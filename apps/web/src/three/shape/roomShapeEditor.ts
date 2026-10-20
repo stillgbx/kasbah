@@ -5,38 +5,38 @@ import { createDragDetector, type DragDetector, type TapEvent } from '../core/in
 import { DECOR_LAYER } from '../core/layers'
 import { dotTexture, ringTexture } from '../relief/reliefEditor'
 
-// Éditeur de la FORME d'une pièce (mode édition, section « Dimensions ») : ses cotes — la ligne
-// du relevé, au milieu des cloisons — avec un point par SOMMET, une poignée au milieu de chaque MUR,
-// et la longueur de chaque côté.
+// Editor of a room's SHAPE (edit mode, "Dimensions" section): its dimensions — the line
+// of the survey, in the middle of the partitions — with a dot per VERTEX, a handle in the middle of each WALL,
+// and the length of each side.
 //
-// Gestes, sans « choisir d'abord » : on attrape directement une poignée. Un MUR glisse le long de sa
-// normale (le geste rend le déplacement, arrondi au centimètre, depuis le début du geste) ; un
-// SOMMET glisse à plat. Ailleurs, le glissement fait orbiter la caméra. L'éditeur ne calcule rien de
-// la maison : il rend des intentions (`wall`, `corner`) que le store traduit en cotes — voisine
-// entraînée comprise — et la scène lui renvoie la forme recalculée (`setShape`).
+// Gestures, without "select first": a handle is grabbed directly. A WALL slides along its
+// normal (the gesture returns the displacement, rounded to the centimeter, since the start of the gesture); a
+// VERTEX slides flat. Elsewhere, dragging orbits the camera. The editor computes nothing about
+// the house: it returns intentions (`wall`, `corner`) that the store translates into dimensions — dragged
+// neighbor included — and the scene sends it back the recomputed shape (`setShape`).
 
 export type ShapeSelection = { corner: number } | { wall: number } | null
 
 export interface RoomShapeHost {
   canvas: HTMLCanvasElement
   camera: Camera
-  /** Groupe en repère du NIVEAU (z = 0 au sol fini) qui porte les poignées. */
+  /** Group in the LEVEL reference frame (z = 0 at the finished floor) that carries the handles. */
   parent: Object3D
-  /** Groupe qui porte les étiquettes de longueur. */
+  /** Group that carries the length labels. */
   labels: Object3D
   note(): CSS2DObject
   setControls(enabled: boolean): void
   invalidate(): void
-  /** Mur `edge` poussé de `delta` m vers l'extérieur depuis le début du geste ; `final` à la fin. */
+  /** Wall `edge` pushed outward by `delta` m since the start of the gesture; `final` at the end. */
   wall(edge: number, delta: number, final: boolean): void
-  /** Sommet `index` amené en `xy` (m, repère maison) ; `final` à la fin. */
+  /** Vertex `index` brought to `xy` (m, house reference frame); `final` at the end. */
   corner(index: number, xy: Vec2, final: boolean): void
-  /** La sélection a changé (le panneau suit). */
+  /** The selection changed (the panel follows). */
   select(sel: ShapeSelection): void
   accent: Color
 }
 
-/** Pas d'accroche d'un glissement (m) : le centimètre, l'unité du relevé. */
+/** Snap step of a drag (m): the centimeter, the survey's unit. */
 export const SHAPE_SNAP_M = 0.01
 const LIFT = 0.06
 const NOTE_INSET_M = 0.45
@@ -68,7 +68,7 @@ export class RoomShapeEditor {
       host.parent.add(p)
       return p
     }
-    // gris sous le seuil du bloom, comme les poignées du terrain ; les murs un ton d'accent, plus gros
+    // gray below the bloom threshold, like the terrain handles; the walls an accent tone, bigger
     this.corners = points('shape:corners', 13, new Color(0.62, 0.62, 0.62), 8)
     this.walls = points('shape:walls', 17, host.accent.clone().multiplyScalar(0.8), 8)
     this.line = new Line(new BufferGeometry(), new LineBasicMaterial({ color: host.accent, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false, toneMapped: false }))
@@ -95,12 +95,12 @@ export class RoomShapeEditor {
     }
   }
 
-  /** Vrai pendant un glissement et juste après : le tap de fin n'en est pas un. */
+  /** True during a drag and right after: the closing tap is not one. */
   active(): boolean { return this.drag?.active() ?? false }
-  /** Un geste est en cours : la forme reçue de la scène ne doit pas en effacer la sélection. */
+  /** A gesture is in progress: the shape received from the scene must not clear its selection. */
   get dragging(): boolean { return this.gesture !== null }
 
-  /** La forme à montrer (cotes en m, repère maison). Garde la sélection si elle existe encore. */
+  /** The shape to show (dimensions in m, house reference frame). Keeps the selection if it still exists. */
   setShape(shape: readonly Vec2[]): void {
     this.shape = shape.map(([x, y]) => [x, y])
     const sel = this.selection
@@ -114,7 +114,7 @@ export class RoomShapeEditor {
     this.host.select(sel)
   }
 
-  /** Un tap sur une poignée la choisit (vrai) ; ailleurs, l'éditeur laisse le tap à la scène (faux). */
+  /** A tap on a handle selects it (true); elsewhere, the editor leaves the tap to the scene (false). */
   tap(ev: TapEvent): boolean {
     const h = this.nearest(ev)
     if (!h) return false
@@ -126,7 +126,7 @@ export class RoomShapeEditor {
     const a = this.shape[k]!, b = this.shape[(k + 1) % this.shape.length]!
     return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
   }
-  /** Normale extérieure du côté `k` (forme CCW). */
+  /** Outward normal of side `k` (CCW shape). */
   private normal(k: number): Vec2 {
     const a = this.shape[k]!, b = this.shape[(k + 1) % this.shape.length]!
     const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1
@@ -144,7 +144,7 @@ export class RoomShapeEditor {
     put(this.corners, p.flatMap(([x, y]) => [x, y, LIFT]))
     put(this.walls, p.flatMap((_, k) => [...this.mid(k), LIFT]))
     put(this.line, n ? [...p, p[0]!].flatMap(([x, y]) => [x, y, LIFT]) : [])
-    // une étiquette de longueur par côté, un peu dans la pièce : la poignée du mur reste dégagée
+    // one length label per side, slightly inside the room: the wall handle stays clear
     while (this.notes.length > n) { const o = this.notes.pop()!; o.element.remove(); o.removeFromParent() }
     while (this.notes.length < n) { const o = this.host.note(); this.host.labels.add(o); this.notes.push(o) }
     this.notes.forEach((o, k) => {
@@ -165,7 +165,7 @@ export class RoomShapeEditor {
     this.host.invalidate()
   }
 
-  /** La poignée la plus proche du doigt ; un sommet l'emporte sur un mur. */
+  /** The handle closest to the finger; a vertex wins over a wall. */
   private nearest(ev: TapEvent): NonNullable<ShapeSelection> | null {
     if (!this.shape.length) return null
     const r = this.host.canvas.getBoundingClientRect()
@@ -188,7 +188,7 @@ export class RoomShapeEditor {
     return w ? { wall: w.k } : null
   }
 
-  /** Le doigt en repère du niveau, sur le plan horizontal du geste. */
+  /** The finger in the level reference frame, on the gesture's horizontal plane. */
   private planePoint(ev: TapEvent, plane: Plane): Vector3 | null {
     this.raycaster.setFromCamera(new Vector2(ev.ndc.x, ev.ndc.y), this.host.camera)
     const hit = this.raycaster.ray.intersectPlane(plane, new Vector3())

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import './textures/prebake' // cuit les matières à l'import, hors du délai du premier test
+import './textures/prebake' // bakes the materials at import, outside the first test's timeout
 import type * as Post from './core/post'
 import type { PostPipelineDeps } from './core/post'
 import { HouseScene } from './HouseScene'
 
-// La chaîne d'effets est remplacée par un faux qui garde ses dépendances : c'est par elles que le
-// garde-fou parle à la scène (`onDowngrade`).
+// The effect chain is replaced by a fake that keeps its dependencies: it is through them that the
+// safeguard talks to the scene (`onDowngrade`).
 const built: PostPipelineDeps[] = []
 vi.mock('./core/post', async (importOriginal) => ({
   ...(await importOriginal<typeof Post>()),
@@ -24,9 +24,9 @@ function sceneWithRenderer(): HouseScene {
 }
 const quality = (scene: HouseScene) => scene.debugStats().quality
 
-describe('le garde-fou de qualité', () => {
-  /** Une qualité CHOISIE est un choix : la machine rame peut-être, mais c'est l'utilisateur qui l'a voulu. */
-  it('ne touche pas à une qualité forcée', () => {
+describe('the quality safeguard', () => {
+  /** A CHOSEN quality is a choice: the machine may be struggling, but the user wanted it. */
+  it('does not touch a forced quality', () => {
     const scene = sceneWithRenderer()
     scene.setOptions({ quality: 'high' })
     expect(built.at(-1)!.onDowngrade).toBeUndefined()
@@ -35,16 +35,16 @@ describe('le garde-fou de qualité', () => {
     scene.dispose()
   })
 
-  /** En « auto », il descend — d'un cran à la fois — sans que le réglage cesse d'être « auto ». */
-  it('en auto, descend d’un cran et reste en auto', () => {
+  /** In "auto", it steps down — one notch at a time — without the setting ceasing to be "auto". */
+  it('in auto, steps down one notch and stays in auto', () => {
     const scene = sceneWithRenderer()
     scene.setOptions({ quality: 'medium' })
     scene.setOptions({ quality: 'auto' })
     built.at(-1)!.onDowngrade!('low')
     expect(quality(scene)).toBe('low')
     expect((scene as unknown as { options: { quality: string } }).options.quality).toBe('auto')
-    scene.setOptions({ quality: 'high' })                  // un choix explicite repart de zéro…
-    scene.setOptions({ quality: 'auto' })                  // …et « auto » refait sa détection
+    scene.setOptions({ quality: 'high' })                  // an explicit choice starts from scratch…
+    scene.setOptions({ quality: 'auto' })                  // …and "auto" redoes its detection
     expect(quality(scene)).not.toBe('low')
     ;(scene as unknown as { renderer: null }).renderer = null
     scene.dispose()

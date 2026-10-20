@@ -2,32 +2,32 @@ import { Color } from 'three'
 import { dayFactor, type SceneAmbience } from '../core/ambience'
 import { mix, mixRgb, toPalette, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
 
-// MAQUETTE : le modèle blanc de l'architecte. Carton, balsa et flocage, tout est presque blanc et
-// presque mat, et ce sont les OMBRES et l'occlusion qui dessinent les volumes — pas la couleur, pas
-// la matière. C'est le style le plus lisible en plein jour (rien ne sature, rien ne brille) et le
-// seul qui n'aura jamais besoin d'assets : sa finesse, c'est l'absence de détail. La nuit, la
-// maquette reste posée sous une lampe de bureau, et ses lampes à elle font des taches chaudes.
+// MAQUETTE: the architect's white model. Cardboard, balsa and flocking, everything is almost white and
+// almost matte, and it is the SHADOWS and the occlusion that draw the volumes — not the color, not
+// the material. It is the most readable style in broad daylight (nothing saturates, nothing shines) and the
+// only one that will never need assets: its finesse is the absence of detail. At night, the
+// model stays set under a desk lamp, and its own lamps make warm spots.
 
 const PALETTE: PaletteSpec = {
   wall: '#f2f0ea',
   wallInterior: '#f7f5f0',
-  // les sols sont un ton sous les murs : sur du blanc, c'est ce ton qui sépare le plan de l'élévation
+  // the floors are a tone below the walls: on white, it is this tone that separates plan from elevation
   floor: '#d8d3c8',
   floors: { wood: '#d4c8b2', tile: '#dddcd6', carpet: '#d6d0c8', concrete: '#d5d2cb' },
   glass: '#cfe3ee',
   roof: '#e9e6df',
-  // le plateau : un gris-vert de carton-plume, pas une pelouse
+  // the base board: a foam-board gray-green, not a lawn
   terrain: '#cdd1c2',
   zones: {
     lawn: '#c3cdb2', pool: '#a9d7e6', driveway: '#d1cfc6', path: '#d9d5c8',
     bed: '#c9c1b1', terrace: '#ddd7c8', other: '#d0cdc3',
   },
   slat: '#f4f2ec',
-  // les objets connectés sont les seules pièces sombres : ils se lisent sur le blanc
+  // the connected objects are the only dark pieces: they read against the white
   device: '#8c8c8c',
 }
 
-/** Un grain de carton : du relief très faible, une rugosité pleine. */
+/** A cardboard grain: very faint relief, full roughness. */
 const board = (texture: SurfaceLooks['wall']['texture'], relief = 0.25) => ({ texture, roughness: 0.9, relief })
 
 const SURFACES: SurfaceLooks = {
@@ -36,11 +36,11 @@ const SURFACES: SurfaceLooks = {
   floor: board('concrete', 0.2),
   floors: { wood: { texture: 'wood', roughness: 0.8, relief: 0.3 }, tile: board('tile', 0.2), carpet: board('carpet', 0.3), concrete: board('concrete', 0.2) },
   roof: board('plaster'),
-  // le plateau est du carton LISSE : le grain d'une pelouse, sur un aplat pâle, ne fait que du bruit
+  // the base board is SMOOTH cardboard: a lawn's grain, on a pale flat color, only adds noise
   terrain: board('plaster', 0.2),
   zones: {
     lawn: board('plaster', 0.2),
-    // de la résine coulée dans un plateau de carton : elle ne bouge pas, et c'est voulu
+    // resin poured into a cardboard base: it does not move, and that is intended
     pool: { texture: 'water', roughness: 0.15, metalness: 0.1, relief: 0.5, flow: 0 },
     driveway: board('concrete', 0.2),
     path: board('pavers', 0.3),
@@ -50,7 +50,7 @@ const SURFACES: SurfaceLooks = {
   },
 }
 
-// Un ciel de STUDIO : gris neutre, sans azur — la maquette n'est pas dehors, elle est sur une table.
+// A STUDIO sky: neutral gray, no azure — the model is not outdoors, it is on a table.
 const SKY_NIGHT = { zenith: [0.01, 0.012, 0.02], horizon: [0.04, 0.045, 0.06], ground: [0.02, 0.02, 0.025], sunGlare: 3, sunColor: [1, 0.98, 0.95] } as const
 const SKY_DAY = { zenith: [0.55, 0.6, 0.7], horizon: [0.9, 0.9, 0.9], ground: [0.35, 0.35, 0.34], sunGlare: 6, sunColor: [1, 0.98, 0.95] } as const
 
@@ -72,27 +72,27 @@ export const maquetteStyle: RenderStyle = {
         intensity: 1.1,
       },
       lighting: {
-        // la nuit, la lampe de bureau : une source blanche et franche, pas une lune bleue
+        // at night, the desk lamp: a white, frank source, not a blue moon
         sunColor: new Color(0xd8dce6).lerp(new Color(0xfff8ee), day),
         sunIntensity: mix(1.0, 2.2, day),
         hemiSky: new Color(0x9aa4b8).lerp(new Color(0xe8ecf2), day),
         hemiGround: new Color(0x3a3c44).lerp(new Color(0xa8a49c), day),
         hemiIntensity: 0.9,
         ambientIntensity: mix(0.25, 0.3, day),
-        // des ombres NETTES et pleines : sur une maquette blanche, ce sont elles qui dessinent
+        // SHARP, full shadows: on a white model, they are what draws
         shadowOpacity: 0.9,
       },
       post: {
-        toneMapping: 'neutral',                          // le blanc doit rester blanc, pas crème
-        // un blanc à 0,95 brûlait : murs et sols tombaient sur la même valeur, plus aucun volume
+        toneMapping: 'neutral',                          // white must stay white, not cream
+        // a white at 0.95 burned out: walls and floors fell on the same value, no volume left
         exposure: mix(1.0, 0.72, day),
         bloom: { strength: mix(0.4, 0.05, day), radius: 0.5, threshold: 0.9 },
-        // l'occlusion est le trait de crayon de ce style : forte, à l'échelle d'une pièce
+        // the occlusion is this style's pencil stroke: strong, at the scale of a room
         ao: { intensity: 1.4, radius: 0.5 },
         vignette: 0.15,
       },
       glow: { scale: mix(1.1, 0.8, day), opacity: mix(0.6, 0.15, day), lightIntensity: mix(9, 3, day), emissive: mix(1.8, 1, day) },
-      // jardin : maquette d'architecte : feuillage blanc cassé, troncs en balsa, fruits fondus dans le feuillage
+      // garden: architect's model: off-white foliage, balsa trunks, fruit blended into the foliage
       garden: { leaf: [new Color(0xf3f0ea), new Color(0xe9e5dd)], bark: new Color(0xd9c9ab), stone: new Color(0xe2dfd8), accent: new Color(0xefebe4) },
     }
   },

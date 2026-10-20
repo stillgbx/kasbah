@@ -9,7 +9,7 @@ function editor() {
   const site: Site = { elevation: 0, terrain: square(20), zones: [], parkings: [], garden: [] }
   const grid = emptyReliefGrid(site.terrain, 2)
   const terrain = { ...computeTerrain(site), relief: grid }
-  let current = grid                                  // la grille que l'éditeur tient (l'historique la remplace)
+  let current = grid                                  // the grid the editor holds (the history replaces it)
   const ed: ReliefEditor = new ReliefEditor({
     canvas: {} as HTMLCanvasElement, camera: new PerspectiveCamera(), parent: new Group(),
     terrain: () => ({ ...terrain, relief: current }), setControls: () => {}, invalidate: () => {},
@@ -20,8 +20,8 @@ function editor() {
   return ed
 }
 
-describe('éditeur du relief : annuler / rétablir', () => {
-  it('annule et rétablit une saisie, et une nouvelle modification efface le rétablissement', () => {
+describe('relief editor: undo / redo', () => {
+  it('undoes and redoes an edit, and a new change clears the redo', () => {
     const ed = editor()
     expect(ed.canUndo).toBe(false)
     ed.setSelectedCm(50)
@@ -37,18 +37,18 @@ describe('éditeur du relief : annuler / rétablir', () => {
     expect(ed.canRedo).toBe(false)
   })
 
-  it('une saisie qui ne change rien ne fait pas de pas', () => {
+  it('an edit that changes nothing does not add a step', () => {
     const ed = editor()
     expect(ed.setSelectedCm(0)).toBe(false)
     expect(ed.canUndo).toBe(false)
   })
 
-  it(`ne retient que ${RELIEF_HISTORY} pas`, () => {
+  it(`keeps only ${RELIEF_HISTORY} steps`, () => {
     const ed = editor()
     for (let k = 1; k <= RELIEF_HISTORY + 5; k++) ed.setSelectedCm(k * 10)
     let n = 0
     while (ed.undo()) n++
     expect(n).toBe(RELIEF_HISTORY)
-    expect(ed.selectedCm()).toBe(50)                // le 5e état : les 5 premiers pas sont oubliés
+    expect(ed.selectedCm()).toBe(50)                // the 5th state: the first 5 steps are forgotten
   })
 })

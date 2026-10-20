@@ -1,8 +1,8 @@
 import { Box3, Vector3 } from 'three'
 import type { AABB3, Vec3 } from '@kasbah/shared'
 
-// Repère maison Z-up (x est, y nord, z haut) → monde Three Y-up. Le groupe racine porte
-// rotation.x = -π/2, donc un point local (x, y, z) devient (x, z, -y) en monde.
+// Z-up house reference frame (x east, y north, z up) → Y-up Three world. The root group carries
+// rotation.x = -π/2, so a local point (x, y, z) becomes (x, z, -y) in the world.
 
 export function houseToWorld([x, y, z]: Vec3, out = new Vector3()): Vector3 {
   return out.set(x, z, -y)

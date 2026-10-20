@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import '../textures/prebake' // cuit les matières à l'import, hors du délai du premier test
+import '../textures/prebake' // bakes the materials at import, outside the first test's timeout
 import { type BufferAttribute, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, ShapeGeometry, Vector3 } from 'three'
 import { computeHouseGeometry, emptyReliefGrid, footprintCeiling, offsetPolygon, padWeight, parseHouse, parseRelief, pointInPolygon, reliefNodeXY, resolveDefaults, serializeRelief, signedArea, terrainFootprints, terrainHeight, terrainPads, type House } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
@@ -10,7 +10,7 @@ import { applyTerrainHeights, drapeGeometry } from './terrain'
 
 const flat = parseHouse(demo)
 
-/** La maison de démo avec une bosse de 80 cm sur un nœud libre du jardin (hors palier du bâti). */
+/** The demo house with an 80 cm bump on a free node of the garden (outside the building's platform). */
 function withBump(): { house: House; at: [number, number] } {
   const grid = emptyReliefGrid(flat.site.terrain, 2)
   const pads = terrainPads(flat)
@@ -36,28 +36,28 @@ const area = (g: { getIndex(): BufferAttribute | null; getAttribute(n: string): 
   return a
 }
 
-describe('terrain en relief', () => {
-  it('un terrain sans relief garde le chemin d’avant : polygone plat, pas de jupe', () => {
+describe('terrain with relief', () => {
+  it('a terrain without relief keeps the former path: flat polygon, no skirt', () => {
     const nodes = buildHouse(computeHouseGeometry(flat), createMaterials(defaultSceneTheme(), defaultLook()))
     expect(nodes.terrain.geometry).toBeInstanceOf(ShapeGeometry)
     expect(nodes.skirt).toBeNull()
   })
 
-  it('le maillage couvre exactement la parcelle, bassins retirés, et regarde vers le haut', () => {
+  it('the mesh covers exactly the plot, pools removed, and faces up', () => {
     const pool = [[0, 0], [4, 0], [4, 3], [0, 3]] as [number, number][]
     const outer = [[-7.3, -5.1], [9.2, -4.4], [11, 8.7], [-6, 10.2]] as [number, number][]
     const g = drapeGeometry(outer, [pool])
-    expect(area(g)).toBeCloseTo(signedArea(outer) - 12, 4)   // aire > 0 : toutes les faces vers +z
+    expect(area(g)).toBeCloseTo(signedArea(outer) - 12, 4)   // area > 0: all faces toward +z
   })
 
-  it('affiné le long d’un mur, le maillage couvre toujours la parcelle, sans fente avec les mailles voisines', () => {
+  it('refined along a wall, the mesh still covers the plot, with no gap against the neighboring cells', () => {
     const outer = [[-7.3, -5.1], [9.2, -4.4], [11, 8.7], [-6, 10.2]] as [number, number][]
     const room = [[0.1, 0.2], [4.3, 0.2], [4.3, 3.1], [0.1, 3.1]] as [number, number][]
     const plain = drapeGeometry(outer, [])
     const g = drapeGeometry(outer, [], 0.5, [{ polygon: room, ceiling: 0 }])
     expect(area(g)).toBeCloseTo(signedArea(outer), 4)
     expect(g.getAttribute('position').count).toBeGreaterThan(plain.getAttribute('position').count)
-    // chaque arête de bord du maillage est une arête du CONTOUR : une fente se verrait comme un bord intérieur
+    // every border edge of the mesh is an edge of the OUTLINE: a gap would show as an inner border
     const pos = g.getAttribute('position') as BufferAttribute, idx = g.getIndex()!
     const edges = new Map<string, number>()
     for (let k = 0; k < idx.count; k += 3) {
@@ -79,8 +79,8 @@ describe('terrain en relief', () => {
     }
   })
 
-  it('sous un étage en porte-à-faux, la façade du RDC est affinée : le terrain dessiné touche le mur à sa hauteur', () => {
-    // RDC 4 × 4 enterré dans une pente, étage qui déborde de 2 m tout autour (cas de la maison réelle)
+  it('under a cantilevered upper floor, the ground-floor facade is refined: the drawn terrain touches the wall at its height', () => {
+    // 4 × 4 ground floor buried in a slope, upper floor overhanging by 2 m all around (the real house's case)
     const rdc = { polygon: offsetPolygon([[0, 0], [4, 0], [4, 4], [0, 4]], 0.15), ceiling: -0.15 }
     const etage = { polygon: offsetPolygon([[-2, -2], [6, -2], [6, 6], [-2, 6]], 0.15), ceiling: 2.6 }
     const relief = parseRelief({ step: 2, origin: [-10, -10], rows: Array.from({ length: 11 }, () => Array.from({ length: 11 }, (_, i) => String(i * 25)).join(' ')) })!
@@ -90,7 +90,7 @@ describe('terrain en relief', () => {
     applyTerrainHeights(g, terrain)
     const mesh = new Mesh(g, new MeshBasicMaterial({ side: DoubleSide }))
     const ray = new Raycaster()
-    // juste devant la face extérieure du mur (contour + 0,30 m), le long des quatre façades
+    // just in front of the wall's outer face (outline + 0.30 m), along the four facades
     for (const [x, y] of [[-0.33, 1.3], [-0.33, 2.7], [1.7, -0.33], [3.1, 4.33], [4.33, 0.6]] as const) {
       ray.set(new Vector3(x, y, 50), new Vector3(0, 0, -1))
       const hit = ray.intersectObject(mesh, false)[0]!
@@ -98,7 +98,7 @@ describe('terrain en relief', () => {
     }
   })
 
-  it('le terrain suit le relief, s’écrête sous le bâti, et la jupe le borde', () => {
+  it('the terrain follows the relief, is clipped under the building, and the skirt borders it', () => {
     const { house, at } = withBump()
     const geometry = computeHouseGeometry(house)
     const nodes = buildHouse(geometry, createMaterials(defaultSceneTheme(), defaultLook()))
@@ -116,7 +116,7 @@ describe('terrain en relief', () => {
     expect(terrainHeight(geometry.terrain, c[0], c[1])).toBeLessThanOrEqual(geometry.terrain.z)
   })
 
-  it('revenir à un terrain plat rend le polygone plat et retire la jupe', () => {
+  it('going back to a flat terrain makes the polygon flat and removes the skirt', () => {
     const { house } = withBump()
     const mats = createMaterials(defaultSceneTheme(), defaultLook())
     const nodes = buildHouse(computeHouseGeometry(house), mats)

@@ -1,38 +1,38 @@
 import type { Tween } from './tween'
 
-// Rendu À LA DEMANDE : la boucle ne tourne que si quelque chose bouge (contrôles amortis, tween,
-// animation de marqueur). Sur tablette, c'est la différence entre 0 % et 30 % de CPU au repos.
+// ON-DEMAND rendering: the loop only runs if something moves (damped controls, tween,
+// marker animation). On a tablet, that is the difference between 0 % and 30 % CPU at rest.
 //
-// Avec une nuance qui compte autant que la règle. Une animation DÉCORATIVE — l'onde d'un lecteur qui
-// joue (période 5,75 s), le souffle d'une batterie qui charge (2,6 s) — suffisait à faire tourner la
-// boucle en permanence, à la cadence de l'écran. Une maison où une enceinte joue redessinait donc
-// TOUT (deux passes, ~280 appels de dessin, la chaîne d'effets, quarante étiquettes déplacées)
-// soixante fois par seconde, pour un anneau qui avance d'une fraction de pixel par image. Et ce
-// chargement permanent se cumulait à tout le reste : la file de composition du navigateur ne se
-// vidait jamais vraiment.
+// With a nuance that matters as much as the rule. A DECORATIVE animation — the wave of a player that
+// is playing (period 5.75 s), the breathing of a charging battery (2.6 s) — was enough to keep the
+// loop running permanently, at the screen's refresh rate. A house where a speaker was playing thus redrew
+// EVERYTHING (two passes, ~280 draw calls, the effect chain, forty labels moved)
+// sixty times per second, for a ring that advances a fraction of a pixel per frame. And this
+// permanent load added up with everything else: the browser's compositing queue never
+// really emptied.
 //
-// Ces animations tournent donc à `ANIMATION_HZ`, pas à la cadence de l'écran. Tout ce qui vient d'un
-// GESTE — une orbite, un vol de caméra, une demande explicite par `invalidate` — garde la cadence
-// pleine : c'est là que l'œil voit la saccade, pas sur une onde de cinq secondes.
+// These animations therefore run at `ANIMATION_HZ`, not at the screen's refresh rate. Everything that comes from a
+// GESTURE — an orbit, a camera flight, an explicit request through `invalidate` — keeps the full
+// rate: that is where the eye sees stutter, not on a five-second wave.
 
 export interface Animation {
   step(now: number, dtS: number): boolean
   /**
-   * Cadence PROPRE de cette animation, en images par seconde (défaut `ANIMATION_HZ`). Une eau qui
-   * ondule se contente de 10 Hz là où une averse en demande 20. C'est la plus rapide des animations
-   * en cours qui donne le tempo — une image redessinée les sert toutes.
+   * This animation's OWN rate, in frames per second (default `ANIMATION_HZ`). Rippling water
+   * makes do with 10 Hz where a downpour needs 20. The fastest of the running animations
+   * sets the tempo — one redrawn frame serves them all.
    */
   readonly hz?: number
 }
 
 export interface RenderLoopOptions {
   /**
-   * `interactive` : cette image suit un GESTE (orbite, vol de caméra, demande explicite) et non le
-   * simple réveil d'une animation décorative. Seules celles-là s'enchaînent à la cadence de l'écran,
-   * donc seules celles-là disent quelque chose du temps passé HORS du dessin.
+   * `interactive`: this frame follows a GESTURE (orbit, camera flight, explicit request) and not the
+   * mere wake-up of a decorative animation. Only those chain at the screen's refresh rate,
+   * so only those say something about the time spent OUTSIDE drawing.
    */
   render(interactive: boolean): void
-  /** Retourne true si les contrôles ont encore bougé (amortissement). */
+  /** Returns true if the controls moved again (damping). */
   updateControls(): boolean
   requestFrame?: (cb: (now: number) => void) => number
   cancelFrame?: (h: number) => void
@@ -49,7 +49,7 @@ export interface RenderLoop {
   dispose(): void
 }
 
-/** Cadence par défaut des animations décoratives, en images par seconde. Une onde de 5,75 s y est lisse. */
+/** Default rate of the decorative animations, in frames per second. A 5.75 s wave is smooth at it. */
 const ANIMATION_HZ = 20
 
 export function createRenderLoop(opts: RenderLoopOptions): RenderLoop {
@@ -68,25 +68,25 @@ export function createRenderLoop(opts: RenderLoopOptions): RenderLoop {
     handle = null
     if (disposed || paused) return
     const t = now()
-    // `moving` dit s'il faut CONTINUER après cette image ; `dirty` dit seulement que celle-ci est
-    // demandée. Les confondre ferait tourner la boucle indéfiniment après un simple `invalidate`.
+    // `moving` says whether to CONTINUE after this frame; `dirty` only says that this one is
+    // requested. Mixing them up would make the loop run forever after a simple `invalidate`.
     let moving = false
-    // Une tween qui FINIT à cette image vient de poser son état final (une pilule masquée, un étage
-    // posé) : l'image doit être dessinée. Sans ça, une animation décorative pas encore due faisait
-    // sauter le dessin — la pilule restait affichée, pleine, jusqu'au prochain tic du décor.
+    // A tween that ENDS on this frame has just set its final state (a pill hidden, a level
+    // set down): the frame must be drawn. Without this, a decorative animation not yet due made
+    // the drawing get skipped — the pill stayed displayed, full, until the decor's next tick.
     let finished = false
     for (const tw of tweens) { if (tw.step(t)) moving = true; else { tweens.delete(tw); finished = true } }
     if (opts.updateControls()) moving = true
     const interactive = moving || dirty || finished
 
-    // Rien que du décor à animer, et pas encore l'heure : on rend la main sans rien redessiner.
+    // Nothing but decor to animate, and not yet time: hand back without redrawing anything.
     let hz = 0
     for (const a of animations) hz = Math.max(hz, a.hz ?? ANIMATION_HZ)
     const due = hz > 0 && t - lastAnimation >= 1000 / hz
     if (!interactive && animations.size > 0 && !due) { schedule(); return }
 
     if (animations.size > 0) {
-      const dtS = Math.min(0.1, (t - lastAnimation) / 1000)   // borné : une longue pause ne fait pas un bond
+      const dtS = Math.min(0.1, (t - lastAnimation) / 1000)   // clamped: a long pause does not make a jump
       lastAnimation = t
       for (const a of animations) { if (!a.step(t, dtS)) animations.delete(a) }
     }

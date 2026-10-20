@@ -3,38 +3,38 @@ import { applyHeightMist } from './heightMist'
 import { applyLevelFade } from './levelFade'
 import { applyRoomFocus } from './roomFocus'
 
-// Une lampe d'intérieur n'éclaire que SON niveau, dans le shader, en une seule passe.
+// An indoor lamp only lights ITS level, in the shader, in a single pass.
 //
-// Une `PointLight` ignore la géométrie : sans rien faire, le plafonnier du salon éclaire le sas
-// d'entrée en dessous à travers la dalle. Ce fichier ajoute, à la boucle des lumières ponctuelles de
-// chaque matière éclairée, un test de HAUTEUR : la lampe et le pixel sont rangés dans une tranche
-// par les élévations des niveaux, et la lampe ne compte que si c'est la même tranche.
+// A `PointLight` ignores geometry: left alone, the living room ceiling light lights the entrance
+// airlock below through the slab. This file adds, to the point-light loop of
+// every lit material, a HEIGHT test: the lamp and the pixel are sorted into a slice
+// by the levels' elevations, and the lamp only counts if it is the same slice.
 //
-// Ce qui le remplace : un rendu en PASSES (la matière sous l'éclairage global, puis chaque niveau
-// allumé redessiné seul avec ses lampes). Il coûtait une image de plus par niveau allumé, et surtout
-// — l'ensemble des lumières changeant d'une passe à l'autre — il obligeait three à réévaluer le
-// programme de CHAQUE matière à chaque passe : 14 ms de CPU par image sur la maison réelle, mesuré
-// le 2026-09-24 (voir `doc/1_architecture/1_5_scene-3d.md`).
+// What it replaces: rendering in PASSES (the material under the global lighting, then each lit
+// level redrawn alone with its lamps). It cost one more frame per lit level, and above all
+// — the set of lights changing from one pass to the next — it forced three to re-evaluate the
+// program of EVERY material at every pass: 14 ms of CPU per frame on the real house, measured
+// on 2026-09-24 (see `doc/1_architecture/1_5_scene-3d.md`).
 //
-// Les lampes de JARDIN ne sont pas testées : elles portent une ombre (`castShadow`), c'est l'ombre
-// qui les arrête au mur. Three range les lumières qui portent une ombre EN TÊTE de la liste
-// (`shadowCastingAndTexturingLightsFirst`), d'où le test `UNROLLED_LOOP_INDEX >= NUM_POINT_LIGHT_SHADOWS`.
-// Une lampe de jardin éteinte ne porte pas d'ombre : elle tombe dans le test, mais elle n'éclaire rien.
+// GARDEN lamps are not tested: they cast a shadow (`castShadow`), and it is the shadow
+// that stops them at the wall. Three sorts shadow-casting lights AT THE HEAD of the list
+// (`shadowCastingAndTexturingLightsFirst`), hence the test `UNROLLED_LOOP_INDEX >= NUM_POINT_LIGHT_SHADOWS`.
+// A garden lamp that is off casts no shadow: it falls into the test, but it lights nothing.
 //
-// Une matière marquée `userData.noLamps` (le terrain, les zones, le toit, l'eau) ne reçoit aucune
-// lampe d'intérieur : le sol du jardin est à la hauteur du rez-de-chaussée, une lampe du salon le
-// tacherait à travers la façade.
+// A material marked `userData.noLamps` (the terrain, the zones, the roof, the water) receives no
+// indoor lamp: the garden ground is at the height of the ground floor, a living room lamp would
+// stain it through the facade.
 
-/** Tranches au plus : un niveau de plus que de bornes. */
+/** Slices at most: one level more than bounds. */
 const MAX_BOUNDS = 8
 
-/** Hauteurs MONDE des niveaux, sauf le plus bas, croissantes. Partagées par toutes les matières. */
+/** WORLD heights of the levels, except the lowest, ascending. Shared by all materials. */
 export const levelLightUniforms = {
   kasbahLevelY: { value: new Float32Array(MAX_BOUNDS) },
   kasbahLevelCount: { value: 0 },
 }
 
-/** Pose les bornes des tranches (élévations monde des niveaux, dans n'importe quel ordre). */
+/** Sets the slice bounds (world elevations of the levels, in any order). */
 export function setLevelHeights(heights: readonly number[]): void {
   const sorted = [...heights].sort((a, b) => a - b).slice(1, MAX_BOUNDS + 1)
   levelLightUniforms.kasbahLevelY.value.fill(0).set(sorted)
@@ -50,10 +50,10 @@ int kasbahBand( float y ) {
   for ( int i = 0; i < ${MAX_BOUNDS}; i ++ ) if ( i < kasbahLevelCount && y >= kasbahLevelY[ i ] ) b = i + 1;
   return b;
 }
-// d'une position VUE à la hauteur MONDE : la ligne y de l'inverse de la matrice de vue
+// from a VIEW position to the WORLD height: row y of the inverse of the view matrix
 float kasbahWorldY( vec3 p ) { return dot( viewMatrix[ 1 ].xyz, p - viewMatrix[ 3 ].xyz ); }
-// Le dessus d'une dalle est posé EXACTEMENT sur la borne : le pixel est relevé de 5 mm pour tomber
-// dans le niveau qu'elle porte, son dessous restant au niveau d'en dessous (c'est son plafond).
+// The top of a slab sits EXACTLY on the bound: the pixel is raised by 5 mm to fall
+// into the level the slab carries, its underside staying in the level below (it is its ceiling).
 bool kasbahLampReaches( vec3 lightPos, vec3 fragPos ) {
   if ( kasbahLamps < 0.5 ) return false;
   return kasbahBand( kasbahWorldY( lightPos ) ) == kasbahBand( kasbahWorldY( fragPos ) + 0.005 );
@@ -63,13 +63,13 @@ bool kasbahLampReaches( vec3 lightPos, vec3 fragPos ) {
 const POINT_INFO = 'getPointLightInfo( pointLight, geometryPosition, directLight );'
 const POINT_DIRECT = 'RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );'
 
-/** La boucle des lumières ponctuelles, testée : une lampe masquée ou éteinte ne calcule rien. */
+/** The point-light loop, tested: a masked or switched-off lamp computes nothing. */
 const LIGHTS_BEGIN = (() => {
   const src = ShaderChunk.lights_fragment_begin
   const start = src.indexOf('#if ( NUM_POINT_LIGHTS > 0 )')
   const end = src.indexOf('#pragma unroll_loop_end', start)
   const block = src.slice(start, end)
-  if (start < 0 || !block.includes(POINT_INFO) || !block.includes(POINT_DIRECT)) throw new Error('levelLight: lights_fragment_begin a changé')
+  if (start < 0 || !block.includes(POINT_INFO) || !block.includes(POINT_DIRECT)) throw new Error('levelLight: lights_fragment_begin changed')
   const patched = block
     .replace(POINT_INFO, `${POINT_INFO}
 		#if ( UNROLLED_LOOP_INDEX >= NUM_POINT_LIGHT_SHADOWS )
@@ -79,7 +79,7 @@ const LIGHTS_BEGIN = (() => {
   return src.slice(0, start) + patched + src.slice(end)
 })()
 
-/** Applique le masque à un shader en cours de compilation. Sans effet sur une matière non éclairée. */
+/** Applies the mask to a shader being compiled. No effect on an unlit material. */
 export function applyLevelLight(shader: WebGLProgramParametersWithUniforms, material: Material): void {
   if (!shader.fragmentShader.includes('#include <lights_fragment_begin>')) return
   shader.uniforms.kasbahLevelY = levelLightUniforms.kasbahLevelY
@@ -90,11 +90,11 @@ export function applyLevelLight(shader: WebGLProgramParametersWithUniforms, mate
     .replace('#include <lights_fragment_begin>', LIGHTS_BEGIN)
 }
 
-// Posé sur le PROTOTYPE : toute matière éclairée de la scène le reçoit, y compris celles que les
-// marqueurs créent à la volée, sans qu'aucun constructeur ait à y penser. Une matière qui pose son
-// propre `onBeforeCompile` (l'eau) appelle `applyLevelLight` elle-même. La brume basse
-// (`heightMist.ts`), l'opacité et le fondu des étages (`levelFade.ts`) et la mise en valeur d'une
-// pièce (`roomFocus.ts`) passent par le même crochet, pour la même raison.
+// Set on the PROTOTYPE: every lit material of the scene receives it, including those that the
+// markers create on the fly, without any constructor having to think about it. A material that sets its
+// own `onBeforeCompile` (the water) calls `applyLevelLight` itself. The low mist
+// (`heightMist.ts`), the opacity and the level fade (`levelFade.ts`) and the highlighting of a
+// room (`roomFocus.ts`) go through the same hook, for the same reason.
 Material.prototype.onBeforeCompile = function (this: Material, shader: WebGLProgramParametersWithUniforms) {
   applyLevelLight(shader, this)
   applyHeightMist(shader, this)

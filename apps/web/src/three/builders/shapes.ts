@@ -6,14 +6,14 @@ export function toShape(polygon: readonly Vec2[]): Shape {
   return new Shape(polygon.map(([x, y]) => new Vector2(x, y)))
 }
 
-/** Extrusion d'un polygone du plan XY de z0 à z1 (repère maison, Z-up). */
+/** Extrusion of a polygon of the XY plane from z0 to z1 (house reference frame, Z-up). */
 export function extrudePolygon(polygon: readonly Vec2[], z0: number, z1: number): ExtrudeGeometry {
   const g = new ExtrudeGeometry(toShape(polygon), { depth: z1 - z0, bevelEnabled: false })
   g.translate(0, 0, z0)
   return g
 }
 
-/** Extrusion percée de trous (dalle de pièce avec puits de lumière, toit plat avec Velux). */
+/** Extrusion pierced with holes (room slab with skylights, flat roof with Velux windows). */
 export function extrudePolygonWithHoles(
   outer: readonly Vec2[], holes: readonly (readonly Vec2[])[], z0: number, z1: number,
 ): ExtrudeGeometry {
@@ -31,9 +31,9 @@ export function flatPolygon(polygon: readonly Vec2[], z: number): ShapeGeometry 
 }
 
 /**
- * Repère 2D d'une face plane, en mètres : u le long de sa première arête (l'égout d'un versant),
- * v dans le plan, orienté vers le HAUT (le faîtage). Sert aux UV — la texture se répète tous les
- * `tileM` mètres, rangées de tuiles parallèles à l'égout — et au découpage des trous.
+ * 2D reference frame of a planar face, in meters: u along its first edge (the eaves of a roof slope),
+ * v in the plane, pointing UP (toward the ridge). Used for UVs — the texture repeats every
+ * `tileM` meters, tile rows parallel to the eaves — and for cutting the holes.
  */
 function faceFrame(face: readonly Vec3[]): { to2: (p: Vec3) => [number, number]; from2: (u: number, v: number) => Vec3 } {
   const a = face[0]!, b = face[1]!, c = face[2]!
@@ -50,7 +50,7 @@ function faceFrame(face: readonly Vec3[]): { to2: (p: Vec3) => [number, number];
   }
 }
 
-/** Faces planes convexes (éventail) → géométrie non indexée avec normales et UV en mètres. */
+/** Convex planar faces (fan) → non-indexed geometry with normals and UVs in meters. */
 export function planarFaces(faces: readonly Vec3[][]): BufferGeometry {
   const positions: number[] = []
   const uvs: number[] = []
@@ -71,8 +71,8 @@ export function planarFaces(faces: readonly Vec3[][]): BufferGeometry {
 }
 
 /**
- * Faces de toit gable percées de trous. Chaque trou dont `faceIndex` désigne la face est projeté
- * dans le plan de la face (repère local 2D) puis découpé via un Shape à trous, remis en 3D.
+ * Gable roof faces pierced with holes. Each hole whose `faceIndex` designates the face is projected
+ * into the plane of the face (local 2D reference frame) then cut via a Shape with holes, put back in 3D.
  */
 export function planarFacesWithHoles(
   faces: readonly Vec3[][],
@@ -102,8 +102,8 @@ export function planarFacesWithHoles(
     }
     pos.needsUpdate = true
     g.computeVertexNormals()
-    // mergeGeometries exige les mêmes attributs partout : planarFaces n'est pas indexé. Les UV du
-    // ShapeGeometry sont déjà les coordonnées (u, v) du repère de la face : on les garde.
+    // mergeGeometries requires the same attributes everywhere: planarFaces is not indexed. The
+    // ShapeGeometry's UVs are already the (u, v) coordinates of the face's frame: we keep them.
     const flat = g.toNonIndexed()
     g.dispose()
     parts.push(flat)
@@ -116,9 +116,9 @@ export function planarFacesWithHoles(
 }
 
 /**
- * Décale un polygone CCW vers l'INTÉRIEUR de `d` (coins mitrés). `offsetPolygon` (shared) ne sert
- * que le débord — vers l'extérieur — et son repli de bout droit ne vaut que pour une distance
- * positive. Sert aux anneaux : marge d'une pièce sélectionnée, margelle, acrotère.
+ * Offsets a CCW polygon INWARD by `d` (mitered corners). `offsetPolygon` (shared) only serves
+ * the overhang — outward — and its square-end fallback only holds for a positive
+ * distance. Used for rings: margin of a selected room, pool coping, parapet.
  */
 export function insetPolygon(polygon: readonly Vec2[], d: number): Vec2[] {
   const p = ensureCCW(polygon)
@@ -127,14 +127,14 @@ export function insetPolygon(polygon: readonly Vec2[], d: number): Vec2[] {
   for (let i = 0; i < n; i++) {
     const prev = p[(i - 1 + n) % n]!, cur = p[i]!, next = p[(i + 1) % n]!
     const dA = normalize(sub(cur, prev)), dB = normalize(sub(next, cur))
-    const oA = add(prev, scale(perpLeft(dA), d))            // perpendiculaire GAUCHE = vers l'intérieur d'un CCW
+    const oA = add(prev, scale(perpLeft(dA), d))            // LEFT perpendicular = toward the inside of a CCW
     const oB = add(cur, scale(perpLeft(dB), d))
     out.push(lineIntersect(oA, dA, oB, dB) ?? oB)
   }
   return out
 }
 
-/** Polygone plat PERCÉ de trous (les bassins d'une parcelle), posé à `z`. */
+/** Flat polygon PIERCED with holes (the pools of a plot), laid at `z`. */
 export function flatWithHoles(outer: readonly Vec2[], holes: readonly (readonly Vec2[])[], z: number): ShapeGeometry {
   const shape = toShape(outer)
   for (const h of holes) shape.holes.push(new Path(h.map(([x, y]) => new Vector2(x, y))))
@@ -143,10 +143,10 @@ export function flatWithHoles(outer: readonly Vec2[], holes: readonly (readonly 
   return g
 }
 
-/** Anneau plat entre deux polygones (le second est le trou), posé à `z`. */
+/** Flat ring between two polygons (the second is the hole), laid at `z`. */
 export const flatRing = (outer: readonly Vec2[], inner: readonly Vec2[], z: number): ShapeGeometry => flatWithHoles(outer, [inner], z)
 
-/** Disque percé de trous : le sol infini, qui ne doit pas boucher un bassin creusé sous lui. */
+/** Disc pierced with holes: the infinite ground, which must not cover a pool dug beneath it. */
 export function discWithHoles(radius: number, holes: readonly (readonly Vec2[])[], z: number): ShapeGeometry {
   const shape = new Shape().absarc(0, 0, radius, 0, Math.PI * 2, false)
   for (const h of holes) shape.holes.push(new Path(h.map(([x, y]) => new Vector2(x, y))))
@@ -155,7 +155,7 @@ export function discWithHoles(radius: number, holes: readonly (readonly Vec2[])[
   return g
 }
 
-/** Anneau extrudé de z0 à z1 : un muret qui suit un contour. */
+/** Ring extruded from z0 to z1: a low wall that follows an outline. */
 export function extrudeRing(outer: readonly Vec2[], inner: readonly Vec2[], z0: number, z1: number): ExtrudeGeometry {
   const shape = toShape(outer)
   shape.holes.push(new Path(inner.map(([x, y]) => new Vector2(x, y))))
@@ -165,10 +165,10 @@ export function extrudeRing(outer: readonly Vec2[], inner: readonly Vec2[], z0: 
 }
 
 /**
- * Construit une géométrie dans le repère du polygone — son plus grand côté sur l'axe y, autour de
- * son centre — puis la remet en place. Les UV d'`ExtrudeGeometry` et de `ShapeGeometry` reprennent
- * les positions LOCALES : une matière à motif (le carrelage d'un bassin) suit alors les bords du
- * polygone au lieu des axes du monde — une piscine tournée de 30° avait ses carreaux en biais.
+ * Builds a geometry in the polygon's frame — its longest side on the y axis, around
+ * its center — then puts it back in place. The UVs of `ExtrudeGeometry` and `ShapeGeometry` take
+ * the LOCAL positions: a patterned material (a pool's tiling) then follows the edges of the
+ * polygon instead of the world axes — a pool rotated by 30° had its tiles askew.
  */
 export function alignedToLongestEdge(polygon: readonly Vec2[], build: (local: Vec2[]) => BufferGeometry): BufferGeometry {
   const yaw = ((longestEdgeYawDeg(polygon) ?? 0) * Math.PI) / 180

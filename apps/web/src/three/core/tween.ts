@@ -1,5 +1,5 @@
-// Interpolation minimale (aucune bibliothèque) : une tween = fonction de progression appelée par la
-// boucle de rendu tant qu'elle n'est pas finie.
+// Minimal interpolation (no library): a tween = a progress function called by the render loop
+// until it is finished.
 
 export type Easing = (t: number) => number
 export const easeInOutCubic: Easing = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
@@ -8,7 +8,7 @@ export const easeInCubic: Easing = (t) => t * t * t
 export const linear: Easing = (t) => t
 
 export interface Tween {
-  /** Avance à l'instant `now` (ms) ; retourne true tant qu'elle est active. */
+  /** Advances to time `now` (ms); returns true while it is active. */
   step(now: number): boolean
   cancel(): void
   readonly done: boolean

@@ -9,44 +9,44 @@ import { CopyShader } from 'three/addons/shaders/CopyShader.js'
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './layers'
 import { NEUTRAL_GRADE, type PostLook } from '../styles/types'
 
-// Le POST-TRAITEMENT : ce qui sépare un rendu direct d'une image. Trois choses, dans cet ordre.
+// POST-PROCESSING: what separates a direct render from an image. Three things, in this order.
 //
-//  1. Le TONE MAPPING. La scène est calculée en valeurs linéaires non bornées (une lampe vaut 20,
-//     pas 1) ; sans courbe pour ramener ça à l'écran, tout ce qui dépasse devient un aplat blanc et
-//     la nuit devient un aplat noir. C'est le réglage qui décide si la maison est lisible.
-//  2. L'OCCLUSION AMBIANTE (GTAO). Elle assombrit les angles rentrants, le pied des murs, le dessous
-//     des objets. C'est elle qui POSE les volumes les uns sur les autres — sans elle, une maison
-//     reste un empilement de faces qui flottent, quelle que soit la finesse des matières.
-//  3. Le BLOOM. Ce qui dépasse le seuil bave sur ses voisins : le halo des lampes de la maquette.
-//     La scène en faisait déjà une imitation par sprite additif (`GLOW`), qui reste — les deux se
-//     complètent, l'un donne le volume de la source, l'autre la diffusion dans l'image.
+//  1. TONE MAPPING. The scene is computed in unbounded linear values (a lamp is worth 20,
+//     not 1); without a curve to bring that back to the screen, everything that overshoots becomes a flat white and
+//     the night becomes a flat black. It is the setting that decides whether the house is readable.
+//  2. AMBIENT OCCLUSION (GTAO). It darkens inside corners, the foot of the walls, the underside
+//     of objects. It is what SETS the volumes on one another — without it, a house
+//     stays a stack of floating faces, however fine the materials.
+//  3. BLOOM. What exceeds the threshold bleeds onto its neighbors: the halo of the maquette's lamps.
+//     The scene already imitated it with an additive sprite (`GLOW`), which stays — the two
+//     complement each other, one gives the volume of the source, the other the diffusion in the image.
 //
-// Puis une vignette, en espace d'affichage, parce que c'est là qu'elle se règle à l'œil — dans la
-// passe de sortie elle-même, pas dans une passe à elle (`VignetteOutputPass`).
+// Then a vignette, in display space, because that is where it is tuned by eye — in the
+// output pass itself, not in a pass of its own (`VignetteOutputPass`).
 //
-// COÛT : ces passes sont payées à chaque image rendue. Le rendu étant à la demande
-// (`core/renderLoop.ts`), le coût au repos reste nul — mais pendant un vol de caméra sur tablette,
-// il compte. D'où les trois niveaux de `RenderQuality`, et le garde-fou qui descend d'un cran tout
-// seul si les images coûtent trop cher.
+// COST: these passes are paid on every rendered frame. Rendering being on demand
+// (`core/renderLoop.ts`), the cost at rest stays zero — but during a camera flight on a tablet,
+// it counts. Hence the three levels of `RenderQuality`, and the safeguard that steps down a notch on
+// its own if the frames cost too much.
 //
-// L'ANTICRÉNELAGE (MSAA) ne sert qu'au rendu de la SCÈNE : c'est là que naissent les arêtes. Il vit
-// donc dans la cible de `ScenePass`, recopiée une fois dans le tampon du composer ; les deux tampons
-// du composer, eux, n'en ont pas. Jusqu'au 2026-09-25 la cible MSAA était celle du composer, qui la
-// CLONE pour son second tampon : chaque passe plein écran (bloom, sortie, vignette, tilt-shift)
-// écrivait dans une cible multi-échantillonnée puis la résolvait. Mesuré sur un iGPU (Radeon
-// intégrée, 1904×905, qualité moyenne) : 22 ms de GPU par image, 7,7 ms sans — le bloom passait de
-// 4,9 à 1,7 ms, chaque passe de shader de 2,8 à 0,8 ms.
+// ANTI-ALIASING (MSAA) only serves the render of the SCENE: that is where edges are born. It therefore lives
+// in the target of `ScenePass`, copied once into the composer's buffer; the composer's two buffers,
+// for their part, have none. Until 2026-09-25 the MSAA target was the composer's, which
+// CLONES it for its second buffer: every full-screen pass (bloom, output, vignette, tilt-shift)
+// wrote into a multisampled target then resolved it. Measured on an iGPU (integrated
+// Radeon, 1904×905, medium quality): 22 ms of GPU per frame, 7.7 ms without — bloom went from
+// 4.9 to 1.7 ms, each shader pass from 2.8 to 0.8 ms.
 
-/** Ce que l'utilisateur choisit. `auto` mesure la machine, puis se corrige si les images traînent. */
+/** What the user chooses. `auto` measures the machine, then corrects itself if the frames lag. */
 export type RenderQuality = 'auto' | 'high' | 'medium' | 'low'
 export const RENDER_QUALITIES: readonly RenderQuality[] = ['auto', 'high', 'medium', 'low']
 
-/** Ce qui est réellement appliqué. */
+/** What is actually applied. */
 export type EffectiveQuality = 'high' | 'medium' | 'low'
 
-/** Plafond du rapport de pixels selon la qualité : c'est le levier le moins visible et le plus rentable. */
+/** Pixel ratio ceiling by quality: it is the least visible and most profitable lever. */
 export const PIXEL_RATIO: Record<EffectiveQuality, number> = { high: 2, medium: 1.5, low: 1.25 }
-/** Anticrénelage matériel du tampon intermédiaire (MSAA). 0 en bas de gamme. */
+/** Hardware anti-aliasing of the intermediate buffer (MSAA). 0 at the low end. */
 const SAMPLES: Record<EffectiveQuality, number> = { high: 4, medium: 2, low: 0 }
 
 const TONE_MAPPING: Record<PostLook['toneMapping'], ToneMapping> = {
@@ -56,27 +56,27 @@ const TONE_MAPPING: Record<PostLook['toneMapping'], ToneMapping> = {
   linear: NoToneMapping,
 }
 
-/** La courbe de tone mapping d'un style : le renderer l'applique lui-même quand il n'y a pas de chaîne. */
+/** A style's tone mapping curve: the renderer applies it itself when there is no chain. */
 export const toneMappingOf = (look: PostLook): ToneMapping => TONE_MAPPING[look.toneMapping]
 
-/** Le nom du GPU tel que le navigateur le donne (`ANGLE (AMD, AMD Radeon(TM) Graphics ...)`) ; vide s'il le cache. */
+/** The GPU name as the browser gives it (`ANGLE (AMD, AMD Radeon(TM) Graphics ...)`); empty if it hides it. */
 export function gpuName(renderer: WebGLRenderer): string {
   const gl = renderer.getContext()
   const dbg = gl.getExtension('WEBGL_debug_renderer_info')
   return String((dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) ?? '')
 }
 
-// Un GPU INTÉGRÉ partait d'office en « medium », sur son nom : la Radeon d'un portable hybride
-// (Ryzen 9 5900HX + RTX 3060) coûtait 93 ms de GPU par image « high » le 2026-09-15. Depuis la passe
-// unique et la chaîne allégée, elle en coûte 26 à 46 avec la vraie maison (mesuré le 2026-09-27) :
-// c'est au garde-fou d'en juger, sur la mesure, plus au nom.
-/** Rendu logiciel : rien n'y est tenable au-delà de « low ». */
+// An INTEGRATED GPU started out as "medium" by default, based on its name: the Radeon of a hybrid laptop
+// (Ryzen 9 5900HX + RTX 3060) cost 93 ms of GPU per "high" frame on 2026-09-15. Since the single
+// pass and the lightened chain, it costs 26 to 46 with the real house (measured on 2026-09-27):
+// it is up to the safeguard to judge, on the measurement, no longer on the name.
+/** Software rendering: nothing is sustainable there beyond "low". */
 const SOFTWARE_GPU = /SwiftShader|llvmpipe|Basic Render Driver/i
 
 /**
- * Ce que la machine a l'air de pouvoir tenir. Grossier par nature, mais il ne sert qu'à choisir un
- * point de départ : le garde-fou de `PostPipeline` corrige ensuite à la mesure. Le nom du GPU
- * (`gpuName`) pèse plus que le reste : c'est lui qui exécute la chaîne, pas les cœurs du processeur.
+ * What the machine seems able to sustain. Crude by nature, but it only serves to pick a
+ * starting point: the `PostPipeline` safeguard then corrects by measurement. The GPU name
+ * (`gpuName`) weighs more than the rest: it is what runs the chain, not the processor's cores.
  */
 export function detectQuality(gpu = ''): EffectiveQuality {
   const nav = globalThis.navigator as (Navigator & { deviceMemory?: number }) | undefined
@@ -89,10 +89,10 @@ export function detectQuality(gpu = ''): EffectiveQuality {
 }
 
 /**
- * Le garde-fou : `sample` reçoit le coût d'une image, `onOver` est appelé UNE fois si la MÉDIANE des
- * images observées dépasse le budget. Les premières compilent des shaders et sont ignorées ; la
- * médiane, elle, ignore les pointes isolées — l'envoi d'une texture, une carte d'environnement —
- * qu'une moyenne aurait prises pour la machine.
+ * The safeguard: `sample` receives the cost of a frame, `onOver` is called ONCE if the MEDIAN of the
+ * observed frames exceeds the budget. The first ones compile shaders and are ignored; the
+ * median, for its part, ignores isolated spikes — a texture upload, an environment map —
+ * that an average would have taken for the machine.
  */
 export function createCostGuard(onOver: () => void, budgetMs = FRAME_BUDGET_MS, watched = FRAMES_WATCHED, warmup = 4): { sample(ms: number): void } {
   let frames = 0, done = false
@@ -109,15 +109,15 @@ export function createCostGuard(onOver: () => void, budgetMs = FRAME_BUDGET_MS, 
 }
 
 /**
- * La SORTIE (tone mapping, espace colorimétrique) et la VIGNETTE en une passe : une lecture et une
- * écriture plein écran de moins. La vignette est appliquée APRÈS la conversion sRGB, comme quand elle
- * avait sa passe : c'est une atténuation d'objectif, pas une lumière. `vignette = 0` l'annule.
+ * The OUTPUT (tone mapping, color space) and the VIGNETTE in one pass: one full-screen read and
+ * write fewer. The vignette is applied AFTER the sRGB conversion, as when it
+ * had its own pass: it is a lens falloff, not a light. `vignette = 0` cancels it.
  */
 class VignetteOutputPass extends OutputPass {
   readonly vignette = { value: 0 }
   /**
-   * L'étalonnage (`GradeLook`), appliqué AVANT la vignette, en espace d'affichage : c'est là qu'un
-   * étalonneur règle ses courbes. Neutre, il rend l'image à l'identique. `gamma` est passé INVERSÉ.
+   * The grading (`GradeLook`), applied BEFORE the vignette, in display space: that is where a
+   * colorist sets their curves. Neutral, it renders the image identically. `gamma` is passed INVERTED.
    */
   readonly grade = {
     lift: { value: new Vector3(0, 0, 0) },
@@ -134,41 +134,41 @@ class VignetteOutputPass extends OutputPass {
     this.uniforms.gradeSaturation = this.grade.saturation
     const frag = this.material.fragmentShader
     const at = frag.lastIndexOf('}')
-    if (!frag.includes('varying vec2 vUv;') || at < 0) throw new Error('post: OutputShader a changé')
+    if (!frag.includes('varying vec2 vUv;') || at < 0) throw new Error('post: OutputShader changed')
     this.material.fragmentShader = frag.slice(0, at).replace('varying vec2 vUv;', 'varying vec2 vUv;\nuniform float vignette;\nuniform vec3 gradeLift;\nuniform vec3 gradeInvGamma;\nuniform vec3 gradeGain;\nuniform float gradeSaturation;') + `
       vec3 kasbahC = gradeGain * ( gl_FragColor.rgb + gradeLift * ( 1.0 - gl_FragColor.rgb ) );
       kasbahC = pow( max( kasbahC, 0.0 ), gradeInvGamma );
       gl_FragColor.rgb = mix( vec3( dot( kasbahC, vec3( 0.2126, 0.7152, 0.0722 ) ) ), kasbahC, gradeSaturation );
-      // distance au centre, ramenée à 1 dans les coins ; courbe douce pour qu'aucun cercle ne se voie
+      // distance to the center, brought to 1 in the corners; soft curve so that no circle shows
       float kasbahD = length( vUv - 0.5 ) * 1.41421356;
       gl_FragColor.rgb *= 1.0 - vignette * smoothstep( 0.35, 1.0, kasbahD );
     ` + frag.slice(at)
   }
 }
 
-/** Largeur de la transition net → flou, en fraction de l'image. */
+/** Width of the sharp → blurred transition, as a fraction of the image. */
 const TILT_FALLOFF = 0.35
-/** Rayon (px) du flou à pleine force. */
+/** Radius (px) of the blur at full strength. */
 const TILT_MAX_PX = 14
 
 /**
- * TILT-SHIFT : une bande nette au milieu de l'image, le flou qui monte vers le haut et vers le bas.
+ * TILT-SHIFT: a sharp band in the middle of the image, the blur rising toward the top and the bottom.
  *
- * Ce n'est PAS une profondeur de champ : rien ici ne lit la profondeur. Et c'est fidèle — une photo
- * tilt-shift est faite avec un plan de netteté INCLINÉ, qui vu d'une caméra plongeante se lit
- * précisément comme une bande horizontale. Un vrai flou de profondeur (`BokehPass`) demanderait un
- * rendu de plus de la scène, en profondeur.
+ * It is NOT a depth of field: nothing here reads depth. And that is faithful — a tilt-shift
+ * photo is taken with a TILTED plane of focus, which seen from a downward-looking camera reads
+ * precisely as a horizontal band. A true depth blur (`BokehPass`) would require one more
+ * render of the scene, in depth.
  *
- * Deux passes séparables (horizontale puis verticale) plutôt qu'un noyau 2D : neuf échantillons
- * chacune au lieu de quatre-vingt-un, pour le même flou. Le rayon varie par pixel, ce qui n'est pas
- * exactement séparable — l'écart ne se voit pas, et c'est l'approximation de tous les flous d'écran.
+ * Two separable passes (horizontal then vertical) rather than a 2D kernel: nine samples
+ * each instead of eighty-one, for the same blur. The radius varies per pixel, which is not
+ * exactly separable — the difference does not show, and it is the approximation of all screen blurs.
  *
- * Appliqué APRÈS le tone mapping (comme la vignette) : c'est un défaut d'objectif, pas une lumière.
+ * Applied AFTER tone mapping (like the vignette): it is a lens defect, not a light.
  */
 const TILT_SHIFT_SHADER = {
   uniforms: {
     tDiffuse: { value: null as unknown },
-    /** Un pixel, en UV, dans la direction de la passe : (1/l, 0) puis (0, 1/h). */
+    /** One pixel, in UV, in the direction of the pass: (1/w, 0) then (0, 1/h). */
     direction: { value: new Vector2(0, 0) },
     strength: { value: 0 },
     center: { value: 0.5 },
@@ -178,8 +178,8 @@ const TILT_SHIFT_SHADER = {
     varying vec2 vUv;
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
   `,
-  // Les deux constantes sont INTERPOLÉES depuis le JS : `tiltBlurFactor` doit rendre exactement la
-  // même courbe pour les pilules, et deux nombres recopiés à la main finissent toujours par diverger.
+  // The two constants are INTERPOLATED from the JS: `tiltBlurFactor` must return exactly the
+  // same curve for the pills, and two numbers copied by hand always end up diverging.
   fragmentShader: /* glsl */`
     uniform sampler2D tDiffuse;
     uniform vec2 direction;
@@ -205,23 +205,23 @@ const TILT_SHIFT_SHADER = {
 }
 
 /**
- * Combien un point de l'image est flouté, de 0 (net) à 1. `uvY` a son origine en BAS, comme le
- * shader. Sert AUSSI aux pilules des appareils, qui vivent dans le DOM et non dans le canvas : sans
- * ça, elles resteraient parfaitement nettes au-dessus d'une maison floutée (voir `HouseScene`).
+ * How much a point of the image is blurred, from 0 (sharp) to 1. `uvY` has its origin at the BOTTOM, like the
+ * shader. ALSO used for the device pills, which live in the DOM and not in the canvas: without
+ * it, they would stay perfectly sharp above a blurred house (see `HouseScene`).
  */
 export function tiltBlurFactor(uvY: number, look: { center: number; width: number }): number {
   const d = Math.abs(uvY - look.center)
   const t = Math.min(1, Math.max(0, (d - look.width) / TILT_FALLOFF))
-  return t * t * (3 - 2 * t)              // smoothstep, celui du shader
+  return t * t * (3 - 2 * t)              // smoothstep, the shader's
 }
 
-/** Dessine la scène dans la cible donnée, `null` = l'écran. */
+/** Draws the scene into the given target, `null` = the screen. */
 export type DrawScene = (target: WebGLRenderTarget | null) => void
 
 /**
- * La première passe : notre propre rendu (ombres à la demande, caustiques), là où un `RenderPass`
- * ferait un `render` nu. Elle porte l'ANTICRÉNELAGE : la scène est dessinée dans sa cible MSAA, puis
- * recopiée — résolue — dans le tampon du composer, qui n'en a pas (voir l'en-tête).
+ * The first pass: our own render (shadows on demand, caustics), where a `RenderPass`
+ * would do a bare `render`. It carries the ANTI-ALIASING: the scene is drawn into its MSAA target, then
+ * copied — resolved — into the composer's buffer, which has none (see the header).
  */
 class ScenePass extends Pass {
   private readonly msaa: WebGLRenderTarget | null
@@ -230,9 +230,9 @@ class ScenePass extends Pass {
 
   constructor(private readonly draw: DrawScene, samples: number) {
     super()
-    this.needsSwap = false          // comme `RenderPass` : la suite lit le tampon qu'on vient d'écrire
+    this.needsSwap = false          // like `RenderPass`: what follows reads the buffer just written
     this.msaa = samples > 0 ? new WebGLRenderTarget(1, 1, { type: HalfFloatType, samples }) : null
-    // sans mélange : la copie remplace le tampon, alpha compris (le canvas est transparent)
+    // no blending: the copy replaces the buffer, alpha included (the canvas is transparent)
     this.copyMaterial = this.msaa
       ? new ShaderMaterial({ ...CopyShader, uniforms: UniformsUtils.clone(CopyShader.uniforms), blending: NoBlending, depthTest: false, depthWrite: false })
       : null
@@ -259,9 +259,9 @@ class ScenePass extends Pass {
 }
 
 /**
- * L'occlusion relève la scène en profondeur et en normales : les décors ADDITIFS (le halo d'une
- * lampe) doivent en être absents, sinon elle les prend pour des obstacles et creuse un carré noir
- * sous chaque lampe allumée. Le temps du relevé, leur couche est éteinte sur la caméra.
+ * The occlusion captures the scene in depth and normals: the ADDITIVE decorations (a lamp's
+ * halo) must be absent from it, otherwise it takes them for obstacles and digs a black square
+ * under every lit lamp. For the duration of the capture, their layer is turned off on the camera.
  */
 class ArchitectureGTAOPass extends GTAOPass {
   override render(renderer: WebGLRenderer, write: WebGLRenderTarget, read: WebGLRenderTarget, deltaTime = 0, maskActive = false): void {
@@ -276,17 +276,17 @@ class ArchitectureGTAOPass extends GTAOPass {
 export interface PostPipeline {
   readonly quality: EffectiveQuality
   /**
-   * Une cible au format de celle où la scène est dessinée (demi-flottant, linéaire). Précompiler
-   * les shaders en visant l'ÉCRAN produirait la variante « tone mapping + sRGB », que la scène
-   * n'utilise jamais ici : c'est la sortie de la chaîne qui s'en charge.
+   * A target in the format of the one the scene is drawn into (half float, linear). Precompiling
+   * the shaders while targeting the SCREEN would produce the "tone mapping + sRGB" variant, which the scene
+   * never uses here: it is the output of the chain that takes care of it.
    */
   readonly sceneTarget: WebGLRenderTarget
   setSize(width: number, height: number, pixelRatio: number): void
   setLook(look: PostLook): void
   /**
-   * Rend une image complète. Mesure son coût et peut demander une baisse de qualité. `measurable` :
-   * l'image dit quelque chose de la machine — elle suit un geste (voir `renderLoop.ts`) et ne refait
-   * pas la carte d'ombre. Les autres sont rendues sans être comptées.
+   * Renders a full frame. Measures its cost and may request a quality drop. `measurable`:
+   * the frame says something about the machine — it follows a gesture (see `renderLoop.ts`) and does not redo
+   * the shadow map. The others are rendered without being counted.
    */
   render(measurable: boolean): void
   dispose(): void
@@ -298,23 +298,23 @@ export interface PostPipelineDeps {
   camera: Camera
   draw: DrawScene
   quality: EffectiveQuality
-  /** Appelé au plus une fois, quand le garde-fou décide que la machine ne suit pas. */
+  /** Called at most once, when the safeguard decides the machine cannot keep up. */
   onDowngrade?: (to: EffectiveQuality) => void
   now?: () => number
 }
 
-/** Ce qu'on lit de `EXT_disjoint_timer_query_webgl2` (absent des types du DOM). */
+/** What is read from `EXT_disjoint_timer_query_webgl2` (missing from the DOM types). */
 interface TimerQueryExt { readonly TIME_ELAPSED_EXT: number; readonly GPU_DISJOINT_EXT: number }
 
 /**
- * Au-delà de ce coût MÉDIAN par image, la qualité descend d'un cran (≈ 30 images/s sur les vols de
- * caméra). 40 ms jusqu'au 2026-09-25 (25 images/s, une vue qui rame), puis 25 ms — qui faisait
- * descendre la Radeon intégrée d'un cran dès qu'on touchait la vue : « high » y coûte 26-46 ms avec
- * la vraie maison, « medium » 9-18 (mesuré le 2026-09-27). 30 images/s tenues valent mieux qu'une
- * image appauvrie : choix de l'utilisateur, le même jour.
+ * Beyond this MEDIAN cost per frame, the quality steps down a notch (≈ 30 frames/s on camera
+ * flights). 40 ms until 2026-09-25 (25 frames/s, a view that lags), then 25 ms — which made
+ * the integrated Radeon step down a notch as soon as the view was touched: "high" costs 26-46 ms there with
+ * the real house, "medium" 9-18 (measured on 2026-09-27). 30 frames/s sustained are worth more than an
+ * impoverished image: the user's choice, the same day.
  */
 const FRAME_BUDGET_MS = 33
-/** Images observées avant de trancher : à 5 images/s, c'est déjà trois secondes de saccade. */
+/** Frames observed before deciding: at 5 frames/s, that is already three seconds of stutter. */
 const FRAMES_WATCHED = 16
 
 export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
@@ -322,13 +322,13 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
   const now = deps.now ?? (() => performance.now())
   const samples = SAMPLES[quality]
 
-  // Sans MSAA : il est dans la cible de la scène (`ScenePass`), et le composer CLONE cette cible-ci.
+  // Without MSAA: it is in the scene's target (`ScenePass`), and the composer CLONES this target.
   const target = new WebGLRenderTarget(1, 1, { type: HalfFloatType })
   const composer = new EffectComposer(renderer, target)
   composer.addPass(new ScenePass(draw, samples))
 
-  // L'occlusion n'est calculée qu'en qualité haute : c'est la passe la plus chère du lot (elle rend
-  // la scène une fois de plus, en profondeur et en normales).
+  // The occlusion is only computed in high quality: it is the most expensive pass of the lot (it renders
+  // the scene one more time, in depth and normals).
   const ao = quality === 'high' ? new ArchitectureGTAOPass(scene, camera, 1, 1) : null
   if (ao) {
     ao.output = GTAOPass.OUTPUT.Default
@@ -341,29 +341,29 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
   const output = new VignetteOutputPass()
   composer.addPass(output)
 
-  // Le tilt-shift ferme la marche : il floute l'image FINIE, vignette comprise. Éteint en qualité
-  // basse, comme le bloom — deux passes plein écran de plus sur une machine qui peine déjà, non.
+  // The tilt-shift brings up the rear: it blurs the FINISHED image, vignette included. Off in low
+  // quality, like the bloom — two more full-screen passes on a machine already struggling, no.
   const tilt = quality === 'low' ? null : [new ShaderPass(TILT_SHIFT_SHADER), new ShaderPass(TILT_SHIFT_SHADER)] as const
   if (tilt) for (const pass of tilt) { pass.enabled = false; composer.addPass(pass) }
 
-  // LE GARDE-FOU MESURE LE GPU, PAS LE FIL PRINCIPAL. `composer.render()` ne fait que SOUMETTRE des
-  // commandes : 7 ms sur une machine dont le GPU met 93 ms à les exécuter — et c'est l'exécution qui
-  // bride la cadence. Chronométré côté CPU, le garde-fou restait aveugle et « auto » restait « high »
-  // à 8 images par seconde. Deux mesures, dans l'ordre :
-  //  - une requête de temps GPU autour de chaque image (`EXT_disjoint_timer_query_webgl2`), lue
-  //    quelques images plus tard quand le résultat est disponible ;
-  //  - sinon (Safari, Firefox), l'intervalle entre deux images ENCHAÎNÉES par un geste : c'est le
-  //    coût réel d'une image quand le GPU est le goulot, et l'écran ne le borne que par en bas.
-  // Dans les deux cas, seules les images `measurable` comptent : celles d'un geste, sans relevé
-  // d'ombres. Les premières images après un chargement refont la carte d'ombre pendant 700 ms et
-  // envoient textures et cartes d'environnement — elles disaient « lent » de toute machine.
+  // THE SAFEGUARD MEASURES THE GPU, NOT THE MAIN THREAD. `composer.render()` only SUBMITS
+  // commands: 7 ms on a machine whose GPU takes 93 ms to execute them — and it is the execution that
+  // caps the frame rate. Timed on the CPU side, the safeguard stayed blind and "auto" stayed "high"
+  // at 8 frames per second. Two measurements, in order:
+  //  - a GPU timer query around each frame (`EXT_disjoint_timer_query_webgl2`), read
+  //    a few frames later when the result is available;
+  //  - otherwise (Safari, Firefox), the interval between two frames CHAINED by a gesture: it is the
+  //    real cost of a frame when the GPU is the bottleneck, and the screen only bounds it from below.
+  // In both cases, only `measurable` frames count: those of a gesture, without a shadow
+  // capture. The first frames after a load redo the shadow map for 700 ms and
+  // upload textures and environment maps — they said "slow" of any machine.
   const gl = renderer.getContext()
   const timer = 'createQuery' in gl ? (gl.getExtension('EXT_disjoint_timer_query_webgl2') as TimerQueryExt | null) : null
   const pending: WebGLQuery[] = []
   const guard = createCostGuard(() => deps.onDowngrade?.(quality === 'high' ? 'medium' : 'low'))
   let lastStart = 0
   const readQueries = (gl2: WebGL2RenderingContext, ext: TimerQueryExt) => {
-    // Un « disjoint » (changement de fréquence, autre contexte) invalide tout ce qui était en vol.
+    // A "disjoint" (frequency change, other context) invalidates everything that was in flight.
     if (gl2.getParameter(ext.GPU_DISJOINT_EXT)) { for (const q of pending) gl2.deleteQuery(q); pending.length = 0; return }
     while (pending.length && gl2.getQueryParameter(pending[0]!, gl2.QUERY_RESULT_AVAILABLE)) {
       const q = pending.shift()!
@@ -376,12 +376,12 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
     quality,
     sceneTarget: target,
     setSize(width, height, pixelRatio) {
-      // `setPixelRatio` redimensionne déjà tampons ET passes : inutile de les toucher un à un.
+      // `setPixelRatio` already resizes buffers AND passes: no need to touch them one by one.
       composer.setPixelRatio(pixelRatio)
       composer.setSize(width, height)
       if (tilt) {
-        // Le pas d'échantillonnage est UN PIXEL RENDU : il suit donc la taille ET le rapport de
-        // pixels, sans quoi le flou serait deux fois plus étroit sur un écran dense.
+        // The sampling step is ONE RENDERED PIXEL: it therefore follows the size AND the pixel
+        // ratio, otherwise the blur would be twice as narrow on a dense screen.
         const w = Math.max(1, width * pixelRatio), h = Math.max(1, height * pixelRatio)
         ;(tilt[0].uniforms.direction as { value: Vector2 }).value.set(1 / w, 0)
         ;(tilt[1].uniforms.direction as { value: Vector2 }).value.set(0, 1 / h)
@@ -391,8 +391,8 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
       renderer.toneMapping = TONE_MAPPING[look.toneMapping]
       renderer.toneMappingExposure = look.exposure
       if (bloom) {
-        // `null` = le style ne veut pas de bloom : on l'éteint plutôt que de démonter la chaîne,
-        // pour qu'un changement de style ne reconstruise pas des cibles de rendu.
+        // `null` = the style wants no bloom: we turn it off rather than tearing down the chain,
+        // so that a style change does not rebuild render targets.
         bloom.enabled = look.bloom !== null
         if (look.bloom) {
           bloom.strength = look.bloom.strength

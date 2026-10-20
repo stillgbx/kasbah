@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import './textures/prebake' // cuit les matières à l'import, hors du délai du premier test
+import './textures/prebake' // bakes the materials at import, outside the first test's timeout
 import { computeHouseGeometry, parseHouse, pointInPolygon, type Vec2 } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import { houseToWorld } from './core/coords'
 import { HouseScene } from './HouseScene'
 
-// Mode édition, onglet Étage : un tap sur le plancher du 1er attrapait la poignée d'une fenêtre du
-// RDC juste dessous — les poignées passaient avant le bâti sans regarder s'il les cachait.
+// Edit mode, upper floor tab: a tap on the upper floor's floor grabbed the handle of a window on the
+// ground floor right below — handles took precedence over the structure without checking whether it hid them.
 
 const house = parseHouse(demo)
 const g = computeHouseGeometry(house)
@@ -15,8 +15,8 @@ const rdc = g.levels.find((l) => l.levelId === 'rdc')!
 const etageRooms = house.rooms.filter((r) => r.levelId === 'etage')
 
 /**
- * Une ouverture murale du RDC, et un œil placé au-dessus du 1er côté intérieur : le rayon vers le
- * centre de l'ouverture traverse le plancher d'une pièce du 1er avant de l'atteindre.
+ * A wall opening on the ground floor, and an eye placed above the upper floor, on the inside: the ray
+ * toward the center of the opening crosses the floor of an upper-floor room before reaching it.
  */
 function throughEtageFloor(): { eye: [number, number, number]; target: [number, number, number]; roomId: string } {
   for (const o of rdc.openings) {
@@ -26,17 +26,17 @@ function throughEtageFloor(): { eye: [number, number, number]; target: [number, 
     ]
     for (const back of [2, 3, 4]) {
       const eye: [number, number, number] = [c[0] - o.normal[0] * back, c[1] - o.normal[1] * back, etage.elevation + 3]
-      const t = (eye[2] - etage.elevation) / (eye[2] - c[2])     // où le rayon passe au niveau du plancher
+      const t = (eye[2] - etage.elevation) / (eye[2] - c[2])     // where the ray passes at floor height
       const at: Vec2 = [eye[0] + (c[0] - eye[0]) * t, eye[1] + (c[1] - eye[1]) * t]
       const room = etageRooms.find((r) => pointInPolygon(at, r.polygon))
       if (room) return { eye, target: c, roomId: room.id }
     }
   }
-  throw new Error('aucune ouverture du RDC sous un plancher du 1er dans la maison de démo')
+  throw new Error('no ground-floor opening under an upper-floor floor in the demo house')
 }
 
-describe('un tap ne traverse pas le plancher', () => {
-  it('le sol du 1er gagne contre la poignée d’une ouverture du RDC qu’il cache', () => {
+describe('a tap does not go through the floor', () => {
+  it('the upper floor wins against the handle of a ground-floor opening it hides', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(house)
     scene.resize(600, 600)

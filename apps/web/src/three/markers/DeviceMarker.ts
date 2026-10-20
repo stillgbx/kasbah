@@ -13,50 +13,50 @@ import { isOrientable, yawToRad } from '../../lib/orientation'
 import { iconSvg, kindIcon } from '../../lib/strokeIcons'
 import { deviceCategory } from '../../lib/deviceIcons'
 
-// Marqueur d'appareil : une pilule DOM (icône + nom) projetée au-dessus de l'ancre par le
-// CSS2DRenderer, cliquable, et une représentation 3D minimale propre au type (sphère lumineuse,
-// lame de volet, carrosserie…). `update(state)` MUTE les objets ; rien n'est recréé.
-// Repère : local au niveau (Z-up), le groupe est à la position de l'appareil.
+// Device marker: a DOM pill (icon + name) projected above the anchor by the
+// CSS2DRenderer, clickable, and a minimal 3D representation specific to the type (glowing sphere,
+// shutter slat, car body…). `update(state)` MUTATES the objects; nothing is recreated.
+// Reference frame: local to the level (Z-up), the group is at the device's position.
 
 export interface MarkerContext {
   materials: MaterialSet
   theme: SceneTheme
-  /** Ce que le style dit d'une lampe allumée : taille du halo, opacité, portée. */
+  /** What the style says about a lit lamp: halo size, opacity, range. */
   glow: GlowLook
   /**
-   * L'appareil est au JARDIN (hors niveau). Il n'est pas dessiné au même moment qu'un appareil de
-   * niveau, et sa lampe n'éclaire pas la même chose — voir `core/layers.ts`.
+   * The device is in the GARDEN (outside any level). It is not drawn at the same moment as a level
+   * device, and its lamp does not light the same thing — see `core/layers.ts`.
    */
   outdoor?: boolean
   descriptor: DeviceDescriptor | undefined
-  /** Lumière liée à un ventilateur : icône `lightFan` dans la pilule + corps 3D ventilateur. */
+  /** Light tied to a fan: `lightFan` icon in the pill + 3D fan body. */
   linkedFan?: boolean
-  /** Id du descripteur `fan` lié (pour faire tourner les pales selon son état). */
+  /** Id of the linked `fan` descriptor (to spin the blades according to its state). */
   linkedFanId?: string
-  /** `meta.fan.speeds` du ventilateur lié : la vitesse des pales se lit comme un rang dans cette liste. */
+  /** `meta.fan.speeds` of the linked fan: the blade speed reads as a rank in this list. */
   linkedFanSpeeds?: readonly number[]
-  /** Rectangle de l'ouverture liée (volets). */
+  /** Rectangle of the linked opening (shutters). */
   opening?: OpeningRect
   addAnimation(a: Animation): () => void
-  /** Redemande un rendu : la scène ne rend qu'à la demande, et une image chargée plus tard n'anime rien. */
+  /** Requests a render again: the scene only renders on demand, and an image loaded later animates nothing. */
   invalidate(): void
-  /** Chargement des images posées sur un écran ; injecté par les tests, `TextureLoader` sinon. */
+  /** Loading of the images laid on a screen; injected by the tests, `TextureLoader` otherwise. */
   loadTexture?: TextureLoad
-  /** Chargement des carrosseries 3D d'un véhicule ; injecté par les tests, `GLTFLoader` sinon. */
+  /** Loading of a vehicle's 3D car bodies; injected by the tests, `GLTFLoader` otherwise. */
   loadModel?: ModelLoad
   /**
-   * Projette un point GPS dans le repère de la maison (x, y en mètres), `null` hors du terrain. C'est
-   * la scène qui sait le faire (origine, cap, décalage de l'appareil) ; un marqueur qui suit une
-   * position publiée en GPS — la tondeuse — s'en sert à chaque relevé, sans reconstruction.
+   * Projects a GPS point into the house reference frame (x, y in meters), `null` outside the terrain. It is
+   * the scene that knows how (origin, heading, device offset); a marker that follows a
+   * position published as GPS — the mower — uses it at every reading, without rebuilding.
    */
   toLocal?: (p: { lat: number; lon: number }) => [number, number] | null
-  /** z local du marqueur posé en (x, y) : un engin qui roule dans le jardin suit le relief. */
+  /** Local z of the marker placed at (x, y): a vehicle driving in the garden follows the relief. */
   groundZ?: (x: number, y: number) => number
   /**
-   * La place où cet engin se RANGE quand il est au repos (centre en repère maison, et cap), `null`
-   * s'il n'y en a pas ou s'il est en mouvement. C'est la scène qui tranche (elle connaît les places
-   * de la maison et tous les engins) ; le marqueur d'une tondeuse s'en sert à chaque relevé, sans
-   * reconstruction — sinon le robot dériverait de sa base au fil des points GPS reçus à l'arrêt.
+   * The space where this vehicle PARKS when at rest (center in the house reference frame, and heading), `null`
+   * if there is none or if it is moving. It is the scene that decides (it knows the house's
+   * spaces and all the vehicles); a mower's marker uses it at every reading, without
+   * rebuilding — otherwise the robot would drift from its base with the GPS points received while stopped.
    */
   parkedAt?: (state: DeviceState) => { xy: [number, number]; yaw: number } | null
   onTap(key: string): void
@@ -64,19 +64,19 @@ export interface MarkerContext {
 }
 
 /**
- * Ce que l'appareil fait ENTENDRE, décidé par la scène (qui connaît la maison et tous les états) et non
- * par le marqueur (qui ne voit que le sien) : `emits` — du son sort de lui ; `relayFrom` — l'état du
- * lecteur dont il joue le son (barre de son d'une TV). Voir `lib/audioRouting.ts`.
+ * What the device makes HEARD, decided by the scene (which knows the house and all the states) and not
+ * by the marker (which only sees its own): `emits` — sound comes out of it; `relayFrom` — the state of the
+ * player whose sound it plays (a TV's soundbar). See `lib/audioRouting.ts`.
  */
 export interface SoundCue { emits: boolean; relayFrom?: DeviceState }
 
-/** Guide du mode « déplacer » : dessiné après la maison, donc par-dessus elle. */
+/** Guide of the "move" mode: drawn after the house, hence on top of it. */
 const GUIDE_RENDER_ORDER = 10
 
 export abstract class DeviceMarker {
   readonly object = new Group()
   readonly key: string
-  /** Hauteur (m) de la pilule au-dessus de l'ancre. */
+  /** Height (m) of the pill above the anchor. */
   protected lift = 0.35
   protected state: DeviceState | undefined
   protected sound: SoundCue | undefined
@@ -84,16 +84,16 @@ export abstract class DeviceMarker {
   protected stopAnimation: (() => void) | null = null
   protected pill: HTMLButtonElement | null = null
   protected css: CSS2DObject | null = null
-  /** Visibilité imposée par le niveau focalisé (indépendante de l'état). */
+  /** Visibility imposed by the focused level (independent of the state). */
   private pillAllowed = true
-  /** Vrai dès que le marqueur est jeté : un chargement encore en vol ne doit pas réveiller un mort. */
+  /** True as soon as the marker is discarded: a load still in flight must not wake the dead. */
   protected disposed = false
-  /** Maillages cliquables (userData.key). */
+  /** Clickable meshes (userData.key). */
   readonly pickables: Object3D[] = []
   /**
-   * Mode « déplacer » : anneau au sol + fil vertical, pour lire x;y d'un appareil en hauteur ; et, pour
-   * un appareil qui regarde quelque part (écran, caméra, véhicule), un cône « regarde vers » au sol
-   * dans la direction de son `yaw`, qui suit les touches de rotation du panneau.
+   * "Move" mode: ring on the ground + vertical wire, to read the x;y of a device mounted high; and, for
+   * a device that looks somewhere (screen, camera, vehicle), a "looks toward" cone on the ground
+   * in the direction of its `yaw`, which follows the panel's rotation keys.
    */
   private guide: { ring: Mesh<RingGeometry, MeshBasicMaterial>; line: Line<BufferGeometry, LineBasicMaterial>; look: Mesh<ShapeGeometry, MeshBasicMaterial> | null } | null = null
 
@@ -110,17 +110,17 @@ export abstract class DeviceMarker {
       this.pill.dataset.key = device.id
       const kind = ctx.descriptor?.kind ?? device.kind
       this.pill.dataset.cat = deviceCategory(kind)
-      // le disque d'icône est le POINT FIXE de la pilule : teinté par la catégorie, rempli par l'état,
-      // et seul survivant quand la distance réduit la pilule à une icône ou à un point (`data-lod`)
+      // the icon disc is the FIXED POINT of the pill: tinted by the category, filled by the state,
+      // and the sole survivor when distance reduces the pill to an icon or a dot (`data-lod`)
       const disc = document.createElement('span')
       disc.className = 'marker-pill__icon'
-      // un module de champ de panneaux est un capteur de puissance, mais ce qu'on voit sur le toit est du solaire
+      // a module of a panel array is a power sensor, but what one sees on the roof is solar
       disc.appendChild(iconSvg(
         panelOf(device) ? 'solar' : kindIcon(kind, ctx.descriptor, { linkedFan: ctx.linkedFan }),
         16, 2,
       ))
       this.pill.appendChild(disc)
-      this.pill.title = ctx.label                       // la pilule est bornée : le nom entier reste lisible au survol
+      this.pill.title = ctx.label                       // the pill is bounded: the full name stays readable on hover
       const span = document.createElement('span')
       span.className = 'marker-pill__label'
       span.textContent = ctx.label
@@ -137,7 +137,7 @@ export abstract class DeviceMarker {
     this.pickables.push(o)
   }
 
-  /** Un maillage retiré de la scène doit aussi cesser d'être cliquable, sans quoi on tape dans le vide. */
+  /** A mesh removed from the scene must also stop being clickable, otherwise taps hit empty space. */
   protected unregisterPickable(o: Object3D): void {
     const i = this.pickables.indexOf(o)
     if (i >= 0) this.pickables.splice(i, 1)
@@ -145,21 +145,21 @@ export abstract class DeviceMarker {
 
   protected setLift(z: number): void { this.lift = z; this.css?.position.set(0, 0, z) }
 
-  /** Vrai si l'appareil est « actif » (lampe allumée, volet ouvert, lecture…) : teinte la pilule. */
+  /** True if the device is "active" (lamp on, shutter open, playback…): tints the pill. */
   protected abstract isOn(state: DeviceState): boolean
-  /** Réaction 3D spécifique au type. */
+  /** Type-specific 3D reaction. */
   protected abstract onState(state: DeviceState | undefined): void
 
   get currentState(): DeviceState | undefined { return this.state }
   get currentSound(): SoundCue | undefined { return this.sound }
-  /** Ventilateur lié à cette lumière (plafonnier), s'il y en a un. */
+  /** Fan linked to this light (ceiling light), if there is one. */
   get linkedFanDeviceId(): string | undefined { return this.ctx.linkedFanId }
 
   update(state: DeviceState | undefined, sound?: SoundCue): void {
     this.state = state
     this.sound = sound
     if (this.pill) {
-      // actif par lui-même, ou parce qu'il joue le son d'un autre (barre de son d'une TV en lecture)
+      // active by itself, or because it plays the sound of another (a TV's soundbar during playback)
       this.pill.dataset.on = (state && state.available && this.isOn(state)) || sound?.relayFrom ? '1' : '0'
       this.pill.dataset.unavailable = state && !state.available ? '1' : '0'
     }
@@ -167,16 +167,16 @@ export abstract class DeviceMarker {
   }
 
   /**
-   * État du ventilateur lié (plafonnier). No-op hors `LightMarker` : les pales tournent quand
-   * le fan est allumé.
+   * State of the linked fan (ceiling light). No-op outside `LightMarker`: the blades spin when
+   * the fan is on.
    */
   setCompanionFan(_state: DeviceState | undefined): void { /* no-op */ }
 
   setSelected(s: boolean): void {
     this.selected = s
     if (this.pill) this.pill.dataset.sel = s ? '1' : '0'
-    // un marqueur allumé se MONTRE, même de loin, là où la distance avait effacé sa pilule
-    // (`setPillVisible`) : c'est ce qui fait ressortir le module d'une case survolée dans la grille
+    // a lit marker SHOWS ITSELF, even from afar, where distance had erased its pill
+    // (`setPillVisible`): that is what makes the module of a hovered cell stand out in the grid
     if (this.css) this.css.visible = this.pillAllowed || s
   }
 
@@ -186,9 +186,9 @@ export abstract class DeviceMarker {
   }
 
   /**
-   * Netteté de la pilule, de 1 (intacte) à 0 (effacée) : elle suit la bande nette du tilt-shift.
-   * Une pilule vit dans le DOM, hors du canvas — le flou de la chaîne d'image ne l'atteint pas, et
-   * laissée intacte au-dessus d'une maison floutée elle casse l'illusion de maquette.
+   * Sharpness of the pill, from 1 (intact) to 0 (erased): it follows the tilt-shift's sharp band.
+   * A pill lives in the DOM, outside the canvas — the blur of the image chain does not reach it, and
+   * left intact above a blurred house it breaks the miniature illusion.
    */
   setPillFocus(k: number): void {
     this.pillFocus = k
@@ -196,8 +196,8 @@ export abstract class DeviceMarker {
   }
 
   /**
-   * Fondu de la pilule, de 1 (pleine) à 0 : elle apparaît et s'efface avec son niveau au lieu de
-   * surgir (`HouseScene.fadePills`). Se multiplie à la netteté du tilt-shift.
+   * Fade of the pill, from 1 (full) to 0: it appears and fades out with its level instead of
+   * popping up (`HouseScene.fadePills`). Multiplied by the tilt-shift sharpness.
    */
   setPillFade(k: number): void {
     this.pillFade = k
@@ -210,7 +210,7 @@ export abstract class DeviceMarker {
     const el = this.css?.element
     if (!el) return
     const k = this.pillFocus * this.pillFade
-    // `''` et non `'1'` : à pleine netteté la pilule redevient un élément SANS style d'opacité
+    // `''` and not `'1'`: at full sharpness the pill becomes an element WITHOUT an opacity style again
     const v = k >= 0.995 ? '' : k.toFixed(2)
     if (el.style.opacity !== v) el.style.opacity = v
   }
@@ -222,47 +222,47 @@ export abstract class DeviceMarker {
   }
 
   /**
-   * Marque un objet comme DÉCOR : il est posé sur la scène, il n'en est pas la matière. Il sort donc
-   * du relevé d'occlusion (voir `core/layers.ts`) — ce qui vaut pour tout ce qui est translucide ou
-   * additif, et pour rien d'autre.
+   * Marks an object as DECOR: it is laid on the scene, it is not its matter. It therefore leaves
+   * the occlusion capture (see `core/layers.ts`) — which holds for everything translucent or
+   * additive, and for nothing else.
    */
   protected asDecor<T extends Object3D>(o: T): T {
     o.layers.set(this.ctx.outdoor ? SITE_DECOR_LAYER : DECOR_LAYER)
     return o
   }
 
-  /** Position monde de l'ancre. */
+  /** World position of the anchor. */
   worldAnchor(out = new Vector3()): Vector3 { return this.object.getWorldPosition(out) }
-  /** Position monde de la pilule (ancre + lift). */
+  /** World position of the pill (anchor + lift). */
   worldPill(out = new Vector3()): Vector3 { return this.css ? this.css.getWorldPosition(out) : this.worldAnchor(out) }
 
   /**
-   * Mode « déplacer » : la pilule laisse passer le pointeur (CSS) et un guide relie l'appareil au sol.
+   * "Move" mode: the pill lets the pointer through (CSS) and a guide links the device to the ground.
    *
-   * `guide` sépare les deux : les dix modules d'un champ de panneaux se glissent tous (leur pilule
-   * doit laisser passer le doigt, sinon le tap sélectionne le module au lieu de déplacer le champ),
-   * mais un seul porte le guide — dix anneaux pour un seul objet qui bouge.
+   * `guide` separates the two: the ten modules of a panel array are all dragged (their pill
+   * must let the finger through, otherwise the tap selects the module instead of moving the array),
+   * but only one carries the guide — ten rings for a single object that moves.
    */
   setMoving(on: boolean, height: number, guide = on): void {
     if (this.pill) this.pill.dataset.moving = on ? '1' : '0'
     if (on && guide) {
       if (!this.guide) {
         const color = this.ctx.theme.primary
-        // Le guide se dessine PAR-DESSUS la maison (`depthTest: false` + `renderOrder`) : le sol d'un
-        // niveau-toit passe sous la dalle de toiture, qui enterrait l'anneau et le cône ; ailleurs, un
-        // mur au premier plan les mangeait de la même façon. Un seul appareil porte un guide à la fois.
+        // The guide is drawn ON TOP OF the house (`depthTest: false` + `renderOrder`): the floor of a
+        // roof level passes under the roofing slab, which buried the ring and the cone; elsewhere, a
+        // wall in the foreground ate them the same way. Only one device carries a guide at a time.
         const ring = this.asDecor(new Mesh(new RingGeometry(0.22, 0.3, 40), new MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false })))
         const line = this.asDecor(new Line(new BufferGeometry(), new LineBasicMaterial({ color, transparent: true, opacity: 0.7, depthTest: false })))
         ring.renderOrder = line.renderOrder = GUIDE_RENDER_ORDER
         this.object.add(ring, line)
         let look: Mesh<ShapeGeometry, MeshBasicMaterial> | null = null
-        // Un module regarde dans l'azimut de son champ (+y local) comme n'importe quel appareil
-        // orienté. Posé à plat (aucune inclinaison), il ne regarde nulle part : pas de cône du tout,
-        // plutôt qu'une flèche qui invente une direction.
+        // A module looks in its array's azimuth (local +y) like any oriented
+        // device. Laid flat (no tilt), it looks nowhere: no cone at all,
+        // rather than an arrow that invents a direction.
         const panel = panelOf(this.device)
         if (panel ? panel.tilt !== 0 : isOrientable(this.device, this.ctx.descriptor)) {
-          // cône plat depuis l'appareil vers +y (le plan XY est le sol en Z-up), tourné du yaw ; les
-          // marqueurs sont reconstruits à chaque écriture du placement, donc il suit la rotation
+          // flat cone from the device toward +y (the XY plane is the ground in Z-up), rotated by the yaw; the
+          // markers are rebuilt at every write of the placement, so it follows the rotation
           const shape = new Shape()
           shape.moveTo(0, 0.18)
           shape.lineTo(-0.42, 1.35)
@@ -270,7 +270,7 @@ export abstract class DeviceMarker {
           shape.lineTo(0, 0.18)
           look = this.asDecor(new Mesh(new ShapeGeometry(shape, 12), new MeshBasicMaterial({ color, transparent: true, opacity: 0.45, depthWrite: false, depthTest: false, side: DoubleSide })))
           look.renderOrder = GUIDE_RENDER_ORDER
-          // un châssis NÉGATIF bascule le verre en arrière : le cône fait alors demi-tour
+          // a NEGATIVE rack tilts the glass backward: the cone then turns around
           look.rotation.z = yawToRad(this.device.yaw) + (panel && panel.tilt < 0 ? Math.PI : 0)
           this.object.add(look)
         }
@@ -282,7 +282,7 @@ export abstract class DeviceMarker {
     }
   }
 
-  /** Hauteur (m) de l'appareil au-dessus du sol : l'anneau reste au sol quand la hauteur change. */
+  /** Height (m) of the device above the ground: the ring stays on the ground when the height changes. */
   setGuideHeight(height: number): void {
     if (!this.guide) return
     const floor = -height + 0.01
@@ -292,10 +292,10 @@ export abstract class DeviceMarker {
   }
 
   /**
-   * Teinte de carrosserie montrée le temps qu'on la CHOISIT, sans rien écrire — `null` rend celle
-   * d'avant. Seul un véhicule a une caisse à peindre : c'est `VehicleMarker` qui fait le travail,
-   * et ce point d'entrée vit sur la classe de base pour que la scène n'ait pas à importer la
-   * sous-classe (un import de valeur de plus dans son graphe, pour une méthode à un appel).
+   * Body color shown while it is being CHOSEN, without writing anything — `null` restores the
+   * previous one. Only a vehicle has a body to paint: `VehicleMarker` does the work,
+   * and this entry point lives on the base class so that the scene does not have to import the
+   * subclass (one more value import in its graph, for a one-call method).
    */
   previewColor(_color: string | null): void {}
 

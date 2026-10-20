@@ -13,26 +13,26 @@ function editor(polygon: Vec2[] = square) {
   }, polygon, true)
 }
 
-describe('éditeur du contour', () => {
-  it('déplace le sommet choisi, arrondi à 10 cm', () => {
+describe('outline editor', () => {
+  it('moves the chosen vertex, rounded to 10 cm', () => {
     const ed = editor()
     ed.selected = 2
     expect(ed.setSelectedXY([25.04, 22.96])).toBe(true)
     expect(ed.polygon[2]).toEqual([25, 23])
-    expect(square[2]).toEqual([20, 20])               // le contour d'entrée n'est pas touché
+    expect(square[2]).toEqual([20, 20])               // the input outline is not touched
   })
 
-  it('refuse un déplacement qui ferait se croiser le contour', () => {
+  it('refuses a move that would make the outline cross itself', () => {
     const ed = editor()
     ed.selected = 2
-    expect(ed.setSelectedXY([10, -5])).toBe(false)    // le coin nord-est passe sous le côté sud
+    expect(ed.setSelectedXY([10, -5])).toBe(false)    // the north-east corner passes under the south side
     expect(ed.polygon[2]).toEqual([20, 20])
     expect(ed.canUndo).toBe(false)
   })
 
-  it('ajoute un sommet au milieu d’un côté et le choisit', () => {
+  it('adds a vertex in the middle of a side and selects it', () => {
     const ed = editor()
-    ed.insertOnEdge(3)                                // côté (0, 20) → (0, 0)
+    ed.insertOnEdge(3)                                // side (0, 20) → (0, 0)
     expect(ed.polygon).toEqual([[0, 0], [20, 0], [20, 20], [0, 20], [0, 10]])
     expect(ed.selected).toBe(4)
     ed.insertOnEdge(0)
@@ -40,29 +40,29 @@ describe('éditeur du contour', () => {
     expect(ed.selected).toBe(1)
   })
 
-  it('retire un sommet, jamais en dessous de trois', () => {
+  it('removes a vertex, never below three', () => {
     const ed = editor()
     ed.selected = 1
     expect(ed.removeSelected()).toBe(true)
     expect(ed.polygon).toEqual([[0, 0], [20, 20], [0, 20]])
-    expect(ed.selected).toBe(1)                       // le suivant prend la place : on retire en série
+    expect(ed.selected).toBe(1)                       // the next one takes its place: removal in series
     expect(ed.canRemove).toBe(false)
     expect(ed.removeSelected()).toBe(false)
     expect(ed.polygon).toHaveLength(3)
   })
 
-  it('refuse un retrait qui ferait se croiser le contour', () => {
-    // un carré percé d'une pointe depuis l'ouest : sans le coin nord-est, la diagonale la traverse
+  it('refuses a removal that would make the outline cross itself', () => {
+    // a square pierced by a spike from the west: without the north-east corner, the diagonal crosses it
     const ed = editor([[0, 0], [10, 0], [10, 10], [0, 10], [0, 6], [8, 5], [0, 4]])
     ed.selected = 2
     expect(ed.canRemove).toBe(false)
     expect(ed.removeSelected()).toBe(false)
     expect(ed.polygon).toHaveLength(7)
-    ed.selected = 5                                   // la pointe, elle, peut partir
+    ed.selected = 5                                   // the spike, for its part, can go
     expect(ed.canRemove).toBe(true)
   })
 
-  it('annule et rétablit ajout, saisie et retrait', () => {
+  it('undoes and redoes add, edit and removal', () => {
     const ed = editor()
     ed.insertOnEdge(0)
     ed.setSelectedXY([10, -3])
@@ -79,7 +79,7 @@ describe('éditeur du contour', () => {
     expect(ed.polygon).toHaveLength(5)
   })
 
-  it(`ne retient que ${OUTLINE_HISTORY} pas`, () => {
+  it(`keeps only ${OUTLINE_HISTORY} steps`, () => {
     const ed = editor()
     ed.selected = 2
     for (let k = 1; k <= OUTLINE_HISTORY + 5; k++) ed.setSelectedXY([20 + k, 20])
@@ -89,8 +89,8 @@ describe('éditeur du contour', () => {
   })
 })
 
-describe('éditeur du contour : import', () => {
-  it('remplace le contour en un pas d’historique, sans sommet choisi', () => {
+describe('outline editor: import', () => {
+  it('replaces the outline in one history step, with no vertex selected', () => {
     const ed = editor()
     ed.selected = 1
     ed.setPolygon([[0, 0], [5, 0], [5, 5]])

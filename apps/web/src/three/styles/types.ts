@@ -3,19 +3,19 @@ import type { FloorStyle, ZoneKind } from '@kasbah/shared'
 import { duskFactor, type SceneAmbience } from '../core/ambience'
 import type { SurfaceRole } from '../textures/procedural'
 
-// Un STYLE DE RENDU décide de tout ce qui relève du goût : les couleurs de matière, quelle matière
-// procédurale habille quelle surface, comment le ciel est fait, ce que le post-traitement en fait.
-// Il ne décide PAS de l'heure (`core/ambience.ts`) ni de la palette de l'interface (`core/theme.ts`).
+// A RENDER STYLE decides everything that is a matter of taste: the material colors, which procedural
+// material dresses which surface, how the sky is made, what post-processing does with it.
+// It does NOT decide the hour (`core/ambience.ts`) nor the interface palette (`core/theme.ts`).
 //
-// Un style est une FONCTION de l'ambiance : `look(ambience)`. C'est ce qui permet au même style
-// « réaliste » de rendre un midi d'été et la nuit de la maquette sans deux styles distincts — il
-// mélange ses deux jeux de valeurs avec `dayFactor`. Un style qui n'a pas de nuit (un rendu de plan,
-// par exemple) ignore simplement son argument.
+// A style is a FUNCTION of the ambience: `look(ambience)`. That is what lets the same
+// "realistic" style render a summer noon and the maquette's night without two distinct styles — it
+// blends its two sets of values with `dayFactor`. A style that has no night (a plan render,
+// for example) simply ignores its argument.
 //
-// AJOUTER UN STYLE : un fichier dans ce dossier qui exporte un `RenderStyle`, plus une ligne dans
-// `index.ts` et deux clés i18n. Rien d'autre à toucher — ni la scène, ni les builders, ni l'UI.
+// ADDING A STYLE: a file in this folder that exports a `RenderStyle`, plus a line in
+// `index.ts` and two i18n keys. Nothing else to touch — neither the scene, nor the builders, nor the UI.
 
-/** Couleurs de MATIÈRE (le style les donne, le thème de l'app n'y touche pas). */
+/** MATERIAL colors (the style gives them, the app theme does not touch them). */
 export interface ScenePalette {
   wall: Color
   wallInterior: Color
@@ -24,34 +24,34 @@ export interface ScenePalette {
   glass: Color
   roof: Color
   /**
-   * La dalle d'un toit PLAT : celle du versant, sauf si le style la déclare (un toit végétalisé).
-   * TOUJOURS présente : le thème de scène se recompose en étalant l'ancien, une clé absente y
-   * gardait la couleur du style précédent (l'herbe de nature restait sur le toit du réaliste).
+   * The slab of a FLAT roof: that of the slope, unless the style declares it (a green roof).
+   * ALWAYS present: the scene theme is recomposed by spreading the old one, a missing key there
+   * kept the previous style's color (nature's grass stayed on realistic's roof).
    */
   roofFlat: Color
   terrain: Color
   zones: Record<ZoneKind, Color>
-  /** Lame d'un volet. */
+  /** Slat of a shutter. */
   slat: Color
-  /** Petit objet connecté neutre. */
+  /** Small neutral connected object. */
   device: Color
 }
 
-/** Comment une surface répond à la lumière, et de quelle matière elle est faite. */
+/** How a surface responds to light, and what material it is made of. */
 export interface SurfaceLook {
-  /** La matière procédurale (`textures/procedural.ts`). */
+  /** The procedural material (`textures/procedural.ts`). */
   texture: SurfaceRole
-  /** Rugosité là où la carte de rugosité vaut 1 : 0 = miroir, 1 = mat. */
+  /** Roughness where the roughness map is 1: 0 = mirror, 1 = matte. */
   roughness: number
-  /** Métallicité (ne rend QUE des reflets : sans carte d'environnement, une valeur haute noircit). */
+  /** Metalness (renders ONLY reflections: without an environment map, a high value turns black). */
   metalness?: number
-  /** Part de la couleur que la surface ÉMET (un sol de néon, une paroi rétroéclairée). */
+  /** Share of the color that the surface EMITS (a neon floor, a backlit wall). */
   emissive?: number
-  /** Multiplicateur du relief de la matière : 0 l'aplatit, 2 le creuse. */
+  /** Multiplier of the material's relief: 0 flattens it, 2 deepens it. */
   relief?: number
   /**
-   * Eau VIVANTE (`effects/water.ts`), lu pour la seule piscine : 1 = elle ondule et projette ses
-   * caustiques, 0 = elle reste figée. Une maquette a de l'eau en résine coulée, pas de la houle.
+   * LIVING water (`effects/water.ts`), read for the pool only: 1 = it ripples and casts its
+   * caustics, 0 = it stays frozen. A maquette has poured-resin water, not swell.
    */
   flow?: number
 }
@@ -62,7 +62,7 @@ export interface SurfaceLooks {
   floor: SurfaceLook
   floors: Record<FloorStyle, SurfaceLook>
   roof: SurfaceLook
-  /** La dalle d'un toit PLAT, si le style la distingue du versant : à défaut, du gravillon (`materials.ts`). */
+  /** The slab of a FLAT roof, if the style distinguishes it from the slope: otherwise, gravel (`materials.ts`). */
   roofFlat?: SurfaceLook
   terrain: SurfaceLook
   zones: Record<ZoneKind, SurfaceLook>
@@ -72,23 +72,23 @@ export interface GlassLook {
   opacity: number
   roughness: number
   metalness: number
-  /** Ce que la vitre renvoie de l'intérieur quand la nuit tombe (une fenêtre allumée se voit du jardin). */
+  /** What the glass gives back from inside when night falls (a lit window is seen from the garden). */
   emissive: number
 }
 
 /**
- * Le ciel, en valeurs LINÉAIRES et non bornées à 1 : c'est lui qui sert de carte d'environnement à
- * toute la scène. Le dépassement au-dessus de 1 n'est pas un détail — une tache plafonnée à 255 ne
- * fait pas un reflet, elle fait une tache grise ; c'est le dépassement qui donne le point brillant.
+ * The sky, in LINEAR values not bounded to 1: it serves as the environment map for
+ * the whole scene. The overshoot above 1 is not a detail — a spot capped at 255 does not
+ * make a reflection, it makes a gray spot; it is the overshoot that gives the bright point.
  */
 export interface SkyLook {
   zenith: readonly [number, number, number]
   horizon: readonly [number, number, number]
   ground: readonly [number, number, number]
-  /** Éclat du disque solaire, en multiples du blanc. 0 = ciel couvert, pas de point brillant. */
+  /** Brightness of the solar disc, in multiples of white. 0 = overcast sky, no bright point. */
   sunGlare: number
   sunColor: readonly [number, number, number]
-  /** Ce que le ciel apporte aux matériaux (`scene.environmentIntensity`). */
+  /** What the sky brings to the materials (`scene.environmentIntensity`). */
   intensity: number
 }
 
@@ -99,93 +99,93 @@ export interface LightRig {
   hemiGround: Color
   hemiIntensity: number
   ambientIntensity: number
-  /** Les ombres portées s'effacent sous un ciel couvert ou une lune basse : 0 les éteint. */
+  /** Cast shadows fade under an overcast sky or a low moon: 0 turns them off. */
   shadowOpacity: number
 }
 
 export interface PostLook {
   toneMapping: 'aces' | 'agx' | 'neutral' | 'linear'
-  /** Exposition : le diaphragme. C'est le réglage qui décide si la nuit est lisible ou noire. */
+  /** Exposure: the aperture. It is the setting that decides whether the night is readable or black. */
   exposure: number
-  /** Halo autour de ce qui dépasse le seuil. `null` = pas de passe de bloom. */
+  /** Halo around what exceeds the threshold. `null` = no bloom pass. */
   bloom: { strength: number; radius: number; threshold: number } | null
-  /** Occlusion ambiante : ce qui assombrit les angles rentrants et pose les objets sur leur sol. */
+  /** Ambient occlusion: what darkens inside corners and sets objects on their ground. */
   ao: { intensity: number; radius: number } | null
-  /** Assombrissement des bords de l'image, 0 à 1. */
+  /** Darkening of the image edges, 0 to 1. */
   vignette: number
   /**
-   * TILT-SHIFT : une bande nette, le reste flou — ce qui fait lire une vraie maison comme une
-   * maquette. Absent (le cas de tous les styles), l'effet n'existe pas : il ne se règle QUE depuis
-   * le banc (`styles/tuning.ts`), parce que c'est un goût et non une propriété de la lumière.
+   * TILT-SHIFT: a sharp band, the rest blurred — what makes a real house read as a
+   * miniature. Absent (the case of every style), the effect does not exist: it is set ONLY from
+   * the bench (`styles/tuning.ts`), because it is a taste and not a property of the light.
    */
   tiltShift?: TiltShiftLook | null
-  /** Étalonnage de l'image finie (`GradeLook`). Absent = neutre : l'image du style, à l'identique. */
+  /** Grading of the finished image (`GradeLook`). Absent = neutral: the style's image, identical. */
   grade?: GradeLook | null
 }
 
 /**
- * ÉTALONNAGE en espace d'affichage, dans la passe de sortie : `gain × (c + lift × (1 − c))`, puis
- * la puissance `1 / gamma`, puis la saturation. Par canal (r, g, b) : c'est ce qui teinte une image
- * sans toucher à aucune lumière — le bleu de l'aube, l'orangé du couchant.
+ * GRADING in display space, in the output pass: `gain × (c + lift × (1 − c))`, then
+ * the power `1 / gamma`, then the saturation. Per channel (r, g, b): that is what tints an image
+ * without touching any light — the blue of dawn, the orange of sunset.
  */
 export interface GradeLook {
-  /** Relève les noirs vers cette couleur : 0 = neutre. */
+  /** Raises the blacks toward this color: 0 = neutral. */
   lift: readonly [number, number, number]
-  /** > 1 éclaircit les tons moyens : 1 = neutre. */
+  /** > 1 lightens the midtones: 1 = neutral. */
   gamma: readonly [number, number, number]
-  /** Multiplie les hautes lumières : 1 = neutre. */
+  /** Multiplies the highlights: 1 = neutral. */
   gain: readonly [number, number, number]
-  /** 1 = neutre, 0 = noir et blanc. */
+  /** 1 = neutral, 0 = black and white. */
   saturation: number
 }
 
-/** Voir `PostLook.tiltShift`. Les valeurs sont en fraction de l'image, l'origine en BAS (comme les UV). */
+/** See `PostLook.tiltShift`. The values are fractions of the image, the origin at the BOTTOM (like UVs). */
 export interface TiltShiftLook {
-  /** Force du flou hors de la bande nette. */
+  /** Strength of the blur outside the sharp band. */
   strength: number
-  /** Position de la bande nette, 0 = bas de l'image, 1 = haut. */
+  /** Position of the sharp band, 0 = bottom of the image, 1 = top. */
   center: number
-  /** Demi-hauteur de la bande nette. */
+  /** Half height of the sharp band. */
   width: number
-  /** Combien les pilules DOM suivent le flou (elles ne sont pas dans le canvas). */
+  /** How much the DOM pills follow the blur (they are not in the canvas). */
   pills: number
 }
 
-/** Le halo posé sur une lampe allumée, et ce qu'elle éclaire autour d'elle. */
+/** The halo laid on a lit lamp, and what it lights around it. */
 export interface GlowLook {
-  /** Diamètre (m) du halo. */
+  /** Diameter (m) of the halo. */
   scale: number
-  /** Opacité du halo à pleine luminosité. */
+  /** Opacity of the halo at full brightness. */
   opacity: number
-  /** Intensité de la `PointLight` d'une lampe à pleine luminosité. */
+  /** Intensity of a lamp's `PointLight` at full brightness. */
   lightIntensity: number
-  /** Part émissive du globe de la lampe. */
+  /** Emissive share of the lamp's globe. */
   emissive: number
 }
 
 /**
- * Le jardin dans ce style (`three/garden/`). Absent = ses couleurs NATURELLES : les verts des
- * familles, ceux de la saison, les couleurs propres à chaque espèce. Présent, la palette du style
- * remplace tout cela — une espèce garde sa silhouette, ses saisons (feuillage restant) et ses
- * fruits, mais prend les teintes du style.
+ * The garden in this style (`three/garden/`). Absent = its NATURAL colors: the greens of the
+ * families, those of the season, the colors specific to each species. Present, the style's palette
+ * replaces all of that — a species keeps its silhouette, its seasons (remaining foliage) and its
+ * fruit, but takes the style's tints.
  */
 export interface GardenLook {
-  /** Teintes du feuillage ; chaque élément en prend une, tirée par sa graine. */
+  /** Foliage tints; each element takes one, drawn by its seed. */
   leaf: readonly Color[]
   bark: Color
   stone: Color
-  /** Fruits et fleurs. `null` = ceux de l'espèce. */
+  /** Fruit and flowers. `null` = the species'. */
   accent: Color | null
-  /** Part ÉMISE du feuillage et des fruits (néon) ; absent = rien n'émet. */
+  /** EMITTED share of the foliage and fruit (neon); absent = nothing emits. */
   emissive?: number
-  /** Feuillage restant, en plus de celui de la saison : < 1 dégarnit (arbres à moitié morts). */
+  /** Remaining foliage, on top of the season's: < 1 thins it out (half-dead trees). */
   foliage?: number
 }
 
-/** Qui défile autour de la maison (`effects/parade.ts`). */
+/** Who parades around the house (`effects/parade.ts`). */
 export type ParadeKind = 'noel' | 'halloween' | 'tatooine' | 'akira' | 'girlyversaire'
 
-/** Tout ce que la scène lit d'un style, pour une ambiance donnée. */
+/** Everything the scene reads from a style, for a given ambience. */
 export interface StyleLook {
   palette: ScenePalette
   surfaces: SurfaceLooks
@@ -195,18 +195,18 @@ export interface StyleLook {
   post: PostLook
   glow: GlowLook
   /**
-   * Chauves-souris qui tournent autour de la maison (`effects/bats.ts`). Absent ou `count` 0 = aucune.
-   * La teinte est au style : une silhouette noire se perd la nuit sur un jardin noir.
+   * Bats circling the house (`effects/bats.ts`). Absent or `count` 0 = none.
+   * The tint belongs to the style: a black silhouette gets lost at night over a black garden.
    */
   bats?: { count: number; color: Color }
   /**
-   * Boule à facettes au-dessus du toit et projecteurs qui balaient la maison (`effects/disco.ts`).
-   * Absent ou `spots` 0 = rien. Les projecteurs passent d'une couleur de `colors` à la suivante.
+   * Mirror ball above the roof and spotlights sweeping the house (`effects/disco.ts`).
+   * Absent or `spots` 0 = nothing. The spotlights go from one color of `colors` to the next.
    */
   disco?: { spots: number; colors: readonly Color[] }
   /**
-   * Des personnages qui tournent autour de la maison (`effects/parade.ts`) : le traîneau du père
-   * Noël, les fantômes et les squelettes d'Halloween, des X-wings, la moto de Kaneda. Absent = personne.
+   * Characters circling the house (`effects/parade.ts`): Santa's
+   * sleigh, the Halloween ghosts and skeletons, X-wings, Kaneda's bike. Absent = nobody.
    */
   parade?: { kind: ParadeKind }
   garden?: GardenLook
@@ -214,20 +214,20 @@ export interface StyleLook {
 
 export interface RenderStyle {
   readonly id: string
-  /** Clé i18n du nom affiché (`scene.styles.<id>`). */
+  /** i18n key of the displayed name (`scene.styles.<id>`). */
   readonly labelKey: string
   /**
-   * Pack de matières en images (`textures/assets.ts`) que ce style sait porter, rôle pour rôle, à
-   * la place de ses matières procédurales. Absent = style entièrement calculé (le switch des
-   * Réglages est alors grisé).
+   * Pack of photo materials (`textures/assets.ts`) that this style can carry, role for role, in
+   * place of its procedural materials. Absent = fully computed style (the switch in
+   * Settings is then grayed out).
    */
   readonly assets?: string
   look(ambience: SceneAmbience): StyleLook
 }
 
-// ---- outils d'écriture des styles ---------------------------------------------------------------
+// ---- style-writing tools ------------------------------------------------------------------------
 
-/** Une palette DÉCLARÉE : des hexadécimaux, plus lisibles à écrire et à relire qu'un `new Color`. */
+/** A DECLARED palette: hexadecimals, easier to write and to reread than a `new Color`. */
 export interface PaletteSpec {
   wall: string
   wallInterior: string
@@ -235,7 +235,7 @@ export interface PaletteSpec {
   floors: Record<FloorStyle, string>
   glass: string
   roof: string
-  /** Absente = la couleur du toit (`roof`). */
+  /** Absent = the roof color (`roof`). */
   roofFlat?: string
   terrain: string
   zones: Record<ZoneKind, string>
@@ -247,12 +247,12 @@ const mixColor = (a: string, b: string, t: number) => new Color(a).lerp(new Colo
 const mixRecord = <K extends string>(a: Record<K, string>, b: Record<K, string>, t: number) =>
   Object.fromEntries((Object.keys(a) as K[]).map((k) => [k, mixColor(a[k], b[k], t)])) as Record<K, Color>
 
-/** Une palette déclarée, telle quelle : pour un style dont les matières ne changent pas avec l'heure. */
+/** A declared palette, as is: for a style whose materials do not change with the hour. */
 export const toPalette = (p: PaletteSpec): ScenePalette => mixPalette(p, p, 0)
 
 /**
- * Mélange deux palettes déclarées. `t` = 0 rend la première, 1 la seconde ; les styles s'en servent
- * pour passer de leur nuit à leur jour avec `dayFactor`, sans écrire deux fois la même structure.
+ * Blends two declared palettes. `t` = 0 returns the first, 1 the second; the styles use it
+ * to go from their night to their day with `dayFactor`, without writing the same structure twice.
  */
 export function mixPalette(night: PaletteSpec, day: PaletteSpec, t: number): ScenePalette {
   return {
@@ -270,24 +270,24 @@ export function mixPalette(night: PaletteSpec, day: PaletteSpec, t: number): Sce
   }
 }
 
-/** Interpolation linéaire, l'outil de base d'un style qui change avec l'heure. */
+/** Linear interpolation, the basic tool of a style that changes with the hour. */
 export const mix = (a: number, b: number, t: number) => a + (b - a) * t
 
-/** Idem pour un triplet de ciel. */
+/** Same for a sky triplet. */
 export function mixRgb(a: readonly [number, number, number], b: readonly [number, number, number], t: number): [number, number, number] {
   return [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)]
 }
 
 export const NEUTRAL_GRADE: GradeLook = { lift: [0, 0, 0], gamma: [1, 1, 1], gain: [1, 1, 1], saturation: 1 }
-/** Le couchant : hautes lumières orangées, noirs un peu violacés, couleurs plus franches. */
+/** Sunset: orange highlights, slightly purplish blacks, bolder colors. */
 const DUSK_GRADE: GradeLook = { lift: [0.012, 0, 0.03], gamma: [1.03, 1, 0.96], gain: [1.08, 0.97, 0.85], saturation: 1.1 }
-/** L'aube : froide et pâle, un bleu qui n'a pas encore chauffé. */
+/** Dawn: cold and pale, a blue that has not warmed up yet. */
 const DAWN_GRADE: GradeLook = { lift: [0, 0.008, 0.03], gamma: [0.98, 1, 1.03], gain: [0.93, 0.99, 1.08], saturation: 0.94 }
 
 /**
- * L'étalonnage de l'HEURE : neutre en plein jour et en pleine nuit, orangé quand le soleil rase
- * l'horizon à l'ouest, bleuté quand il y est à l'est. Un ciel couvert l'éteint en grande partie :
- * sans soleil, pas de couleur de couchant. `strength` le dose par style.
+ * The grading of the HOUR: neutral in broad daylight and in the dead of night, orange when the sun skims
+ * the horizon in the west, bluish when it is in the east. An overcast sky largely turns it off:
+ * no sun, no sunset color. `strength` doses it per style.
  */
 export function hourGrade(a: SceneAmbience, strength = 1): GradeLook {
   const k = duskFactor(a) * (1 - 0.7 * a.cloudiness) * strength
@@ -300,7 +300,7 @@ export function hourGrade(a: SceneAmbience, strength = 1): GradeLook {
   }
 }
 
-/** Tous les rôles de matière qu'un look emploie : ce sont les seuls à cuire. */
+/** All the material roles a look uses: they are the only ones to bake. */
 export function rolesOf(s: SurfaceLooks): SurfaceRole[] {
   return [
     s.wall.texture, s.wallInterior.texture, s.floor.texture, s.roof.texture, s.terrain.texture,

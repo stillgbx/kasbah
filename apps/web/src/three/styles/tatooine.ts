@@ -2,11 +2,11 @@ import { Color } from 'three'
 import { dayFactor, type SceneAmbience } from '../core/ambience'
 import { mix, mixPalette, mixRgb, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
 
-// TATOOINE : la ferme d'humidité dans le désert — celles des films sont tournées dans les ksour du
-// sud tunisien, ce qui va bien à une Kasbah. Murs d'adobe ocre au relief poussé, toit du même
-// enduit, pas un brin d'herbe : sable partout, la piscine est la réserve d'eau. Soleil écrasant et
-// blanc chaud, ciel poussiéreux, ombres franches. Des X-wings passent au-dessus (`StyleLook.parade`).
-// Le ciel n'a qu'un soleil : un second disque demanderait de toucher `core/sky.ts`.
+// TATOOINE: the moisture farm in the desert — the ones in the films were shot in the ksour of
+// southern Tunisia, which suits a Kasbah. Ochre adobe walls with strong relief, a roof of the same
+// render, not a blade of grass: sand everywhere, the pool is the water reserve. Crushing sun and
+// hot white, dusty sky, crisp shadows. X-wings fly overhead (`StyleLook.parade`).
+// The sky has only one sun: a second disc would mean touching `core/sky.ts`.
 
 const PALETTE: PaletteSpec = {
   wall: '#d9b98c',
@@ -24,7 +24,7 @@ const PALETTE: PaletteSpec = {
   device: '#b8b0a0',
 }
 
-/** La nuit : le même sable sous deux lunes, bleui. */
+/** Night: the same sand under two moons, turned blue. */
 const NIGHT: PaletteSpec = { ...PALETTE, terrain: '#9a8a78', zones: { ...PALETTE.zones, lawn: '#968672' } }
 
 const adobe = { texture: 'plaster' as const, roughness: 0.95, relief: 1.5 }
@@ -54,7 +54,7 @@ const SURFACES: SurfaceLooks = {
   },
 }
 
-// le ciel poussiéreux d'un désert : un zénith pâle, un horizon presque blanc et chaud
+// the dusty sky of a desert: a pale zenith, an almost white and warm horizon
 const SKY_NIGHT = { zenith: [0.01, 0.014, 0.045], horizon: [0.12, 0.09, 0.08], ground: [0.03, 0.025, 0.02], sunGlare: 6, sunColor: [0.9, 0.85, 1] } as const
 const SKY_DAY = { zenith: [0.32, 0.46, 0.72], horizon: [0.95, 0.82, 0.62], ground: [0.32, 0.24, 0.15], sunGlare: 14, sunColor: [1, 0.92, 0.75] } as const
 
@@ -77,7 +77,7 @@ export const tatooineStyle: RenderStyle = {
       },
       lighting: {
         sunColor: new Color(0x9aa8d8).lerp(new Color(0xffe2b0), day),
-        // un soleil écrasant : c'est lui qui fait le désert, avec des ombres franches
+        // a crushing sun: it is what makes the desert, with crisp shadows
         sunIntensity: mix(0.5, 2.8, day),
         hemiSky: new Color(0x2a3050).lerp(new Color(0xbcd4ff), day),
         hemiGround: new Color(0x3a3028).lerp(new Color(0xc29060), day),
@@ -91,12 +91,12 @@ export const tatooineStyle: RenderStyle = {
         bloom: { strength: mix(0.5, 0.3, day), radius: 0.6, threshold: 0.9 },
         ao: { intensity: 1.1, radius: 0.45 },
         vignette: mix(0.45, 0.3, day),
-        // une chaleur jaune dans les hautes lumières, des couleurs un peu brûlées
+        // a yellow warmth in the highlights, slightly burnt colors
         grade: { lift: [0.015, 0.008, 0], gamma: [1.02, 1, 0.97], gain: [1.06, 1, 0.88], saturation: 0.92 },
       },
       glow: { scale: mix(1.4, 1, day), opacity: mix(0.8, 0.3, day), lightIntensity: mix(12, 6, day), emissive: mix(2.2, 1.3, day) },
       parade: { kind: 'tatooine' },
-      // jardin : la végétation rare d'un désert, olive poussiéreuse et à moitié sèche
+      // garden: the sparse vegetation of a desert, dusty olive and half dry
       garden: { leaf: [new Color(0x7a7a4a), new Color(0x8c8456), new Color(0xa39461)], bark: new Color(0x6b5238), stone: new Color(0xcdb38a), accent: null, foliage: 0.6 },
     }
   },

@@ -7,7 +7,7 @@ const COLORS = [new Color(0xff0000), new Color(0x0000ff)]
 const spotsOf = (d: Disco) => d.object.children.filter((o): o is SpotLight => o instanceof SpotLight)
 
 describe('Disco', () => {
-  it('pose la boule au-dessus du toit et autant de projecteurs que demandé', () => {
+  it('places the ball above the roof and as many spotlights as requested', () => {
     const d = new Disco(AREA, 4, COLORS)
     expect(spotsOf(d)).toHaveLength(4)
     const ball = d.object.children[0]!
@@ -15,7 +15,7 @@ describe('Disco', () => {
     d.dispose()
   })
 
-  it('fait balayer les projecteurs et glisser leur couleur', () => {
+  it('makes the spotlights sweep and their color glide', () => {
     const d = new Disco(AREA, 2, COLORS)
     const spot = spotsOf(d)[0]!
     const aim0 = spot.target.position.clone()
@@ -26,7 +26,7 @@ describe('Disco', () => {
     d.dispose()
   })
 
-  it('ne prend aucun clic : un faisceau couvre les appareils', () => {
+  it('takes no click: a beam covers the devices', () => {
     const d = new Disco(AREA, 4, COLORS)
     d.object.updateMatrixWorld(true)
     const ray = new Raycaster(new Vector3(5, 4, 30), new Vector3(0, 0, -1))
@@ -34,7 +34,7 @@ describe('Disco', () => {
     d.dispose()
   })
 
-  it('se détache de la scène au dispose', () => {
+  it('detaches from the scene on dispose', () => {
     const root = new Group()
     const d = new Disco(AREA, 3, COLORS)
     root.add(d.object)

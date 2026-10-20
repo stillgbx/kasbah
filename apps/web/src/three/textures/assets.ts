@@ -2,23 +2,23 @@ import { NoColorSpace, RepeatWrapping, SRGBColorSpace, TextureLoader, type Textu
 import { FINISHES, type FinishId } from '@kasbah/shared'
 import type { SurfaceRole, SurfaceTexture, SurfaceTextures } from './procedural'
 
-// Matières en IMAGES : des jeux PBR photographiques libres (ambientCG, CC0) qui remplacent, rôle
-// pour rôle, les matières procédurales quand le style en porte un pack et que l'utilisateur l'a
-// demandé (Réglages → Rendu 3D → matières en images). Même contrat de sortie (`SurfaceTexture`) :
-// les matériaux ne savent pas d'où vient une carte, et un rôle absent du pack reste procédural
-// (l'eau, le néon, la laque n'ont pas de photo).
+// Materials as IMAGES: free photographic PBR sets (ambientCG, CC0) that replace, role
+// for role, the procedural materials when the style carries a pack and the user asked
+// for it (Settings → 3D rendering → Photo materials). Same output contract (`SurfaceTexture`):
+// the materials don't know where a map comes from, and a role missing from the pack stays procedural
+// (water, neon, lacquer have no photo).
 //
-// Les fichiers vivent sous `public/assets/textures/<pack>/<rôle>/{color,normal,roughness}.jpg`,
-// produits par `scripts/fetch-textures.mjs` (téléchargement, puis réduction à 512 px : une image
-// d'un mètre cinquante vue à quinze mètres n'a pas besoin de plus). Aucun CDN : l'app tourne en LAN.
+// The files live under `public/assets/textures/<pack>/<role>/{color,normal,roughness}.jpg`,
+// produced by `scripts/fetch-textures.mjs` (download, then reduction to 512 px: an image
+// of a meter and a half seen from fifteen meters needs no more). No CDN: the app runs on the LAN.
 //
-// Une matière photo porte SA couleur (`colored`) : le matériau ne la teinte plus par la palette du
-// style, sans quoi un plâtre blanc photographié sous un mur beige rendrait un beige sale.
+// A photo material carries ITS OWN color (`colored`): the material no longer tints it with the
+// style's palette, otherwise a white plaster photographed under a beige wall would render a dirty beige.
 
 export interface PackSurface {
-  /** Côté (m) couvert par une image avant répétition : la cote réelle publiée avec la texture. */
+  /** Side (m) covered by one image before repeating: the real-world dimension published with the texture. */
   tileM: number
-  /** Multiplicateur du relief photographié (défaut 1). */
+  /** Multiplier of the photographed relief (default 1). */
   normalScale?: number
 }
 
@@ -27,19 +27,19 @@ export interface TexturePack {
   surfaces: Partial<Record<SurfaceRole, PackSurface>>
 }
 
-/** Le pack livré : une photo par matière « réelle ». Les cotes sont celles d'ambientCG (voir `SOURCES.md`). */
+/** The shipped pack: one photo per "real" material. The dimensions are ambientCG's (see `SOURCES.md`). */
 export const PHOTO_PACK: TexturePack = {
   id: 'photo',
   surfaces: {
     plaster: { tileM: 2 },
     concrete: { tileM: 2.4 },
     wood: { tileM: 1.8 },
-    // Tiles107 : carreaux blancs clairs (8 × 60 cm → 4,8 m) — Tiles052 était trop sombre
+    // Tiles107: light white tiles (8 × 60 cm → 4.8 m) — Tiles052 was too dark
     tile: { tileM: 4.8 },
-    // Tiles133A : faïence fine du bassin (restée telle quelle)
+    // Tiles133A: fine earthenware of the pool (kept as is)
     poolTile: { tileM: 1.2 },
     carpet: { tileM: 1.7 },
-    // Grass006 : cote absente chez ambientCG — on garde 1,4 m (celle de Grass004)
+    // Grass006: dimension missing at ambientCG — we keep 1.4 m (Grass004's)
     grass: { tileM: 1.4 },
     pavers: { tileM: 3.5 },
     soil: { tileM: 1.4 },
@@ -54,53 +54,53 @@ export const TEXTURE_PACKS: readonly TexturePack[] = [PHOTO_PACK]
 export const packById = (id: string | undefined): TexturePack | undefined => TEXTURE_PACKS.find((p) => p.id === id)
 
 /**
- * Chargeur d'UNE image, injectable : même contrat que `TextureLoad` (écrans) et `ModelLoad`
- * (carrosseries), pour que la scène reste testable sous happy-dom où aucun fichier ne se charge.
+ * Loader of ONE image, injectable: same contract as `TextureLoad` (screens) and `ModelLoad`
+ * (car bodies), so that the scene stays testable under happy-dom where no file loads.
  */
 export type ImageLoad = (url: string, onLoad: () => void, onError: () => void) => Texture
 
 const defaultLoad: ImageLoad = (url, onLoad, onError) => new TextureLoader().load(url, onLoad, undefined, onError)
 
-/** `base: './'` dans Vite : URL relative, pour être servi à la racine par Fastify comme depuis un sous-dossier. */
-/** `dir` = chemin sous `assets/textures/` : `<pack>/<rôle>` pour un pack, celui du catalogue pour une finition. */
+/** `base: './'` in Vite: relative URL, to be served at the root by Fastify as well as from a subfolder. */
+/** `dir` = path under `assets/textures/`: `<pack>/<role>` for a pack, the catalog's for a finish. */
 export const textureUrl = (dir: string, file: string) =>
   `${import.meta.env.BASE_URL}assets/textures/${dir}/${file}.jpg`
 
 function fetchSurface(dir: string, spec: PackSurface, load: ImageLoad): Promise<SurfaceTexture> {
   const one = (file: string, srgb: boolean) => new Promise<Texture>((resolve, reject) => {
-    const t = load(textureUrl(dir, file), () => resolve(t), () => reject(new Error(`matière introuvable : ${dir}/${file}`)))
+    const t = load(textureUrl(dir, file), () => resolve(t), () => reject(new Error(`material not found: ${dir}/${file}`)))
     t.wrapS = t.wrapT = RepeatWrapping
     t.repeat.set(1 / spec.tileM, 1 / spec.tileM)
-    // la couleur est en sRGB ; la normale et la rugosité sont des DONNÉES, à ne surtout pas recourber
+    // the color is in sRGB; the normal and the roughness are DATA, which must above all not be re-curved
     t.colorSpace = srgb ? SRGBColorSpace : NoColorSpace
     t.anisotropy = 4
   })
   return Promise.all([one('color', true), one('normal', false), one('roughness', false)]).then(([map, normalMap, roughnessMap]) => ({
     map, normalMap, normalScale: spec.normalScale ?? 1,
     roughnessMap,
-    metalnessMap: null,                     // une photo n'a pas de carte de métal : celle du style, uniforme
+    metalnessMap: null,                     // a photo has no metal map: the style's, uniform
     tileM: spec.tileM,
     colored: true,
   }))
 }
 
 /**
- * Le catalogue chargé, gardé comme le catalogue cuit (`BAKED`) : borné (un pack, dix rôles), partagé
- * entre les scènes, jamais libéré. Un échec ne s'y met pas : une coupure réseau ne condamne pas la
- * matière jusqu'au prochain rechargement.
+ * The loaded catalog, kept like the baked catalog (`BAKED`): bounded (one pack, ten roles), shared
+ * between scenes, never freed. A failure does not go in: a network outage does not doom the
+ * material until the next reload.
  */
 const READY = new Map<string, SurfaceTexture>()
 const PENDING = new Map<string, Promise<SurfaceTexture>>()
 
 /**
- * Les matières photo DÉJÀ LÀ pour ces rôles ; celles qui manquent se chargent, et `onReady` est
- * rappelé à chaque rôle qui arrive (l'appelant repasse alors par ici et obtient une carte de plus).
- * Entre-temps, le procédural tient la place : la maison n'attend jamais une image.
+ * The photo materials ALREADY THERE for these roles; the missing ones load, and `onReady` is
+ * called back for each role that arrives (the caller then comes back here and gets one more map).
+ * Meanwhile, the procedural holds the place: the house never waits for an image.
  */
 /**
- * Attend les matières d'un pack encore en route pour ces rôles (lancées par `loadPackTextures`),
- * arrivées ou en échec : c'est ce qu'attend le voile de chargement de la scène, qui en affiche le
- * compte. Une matière en échec ne bloque rien. `onProgress` reçoit (arrivées, total) à chaque pas.
+ * Waits for the materials of a pack still on their way for these roles (started by `loadPackTextures`),
+ * arrived or failed: it is what the scene's loading veil waits for, which shows the
+ * count. A failed material blocks nothing. `onProgress` receives (arrived, total) at each step.
  */
 export function packTexturesSettled(pack: TexturePack, roles: Iterable<SurfaceRole>, onProgress?: (done: number, total: number) => void): Promise<void> {
   const keys = [...new Set(roles)].filter((role) => pack.surfaces[role]).map((role) => `${pack.id}/${role}`)
@@ -114,7 +114,7 @@ export function loadPackTextures(pack: TexturePack, roles: Iterable<SurfaceRole>
   const out: SurfaceTextures = {}
   for (const role of new Set(roles)) {
     const spec = pack.surfaces[role]
-    if (!spec) continue                       // pas de photo pour ce rôle : le procédural reste
+    if (!spec) continue                       // no photo for this role: the procedural stays
     const key = `${pack.id}/${role}`
     const ready = READY.get(key)
     if (ready) { out[role] = ready; continue }
@@ -130,10 +130,10 @@ export function loadPackTextures(pack: TexturePack, roles: Iterable<SurfaceRole>
 }
 
 /**
- * Les photos des FINITIONS (`@kasbah/shared › FINISHES`) déjà là ; les autres se chargent et
- * `onReady` est rappelé à chaque arrivée, comme pour un pack. Même cache, la clé est le dossier :
- * une finition qui reprend une matière du pack (`photo/wood`) ne la charge pas deux fois — d'où
- * la règle que sa cote soit la même que celle du pack (vérifiée par les tests).
+ * The photos of the FINISHES (`@kasbah/shared › FINISHES`) already there; the others load and
+ * `onReady` is called back at each arrival, as for a pack. Same cache, the key is the folder:
+ * a finish that reuses a pack material (`photo/wood`) does not load it twice — hence
+ * the rule that its dimension be the same as the pack's (checked by the tests).
  */
 export function loadFinishTextures(ids: Iterable<FinishId>, onReady: () => void, load: ImageLoad = defaultLoad): Partial<Record<FinishId, SurfaceTexture>> {
   const out: Partial<Record<FinishId, SurfaceTexture>> = {}

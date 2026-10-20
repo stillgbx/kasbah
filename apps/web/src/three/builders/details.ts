@@ -4,72 +4,72 @@ import type { LevelGeometry, OpeningMaterial, OpeningRect, OpeningType, RoofDesc
 import { joineryMaterial, type JoineryRole, type MaterialSet } from './materials'
 import { extrudePolygon, extrudeRing, insetPolygon } from './shapes'
 
-// Détail ARCHITECTURAL procédural : ce qui fait qu'une boîte extrudée devient un bâtiment. Aucun
-// asset, aucune donnée de plus dans house.json — tout se déduit des prismes de murs et des
-// rectangles d'ouvertures (`packages/shared/src/house/geometry`). Quatre familles :
-//  - l'ENCADREMENT d'une baie (quatre montants pour une fenêtre, trois pour une porte), posé à
-//    mi-épaisseur du mur, là où est déjà le vitrage — le volet, lui, vit près de la face
-//    extérieure (`markers.ts`, 0,8 de l'épaisseur) et ne le touche pas ;
-//  - l'APPUI d'une fenêtre, qui déborde de la façade et dont le dessus AFFLEURE l'allège : un
-//    volet fermé descend jusque là, un appui plus haut le couperait ;
-//  - le COURONNEMENT des murs, une lisse plus claire qui déborde d'un centimètre de chaque face :
-//    vue du dessus, c'est elle qui dessine le plan ; de côté, c'est l'arête du mur ;
-//  - le SOUBASSEMENT des murs extérieurs, une bande plus sombre qui pose la maison sur son sol,
-//    et qui rentre de huit millimètres côté pièce — une plinthe.
-// Plus le VANTAIL d'une porte (fermé, côté intérieur) : une baie vide se lit comme un trou.
+// Procedural ARCHITECTURAL detail: what turns an extruded box into a building. No
+// asset, no extra data in house.json — everything is derived from the wall prisms and the
+// opening rectangles (`packages/shared/src/house/geometry`). Four families:
+//  - the SURROUND of an opening (four jambs for a window, three for a door), set at
+//    mid-thickness of the wall, where the glazing already is — the shutter, for its part, lives near the
+//    outer face (`markers.ts`, 0.8 of the thickness) and does not touch it;
+//  - the SILL of a window, which projects from the facade and whose top is FLUSH with the breast: a
+//    closed shutter comes down to there, a higher sill would cut it;
+//  - the COPING of the walls, a lighter rail that overhangs each face by one centimeter:
+//    seen from above, it is what draws the plan; from the side, it is the edge of the wall;
+//  - the PLINTH of the exterior walls, a darker band that sets the house on its ground,
+//    and that steps in by eight millimeters on the room side — a baseboard.
+// Plus the LEAF of a door (closed, on the inside): an empty opening reads as a hole.
 //
-// Les décalages se font ACROSS le mur seulement, jamais le long : deux morceaux d'un même mur
-// (plein, linteau, plein) gardent des couronnements qui se touchent exactement, sans recouvrement
-// — deux dessus coplanaires qui se chevauchent scintillent. Il reste une encoche d'un centimètre
-// à chaque angle extérieur, invisible à l'échelle d'une maison.
+// The offsets are made ACROSS the wall only, never along it: two pieces of the same wall
+// (solid, lintel, solid) keep copings that touch exactly, without overlap
+// — two overlapping coplanar tops flicker. A one-centimeter notch remains
+// at each outer corner, invisible at the scale of a house.
 //
-// Une géométrie FUSIONNÉE par matériau et par niveau : une maison de trente baies, ce sont trois
-// appels de dessin de plus, pas trois cents.
+// One MERGED geometry per material and per level: a house with thirty openings means three
+// more draw calls, not three hundred.
 
-const FRAME = 0.06          // largeur vue d'un montant de fenêtre (m)
-const DOOR_FRAME = 0.07     // idem, porte
-const CAP_H = 0.03          // hauteur du couronnement, pris SUR le mur…
-const CAP_UP = 0.005        // …plus ce qu'il dépasse (deux dessus coplanaires scintilleraient)
-const CAP_OUT = 0.01        // débord du couronnement de chaque côté
+const FRAME = 0.06          // visible width of a window jamb (m)
+const DOOR_FRAME = 0.07     // same, door
+const CAP_H = 0.03          // height of the coping, taken FROM the wall…
+const CAP_UP = 0.005        // …plus what sticks out above it (two coplanar tops would flicker)
+const CAP_OUT = 0.01        // overhang of the coping on each side
 const PLINTH_H = 0.28
-const PLINTH_OUT = 0.015    // débord du soubassement côté façade
-const PLINTH_IN = 0.008     // et côté pièce : la plinthe
+const PLINTH_OUT = 0.015    // overhang of the plinth on the facade side
+const PLINTH_IN = 0.008     // and on the room side: the baseboard
 const SILL_H = 0.05
-const SILL_OUT = 0.05       // débord de l'appui devant la façade
-const SILL_SIDE = 0.04      // et de chaque côté de la baie
-const LEAF = 0.04           // épaisseur d'un vantail
+const SILL_OUT = 0.05       // overhang of the sill in front of the facade
+const SILL_SIDE = 0.04      // and on each side of the opening
+const LEAF = 0.04           // thickness of a leaf
 const EPS = 1e-6
-/** Aucune ouverture habillée : le cas de toutes les maisons qui n'ont pas d'ouvrant lié. */
+/** No dressed opening: the case of every house that has no linked cover. */
 const EMPTY_SET: ReadonlySet<string> = new Set<string>()
-/** Jeu (m) entre deux vantaux pleins : c'est ce trait qui fait lire une porte à deux battants. */
+/** Gap (m) between two solid leaves: this line is what makes a double door read. */
 const LEAF_GAP = 0.02
 
 /**
- * Ce qui est VITRÉ : une fenêtre, une baie, une porte vitrée. Ces trois-là reçoivent un vitrage dans
- * leur embrasure (`buildPane`) ; une porte pleine, un passage et une porte de garage, non.
+ * What is GLAZED: a window, a bay window, a glazed door. These three receive glazing in
+ * their reveal (`buildPane`); a solid door, a passage and a garage door do not.
  *
- * Déclaré ici, dans un module FEUILLE : `buildHouse` importe déjà `buildDetails` d'ici, et l'inverse
- * ferait un cycle — Vite réévalue un module à chaud, et un cycle le laisse à moitié initialisé
- * (cf. `6_faq/6_0_pieges-outillage.md`).
+ * Declared here, in a LEAF module: `buildHouse` already imports `buildDetails` from here, and the reverse
+ * would make a cycle — Vite re-evaluates a module on hot reload, and a cycle leaves it half initialized
+ * (see `6_faq/6_0_pieges-outillage.md`).
  */
 export const GLAZED_OPENINGS: ReadonlySet<OpeningType> = new Set<OpeningType>(['window', 'bay', 'glass-door', 'roof-window', 'skylight'])
 
 /**
- * Vitrée pour de bon : par sa NATURE, ou parce que le relevé lui donne le verre pour matière. Une
- * porte pleine déclarée en verre reçoit alors son vitrage et perd son panneau opaque — c'est tout
- * ce que « matière : verre » veut dire, et c'est la seule matière qui touche la géométrie.
+ * Glazed for real: by its KIND, or because the survey gives it glass as its material. A
+ * solid door declared as glass then receives its glazing and loses its opaque panel — that is all
+ * that "Material: Glass" means, and it is the only material that affects the geometry.
  */
 export const isGlazed = (o: OpeningRect): boolean => o.material === 'glass' || GLAZED_OPENINGS.has(o.type)
 
 /**
- * Une boîte dans le repère d'une baie : x le long du mur depuis le bord gauche, y dans l'épaisseur
- * depuis la face intérieure, z depuis l'allège. `at` est le CENTRE de la boîte.
+ * A box in an opening's frame: x along the wall from the left edge, y in the thickness
+ * from the inner face, z from the sill. `at` is the CENTER of the box.
  */
 function boxAt(o: OpeningRect, size: readonly [number, number, number], at: readonly [number, number, number]): BufferGeometry {
   const g = new BoxGeometry(size[0], size[1], size[2])
-  // Après `rotateZ`, l'axe y local suit la perpendiculaire GAUCHE de `u` — et la normale extérieure
-  // d'un mur (pièce CCW) est la perpendiculaire DROITE. Sans ce signe, cadres et appuis partaient
-  // dans la pièce : constaté sur la vraie maison, appui posé au pied de la fenêtre côté parquet.
+  // After `rotateZ`, the local y axis follows the LEFT perpendicular of `u` — and the outward normal
+  // of a wall (CCW room) is the RIGHT perpendicular. Without this sign, frames and sills went
+  // into the room: observed on the real house, a sill laid at the foot of the window on the parquet side.
   const side = Math.sign(-o.u[1] * o.normal[0] + o.u[0] * o.normal[1]) || 1
   g.translate(at[0], side * at[1], at[2])
   g.rotateZ(Math.atan2(o.u[1], o.u[0]))
@@ -78,45 +78,45 @@ function boxAt(o: OpeningRect, size: readonly [number, number, number], at: read
 }
 
 /**
- * Encadrement d'une baie (montants SOMBRES : sur un mur clair, c'est le cadre qui dessine la
- * fenêtre — la maquette a des menuiseries anthracite) et appui d'une fenêtre (CLAIR, avec les lisses).
+ * Surround of an opening (DARK jambs: on a light wall, it is the frame that draws the
+ * window — the maquette has charcoal joinery) and sill of a window (LIGHT, like the rails).
  *
- * Trois familles se distinguent au premier coup d'œil, et c'est voulu — l'utilisateur corrige un
- * relevé, il doit voir qu'il a désigné la bonne ouverture :
- *  - une FENÊTRE : cadre sur ses quatre côtés, plus un appui qui déborde de la façade ;
- *  - une BAIE VITRÉE : cadre sur quatre côtés aussi (elle a une traverse basse, c'est son rail),
- *    mais AUCUN appui — elle descend au sol — et un refend vertical par vantail, sans quoi trois
- *    mètres de verre d'un seul tenant ne ressemblent à rien ;
- *  - une PORTE, vitrée ou pleine : trois côtés, pas de traverse basse (c'est le seuil), pas d'appui.
+ * Three families are told apart at first glance, and that is intended — the user is correcting a
+ * survey, they must see that they designated the right opening:
+ *  - a WINDOW: frame on its four sides, plus a sill that projects from the facade;
+ *  - a BAY WINDOW: frame on four sides too (it has a bottom rail, that is its track),
+ *    but NO sill — it goes down to the floor — and a vertical mullion per leaf, otherwise three
+ *    meters of glass in one piece look like nothing;
+ *  - a DOOR, glazed or solid: three sides, no bottom rail (that is the threshold), no sill.
  */
 function frameOfOpening(o: OpeningRect, frames: BufferGeometry[], trim: BufferGeometry[]): void {
   if (o.type === 'passage') return
-  // cadre mural seulement : les ouvertures de surface ont leur dormant dessiné avec le vitrage
+  // wall frame only: surface openings have their fixed frame drawn with the glazing
   if (o.host === 'floor' || o.host === 'roof') return
   const f = o.type === 'window' ? FRAME : DOOR_FRAME
   const { width: w, height: h, depth: d } = o
   if (w <= 2 * f + EPS || h <= f + EPS) return
-  const fd = Math.min(0.12, Math.max(0.04, d * 0.4))        // profondeur du cadre dans l'épaisseur
+  const fd = Math.min(0.12, Math.max(0.04, d * 0.4))        // depth of the frame in the thickness
   frames.push(
     boxAt(o, [f, fd, h], [f / 2, d / 2, h / 2]),
     boxAt(o, [f, fd, h], [w - f / 2, d / 2, h / 2]),
     boxAt(o, [w - 2 * f, fd, f], [w / 2, d / 2, h - f / 2]),
   )
-  // traverse basse : l'allège d'une fenêtre, le rail d'une baie ; une porte a un seuil, pas une traverse
+  // bottom rail: a window's breast, a bay window's track; a door has a threshold, not a rail
   if (o.type === 'window' || o.type === 'bay') frames.push(boxAt(o, [w - 2 * f, fd, f], [w / 2, d / 2, f / 2]))
   if (o.type === 'window') {
     const sy = 0.06 + SILL_OUT
     trim.push(boxAt(o, [w + 2 * SILL_SIDE, sy, SILL_H], [w / 2, d - 0.06 + sy / 2, -SILL_H / 2]))
   }
-  // Un REFEND par joint entre vantaux, sur tout ce qui est vitré : sans eux, trois mètres de verre
-  // d'un seul tenant ne ressemblent à rien. La baie en prenait déjà d'office ; c'est maintenant le
-  // nombre de vantaux qui décide (`openingLeaves` rend la même chose quand le fichier se tait).
+  // A MULLION per joint between leaves, on everything that is glazed: without them, three meters of glass
+  // in one piece look like nothing. The bay window already got them by default; now it is the
+  // number of leaves that decides (`openingLeaves` returns the same thing when the file is silent).
   if (isGlazed(o)) {
     for (let i = 1; i < o.leaves; i++) frames.push(boxAt(o, [f, fd, h - 2 * f], [(i * w) / o.leaves, d / 2, h / 2]))
   }
 }
 
-/** Les `n` vantaux d'une baie large de `inner`, avec leur jeu : largeur d'un vantail, et son bord gauche. */
+/** The `n` leaves of an opening `inner` wide, with their gap: width of a leaf, and its left edge. */
 function leafSpans(inner: number, n: number): { width: number; x0: (i: number) => number } | null {
   const gap = n > 1 ? LEAF_GAP : 0
   const width = (inner - gap * (n - 1)) / n
@@ -124,9 +124,9 @@ function leafSpans(inner: number, n: number): { width: number; x0: (i: number) =
 }
 
 /**
- * Ce qui REMPLIT la baie : le vantail plein d'une porte (côté intérieur), le tablier d'une porte de
- * garage — et, pour une porte VITRÉE, un simple cadre de vantail, sombre, autour du verre déjà posé
- * par `buildPane`. Un panneau opaque y cacherait précisément ce qui la définit.
+ * What FILLS the opening: the solid leaf of a door (inner side), the curtain of a garage
+ * door — and, for a GLAZED door, a simple leaf frame, dark, around the glass already laid
+ * by `buildPane`. An opaque panel would hide precisely what defines it.
  */
 function leafOfOpening(o: OpeningRect, out: BufferGeometry[], frames: BufferGeometry[]): void {
   if (o.type !== 'door' && o.type !== 'garage' && o.type !== 'glass-door') return
@@ -136,7 +136,7 @@ function leafOfOpening(o: OpeningRect, out: BufferGeometry[], frames: BufferGeom
   const span = leafSpans(w - 2 * f, o.leaves)
   if (!span) return
   if (isGlazed(o)) {
-    const lh = h - f, r = f * 0.8                   // le battant est un peu plus fin que le dormant
+    const lh = h - f, r = f * 0.8                   // the leaf is a little thinner than the fixed frame
     const y = d * 0.35
     for (let i = 0; i < o.leaves; i++) {
       const x = f + span.x0(i), lw = span.width
@@ -150,8 +150,8 @@ function leafOfOpening(o: OpeningRect, out: BufferGeometry[], frames: BufferGeom
     }
     return
   }
-  // vantaux PLEINS : un panneau par vantail, séparés par leur jeu — une porte à deux battants se
-  // reconnaît à ce trait vertical, pas à un panneau deux fois plus large
+  // SOLID leaves: one panel per leaf, separated by their gap — a double door is
+  // recognized by this vertical line, not by a panel twice as wide
   const thick = o.type === 'garage' ? 0.05 : LEAF
   const y = o.type === 'garage' ? d / 2 : d * 0.35
   for (let i = 0; i < o.leaves; i++) {
@@ -160,15 +160,15 @@ function leafOfOpening(o: OpeningRect, out: BufferGeometry[], frames: BufferGeom
 }
 
 /**
- * Le quad d'un morceau de mur est [P0, Q0, Q1, P1] : P sur la ligne intérieure, Q sur la ligne
- * extérieure (`pieceFootprint`). On le décale ACROSS seulement : `inward` côté P, `outward` côté Q.
+ * The quad of a wall piece is [P0, Q0, Q1, P1]: P on the inner line, Q on the outer
+ * line (`pieceFootprint`). It is offset ACROSS only: `inward` on the P side, `outward` on the Q side.
  */
 function acrossOffset(fp: WallPrism['footprint'], inward: number, outward: number): Vec2[] {
   const [p0, q0, q1, p1] = fp
   const dx = p1[0] - p0[0], dy = p1[1] - p0[1]
   const L = Math.hypot(dx, dy) || 1
-  let nx = dy / L, ny = -dx / L                              // une perpendiculaire…
-  if ((q0[0] - p0[0]) * nx + (q0[1] - p0[1]) * ny < 0) { nx = -nx; ny = -ny }   // …orientée vers Q
+  let nx = dy / L, ny = -dx / L                              // a perpendicular…
+  if ((q0[0] - p0[0]) * nx + (q0[1] - p0[1]) * ny < 0) { nx = -nx; ny = -ny }   // …oriented toward Q
   return [
     [p0[0] - nx * inward, p0[1] - ny * inward],
     [q0[0] + nx * outward, q0[1] + ny * outward],
@@ -177,7 +177,7 @@ function acrossOffset(fp: WallPrism['footprint'], inward: number, outward: numbe
   ]
 }
 
-/** Couronnement : sur chaque morceau qui atteint le haut de SON mur (le plein et le linteau, pas l'allège). */
+/** Coping: on each piece that reaches the top of ITS wall (the solid part and the lintel, not the breast). */
 function capsOfWalls(walls: readonly WallPrism[], out: BufferGeometry[]): void {
   const top = new Map<string, number>()
   for (const w of walls) {
@@ -190,18 +190,18 @@ function capsOfWalls(walls: readonly WallPrism[], out: BufferGeometry[]): void {
   }
 }
 
-/** Soubassement : les morceaux de mur EXTÉRIEUR qui partent du sol (une porte y laisse son trou). */
+/** Plinth: the EXTERIOR wall pieces that start from the floor (a door leaves its gap there). */
 function plinthsOfWalls(walls: readonly WallPrism[], out: BufferGeometry[]): void {
   for (const w of walls) {
     if (w.kind !== 'exterior' || w.z0 > EPS) continue
-    // deux millimètres au-dessus du sol fini : le débord ne partage pas sa face avec le plancher
+    // two millimeters above the finished floor: the overhang does not share its face with the floor
     out.push(extrudePolygon(acrossOffset(w.footprint, PLINTH_IN, PLINTH_OUT), w.z0 + 0.002, Math.min(w.z1, w.z0 + PLINTH_H)))
   }
 }
 
 function meshOf(parts: BufferGeometry[], material: MaterialSet['trim'], name: string): Mesh | null {
   if (parts.length === 0) return null
-  // une boîte est INDEXÉE, une extrusion ne l'est pas : `mergeGeometries` refuse de mélanger les deux
+  // a box is INDEXED, an extrusion is not: `mergeGeometries` refuses to mix the two
   const flat = parts.map((p) => (p.index ? p.toNonIndexed() : p))
   const g = mergeGeometries(flat, false)
   for (const p of parts) p.dispose()
@@ -211,20 +211,20 @@ function meshOf(parts: BufferGeometry[], material: MaterialSet['trim'], name: st
   mesh.name = name
   mesh.castShadow = true
   mesh.receiveShadow = true
-  // rangé avec les murs du niveau (fantôme d'un étage au-dessus, retour au matériau) ; pas de pièce
+  // stored with the level's walls (ghost of a level above, material reset); no room
   mesh.userData = { role: 'wall', kind: 'detail', material }
   return mesh
 }
 
 /**
- * La MENUISERIE se fusionne par teinte, pas en bloc : une ouverture qui ne demande ni matière ni
- * couleur retombe sur le matériau partagé de son rôle, et n'ajoute donc aucun appel de dessin. Une
- * maison ordinaire garde ses deux maillages ; seules les ouvertures qui veulent autre chose en
- * coûtent un de plus, et deux fenêtres de la même teinte le partagent.
+ * The JOINERY is merged per tint, not as a block: an opening that asks for neither material nor
+ * color falls back on its role's shared material, and so adds no draw call. An
+ * ordinary house keeps its two meshes; only the openings that want something else
+ * cost one more, and two windows of the same tint share it.
  */
 type Buckets = Map<string, { parts: BufferGeometry[]; material?: OpeningMaterial; color?: string }>
 function bucket(buckets: Buckets, o: OpeningRect): BufferGeometry[] {
-  // la clé VIDE est celle du réglage par défaut : c'est elle qui garde son maillage sans suffixe
+  // the EMPTY key is the default setting's: it is the one that keeps its mesh without a suffix
   const key = o.material || o.color ? `${o.material ?? ''}|${o.color ?? ''}` : ''
   let b = buckets.get(key)
   if (!b) { b = { parts: [], ...(o.material ? { material: o.material } : {}), ...(o.color ? { color: o.color } : {}) }; buckets.set(key, b) }
@@ -234,7 +234,7 @@ function meshesOf(buckets: Buckets, mats: MaterialSet, role: JoineryRole, name: 
   return [...buckets].map(([key, b]) => meshOf(b.parts, joineryMaterial(mats, role, b.material, b.color), key ? `${name}#${key}` : name))
 }
 
-/** Le détail d'un niveau : lisses, encadrements, soubassement, vantaux — les deux derniers par teinte. */
+/** The detail of a level: rails, surrounds, plinth, leaves — the last two per tint. */
 export function buildDetails(level: LevelGeometry, mats: MaterialSet, dressed: ReadonlySet<string> = EMPTY_SET): Mesh[] {
   const trim: BufferGeometry[] = []
   const plinth: BufferGeometry[] = []
@@ -242,10 +242,10 @@ export function buildDetails(level: LevelGeometry, mats: MaterialSet, dressed: R
   const doors: Buckets = new Map()
   for (const o of level.openings) {
     frameOfOpening(o, bucket(frames, o), trim)
-    // Le vantail d'une baie HABILLÉE par un ouvrant appartient à l'appareil : c'est lui qui le
-    // dessine, à ses cotes et à ses couleurs, et qui l'ouvre. En dessiner un second ici laissait une
-    // porte de garage fermée derrière le tablier qui vient de remonter. Le DORMANT et le VITRAGE,
-    // eux, restent au bâti : un volet ne retire ni le cadre ni la vitre de la fenêtre qu'il couvre.
+    // The leaf of an opening DRESSED by a cover belongs to the device: it is the device that
+    // draws it, at its dimensions and in its colors, and that opens it. Drawing a second one here left a
+    // closed garage door behind the curtain that had just gone up. The FIXED FRAME and the GLAZING,
+    // for their part, stay with the structure: a shutter removes neither the frame nor the glass of the window it covers.
     if (!dressed.has(o.openingId)) leafOfOpening(o, bucket(doors, o), bucket(frames, o))
   }
   capsOfWalls(level.walls, trim)
@@ -258,18 +258,18 @@ export function buildDetails(level: LevelGeometry, mats: MaterialSet, dressed: R
   ].filter((m): m is Mesh => m !== null)
 }
 
-// ---- le toit ------------------------------------------------------------------------------------
+// ---- the roof -----------------------------------------------------------------------------------
 
-const FASCIA_DROP = 0.18      // hauteur d'une planche de rive (m)
-const FASCIA_T = 0.04         // son épaisseur
-const FASCIA_GAP = 0.01       // décollée du pignon : deux faces coplanaires scintilleraient
-const PARAPET_H = 0.35        // acrotère d'un toit plat, au-dessus de la dalle
+const FASCIA_DROP = 0.18      // height of a fascia board (m)
+const FASCIA_T = 0.04         // its thickness
+const FASCIA_GAP = 0.01       // set off from the gable: two coplanar faces would flicker
+const PARAPET_H = 0.35        // parapet of a flat roof, above the slab
 const PARAPET_T = 0.2
 
 /**
- * Une planche le long d'une arête 3D, pendue sous elle et poussée vers `out` : un parallélépipède
- * (une boîte unitaire à laquelle on donne une base oblique), pour que la planche d'une rive en pente
- * suive la pente en gardant ses faces verticales.
+ * A board along a 3D edge, hanging below it and pushed toward `out`: a parallelepiped
+ * (a unit box given an oblique base), so that the board of a sloping verge
+ * follows the slope while keeping its faces vertical.
  */
 function board(a: Vec3, b: Vec3, out: Vec2): BufferGeometry {
   const g = new BoxGeometry(1, 1, 1)
@@ -282,10 +282,10 @@ function board(a: Vec3, b: Vec3, out: Vec2): BufferGeometry {
 }
 
 /**
- * Le détail du toit. Toit à deux pentes : une planche de RIVE sous chaque arête de versant qui n'est
- * pas le faîte (égouts et rives de pignon) — c'est l'épaisseur visible d'un toit qui n'en a pas
- * (`faces` est un jeu de plans, `thickness` 0). Toit plat : un ACROTÈRE, muret dans le matériau des
- * murs qui court sur le pourtour de la dalle, couronné comme les murs.
+ * The roof detail. Gable roof: a FASCIA board under each slope edge that is not
+ * the ridge (eaves and gable verges) — it is the visible thickness of a roof that has none
+ * (`faces` is a set of planes, `thickness` 0). Flat roof: a PARAPET, a low wall in the walls'
+ * material that runs around the slab, coped like the walls.
  */
 export function buildRoofDetails(roof: RoofDescriptor, mats: MaterialSet): Mesh[] {
   const out: Mesh[] = []
@@ -302,7 +302,7 @@ export function buildRoofDetails(roof: RoofDescriptor, mats: MaterialSet): Mesh[
   } else {
     const parts: BufferGeometry[] = []
     for (const face of roof.faces) {
-      // un pignon est vertical : son emprise au sol n'a pas d'aire
+      // a gable is vertical: its ground footprint has no area
       let area = 0
       for (let i = 0; i < face.length; i++) {
         const p = face[i]!, q = face[(i + 1) % face.length]!
@@ -313,7 +313,7 @@ export function buildRoofDetails(roof: RoofDescriptor, mats: MaterialSet): Mesh[
       const cy = face.reduce((s, p) => s + p[1], 0) / face.length
       for (let i = 0; i < face.length; i++) {
         const a = face[i]!, b = face[(i + 1) % face.length]!
-        if (a[2] >= roof.zRidge - EPS && b[2] >= roof.zRidge - EPS) continue   // le faîte n'a pas de rive
+        if (a[2] >= roof.zRidge - EPS && b[2] >= roof.zRidge - EPS) continue   // the ridge has no fascia
         const L = Math.hypot(b[0] - a[0], b[1] - a[1])
         if (L < EPS) continue
         let out2: Vec2 = [(b[1] - a[1]) / L, -(b[0] - a[0]) / L]

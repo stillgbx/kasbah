@@ -2,10 +2,10 @@ import { Color } from 'three'
 import { dayFactor, duskFactor, type SceneAmbience } from '../core/ambience'
 import { hourGrade, mix, mixRgb, toPalette, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
 
-// NATURE : le chalet — du bois partout (bardage, lambris, planchers, terrasse, toit, allées), des
-// toits plats végétalisés, un peu de pierre au sol, une lumière chaude, des matières mates. Le contraire du réaliste sur un
-// point précis — ici rien ne brille. Pas de métal, pas d'eau miroir, une occlusion marquée qui pose
-// les volumes, et une vignette douce. La maison a l'air d'être en matériaux, pas en rendu.
+// NATURE: the chalet — wood everywhere (siding, paneling, floors, terrace, roof, paths),
+// green flat roofs, a little stone on the ground, warm light, matte materials. The opposite of realistic on one
+// specific point — here nothing shines. No metal, no mirror water, a strong occlusion that grounds
+// the volumes, and a soft vignette. The house looks like it is made of materials, not rendered.
 
 const PALETTE: PaletteSpec = {
   wall: '#a8784c',
@@ -14,7 +14,7 @@ const PALETTE: PaletteSpec = {
   floors: { wood: '#b07d4c', tile: '#cbc3b1', carpet: '#b8a58e', concrete: '#bdb5a6' },
   glass: '#b6cfc4',
   roof: '#6e5238',
-  // toit plat végétalisé : un sedum plus sombre et plus sec que la pelouse
+  // green flat roof: a sedum darker and drier than the lawn
   roofFlat: '#5f7a42',
   terrain: '#6d8f4e',
   zones: {
@@ -82,7 +82,7 @@ export const natureStyle: RenderStyle = {
         shadowOpacity: mix(0.3, 1, day) * clear,
       },
       post: {
-        toneMapping: 'agx',                              // plus doux qu'ACES : il ne sature pas les verts
+        toneMapping: 'agx',                              // softer than ACES: it does not saturate the greens
         exposure: mix(1.5, 1.05, day),
         bloom: { strength: mix(0.5, 0.12, day), radius: 0.5, threshold: mix(0.8, 1.1, day) },
         ao: { intensity: mix(1.2, 1.1, day), radius: 0.45 },

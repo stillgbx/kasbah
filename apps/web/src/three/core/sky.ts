@@ -1,41 +1,41 @@
 import { DataTexture, EquirectangularReflectionMapping, FloatType, LinearFilter, PMREMGenerator, RGBAFormat, type Texture, type Vector3, type WebGLRenderer } from 'three'
 import type { SkyLook } from '../styles/types'
 
-// Ce que la maison REFLÈTE. Un matériau PBR ne rend ses reflets — et la totalité de sa part
-// métallique — qu'à partir d'une carte d'environnement ; sans elle, murs, verre, eau et carrosseries
-// rendent de l'argile. La carte était jusqu'ici réservée aux véhicules, « `scene.environment`
-// toucherait murs, toit et panneaux solaires, ce qui est une autre décision » : cette décision est
-// prise, et elle est posée sur toute la scène. C'est elle qui fait la différence entre une maquette
-// et un tas de polygones gris.
+// What the house REFLECTS. A PBR material only renders its reflections — and the whole of its metallic
+// part — from an environment map; without it, walls, glass, water and car bodies
+// render as clay. The map was until now reserved for vehicles, "`scene.environment`
+// would touch walls, roof and solar panels, which is another decision": that decision is
+// made, and it is set on the whole scene. It is what makes the difference between a maquette
+// and a pile of gray polygons.
 //
-// Trois choses comptent, et aucune n'est un détail :
-//  - le SOL sombre, qui donne son assise au bas des volumes ;
-//  - l'HORIZON clair et RESSERRÉ (`|sin φ|^0.45`, pas une interpolation linéaire) : c'est cette
-//    ligne qui balaie une surface courbe quand on tourne autour, et c'est elle qui fait lire un galbe ;
-//  - un SOLEIL en valeurs HDR (`FloatType`, bien au-delà de 1). Une tache plafonnée à 1 ne fait pas
-//    un reflet, elle fait une tache grise — c'est le dépassement qui donne le point brillant.
+// Three things matter, and none is a detail:
+//  - the dark GROUND, which gives the bottom of the volumes their footing;
+//  - the bright and TIGHT HORIZON (`|sin φ|^0.45`, not a linear interpolation): it is this
+//    line that sweeps across a curved surface as you turn around it, and it is what makes a curve read;
+//  - a SUN in HDR values (`FloatType`, well beyond 1). A spot capped at 1 does not make
+//    a reflection, it makes a gray spot — it is the overshoot that gives the bright point.
 //
-// Le ciel lui-même n'est jamais AFFICHÉ : le fond de la scène reste celui de l'app (le sol infini de
-// `buildHouse`), comme sur la maquette. Il ne sert qu'à éclairer et à se refléter.
+// The sky itself is never DISPLAYED: the scene background stays the app's (the infinite ground of
+// `buildHouse`), as on the maquette. It only serves to light and to be reflected.
 
-/** Équirectangulaire : largeur = le tour, hauteur = du bas vers le haut. Petite, tout y sera flouté. */
+/** Equirectangular: width = the full turn, height = from bottom to top. Small, everything will be blurred anyway. */
 const W = 128
 const H = 64
-/** Rayon angulaire du disque solaire, en cosinus : 0,993 ≈ 6,8°. Large — le PMREM l'étale, il ne le concentre pas. */
+/** Angular radius of the solar disc, as a cosine: 0.993 ≈ 6.8°. Wide — the PMREM spreads it, it does not concentrate it. */
 const SUN_COS = 0.993
 
 /**
- * Le dégradé brut, en flottants. La convention d'échantillonnage de three est
- * `u = atan2(z, x) / 2π + 0.5`, `v = asin(y) / π + 0.5` : le rang 0 regarde vers le BAS.
- * `sun` est un vecteur unitaire pointant VERS le soleil, dans le repère monde.
+ * The raw gradient, in floats. three's sampling convention is
+ * `u = atan2(z, x) / 2π + 0.5`, `v = asin(y) / π + 0.5`: row 0 looks DOWN.
+ * `sun` is a unit vector pointing TOWARD the sun, in the world reference frame.
  */
 function skyTexture(look: SkyLook, sun: Vector3): DataTexture {
   const data = new Float32Array(W * H * 4)
   for (let y = 0; y < H; y++) {
-    const phi = ((y + 0.5) / H - 0.5) * Math.PI            // -π/2 (bas) → +π/2 (haut)
+    const phi = ((y + 0.5) / H - 0.5) * Math.PI            // -π/2 (bottom) → +π/2 (top)
     const cp = Math.cos(phi), sp = Math.sin(phi)
-    // `h` = 0 à l'horizon, 1 aux deux pôles : la bande claire se serre autour de l'horizon au lieu
-    // de se diluer sur toute la moitié du ciel.
+    // `h` = 0 at the horizon, 1 at both poles: the bright band tightens around the horizon instead
+    // of diluting over the whole half of the sky.
     const h = Math.abs(sp) ** 0.45
     const far = sp >= 0 ? look.zenith : look.ground
     for (let x = 0; x < W; x++) {
@@ -59,11 +59,11 @@ function skyTexture(look: SkyLook, sun: Vector3): DataTexture {
 }
 
 /**
- * La carte prête à poser sur `scene.environment`. Le PMREM pré-filtre le ciel pour toutes les
- * rugosités, une fois : sans lui, une surface mate irait piocher un pixel net et scintillerait.
+ * The map ready to set on `scene.environment`. The PMREM prefilters the sky for all
+ * roughnesses, once: without it, a matte surface would pick a sharp pixel and flicker.
  *
- * `null` sans renderer (mode sans tête, tests) : les matériaux gardent alors leur rendu diffus, ce
- * qui n'empêche rien de fonctionner.
+ * `null` without a renderer (headless mode, tests): the materials then keep their diffuse render, which
+ * prevents nothing from working.
  */
 export function createSkyEnvironment(renderer: WebGLRenderer | null, look: SkyLook, sun: Vector3): Texture | null {
   if (!renderer) return null
@@ -76,10 +76,10 @@ export function createSkyEnvironment(renderer: WebGLRenderer | null, look: SkyLo
 }
 
 /**
- * Le même ciel sous les nuages : les couleurs perdent leur saturation et le zénith s'assombrit à
- * mesure que la couverture monte, le disque solaire s'éteint. Central — chaque style garde son
- * ciel dégagé, la météo le grise pareil pour tous ; c'est ce que la caméra voit dans les reflets et
- * dans le fond du canvas.
+ * The same sky under the clouds: the colors lose their saturation and the zenith darkens as
+ * the cover rises, the solar disc goes out. Central — each style keeps its
+ * clear sky, the weather grays it the same for all; it is what the camera sees in the reflections and
+ * in the canvas background.
  */
 export function overcastSky(look: SkyLook, cloudiness: number): SkyLook {
   const c = Math.min(1, Math.max(0, cloudiness))

@@ -2,10 +2,10 @@ import { Color } from 'three'
 import { dayFactor, type SceneAmbience } from '../core/ambience'
 import { mix, mixPalette, mixRgb, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
 
-// NOËL : le chalet sous la neige. Façades en bardage rouge, toit, terrain et pelouse blancs de
-// neige (la neige est PEINTE par la palette : elle tient même sans météo neigeuse), fenêtres d'une
-// lumière chaude qui se voit de loin, nuit bleue et claire de lune. Le traîneau du père Noël tourne
-// au-dessus du toit (`StyleLook.parade`).
+// CHRISTMAS: the chalet under snow. Red-sided facades, roof, terrain and lawn white with
+// snow (the snow is PAINTED by the palette: it holds even without snowy weather), windows with a
+// warm light visible from afar, blue night and moonlight. Santa's sleigh circles
+// above the roof (`StyleLook.parade`).
 
 const NIGHT: PaletteSpec = {
   wall: '#7a2420',
@@ -39,7 +39,7 @@ const DAY: PaletteSpec = {
   device: '#f2ede4',
 }
 
-// la neige : un blanc mat au grain fin, qui garde un peu de relief
+// the snow: a matte, fine-grained white that keeps a little relief
 const snow = { texture: 'plaster' as const, roughness: 0.9, relief: 0.5 }
 
 const SURFACES: SurfaceLooks = {
@@ -57,7 +57,7 @@ const SURFACES: SurfaceLooks = {
   terrain: snow,
   zones: {
     lawn: snow,
-    // une glace de patinoire, lisse et bleutée, qui ne bouge pas
+    // skating-rink ice, smooth and bluish, that does not move
     pool: { texture: 'water', roughness: 0.05, metalness: 0.3, flow: 0 },
     driveway: { texture: 'gravel', roughness: 0.9, relief: 0.5 },
     path: snow,
@@ -67,7 +67,7 @@ const SURFACES: SurfaceLooks = {
   },
 }
 
-// nuit bleue sous la lune ; jour d'hiver pâle
+// blue night under the moon; pale winter day
 const SKY_NIGHT = { zenith: [0.008, 0.015, 0.06], horizon: [0.07, 0.09, 0.18], ground: [0.02, 0.025, 0.04], sunGlare: 5, sunColor: [0.8, 0.88, 1] } as const
 const SKY_DAY = { zenith: [0.3, 0.42, 0.65], horizon: [0.78, 0.82, 0.9], ground: [0.3, 0.32, 0.36], sunGlare: 7, sunColor: [1, 0.95, 0.88] } as const
 
@@ -79,7 +79,7 @@ export const noelStyle: RenderStyle = {
     return {
       palette: mixPalette(NIGHT, DAY, day),
       surfaces: SURFACES,
-      // les fenêtres d'une veillée : chaudes et visibles de loin, la nuit surtout
+      // the windows of a winter evening gathering: warm and visible from afar, especially at night
       glass: { opacity: 0.45, roughness: 0.08, metalness: 0.1, emissive: mix(0.8, 0.1, day) },
       sky: {
         zenith: mixRgb(SKY_NIGHT.zenith, SKY_DAY.zenith, day),
@@ -90,17 +90,17 @@ export const noelStyle: RenderStyle = {
         intensity: mix(1.2, 0.9, day),
       },
       lighting: {
-        // clair de lune bleuté la nuit ; soleil bas et blanc le jour
+        // bluish moonlight at night; low, white sun by day
         sunColor: new Color(0xa8c0ff).lerp(new Color(0xfff2e0), day),
         sunIntensity: mix(0.6, 1.9, day),
         hemiSky: new Color(0x2a3a6a).lerp(new Color(0xc8d8f0), day),
-        hemiGround: new Color(0x6a7890).lerp(new Color(0xe0e6ee), day),   // la neige renvoie la lumière
+        hemiGround: new Color(0x6a7890).lerp(new Color(0xe0e6ee), day),   // the snow bounces the light back
         hemiIntensity: mix(0.7, 0.8, day),
         ambientIntensity: mix(0.1, 0.22, day),
         shadowOpacity: mix(0.55, 0.85, day),
       },
       post: {
-        toneMapping: 'agx',                              // le blanc de la neige ne doit pas brûler
+        toneMapping: 'agx',                              // the white of the snow must not burn out
         exposure: mix(1.3, 0.95, day),
         bloom: { strength: mix(0.8, 0.25, day), radius: 0.7, threshold: mix(0.6, 0.95, day) },
         ao: { intensity: mix(1.1, 0.9, day), radius: 0.4 },
@@ -109,7 +109,7 @@ export const noelStyle: RenderStyle = {
       },
       glow: { scale: mix(1.7, 1.1, day), opacity: mix(1, 0.35, day), lightIntensity: mix(18, 7, day), emissive: mix(2.8, 1.4, day) },
       parade: { kind: 'noel' },
-      // jardin : sapins sombres et givre ; les fruits sont des boules rouges
+      // garden: dark firs and frost; the fruits are red baubles
       garden: { leaf: [new Color(0x1f4d2e), new Color(0x2b5e3a), new Color(0xdfe8ee)], bark: new Color(0x4a3222), stone: new Color(0xe6ecf2), accent: new Color(0xd81f26) },
     }
   },

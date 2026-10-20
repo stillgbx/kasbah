@@ -1,45 +1,45 @@
 import { Mesh, PlaneGeometry, ShaderMaterial, SRGBColorSpace, TextureLoader, Vector2, type Texture } from 'three'
 
-// Pochette (ou logo de l'appli) posée SUR l'écran d'un lecteur dans la scène 3D : ce que la TV du
-// salon diffuse se voit sur la maquette, pas seulement dans le panneau. L'image est celle que l'état
-// porte déjà (`nowPlaying.artUrl`), servie par notre propre origine — donc pas de CORS à négocier.
+// Cover art (or app logo) laid ON the screen of a player in the 3D scene: what the living room
+// TV is showing can be seen on the maquette, not only in the panel. The image is the one the state
+// already carries (`nowPlaying.artUrl`), served by our own origin — so no CORS to negotiate.
 //
-// L'image REMPLIT l'écran (comme `object-fit: cover`) : une pochette est carrée, un écran est en
-// 16:9, alors on montre la bande centrale de l'image plutôt que de la déformer ou de la laisser en
-// timbre au milieu d'un cadre noir (premier essai, écarté par l'utilisateur). Le calcul du cadrage
-// est pur (`coverCrop`) : il ne dépend que des deux formats.
+// The image FILLS the screen (like `object-fit: cover`): a cover is square, a screen is
+// 16:9, so we show the central band of the image rather than distorting it or leaving it as a
+// stamp in the middle of a black frame (first attempt, rejected by the user). The framing computation
+// is pure (`coverCrop`): it depends only on the two aspect ratios.
 //
-// PIÈGE : le cadrage est appliqué DANS le shader (`uCrop`, `uCropOffset`). `texture.repeat` et
-// `texture.offset` n'agissent que par le transform d'UV des matériaux STANDARD ; un shader écrit à la
-// main lit `uv` brut et les ignore en silence — l'image sortait étirée alors que le calcul était bon.
+// PITFALL: the framing is applied IN the shader (`uCrop`, `uCropOffset`). `texture.repeat` and
+// `texture.offset` only act through the UV transform of STANDARD materials; a hand-written
+// shader reads raw `uv` and silently ignores them — the image came out stretched while the computation was right.
 //
-// L'image porte un VOILE dégradé, transposition de ce que l'utilisateur fait dans ses projets web
-// (`.background-shade` : un `linear-gradient(#0000, #00000040)` posé par-dessus) : une pochette pleine
-// de couleurs saturées est moins criarde, et se marie mieux avec une maquette gris-bleu. En CSS c'est
-// un noir semi-transparent EMPILÉ sur l'image ; ici la même chose en une multiplication, avant le
-// mélange alpha — composer du noir d'opacité a sur une couleur c donne `c · (1 − a)`.
+// The image carries a gradient VEIL, a transposition of what the user does in their web projects
+// (`.background-shade`: a `linear-gradient(#0000, #00000040)` laid on top): a cover full
+// of saturated colors is less garish, and goes better with a blue-gray maquette. In CSS it is
+// a semi-transparent black STACKED on the image; here the same thing as a multiplication, before
+// alpha blending — compositing black of opacity a over a color c gives `c · (1 − a)`.
 //
-// Essayé et RETIRÉ : un fondu des quatre bords. Le plan épouse exactement la dalle, donc le bord de
-// l'image tombe sur l'arête de l'écran — une arête vraie, qui appartient à l'objet et n'a pas besoin
-// d'être adoucie. Le fondu mangeait de l'image sans rien résoudre.
+// Tried and REMOVED: a fade of the four edges. The plane matches the slab exactly, so the edge of
+// the image falls on the edge of the screen — a real edge, which belongs to the object and does not need
+// softening. The fade ate into the image without solving anything.
 //
-// Matériau NON éclairé : un écran émet sa lumière. Éclairé, il serait sombre dans une maison dont
-// les lampes sont éteintes, alors que c'est précisément ce qu'on veut voir.
+// UNLIT material: a screen emits its own light. Lit, it would be dark in a house whose
+// lamps are off, whereas that is precisely what we want to see.
 
 export type TextureLoad = (url: string, onLoad: (t: Texture) => void, onError: () => void) => void
 
 const defaultLoad: TextureLoad = (url, onLoad, onError) => { new TextureLoader().load(url, onLoad, undefined, () => onError()) }
 
-/** Voile noir : opacité en HAUT et en BAS de l'image (le `#0000` → `#00000040` du CSS d'origine). */
+/** Black veil: opacity at the TOP and at the BOTTOM of the image (the `#0000` → `#00000040` of the original CSS). */
 const SHADE_TOP = 0
 const SHADE_BOTTOM = 0.25
 
 /**
- * Plan orienté comme la face avant d'un écran, dans le repère LOCAL de sa boîte (X = largeur,
- * Y = profondeur, Z = hauteur) : normale vers +Y, haut de l'image vers +Z, et côté droit de l'image
- * vers −X. Ce dernier point n'est pas un détail : quelqu'un placé devant l'écran (en +Y, regardant
- * vers −Y) a sa droite en −X. Vouloir « droite = +X » avec le haut en +Z et la normale en +Y
- * demanderait un miroir (déterminant −1), pas une rotation — l'image sortirait retournée.
+ * Plane oriented like the front face of a screen, in the LOCAL frame of its box (X = width,
+ * Y = depth, Z = height): normal toward +Y, top of the image toward +Z, and right side of the image
+ * toward −X. That last point is not a detail: someone standing in front of the screen (at +Y, looking
+ * toward −Y) has their right at −X. Wanting "right = +X" with the top at +Z and the normal at +Y
+ * would require a mirror (determinant −1), not a rotation — the image would come out flipped.
  */
 export function screenArtGeometry(width: number, height: number): PlaneGeometry {
   const geometry = new PlaneGeometry(width, height)
@@ -49,13 +49,13 @@ export function screenArtGeometry(width: number, height: number): PlaneGeometry 
 }
 
 /**
- * Cadrage « cover » d'une image de format `source` sur un écran de format `screen` (largeur /
- * hauteur) : la part de l'image à montrer et son décalage pour REMPLIR l'écran SANS JAMAIS déformer,
- * exactement comme `object-fit: cover` en CSS. Une image plus étroite que l'écran (pochette carrée
- * sur un 16:9) est rognée en haut et en bas ; une image plus large est rognée sur les côtés.
+ * "Cover" framing of an image of aspect `source` on a screen of aspect `screen` (width /
+ * height): the part of the image to show and its offset to FILL the screen WITHOUT EVER distorting,
+ * exactly like `object-fit: cover` in CSS. An image narrower than the screen (square cover
+ * on a 16:9) is cropped at the top and bottom; a wider image is cropped on the sides.
  *
- * Format de l'image inconnu (texture pas encore décodée) : on la suppose CARRÉE, jamais « on étire
- * pour remplir » — mieux vaut rogner un peu trop qu'afficher une pochette écrasée.
+ * Unknown image aspect (texture not yet decoded): we assume it is SQUARE, never "stretch
+ * to fill" — better to crop a little too much than to show a squashed cover.
  */
 export function coverCrop(sourceAspect: number, screenAspect: number): { repeat: [number, number]; offset: [number, number] } {
   if (!Number.isFinite(screenAspect) || screenAspect <= 0) return { repeat: [1, 1], offset: [0, 0] }
@@ -68,7 +68,7 @@ export function coverCrop(sourceAspect: number, screenAspect: number): { repeat:
   return { repeat: [repeatX, 1], offset: [(1 - repeatX) / 2, 0] }
 }
 
-/** Format d'une image chargée ; `0` si la texture ne le dit pas (test, image non décodée). */
+/** Aspect ratio of a loaded image; `0` if the texture does not tell (test, undecoded image). */
 function aspectOf(texture: Texture): number {
   const image = texture.image as { width?: number; height?: number } | undefined
   const w = image?.width ?? 0, h = image?.height ?? 0
@@ -76,17 +76,17 @@ function aspectOf(texture: Texture): number {
 }
 
 /**
- * Matériau de l'image : la texture cadrée, assombrie par le voile dégradé. `transparent` reste vrai
- * pour les images qui portent de l'alpha (les logos d'applis sont des PNG détourés).
+ * Material of the image: the framed texture, darkened by the gradient veil. `transparent` stays true
+ * for images that carry alpha (app logos are cut-out PNGs).
  */
 function artMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     transparent: true, depthWrite: false,
     uniforms: {
       uMap: { value: null },
-      // cadrage « cover » : part de l'image montrée, et coin d'où on part (voir `coverCrop`)
+      // "cover" framing: share of the image shown, and the corner it starts from (see `coverCrop`)
       uCrop: { value: new Vector2(1, 1) }, uCropOffset: { value: new Vector2(0, 0) },
-      // voile noir dégradé : opacité en haut, opacité en bas
+      // gradient black veil: opacity at the top, opacity at the bottom
       uShade: { value: new Vector2(SHADE_TOP, SHADE_BOTTOM) },
     },
     vertexShader: `
@@ -97,7 +97,7 @@ function artMaterial(): ShaderMaterial {
       varying vec2 vUv;
       void main() {
         vec4 c = texture2D(uMap, vUv * uCrop + uCropOffset);
-        // voile noir : vUv.y vaut 1 en haut de l'image (cf. l'orientation du plan)
+        // black veil: vUv.y is 1 at the top of the image (see the plane's orientation)
         float shade = mix(uShade.y, uShade.x, vUv.y);
         gl_FragColor = vec4(c.rgb * (1.0 - shade), c.a);
       }`,
@@ -105,25 +105,25 @@ function artMaterial(): ShaderMaterial {
 }
 
 export interface ScreenArtOptions {
-  /** Largeur et hauteur de l'écran (m) : l'image le remplit. */
+  /** Width and height of the screen (m): the image fills it. */
   width: number
   height: number
-  /** Décalage en Y (m) pour poser l'image DEVANT la face, sans la traverser. */
+  /** Y offset (m) to lay the image IN FRONT of the face, without going through it. */
   offsetY: number
-  /** Injection pour les tests (sinon `TextureLoader`). */
+  /** Injection for the tests (otherwise `TextureLoader`). */
   load?: TextureLoad
-  /** Appelé quand une image vient d'être posée : la scène ne rend qu'à la demande. */
+  /** Called when an image has just been laid: the scene only renders on demand. */
   onReady?: () => void
 }
 
 /**
- * L'image de l'écran d'un marqueur. `set(url)` charge et remplace ; `set(undefined)` cache. Une
- * réponse tardive dont l'URL n'est plus celle attendue est jetée (l'utilisateur a pu zapper), et la
- * texture remplacée est libérée — une texture non libérée reste en mémoire vidéo.
+ * The image on a marker's screen. `set(url)` loads and replaces; `set(undefined)` hides. A
+ * late response whose URL is no longer the expected one is discarded (the user may have switched channels), and the
+ * replaced texture is freed — a texture that is not freed stays in video memory.
  */
 export class ScreenArt {
   readonly mesh: Mesh<PlaneGeometry, ShaderMaterial>
-  /** URL visée en dernier (chargée ou en cours) ; `null` = rien à afficher. */
+  /** URL targeted last (loaded or in progress); `null` = nothing to display. */
   private wanted: string | null = null
   private texture: Texture | null = null
   private readonly load: TextureLoad
@@ -155,14 +155,14 @@ export class ScreenArt {
       this.mesh.visible = true
       this.opts.onReady?.()
     }, () => {
-      // image refusée ou illisible : on garde l'écran nu et on n'insiste pas
+      // image refused or unreadable: we keep the screen bare and do not insist
       if (this.wanted !== next) return
       this.wanted = null
       this.clear()
     })
   }
 
-  /** Cache l'image et libère la texture : rien à afficher, rien à garder en mémoire. */
+  /** Hides the image and frees the texture: nothing to display, nothing to keep in memory. */
   private clear(): void {
     this.mesh.visible = false
     this.mesh.material.uniforms.uMap!.value = null

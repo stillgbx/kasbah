@@ -5,60 +5,60 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { isParkingBay, type Parking, type ParkingSide } from '@kasbah/shared'
 
-// Ce qu'on VOIT d'une place de stationnement. Deux dessins, parce que ce sont deux objets :
+// What one SEES of a parking space. Two drawings, because these are two objects:
 //
-// - une place de voiture est une PEINTURE au sol — des tirets fins, un « P » au milieu, et un trait
-//   plein côté ARRIÈRE, qui est ce qui distingue l'avant de l'arrière sans écrire une flèche : c'est
-//   la butée, celle contre laquelle on recule. Elle doit se lire quand on la cherche et disparaître
-//   quand on regarde la maison : c'est la demande, « discret ».
-// - la base d'un robot est un OBJET — une plaque au sol et un bloc, comme les bases de robot
-//   aspirateur. Un marquage au sol ne dirait pas qu'il y a quelque chose là où le robot se recharge.
-//   Le bloc est DERRIÈRE le robot (côté arrière de la place) : c'est là qu'il vient toucher en
-//   reculant dans sa station, et c'est ce qu'on voit sur une vraie base.
+// - a car space is PAINT on the ground — thin dashes, a "P" in the middle, and a solid
+//   line on the BACK side, which is what tells the front from the back without writing an arrow: it is
+//   the stop, the one you back up against. It must read when you look for it and disappear
+//   when you look at the house: that is the request, "discreet".
+// - a robot's base is an OBJECT — a plate on the ground and a block, like the bases of robot
+//   vacuums. A ground marking would not say there is something there where the robot charges.
+//   The block is BEHIND the robot (back side of the space): that is where it comes to touch when
+//   backing into its station, and that is what one sees on a real base.
 //
-// Tout est construit dans le repère de la place (origine au centre, +y vers l'avant) : le groupe
-// porte la position et la rotation, et le reste ne connaît que des mètres.
+// Everything is built in the space's frame (origin at the center, +y toward the front): the group
+// carries the position and the rotation, and the rest only knows meters.
 
-/** Cotes du marquage d'une place de voiture (m) : le « P » occupe le milieu, largement. */
+/** Dimensions of a car space marking (m): the "P" fills the middle, generously. */
 const BAY = { dash: 0.3, gap: 0.22, stroke: 0.06, glyph: 0.68 } as const
-/** Cotes d'une base de robot (m) : la plaque, puis le bloc de tête où le robot vient toucher. */
+/** Dimensions of a robot base (m): the plate, then the head block where the robot comes to touch. */
 const DOCK = { plate: 0.03, head: 0.16, headDepth: 0.1 } as const
-/** Épaisseur (m) d'une ligne de cote, celle des cotes d'ouverture. */
+/** Thickness (m) of a dimension line, that of the opening dimensions. */
 const COTE_BAR = 0.02
 
 export interface ParkingMaterials {
-  /** Le marquage au sol : peinture claire, sans reflet, jamais opaque. */
+  /** The ground marking: light paint, no reflection, never opaque. */
   paint: MeshBasicMaterial
-  /** La ligne de cote, pendant qu'on règle une place. */
+  /** The dimension line, while a space is being adjusted. */
   cote: MeshBasicMaterial
-  /** La plaque et le bloc d'une base de robot. */
+  /** The plate and the block of a robot base. */
   dock: MeshStandardMaterial
-  /** Voile touchable de la place CHOISIE en mode édition. */
+  /** Touchable veil of the SELECTED space in edit mode. */
   fillOn: MeshBasicMaterial
-  /** Cadre du mode édition, au repos puis choisi. */
+  /** Edit mode frame, at rest then selected. */
   ring: MeshBasicMaterial
   ringOn: MeshBasicMaterial
   /**
-   * Ce qui ÉTEINT un voile ou un cadre : un matériau invisible, jamais `Object3D.visible` — cette
-   * propriété-là dit « mon niveau est masqué », et l'éteindre rendrait la place injoignable au doigt
-   * (même piège que les poignées d'ouverture).
+   * What TURNS OFF a veil or a frame: an invisible material, never `Object3D.visible` — that
+   * property says "my level is hidden", and turning it off would make the space unreachable by finger
+   * (same pitfall as the opening handles).
    */
   off: MeshBasicMaterial
 }
 
 /**
- * La couleur de la peinture au sol, et elle NE SUIT PAS le thème de l'app : un marquage de parking
- * est blanc dans le monde, comme le toit et la pelouse gardent leur couleur de matière quel que soit
- * le thème (voir `styles/`). Essayé d'abord avec `theme.onSurface` — en thème sombre il donnait du
- * blanc (juste), en thème clair un trait ANTHRACITE sur le béton, qu'aucun parking ne porte.
+ * The color of the ground paint, and it does NOT FOLLOW the app theme: a parking marking
+ * is white in the world, just as the roof and the lawn keep their material color whatever
+ * the theme (see `styles/`). Tried first with `theme.onSurface` — in dark theme it gave
+ * white (right), in light theme a CHARCOAL line on the concrete, which no parking lot carries.
  */
 const PAINT = 0xe8eef4
 
 export function parkingMaterials(accent: Color): ParkingMaterials {
   const trait = accent.clone().lerp(new Color(0xffffff), 0.2).multiplyScalar(1.15)
   return {
-    // `depthWrite: false` : la peinture est posée à deux centimètres du sol, elle ne doit pas
-    // disputer la profondeur à ce qui se gare dessus.
+    // `depthWrite: false`: the paint is laid two centimeters above the ground, it must not
+    // fight over depth with what parks on it.
     paint: new MeshBasicMaterial({ color: PAINT, transparent: true, opacity: 0.26, depthWrite: false, side: DoubleSide }),
     cote: new MeshBasicMaterial({ color: trait, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, side: DoubleSide }),
     dock: new MeshStandardMaterial({ color: 0x2d3138, roughness: 0.7, metalness: 0.1 }),
@@ -70,10 +70,10 @@ export function parkingMaterials(accent: Color): ParkingMaterials {
 }
 
 /**
- * Le « P » du marquage, dessiné dans un canevas plutôt que dans une police 3D : une lettre est une
- * IMAGE ici, elle ne porte ni volume ni ombre, et charger une police pour un caractère coûterait
- * plus cher que la place entière. `null` là où il n'y a pas de canevas (tests hors navigateur) —
- * le reste du marquage se passe très bien de sa lettre.
+ * The "P" of the marking, drawn in a canvas rather than in a 3D font: a letter is an
+ * IMAGE here, it carries neither volume nor shadow, and loading a font for one character would cost
+ * more than the whole space. `null` where there is no canvas (tests outside a browser) —
+ * the rest of the marking does very well without its letter.
  */
 export function parkingGlyphTexture(color: Color): Texture | null {
   if (typeof document === 'undefined') return null
@@ -85,16 +85,16 @@ export function parkingGlyphTexture(color: Color): Texture | null {
   ctx.font = 'bold 112px system-ui, sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  // Le canevas est dessiné à L'ENVERS (demi-tour) : la lettre est posée dans le repère de la place,
-  // dont le +y est l'avant, et une texture y arrive tête en bas. On la lit donc en se tenant DEVANT
-  // la place, comme le « P » d'un vrai parking se lit en arrivant dessus.
+  // The canvas is drawn UPSIDE DOWN (half turn): the letter is laid in the space's frame,
+  // whose +y is the front, and a texture arrives there upside down. It thus reads standing IN FRONT OF
+  // the space, as the "P" of a real parking lot reads when driving onto it.
   ctx.translate(64, 64)
   ctx.rotate(Math.PI)
   ctx.fillText('P', 0, 4)
   return new CanvasTexture(canvas)
 }
 
-/** Une bande plate (peinture) de `len × width`, centrée en `(x, y)` du repère de la place. */
+/** A flat stripe (paint) of `len × width`, centered at `(x, y)` of the space's frame. */
 function stripe(len: number, width: number, x: number, y: number): BufferGeometry {
   const g = new PlaneGeometry(len, width)
   g.translate(x, y, 0)
@@ -102,12 +102,12 @@ function stripe(len: number, width: number, x: number, y: number): BufferGeometr
 }
 
 /**
- * Le contour en TIRETS d'une place : chaque côté est découpé en bandes de longueur à peu près
- * constante, le pas étant ajusté pour qu'un côté commence et finisse par un tiret — un marquage qui
- * s'arrête au milieu d'un vide se lit comme un contour cassé.
+ * The DASHED outline of a space: each side is cut into stripes of roughly constant
+ * length, the step being adjusted so that a side starts and ends with a dash — a marking that
+ * stops in the middle of a gap reads as a broken outline.
  *
- * Le côté ARRIÈRE est plein : c'est lui qui dit dans quel sens l'engin se range, sans flèche ni
- * texte. Un parking se peint ainsi — le trait plein est la butée, l'ouverture est devant.
+ * The BACK side is solid: it says which way the vehicle parks, without arrow or
+ * text. A parking lot is painted this way — the solid line is the stop, the opening is in front.
  */
 function bayMarking(width: number, length: number): BufferGeometry | null {
   const parts: BufferGeometry[] = []
@@ -120,20 +120,20 @@ function bayMarking(width: number, length: number): BufferGeometry | null {
       parts.push(along === 'x' ? stripe(dash, BAY.stroke, c, offset) : stripe(BAY.stroke, dash, offset, c))
     }
   }
-  dashed(length, 'y', -width / 2)                 // les deux longs côtés
+  dashed(length, 'y', -width / 2)                 // the two long sides
   dashed(length, 'y', width / 2)
-  dashed(width, 'x', length / 2)                  // l'avant, par où l'on sort
-  parts.push(stripe(width, BAY.stroke, 0, -length / 2))  // l'arrière, plein : la butée
+  dashed(width, 'x', length / 2)                  // the front, the way out
+  parts.push(stripe(width, BAY.stroke, 0, -length / 2))  // the back, solid: the stop
   return parts.length ? mergeGeometries(parts, false) : null
 }
 
 /**
- * Le cône « regarde vers » du mode édition, copié du guide d'un appareil orientable
- * (`DeviceMarker.setMoving`) : c'est le langage que l'app a déjà pour dire un SENS, et une place
- * sans lui se pose à l'aveugle — le trait plein de l'arrière ne se voit qu'une fois la place tracée.
+ * The "looks toward" cone of edit mode, copied from the guide of an orientable device
+ * (`DeviceMarker.setMoving`): it is the language the app already has to say a DIRECTION, and a space
+ * without it is placed blind — the solid back line only shows once the space is drawn.
  *
- * Il est posé devant l'avant de la place et dimensionné par elle : une base de tondeuse de 80 cm ne
- * porte pas la même flèche qu'un garage de 5 m.
+ * It is placed ahead of the front of the space and sized by it: an 80 cm mower base does not
+ * carry the same arrow as a 5 m garage.
  */
 function facingCone(length: number): BufferGeometry {
   const reach = Math.min(Math.max(length * 0.42, 0.45), 1.6)
@@ -150,19 +150,19 @@ function facingCone(length: number): BufferGeometry {
 
 export interface ParkingNodes {
   group: Group
-  /** Surface touchable (mode édition) : c'est elle que le rayon rencontre, et elle seule. */
+  /** Touchable surface (edit mode): it is what the ray meets, and it alone. */
   fill: Mesh
-  /** Cadre du mode édition, éteint le reste du temps par son MATÉRIAU (jamais par `visible`). */
+  /** Edit mode frame, turned off the rest of the time through its MATERIAL (never through `visible`). */
   ring: Mesh
   ringOn: Mesh
-  /** Le cône qui dit l'avant, allumé avec le cadre. */
+  /** The cone that indicates the front, lit with the frame. */
   cone: Mesh
 }
 
 /**
- * Une place, prête à poser dans le groupe de son hôte. `z` est la hauteur LOCALE à ce groupe (sol du
- * niveau, ou terrain) ; le marquage se pose deux centimètres au-dessus pour ne pas se battre avec le
- * sol, la plaque d'une base repose dessus.
+ * A space, ready to be placed in its host's group. `z` is the height LOCAL to that group (floor of the
+ * level, or terrain); the marking is laid two centimeters above so as not to fight with the
+ * ground, the plate of a base rests on it.
  */
 export function buildParking(
   p: Parking, z: number, mats: ParkingMaterials, glyph: Texture | null,
@@ -181,8 +181,8 @@ export function buildParking(
       group.add(new Mesh(marking, mats.paint))
     }
     if (glyph) {
-      // Au MILIEU et grand : c'est ce qui se lit d'un coup d'œil de loin, là où une lettre posée dans
-      // un coin se confondait avec un tiret. Plus grand, donc plus pâle — la place reste discrète.
+      // In the MIDDLE and large: it is what reads at a glance from afar, where a letter placed in
+      // a corner was confused with a dash. Larger, hence paler — the space stays discreet.
       const side = Math.min(width, length) * BAY.glyph
       const g = new PlaneGeometry(side, side)
       g.translate(0, 0, 0.021)
@@ -193,8 +193,8 @@ export function buildParking(
     plate.translate(0, 0, DOCK.plate / 2)
     const plateMesh = new Mesh(plate, mats.dock)
     plateMesh.receiveShadow = true
-    // Le bloc est DERRIÈRE : un robot recule dans sa base, ses contacts sont à l'arrière, et c'est le
-    // bout de plaque qu'on voit dépasser quand il est posé dessus.
+    // The block is BEHIND: a robot backs into its base, its contacts are at the back, and it is the
+    // end of the plate that one sees sticking out when it sits on it.
     const head = new BoxGeometry(width * 0.8, DOCK.headDepth, DOCK.head)
     head.translate(0, -length / 2 + DOCK.headDepth / 2, DOCK.head / 2)
     const headMesh = new Mesh(head, mats.dock)
@@ -202,10 +202,10 @@ export function buildParking(
     group.add(plateMesh, headMesh)
   }
 
-  // Les quatre lignes de COTE, seulement pour la place qu'on règle : chacune part du milieu d'un
-  // bord et va droit jusqu'au contour de l'hôte — exactement l'intervalle que le nombre annonce
-  // (même règle que les cotes d'une ouverture). Dessinées par-dessus tout : une cote qu'un mur de
-  // garage coupe en deux ne se lit plus.
+  // The four DIMENSION lines, only for the space being adjusted: each one starts from the middle of an
+  // edge and goes straight to the host's outline — exactly the interval the number states
+  // (same rule as the dimensions of an opening). Drawn over everything: a dimension that a garage
+  // wall cuts in two no longer reads.
   if (gaps) {
     for (const side of ['front', 'back', 'left', 'right'] as const) {
       const d = gaps[side]
@@ -219,8 +219,8 @@ export function buildParking(
     }
   }
 
-  // Le voile touchable couvre EXACTEMENT le rectangle : ce qu'on attrape au doigt est la place, pas
-  // une boîte plus grande qu'elle. Il est posé au-dessus du marquage pour que le rayon le trouve.
+  // The touchable veil covers EXACTLY the rectangle: what is grabbed by finger is the space, not
+  // a box larger than it. It is laid above the marking so that the ray finds it.
   const fillGeo = new PlaneGeometry(width, length)
   fillGeo.translate(0, 0, 0.03)
   const fill = new Mesh(fillGeo, mats.off)
@@ -236,7 +236,7 @@ export function buildParking(
   return { group, fill, ring, ringOn, cone }
 }
 
-/** Un cadre plat de `bar` mètres d'épaisseur, autour d'un rectangle `width × length`. */
+/** A flat frame `bar` meters thick, around a `width × length` rectangle. */
 function frameGeometry(width: number, length: number, bar: number): BufferGeometry {
   const parts = [
     stripe(width, bar, 0, length / 2 - bar / 2),

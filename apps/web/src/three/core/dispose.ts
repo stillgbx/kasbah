@@ -1,7 +1,7 @@
 import type { Material, Object3D} from 'three';
 import { Mesh, Sprite, Texture } from 'three'
 
-/** Libère géométries, matériaux et textures d'un sous-arbre (les matériaux partagés sont exclus via `keep`). */
+/** Frees the geometries, materials and textures of a subtree (shared materials are excluded via `keep`). */
 export function disposeObject3D(root: Object3D, keep: ReadonlySet<Material> = new Set()): void {
   root.traverse((o) => {
     if (o instanceof Mesh || o instanceof Sprite) {

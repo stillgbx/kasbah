@@ -3,57 +3,57 @@ import { isSimplePolygon, type Vec2 } from '@kasbah/shared'
 import { createDragDetector, type DragDetector, type TapEvent } from '../core/input'
 import { dotTexture, ringTexture } from './reliefEditor'
 
-// Éditeur du CONTOUR du terrain (onglet « Contour » de « Modeler le terrain ») : un point par sommet
-// du polygone, et une poignée plus petite au milieu de chaque côté.
+// Editor of the terrain OUTLINE ("Outline" tab of "Shape the terrain"): a dot per vertex
+// of the polygon, and a smaller handle in the middle of each side.
 //
-// Même règle que le relief : CHOISIR, puis glisser. Un tap choisit un sommet ; un tap sur une poignée
-// de milieu y AJOUTE un sommet, déjà choisi, qu'on glisse ensuite. Seul le sommet choisi se glisse ;
-// un glissement qui part ailleurs fait orbiter la caméra. Le sommet glisse À PLAT, sur le plan
-// horizontal de sa hauteur, arrondi à `OUTLINE_SNAP_M`.
+// Same rule as the relief: SELECT, then drag. A tap selects a vertex; a tap on a middle
+// handle ADDS a vertex there, already selected, which is then dragged. Only the selected vertex can be dragged;
+// a drag that starts elsewhere orbits the camera. The vertex slides FLAT, on the horizontal
+// plane of its height, rounded to `OUTLINE_SNAP_M`.
 //
-// Un contour qui se croiserait est REFUSÉ au fil du geste : le sommet reste à sa dernière place
-// valide. Chaque modification (geste, saisie, ajout, retrait) s'annule et se rétablit.
+// An outline that would cross itself is REFUSED as the gesture goes: the vertex stays at its last valid
+// place. Every change (gesture, entry, addition, removal) can be undone and redone.
 //
-// Le polygone vit ici tant qu'on édite ; c'est la scène qui le pose sur le terrain (`changed`) et le
-// panneau qui l'enregistre.
+// The polygon lives here while editing; it is the scene that lays it on the terrain (`changed`) and the
+// panel that saves it.
 
 export interface OutlineEditorHost {
   canvas: HTMLCanvasElement
   camera: Camera
-  /** Groupe en repère MAISON qui porte les poignées (le site). */
+  /** Group in the HOUSE reference frame that carries the handles (the site). */
   parent: Object3D
-  /** Hauteur absolue du terrain dessiné en (x, y) : les poignées et le trait s'y posent. */
+  /** Absolute height of the drawn terrain at (x, y): the handles and the stroke sit on it. */
   ground(x: number, y: number): number
   setControls(enabled: boolean): void
   invalidate(): void
-  /** Le contour a bougé ; `final` à la fin du geste (un glissement en envoie un par image avant). */
+  /** The outline moved; `final` at the end of the gesture (a drag sends one per frame before). */
   changed(final: boolean): void
-  /** Le sommet choisi a changé (ou l'historique) : le panneau se remet à jour. */
+  /** The selected vertex changed (or the history): the panel updates. */
   selectionChanged(): void
   accent: Color
 }
 
-/** Pas d'accroche d'un glissement (m). */
+/** Snap step of a drag (m). */
 export const OUTLINE_SNAP_M = 0.1
-/** Pas d'annulation retenus. */
+/** Undo steps kept. */
 export const OUTLINE_HISTORY = 20
 const HANDLE_LIFT = 0.08
 const HIT_PX = { mouse: 14, touch: 26 }
 const DEAD_PX = 6
-/** Le trait suit le relief : un point tous les `LINE_STEP_M` le long de chaque côté. */
+/** The stroke follows the relief: a point every `LINE_STEP_M` along each side. */
 const LINE_STEP_M = 1
 
 const snap = (v: number) => Math.round(v / OUTLINE_SNAP_M) * OUTLINE_SNAP_M
 const clone = (p: readonly Vec2[]): Vec2[] => p.map(([x, y]) => [x, y])
 
-/** Ce qu'une poignée désigne : un sommet, ou le milieu du côté `k` → `k + 1`. */
+/** What a handle designates: a vertex, or the middle of side `k` → `k + 1`. */
 type Hit = { vertex: number } | { edge: number }
 
 export class OutlineEditor {
   polygon: Vec2[]
-  /** Indice du sommet choisi. */
+  /** Index of the selected vertex. */
   selected: number | null = null
-  /** Dernier choix fait au tap, et avec quoi (souris, stylet, doigt) : le panneau y donne la main au champ. */
+  /** Last selection made by tap, and with what (mouse, pen, finger): the panel hands over to the field accordingly. */
   pick = { seq: 0, by: '' }
   private enabled = true
   private readonly vertices: Points
@@ -77,7 +77,7 @@ export class OutlineEditor {
       host.parent.add(p)
       return p
     }
-    // gris, hors tone mapping et SOUS le seuil du bloom (comme les points du relief) : blancs, ils bavaient en halos la nuit
+    // gray, outside tone mapping and BELOW the bloom threshold (like the relief dots): white, they bled into halos at night
     this.vertices = points('outline:vertices', 14, new Color(0.62, 0.62, 0.62), 6)
     this.mids = points('outline:mids', 9, new Color(0.42, 0.43, 0.46), 6)
     this.line = new Line(new BufferGeometry(), new LineBasicMaterial({ color: host.accent, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false, toneMapped: false }))
@@ -102,10 +102,10 @@ export class OutlineEditor {
     }
   }
 
-  /** Vrai pendant un glissement et juste après : le tap de fin n'en est pas un. */
+  /** True during a drag and right after: the closing tap is not one. */
   active(): boolean { return this.drag?.active() ?? false }
 
-  /** Montre (ou cache) les poignées : l'onglet Relief garde l'éditeur, sans qu'il réponde. */
+  /** Shows (or hides) the handles: the Relief tab keeps the editor, without it responding. */
   setEnabled(on: boolean): void {
     this.enabled = on
     for (const o of [this.vertices, this.mids, this.line]) o.visible = on
@@ -113,12 +113,12 @@ export class OutlineEditor {
     this.host.invalidate()
   }
 
-  /** Position du sommet choisi, `null` sans choix. */
+  /** Position of the selected vertex, `null` without a selection. */
   selectedXY(): Vec2 | null {
     return this.selected === null ? null : [this.polygon[this.selected]![0], this.polygon[this.selected]![1]]
   }
 
-  /** Déplace le sommet choisi (saisie) ; faux sans choix, sans changement, ou si le contour se croiserait. */
+  /** Moves the selected vertex (entry); false without a selection, without a change, or if the outline would cross itself. */
   setSelectedXY(xy: Vec2): boolean {
     const k = this.selected
     if (k === null) return false
@@ -134,14 +134,14 @@ export class OutlineEditor {
     return true
   }
 
-  /** Un sommet de plus peut-il partir : il en reste au moins trois, et le contour ne se croise pas. */
+  /** Whether one more vertex can go: at least three remain, and the outline does not cross itself. */
   get canRemove(): boolean {
     const k = this.selected
     if (k === null || this.polygon.length <= 3) return false
     return isSimplePolygon(this.polygon.filter((_, i) => i !== k))
   }
 
-  /** Retire le sommet choisi ; le suivant est choisi à sa place (on retire en série). */
+  /** Removes the selected vertex; the next one is selected in its place (removal in series). */
   removeSelected(): boolean {
     const k = this.selected
     if (k === null || !this.canRemove) return false
@@ -152,7 +152,7 @@ export class OutlineEditor {
     return true
   }
 
-  /** Nouveau contour (import du cadastre) : un pas d'historique, plus de sommet choisi. */
+  /** New outline (cadastre import): one history step, no selected vertex anymore. */
   setPolygon(polygon: readonly Vec2[]): void {
     this.record(clone(this.polygon))
     this.polygon = clone(polygon)
@@ -160,7 +160,7 @@ export class OutlineEditor {
     this.refresh()
   }
 
-  /** Ajoute un sommet au milieu du côté `edge` → `edge + 1`, et le choisit. */
+  /** Adds a vertex in the middle of side `edge` → `edge + 1`, and selects it. */
   insertOnEdge(edge: number): void {
     const n = this.polygon.length
     const a = this.polygon[edge]!, b = this.polygon[(edge + 1) % n]!
@@ -185,14 +185,14 @@ export class OutlineEditor {
     return true
   }
 
-  /** Retient l'état d'AVANT une modification ; une nouvelle modification efface ce qu'on pouvait rétablir. */
+  /** Records the state BEFORE a change; a new change clears what could have been redone. */
   private record(before: Vec2[]): void {
     this.undoStack.push(before)
     if (this.undoStack.length > OUTLINE_HISTORY) this.undoStack.shift()
     this.redoStack = []
   }
 
-  /** Un tap : choisit le sommet sous le doigt, ajoute un sommet sur une poignée de milieu, ou ne choisit plus rien. */
+  /** A tap: selects the vertex under the finger, adds a vertex on a middle handle, or selects nothing anymore. */
   tap(ev: TapEvent): void {
     const h = this.nearest(ev)
     this.pick = { seq: this.pick.seq + 1, by: ev.pointerType }
@@ -206,7 +206,7 @@ export class OutlineEditor {
     this.host.selectionChanged()
   }
 
-  /** Reposent sommets, milieux, trait et anneau sur le terrain dessiné. */
+  /** Lays vertices, midpoints, stroke and ring back on the drawn terrain. */
   refresh(): void {
     const p = this.polygon, n = p.length
     const z = (x: number, y: number) => this.host.ground(x, y) + HANDLE_LIFT
@@ -252,7 +252,7 @@ export class OutlineEditor {
     return out.set(x, y, z).applyMatrix4(this.host.parent.matrixWorld).project(this.host.camera)
   }
 
-  /** La poignée la plus proche du doigt, à quelques pixels près ; un sommet l'emporte sur un milieu. */
+  /** The handle closest to the finger, within a few pixels; a vertex wins over a midpoint. */
   private nearest(ev: TapEvent): Hit | null {
     const r = this.host.canvas.getBoundingClientRect()
     const limit = ev.pointerType === 'mouse' ? HIT_PX.mouse : HIT_PX.touch
@@ -262,7 +262,7 @@ export class OutlineEditor {
       let best: { k: number; d: number } | null = null
       for (let k = 0; k < (pos?.count ?? 0); k++) {
         this.screenOf(pos!.getX(k), pos!.getY(k), pos!.getZ(k), v)
-        if (v.z > 1) continue                                 // derrière la caméra
+        if (v.z > 1) continue                                 // behind the camera
         const d = Math.hypot(((v.x - ev.ndc.x) * r.width) / 2, ((v.y - ev.ndc.y) * r.height) / 2)
         if (d < limit && (!best || d < best.d)) best = { k, d }
       }
@@ -274,7 +274,7 @@ export class OutlineEditor {
     return mid ? { edge: mid.k } : null
   }
 
-  /** Le doigt en repère maison, sur le plan horizontal du geste. */
+  /** The finger in the house reference frame, on the gesture's horizontal plane. */
   private groundPoint(ev: TapEvent, plane: Plane): Vector3 | null {
     this.raycaster.setFromCamera(new Vector2(ev.ndc.x, ev.ndc.y), this.host.camera)
     const hit = this.raycaster.ray.intersectPlane(plane, new Vector3())
@@ -288,7 +288,7 @@ export class OutlineEditor {
     const [x, y] = this.polygon[k]!
     this.host.parent.updateWorldMatrix(true, false)
     const world = new Vector3(x, y, this.host.ground(x, y)).applyMatrix4(this.host.parent.matrixWorld)
-    // plan horizontal du MONDE (y vers le haut) à la hauteur du sommet ; écart doigt–sommet conservé
+    // horizontal WORLD plane (y up) at the vertex height; finger–vertex offset preserved
     const plane = new Plane().setFromNormalAndCoplanarPoint(new Vector3(0, 1, 0), world)
     const hit = this.groundPoint(ev, plane)
     const offset = hit ? hit.sub(new Vector3(x, y, hit.z)) : new Vector3()
@@ -308,7 +308,7 @@ export class OutlineEditor {
     if (p[0] === cur[0] && p[1] === cur[1]) return
     const next = clone(this.polygon)
     next[g.k] = p
-    if (!isSimplePolygon(next)) return                     // le sommet reste à sa dernière place valide
+    if (!isSimplePolygon(next)) return                     // the vertex stays at its last valid place
     this.polygon = next
     this.refresh()
     this.host.changed(false)

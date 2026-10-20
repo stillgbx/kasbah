@@ -4,12 +4,12 @@ import type { SceneTheme } from '../core/theme'
 import { createSurfaceTextures, type SurfaceRole, type SurfaceTexture, type SurfaceTextures } from '../textures/procedural'
 import { rolesOf, type SkyLook, type StyleLook, type SurfaceLook } from '../styles/types'
 
-// Matériaux PARTAGÉS par rôle : un changement d'heure ou de thème mute ~15 matériaux, pas N maillages.
-// Les sols reçoivent un clone par pièce (surbrillance individuelle) rattaché à son rôle.
+// Materials SHARED per role: a change of hour or theme mutates ~15 materials, not N meshes.
+// Floors receive one clone per room (individual highlighting) attached to its role.
 //
-// C'est le STYLE DE RENDU (`three/styles/`) qui dit, pour chaque surface, quelle matière procédurale
-// l'habille et comment elle répond à la lumière ; la couleur vient de sa palette. Changer de style ne
-// touche aucune géométrie : on mute les mêmes matériaux et on leur repasse d'autres cartes.
+// It is the RENDER STYLE (`three/styles/`) that says, for each surface, which procedural material
+// dresses it and how it responds to light; the color comes from its palette. Changing style
+// touches no geometry: we mutate the same materials and hand them other maps.
 
 export interface MaterialSet {
   wall: MeshStandardMaterial
@@ -18,72 +18,72 @@ export interface MaterialSet {
   floors: Record<FloorStyle, MeshStandardMaterial>
   glass: MeshPhysicalMaterial
   roof: MeshStandardMaterial
-  /** Dalle d'un toit plat : du gravillon, pas des tuiles — un style peut dire autrement (`SurfaceLooks.roofFlat`). */
+  /** Slab of a flat roof: gravel, not tiles — a style can say otherwise (`SurfaceLooks.roofFlat`). */
   roofFlat: MeshStandardMaterial
   terrain: MeshStandardMaterial
-  /** Sol infini sous la parcelle : NON éclairé, de la couleur du sol du ciel — il prolonge l'horizon. */
+  /** Infinite ground under the plot: UNLIT, the color of the sky's ground — it extends the horizon. */
   ground: MeshBasicMaterial
   zones: Record<ZoneKind, MeshStandardMaterial>
   ghost: MeshStandardMaterial
   slat: MeshStandardMaterial
   vehicle: MeshStandardMaterial
-  /** Petits objets connectés neutres. */
+  /** Small neutral connected objects. */
   device: MeshStandardMaterial
-  /** Détail architectural (`builders/details.ts`) : lisses claires (appuis, couronnements)… */
+  /** Architectural detail (`builders/details.ts`): light rails (sills, copings)… */
   trim: MeshStandardMaterial
-  /** …menuiseries sombres (encadrements des baies)… */
+  /** …dark joinery (opening surrounds)… */
   frame: MeshStandardMaterial
-  /** …soubassement des murs extérieurs… */
+  /** …plinth of the exterior walls… */
   plinth: MeshStandardMaterial
-  /** …et vantaux des portes. Leurs couleurs se DÉDUISENT de la palette, aucun style n'a à les donner. */
+  /** …and door leaves. Their colors are DERIVED from the palette, no style has to give them. */
   door: MeshStandardMaterial
-  /** Parois et fond d'une piscine, vus de l'intérieur (faces arrière) : carrelage clair sous l'eau. */
+  /** Walls and bottom of a pool, seen from inside (back faces): light tiling under the water. */
   poolBasin: MeshStandardMaterial
   /**
-   * Menuiseries d'ouvertures qui ne se contentent pas du réglage par nature : une entrée par
-   * combinaison `rôle|matière|couleur` demandée par le relevé (`joineryMaterial`). Une maison qui
-   * n'en déclare aucune n'en a aucune, et garde ses deux appels de dessin.
+   * Opening joinery that is not content with the per-kind setting: one entry per
+   * `role|material|color` combination requested by the survey (`joineryMaterial`). A house that
+   * declares none has none, and keeps its two draw calls.
    */
   joinery: Map<string, MeshStandardMaterial>
   /**
-   * Matériaux des FINITIONS posées par la maison (sol, murs d'une pièce, façade) : une entrée par
-   * clé `surface|finition|teinte|repli` (`finishMaterial`). Une maison sans finition n'en a aucune.
+   * Materials of the FINISHES laid by the house (floor, walls of a room, facade): one entry per
+   * `surface|finish|tint|fallback` key (`finishMaterial`). A house without finishes has none.
    */
   finishes: Map<string, MeshStandardMaterial>
   /**
-   * Comment le style courant interprète les finitions : `honor` faux = un style « costume » qui
-   * garde sa palette (la finition prend l'apparence de la surface qu'elle remplace) ; `photos` =
-   * les photos déjà chargées, absentes quand l'utilisateur a coupé les matières en images.
+   * How the current style interprets the finishes: `honor` false = a "costume" style that
+   * keeps its palette (the finish takes the look of the surface it replaces); `photos` =
+   * the photos already loaded, absent when the user turned off photo materials.
    */
   finishMode: { honor: boolean; photos?: Partial<Record<FinishId, SurfaceTexture>> }
-  /** Dernier style appliqué : une menuiserie créée après coup doit pouvoir se teindre tout de suite. */
+  /** Last style applied: a joinery created afterward must be able to take its tint right away. */
   applied: { theme: SceneTheme; look: StyleLook } | null
-  /** Les matières employées par le style courant. Elles appartiennent au CATALOGUE, pas à ce jeu de matériaux. */
+  /** The materials used by the current style. They belong to the CATALOG, not to this material set. */
   textures: SurfaceTextures
   all: Set<Material>
 }
 
 /**
- * Une couleur LINÉAIRE du ciel, telle quelle. `new Color(hex)` convertirait depuis le sRGB ; ici les
- * valeurs sont déjà celles de la lumière, il ne faut surtout pas les recourber une seconde fois.
+ * A LINEAR sky color, as is. `new Color(hex)` would convert from sRGB; here the
+ * values are already light values, they must above all not be re-curved a second time.
  */
 const linear = (rgb: readonly [number, number, number], k = 1) =>
   new Color().setRGB(rgb[0] * k, rgb[1] * k, rgb[2] * k, LinearSRGBColorSpace)
 
-/** Ce qu'on voit sous la ligne d'horizon : entre le sol du ciel et l'horizon lui-même. */
+/** What is seen below the horizon line: between the sky's ground and the horizon itself. */
 export const groundColor = (sky: SkyLook) => linear(sky.ground).lerp(linear(sky.horizon), 0.35)
-/** Ce qu'on voit au-dessus : le fond du canvas, qui se raccorde au disque sans couture. */
+/** What is seen above: the canvas background, which joins the disc seamlessly. */
 export const backdropColor = (sky: SkyLook) => linear(sky.horizon).lerp(linear(sky.zenith), 0.35)
 
-/** Pose une matière et ses réglages PBR sur un matériau existant. */
+/** Applies a material and its PBR settings to an existing material. */
 const WHITE = new Color(0xffffff)
 const BLACK = new Color(0x000000)
 
 function surface(m: MeshStandardMaterial, color: Color, look: SurfaceLook, tex: SurfaceTexture | undefined): void {
-  // une matière photo porte sa couleur : la palette du style ne la teinte pas
+  // a photo material carries its own color: the style's palette does not tint it
   m.color.copy(tex?.colored ? WHITE : color)
-  // Recompiler un shader coûte ; on ne le demande que si les CARTES changent (donc à un changement
-  // de style), pas à chaque heure qui passe.
+  // Recompiling a shader is costly; it is only requested if the MAPS change (hence on a change
+  // of style), not at every passing hour.
   const changed = m.map !== (tex?.map ?? null)
   m.map = tex?.map ?? null
   m.normalMap = tex?.normalMap ?? null
@@ -97,37 +97,37 @@ function surface(m: MeshStandardMaterial, color: Color, look: SurfaceLook, tex: 
   if (changed) m.needsUpdate = true
 }
 
-/** `surface` sous un autre nom, là où un paramètre `surface` (la nature de la finition) le masque. */
+/** `surface` under another name, where a `surface` parameter (the kind of finish) shadows it. */
 const surface_ = (m: MeshStandardMaterial, color: Color, look: SurfaceLook, tex: SurfaceTexture | undefined) => surface(m, color, look, tex)
 
 const std = (extra: ConstructorParameters<typeof MeshStandardMaterial>[0] = {}) =>
   new MeshStandardMaterial({ roughness: 0.9, metalness: 0, ...extra })
 
 /**
- * Les trois rôles d'une menuiserie : le dormant d'une baie, le vantail d'une porte, et le TABLIER
- * d'un ouvrant (volet, portail) — celui-là appartient à un appareil et non au bâti, mais il se
- * teinte de la même façon, matière comprise (`HouseDevice.coverMaterial`).
+ * The three roles of a joinery: the fixed frame of an opening, the leaf of a door, and the CURTAIN
+ * of a cover (shutter, gate) — that one belongs to a device and not to the structure, but it is
+ * tinted the same way, material included (`HouseDevice.coverMaterial`).
  */
 export type JoineryRole = 'frame' | 'door' | 'slat'
 interface Pbr { roughness: number; metalness: number }
-/** Le réglage PBR de chaque rôle, déclaré ICI pour que les variantes teintées partent du même. */
+/** The PBR setting of each role, declared HERE so that the tinted variants start from the same one. */
 const ROLE_PBR: Record<JoineryRole, Pbr> = {
   frame: { roughness: 0.45, metalness: 0.1 },
   door: { roughness: 0.5, metalness: 0 },
   slat: { roughness: 0.5, metalness: 0.2 },
 }
 /**
- * Ce que chaque matière fait à la lumière. Le VERRE n'a pas de ligne : il ne change pas la
- * menuiserie, il vitre l'ouverture (`details.ts`) — le dormant d'une baie est déjà celui d'une
- * fenêtre. Le métal est lisse et réfléchit ; le bois est mat et ne réfléchit rien.
+ * What each material does to light. GLASS has no line: it does not change the
+ * joinery, it glazes the opening (`details.ts`) — the fixed frame of a bay window is already that of a
+ * window. Metal is smooth and reflects; wood is matte and reflects nothing.
  */
 const MATERIAL_PBR: Partial<Record<OpeningMaterial, Pbr>> = {
   wood: { roughness: 0.6, metalness: 0 },
   metal: { roughness: 0.3, metalness: 0.85 },
-  // une toile ne réfléchit RIEN : c'est la matière la plus mate du jeu, plus qu'un bois huilé
+  // a canvas reflects NOTHING: it is the most matte material of the set, more than oiled wood
   fabric: { roughness: 1, metalness: 0 },
 }
-/** Un tablier de VERRE : lisse, et assez opaque pour qu'on voie qu'il est là (porte de garage vitrée). */
+/** A GLASS curtain: smooth, and opaque enough that one can see it is there (glazed garage door). */
 const GLASS_SLAT = { roughness: 0.15, metalness: 0, opacity: 0.45 }
 
 export function createMaterials(theme: SceneTheme, look: StyleLook, textures: SurfaceTextures = {}): MaterialSet {
@@ -139,14 +139,14 @@ export function createMaterials(theme: SceneTheme, look: StyleLook, textures: Su
     roofFlat: std(),
     terrain: std(),
     ground: new MeshBasicMaterial(),
-    // l'eau est TRANSLUCIDE : c'est le fond carrelé qui lui donne sa couleur et sa profondeur
+    // the water is TRANSLUCENT: it is the tiled bottom that gives it its color and depth
     zones: { lawn: std(), pool: std({ transparent: true, opacity: 0.72 }), driveway: std(), path: std(), bed: std(), terrace: std(), other: std() },
     textures,
     ghost: std({ transparent: true, opacity: 0.12, depthWrite: false }),
     slat: std({ roughness: 0.5, metalness: 0.2 }),
-    // Peinture de carrosserie : lisse et assez métallique pour RÉFLÉCHIR. Ces valeurs n'ont de sens
-    // qu'avec `scene.environment` — sans carte d'environnement, la part métallique n'a rien à
-    // renvoyer et la voiture s'assombrit au lieu de briller.
+    // Car body paint: smooth and metallic enough to REFLECT. These values only make sense
+    // with `scene.environment` — without an environment map, the metallic part has nothing to
+    // send back and the car darkens instead of shining.
     vehicle: std({ roughness: 0.28, metalness: 0.55 }),
     device: std({ roughness: 0.6, metalness: 0.1 }),
     trim: std({ roughness: 0.55 }),
@@ -165,35 +165,35 @@ export function createMaterials(theme: SceneTheme, look: StyleLook, textures: Su
     if (v instanceof Material) all.add(v)
     else for (const m of Object.values(v as Record<string, Material>)) all.add(m)
   }
-  // dehors, à la hauteur d'un niveau : une lampe d'intérieur les tacherait à travers la façade
+  // outdoors, at the height of a level: an indoor lamp would stain them through the facade
   for (const m of [set.terrain, set.roof, set.roofFlat, ...Object.values(set.zones)]) m.userData.noLamps = true
   const mats = { ...set, all }
   applyLook(mats, theme, look)
   return mats
 }
 
-/** Cuit les matières qui manquent au style demandé, garde celles déjà là. */
+/** Bakes the materials missing for the requested style, keeps those already there. */
 function ensureTextures(textures: SurfaceTextures, roles: readonly SurfaceRole[]): void {
   const missing = roles.filter((r) => !textures[r])
   if (missing.length) Object.assign(textures, createSurfaceTextures(missing))
 }
 
 /**
- * Applique un style et une heure aux matériaux existants (aucune géométrie touchée). C'est l'unique
- * chemin : création comprise, qui n'est qu'une première application.
+ * Applies a style and an hour to the existing materials (no geometry touched). It is the only
+ * path: creation included, which is only a first application.
  */
-/** Ce que la météo fait aux surfaces DEHORS (`core/ambience.ts` : `wetness`, `snow`). */
+/** What the weather does to OUTDOOR surfaces (`core/ambience.ts`: `wetness`, `snow`). */
 export interface SurfaceWeather { wetness: number; snow: number }
 export const DRY: SurfaceWeather = { wetness: 0, snow: 0 }
 
-/** Blanc de neige, en sRGB : pas un blanc pur, qui brûlerait au soleil. */
+/** Snow white, in sRGB: not a pure white, which would burn out in the sun. */
 const SNOW = new Color(0xe9edf2)
 
 /**
- * Mouille ou enneige une surface déjà habillée par `surface()`. La pluie la fonce et la lisse (le
- * reflet du ciel dans une flaque, c'est une rugosité qui tombe) ; la neige la blanchit et la
- * matifie. Une matière photo porte sa couleur en carte : la blanchir par sa couleur ne peut rien
- * (elle est déjà à blanc), c'est l'émissif qui pose la neige dessus.
+ * Wets or snows over a surface already dressed by `surface()`. Rain darkens and smooths it (the
+ * reflection of the sky in a puddle is a roughness that drops); snow whitens it and makes it
+ * matte. A photo material carries its color as a map: whitening it through its color can do nothing
+ * (it is already at white), it is the emissive that lays the snow on it.
  */
 function weathered(m: MeshStandardMaterial, look: SurfaceLook, tex: SurfaceTexture | undefined, w: SurfaceWeather): void {
   if (w.wetness <= 0 && w.snow <= 0) return
@@ -212,9 +212,9 @@ export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook,
   const s = look.surfaces
   const roofFlat: SurfaceLook = s.roofFlat ?? { texture: 'gravel', roughness: 1 }
   ensureTextures(mats.textures, [...rolesOf(s), 'tile', 'poolTile', roofFlat.texture])
-  // une matière en images (`textures/assets.ts`) passe devant la procédurale du même rôle
+  // a material as images (`textures/assets.ts`) takes precedence over the procedural one of the same role
   const tex = (l: SurfaceLook) => photos?.[l.texture] ?? mats.textures[l.texture]
-  // dehors, la météo passe après la matière ; dedans et sur l'eau, elle ne passe pas
+  // outdoors, the weather is applied after the material; indoors and on the water, it is not applied
   const outdoor = (m: MeshStandardMaterial, color: Color, l: SurfaceLook) => { surface(m, color, l, tex(l)); weathered(m, l, tex(l), weather) }
 
   surface(mats.wall, theme.wall, s.wall, tex(s.wall))
@@ -240,63 +240,63 @@ export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook,
   mats.slat.color.copy(theme.slat)
   mats.vehicle.color.copy(theme.secondary)
   mats.device.color.copy(theme.device)
-  // le détail architectural se déduit de la palette : une lisse plus claire que le mur, des
-  // menuiseries et un soubassement plus sombres, un vantail de la couleur du parquet — un style
-  // monochrome le reste. Première lisse à 0,55 vers le blanc : elle brûlait en plein soleil.
+  // the architectural detail is derived from the palette: a rail lighter than the wall,
+  // darker joinery and plinth, a leaf the color of the parquet — a monochrome style
+  // stays monochrome. First rail at 0.55 toward white: it burned out in full sun.
   mats.trim.color.copy(theme.wall).lerp(WHITE, 0.4)
   mats.frame.color.copy(roleColor(theme, 'frame'))
   mats.plinth.color.copy(theme.wall).lerp(BLACK, 0.4)
   mats.door.color.copy(roleColor(theme, 'door'))
-  // les menuiseries teintées suivent : elles se recalculent ENTIÈREMENT depuis leur clé, donc un
-  // changement de style ou d'heure les rattrape même si elles sont nées entre deux applications
+  // the tinted joineries follow: they are recomputed ENTIRELY from their key, so a
+  // change of style or hour catches them even if they were born between two applications
   mats.applied = { theme, look }
   for (const [key, m] of mats.joinery) applyJoinery(m, key, theme)
   for (const [key, m] of mats.finishes) applyFinish(mats, m, key, theme, look)
-  // le bassin : faïence fine (`poolTile`), pas les grands carreaux du sol maison
+  // the pool basin: fine earthenware (`poolTile`), not the large floor tiles of the house
   const basin: SurfaceLook = { texture: 'poolTile', roughness: 0.35 }
   surface(mats.poolBasin, theme.zones.pool.clone().lerp(WHITE, 0.55), basin, tex(basin))
 }
 
-/** La couleur d'un rôle de menuiserie quand le relevé n'en impose pas : déduite de la palette. */
+/** The color of a joinery role when the survey does not impose one: derived from the palette. */
 function roleColor(theme: SceneTheme, role: JoineryRole): Color {
   if (role === 'slat') return theme.slat.clone()
   return role === 'frame' ? theme.wall.clone().lerp(BLACK, 0.55) : theme.floors.wood.clone()
 }
 
-/** `rôle|matière|couleur` — la clé PORTE tout ce qu'il faut pour recalculer le matériau. */
+/** `role|material|color` — the key CARRIES everything needed to recompute the material. */
 const joineryKey = (role: JoineryRole, material?: OpeningMaterial, color?: string) =>
   `${role}|${material ?? ''}|${color ?? ''}`
 
 function applyJoinery(m: MeshStandardMaterial, key: string, theme: SceneTheme): void {
   const [role, material, color] = key.split('|') as [JoineryRole, OpeningMaterial | '', string]
-  // Le VERRE d'un TABLIER : là où une ouverture se fait vitrer (`isGlazed`), un ouvrant, lui, devient
-  // translucide — c'est ce qu'est une porte de garage vitrée. Il n'a de sens que pour ce rôle-là.
+  // The GLASS of a CURTAIN: where an opening gets glazed (`isGlazed`), a cover, for its part, becomes
+  // translucent — that is what a glazed garage door is. It only makes sense for that role.
   const glazed = role === 'slat' && material === 'glass'
   const pbr = glazed ? GLASS_SLAT : (material ? MATERIAL_PBR[material] : undefined) ?? ROLE_PBR[role]
   m.roughness = pbr.roughness
   m.metalness = pbr.metalness
-  // `transparent` décide du passage de rendu : three veut être prévenu quand il change
+  // `transparent` decides the render pass: three wants to be told when it changes
   if (m.transparent !== glazed) { m.transparent = glazed; m.needsUpdate = true }
   m.opacity = glazed ? GLASS_SLAT.opacity : 1
-  // la couleur du fichier passe devant la matière, qui passe devant le rôle : le bois d'une
-  // menuiserie est celui du parquet du style, sauf si le relevé a dit lequel
+  // the file's color takes precedence over the material, which takes precedence over the role: the wood of a
+  // joinery is the style's parquet, unless the survey said which one
   if (color) m.color.set(color)
   else if (glazed) m.color.copy(theme.glass)
   else if (material === 'wood') m.color.copy(theme.floors.wood)
   else if (material === 'metal') m.color.copy(theme.wall).lerp(BLACK, 0.65)
-  // une toile écrue : le mur du style, éclairci — un store banne sans teinte choisie doit se lire
-  // comme de la toile, pas comme un pan de façade
+  // a raw canvas: the style's wall, lightened — an awning without a chosen tint must read
+  // as canvas, not as a section of facade
   else if (material === 'fabric') m.color.copy(theme.wall).lerp(WHITE, 0.3)
   else m.color.copy(roleColor(theme, role))
 }
 
 /**
- * Le matériau d'une menuiserie — d'ouverture, ou d'ouvrant. Sans matière NI couleur voulue, c'est le matériau
- * partagé du rôle qu'on rend tel quel : une maison ordinaire garde ses deux appels de dessin, et
- * seules les ouvertures qui demandent autre chose en coûtent un de plus.
+ * The material of a joinery — of an opening, or of a cover. With neither a requested material NOR color, it is the role's shared
+ * material that is returned as is: an ordinary house keeps its two draw calls, and
+ * only the openings that ask for something else cost one more.
  *
- * La variante naît teinte comprise : la géométrie se rebâtit à chaque changement de maison, donc
- * bien après la dernière application de style, et un matériau créé noir se serait vu.
+ * The variant is born with its tint: the geometry is rebuilt at every house change, so
+ * well after the last style application, and a material created black would have been seen.
  */
 export function joineryMaterial(
   mats: MaterialSet, role: JoineryRole, material?: OpeningMaterial, color?: string,
@@ -312,24 +312,24 @@ export function joineryMaterial(
   return m
 }
 
-// ---- finitions (sol, murs d'une pièce, façade) -------------------------------------------------
+// ---- finishes (floor, walls of a room, facade) -------------------------------------------------
 
 export type FinishSurfaceKind = 'floor' | 'wall' | 'facade'
 
-/** La matière procédurale qui tient lieu de photo, par famille. */
+/** The procedural material that stands in for a photo, per family. */
 const FAMILY_ROLE: Record<FinishFamily, SurfaceRole> = {
   wood: 'wood', tile: 'tile', carpet: 'carpet', concrete: 'concrete',
   paint: 'plaster', stone: 'stone', siding: 'siding', pavers: 'pavers',
 }
-/** Le réglage de sol du style le plus proche d'une famille (rugosité, relief). */
+/** The floor setting of the style closest to a family (roughness, relief). */
 const FAMILY_FLOOR: Partial<Record<FinishFamily, FloorStyle>> = { wood: 'wood', tile: 'tile', carpet: 'carpet', concrete: 'concrete', pavers: 'concrete' }
 
 const finishKey = (surface: FinishSurfaceKind, f: Finish, fallback?: FloorStyle) => `${surface}|${f.id}|${f.tint ?? ''}|${fallback ?? ''}`
 
 /**
- * Le matériau d'une finition. Comme une menuiserie teintée : créé à la demande, partagé par clé, et
- * repris par `applyLook` à chaque style ou heure. `fallback` = le sol que la pièce déclarait avant
- * (`style.floor`) : c'est lui qu'on montre dans un style qui n'interprète pas les finitions.
+ * The material of a finish. Like a tinted joinery: created on demand, shared by key, and
+ * taken up again by `applyLook` at each style or hour. `fallback` = the floor the room declared before
+ * (`style.floor`): it is the one shown in a style that does not interpret finishes.
  */
 export function finishMaterial(mats: MaterialSet, surface: FinishSurfaceKind, finish: Finish, fallback?: FloorStyle): MeshStandardMaterial {
   const key = finishKey(surface, finish, fallback)
@@ -347,7 +347,7 @@ function applyFinish(mats: MaterialSet, m: MeshStandardMaterial, key: string, th
   const s = look.surfaces
   const tex = (l: SurfaceLook) => mats.textures[l.texture]
   if (!mats.finishMode.honor) {
-    // style « costume » : la finition prend l'apparence de la surface qu'elle remplace
+    // "costume" style: the finish takes the look of the surface it replaces
     if (surface === 'floor') {
       const l = fallback ? s.floors[fallback] : s.floor
       surface_(m, fallback ? theme.floors[fallback] : theme.floor, l, tex(l))
@@ -362,11 +362,11 @@ function applyFinish(mats: MaterialSet, m: MeshStandardMaterial, key: string, th
   ensureTextures(mats.textures, [l.texture])
   const photo = mats.finishMode.photos?.[id]
   surface_(m, new Color(tint || spec.color), l, photo ?? mats.textures[l.texture])
-  // une teinte choisie colore la photo (un enduit blanc photographié, repeint)
+  // a chosen tint colors the photo (a photographed white plaster, repainted)
   if (photo && tint) m.color.set(tint)
 }
 
-/** Les matières ne sont PAS libérées : elles appartiennent au catalogue partagé (`textures/procedural.ts`). */
+/** The materials are NOT freed: they belong to the shared catalog (`textures/procedural.ts`). */
 export function disposeMaterials(mats: MaterialSet): void {
   for (const m of mats.all) m.dispose()
   mats.joinery.clear()

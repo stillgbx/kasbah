@@ -2,22 +2,22 @@ import { Box3, BufferAttribute, ConeGeometry, CylinderGeometry, IcosahedronGeome
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { GardenKind } from '@kasbah/shared'
 
-// Formes PROCÉDURALES des éléments du jardin : aucun fichier, une géométrie tirée d'une graine.
-// Chaque famille a `GARDEN_VARIANTS` formes ; un élément prend celle de sa graine, et son échelle,
-// sa rotation et une pointe de couleur font le reste : trente sapins, quatre géométries.
+// PROCEDURAL shapes of the garden elements: no file, a geometry drawn from a seed.
+// Each family has `GARDEN_VARIANTS` shapes; an element takes the one of its seed, and its scale,
+// its rotation and a touch of color do the rest: thirty firs, four geometries.
 //
-// Repère maison (Z vers le haut), pied à l'origine, HAUTEUR 1 exactement : l'élément est mis à sa
-// hauteur par l'échelle de son instance. Les pierres descendent un peu sous zéro (enterrées).
+// House reference frame (Z up), foot at the origin, HEIGHT exactly 1: the element is brought to its
+// height by its instance's scale. Stones go a little below zero (buried).
 //
-// Style LOW-POLY FACETTÉ (référence donnée le 2026-09-28 : les packs nature de Pure Poly) : peu de
-// faces, normales par face, et une clarté qui varie d'une face à l'autre et monte vers le sommet —
-// c'est ce qui donne le grain « palette » sans aucune texture.
+// FACETED LOW-POLY style (reference given on 2026-09-28: Pure Poly's nature packs): few
+// faces, per-face normals, and a lightness that varies from one face to the next and rises toward the top —
+// that is what gives the "palette" grain without any texture.
 
 export const GARDEN_VARIANTS = 4
-/** `accent` : fruits ou fleurs d'une espèce (`species.ts`), semés sur le houppier. */
+/** `accent`: fruit or flowers of a species (`species.ts`), sown on the crown. */
 export type GardenPart = 'bark' | 'leaf' | 'stone' | 'accent'
 
-/** Une pièce d'une forme : sa géométrie et la matière de jardin qui l'habille. */
+/** One piece of a shape: its geometry and the garden material that dresses it. */
 export interface GardenShapePart {
   geometry: BufferGeometry
   part: GardenPart
@@ -25,11 +25,11 @@ export interface GardenShapePart {
 
 export interface GardenShape {
   parts: GardenShapePart[]
-  /** Diamètre au sol de la forme, rapporté à sa hauteur (1). */
+  /** Ground diameter of the shape, relative to its height (1). */
   width: number
 }
 
-/** Générateur pseudo-aléatoire déterministe (mulberry32) : même graine, même forme. */
+/** Deterministic pseudo-random generator (mulberry32): same seed, same shape. */
 export function rng(seed: number): () => number {
   let a = seed >>> 0
   return () => {
@@ -41,7 +41,7 @@ export function rng(seed: number): () => number {
   }
 }
 
-/** Graine d'un élément : la sienne, sinon un hachage de son id (FNV-1a). */
+/** Seed of an element: its own, otherwise a hash of its id (FNV-1a). */
 export function gardenSeed(item: { id: string; seed?: number }): number {
   if (item.seed !== undefined) return item.seed
   let h = 0x811c9dc5
@@ -51,7 +51,7 @@ export function gardenSeed(item: { id: string; seed?: number }): number {
 
 const Y_TO_Z = Math.PI / 2
 
-/** Ne garder que les positions, indexées : c'est ce que `mergeGeometries` exige de toutes les pièces. */
+/** Keep only the positions, indexed: that is what `mergeGeometries` requires of all pieces. */
 export function positionsOnly(g: BufferGeometry): BufferGeometry {
   g.deleteAttribute('normal')
   g.deleteAttribute('uv')
@@ -59,9 +59,9 @@ export function positionsOnly(g: BufferGeometry): BufferGeometry {
 }
 
 /**
- * Une boule bosselée (houppier, buisson, pierre). La bosse est une fonction CONTINUE de la position,
- * pas un tirage par sommet : l'icosaèdre répète ses sommets d'une face à l'autre, un tirage par
- * sommet l'aurait fendu.
+ * A bumpy ball (crown, bush, stone). The bump is a CONTINUOUS function of the position,
+ * not a draw per vertex: the icosahedron repeats its vertices from one face to the next, a draw per
+ * vertex would have split it.
  */
 export function blob(r: number, bump: number, next: () => number, detail = 1): BufferGeometry {
   const g = positionsOnly(new IcosahedronGeometry(1, detail))
@@ -97,7 +97,7 @@ function broadleaf(next: () => number): Record<string, BufferGeometry[]> {
   return { bark, leaf }
 }
 
-/** Un fruitier générique : un feuillu plus bas et plus étalé, semé de fruits rouges. */
+/** A generic fruit tree: a broadleaf, lower and more spread out, sown with red fruit. */
 function fruit(next: () => number): Record<string, BufferGeometry[]> {
   const { bark = [], leaf = [] } = broadleaf(next)
   for (const g of leaf) g.scale(1.25, 1.25, 0.9)
@@ -113,7 +113,7 @@ function fruit(next: () => number): Record<string, BufferGeometry[]> {
 function conifer(next: () => number, variant: number): Record<string, BufferGeometry[]> {
   const bark = [trunk(0.04, 0.03, 0.2)]
   const leaf: BufferGeometry[] = []
-  // la dernière forme est un cyprès : une colonne étroite plutôt qu'un sapin étagé
+  // the last shape is a cypress: a narrow column rather than a tiered fir
   const column = variant === GARDEN_VARIANTS - 1
   const tiers = column ? 1 : 3 + Math.floor(next() * 2)
   const r0 = column ? 0.13 : 0.26 + next() * 0.06
@@ -143,10 +143,10 @@ function palm(next: () => number): Record<string, BufferGeometry[]> {
   for (let i = 0; i < fronds; i++) {
     const len = 0.34 + next() * 0.1
     const g = new ConeGeometry(0.055, len, 4, 1)
-    g.rotateZ(-Math.PI / 2)                          // pointe vers +x
+    g.rotateZ(-Math.PI / 2)                          // tip toward +x
     g.translate(len / 2, 0, 0)
-    g.scale(1, 1, 0.22)                              // palme plate
-    g.rotateY(0.25 + next() * 0.55)                  // retombe
+    g.scale(1, 1, 0.22)                              // flat frond
+    g.rotateY(0.25 + next() * 0.55)                  // droops
     g.rotateZ((i / fronds) * Math.PI * 2 + next() * 0.3)
     g.translate(x, 0, 0.86)
     leaf.push(positionsOnly(g))
@@ -154,7 +154,7 @@ function palm(next: () => number): Record<string, BufferGeometry[]> {
   return { bark, leaf }
 }
 
-/** Une touffe de chaumes presque droits, nus au pied, et des plumets de feuilles sur le haut. */
+/** A clump of almost straight culms, bare at the foot, and plumes of leaves at the top. */
 function bamboo(next: () => number): Record<string, BufferGeometry[]> {
   const bark: BufferGeometry[] = []
   const leaf: BufferGeometry[] = []
@@ -194,8 +194,8 @@ function rock(next: () => number): Record<string, BufferGeometry[]> {
 }
 
 /**
- * Pied à z = 0 (une pierre enterrée d'un cinquième), hauteur 1 : c'est ce qui rend la hauteur
- * écrite dans la maison exacte, quelle que soit la forme tirée.
+ * Foot at z = 0 (a stone buried by a fifth), height 1: this is what makes the height
+ * written in the house exact, whatever shape is drawn.
  */
 function normalize(parts: readonly BufferGeometry[], buried: number): number {
   const box = new Box3()
@@ -214,16 +214,16 @@ function normalize(parts: readonly BufferGeometry[], buried: number): number {
 }
 
 /**
- * Facettes : chaque triangle a ses propres sommets (donc sa normale), et une clarté en couleur de
- * sommet — un peu au hasard, et plus claire vers le haut de la pièce, comme un houppier pris par le
- * ciel. Sans `gradient`, la teinte reste celle de l'instance (la couleur de sommet ne fait que la
- * moduler) ; avec, la couleur va du bas au haut de la pièce — c'est ainsi qu'une espèce porte les
- * siennes.
+ * Facets: each triangle has its own vertices (hence its normal), and a lightness as vertex
+ * color — a little random, and lighter toward the top of the piece, like a crown caught by the
+ * sky. Without `gradient`, the tint stays the instance's (the vertex color only
+ * modulates it); with it, the color goes from the bottom to the top of the piece — that is how a species carries
+ * its own.
  */
 export function facet(g: BufferGeometry, next: () => number, gradient?: readonly [Color, Color]): BufferGeometry {
   const flat = g.index ? g.toNonIndexed() : g
   if (flat !== g) g.dispose()
-  flat.computeVertexNormals()                        // sans index : une normale par face
+  flat.computeVertexNormals()                        // no index: one normal per face
   flat.computeBoundingBox()
   const { min, max } = flat.boundingBox!
   const span = max.z - min.z || 1
@@ -246,9 +246,9 @@ export function facet(g: BufferGeometry, next: () => number, gradient?: readonly
 const cache = new Map<string, GardenShape>()
 
 /**
- * La forme `variant` d'une famille, construite une fois et partagée par toutes les instances.
- * `foliage` < 1 retire des masses de feuillage (feuillus et buissons seulement : un conifère amputé
- * de ses étages hauts n'aurait plus l'air de rien) — la hauteur, elle, reste celle de l'arbre entier.
+ * The `variant` shape of a family, built once and shared by all instances.
+ * `foliage` < 1 removes foliage masses (broadleaves and bushes only: a conifer stripped
+ * of its upper tiers would look like nothing) — the height, for its part, stays that of the whole tree.
  */
 export function gardenShape(kind: GardenKind, variant: number, foliage = 1): GardenShape {
   const key = `${kind}:${variant}:${foliage}`
@@ -262,11 +262,11 @@ export function gardenShape(kind: GardenKind, variant: number, foliage = 1): Gar
         : kind === 'bamboo' ? bamboo(next)
         : kind === 'shrub' ? shrub(next)
           : rock(next)
-  // mise à l'échelle sur la forme ENTIÈRE, avant d'en retirer des masses
+  // scaling on the WHOLE shape, before removing masses from it
   const width = normalize(Object.values(raw).flat(), kind === 'rock' ? 0.2 : 0)
   if (foliage < 1 && raw.leaf && (kind === 'broadleaf' || kind === 'fruit' || kind === 'shrub')) {
-    // la grande masse centrale part la première : garder les petites fait un arbre dégarni, pas un
-    // arbre plus petit
+    // the big central mass goes first: keeping the small ones makes a thinned tree, not a
+    // smaller tree
     const keep = Math.max(1, Math.round(raw.leaf.length * foliage))
     for (const g of raw.leaf.slice(0, raw.leaf.length - keep)) g.dispose()
     raw.leaf = raw.leaf.slice(raw.leaf.length - keep)

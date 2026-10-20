@@ -55,32 +55,32 @@ import { createMarker } from './markers/createMarker'
 import type { DeviceMarker, SoundCue } from './markers/DeviceMarker'
 import { MowerMarker, VehicleMarker } from './markers/markers'
 
-// Contrôleur de scène sans Vue. Dépendances injectables (renderer, RAF) → instanciable en Node
-// pour les tests sans WebGL. Le composable useHouseScene est son adaptateur réactif.
+// Scene controller without Vue. Injectable dependencies (renderer, RAF) → can be instantiated in Node
+// for tests without WebGL. The useHouseScene composable is its reactive adapter.
 
 export type LevelFocusMode = 'hide' | 'ghost'
 
 export interface HouseSceneOptions {
   levelFocusMode: LevelFocusMode
   shadows: boolean
-  /** Budget du post-traitement. `auto` mesure la machine puis se corrige (`core/post.ts`). */
+  /** Post-processing budget. `auto` measures the machine then corrects itself (`core/post.ts`). */
   quality: RenderQuality
-  /** Perspective, orthographique libre, ou isométrie verrouillée (`core/cameraFit.ts`). */
+  /** Perspective, free orthographic, or locked isometric (`core/cameraFit.ts`). */
   projection: SceneProjection
 }
 
 /**
- * Ce qui décide de l'APPARENCE de la scène, en trois axes indépendants : le style de rendu (le
- * goût), l'ambiance (l'heure qu'il fait au-dessus de la maison) et le thème de l'application (les
- * repères posés dessus). Aucun des trois n'impose les deux autres.
+ * What decides the scene's APPEARANCE, along three independent axes: the render style (the
+ * taste), the ambience (the time of day above the house) and the application theme (the
+ * markers laid on it). None of the three imposes the other two.
  */
 export interface SceneAppearance {
   ui: UiTheme
   style: RenderStyle
   ambience: SceneAmbience
-  /** Matières en images à la place des procédurales, si le style porte un pack (`textures/assets.ts`). */
+  /** Photo materials instead of the procedural ones, if the style carries a pack (`textures/assets.ts`). */
   assets: boolean
-  /** Banc de réglage de la lumière (`styles/tuning.ts`) : multiplicateurs posés sur le look du style. */
+  /** Light tuning bench (`styles/tuning.ts`): multipliers applied on the style's look. */
   tuning: SceneTuning
 }
 
@@ -94,39 +94,39 @@ export interface HouseSceneDeps {
   style?: RenderStyle
   ambience?: SceneAmbience
   labelLayer?: HTMLElement | null
-  /** Désactive OrbitControls/tap (tests Node). */
+  /** Disables OrbitControls/tap (Node tests). */
   headless?: boolean
 }
 
-/** Ce que le voile de débogage affiche (Réglages → Rendu 3D → Débogage). */
+/** What the debug overlay shows (Settings → 3D rendering → Debug). */
 export interface SceneDebugStats {
-  /** Images rendues par seconde. Le rendu étant à la demande, c'est 0 au repos — et c'est normal. */
+  /** Frames rendered per second. Rendering being on demand, it is 0 at rest — and that is normal. */
   fps: number
   /**
-   * Temps passé DANS `render()`, moyenne glissante (ms). Pas du CPU pur : quand la file de commandes
-   * du GPU est pleine, le pilote bloque à l'envoi et cette attente s'y retrouve.
+   * Time spent IN `render()`, moving average (ms). Not pure CPU: when the GPU's command queue
+   * is full, the driver blocks on submission and that wait ends up in it.
    */
   cpuMs: number
   /**
-   * Temps écoulé ENTRE deux images, moins celui passé à dessiner. C'est ce que le navigateur fait de
-   * son côté : style, disposition, peinture, composition, présentation à l'écran. Un « hors rendu »
-   * qui gonfle pendant qu'on tourne désigne tout sauf notre dessin.
+   * Time elapsed BETWEEN two frames, minus the time spent drawing. It is what the browser does on
+   * its side: style, layout, paint, compositing, presentation on screen. An "outside render" time
+   * that swells while rotating points to anything but our drawing.
    */
   outsideMs: number
-  /** Appels de dessin et triangles d'UNE image, tous rendus compris (scène, occlusion, effets). */
+  /** Draw calls and triangles of ONE frame, all renders included (scene, occlusion, effects). */
   calls: number
   triangles: number
   programs: number
   geometries: number
   textures: number
-  /** La carte d'ombre du soleil a-t-elle été refaite à la dernière image ? */
+  /** Was the sun's shadow map redone on the last frame? */
   shadowsRebuilt: boolean
-  /** Lampes qui portent une ombre cubique (six rendus de profondeur chacune). */
+  /** Lamps that cast a cube shadow (six depth renders each). */
   pointShadows: number
   markers: number
   /**
-   * Animations de marqueur en cours (onde d'un lecteur, souffle d'une batterie). Tant qu'il y en a
-   * une, la boucle tourne SANS qu'on touche à rien — bridée à `ANIMATION_HZ` (`core/renderLoop.ts`).
+   * Marker animations in progress (a player's wave, a battery's breath). As long as there is
+   * one, the loop runs WITHOUT anything being touched — capped at `ANIMATION_HZ` (`core/renderLoop.ts`).
    */
   animations: number
   quality: EffectiveQuality
@@ -134,19 +134,19 @@ export interface SceneDebugStats {
 }
 
 /**
- * Sonde posée autour d'une image RENDUE. Le voile de débogage y branche `stats.js` : c'est la seule
- * façon d'obtenir sa courbe, puisque la scène ne rend qu'à la demande — un `stats.update()` appelé
- * depuis une boucle à part compterait des images qui n'existent pas.
+ * Probe placed around a RENDERED frame. The debug overlay plugs `stats.js` into it: it is the only
+ * way to get its graph, since the scene only renders on demand — a `stats.update()` called
+ * from a separate loop would count frames that do not exist.
  */
 export interface FrameProbe { begin(): void; end(): void }
 
-/** Points de vue de l'éditeur du relief : depuis un point cardinal, ou d'aplomb. */
+/** Viewpoints of the relief editor: from a cardinal point, or from straight above. */
 export type TerrainView = 'north' | 'east' | 'south' | 'west' | 'top'
 
-/** Les deux onglets de l'éditeur du terrain : les hauteurs, ou la forme de la parcelle. */
+/** The two tabs of the terrain editor: the heights, or the shape of the plot. */
 export type TerrainTab = 'relief' | 'outline'
 
-/** L'édition du contour vue du panneau : sommet choisi, brouillon, historique. */
+/** Outline editing as seen from the panel: selected vertex, draft, history. */
 export interface OutlineEditState {
   point: Vec2 | null
   draft: Vec2[]
@@ -156,13 +156,13 @@ export interface OutlineEditState {
   pick: { seq: number; by: string }
 }
 
-/** L'édition du relief vue du panneau : hauteur du point choisi (cm), brouillon (`null` = plat). */
+/** Relief editing as seen from the panel: height of the selected dot (cm), draft (`null` = flat). */
 export interface ReliefEditState {
   pointCm: number | null
   draft: Relief | null
   canUndo: boolean
   canRedo: boolean
-  /** Dernier point choisi au tap (`seq` croît à chaque tap) et le pointeur qui l'a choisi. */
+  /** Last dot selected by tap (`seq` increases at each tap) and the pointer that selected it. */
   pick: { seq: number; by: string }
   tab: TerrainTab
   outline: OutlineEditState | null
@@ -172,227 +172,227 @@ export interface SceneEvents {
   deviceTap: (key: string) => void
   roomTap: (roomId: string) => void
   zoneTap: (zoneId: string) => void
-  /** Tap sur le toit : le niveau qui le porte (il n'a ni pièce ni sol à toucher). */
+  /** Tap on the roof: the level that carries it (it has neither room nor floor to touch). */
   levelTap: (levelId: string) => void
-  /** Tap sur une épingle du journal (un incident posé sur le terrain) : sa date, qui l'identifie. */
+  /** Tap on a log pin (an incident laid on the terrain): its date, which identifies it. */
   journalTap: (at: number) => void
   backgroundTap: () => void
-  /** Glissement de l'appareil déplaçable : position au sol (repère maison) et pièce survolée (même niveau) ou null. */
+  /** Drag of the movable device: position on the ground (house reference frame) and hovered room (same level) or null. */
   deviceDrag: (key: string, xy: [number, number], roomId: string | null) => void
   deviceDrop: (key: string, xy: [number, number], roomId: string | null) => void
-  /** Tap sur la poignée d'une ouverture (mode édition seulement). */
+  /** Tap on an opening's handle (edit mode only). */
   openingTap: (openingId: string) => void
   /**
-   * Glissement de l'ouverture SÉLECTIONNÉE : le point du doigt projeté sur le plan du SOL de son
-   * niveau, en repère maison. C'est l'appelant qui en déduit un mur et une distance depuis le coin
-   * (`slotFromPoint`) — la scène ne connaît pas les places admissibles.
+   * Drag of the SELECTED opening: the finger's point projected onto the FLOOR plane of its
+   * level, in the house reference frame. It is the caller that derives a wall and a distance from the corner
+   * (`slotFromPoint`) — the scene does not know the admissible places.
    */
   openingDrag: (openingId: string, xy: [number, number]) => void
   openingDrop: (openingId: string) => void
   /**
-   * Mur tapé pendant qu'une ouverture est armée (mode « poser ») : le point touché sur le bâti, en
-   * repère maison. Comme pour le glissement, c'est l'appelant qui en déduit un mur et une distance
-   * depuis le coin — la scène dit OÙ ON A TAPÉ, pas où l'ouverture a le droit d'aller.
+   * Wall tapped while an opening is armed ("place" mode): the point touched on the structure, in the
+   * house reference frame. As for the drag, it is the caller that derives a wall and a distance
+   * from the corner — the scene says WHERE THE TAP LANDED, not where the opening is allowed to go.
    */
   placeTap: (xy: [number, number]) => void
   /**
-   * Point du SOL touché pendant qu'une place de stationnement est armée : le sol d'une pièce, le
-   * terrain ou une zone, en repère maison. Une place se pose à plat — il n'y a pas de mur à viser,
-   * donc pas de règle d'admissibilité à appliquer, contrairement à une ouverture.
+   * FLOOR point touched while a parking space is armed: a room's floor, the
+   * terrain or a zone, in the house reference frame. A space is laid flat — there is no wall to aim at,
+   * hence no admissibility rule to apply, unlike an opening.
    */
   groundTap: (xy: [number, number], levelId: string | null) => void
   /**
-   * L'édition du relief a bougé (entrée, glissement, import) ; `null` en sortant du mode.
-   * `draft` = le brouillon tel qu'il s'écrirait, `null` s'il est plat.
+   * The relief editing moved (entry, drag, import); `null` when leaving the mode.
+   * `draft` = the draft as it would be written, `null` if it is flat.
    */
   reliefChange: (state: ReliefEditState | null) => void
-  /** Tap sur une place de stationnement (mode édition seulement). */
+  /** Tap on a parking space (edit mode only). */
   parkingTap: (parkingId: string) => void
   /**
-   * Glissement de la place SÉLECTIONNÉE : le point du doigt projeté sur le sol, en repère maison.
-   * C'est le centre voulu — une place au sol n'a pas de contrainte d'accueil, contrairement à une
-   * ouverture qui doit trouver un mur.
+   * Drag of the SELECTED space: the finger's point projected onto the ground, in the house reference frame.
+   * It is the desired center — a space on the ground has no hosting constraint, unlike an
+   * opening that must find a wall.
    */
   parkingDrag: (parkingId: string, xy: [number, number]) => void
   parkingDrop: (parkingId: string) => void
-  /** Tap sur un élément du jardin (mode édition seulement). */
+  /** Tap on a garden element (edit mode only). */
   gardenTap: (itemId: string) => void
-  /** Glissement de l'élément du jardin SÉLECTIONNÉ : son nouveau pied, en repère maison. */
+  /** Drag of the SELECTED garden element: its new foot, in the house reference frame. */
   gardenDrag: (itemId: string, xy: [number, number]) => void
   gardenDrop: (itemId: string) => void
-  /** Élément du jardin armé : le point du TERRAIN touché (un sol de pièce ou un toit n'en est pas un). */
+  /** Garden element armed: the TERRAIN point touched (a room floor or a roof is not one). */
   gardenPlaceTap: (xy: [number, number]) => void
-  /** « Ajouter une pièce » armé : le point du sol touché (pièce, terrain ou zone), où elle naît. */
+  /** "Add a room" armed: the floor point touched (room, terrain or zone), where it is born. */
   roomPlaceTap: (xy: [number, number]) => void
   /**
-   * La maison se prépare avant d'être montrée (voir `prepare`) : l'étape en cours, avec son compte
-   * quand elle en a un (les matières), puis `null` quand elle est prête.
+   * The house is being prepared before being shown (see `prepare`): the current stage, with its count
+   * when it has one (the materials), then `null` when it is ready.
    */
   prepare: (stage: ScenePrepareStage | null, progress: { done: number; total: number } | null) => void
-  /** Forme d'une pièce (section « Dimensions ») : un mur poussé de `delta` m depuis le début du geste. */
+  /** Shape of a room ("Dimensions" section): a wall pushed by `delta` m since the start of the gesture. */
   shapeWall: (edge: number, delta: number, final: boolean) => void
-  /** …un sommet amené en `xy` (repère maison). */
+  /** …a vertex brought to `xy` (house reference frame). */
   shapeCorner: (index: number, xy: [number, number], final: boolean) => void
-  /** …la poignée choisie a changé. */
+  /** …the selected handle changed. */
   shapeSelect: (sel: ShapeSelection) => void
 }
 
-/** Les étapes de la préparation d'une maison, dans l'ordre. */
+/** The stages of preparing a house, in order. */
 export type ScenePrepareStage = 'materials' | 'shaders' | 'frame'
 
 /**
- * Après une image PEINTE : le rappel d'un `requestAnimationFrame` précède la peinture de son image,
- * celui du suivant la suit.
+ * After a PAINTED frame: the callback of one `requestAnimationFrame` comes before the paint of its frame,
+ * that of the next one comes after it.
  */
 const nextPaint = () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 
-/** Au-delà, la maison se montre même si des matières photo sont encore en route (réseau lent, fichier absent). */
+/** Beyond this, the house is shown even if photo materials are still on their way (slow network, missing file). */
 const PREPARE_PHOTOS_MS = 10_000
-/** Au-delà, la maison se montre même si des shaders compilent encore (la première image les finira). */
+/** Beyond this, the house is shown even if shaders are still compiling (the first frame will finish them). */
 const PREPARE_SHADERS_MS = 30_000
 
-/** Émission d'une fenêtre dont la pièce est éclairée à fond, la nuit ; et son opacité alors. */
+/** Emission of a window whose room is fully lit, at night; and its opacity then. */
 const WINDOW_GLOW = 0.65
 const WINDOW_LIT_OPACITY = 0.6
-/** Portée (m) du brouillard quand l'air est clair : au-delà de tout ce que la scène dessine (sol infini : 400 m). */
+/** Fog range (m) when the air is clear: beyond everything the scene draws (infinite ground: 400 m). */
 const NO_FOG_M = 1e6
-/** Part du ciel d'en haut (hémisphère) dans la couleur de la brume basse. */
+/** Share of the upper sky (hemisphere) in the color of the low mist. */
 const MIST_SKY_SHARE = 0.35
-/** Hauteur (m) de l'étiquette d'une place au-dessus du sol, et celle de ses quatre cotes. */
+/** Height (m) of a space's label above the ground, and that of its four dimensions. */
 const PARKING_NOTE_LIFT_M = 0.9
 const PARKING_COTE_LIFT_M = 0.12
-/** Côté de la boîte cadrée autour d'un appareil sélectionné : lui de près, sa pièce autour. */
+/** Side of the box framed around a selected device: the device up close, its room around it. */
 const DEVICE_FOCUS_SIZE_M = 3
-/** Têtes d'épingle du journal : les teintes de gravité de l'UI (`lib/journal.ts`), en nombres pour Three. */
+/** Heads of the log pins: the UI's severity tints (`lib/journal.ts`), as numbers for Three. */
 const JOURNAL_PIN_COLORS: Record<string, number> = { info: 0x8a94a6, warning: 0xd38b22, error: 0xd24a43, fatal: 0xd24a43 }
-/** Inclinaison permise en cadrant un appareil : plongeante, pour voir par-dessus les murs. */
+/** Tilt allowed when framing a device: looking down, to see over the walls. */
 const DEVICE_FOCUS_POLAR = [(20 * Math.PI) / 180, (40 * Math.PI) / 180] as const
-const DEFAULT_AZIMUTH = -Math.PI / 4     // depuis le sud-est
-/** Ce qu'un appareil peut être « derrière » son mur et gagner quand même le tap (une applique y est collée). */
+const DEFAULT_AZIMUTH = -Math.PI / 4     // from the south-east
+/** How far a device can be "behind" its wall and still win the tap (a wall light is stuck to it). */
 const WALL_PICK_TOLERANCE_M = 0.05
-/** Champ vertical de la perspective (et le champ de référence de l'orthographique). */
+/** Vertical field of the perspective (and the reference field of the orthographic). */
 const BASE_FOV_DEG = 38
-/** Bornes de la molette, à ce champ-là ; un champ plus étroit les recule d'autant. */
+/** Bounds of the mouse wheel, at that field; a narrower field moves them back accordingly. */
 const MIN_DISTANCE_M = 4
 const MAX_DISTANCE_M = 120
 const DEFAULT_POLAR = (55 * Math.PI) / 180
-/** Cadrage d'un niveau-toit : plus plongeant que les autres, on vient regarder la dalle elle-même. */
+/** Framing of a roof level: steeper than the others, one comes to look at the slab itself. */
 const ROOF_POLAR = (35 * Math.PI) / 180
-/** Un éclair : facteur d'exposition et durée (ms) de chaque éclat — deux éclats, le second plus long. */
+/** A lightning strike: exposure factor and duration (ms) of each flash — two flashes, the second longer. */
 const FLASH: readonly (readonly [number, number])[] = [[2.6, 70], [1, 90], [1.9, 120]]
-/** Entre deux éclairs, au hasard dans cette fourchette (ms). */
+/** Between two strikes, at random within this range (ms). */
 const FLASH_EVERY_MS: readonly [number, number] = [6000, 16000]
-/** Plafond du volume où il pleut, au-dessus du sol de la maison (m) : au-dessus des toits, sous la caméra d'ensemble. */
+/** Ceiling of the volume where it rains, above the house floor (m): above the roofs, below the overview camera. */
 const PRECIP_HEIGHT_M = 14
 /**
- * Cadence de l'eau vivante (`effects/water.ts`), en images par seconde. Une houle de piscine avance
- * lentement : à 10 Hz l'œil ne voit pas la marche, et c'est deux fois moins d'images COMPLÈTES à
- * dessiner qu'une averse.
+ * Rate of the living water (`effects/water.ts`), in frames per second. A pool swell advances
+ * slowly: at 10 Hz the eye does not see the steps, and it is half as many FULL frames to
+ * draw as a downpour.
  */
 const WATER_HZ = 10
 const WORLD_UP = new Vector3(0, 1, 0)
-/** Pas de la grille d'un relief créé dans l'éditeur (m) : ~900 poignées sur la parcelle, assez pour une bosse. */
+/** Grid step of a relief created in the editor (m): ~900 handles on the plot, enough for a bump. */
 const RELIEF_STEP = 2
-/** Part visible de la maison pendant qu'on modèle le terrain : assez pour se repérer, pas pour gêner. */
+/** Visible share of the house while shaping the terrain: enough to find one's bearings, not enough to get in the way. */
 const RELIEF_HOUSE_OPACITY = 0.5
-/** De quoi tester la piscine contre le champ de la caméra sans rien allouer par mouvement. */
+/** What it takes to test the pool against the camera's field without allocating anything per movement. */
 const waterFrustum = new Frustum()
 const waterMatrix = new Matrix4()
 const waterSphere = new Sphere()
 const WHITE = new Color(0xffffff)
 /**
- * Poignée d'une ouverture en mode édition : une dalle qui remplit son rectangle et déborde de
- * l'épaisseur du mur, et un cadre qui la cerne (voir `OPENING_RING` pour sa largeur).
+ * Handle of an opening in edit mode: a slab that fills its rectangle and overhangs
+ * the wall thickness, and a frame that rings it (see `OPENING_RING` for its width).
  */
 /**
- * De combien la poignée d'une ouverture DÉBORDE de chaque face du mur (m). Elle s'attrape ainsi de
- * l'intérieur comme de l'extérieur sans viser, et surtout son cadre au repos, qui est soumis à la
- * profondeur, reste visible quand on regarde la façade de biais : à ras du mur, la face extérieure le
- * masquait (constaté sur un mur de 30 cm, là où la poignée en faisait autant).
+ * How far an opening's handle OVERHANGS each face of the wall (m). It can thus be grabbed from
+ * the inside as from the outside without aiming, and above all its frame at rest, which is subject to
+ * depth, stays visible when the facade is seen at an angle: flush with the wall, the outer face
+ * hid it (observed on a 30 cm wall, where the handle was just as thick).
  */
 const OPENING_HANDLE_PROUD_M = 0.09
 /**
- * Largeur vue du cadre d'une poignée : FIN au repos, épais pour celle qu'on règle. C'est l'épaisseur
- * qui porte l'écart entre les deux — une nuance d'intensité ne suffisait pas à les distinguer, et
- * retirer le cadre au repos rendait les autres ouvertures introuvables.
+ * Visible width of a handle's frame: THIN at rest, thick for the one being adjusted. It is the thickness
+ * that carries the difference between the two — a nuance of intensity was not enough to tell them apart, and
+ * removing the frame at rest made the other openings impossible to find.
  */
 const OPENING_RING = { rest: 0.035, on: 0.075 } as const
-/** De combien le nom de l'ouverture réglée flotte au-dessus d'elle (m) : dégagé du linteau. */
+/** How far the name of the adjusted opening floats above it (m): clear of the lintel. */
 const OPENING_NOTE_LIFT_M = 0.18
 /**
- * Le repère d'origine du fichier (mode édition) : rayon de l'anneau, épaisseur des barres, longueur
- * des deux axes et de la flèche du nord — en mètres. À l'échelle d'une pièce, pas d'un bâtiment : un
- * trièdre de logiciel de CAO au milieu d'une maquette n'aurait rien à y faire.
+ * The file's origin marker (edit mode): ring radius, bar thickness, length
+ * of the two axes and of the north arrow — in meters. At the scale of a room, not of a building: a
+ * CAD-software trihedron in the middle of a maquette would be out of place.
  */
 const ORIGIN_MARK = { ring: 0.24, bar: 0.05, axis: 1.1, north: 0.7 } as const
 /**
- * Ligne de cote d'une ouverture : épaisseur du trait, hauteur des tirets qui la ferment à chaque
- * bout, et de combien le nombre flotte au-dessus d'elle (m).
+ * Dimension line of an opening: line thickness, height of the ticks closing it at each
+ * end, and how far the number floats above it (m).
  */
 const COTE = { bar: 0.035, tick: 0.2, lift: 0.14 } as const
 
-/** Rayon (m) dont s'écartent les personnages qui défilent, par nature d'engin (`roamObstacles`). */
+/** Radius (m) that the parading characters keep clear of, by kind of vehicle (`roamObstacles`). */
 const ROAM_RADIUS = { vehicle: 2.6, mower: 0.6 } as const
-/** Jusqu'où le cadrage d'une ouverture suit ses cotes (m) : au-delà, le bout du trait n'apprend rien. */
+/** How far the framing of an opening follows its dimensions (m): beyond that, the end of the line teaches nothing. */
 const OPENING_FOCUS_REACH_M = 2
-/** Rayon (px) autour de l'ancre ou de la pilule où l'appui saisit l'appareil déplaçable. */
+/** Radius (px) around the anchor or the pill where the press grabs the movable device. */
 const GRAB_RADIUS_PX = { touch: 44, mouse: 28 }
 /**
- * Niveau de détail des pilules selon l'ÉCHELLE à l'écran (pixels par mètre au point visé) : de près
- * icône et nom, plus loin l'icône seule, en vue d'ensemble un point. En pixels par mètre plutôt qu'en
- * mètres de distance : à distance égale, une scène étroite (volet ouvert, tablette en portrait) montre
- * la maison plus petite, et c'est la densité à l'écran qui gêne. Posé en `data-lod` sur la couche des
- * marqueurs ; la pilule sélectionnée reste toujours entière (CSS).
- * Repères (scène de 600 px de haut) : appareil cadré 8,8 m ≈ 100 px/m, pièce ≈ 55-70, niveau ≈ 30-40,
- * vue d'ensemble ≈ 20.
+ * Level of detail of the pills according to the on-screen SCALE (pixels per meter at the aimed point): up close
+ * icon and name, farther the icon alone, in the overview a dot. In pixels per meter rather than in
+ * meters of distance: at equal distance, a narrow scene (panel open, tablet in portrait) shows
+ * the house smaller, and it is the on-screen density that gets in the way. Set as `data-lod` on the markers'
+ * layer; the selected pill always stays whole (CSS).
+ * Reference points (scene 600 px tall): device framed at 8.8 m ≈ 100 px/m, room ≈ 55-70, level ≈ 30-40,
+ * overview ≈ 20.
  */
 type PillLod = 'full' | 'icon' | 'dot'
 const PILL_LOD_FULL_MIN_PX_PER_M = 65
 const PILL_LOD_ICON_MIN_PX_PER_M = 26
 /**
- * Fenêtre pendant laquelle les ombres se refont après un changement de scène. Elle couvre la course
- * animée la plus longue (un volet met 400 ms) : au-delà, rien de ce qui porte une ombre ne bouge plus.
+ * Window during which the shadows are redone after a scene change. It covers the longest animated
+ * travel (a shutter takes 400 ms): beyond it, nothing that casts a shadow moves anymore.
  */
 const SHADOW_SETTLE_MS = 700
-/** Calme exigé avant de refaire le reflet de la piscine (ms) : un geste en cours n'en paie aucun. */
+/** Calm required before redoing the pool reflection (ms): a gesture in progress pays for none. */
 const REFLECTION_SETTLE_MS = 400
-/** Hauteur de la sonde de reflet au-dessus de l'eau (m) : l'œil d'un baigneur, pas le ras de l'eau. */
+/** Height of the reflection probe above the water (m): a swimmer's eye, not water level. */
 const REFLECTION_EYE_M = 0.4
-/** Images dessinées au minimum qui refont les ombres après une demande (la VSM filtre sur deux passes). */
+/** Minimum frames drawn that redo the shadows after a request (the VSM filters over two passes). */
 const SHADOW_MIN_FRAMES = 2
 /**
- * L'envol d'un étage qu'on masque (`liftTo`) : de combien il monte avant de disparaître, et en
- * combien de temps — un peu moins que le vol de la caméra (650 ms), qu'il accompagne.
+ * The flight of an upper floor being hidden (`liftTo`): how far it rises before disappearing, and in
+ * how much time — a little less than the camera flight (650 ms), which it accompanies.
  */
 const LEVEL_LIFT_M = 8
 const LEVEL_LIFT_MS = 450
-/** Marge (m) du seuil du fondu au-dessus du niveau qui reste : jamais une limite posée sur une face. */
+/** Margin (m) of the fade threshold above the level that stays: never a boundary laid on a face. */
 const LEVEL_FADE_MARGIN_M = 0.03
 /**
- * Les pilules qui APPARAISSENT attendent que l'étage ait commencé à se dégager : leur fondu part à ce
- * délai et dure un peu plus que le vol. Celles qui partent suivent le vol (`LEVEL_LIFT_MS`).
+ * The pills that APPEAR wait for the upper floor to have started clearing: their fade starts after this
+ * delay and lasts a little longer than the flight. Those that leave follow the flight (`LEVEL_LIFT_MS`).
  */
 const PILL_IN_DELAY_MS = 150
 const PILL_IN_MS = 550
-/** La pièce qu'on regarde : durée du fondu du reste de la maison, et épaisseur de dalle comprise sous son sol. */
+/** The room being looked at: duration of the fade of the rest of the house, and slab thickness included under its floor. */
 const ROOM_FOCUS_MS = 300
 const ROOM_FOCUS_SLAB_M = 0.35
-/** Marge (m) entre le masque et les surfaces de la pièce : jamais une limite posée sur une face. */
+/** Margin (m) between the mask and the room's surfaces: never a boundary laid on a face. */
 const ROOM_FOCUS_MARGIN_M = 0.12
-/** Délai après lequel les étiquettes sont considérées immobiles (et leur promotion relâchée). */
+/** Delay after which the labels are considered still (and their promotion released). */
 const LABELS_IDLE_MS = 500
 
 export class HouseScene {
   readonly scene = new Scene()
   /**
-   * La caméra ACTIVE. Elle change d'espèce avec la projection (`setOptions({ projection })`) : les
-   * deux gardent la même pose, seul le tronc diffère. Ce qui la lit à chaque image — lancer de
-   * rayon, étiquettes, chaîne d'image — n'a pas à savoir laquelle des deux elle est.
+   * The ACTIVE camera. It changes kind with the projection (`setOptions({ projection })`): the
+   * two keep the same pose, only the frustum differs. What reads it every frame — raycasting,
+   * labels, image chain — does not have to know which of the two it is.
    */
   camera: PerspectiveCamera | OrthographicCamera
-  /** Celle qui porte le champ de vision de référence : même en orthographique, c'est lui qui pose les distances. */
+  /** The one that carries the reference field of view: even in orthographic, it is what sets the distances. */
   private readonly perspectiveCamera: PerspectiveCamera
-  /** Bâtie au premier passage en orthographique, gardée ensuite (l'aller-retour est un réglage, pas une animation). */
+  /** Built on the first switch to orthographic, kept afterward (going back and forth is a setting, not an animation). */
   private orthoCamera: OrthographicCamera | null = null
   readonly renderer: WebGLRenderer | null
   readonly labelRenderer: CSS2DRenderer | null
@@ -400,13 +400,13 @@ export class HouseScene {
   readonly loop: RenderLoop
   readonly markers = new Map<string, DeviceMarker>()
   /**
-   * Les incidents du journal d'un appareil, posés sur le terrain le temps que le panneau les montre :
-   * chaque épingle avec sa tête (touchable), son étiquette (visible seulement quand elle est ACTIVE)
-   * et sa date, qui l'identifie.
+   * The incidents of a device's log, laid on the terrain while the panel shows them:
+   * each pin with its head (touchable), its label (visible only when it is ACTIVE)
+   * and its date, which identifies it.
    */
   /**
-   * Formes PEINTES sur le terrain (la carte du terrain d'une tondeuse) : celles qu'on a reçues, gardées
-   * pour être repeintes quand le terrain change (relief, maison rechargée), et leur groupe dans la scène.
+   * Shapes PAINTED on the terrain (a mower's terrain map): the ones received, kept
+   * to be repainted when the terrain changes (relief, house reloaded), and their group in the scene.
    */
   private groundShapes: readonly GroundShape[] = []
   private groundOverlay: Group | null = null
@@ -418,71 +418,71 @@ export class HouseScene {
   private style: RenderStyle
   private ambience: SceneAmbience
   private look: StyleLook
-  /** Matières en images demandées (Réglages). Elles ne s'appliquent que si le style porte un pack. */
+  /** Photo materials requested (Settings). They only apply if the style carries a pack. */
   private assets = false
-  /** Jeton des chargements de matières : un rôle qui arrive pour un style qu'on a quitté est ignoré. */
+  /** Token of the material loads: a role that arrives for a style that was left is ignored. */
   private photoGen = 0
-  /** Jeton de la préparation en cours : un nouveau chargement (ou la fin de la scène) l'invalide. */
+  /** Token of the preparation in progress: a new load (or the end of the scene) invalidates it. */
   private prepareGen = 0
   private preparing = false
   /**
-   * Aucune image pendant la préparation. Une seule image rendue avant la fin de `compileAsync`
-   * compile TOUT d'un bloc, sur le fil principal : 9 s figées au premier chargement (cache de
-   * shaders froid, iGPU), le voile compris — mesuré le 2026-09-25.
+   * No frame during the preparation. A single frame rendered before `compileAsync` finishes
+   * compiles EVERYTHING in one block, on the main thread: 9 s frozen at the first load (cold shader
+   * cache, iGPU), the veil included — measured on 2026-09-25.
    */
   private holdFrames = false
-  /** Des shaders demandés APRÈS le chargement (un style, une matière photo) se compilent : l'ancienne image reste. */
+  /** Shaders requested AFTER the load (a style, a photo material) are compiling: the old frame stays. */
   private compiling = false
   private compileGen = 0
   private post: PostPipeline | null = null
   private quality: EffectiveQuality = 'high'
-  /** Le cran où le garde-fou est descendu en « auto » ; `null` = la détection décide. Le réglage, lui, reste « auto ». */
+  /** The notch the safeguard stepped down to in "auto"; `null` = detection decides. The setting, for its part, stays "auto". */
   private autoQuality: EffectiveQuality | null = null
-  /** Minuterie de l'orage en cours (prochain éclat, ou éclat en train de s'éteindre) ; `null` = pas d'orage. */
+  /** Timer of the storm in progress (next flash, or flash fading out); `null` = no storm. */
   private stormTimer: ReturnType<typeof setTimeout> | null = null
-  /** Pluie ou neige en cours (`effects/precipitation.ts`), de quoi retirer son animation, et l'intensité avec laquelle elle a été bâtie. */
+  /** Rain or snow in progress (`effects/precipitation.ts`), what it takes to remove its animation, and the intensity it was built with. */
   private precip: Precipitation | null = null
   private stopPrecip: (() => void) | null = null
-  /** Chauves-souris du style (`effects/bats.ts`), et de quoi retirer leur animation. */
+  /** The style's bats (`effects/bats.ts`), and what it takes to remove their animation. */
   private bats: Bats | null = null
   private stopBats: (() => void) | null = null
-  /** Boule à facettes et projecteurs du style (`effects/disco.ts`), et de quoi retirer leur animation. */
+  /** The style's mirror ball and spotlights (`effects/disco.ts`), and what it takes to remove their animation. */
   private disco: Disco | null = null
   private stopDisco: (() => void) | null = null
-  /** Personnages du style (`effects/parade.ts`), et de quoi retirer leur animation. */
+  /** The style's characters (`effects/parade.ts`), and what it takes to remove their animation. */
   private parade: Parade | null = null
-  /** L'empreinte du jardin que les personnages contournent : changée, ils sont retracés. */
+  /** The garden footprint the characters skirt: when it changes, they are rerouted. */
   private gardenRoamKey = ''
   private stopParade: (() => void) | null = null
   private precipIntensity = 0
   /**
-   * L'eau vivante (`effects/water.ts`) : un temps PARTAGÉ par la surface et le fond — crêtes et
-   * caustiques battent ensemble —, la force de chacun, et de quoi retirer l'animation. Les deux
-   * matériaux sont patchés une fois pour toutes ; c'est la force qui dit si l'eau bouge. La carte
-   * des caustiques n'existe qu'avec un renderer (pas en headless).
+   * The living water (`effects/water.ts`): a time SHARED by the surface and the bottom — crests and
+   * caustics beat together —, the strength of each, and what it takes to remove the animation. The two
+   * materials are patched once and for all; it is the strength that says whether the water moves. The
+   * caustics map only exists with a renderer (not in headless).
    */
   private readonly water = createWaterUniforms()
   private caustics: WaterCaustics | null = null
-  /** Reflet figé de la piscine (`effects/reflection.ts`) et l'instant où le refaire (0 = à jour). */
+  /** Frozen reflection of the pool (`effects/reflection.ts`) and when to redo it (0 = up to date). */
   private reflection: ReflectionProbe | null = null
   private reflectionDue = 0
   private reflectionTimer: ReturnType<typeof setTimeout> | null = null
   private readonly waterStrength: { surface: WaterStrength; basin: WaterStrength }
   private stopWater: (() => void) | null = null
-  /** Direction d'où vient la lumière du jour, monde three : l'heure de l'ambiance ET le cap de la maison. */
+  /** Direction the daylight comes from, three world: the ambience's hour AND the house heading. */
   private get sunDir(): Vector3 { return sunDirection(this.ambience, undefined, this.headingDeg) }
   /**
-   * Le cap du +y du plan (`origin.heading`) : la météo compte ses directions depuis le nord VRAI, la
-   * scène depuis le haut du plan. Soleil, pluie et houle le retranchent.
+   * The heading of the plan's +y (`origin.heading`): the weather counts its directions from TRUE north, the
+   * scene from the top of the plan. Sun, rain and swell subtract it.
    */
   private get headingDeg(): number { return this.house?.origin.heading ?? 0 }
   /**
-   * Les ombres ne dépendent PAS de la caméra : les refaire à chaque image pendant qu'on tourne
-   * autour de la maison, c'est redessiner tout le bâti pour rien. Elles se refont pendant un court
-   * moment après un changement de scène — le temps qu'une course de volet s'achève.
+   * The shadows do NOT depend on the camera: redoing them every frame while orbiting
+   * the house means redrawing the whole structure for nothing. They are redone for a short
+   * while after a scene change — the time for a shutter's travel to finish.
    */
   private shadowsDirtyUntil = 0
-  /** Images dessinées qui refont encore les ombres, quel que soit le temps écoulé (`invalidateShadows`). */
+  /** Drawn frames that still redo the shadows, whatever the elapsed time (`invalidateShadows`). */
   private shadowFramesPending = 0
   private perf = { fps: 0, cpuMs: 0, outsideMs: 0, lastStart: 0, wasInteractive: false, frames: 0, since: 0, shadowsRebuilt: false }
   private probe: FrameProbe | null = null
@@ -496,7 +496,7 @@ export class HouseScene {
   private focusedLevelId: string | null = null
   private pillLod: PillLod | null = null
   private highlightedRoom: string | null = null
-  /** Le trait et le voile posés sur la pièce sélectionnée (`highlightRoom`), dans le groupe de son niveau. */
+  /** The line and the veil laid on the selected room (`highlightRoom`), in its level's group. */
   private highlightMeshes: Mesh[] = []
   private selectedKey: string | null = null
   private listeners: { [K in keyof SceneEvents]: Set<SceneEvents[K]> } = {
@@ -508,80 +508,80 @@ export class HouseScene {
     shapeWall: new Set(), shapeCorner: new Set(), shapeSelect: new Set(),
   }
   private detachInput: (() => void) | null = null
-  /** Retire le relais de molette posé sur la couche des étiquettes (`forwardWheelFromLabels`). */
+  /** Removes the wheel relay set on the labels layer (`forwardWheelFromLabels`). */
   private detachWheel: (() => void) | null = null
   private movableKeys: string[] = []
-  /** Marqueur effectivement attrapé parmi les déplaçables (les modules d'un champ bougent ensemble). */
+  /** Marker actually grabbed among the movable ones (the modules of an array move together). */
   private grabbedKey: string | null = null
   private drag: DragDetector | null = null
   private readonly dragPlane = new Plane()
   private readonly dragOffset = new Vector3()
   private lastDrag: { xy: [number, number]; roomId: string | null } | null = null
   /**
-   * Mode « régler les ouvertures » : une poignée par ouverture, vivante seulement dans ce mode —
-   * hors édition la scène est exactement celle d'avant. Seule la SÉLECTIONNÉE se glisse, comme un
-   * seul appareil se déplace à la fois.
+   * "Adjust the openings" mode: one handle per opening, alive only in this mode —
+   * outside edit mode the scene is exactly the one from before. Only the SELECTED one can be dragged, just as
+   * only one device is moved at a time.
    */
   private editingOpenings = false
   private selectedOpeningId: string | null = null
-  /** Pièce dont on attend qu'on tape un mur pour y poser une ouverture neuve (mode « poser »). */
+  /** Room where a wall tap is awaited to place a new opening there ("place" mode). */
   private placingOpening: { roomId: string; type: string } | null = null
-  /** Cône de cap pendant la pose d'une fenêtre de toit / puits de lumière. */
+  /** Heading cone while placing a roof window / skylight. */
   private placingYawGuide: Mesh | null = null
-  /** Ouvertures dont un ouvrant porte le vantail (`dressedOpenings`), telles que les murs ont été bâtis. */
+  /** Openings whose leaf is carried by a cover (`dressedOpenings`), as the walls were built. */
   private dressed: ReadonlySet<string> = new Set<string>()
   private openingHandles = new Map<string, { group: Group; fill: Mesh; ring: Mesh; ringOn: Mesh; rect: OpeningRect }>()
-  /** Cinq matériaux pour toutes les poignées : la sélection n'est qu'un échange de matériau. */
+  /** Five materials for all the handles: selection is only a material swap. */
   private openingMats: {
     fill: MeshBasicMaterial; fillOn: MeshBasicMaterial
     ring: MeshBasicMaterial; ringOn: MeshBasicMaterial
-    /** Ce qui ÉTEINT un cadre : un matériau invisible, jamais `Object3D.visible` (voir `styleOpeningHandles`). */
+    /** What TURNS OFF a frame: an invisible material, never `Object3D.visible` (see `styleOpeningHandles`). */
     off: MeshBasicMaterial
   } | null = null
   private openingDragger: DragDetector | null = null
-  /** Le repère d'origine du fichier (`buildOriginMark`), vivant avec le mode édition. */
+  /** The file's origin marker (`buildOriginMark`), alive with edit mode. */
   private originMark: { group: Group; labels: CSS2DObject[] } | null = null
-  /** Nom et cotes de l'ouverture réglée (`refreshOpeningNotes`), et le groupe d'étiquettes qui les porte. */
+  /** Name and dimensions of the adjusted opening (`refreshOpeningNotes`), and the label group that carries them. */
   private openingNotes: {
     name: CSS2DObject
-    /** Mur : [droite, gauche]. Surface : front, back, left, right. */
+    /** Wall: [right, left]. Surface: front, back, left, right. */
     gaps: CSS2DObject[]
     parent: Group
-    /** Le tracé des cotes : un trait et deux tirets chacune. */
+    /** The dimension lines: one line and two ticks each. */
     cotes: Group
     lines: { line: Mesh; a: Mesh; b: Mesh }[]
     host: 'wall' | 'surface'
   } | null = null
-  /** Dernière position du doigt pas encore rapportée, et l'image où elle le sera (0 = aucune en attente). */
+  /** Last finger position not yet reported, and the frame where it will be (0 = none pending). */
   private pendingOpeningXY: [number, number] | null = null
   private openingFrame = 0
   /**
-   * Places de stationnement : leur dessin au sol vit TOUJOURS (c'est du marquage, pas une poignée),
-   * mais seul le mode édition les rend touchables et glissables — comme les ouvertures.
+   * Parking spaces: their ground drawing ALWAYS lives (it is a marking, not a handle),
+   * but only edit mode makes them touchable and draggable — like the openings.
    */
   private editingParkings = false
   private selectedParkingId: string | null = null
-  /** Une place est ARMÉE : le prochain tap au sol dit où elle se pose (mode « poser »). */
+  /** A space is ARMED: the next ground tap says where it is placed ("place" mode). */
   private placingParking = false
-  /** Une pièce est ARMÉE : le prochain tap au sol dit où elle naît. */
+  /** A room is ARMED: the next ground tap says where it is born. */
   private placingRoom = false
   private parkingNodes = new Map<string, ParkingNodes>()
   private parkingMats: ParkingMaterials | null = null
-  /** Le « P » du marquage : une texture pour toutes les places, refaite avec le thème. */
+  /** The "P" of the marking: one texture for all the spaces, redone with the theme. */
   private parkingGlyph: Texture | null = null
   private parkingDragger: DragDetector | null = null
   private pendingParkingXY: [number, number] | null = null
   private parkingFrame = 0
-  /** Nom et quatre cotes de la place réglée, en DOM : gardées d'une image à l'autre (`refreshParkingNotes`). */
+  /** Name and four dimensions of the adjusted space, in the DOM: kept from one frame to the next (`refreshParkingNotes`). */
   private parkingNotes: { name: CSS2DObject; sides: Record<ParkingSide, CSS2DObject>; parent: Group } | null = null
   /**
-   * Où chaque engin placé par son GPS se RANGE, quand il est au repos près d'une place compatible
-   * (`assignParkings`). Recalculé avec les marqueurs — c'est lui qui remplace le point du relevé.
+   * Where each vehicle placed by its GPS PARKS, when it is at rest near a compatible space
+   * (`assignParkings`). Recomputed with the markers — it is what replaces the reading's point.
    */
   private parkingFixes = new Map<string, ParkingFix>()
-  /** Arbres, buissons, pierres : un calque gardé d'une maison à l'autre, reposé sur chaque site neuf. */
+  /** Trees, bushes, stones: a layer kept from one house to the next, laid again on each new site. */
   private garden = new GardenLayer()
-  /** Saison du jardin (feuillage, fleurs, fruits), résolue par l'appelant (`auto` suit la date). */
+  /** Garden season (foliage, flowers, fruit), resolved by the caller (`auto` follows the date). */
   private season: Season = 'summer'
   private editingGarden = false
   private selectedGardenId: string | null = null
@@ -590,54 +590,54 @@ export class HouseScene {
   private pendingGardenXY: [number, number] | null = null
   private gardenFrame = 0
   /**
-   * Relief en cours d'édition (brouillon), `null` hors du mode. Il survit à un rechargement de la
-   * maison ; l'éditeur, lui, vit et meurt avec les nœuds de la scène.
+   * Relief being edited (draft), `null` outside the mode. It survives a reload of the
+   * house; the editor, for its part, lives and dies with the scene's nodes.
    */
   private reliefGrid: ReliefGrid | null = null
   private reliefEditor: ReliefEditor | null = null
   private reliefFrame = 0
-  /** Le mode est demandé ; il s'ouvre dès qu'une maison est chargée. */
+  /** The mode is requested; it opens as soon as a house is loaded. */
   private reliefWanted = false
   /**
-   * Contour en cours d'édition (brouillon), `null` hors du mode ; comme le relief, il survit à un
-   * rechargement de la maison, et son éditeur vit et meurt avec les nœuds.
+   * Outline being edited (draft), `null` outside the mode; like the relief, it survives a
+   * reload of the house, and its editor lives and dies with the nodes.
    */
   private outlineDraft: Vec2[] | null = null
   private outlineEditor: OutlineEditor | null = null
   private terrainTab: TerrainTab = 'relief'
-  /** Le contour sur lequel le terrain est maillé : un autre contour impose de le remailler. */
+  /** The outline the terrain is meshed on: another outline requires remeshing it. */
   private meshedOutline = ''
-  /** Matières du bâti estompées pendant qu'on modèle le terrain, rendues pleines en sortant. */
+  /** Structure materials faded while shaping the terrain, made full again on exit. */
   private reliefFaded = new Set<Material>()
   private readonly raycaster = new Raycaster()
   private size = { width: 1, height: 1 }
   private cameraTween: { cancel(): void } | null = null
-  /** Où en est chaque étage (et le toit) de son envol : voir `liftTo`. */
+  /** Where each upper floor (and the roof) is in its flight: see `liftTo`. */
   private readonly lifts = new Map<string, { offset: number; shown: boolean; tween: Tween | null }>()
-  /** Hauteur monde au-dessus de laquelle les étages en vol s'effacent (`core/levelFade.ts`). */
+  /** World height above which the levels in flight fade out (`core/levelFade.ts`). */
   private fadeCutY = Infinity
-  /** Où va la mise en valeur de la pièce (`core/roomFocus.ts`) : 0 ou 1, et la course en cours. */
+  /** Where the room highlight is heading (`core/roomFocus.ts`): 0 or 1, and the travel in progress. */
   private roomFocusTarget = 0
   private roomFocusTween: Tween | null = null
-  /** Ce que chaque pilule de niveau doit montrer, et le fondu en cours (`fadePills`). */
+  /** What each level pill must show, and the fade in progress (`fadePills`). */
   private pillTargets = new WeakMap<DeviceMarker, boolean>()
   private pillFading: [DeviceMarker, boolean][] = []
   private pillTween: Tween | null = null
   private readonly deps: HouseSceneDeps
   private readonly sun: DirectionalLight
   private readonly hemi: HemisphereLight
-  /** Lampes ÉTEINTES qui tiennent la place des lampes des niveaux masqués : voir `padLamps`. */
+  /** Lamps that are OFF standing in for the lamps of the hidden levels: see `padLamps`. */
   private readonly lampPadding = new Group()
   private readonly ambient: AmbientLight
-  /** Largeur (px) du bord droit du canvas couverte par le panneau flottant : le cadrage vise la partie libre. */
+  /** Width (px) of the canvas's right edge covered by the floating panel: framing aims at the free part. */
   private viewInsetRight = 0
-  /** Ce que reflète une carrosserie. Propre aux véhicules : la maison, elle, n'a pas d'environnement. */
+  /** What a car body reflects. Specific to vehicles: the house, for its part, has no environment. */
   private skyEnv: Texture | null = null
-  /** Vrai tant qu'une pilule au moins porte une opacité du tilt-shift, donc qu'il y a à défaire. */
+  /** True as long as at least one pill carries a tilt-shift opacity, hence there is something to undo. */
   private pillsFaded = false
-  /** Réutilisé à chaque image par `updatePillFocus` : un vecteur par marqueur et par image, non. */
+  /** Reused every frame by `updatePillFocus`: one vector per marker and per frame, no. */
   private readonly pillFocusAt = new Vector3()
-  /** Banc de réglage : neutre tant que les Réglages n'ont rien posé (`styles/tuning.ts`). */
+  /** Tuning bench: neutral as long as Settings has not set anything (`styles/tuning.ts`). */
   private tuning: SceneTuning = NEUTRAL_TUNING
   private descriptors = new Map<string, DeviceDescriptor>()
   private states: Record<string, DeviceState> = {}
@@ -653,25 +653,25 @@ export class HouseScene {
       surface: makeWaterAlive(this.materials.zones.pool, 'surface', this.water),
       basin: makeWaterAlive(this.materials.poolBasin, 'basin', this.water),
     }
-    // Voir `render()` : les matrices monde se mettent à jour une fois par image, pas une fois par rendu.
+    // See `render()`: the world matrices are updated once per frame, not once per render.
     this.scene.matrixWorldAutoUpdate = false
     this.perspectiveCamera = new PerspectiveCamera(BASE_FOV_DEG, 1, 0.1, 500)
     this.camera = this.perspectiveCamera
     this.camera.position.set(20, 18, 20)
-    // halos, ondes, jauges — d'un niveau et du jardin (`core/layers.ts`)
+    // halos, waves, gauges — of a level and of the garden (`core/layers.ts`)
     for (const l of [DECOR_LAYER, SITE_DECOR_LAYER]) this.camera.layers.enable(l)
-    // Le lancer de rayon ne teste QUE des listes explicites (jamais l'arbre) : lui ouvrir la couche
-    // des décors ne rend donc rien de plus touchable, mais c'est ce qui permet d'attraper la poignée
-    // d'une ouverture, qui y vit pour être dessinée APRÈS les murs de son niveau. Sans cette ligne,
-    // `Raycaster` ne voit que la couche 0 et le glissement ne démarre jamais (constaté).
+    // The raycaster ONLY tests explicit lists (never the tree): opening the decor
+    // layer to it therefore makes nothing more touchable, but it is what lets it catch an
+    // opening's handle, which lives there to be drawn AFTER its level's walls. Without this line,
+    // `Raycaster` only sees layer 0 and the drag never starts (observed).
     this.raycaster.layers.enable(DECOR_LAYER)
 
     const create = deps.createRenderer ?? defaultCreateRenderer
     this.renderer = deps.headless ? null : create(canvas)
     this.supported = deps.headless ? true : this.renderer !== null
-    // VSM (Variance Shadow Maps) et non PCFSoftShadowMap : depuis three 0.184 ce dernier est
-    // déprécié et retombe sur du PCF DUR (bords crénelés) avec un avertissement en console.
-    // VSM floute nativement, piloté par `shadow.radius` / `shadow.blurSamples`.
+    // VSM (Variance Shadow Maps) and not PCFSoftShadowMap: since three 0.184 the latter is
+    // deprecated and falls back to HARD PCF (jagged edges) with a console warning.
+    // VSM blurs natively, driven by `shadow.radius` / `shadow.blurSamples`.
     if (this.renderer) { this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = VSMShadowMap }
     if (this.renderer) { this.caustics = new WaterCaustics(this.water); this.water.caustics.value = this.caustics.texture }
     this.applySky()
@@ -686,8 +686,8 @@ export class HouseScene {
     this.sun.castShadow = true
     this.sun.shadow.mapSize.set(2048, 2048)
     this.sun.shadow.bias = -0.0005
-    // `normalBias` décale le point testé le long de la normale : c'est lui qui tue l'acné des
-    // murs rasants, là où `bias` seul décollait l'ombre de son objet (peter-panning).
+    // `normalBias` shifts the tested point along the normal: it is what kills the acne of
+    // grazing walls, where `bias` alone detached the shadow from its object (peter-panning).
     this.sun.shadow.normalBias = 0.02
     this.sun.shadow.radius = 3
     this.sun.shadow.blurSamples = 16
@@ -699,7 +699,7 @@ export class HouseScene {
       this.controls.dampingFactor = 0.08
       this.controls.rotateSpeed = 0.6
       this.controls.screenSpacePanning = false
-      // bornes de distance, plongée, rotation, molette et doigts dépendent de la projection : un seul endroit les pose
+      // distance bounds, tilt, rotation, wheel and fingers depend on the projection: a single place sets them
       this.applyControlLimits()
       this.controls.addEventListener('change', () => { this.loop.invalidate(); this.syncWater() })
       this.controls.addEventListener('start', () => { this.cameraTween?.cancel(); this.cameraTween = null })
@@ -718,19 +718,19 @@ export class HouseScene {
   }
 
   /**
-   * La molette posée SUR une pilule ne zoomait pas. Une pilule est cliquable, donc
-   * `pointer-events: auto` (`styles/app.css`), donc elle reçoit aussi la molette — et
-   * `OrbitControls`, qui écoute le CANVAS, ne la voit jamais. Sur une maison de quarante appareils,
-   * l'écran en est constellé : le zoom devenait intermittent sans raison visible.
+   * The wheel over a pill did not zoom. A pill is clickable, hence
+   * `pointer-events: auto` (`styles/app.css`), hence it also receives the wheel — and
+   * `OrbitControls`, which listens on the CANVAS, never sees it. On a house with forty devices,
+   * the screen is studded with them: zoom became intermittent for no visible reason.
    *
-   * L'événement est donc repassé au canvas tel quel, position comprise (le zoom vise le curseur).
-   * Seule la MOLETTE : un glissement parti d'une pilule reste ambigu — c'est peut-être un appui sur
-   * la pilule — alors qu'une molette sur une étiquette n'a aucun autre sens que « zoomer ».
+   * The event is therefore passed back to the canvas as is, position included (the zoom aims at the cursor).
+   * Only the WHEEL: a drag that starts on a pill remains ambiguous — it may be a press on
+   * the pill — whereas a wheel over a label has no other meaning than "zoom".
    */
   private forwardWheelFromLabels(layer: HTMLElement | null): (() => void) | null {
     if (!layer || typeof WheelEvent === 'undefined') return null
     const onWheel = (e: WheelEvent) => {
-      if (e.target === layer) return            // le vide entre les pilules : le canvas l'a déjà eu
+      if (e.target === layer) return            // the gap between the pills: the canvas already got it
       e.preventDefault()
       this.canvas.dispatchEvent(new WheelEvent('wheel', {
         deltaX: e.deltaX, deltaY: e.deltaY, deltaZ: e.deltaZ, deltaMode: e.deltaMode,
@@ -741,7 +741,7 @@ export class HouseScene {
     return () => layer.removeEventListener('wheel', onWheel)
   }
 
-  // ---- événements ---------------------------------------------------------
+  // ---- events -------------------------------------------------------------
   on<K extends keyof SceneEvents>(event: K, fn: SceneEvents[K]): () => void {
     this.listeners[event].add(fn)
     return () => this.listeners[event].delete(fn)
@@ -750,7 +750,7 @@ export class HouseScene {
     for (const fn of this.listeners[event]) (fn as (...a: Parameters<SceneEvents[K]>) => void)(...args)
   }
 
-  // ---- chargement ---------------------------------------------------------
+  // ---- loading ------------------------------------------------------------
   load(house: House): void {
     const firstLoad = this.house === null
     const turned = this.headingDeg !== house.origin.heading
@@ -763,49 +763,49 @@ export class HouseScene {
     this.meshedOutline = JSON.stringify(this.geometry.terrain.polygon)
     if (this.reliefWanted && !this.reliefGrid) this.reliefGrid = parseRelief(house.site.relief) ?? emptyReliefGrid(house.site.terrain, RELIEF_STEP)
     if (this.reliefWanted && !this.outlineDraft) this.outlineDraft = house.site.terrain.map(([x, y]) => [x, y])
-    this.applyReliefDraft()                // un relief en cours d'édition passe avant celui du fichier
+    this.applyReliefDraft()                // a relief being edited takes precedence over the file's
     if (this.reliefGrid) { this.syncReliefFocus(); this.emitRelief() }
     this.invalidateShadows()
     this.nodes.terrain.receiveShadow = true
     this.scene.add(this.nodes.root)
-    this.syncPrecipitation()               // la racine est neuve : ce qui tombe se repose dessus
+    this.syncPrecipitation()               // the root is new: what falls is set on it again
     this.syncBats()
     this.syncDisco()
     this.syncParade()
-    this.applyMist()                       // la nappe se pose sur CE terrain
-    if (turned) this.applySky()            // le soleil du ciel suit le cap de la maison
+    this.applyMist()                       // the layer settles on THIS terrain
+    if (turned) this.applySky()            // the sky's sun follows the house heading
     this.fitSunShadow()
-    this.buildParkings()                   // le marquage au sol vit avec le terrain, avant les marqueurs
-    this.buildGroundOverlay()              // la carte peinte aussi : la racine est neuve
+    this.buildParkings()                   // the ground marking lives with the terrain, before the markers
+    this.buildGroundOverlay()              // the painted map too: the root is new
     this.buildGarden()
     this.buildMarkers()
-    this.syncWindowGlow()                  // les verres sont neufs : ils reprennent le style et les lampes
-    this.buildOpeningHandles()             // la racine est neuve : le mode édition repose ses poignées
-    this.buildOriginMark()                 // …son repère d'origine…
-    this.rebuildShapeEditor()              // …et l'éditeur de forme, dont le groupe de niveau est neuf
-    this.refreshOpeningNotes()             // …et ses étiquettes, qui vivent dans un groupe jeté avec elle
+    this.syncWindowGlow()                  // the glass panes are new: they take the style and the lamps again
+    this.buildOpeningHandles()             // the root is new: edit mode lays its handles again
+    this.buildOriginMark()                 // …its origin marker…
+    this.rebuildShapeEditor()              // …and the shape editor, whose level group is new
+    this.refreshOpeningNotes()             // …and its labels, which live in a group thrown away with it
     const c = this.geometry.bounds
     this.controls?.target.set((c.min[0] + c.max[0]) / 2, 0, -(c.min[1] + c.max[1]) / 2)
     this.applyLevelFocus()
     if (firstLoad) this.resetView(false)
-    this.syncWater()                       // après le cadrage : la piscine est-elle DANS le champ ?
+    this.syncWater()                       // after the framing: is the pool IN the field of view?
     this.loop.invalidate()
     void this.prepare()
   }
 
-  /** La maison se prépare encore (voir `prepare`) : le voile de chargement la cache. */
+  /** The house is still being prepared (see `prepare`): the loading veil hides it. */
   get preparingHouse(): boolean { return this.preparing }
 
   /**
-   * Prépare la maison qu'on vient de construire AVANT qu'on la regarde : les matières photo, puis
-   * les shaders (`compileAsync`, qui compile en parallèle quand le pilote le permet), puis une
-   * première image — elle compile ce que `compileAsync` ne voit pas : la chaîne d'effets et le
-   * relevé des ombres. Sans ça, tout se compilait à la première image, et chaque matière photo
-   * arrivée ensuite recompilait sa matière : autant d'images figées au premier geste. Le rendu est
-   * le même ; seul le MOMENT où ces compilations sont payées change, sous le voile de chargement.
+   * Prepares the house just built BEFORE it is looked at: the photo materials, then
+   * the shaders (`compileAsync`, which compiles in parallel when the driver allows it), then a
+   * first frame — it compiles what `compileAsync` does not see: the effect chain and the
+   * shadow capture. Without this, everything compiled at the first frame, and each photo material
+   * arriving afterward recompiled its material: as many frozen frames at the first gesture. The render is
+   * the same; only the MOMENT when these compilations are paid changes, under the loading veil.
    *
-   * Ne couvre que l'état du chargement : un autre style, la pluie, une lampe de jardin allumée plus
-   * tard peuvent encore demander leur variante.
+   * Only covers the state at load: another style, the rain, a garden lamp turned on later
+   * can still request their variant.
    */
   private async prepare(): Promise<void> {
     const gen = ++this.prepareGen
@@ -816,7 +816,7 @@ export class HouseScene {
     }
     this.holdFrames = true
     try {
-      // les matières photo d'abord : chacune qui arrive change sa matière, donc son shader
+      // the photo materials first: each one that arrives changes its material, hence its shader
       step('materials')
       const pack = this.photoPack()
       if (pack) {
@@ -828,42 +828,42 @@ export class HouseScene {
       const r = this.renderer
       if (gen !== this.prepareGen || !r) return
       step('shaders')
-      // laisser le voile PEINDRE l'étape avant de lancer les compilations, qui occupent le fil principal
+      // let the veil PAINT the stage before starting the compilations, which occupy the main thread
       await nextPaint()
       if (gen !== this.prepareGen) return
       this.scene.updateMatrixWorld()
-      // la variante que la scène utilise vraiment : celle de la cible de la chaîne d'effets (sans
-      // tone mapping, linéaire), ou l'écran quand il n'y a pas de chaîne (qualité basse)
+      // the variant the scene really uses: that of the effect chain's target (without
+      // tone mapping, linear), or the screen when there is no chain (low quality)
       const previous = r.getRenderTarget()
       r.setRenderTarget(this.post?.sceneTarget ?? null)
-      // `compile` lance les compilations sans les attendre (en parallèle, quand le pilote a
-      // KHR_parallel_shader_compile) ; c'est `shadersReady` qui attend. PAS `compileAsync` : sa boucle
-      // lit le programme de chaque matière sans garde, et une matière détruite pendant l'attente (les
-      // marqueurs se reconstruisent quand les descripteurs arrivent) la fait planter en silence — la
-      // promesse ne se résolvait jamais et le voile restait (constaté le 2026-09-25).
+      // `compile` starts the compilations without waiting for them (in parallel, when the driver has
+      // KHR_parallel_shader_compile); it is `shadersReady` that waits. NOT `compileAsync`: its loop
+      // reads each material's program without a guard, and a material destroyed during the wait (the
+      // markers are rebuilt when the descriptors arrive) makes it crash silently — the
+      // promise never resolved and the veil stayed (observed on 2026-09-25).
       r.compile(this.scene, this.camera)
       r.setRenderTarget(previous)
       await this.shadersReady(r, () => gen === this.prepareGen)
       if (gen !== this.prepareGen) return
       step('frame')
-      // laisser le voile peindre l'étape, puis rendre l'image qui compile le reste
+      // let the veil paint the stage, then render the frame that compiles the rest
       await nextPaint()
       if (gen !== this.prepareGen) return
       this.holdFrames = false
       this.render(false)
     } catch {
-      // une préparation ratée ne doit pas laisser la maison sous le voile : on la montre telle quelle
+      // a failed preparation must not leave the house under the veil: we show it as it is
     } finally {
-      // la préparation suivante (un nouveau chargement) tient elle-même les images
+      // the next preparation (a new load) holds the frames itself
       if (gen === this.prepareGen) { this.holdFrames = false; this.loop.invalidate() }
       step(null)
     }
   }
 
   /**
-   * Attend que les programmes des matières visibles soient compilés. Une matière disparue ou qui
-   * n'a pas encore de programme ne retient rien : la première image la compilera. Plafonné, pour
-   * qu'aucun cas imprévu ne laisse la maison sous le voile.
+   * Waits for the programs of the visible materials to be compiled. A material that disappeared or that
+   * has no program yet holds nothing back: the first frame will compile it. Capped, so
+   * that no unforeseen case leaves the house under the veil.
    */
   private async shadersReady(r: WebGLRenderer, current: () => boolean): Promise<void> {
     const materials = new Set<Material>()
@@ -886,16 +886,16 @@ export class HouseScene {
   }
 
   /**
-   * La même compilation que `prepare`, pour ce qui change APRÈS le chargement : un style (jamais vu,
-   * ou quitté — three jette les programmes que plus rien n'utilise), une matière photo qui arrive.
-   * Laissés à la première image, ces shaders se compilaient sur le fil principal : 2,5 à 5,5 s
-   * figées sur l'iGPU pour « réaliste », la sélection du style ne se peignant qu'après (mesuré le
-   * 2026-09-27). Ici, `compile` les lance en parallèle et l'ancienne image reste jusqu'à ce qu'ils
-   * soient prêts. Sans `KHR_parallel_shader_compile`, tout est « prêt » tout de suite : rien n'attend.
+   * The same compilation as `prepare`, for what changes AFTER the load: a style (never seen,
+   * or left — three discards the programs nothing uses anymore), a photo material that arrives.
+   * Left to the first frame, these shaders compiled on the main thread: 2.5 to 5.5 s
+   * frozen on the iGPU for "realistic", the style selection only painting afterward (measured on
+   * 2026-09-27). Here, `compile` starts them in parallel and the old frame stays until they
+   * are ready. Without `KHR_parallel_shader_compile`, everything is "ready" right away: nothing waits.
    */
   private async compileBeforeShow(): Promise<void> {
     const r = this.renderer
-    if (!r || this.holdFrames) return      // une préparation tient déjà les images, et compilera tout
+    if (!r || this.holdFrames) return      // a preparation already holds the frames, and will compile everything
     const gen = ++this.compileGen
     this.scene.updateMatrixWorld()
     const previous = r.getRenderTarget()
@@ -912,24 +912,24 @@ export class HouseScene {
 
   private fitSunShadow(): void {
     if (!this.geometry || !this.house) return
-    // Cadrer la carte d'ombre sur le BÂTI, pas sur les bornes de la maison (qui incluent le
-    // terrain) : sur une parcelle large, la même carte 2048 passait l'essentiel de ses texels
-    // sur de la pelouse vide. Les ombres portées restent couvertes : dans le repère de la
-    // lumière, l'ombre d'une boîte tient exactement dans l'emprise de cette boîte.
+    // Frame the shadow map on the STRUCTURE, not on the house bounds (which include the
+    // terrain): on a wide plot, the same 2048 map spent most of its texels
+    // on empty lawn. The cast shadows stay covered: in the light's
+    // frame, the shadow of a box fits exactly in that box's footprint.
     const b = boundsToWorldBox(buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roof))
-    // …et le JARDIN : un arbre hors du bâti n'avait pas d'ombre, et celle d'un grand arbre était coupée
-    // au bord du cadre. Même carte, plus de surface : les ombres de la maison y perdent en netteté.
+    // …and the GARDEN: a tree outside the structure had no shadow, and that of a large tree was cut
+    // at the edge of the frame. Same map, more area: the house's shadows lose sharpness.
     const garden = this.garden.worldBounds()
     if (garden) b.union(garden)
     const center = b.getCenter(new Vector3())
     const r = b.getSize(new Vector3()).length() / 2
-    // La lumière vient d'où vient le soleil de l'heure courante (`core/ambience.ts`), à une distance
-    // qui dégage le bâti — une `DirectionalLight` n'a pas de position au sens physique, seule compte
-    // la DIRECTION, mais le frustum d'ombre, lui, part bien de ce point.
+    // The light comes from where the current hour's sun comes from (`core/ambience.ts`), at a distance
+    // that clears the structure — a `DirectionalLight` has no position in the physical sense, only the
+    // DIRECTION counts, but the shadow frustum, for its part, does start from this point.
     this.sun.position.copy(center).addScaledVector(this.sunDir, Math.max(r * 1.6, 12))
     this.sun.target.position.copy(center)
     this.scene.add(this.sun.target)
-    // Frustum ajusté aux huit coins du bâti exprimés dans le repère de la lumière.
+    // Frustum fitted to the eight corners of the structure expressed in the light's frame.
     const zAxis = new Vector3().subVectors(this.sun.position, center).normalize()
     const xAxis = new Vector3().crossVectors(new Vector3(0, 1, 0), zAxis).normalize()
     const yAxis = new Vector3().crossVectors(zAxis, xAxis)
@@ -945,7 +945,7 @@ export class HouseScene {
       if (d < minD) minD = d
       if (d > maxD) maxD = d
     }
-    const margin = Math.max(0.5, r * 0.08)      // le flou VSM déborde du frustum : marge
+    const margin = Math.max(0.5, r * 0.08)      // the VSM blur overflows the frustum: margin
     const cam = this.sun.shadow.camera
     cam.left = minX - margin; cam.right = maxX + margin
     cam.bottom = minY - margin; cam.top = maxY + margin
@@ -964,13 +964,13 @@ export class HouseScene {
     this.clearOpeningNotes()
     this.clearParkings()
     this.clearParkingNotes()
-    this.garden.group.removeFromParent()   // gardé : ses formes et matières servent à la maison suivante
+    this.garden.group.removeFromParent()   // kept: its shapes and materials serve the next house
     this.clearOriginMark()
     this.removePrecipitation()
     this.removeBats()
     this.removeDisco()
     this.removeParade()
-    // une maison neuve part posée : aucun étage n'est en vol
+    // a new house starts out landed: no upper floor is in flight
     for (const s of this.lifts.values()) s.tween?.cancel()
     this.lifts.clear()
     this.fadeCutY = Infinity
@@ -990,26 +990,26 @@ export class HouseScene {
     this.house = null
     this.index = null
     this.geometry = null
-    this.syncWater()                       // plus de maison, donc plus de piscine à animer
+    this.syncWater()                       // no more house, hence no more pool to animate
     this.highlightedRoom = null
-    this.highlightMeshes = []                // libérés avec la racine
+    this.highlightMeshes = []                // freed with the root
   }
 
-  /** Descripteurs de plugin (type de marqueur, icône). Reconstruit les marqueurs. */
+  /** Plugin descriptors (marker type, icon). Rebuilds the markers. */
   setDescriptors(descriptors: Record<string, DeviceDescriptor>): void {
     this.descriptors = new Map(Object.entries(descriptors))
-    // le KIND d'un appareil vient de son descripteur, qui arrive parfois après la maison : une porte
-    // de garage reconnue à ce moment-là doit faire retirer le vantail que le bâti avait dessiné
+    // a device's KIND comes from its descriptor, which sometimes arrives after the house: a garage
+    // door recognized at that moment must remove the leaf the structure had drawn
     if (this.house) { this.refreshDressedOpenings(); this.buildMarkers(); this.updateStates(this.states, true); this.applyLevelFocus(); this.loop.invalidate() }
   }
 
   /**
-   * Les ouvertures HABILLÉES par un ouvrant : celles dont le vantail appartient à un appareil, qui le
-   * dessine à ses cotes et l'ouvre. Le bâti n'en pose alors aucun — sans quoi une porte de garage
-   * remontée laissait derrière elle le panneau fixe que `details.ts` avait dessiné.
+   * The openings DRESSED by a cover: those whose leaf belongs to a device, which
+   * draws it at its dimensions and opens it. The structure then lays none — otherwise a raised garage door
+   * left behind it the fixed panel that `details.ts` had drawn.
    *
-   * Un ouvrant, et lui seul : un capteur d'ouverture épouse lui aussi le rectangle de sa fenêtre,
-   * mais il ne la ferme pas.
+   * A cover, and it alone: an opening sensor also fits the rectangle of its window,
+   * but it does not close it.
    */
   private dressedOpenings(): Set<string> {
     const out = new Set<string>()
@@ -1021,7 +1021,7 @@ export class HouseScene {
     return out
   }
 
-  /** Refait les murs des niveaux quand cet ensemble a changé, et rien sinon (le cas de tous les gestes). */
+  /** Redoes the levels' walls when this set has changed, and nothing otherwise (the case of every gesture). */
   private refreshDressedOpenings(): void {
     const next = this.dressedOpenings()
     if (next.size === this.dressed.size && [...next].every((id) => this.dressed.has(id))) return
@@ -1030,56 +1030,56 @@ export class HouseScene {
   }
 
   /**
-   * Où poser un appareil : sa `position` du JSON, ou — pour un VÉHICULE, qui n'en a pas — celle
-   * que son GPS lui donne, à condition qu'il soit sur le terrain. `null` = pas de marqueur.
+   * Where to place a device: its JSON `position`, or — for a VEHICLE, which has none — the one
+   * its GPS gives it, provided it is on the terrain. `null` = no marker.
    *
-   * Une voiture n'est pas un objet du bâtiment : sa place n'est pas une donnée qu'on écrit, c'est
-   * un calcul qui suit le relevé. Garée ailleurs, elle disparaît simplement de la scène.
+   * A car is not an object of the building: its place is not data one writes, it is
+   * a computation that follows the reading. Parked elsewhere, it simply disappears from the scene.
    */
   private effectivePosition(device: HouseDevice): Vec3 | null {
-    // Un ouvrant lié à une ouverture ÉPOUSE son rectangle : son tablier y était déjà dessiné, mais sa
-    // pilule restait sur la `position` du JSON — posée une fois par l'auto-placement, puis figée
-    // pendant qu'on affinait la baie au doigt (2,11 m d'écart mesurés sur le volet du bureau). Ce
-    // qu'on voit et ce qu'on touche viennent maintenant du même point.
+    // A cover linked to an opening FITS its rectangle: its curtain was already drawn there, but its
+    // pill stayed on the JSON's `position` — set once by the auto-placement, then frozen
+    // while the opening was refined by finger (2.11 m of offset measured on the office shutter). What
+    // one sees and what one touches now come from the same point.
     const rect = device.openingId ? this.openingRect(device.openingId) : undefined
     if (rect) return openingCentre(rect)
     if (device.position) return device.position
     const raw = this.gpsPoint(device)
     if (!raw) return null
-    // L'engin au repos près d'une place compatible s'y RANGE : le relevé dit « il est rentré », la
-    // place dit où il se met (`computeParkingFixes`). Le z reste celui du relevé — une place ne
-    // décolle pas du sol.
+    // The vehicle at rest near a compatible space PARKS there: the reading says "it is home", the
+    // space says where it goes (`computeParkingFixes`). The z stays the reading's — a space does not
+    // lift off the ground.
     const fix = this.parkingFixes.get(device.id)
     return fix ? [fix.position[0], fix.position[1], raw[2]] : raw
   }
 
-  /** Le point du RELEVÉ, projeté sur le terrain et corrigé du décalage saisi — avant toute place. */
+  /** The READING's point, projected onto the terrain and corrected by the entered offset — before any space. */
   private gpsPoint(device: HouseDevice): Vec3 | null {
     const state = device.deviceId ? this.states[device.deviceId] : undefined
-    // un véhicule, ou une tondeuse qui publie sa position en GPS (Husqvarna) : même projection
+    // a vehicle, or a mower that publishes its position as GPS (Husqvarna): same projection
     if ((state?.kind !== 'vehicle' && state?.kind !== 'mower') || !state.location || !this.house) return null
     return sitePosition(this.house, state.location, device.gpsOffset)
   }
 
   /**
-   * Orientation d'un véhicule placé par son GPS, du plus sûr au plus supposé :
-   *   1. le `yaw` du JSON, s'il a été posé à la main — l'utilisateur a tranché ;
-   *   2. le CAP du fabricant (`headingDeg`), quand il le donne (Tesla) : c'est une mesure ;
-   *   3. l'axe de la pièce où la voiture se trouve — un garage range une voiture dans son sens, et
-   *      c'est mieux que le nord ;
-   *   4. rien : le marqueur reste face à +y.
+   * Orientation of a vehicle placed by its GPS, from the surest to the most assumed:
+   *   1. the JSON `yaw`, if it was set by hand — the user has decided;
+   *   2. the vendor's HEADING (`headingDeg`), when it gives one (Tesla): it is a measurement;
+   *   3. the axis of the room where the car is — a garage parks a car along its length, and
+   *      it is better than north;
+   *   4. nothing: the marker stays facing +y.
    *
-   * `undefined` plutôt que `0` au bout : le marqueur garde son défaut, personne n'affirme un cap.
+   * `undefined` rather than `0` at the end: the marker keeps its default, nobody asserts a heading.
    *
-   * La correction `yawOffset` s'AJOUTE au cap ainsi déduit (2, 3 et 4) : un cap mesuré reste une
-   * mesure — la voiture qui tourne tourne encore —, mais ni lui ni l'axe d'un garage ne disent de
-   * quel côté elle s'est garée. Elle ne touche pas au `yaw` posé à la main, qui fait déjà foi.
+   * The `yawOffset` correction is ADDED to the heading thus derived (2, 3 and 4): a measured heading stays a
+   * measurement — the car that turns still turns —, but neither it nor a garage's axis says which
+   * way round it was parked. It does not touch the hand-set `yaw`, which is already authoritative.
    */
   private vehicleYaw(device: HouseDevice, state: DeviceState | undefined, position: Vec3): number | undefined {
     if (device.yaw !== undefined) return device.yaw
-    // Rangé sur une place, c'est ELLE qui donne le cap, et elle passe avant tout ce qui se déduit :
-    // le sens d'une place a été posé à la main en regardant la scène. Le `yawOffset` ne s'y ajoute
-    // pas — il corrige une déduction, or il n'y a plus rien à corriger.
+    // Parked on a space, it is the SPACE that gives the heading, and it takes precedence over everything derived:
+    // the direction of a space was set by hand while looking at the scene. The `yawOffset` is not added
+    // to it — it corrects a derivation, and there is nothing left to correct.
     const fix = this.parkingFixes.get(device.id)
     if (fix) return fix.yaw
     if (state?.kind !== 'vehicle' || !this.house) return undefined
@@ -1091,9 +1091,9 @@ export class HouseScene {
   }
 
   /**
-   * Axe de la pièce FERMÉE qui contient ce point, s'il y en a une. Les pièces sont essayées du
-   * niveau le plus bas au plus haut : une voiture est au rez-de-chaussée, pas dans la chambre qui
-   * le surplombe.
+   * Axis of the ENCLOSED room that contains this point, if there is one. The rooms are tried from the
+   * lowest level to the highest: a car is on the ground floor, not in the bedroom that
+   * overhangs it.
    */
   private enclosingRoomYaw(xy: [number, number]): number | undefined {
     const index = this.index
@@ -1105,16 +1105,16 @@ export class HouseScene {
   }
 
   /**
-   * La position GPS d'un véhicule ET son cap : refaire les marqueurs est ce qui les applique, et une
-   * voiture qui se gare tourne parfois sans changer de place au mètre près.
+   * The GPS position of a vehicle AND its heading: redoing the markers is what applies them, and a
+   * car that parks sometimes turns without changing place to the nearest meter.
    */
   private vehicleFix(state: DeviceState | undefined): string {
     if (state?.kind === 'vehicle' && state.location) return `${state.location.lat},${state.location.lon},${state.headingDeg ?? ''},${atRest(state)}`
-    // une tondeuse publie sa position toutes les quelques secondes en tonte : reconstruire à chaque
-    // relevé serait trop cher, et inutile — son marqueur SUIT la position (`MowerMarker`). Ce qui
-    // compte ici, c'est seulement qu'elle entre sur le terrain ou en sorte
-    // …et qu'elle se RANGE ou non : une tondeuse qui rentre à sa base doit s'y poser, et c'est la
-    // reconstruction qui applique la place (`computeParkingFixes`)
+    // a mower publishes its position every few seconds while mowing: rebuilding at every
+    // reading would be too costly, and useless — its marker FOLLOWS the position (`MowerMarker`). What
+    // matters here is only whether it enters or leaves the terrain
+    // …and whether it PARKS or not: a mower returning to its base must settle on it, and it is the
+    // rebuild that applies the space (`computeParkingFixes`)
     if (state?.kind === 'mower' && state.location && this.house) {
       return `${sitePosition(this.house, state.location) ? 'in' : 'out'}:${atRest(state)}`
     }
@@ -1122,22 +1122,22 @@ export class HouseScene {
   }
 
   /**
-   * Les appareils à dessiner : ceux de la maison, plus les VÉHICULES qu'elle ne connaît pas.
+   * The devices to draw: those of the house, plus the VEHICLES it does not know.
    *
-   * Une voiture n'a pas à être déclarée dans `house.json` pour apparaître : ce qui la met dans la
-   * scène est son GPS, pas une ligne de configuration.
+   * A car does not have to be declared in `house.json` to appear: what puts it in the
+   * scene is its GPS, not a configuration line.
    *
-   * Un véhicule non déclaré est identifié par son **deviceId de plugin** (`tesla:5YJ…`) et non par
-   * un id de maison inventé : c'est l'autre espace de clés que l'app sait déjà résoudre (cf.
-   * `useDeviceResolver`), et un id fabriqué de toutes pièces ne résolvait ni le nom, ni le kind, ni
-   * les commandes — le panneau affirmait alors « cet appareil n'est lié à aucun plugin ».
+   * An undeclared vehicle is identified by its **plugin deviceId** (`tesla:5YJ…`) and not by
+   * an invented house id: it is the other key space the app already knows how to resolve (see
+   * `useDeviceResolver`), and an id made up from scratch resolved neither the name, nor the kind, nor
+   * the commands — the panel then claimed "This device is not bound to any plugin".
    */
   private drawable(): HouseDevice[] {
     const devices = this.house?.devices ?? []
     const known = new Set(devices.map((d) => d.deviceId).filter((id): id is string => !!id))
     const strays: HouseDevice[] = []
     for (const [deviceId, descriptor] of this.descriptors) {
-      // une tondeuse non déclarée apparaît de même, si elle publie un GPS (`effectivePosition` tranche)
+      // an undeclared mower appears likewise, if it publishes a GPS (`effectivePosition` decides)
       if ((descriptor.kind !== 'vehicle' && descriptor.kind !== 'mower') || known.has(deviceId)) continue
       strays.push({ id: deviceId, deviceId, kind: descriptor.kind, meta: {} })
     }
@@ -1146,7 +1146,7 @@ export class HouseScene {
 
   private buildMarkers(): void {
     if (!this.house || !this.index || !this.nodes || !this.geometry) return
-    this.computeParkingFixes()             // où chacun se range : les marqueurs en dépendent
+    this.computeParkingFixes()             // where each one parks: the markers depend on it
     for (const m of this.markers.values()) m.dispose()
     this.markers.clear()
     for (const d of this.drawable()) {
@@ -1156,9 +1156,9 @@ export class HouseScene {
   }
 
   /**
-   * Un marqueur, posé dans le groupe de son niveau. `null` quand l'appareil n'a pas de position
-   * EFFECTIVE : pour la plupart c'est la `position` du JSON ; pour un véhicule, c'est son GPS projeté
-   * sur le terrain (`effectivePosition`).
+   * A marker, placed in its level's group. `null` when the device has no EFFECTIVE
+   * position: for most it is the JSON `position`; for a vehicle, it is its GPS projected
+   * onto the terrain (`effectivePosition`).
    */
   private makeMarker(d: HouseDevice): DeviceMarker | null {
     if (!this.house || !this.index || !this.nodes || !this.geometry) return null
@@ -1171,9 +1171,9 @@ export class HouseScene {
     const linkedFanDesc = descriptor?.kind === 'light'
       ? [...this.descriptors.values()].find((d) => d.kind === 'fan' && d.meta.linkedTo === descriptor.id)
       : undefined
-    // Une voiture rangée sur une place de garage n'est plus « dehors » : elle suit le niveau de la
-    // place (comme le marquage). Sinon, vue 1er étage, sa pilule DOM perce le plancher et le rayon
-    // la touche à travers le sol — elle n'a pas de roomId / levelId écrits.
+    // A car parked on a garage space is no longer "outdoors": it follows the level of the
+    // space (like the marking). Otherwise, in the upper floor view, its DOM pill pokes through the floor and the ray
+    // touches it through the floor — it has no written roomId / levelId.
     const levelId = this.markerLevelId(device)
     const levelNodes = levelId ? this.nodes.levels.get(levelId) : undefined
     const parent = levelNodes ? levelNodes.markers : this.nodes.outdoorMarkers
@@ -1189,9 +1189,9 @@ export class HouseScene {
       label: device.name ?? descriptor?.name ?? device.id,
       toLocal: (p) => { const xyz = sitePosition(house, p, d.gpsOffset); return xyz ? [xyz[0], xyz[1]] : null },
       groundZ: (x, y) => this.localZ(device, device.position[2], [x, y]),
-      // Une tondeuse SUIT sa position publiée sans reconstruction (`MowerMarker`) : c'est donc au
-      // marqueur, et non à la scène, de savoir qu'elle est rentrée à sa base — sinon elle dériverait
-      // de quelques mètres au relevé suivant, alors même qu'elle est à l'arrêt dessus.
+      // A mower FOLLOWS its published position without rebuilding (`MowerMarker`): it is therefore up to the
+      // marker, and not the scene, to know that it is back at its base — otherwise it would drift
+      // by a few meters at the next reading, even though it is stopped on it.
       parkedAt: (state) => {
         const fix = this.parkingFixes.get(d.id)
         return fix && atRest(state) ? { xy: fix.position, yaw: fix.yaw } : null
@@ -1200,13 +1200,13 @@ export class HouseScene {
     marker.object.position.set(device.position[0], device.position[1], this.localZ(device, device.position[2]))
     parent.add(marker.object)
     marker.setSelected(this.selectedKey === device.id)
-    // le guide (anneau, fil, cône) ne se dessine que sur le PREMIER déplaçable — dix modules d'un
-    // champ donneraient dix anneaux pour un seul objet qui bouge — mais TOUS se glissent
+    // the guide (ring, wire, cone) is only drawn on the FIRST movable — ten modules of an
+    // array would give ten rings for a single object that moves — but ALL of them can be dragged
     if (this.movableKeys.includes(device.id)) marker.setMoving(true, device.position[2], this.movableKeys[0] === device.id)
     return marker
   }
 
-  /** Le rectangle d'une ouverture, tous niveaux confondus (un ouvrant l'épouse, une poignée aussi). */
+  /** The rectangle of an opening, across all levels (a cover fits it, a handle too). */
   private openingRect(openingId: string): OpeningRect | undefined {
     for (const l of this.geometry?.levels ?? []) {
       const found = l.openings.find((o) => o.openingId === openingId)
@@ -1216,8 +1216,8 @@ export class HouseScene {
   }
 
   /**
-   * z local au groupe parent : tel quel sous un niveau, décalé du terrain SOUS `xy` pour un appareil
-   * extérieur (le terrain dessiné, relief en cours d'édition compris).
+   * z local to the parent group: as is under a level, offset by the terrain UNDER `xy` for an outdoor
+   * device (the drawn terrain, relief being edited included).
    */
   private localZ(device: HouseDevice, z: number, xy: readonly number[] | undefined = device.position): number {
     const levelId = this.markerLevelId(device)
@@ -1226,14 +1226,14 @@ export class HouseScene {
     return z + this.groundZ(xy[0]!, xy[1]!)
   }
 
-  /** Hauteur absolue du terrain dessiné en (x, y) — relief compris, brouillon d'édition compris. */
+  /** Absolute height of the drawn terrain at (x, y) — relief included, editing draft included. */
   private groundZ(x: number, y: number): number {
     return this.geometry ? terrainHeight(this.geometry.terrain, x, y) : (this.house?.site.elevation ?? 0)
   }
 
   /**
-   * Niveau qui porte le marqueur : `levelId` / pièce écrits, sinon celui de la place où l'engin
-   * est rangé (`parkingFixes`). Sans quoi un GPS « au garage » reste parenté à `outdoorMarkers`.
+   * Level that carries the marker: written `levelId` / room, otherwise that of the space where the vehicle
+   * is parked (`parkingFixes`). Otherwise a GPS "in the garage" stays parented to `outdoorMarkers`.
    */
   private markerLevelId(device: HouseDevice): string | null {
     const written = resolveDeviceLevelId(device, this.index!.roomsById)
@@ -1244,7 +1244,7 @@ export class HouseScene {
     return parking ? this.parkingLevelId(parking) ?? null : null
   }
 
-  /** Niveau d'une place : champ écrit, sinon pièce hôte (`parkingHost`). */
+  /** Level of a space: written field, otherwise host room (`parkingHost`). */
   private parkingLevelId(p: Parking): string | undefined {
     if (p.levelId) return p.levelId
     const host = this.house ? parkingHost(this.house, p) : null
@@ -1252,15 +1252,15 @@ export class HouseScene {
   }
 
   /**
-   * Seules des OUVERTURES ont changé (on en règle une au doigt). Le chemin complet (`load`) refait
-   * tout — la géométrie de tous les niveaux, tous les marqueurs, la carte d'ombre — et RECENTRE la
-   * caméra : intenable à chaque mouvement de doigt. Ici : la géométrie descriptive entière (elle est
-   * pure et bon marché), mais seuls les MAILLAGES des niveaux touchés, et seuls les marqueurs qui
-   * épousent une ouverture qui a bougé — un volet taille sa lame sur le rectangle de sa fenêtre.
-   * Caméra, niveau focalisé, sélection et tous les autres marqueurs restent en place.
+   * Only OPENINGS changed (one is being adjusted by finger). The full path (`load`) redoes
+   * everything — the geometry of all levels, all markers, the shadow map — and RECENTERS the
+   * camera: unbearable at every finger movement. Here: the whole descriptive geometry (it is
+   * pure and cheap), but only the MESHES of the touched levels, and only the markers that
+   * fit an opening that moved — a shutter cuts its slat to its window's rectangle.
+   * Camera, focused level, selection and all the other markers stay in place.
    *
-   * (Des relevés ont été pris pendant l'écriture de ce chemin, mais sur batterie donc en mode
-   * économie : ils ne disent rien de la machine et ne sont pas reportés ici.)
+   * (Measurements were taken while writing this path, but on battery hence in power-saving
+   * mode: they say nothing about the machine and are not reported here.)
    */
   updateOpenings(house: House): void {
     if (!this.nodes || !this.house || !this.geometry) { this.load(house); return }
@@ -1297,13 +1297,13 @@ export class HouseScene {
     if (this.editingOpenings) this.buildOpeningHandles()
     this.refreshOpeningNotes()
     this.highlightRoom(this.highlightedRoom)
-    this.syncWindowGlow()                  // les niveaux refaits ont des verres neufs
+    this.syncWindowGlow()                  // the redone levels have new glass panes
     this.applyLevelFocus()
     if (!this.openingDragger?.active()) this.invalidateShadows()
     this.loop.invalidate()
   }
 
-  /** Refait le maillage du toit (trous de Velux) sans toucher aux niveaux ni à la caméra. */
+  /** Redoes the roof mesh (Velux holes) without touching the levels or the camera. */
   private rebuildRoof(): void {
     if (!this.nodes) return
     const old = this.nodes.roof
@@ -1319,9 +1319,9 @@ export class HouseScene {
   }
 
   /**
-   * Refait les MAILLAGES d'un niveau (murs, sols, vitrages, détails) d'après la géométrie courante.
-   * Ses marqueurs, eux, sont repris tels quels : les reconstruire est précisément ce qui les fait
-   * clignoter — et ce qui rouvrait tous les volets fermés de la maison (cf. `CoverMarker.posed`).
+   * Redoes the MESHES of a level (walls, floors, glazing, details) from the current geometry.
+   * Its markers, for their part, are taken over as is: rebuilding them is precisely what makes them
+   * flicker — and what reopened every closed shutter of the house (see `CoverMarker.posed`).
    */
   private rebuildLevelNodes(levelId: string): void {
     const nodes = this.nodes
@@ -1329,14 +1329,14 @@ export class HouseScene {
     const lg = this.geometry?.levels.find((l) => l.levelId === levelId)
     if (!nodes || !old || !lg) return
     const fresh = buildLevel(lg, this.materials, this.dressed, this.geometry?.facade)
-    fresh.group.remove(fresh.markers, fresh.labels)   // les neufs sont vides : ce sont les anciens qu'on garde
+    fresh.group.remove(fresh.markers, fresh.labels)   // the new ones are empty: it is the old ones we keep
     old.markers.removeFromParent()
     old.labels.removeFromParent()
     fresh.group.add(old.markers, old.labels)
-    // Le trait de la pièce sélectionnée et les poignées d'ouverture sont rebâtis après coup : ils
-    // échappent ici à la libération de l'ancien groupe. Les poignées surtout : leurs quatre matériaux
-    // sont PARTAGÉS par tous les niveaux, et les libérer avec ce groupe-ci laisserait les poignées
-    // des autres niveaux tenir un matériau mort.
+    // The selected room's line and the opening handles are rebuilt afterward: they
+    // escape here the freeing of the old group. The handles above all: their four materials
+    // are SHARED by all levels, and freeing them with this group would leave the handles
+    // of the other levels holding a dead material.
     for (const m of this.highlightMeshes) if (m.parent === old.group) m.removeFromParent()
     for (const h of this.openingHandles.values()) if (h.group.parent === old.group) h.group.removeFromParent()
     disposeObject3D(old.group, new Set<Material>(this.materials.all))
@@ -1345,12 +1345,12 @@ export class HouseScene {
     nodes.root.add(next.group)
   }
 
-  /** Seuls les appareils ont changé (placement) : on refait les marqueurs sans toucher aux murs ni à la caméra. */
+  /** Only the devices changed (placement): we redo the markers without touching the walls or the camera. */
   updateDevices(house: House): void {
     if (!this.nodes) { this.load(house); return }
     this.house = house
     this.index = indexHouse(house)
-    this.refreshDressedOpenings()          // lier (ou délier) un ouvrant retire (ou repose) le vantail du bâti
+    this.refreshDressedOpenings()          // linking (or unlinking) a cover removes (or restores) the structure's leaf
     this.buildMarkers()
     this.updateStates(this.states, true)
     this.applyLevelFocus()
@@ -1358,12 +1358,12 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  // ---- mode « déplacer » ---------------------------------------------------
+  // ---- "move" mode ---------------------------------------------------------
   /**
-   * Rend déplaçable au doigt un appareil — ou un GROUPE de marqueurs qui bougent ensemble : les
-   * modules d'un champ de panneaux, dont on attrape n'importe lequel pour emmener le champ entier.
-   * `null` sort du mode. Les événements de glissement nomment le marqueur ATTRAPÉ ; à l'appelant d'en
-   * déduire ce que devient le groupe.
+   * Makes a device movable by finger — or a GROUP of markers that move together: the
+   * modules of a panel array, any of which can be grabbed to carry the whole array.
+   * `null` leaves the mode. The drag events name the GRABBED marker; it is up to the caller to
+   * derive what becomes of the group.
    */
   setMovable(key: string | string[] | null): void {
     this.movableKeys = key === null ? [] : Array.isArray(key) ? key : [key]
@@ -1385,11 +1385,11 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  // ---- mode « régler les ouvertures » --------------------------------------
+  // ---- "adjust the openings" mode ------------------------------------------
   /**
-   * Entre (ou sort) du mode édition : une poignée apparaît sur CHAQUE ouverture — portes, passages et
-   * portes de garage comprises, qui n'ont aucun objet dans la scène et n'offraient donc rien à
-   * attraper. Elles vivent et meurent avec le mode.
+   * Enters (or leaves) edit mode: a handle appears on EVERY opening — doors, passages and
+   * garage doors included, which have no object in the scene and so offered nothing to
+   * grab. They live and die with the mode.
    */
   setEditingOpenings(on: boolean): void {
     if (this.editingOpenings === on) return
@@ -1398,13 +1398,13 @@ export class HouseScene {
     this.buildOpeningHandles()
     this.buildOriginMark()
     this.refreshOpeningNotes()
-    this.applyLevelFocus()                 // les poignées d'un niveau masqué n'ont pas à se montrer
+    this.applyLevelFocus()                 // the handles of a hidden level have no business showing
     this.loop.invalidate()
   }
 
   /**
-   * L'ouverture en cours de réglage : elle se distingue des autres, et c'est la SEULE qui se glisse —
-   * comme un seul appareil se déplace à la fois (`setMovable`).
+   * The opening being adjusted: it stands out from the others, and it is the ONLY one that can be dragged —
+   * just as only one device is moved at a time (`setMovable`).
    */
   setSelectedOpening(id: string | null): void {
     this.selectedOpeningId = id
@@ -1424,9 +1424,9 @@ export class HouseScene {
   }
 
   /**
-   * Arme (ou désarme) la pose d'une ouverture dans une pièce : le prochain tap sur le bâti de son
-   * niveau rapporte le point touché (`placeTap`) au lieu de changer la sélection. Pour une
-   * ouverture de surface (toit / sol), un cône de cap est affiché au centre de la pièce.
+   * Arms (or disarms) placing an opening in a room: the next tap on the structure of its
+   * level reports the touched point (`placeTap`) instead of changing the selection. For a
+   * surface opening (roof / floor), a heading cone is shown at the center of the room.
    */
   setPlacingOpening(armed: { roomId: string; type: string } | null): void {
     this.placingOpening = armed
@@ -1466,7 +1466,7 @@ export class HouseScene {
       const roofLvl = this.roofLevel()
       parent = roofLvl ? this.nodes.levels.get(roofLvl.id)?.group : undefined
       if (!parent) return
-      // au-dessus de la dalle du toit, dans le repère du niveau-toit (z local)
+      // above the roof slab, in the roof level's frame (local z)
       const elev = roofLvl?.elevation ?? 0
       z = (this.geometry?.roof?.zBase ?? elev) - elev + 0.05
     }
@@ -1482,7 +1482,7 @@ export class HouseScene {
     )
     mesh.renderOrder = 999
     mesh.rotation.z = (yawDeg * Math.PI) / 180
-    // Même convention que l'existant : (x, 0.02, −y) dans le groupe de niveau.
+    // Same convention as the existing code: (x, 0.02, −y) in the level group.
     mesh.position.set(cx, z, -cy)
     parent.add(mesh)
     this.placingYawGuide = mesh
@@ -1490,12 +1490,12 @@ export class HouseScene {
   }
 
   /**
-   * Point du bâti sous le doigt, en repère maison. Selon la nature armée : murs+sols (murale),
-   * sols seuls (puits de lumière), toit (fenêtre de toit).
+   * Point of the structure under the finger, in the house reference frame. Depending on the armed kind: walls+floors (wall),
+   * floors only (skylight), roof (roof window).
    */
   private buildingPoint(roomId: string, type: string | undefined, ndc: { x: number; y: number }): [number, number] | null {
     this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
-    // Fenêtre de toit : on vise le maillage du toit, pièce ou non (pose depuis l'onglet Toit).
+    // Roof window: we aim at the roof mesh, room or not (placed from the Roof tab).
     if (type === 'roof-window') {
       if (!this.nodes?.roof) return null
       const hit = this.raycaster.intersectObject(this.nodes.roof, false)[0]
@@ -1518,14 +1518,14 @@ export class HouseScene {
   }
 
   /**
-   * Cadre une ouverture : même boîte de 3 m qu'un appareil, vue DEPUIS l'intérieur de sa pièce (le
-   * calcul de `roomSideAzimuth` pour un appareil contre un mur) — sans quoi on regarde la fenêtre
-   * depuis la pelouse, à travers la façade.
+   * Frames an opening: the same 3 m box as a device, seen FROM inside its room (the
+   * `roomSideAzimuth` computation for a device against a wall) — otherwise one looks at the window
+   * from the lawn, through the facade.
    */
   focusOpening(openingId: string, animate = true): void {
     const rect = this.openingRect(openingId)
     if (!rect || !this.house) return
-    // Fenêtre de toit : cadrer depuis l'onglet Toit (sinon le toit disparaît et on croit la voir au sol).
+    // Roof window: frame from the Roof tab (otherwise the roof disappears and one thinks it is on the floor).
     if (rect.host === 'roof') {
       const roofLvl = this.roofLevel()
       if (roofLvl && this.focusedLevelId !== roofLvl.id) this.focusLevel(roofLvl.id)
@@ -1536,10 +1536,10 @@ export class HouseScene {
     const centre = openingCentre(rect)
     const cx = centre[0], cy = centre[1]
     const z = elevation + centre[2]
-    // Cadrer l'ouverture ET SES COTES, pas seulement elle : une boîte fixe autour de l'ouverture
-    // laissait la cote de droite hors de l'image (ou sous le champ de recherche) dès que le vide de
-    // ce côté dépassait un mètre et demi. On borne la portée — sur un mur de dix mètres, le bout de
-    // la cote n'a plus d'intérêt et reculer d'autant ne montrerait plus rien de l'ouverture.
+    // Frame the opening AND ITS DIMENSIONS, not just the opening: a fixed box around the opening
+    // left the right-hand dimension out of the image (or under the search field) as soon as the gap on
+    // that side exceeded a meter and a half. We bound the reach — on a ten-meter wall, the end of
+    // the dimension is of no interest anymore and backing up that far would show nothing of the opening.
     const room = this.house.rooms.find((r) => r.id === rect.roomId)
     const opening = room?.openings.find((o) => o.id === openingId)
     const box = new Box3()
@@ -1551,7 +1551,7 @@ export class HouseScene {
     } else {
       box.expandByPoint(houseToWorld([cx, cy, z]))
     }
-    box.expandByScalar(DEVICE_FOCUS_SIZE_M / 2)     // la hauteur de l'ouverture, l'épaisseur du mur, et de l'air
+    box.expandByScalar(DEVICE_FOCUS_SIZE_M / 2)     // the opening's height, the wall thickness, and some air
     const b = roomBounds(this.house, rect.roomId, resolveDefaults(this.house.defaults))
     const c = b ? boundsCenter(b) : null
     const { azimuth, polar } = this.currentSpherical()
@@ -1559,17 +1559,17 @@ export class HouseScene {
     this.flyTo(box, inward ?? azimuth, clamp(polar, DEVICE_FOCUS_POLAR[0], DEVICE_FOCUS_POLAR[1]), animate, 1.1)
   }
 
-  // ---- places de stationnement -------------------------------------------
+  // ---- parking spaces ----------------------------------------------------
 
   /**
-   * Qui se RANGE où, pour tous les engins d'un coup (`assignParkings`, partagé et testé sans scène).
+   * Who PARKS where, for all vehicles at once (`assignParkings`, shared and tested without a scene).
    *
-   * Recalculé avec les marqueurs, parce que c'est leur construction qui l'applique : une voiture
-   * rentrée depuis le dernier relevé n'avait pas de marqueur, une voiture repartie n'en a plus, et
-   * une voiture qui se gare change de place sans changer d'état.
+   * Recomputed with the markers, because it is their construction that applies it: a car
+   * that came home since the last reading had no marker, a car that left no longer has one, and
+   * a car that parks changes place without changing state.
    *
-   * Un appareil qui a une `position` écrite n'est pas candidat : sa place fait foi (même règle que
-   * partout ailleurs), et une place de stationnement ne déplace que ce qui vient d'un GPS.
+   * A device that has a written `position` is not a candidate: its place is authoritative (same rule as
+   * everywhere else), and a parking space only moves what comes from a GPS.
    */
   private computeParkingFixes(): void {
     const parkings = this.house?.site.parkings ?? []
@@ -1590,13 +1590,13 @@ export class HouseScene {
   }
 
   /**
-   * Le MARQUAGE des places, qui vit en permanence — ce n'est pas une poignée d'édition mais de la
-   * peinture au sol (voir `builders/parking.ts` pour les deux dessins). Le mode édition n'y ajoute
-   * que le voile touchable et le cadre, par simple échange de matériau (`styleParkingHandles`).
+   * The MARKING of the spaces, which lives permanently — it is not an edit handle but
+   * paint on the ground (see `builders/parking.ts` for the two drawings). Edit mode only adds
+   * the touchable veil and the frame, by a simple material swap (`styleParkingHandles`).
    *
-   * Où le poser : dans les MARQUEURS du niveau de la pièce qui la porte (un garage), sur
-   * `DECOR_LAYER` — un décor translucide, hors du relevé d'occlusion, masqué avec son niveau. Dehors,
-   * c'est du sol comme un autre : dans le groupe du site, avec le terrain.
+   * Where to lay it: in the MARKERS of the level of the room that carries it (a garage), on
+   * `DECOR_LAYER` — a translucent decoration, outside the occlusion capture, hidden with its level. Outdoors,
+   * it is ground like any other: in the site group, with the terrain.
    */
   private buildParkings(): void {
     this.clearParkings()
@@ -1612,7 +1612,7 @@ export class HouseScene {
       const nodes = buildParking(p, z, mats, this.parkingGlyph, gaps ?? undefined)
       if (levelled) nodes.group.traverse((n) => n.layers.set(DECOR_LAYER))
       parent.add(nodes.group)
-      // même piège de matrice périmée que les poignées : le rayon lit `matrixWorld`
+      // same stale-matrix pitfall as the handles: the ray reads `matrixWorld`
       nodes.group.updateWorldMatrix(true, true)
       this.parkingNodes.set(p.id, nodes)
     }
@@ -1621,12 +1621,12 @@ export class HouseScene {
   }
 
   /**
-   * Le groupe qui porte une place, et son z LOCAL : les marqueurs de son NIVEAU, ou le site.
+   * The group that carries a space, and its LOCAL z: the markers of its LEVEL, or the site.
    *
-   * C'est `levelId` qui tranche, pas le point : une place se pose SUR un niveau (le garage, le toit
-   * pour une aire de drone) ou sur le terrain, et c'est le choix qu'on a fait en la posant. Une
-   * place écrite sans niveau retombe sur la pièce qui la contient — celles d'avant le champ ne
-   * bougent pas.
+   * It is `levelId` that decides, not the point: a space is laid ON a level (the garage, the roof
+   * for a drone pad) or on the terrain, and that is the choice made when placing it. A
+   * space written without a level falls back on the room that contains it — those from before the field do
+   * not move.
    */
   private parkingParent(p: Parking): { parent: Group; z: number; levelled: boolean } {
     const site = this.nodes!.site
@@ -1637,7 +1637,7 @@ export class HouseScene {
       : { parent: site, z: this.groundZ(p.center[0], p.center[1]), levelled: false }
   }
 
-  /** Les quatre cotes d'une place dans son hôte, `null` si elle n'est posée sur rien de connu. */
+  /** The four dimensions of a space within its host, `null` if it is laid on nothing known. */
   private parkingGaps(p: Parking): Record<ParkingSide, number | null> | null {
     const host = this.house ? parkingHost(this.house, p) : null
     return host ? parkingGaps(host.polygon, p) : null
@@ -1653,31 +1653,31 @@ export class HouseScene {
   }
 
   /**
-   * Trois états, comme les poignées d'ouverture : hors édition rien ne se voit du réglage (le
-   * marquage seul) ; en édition chaque place porte un cadre fin ; celle qu'on règle porte un cadre
-   * épais, dessiné par-dessus les murs, et un voile teinté. Rien ne se construit ni ne se détruit —
-   * seuls des MATÉRIAUX changent.
+   * Three states, like the opening handles: outside edit mode nothing of the adjustment shows (the
+   * marking alone); in edit mode each space carries a thin frame; the one being adjusted carries a thick
+   * frame, drawn over the walls, and a tinted veil. Nothing is built or destroyed —
+   * only MATERIALS change.
    */
   private styleParkingHandles(): void {
     const mats = this.parkingMats
     if (!mats) return
     for (const [id, n] of this.parkingNodes) {
-      // La place CHOISIE se montre même hors mode édition : on arrive ici depuis la vue Robots, qui
-      // arme la pose d'une base sans rien demander aux Réglages, et une place qu'on vient de poser
-      // doit se voir et se glisser. Les autres n'ont leur cadre qu'en édition.
+      // The SELECTED space shows even outside edit mode: we arrive here from the Robots view, which
+      // arms the placement of a base without asking anything of Settings, and a space just placed
+      // must be seen and dragged. The others only have their frame in edit mode.
       const on = id === this.selectedParkingId
       n.fill.material = on ? mats.fillOn : mats.off
       n.ring.material = this.editingParkings && !on ? mats.ring : mats.off
       n.ringOn.material = on ? mats.ringOn : mats.off
-      // le cône de sens vit avec le cadre : il n'a de raison d'être que pendant qu'on pose
+      // the direction cone lives with the frame: it only has a reason to exist while placing
       n.cone.material = on ? mats.ringOn : this.editingParkings ? mats.ring : mats.off
     }
     this.loop.invalidate()
   }
 
   /**
-   * Mode « poser une place » : le tap suivant ne sélectionne rien, il rapporte le point du SOL
-   * touché (`groundTap`). Tapé hors de tout sol, c'est un renoncement, comme pour une ouverture.
+   * "Place a space" mode: the next tap selects nothing, it reports the touched FLOOR
+   * point (`groundTap`). Tapped outside any floor, it is a cancellation, as for an opening.
    */
   setPlacingParking(on: boolean): void {
     if (this.placingParking === on) return
@@ -1685,7 +1685,7 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Mode « poser une pièce » : le tap suivant rapporte le point du sol touché (`roomPlaceTap`). */
+  /** "Place a room" mode: the next tap reports the touched floor point (`roomPlaceTap`). */
   setPlacingRoom(on: boolean): void {
     if (this.placingRoom === on) return
     this.placingRoom = on
@@ -1693,12 +1693,12 @@ export class HouseScene {
   }
 
   /**
-   * Le point du sol sous le doigt, ET le niveau de ce sol : sol de pièce, dalle de toit, terrain ou
-   * zone — le premier rencontré. `levelId: null` = on a touché le terrain, donc le jardin.
+   * The floor point under the finger, AND the level of that floor: room floor, roof slab, terrain or
+   * zone — the first one hit. `levelId: null` = the terrain was touched, hence the garden.
    *
-   * C'est ce qui donne son NIVEAU à une place qu'on pose : on la met dans le garage en tapant le sol
-   * du garage, sur le toit en tapant le toit, dans le jardin en tapant la pelouse. Rien à choisir
-   * dans un menu — la surface touchée dit déjà tout.
+   * It is what gives its LEVEL to a space being placed: it goes in the garage by tapping the garage
+   * floor, on the roof by tapping the roof, in the garden by tapping the lawn. Nothing to choose
+   * in a menu — the touched surface already says it all.
    */
   private groundPoint(ndc: { x: number; y: number }): { xy: [number, number]; levelId: string | null } | null {
     if (!this.nodes) return null
@@ -1714,10 +1714,10 @@ export class HouseScene {
     if (roof && roofLevel) { targets.push(roof); floorLevel.set(roof, roofLevel.id) }
     const hit = this.raycaster.intersectObjects(targets, false)[0]
     if (!hit) return null
-    return { xy: [hit.point.x, -hit.point.z], levelId: floorLevel.get(hit.object) ?? null }   // monde (x, y, z) → maison (x, z, -y)
+    return { xy: [hit.point.x, -hit.point.z], levelId: floorLevel.get(hit.object) ?? null }   // world (x, y, z) → house (x, z, -y)
   }
 
-  /** Mode « régler les places » : armé depuis les Réglages, comme celui des ouvertures. */
+  /** "Adjust the spaces" mode: armed from Settings, like the openings one. */
   setEditingParkings(on: boolean): void {
     if (this.editingParkings === on) return
     this.editingParkings = on
@@ -1726,12 +1726,12 @@ export class HouseScene {
   }
 
   /**
-   * La place qu'on règle. Comme pour une ouverture, c'est la sélection qui arme le glissement : une
-   * seule place se déplace à la fois, et on ne l'attrape que par elle-même.
+   * The space being adjusted. As for an opening, it is the selection that arms the drag: only one
+   * space moves at a time, and it can only be grabbed by itself.
    */
   setSelectedParking(id: string | null): void {
     this.selectedParkingId = id
-    this.buildParkings()                   // les lignes de cote naissent et meurent avec la sélection
+    this.buildParkings()                   // the dimension lines are born and die with the selection
     this.refreshParkingNotes()
     this.parkingDragger?.detach()
     this.parkingDragger = null
@@ -1746,10 +1746,10 @@ export class HouseScene {
   }
 
   /**
-   * Seules des PLACES ont changé (on en règle une au doigt). Ni la géométrie ni les niveaux n'en
-   * dépendent : on refait le marquage, on recalcule qui se range où, et on ne reconstruit que les
-   * marqueurs dont la place a changé — c'est ce qui fait suivre la voiture pendant le geste sans
-   * refaire les quarante autres marqueurs à chaque image.
+   * Only SPACES changed (one is being adjusted by finger). Neither the geometry nor the levels depend
+   * on them: we redo the marking, recompute who parks where, and only rebuild the
+   * markers whose space changed — that is what makes the car follow during the gesture without
+   * redoing the forty other markers every frame.
    */
   updateParkings(house: House): void {
     if (!this.nodes || !this.house) { this.load(house); return }
@@ -1773,9 +1773,9 @@ export class HouseScene {
   }
 
   /**
-   * Seul le TERRAIN a changé — relief ou contour (on vient de l'enregistrer depuis l'éditeur). Le
-   * chemin complet (`load`) recentrerait la caméra ; ici, le terrain reprend ses z (ou se remaille
-   * sur son nouveau contour) et ce qui s'y pose suit.
+   * Only the TERRAIN changed — relief or outline (it was just saved from the editor). The
+   * full path (`load`) would recenter the camera; here, the terrain takes its z values again (or is remeshed
+   * on its new outline) and what sits on it follows.
    */
   updateRelief(house: House): void {
     if (!this.nodes || !this.house) { this.load(house); return }
@@ -1785,20 +1785,20 @@ export class HouseScene {
     if (this.reliefGrid) this.applyReliefDraft()
     else this.shapeTerrainNow()
     this.afterTerrainChange()
-    this.fitSunShadow()                    // les bornes de la maison suivent le relief enregistré
+    this.fitSunShadow()                    // the house bounds follow the saved relief
     this.emitRelief()
   }
 
-  // ---- jardin (arbres, buissons, pierres) -----------------------------------
+  // ---- garden (trees, bushes, stones) ---------------------------------------
   private buildGarden(): void {
     if (!this.nodes || !this.house) return
     this.nodes.site.add(this.garden.group)
     this.garden.setAccent(this.theme.primary)
     this.garden.build(this.house.site.garden, (x, y) => this.groundZ(x, y), this.season, this.look.garden)
-    this.fitSunShadow()                    // le cadre des ombres suit le jardin
-    this.markReflection()                  // la piscine voit les arbres
-    // les personnages contournent le jardin dès leur tracé : un jardin changé (édition, saison, ou
-    // simplement bâti après eux au chargement) les retrace
+    this.fitSunShadow()                    // the shadow frame follows the garden
+    this.markReflection()                  // the pool sees the trees
+    // the characters skirt the garden from their path onward: a changed garden (editing, season, or
+    // simply built after them at load) reroutes them
     const key = JSON.stringify(this.garden.footprints().map((c) => [c.x, c.y, c.r].map((v) => Math.round(v * 10))))
     if (key !== this.gardenRoamKey) {
       this.gardenRoamKey = key
@@ -1808,8 +1808,8 @@ export class HouseScene {
   }
 
   /**
-   * Le reflet de la piscine est à refaire. Pas tout de suite : un glissement au doigt, un curseur,
-   * un relief qu'on modèle en demandent un par image ; on attend que ça se calme, puis une image.
+   * The pool reflection needs redoing. Not right away: a finger drag, a slider,
+   * a relief being shaped request one per frame; we wait for things to calm down, then one frame.
    */
   private markReflection(): void {
     if (this.deps.headless || !this.renderer) return
@@ -1818,7 +1818,7 @@ export class HouseScene {
     this.reflectionTimer = setTimeout(() => { this.reflectionTimer = null; this.loop.invalidate() }, REFLECTION_SETTLE_MS + 20)
   }
 
-  /** Refait la sonde au-dessus de la (première) piscine, si elle est due. Aucune piscine = aucun coût. */
+  /** Redoes the probe above the (first) pool, if it is due. No pool = no cost. */
   private updateReflection(r: WebGLRenderer, now: number): void {
     if (!this.reflectionDue || now < this.reflectionDue || !this.nodes || !this.geometry) return
     this.reflectionDue = 0
@@ -1833,7 +1833,7 @@ export class HouseScene {
     if (water.envMap !== this.reflection.texture) { water.envMap = this.reflection.texture; water.needsUpdate = true }
   }
 
-  /** Seul le JARDIN a changé : les éléments se reposent, rien d'autre ne se reconstruit. */
+  /** Only the GARDEN changed: the elements are laid again, nothing else is rebuilt. */
   updateGarden(house: House): void {
     if (!this.nodes || !this.house) { this.load(house); return }
     this.house = house
@@ -1852,20 +1852,20 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Mode édition : les éléments du jardin deviennent touchables. */
+  /** Edit mode: the garden elements become touchable. */
   setEditingGarden(on: boolean): void {
     if (this.editingGarden === on) return
     this.editingGarden = on
     if (!on) this.setSelectedGarden(null)
   }
 
-  /** Élément armé : le tap suivant rapporte le point du terrain (`gardenPlaceTap`). */
+  /** Armed element: the next tap reports the terrain point (`gardenPlaceTap`). */
   setPlacingGarden(on: boolean): void {
     this.placingGarden = on
     this.loop.invalidate()
   }
 
-  /** L'élément réglé : anneau au pied, et c'est lui seul qui se glisse, attrapé par lui-même. */
+  /** The adjusted element: ring at its foot, and it alone can be dragged, grabbed by itself. */
   setSelectedGarden(id: string | null): void {
     this.selectedGardenId = id
     this.garden.setSelected(id)
@@ -1882,7 +1882,7 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Cadre un élément du jardin, vu d'où on le regardait. */
+  /** Frames a garden element, seen from where it was being looked at. */
   focusGarden(id: string, animate = true): void {
     const box = this.garden.boxOf(id)
     if (!box) return
@@ -1901,7 +1901,7 @@ export class HouseScene {
     if (!foot) return
     if (this.controls) this.controls.enabled = false
     this.cameraTween?.cancel()
-    // plan horizontal au PIED, écart doigt–pied conservé (même règle qu'une place)
+    // horizontal plane at the FOOT, finger–foot offset preserved (same rule as a space)
     const world = this.garden.group.localToWorld(foot.clone())
     this.dragPlane.setFromNormalAndCoplanarPoint(WORLD_UP, world)
     const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
@@ -1913,7 +1913,7 @@ export class HouseScene {
     const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
     if (!hit) return
     hit.sub(this.dragOffset)
-    this.pendingGardenXY = [hit.x, -hit.z]          // monde (x, y, z) ← maison (x, z, -y)
+    this.pendingGardenXY = [hit.x, -hit.z]          // world (x, y, z) ← house (x, z, -y)
     if (this.gardenFrame !== 0) return
     this.gardenFrame = requestAnimationFrame(() => {
       this.gardenFrame = 0
@@ -1935,17 +1935,17 @@ export class HouseScene {
     this.invalidateShadows()
   }
 
-  // ---- mode « modeler le terrain » ------------------------------------------
+  // ---- "shape the terrain" mode ---------------------------------------------
   /**
-   * Entre (ou sort) de l'édition du relief. En entrant, le brouillon part du relief enregistré (ou
-   * d'une grille à plat au pas de `RELIEF_STEP`) ; en sortant, le terrain revient à celui du
-   * fichier — enregistrer est l'affaire du panneau, avant de sortir.
+   * Enters (or leaves) relief editing. On entering, the draft starts from the saved relief (or
+   * from a flat grid at the `RELIEF_STEP` step); on leaving, the terrain goes back to the
+   * file's — saving is the panel's business, before leaving.
    */
   setEditingRelief(on: boolean): void {
     this.reliefWanted = on
     if (on === (this.reliefGrid !== null)) return
     if (on) {
-      if (!this.house) return              // la maison n'est pas là : `load` ouvrira le mode
+      if (!this.house) return              // the house is not there: `load` will open the mode
       this.reliefGrid = parseRelief(this.house.site.relief) ?? emptyReliefGrid(this.house.site.terrain, RELIEF_STEP)
       this.outlineDraft = this.house.site.terrain.map(([x, y]) => [x, y])
     } else {
@@ -1966,9 +1966,9 @@ export class HouseScene {
   }
 
   /**
-   * On modèle le TERRAIN : la maison s'estompe (toutes les matières des niveaux et du toit, par
-   * l'opacité tramée de `levelFade` — pas de tri de transparence, pas de recompilation) et les
-   * pilules disparaissent. Tout revient en sortant du mode.
+   * We are shaping the TERRAIN: the house fades (all the materials of the levels and of the roof, through
+   * `levelFade`'s dithered opacity — no transparency sorting, no recompilation) and the
+   * pills disappear. Everything comes back on leaving the mode.
    */
   private syncReliefFocus(): void {
     for (const m of this.reliefFaded) materialOpacity(m).value = 1
@@ -1987,7 +1987,7 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Remplace le brouillon (import IGN) ; `null` = terrain plat. Le remplacement s'annule comme un geste. */
+  /** Replaces the draft (IGN import); `null` = flat terrain. The replacement can be undone like a gesture. */
   setReliefDraft(relief: Relief | null): void {
     if (!this.reliefGrid || !this.house) return
     this.reliefGrid = parseRelief(relief ?? undefined) ?? emptyReliefGrid(this.house.site.terrain, RELIEF_STEP)
@@ -1997,40 +1997,40 @@ export class HouseScene {
     this.emitRelief()
   }
 
-  /** Choisit le point voisin dans une direction de l'écran (flèches du clavier). */
+  /** Selects the neighboring dot in a screen direction (keyboard arrows). */
   stepReliefSelection(sx: number, sy: number): void {
     if (this.reliefEditor?.stepSelection(sx, sy)) this.emitRelief()
   }
 
-  /** Annule (ou rétablit) la dernière modification du relief. */
+  /** Undoes (or redoes) the last relief change. */
   undoRelief(): void { if (this.reliefEditor?.undo()) this.afterReliefTravel() }
   redoRelief(): void { if (this.reliefEditor?.redo()) this.afterReliefTravel() }
   private afterReliefTravel(): void {
-    this.reliefGrid = this.reliefEditor!.grid            // l'historique rend un autre objet grille
+    this.reliefGrid = this.reliefEditor!.grid            // the history returns another grid object
     this.applyReliefDraft()
     this.afterTerrainChange()
     this.emitRelief()
   }
 
-  /** Le point choisi prend la hauteur saisie dans le panneau (cm). */
+  /** The selected dot takes the height entered in the panel (cm). */
   setReliefPoint(cm: number): void {
     if (this.reliefEditor?.setSelectedCm(cm)) this.onReliefChanged(true)
   }
 
-  /** Le brouillon tel qu'il s'écrit dans la maison ; `null` s'il est plat (le champ est retiré). */
+  /** The draft as it is written into the house; `null` if it is flat (the field is removed). */
   reliefDraft(): Relief | null {
     return this.reliefGrid && !isFlatRelief(this.reliefGrid) ? serializeRelief(this.reliefGrid) : null
   }
 
   /**
-   * Pose le brouillon sur la géométrie et sur les maillages, et (re)crée l'éditeur si la racine est
-   * neuve. Sans brouillon, rien : la géométrie est déjà celle du fichier.
+   * Applies the draft to the geometry and to the meshes, and (re)creates the editor if the root is
+   * new. Without a draft, nothing: the geometry is already the file's.
    */
   private applyReliefDraft(): void {
     const drafted = this.reliefGrid
     if (!drafted || !this.nodes || !this.geometry) return
     const polygon = this.outlineDraft ?? this.geometry.terrain.polygon
-    // un contour étendu au-delà de la grille l'agrandit : ses nouveaux nœuds ont une poignée
+    // an outline extended beyond the grid enlarges it: its new nodes get a handle
     const grid = extendReliefGrid(drafted, polygon)
     if (grid !== drafted) { this.reliefGrid = grid; this.reliefEditor?.adoptGrid(grid) }
     this.geometry = { ...this.geometry, terrain: { ...this.geometry.terrain, polygon, relief: grid } }
@@ -2063,7 +2063,7 @@ export class HouseScene {
         accent: this.theme.primary,
       }, grid, !!this.deps.headless)
     } else if (reshaped) {
-      this.reliefEditor.layout()           // les nœuds DANS la parcelle ont changé
+      this.reliefEditor.layout()           // the nodes INSIDE the plot have changed
     } else {
       this.reliefEditor.refresh()
     }
@@ -2071,7 +2071,7 @@ export class HouseScene {
     this.outlineEditor.setEnabled(this.terrainTab === 'outline')
   }
 
-  /** Pose le terrain sur `geometry.terrain`, remaillé si son contour n'est plus celui du maillage ; vrai s'il l'a été. */
+  /** Lays the terrain on `geometry.terrain`, remeshed if its outline is no longer the mesh's; true if it was. */
   private shapeTerrainNow(): boolean {
     if (!this.nodes || !this.geometry) return false
     const key = JSON.stringify(this.geometry.terrain.polygon)
@@ -2081,7 +2081,7 @@ export class HouseScene {
     return reshaped
   }
 
-  /** Change d'onglet : seul l'éditeur de l'onglet montre ses poignées et prend les taps. */
+  /** Switches tab: only the tab's editor shows its handles and takes the taps. */
   setTerrainTab(tab: TerrainTab): void {
     if (this.terrainTab === tab) return
     this.terrainTab = tab
@@ -2090,7 +2090,7 @@ export class HouseScene {
     this.emitRelief()
   }
 
-  /** Le contour a bougé : pendant un glissement, seul le trait suit ; la fin du geste remaille le terrain. */
+  /** The outline moved: during a drag, only the line follows; the end of the gesture remeshes the terrain. */
   private onOutlineChanged(final: boolean): void {
     const e = this.outlineEditor
     if (!e) return
@@ -2102,29 +2102,29 @@ export class HouseScene {
     this.emitRelief()
   }
 
-  /** Annule (ou rétablit) la dernière modification du contour. */
+  /** Undoes (or redoes) the last outline change. */
   undoOutline(): void { if (this.outlineEditor?.undo()) this.onOutlineChanged(true) }
   redoOutline(): void { if (this.outlineEditor?.redo()) this.onOutlineChanged(true) }
 
-  /** Le sommet choisi prend la position saisie dans le panneau (m, repère maison). */
+  /** The selected vertex takes the position entered in the panel (m, house reference frame). */
   setOutlinePoint(xy: Vec2): void {
     if (this.outlineEditor?.setSelectedXY(xy)) this.onOutlineChanged(true)
-    else this.emitRelief()                 // refusé : le panneau réaffiche la position gardée
+    else this.emitRelief()                 // refused: the panel shows the kept position again
   }
 
-  /** Remplace le brouillon du contour (import du cadastre) ; le remplacement s'annule comme un geste. */
+  /** Replaces the outline draft (cadastre import); the replacement can be undone like a gesture. */
   setOutlineDraft(polygon: Vec2[]): void {
     if (!this.outlineEditor) return
     this.outlineEditor.setPolygon(polygon)
     this.onOutlineChanged(true)
   }
 
-  /** Retire le sommet choisi. */
+  /** Removes the selected vertex. */
   removeOutlinePoint(): void {
     if (this.outlineEditor?.removeSelected()) this.onOutlineChanged(true)
   }
 
-  /** Un glissement en cours : une mise à jour du terrain par IMAGE ; la fin du geste refait le reste. */
+  /** A drag in progress: one terrain update per FRAME; the end of the gesture redoes the rest. */
   private onReliefChanged(final: boolean): void {
     if (final) {
       if (this.reliefFrame !== 0) { cancelAnimationFrame(this.reliefFrame); this.reliefFrame = 0 }
@@ -2144,8 +2144,8 @@ export class HouseScene {
   }
 
   /**
-   * Ce qui se pose sur le terrain le suit : appareils du jardin, véhicules, épingles du journal,
-   * places de stationnement ; l'ombre et la brume se refont sur la nouvelle surface.
+   * What sits on the terrain follows it: garden devices, vehicles, log pins,
+   * parking spaces; the shadow and the mist are redone on the new surface.
    */
   private afterTerrainChange(): void {
     if (!this.nodes || !this.house) return
@@ -2170,10 +2170,10 @@ export class HouseScene {
   }
 
   /**
-   * Cadre une place : sa boîte, plus de l'air autour, vue d'où on la regardait. Le NIVEAU, lui, est
-   * focalisé par le magasin quand la place est dans une pièce (`selectParking`) — sans quoi on
-   * regarderait le marquage d'un garage à travers le toit, et l'onglet de niveau dirait autre chose
-   * que la scène.
+   * Frames a space: its box, plus some air around it, seen from where it was being looked at. The LEVEL, for its part, is
+   * focused by the store when the space is in a room (`selectParking`) — otherwise one
+   * would look at a garage's marking through the roof, and the level tab would say something other
+   * than the scene.
    */
   focusParking(parkingId: string, animate = true): void {
     const p = this.house?.site.parkings.find((x) => x.id === parkingId)
@@ -2182,8 +2182,8 @@ export class HouseScene {
     const box = new Box3()
     nodes.group.updateWorldMatrix(true, true)
     box.setFromObject(nodes.group)
-    // Au moins la boîte d'un appareil : une base de tondeuse fait 60 cm, et la cadrer au plus juste
-    // mettait la caméra sous le sol. Une grande place, elle, garde sa marge proportionnelle.
+    // At least the box of a device: a mower base is 60 cm, and framing it as tightly as possible
+    // put the camera under the ground. A large space, for its part, keeps its proportional margin.
     box.expandByScalar(Math.max(DEVICE_FOCUS_SIZE_M / 2, Math.max(...p.size) * 0.35))
     const { azimuth, polar } = this.currentSpherical()
     this.flyTo(box, azimuth, clamp(polar, DEVICE_FOCUS_POLAR[0], DEVICE_FOCUS_POLAR[1]), animate, 1.1)
@@ -2201,8 +2201,8 @@ export class HouseScene {
     if (!nodes) return
     if (this.controls) this.controls.enabled = false
     this.cameraTween?.cancel()
-    // Plan horizontal AU SOL DE LA PLACE, et écart doigt–centre conservé : une place attrapée par un
-    // coin ne saute pas sous le doigt au premier appui.
+    // Horizontal plane AT THE SPACE'S FLOOR, and finger–center offset preserved: a space grabbed by a
+    // corner does not jump under the finger at the first press.
     nodes.group.updateWorldMatrix(true, false)
     const foot = nodes.group.getWorldPosition(new Vector3())
     this.dragPlane.setFromNormalAndCoplanarPoint(WORLD_UP, foot)
@@ -2210,13 +2210,13 @@ export class HouseScene {
     this.dragOffset.copy(hit ? hit.sub(foot) : new Vector3())
   }
 
-  /** Une position par IMAGE, pas une par événement (même raison que le glissement d'une ouverture). */
+  /** One position per FRAME, not one per event (same reason as an opening's drag). */
   private moveParkingDrag(id: string, ev: TapEvent): void {
     this.raycaster.setFromCamera(new Vector2(ev.ndc.x, ev.ndc.y), this.camera)
     const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
     if (!hit) return
     hit.sub(this.dragOffset)
-    this.pendingParkingXY = [hit.x, -hit.z]         // monde (x, y, z) ← maison (x, z, -y)
+    this.pendingParkingXY = [hit.x, -hit.z]         // world (x, y, z) ← house (x, z, -y)
     if (this.parkingFrame !== 0) return
     this.parkingFrame = requestAnimationFrame(() => {
       this.parkingFrame = 0
@@ -2233,22 +2233,22 @@ export class HouseScene {
   private endParkingDrag(id: string, moved: boolean): void {
     if (this.controls) this.controls.enabled = true
     if (this.parkingFrame !== 0) { cancelAnimationFrame(this.parkingFrame); this.parkingFrame = 0 }
-    this.flushParkingDrag(id)                       // la dernière position, celle qu'on garde
+    this.flushParkingDrag(id)                       // the last position, the one we keep
     if (moved) this.emit('parkingDrop', id)
     this.invalidateShadows()
   }
 
   /**
-   * Ce que la scène écrit sur la place en cours de réglage : son NOM au-dessus d'elle, et ses QUATRE
-   * cotes — ce qui la sépare du contour de son hôte devant, derrière et de chaque côté. C'est ainsi
-   * qu'on pose une place de garage au mètre ruban, et c'est ce que le panneau règle.
+   * What the scene writes on the space being adjusted: its NAME above it, and its FOUR
+   * dimensions — what separates it from its host's outline in front, behind and on each side. That is how
+   * a garage space is placed with a tape measure, and it is what the panel adjusts.
    *
-   * Les nombres viennent de `parkingGaps`, partagé avec le panneau : la même place ne peut pas se
-   * coter de deux manières. Le trait de chaque cote, lui, est de la géométrie posée dans le groupe de
-   * la place (`buildParking`) : il tourne et glisse avec elle, sans un temps de retard.
+   * The numbers come from `parkingGaps`, shared with the panel: the same space cannot be
+   * dimensioned in two ways. The line of each dimension, for its part, is geometry laid in the
+   * space's group (`buildParking`): it turns and slides with it, without lag.
    *
-   * Les étiquettes sont GARDÉES d'une image à l'autre : les refaire à chaque mouvement de doigt
-   * ferait clignoter du DOM — c'est la leçon des cotes d'ouverture.
+   * The labels are KEPT from one frame to the next: redoing them at every finger movement
+   * would make the DOM flicker — that is the lesson of the opening dimensions.
    */
   private refreshParkingNotes(): void {
     const id = this.selectedParkingId
@@ -2286,8 +2286,8 @@ export class HouseScene {
 
   private clearParkingNotes(): void {
     if (!this.parkingNotes) return
-    // un `CSS2DObject` a posé son élément dans la couche du rendu 2D : le retirer de la scène ne
-    // l'enlève pas (même geste que les cotes d'ouverture)
+    // a `CSS2DObject` placed its element in the 2D render layer: removing it from the scene does not
+    // remove it (same move as for the opening dimensions)
     for (const note of [this.parkingNotes.name, ...Object.values(this.parkingNotes.sides)]) {
       note.element.remove()
       note.removeFromParent()
@@ -2297,29 +2297,29 @@ export class HouseScene {
   }
 
   /**
-   * Une poignée par ouverture, dans le groupe de son niveau : une dalle qui remplit le rectangle —
-   * c'est elle qu'on attrape, et elle déborde l'épaisseur du mur pour s'attraper des deux côtés — et
-   * un trait qui le cerne. Tous deux NON ÉCLAIRÉS, dans le langage de la surbrillance de pièce.
+   * One handle per opening, in its level's group: a slab that fills the rectangle —
+   * it is what is grabbed, and it overhangs the wall thickness to be grabbed from both sides — and
+   * a line that rings it. Both UNLIT, in the language of the room highlight.
    *
-   * **Trois états à lire sans hésiter** : rien, une ouverture, celle qu'on règle. Ce sont
-   * l'ÉPAISSEUR du cadre et son rapport à la profondeur qui les séparent, pas une nuance d'opacité
-   * (essayée d'abord, illisible) ni la présence du cadre (essayée ensuite : les dix-huit autres
-   * ouvertures devenaient introuvables).
+   * **Three states to read without hesitation**: nothing, an opening, the one being adjusted. It is
+   * the THICKNESS of the frame and its relation to depth that separate them, not a nuance of opacity
+   * (tried first, unreadable) nor the presence of the frame (tried next: the eighteen other
+   * openings became impossible to find).
    *
-   *  - au repos : un cadre FIN, calme, et surtout un TUBE — une bague extrudée dans toute l'épaisseur
-   *    de la poignée, qui dépasse donc des deux faces du mur. C'est ce qui lui permet d'être soumise
-   *    au test de profondeur : le toit et les façades la masquent comme n'importe quel objet, alors
-   *    qu'un cadre PLAT posé à mi-épaisseur serait enterré dans la menuiserie qui l'entoure ;
-   *  - sélectionnée : un cadre deux fois plus ÉPAIS, éclairci, plat, et dessiné par-dessus les murs
-   *    (`depthTest: false`, comme le trait d'une pièce) — sinon la façade cache la poignée de la
-   *    fenêtre qu'on regarde depuis la chambre. C'est la seule qui traverse.
+   *  - at rest: a THIN, calm frame, and above all a TUBE — a ring extruded through the whole thickness
+   *    of the handle, which therefore sticks out of both faces of the wall. That is what lets it be subject
+   *    to the depth test: the roof and the facades hide it like any object, whereas
+   *    a FLAT frame placed at mid-thickness would be buried in the joinery around it;
+   *  - selected: a frame twice as THICK, lightened, flat, and drawn over the walls
+   *    (`depthTest: false`, like a room's line) — otherwise the facade hides the handle of the
+   *    window one is looking at from the bedroom. It is the only one that goes through.
    *
-   * Les deux cadres existent en permanence sur chaque poignée ; la sélection n'éteint que des
-   * MATÉRIAUX. Rien ne se construit ni ne se détruit en sélectionnant.
+   * Both frames exist permanently on each handle; selection only turns off
+   * MATERIALS. Nothing is built or destroyed when selecting.
    *
-   * **Elles vivent sur `DECOR_LAYER`, dans le groupe des MARQUEURS de leur niveau** : hors du relevé
-   * d'occlusion (un voile translucide n'est pas un obstacle), touchables (le lancer de rayon ouvre
-   * cette couche), et masquées avec leur niveau.
+   * **They live on `DECOR_LAYER`, in their level's MARKERS group**: outside the occlusion
+   * capture (a translucent veil is not an obstacle), touchable (the raycaster opens
+   * this layer), and hidden with their level.
    */
   private buildOpeningHandles(): void {
     this.clearOpeningHandles()
@@ -2327,15 +2327,15 @@ export class HouseScene {
     const accent = this.theme.primary
     const trait = accent.clone().lerp(WHITE, 0.2).multiplyScalar(1.15)
     const mats = {
-      // le voile porte « il y a quelque chose ici », le cadre porte « c'est une ouverture » : au repos
-      // le voile s'efface derrière le cadre, qui dit la même chose en plus lisible
+      // the veil says "there is something here", the frame says "this is an opening": at rest
+      // the veil fades behind the frame, which says the same thing more readably
       fill: new MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.08, depthWrite: false, side: DoubleSide }),
       fillOn: new MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.3, depthWrite: false, side: DoubleSide }),
       ring: new MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.62, depthWrite: false, side: DoubleSide }),
       ringOn: new MeshBasicMaterial({ color: trait, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false, side: DoubleSide }),
-      // Ce qui éteint un cadre est SON MATÉRIAU et non `Object3D.visible` : cette propriété-là dit
-      // « mon niveau est masqué » (`shownInScene`), et c'est elle qui décide si une poignée est
-      // touchable — l'éteindre ici rendrait la poignée injoignable au doigt.
+      // What turns off a frame is ITS MATERIAL and not `Object3D.visible`: that property says
+      // "my level is hidden" (`shownInScene`), and it is what decides whether a handle is
+      // touchable — turning it off here would make the handle unreachable by finger.
       off: new MeshBasicMaterial({ visible: false }),
     }
     this.openingMats = mats
@@ -2350,7 +2350,7 @@ export class HouseScene {
         if (o.host === 'wall') {
           group.rotation.z = Math.atan2(o.u[1], o.u[0])
         } else {
-          group.rotation.order = 'ZXY'                    // pencher après le cap (cf. buildPane)
+          group.rotation.order = 'ZXY'                    // tilt after the heading (see buildPane)
           group.rotation.z = ((o.yaw ?? 0) * Math.PI) / 180
           group.rotation.x = -((o.slope ?? 0) * Math.PI) / 180
         }
@@ -2362,9 +2362,9 @@ export class HouseScene {
           mats.fill,
         )
         fill.userData = { role: 'opening', openingId: o.openingId }
-        // Cadre : pour un MUR, bâti dans XY puis redressé (y local → z du mur). Pour une SURFACE
-        // (sol / toit), il RESTE dans XY — le plan du porteur — sans `rotateX`, sinon il se dresse
-        // à la verticale (mesuré sur un puits de lumière).
+        // Frame: for a WALL, built in XY then stood up (local y → the wall's z). For a SURFACE
+        // (floor / roof), it STAYS in XY — the plane of the carrier — without `rotateX`, otherwise it stands
+        // up vertically (measured on a skylight).
         const rest = extrudeRing(...frameRect(o.width, o.height, OPENING_RING.rest), -thick / 2, thick / 2)
         const bold = flatRing(...frameRect(o.width, o.height, OPENING_RING.on), o.host === 'wall' ? 0 : thick / 2 + 0.002)
         if (o.host === 'wall') {
@@ -2376,12 +2376,12 @@ export class HouseScene {
         group.add(fill, ring, ringOn)
         group.traverse((n) => n.layers.set(DECOR_LAYER))
         parent.add(group)
-        // La `Scene` tourne avec `matrixWorldAutoUpdate = false` : sans cet appel, la matrice monde
-        // d'une poignée neuve reste l'IDENTITÉ jusqu'à la prochaine image, le lancer de rayon la teste
-        // à l'origine du monde, et un tap la traverse jusqu'au sol de la pièce (mesuré : onze poignées
-        // sur onze, jusqu'à douze mètres d'écart). `true` pour les enfants : c'est la dalle, pas le
-        // groupe, que le rayon touche. Même geste que `focusJournalPoint` et `openingFoot`, qui lisent
-        // une position monde sans attendre une image.
+        // The `Scene` runs with `matrixWorldAutoUpdate = false`: without this call, the world matrix
+        // of a new handle stays IDENTITY until the next frame, the raycaster tests it
+        // at the world origin, and a tap goes through it to the room's floor (measured: eleven handles
+        // out of eleven, up to twelve meters off). `true` for the children: it is the slab, not the
+        // group, that the ray hits. Same move as `focusJournalPoint` and `openingFoot`, which read
+        // a world position without waiting for a frame.
         group.updateWorldMatrix(true, true)
         this.openingHandles.set(o.openingId, { group, fill, ring, ringOn, rect: o })
       }
@@ -2390,35 +2390,35 @@ export class HouseScene {
   }
 
   /**
-   * Ce que la scène écrit sur l'ouverture en cours de réglage : son NOM au-dessus d'elle, et ses deux
-   * COTES de part et d'autre — ce qui la sépare de chaque bout de son mur. C'est ainsi qu'on relève
-   * une maison au mètre ruban, et c'est ce que l'utilisateur regarde en la déplaçant.
+   * What the scene writes on the opening being adjusted: its NAME above it, and its two
+   * DIMENSIONS on either side — what separates it from each end of its wall. That is how
+   * a house is surveyed with a tape measure, and it is what the user looks at while moving it.
    *
-   * Les nombres viennent d'`openingGaps` et le nom d'`openingLabel`, tous deux partagés avec le
-   * panneau : la même fenêtre ne peut pas se nommer de deux façons ni se coter de deux manières.
-   * Le format (`toFixed(2)` et « m ») est celui du panneau, au centimètre près.
+   * The numbers come from `openingGaps` and the name from `openingLabel`, both shared with the
+   * panel: the same window cannot be named in two ways nor dimensioned in two ways.
+   * The format (`toFixed(2)` and "m") is the panel's, to the centimeter.
    *
-   * Les étiquettes se posent à la SÉLECTION, pas au premier mouvement du doigt : apparaître au
-   * moment où le geste commence les ferait surgir sous la main, et elles servent aussi à relire ce
-   * que les champs du panneau viennent d'écrire.
+   * The labels are laid on SELECTION, not at the first finger movement: appearing at the
+   * moment the gesture starts would make them pop up under the hand, and they also serve to reread what
+   * the panel's fields have just written.
    *
-   * Chaque nombre est posé sur une vraie LIGNE DE COTE, comme sur un plan : un trait qui va du bord
-   * de l'ouverture au coin du mur — exactement l'intervalle que le nombre annonce, ni plus ni moins,
-   * sans quoi on ne sait pas si « 0,25 m » se mesure jusqu'au coin ou jusqu'au tableau — fermé à
-   * chaque bout par un tiret vertical. C'est de la GÉOMÉTRIE de scène et non un tracé dans la couche
-   * DOM : le tracé vit dans le repère du niveau, donc il suit l'ouverture qui glisse sans un temps de
-   * retard, et il se cache avec son niveau.
+   * Each number is laid on a real DIMENSION LINE, as on a plan: a line that goes from the edge
+   * of the opening to the corner of the wall — exactly the interval the number announces, no more no less,
+   * otherwise one does not know whether "0.25 m" is measured to the corner or to the jamb — closed at
+   * each end by a vertical tick. It is scene GEOMETRY and not a drawing in the DOM
+   * layer: the drawing lives in the level's frame, so it follows the sliding opening without
+   * lag, and it hides with its level.
    *
-   * Il vit avec les MARQUEURS du niveau, sur `DECOR_LAYER` — c'est ce qui le fait dessiner après les
-   * murs (voir `buildOpeningHandles` : posé ailleurs, le mur le recouvrait), et c'est aussi un groupe
-   * qui SURVIT à la reconstruction d'un niveau, comme les étiquettes.
+   * It lives with the level's MARKERS, on `DECOR_LAYER` — that is what makes it drawn after the
+   * walls (see `buildOpeningHandles`: placed elsewhere, the wall covered it), and it is also a group
+   * that SURVIVES the rebuild of a level, like the labels.
    *
-   * **Le cas difficile est la cote courte.** Le nombre est du DOM, large de 66 px quelle que soit la
-   * distance ; l'intervalle, lui, est en mètres. Aucun seuil en mètres ne peut donc décider « le
-   * nombre est plus large que sa cote ». Il est pour cette raison posé AU-DESSUS du trait et non
-   * dessus : il ne le coupe jamais, à aucune échelle, et reste au milieu de son intervalle donc
-   * attaché à lui. À zéro, il n'y a pas d'intervalle : le trait disparaît et les deux tirets se
-   * confondent en un seul — ce qui est exactement ce qu'il y a à lire, l'ouverture touche le coin.
+   * **The hard case is the short dimension.** The number is DOM, 66 px wide whatever the
+   * distance; the interval, for its part, is in meters. No threshold in meters can therefore decide "the
+   * number is wider than its dimension". For this reason it is laid ABOVE the line and not
+   * on it: it never cuts it, at any scale, and stays in the middle of its interval hence
+   * attached to it. At zero, there is no interval: the line disappears and the two ticks
+   * merge into one — which is exactly what there is to read, the opening touches the corner.
    */
   private refreshOpeningNotes(): void {
     const id = this.selectedOpeningId
@@ -2489,9 +2489,9 @@ export class HouseScene {
         part.b.position.set(x1, 0, mid)
       })
     } else {
-      // Surface : quatre cotes dans le plan (comme une place), trait le long de chaque intervalle.
-      // l'emprise vue du ciel (cap et longueur du rectangle géométrique) : les traits partent du bord du
-      // trou d'un Velux, pas de sa longueur le long de la pente
+      // Surface: four dimensions in the plane (like a space), a line along each interval.
+      // the footprint seen from the sky (heading and length of the geometric rectangle): the lines start from the edge of the
+      // hole of a Velux, not from its length along the slope
       const yaw = rect.yaw ?? opening.yaw ?? 0
       const h = planLength(opening.height, rect.slope)
       const gaps = surfaceGaps(room, { ...opening, yaw, height: h })
@@ -2523,7 +2523,7 @@ export class HouseScene {
         part.line.rotation.set(0, 0, ang)
         part.a.rotation.set(0, 0, ang)
         part.b.rotation.set(0, 0, ang)
-        // repère du groupe cotes = centre de l'ouverture : bord à `half` le long de dir, bout à half+span
+        // frame of the dimensions group = center of the opening: edge at `half` along dir, end at half+span
         const x0 = dir[0] * half, y0 = dir[1] * half
         const x1 = dir[0] * (half + span), y1 = dir[1] * (half + span)
         part.line.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0)
@@ -2548,22 +2548,22 @@ export class HouseScene {
   }
 
   /**
-   * Le repère d'ORIGINE du fichier, en mode édition seulement : le (0, 0, 0) local depuis lequel
-   * toutes les coordonnées de `house.json` sont mesurées — polygones de pièce, positions d'appareils,
-   * `offset` d'ouverture. C'est ce que `house.origin` ancre sur le globe.
+   * The file's ORIGIN marker, in edit mode only: the local (0, 0, 0) from which
+   * all the coordinates of `house.json` are measured — room polygons, device positions,
+   * opening `offset`. It is what `house.origin` anchors on the globe.
    *
-   * Un point seul ne dirait pas dans quel SENS on compte : il porte donc ses deux axes, +x et +y,
-   * distingués par leur longueur et par une étiquette, plus une flèche plus courte vers le NORD VRAI
-   * — `heading` est le cap de +y, donc le nord est en (−sin h, cos h) dans le repère local. C'est ce
-   * qui permet de rapprocher un relevé du terrain.
+   * A point alone would not say in which DIRECTION one counts: it therefore carries its two axes, +x and +y,
+   * told apart by their length and by a label, plus a shorter arrow toward TRUE NORTH
+   * — `heading` is the heading of +y, so north is at (−sin h, cos h) in the local frame. It is what
+   * makes it possible to match a survey with the terrain.
    *
-   * Tout est dessiné PAR-DESSUS la maison (`depthTest: false`) : l'origine peut tomber dans un mur,
-   * sous une dalle ou loin du bâti, et un repère qu'on ne voit pas ne repère rien. Il n'est ni
-   * touchable (aucun `role` dans `userData`, jamais présenté à `pick`) ni déplaçable : l'origine du
-   * fichier n'est pas un réglage.
+   * Everything is drawn ON TOP OF the house (`depthTest: false`): the origin can fall inside a wall,
+   * under a slab or far from the building, and a marker one cannot see marks nothing. It is neither
+   * touchable (no `role` in `userData`, never presented to `pick`) nor movable: the file's
+   * origin is not a setting.
    *
-   * Il est posé dans les marqueurs du niveau qui porte le z = 0 du fichier, et sur `DECOR_LAYER`,
-   * comme les poignées.
+   * It is placed in the markers of the level that carries the file's z = 0, and on `DECOR_LAYER`,
+   * like the handles.
    */
   private buildOriginMark(): void {
     this.clearOriginMark()
@@ -2574,9 +2574,9 @@ export class HouseScene {
     group.name = 'origin-mark'
     const mat = (color: Color, opacity: number) =>
       new MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, depthTest: false, side: DoubleSide })
-    // L'anneau posé à plat sur le (0, 0) du fichier : c'est LUI le repère, les axes ne font que dire
-    // dans quel sens on compte. `RingGeometry` est dans le plan XY, qui est le SOL en Z-up local —
-    // comme l'anneau du guide de déplacement (`DeviceMarker.setMoving`).
+    // The ring laid flat on the file's (0, 0): it is THE marker, the axes only say
+    // in which direction one counts. `RingGeometry` is in the XY plane, which is the FLOOR in local Z-up —
+    // like the ring of the move guide (`DeviceMarker.setMoving`).
     const disc = new Mesh(new RingGeometry(ORIGIN_MARK.ring - ORIGIN_MARK.bar, ORIGIN_MARK.ring, 36), mat(trait, 0.95))
     group.add(disc)
     const labels: CSS2DObject[] = []
@@ -2594,26 +2594,26 @@ export class HouseScene {
     }
     arm([1, 0], ORIGIN_MARK.axis, trait, 0.95, 'x')
     arm([0, 1], ORIGIN_MARK.axis, trait, 0.95, 'y')
-    // Le nord est plus court et plus pâle que les axes du fichier : c'est un renseignement sur le
-    // terrain, pas une direction dans laquelle on compte quelque chose.
+    // North is shorter and paler than the file's axes: it is information about the
+    // terrain, not a direction in which anything is counted.
     const h = (this.house.origin.heading * Math.PI) / 180
     arm([-Math.sin(h), Math.cos(h)], ORIGIN_MARK.north, WHITE, 0.55, 'N')
     group.traverse((n) => n.layers.set(DECOR_LAYER))
-    // le niveau dont le sol est le plus proche du z = 0 du fichier ; le repère se replace dans son
-    // repère à lui (un niveau est posé à son élévation) pour retomber exactement sur l'origine
+    // the level whose floor is closest to the file's z = 0; the marker repositions itself in that level's own
+    // frame (a level is placed at its elevation) to land exactly on the origin
     const host = [...this.nodes.levels.entries()]
       .sort((a, b) => Math.abs(a[1].elevation) - Math.abs(b[1].elevation))[0]
     if (!host) return
     group.position.z = -host[1].elevation
     host[1].markers.add(group)
-    group.updateWorldMatrix(true, true)     // même piège de matrice périmée que les poignées
+    group.updateWorldMatrix(true, true)     // same stale-matrix pitfall as the handles
     this.originMark = { group, labels }
     this.loop.invalidate()
   }
 
   private clearOriginMark(): void {
     if (!this.originMark) return
-    // les étiquettes des axes sont des éléments DOM posés par le rendu 2D : le groupe s'en va, elles non
+    // the axis labels are DOM elements laid by the 2D renderer: the group goes away, they do not
     for (const l of this.originMark.labels) l.element.remove()
     disposeObject3D(this.originMark.group)
     this.originMark = null
@@ -2633,12 +2633,12 @@ export class HouseScene {
     for (const [id, h] of this.openingHandles) {
       const on = id === this.selectedOpeningId
       h.fill.material = on ? mats.fillOn : mats.fill
-      h.ring.material = on ? mats.off : mats.ring          // le cadre fin s'efface sous l'épais
+      h.ring.material = on ? mats.off : mats.ring          // the thin frame fades under the thick one
       h.ringOn.material = on ? mats.ringOn : mats.off
     }
   }
 
-  /** La poignée est-elle sous le doigt ? Masquée avec son niveau, elle ne s'attrape pas. */
+  /** Is the handle under the finger? Hidden with its level, it cannot be grabbed. */
   private grabsOpening(id: string, ev: TapEvent): boolean {
     const handle = this.openingHandles.get(id)
     if (!handle || !shownInScene(handle.group)) return false
@@ -2651,11 +2651,11 @@ export class HouseScene {
     if (!handle) return
     if (this.controls) this.controls.enabled = false
     this.cameraTween?.cancel()
-    // Plan HORIZONTAL au sol du niveau : ce qu'on rapporte est le point du doigt sur ce sol, à charge
-    // de l'appelant d'y chercher la place admissible la plus proche. L'écart initial doigt–ouverture
-    // est conservé (comme pour un appareil) : sans lui, l'ouverture sauterait au premier appui, la
-    // poignée étant à hauteur d'allège et le plan à ses pieds. Les deux glissements partagent plan et
-    // écart : on ne déplace jamais un appareil et une ouverture en même temps.
+    // HORIZONTAL plane at the level's floor: what is reported is the finger's point on that floor, and it is up
+    // to the caller to look there for the nearest admissible place. The initial finger–opening offset
+    // is preserved (as for a device): without it, the opening would jump at the first press, the
+    // handle being at sill height and the plane at its feet. The two drags share plane and
+    // offset: a device and an opening are never moved at the same time.
     const foot = this.openingFoot(handle.group, handle.rect.levelId)
     this.dragPlane.setFromNormalAndCoplanarPoint(WORLD_UP, foot)
     const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
@@ -2663,16 +2663,16 @@ export class HouseScene {
   }
 
   /**
-   * UNE position par image, pas une par événement. Le pointeur en émet plusieurs fois par image, et
-   * chacune reconstruit les murs d'un niveau : tout ce travail-là finissait à la poubelle avant
-   * d'être vu. On retient la dernière position et on la rapporte à l'image suivante.
+   * ONE position per frame, not one per event. The pointer emits several per frame, and
+   * each one rebuilds a level's walls: all that work ended up in the trash before
+   * being seen. We keep the last position and report it on the next frame.
    */
   private moveOpeningDrag(id: string, ev: TapEvent): void {
     this.raycaster.setFromCamera(new Vector2(ev.ndc.x, ev.ndc.y), this.camera)
     const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
     if (!hit) return
     hit.sub(this.dragOffset)
-    this.pendingOpeningXY = [hit.x, -hit.z]         // monde (x, y, z) ← maison (x, z, -y)
+    this.pendingOpeningXY = [hit.x, -hit.z]         // world (x, y, z) ← house (x, z, -y)
     if (this.openingFrame !== 0) return
     this.openingFrame = requestAnimationFrame(() => {
       this.openingFrame = 0
@@ -2689,12 +2689,12 @@ export class HouseScene {
   private endOpeningDrag(id: string, moved: boolean): void {
     if (this.controls) this.controls.enabled = true
     if (this.openingFrame !== 0) { cancelAnimationFrame(this.openingFrame); this.openingFrame = 0 }
-    this.flushOpeningDrag(id)                       // la dernière position, celle qu'on garde
+    this.flushOpeningDrag(id)                       // the last position, the one we keep
     if (moved) this.emit('openingDrop', id)
-    this.invalidateShadows()                        // le geste est fini : les ombres reprennent la main
+    this.invalidateShadows()                        // the gesture is over: the shadows take over again
   }
 
-  /** Le pied de l'ouverture dans le monde : son milieu horizontal, ramené au sol de son niveau. */
+  /** The foot of the opening in the world: its horizontal middle, brought down to its level's floor. */
   private openingFoot(group: Group, levelId: string): Vector3 {
     group.updateWorldMatrix(true, false)
     const p = group.getWorldPosition(new Vector3())
@@ -2703,23 +2703,23 @@ export class HouseScene {
   }
 
   /**
-   * Teinte d'une carrosserie MONTRÉE le temps qu'on la choisit (aperçu) : rien n'est écrit, et la
-   * maison reprend la main dès que le choix est validé. `null` rend la teinte d'avant.
+   * Tint of a car body SHOWN while it is being chosen (preview): nothing is written, and the
+   * house takes over again as soon as the choice is confirmed. `null` restores the previous tint.
    */
   previewBodyColor(key: string, color: string | null): void {
     this.markers.get(key)?.previewColor(color)
   }
 
   /**
-   * Pose les INCIDENTS du journal d'un appareil sur le terrain : une épingle par point (tige fine,
-   * tête teintée de la gravité, plus grosse pour une erreur grave), projetée comme l'appareil
-   * lui-même (`sitePosition`, avec son `gpsOffset`) — un point hors du terrain n'est pas dessiné.
-   * `null` retire tout. C'est ainsi qu'on LOCALISE une panne : « No loop signal » a une place.
+   * Lays the INCIDENTS of a device's log on the terrain: one pin per point (thin stem,
+   * head tinted by severity, larger for a serious error), projected like the device
+   * itself (`sitePosition`, with its `gpsOffset`) — a point outside the terrain is not drawn.
+   * `null` removes everything. That is how a fault is LOCATED: "No loop signal" has a place.
    */
   setJournalPoints(key: string | null, points: readonly { at: number; lat: number; lon: number; severity: string; label?: string }[]): void {
     if (this.journal) {
-      // les étiquettes sont des éléments DOM que le rendu 2D a posés : retirer le groupe de la scène
-      // ne les enlève pas, elles resteraient dans le vide (constaté) — même geste que `DeviceMarker.dispose`
+      // the labels are DOM elements the 2D renderer laid: removing the group from the scene
+      // does not remove them, they would stay in the void (observed) — same move as `DeviceMarker.dispose`
       for (const p of this.journal.points) p.label?.element.remove()
       this.journal.group.removeFromParent()
       disposeObject3D(this.journal.group)
@@ -2732,7 +2732,7 @@ export class HouseScene {
     const anchors: { at: number; anchor: Object3D; head: Mesh; label: CSS2DObject | null }[] = []
     const pickables: Object3D[] = []
     const stem = new CylinderGeometry(0.025, 0.025, 0.7, 8)
-    stem.rotateX(Math.PI / 2)                      // l'axe du cylindre est Y chez Three, la tige monte en Z
+    stem.rotateX(Math.PI / 2)                      // the cylinder axis is Y in Three, the stem rises along Z
     const head = new SphereGeometry(0.16, 16, 12)
     const bigHead = new SphereGeometry(0.22, 16, 12)
     const stemMat = new MeshBasicMaterial({ color: 0xf2f3f5 })
@@ -2745,12 +2745,12 @@ export class HouseScene {
       rod.position.z = 0.35
       const top = new Mesh(p.severity === 'fatal' ? bigHead : head, new MeshBasicMaterial({ color: JOURNAL_PIN_COLORS[p.severity] ?? JOURNAL_PIN_COLORS.info }))
       top.position.z = 0.7
-      // la tête se touche : c'est par là qu'on lit l'incident depuis la scène
+      // the head is touchable: it is through it that the incident is read from the scene
       top.userData = { role: 'journal', at: p.at }
       pickables.push(top)
       pin.add(rod, top)
-      // l'étiquette (texte du fabricant et code) n'apparaît que sur l'épingle ACTIVE : dix-neuf
-      // étiquettes ouvertes se couvriraient l'une l'autre
+      // the label (vendor text and code) only appears on the ACTIVE pin: nineteen
+      // open labels would cover one another
       let label: CSS2DObject | null = null
       if (typeof document !== 'undefined') {
         const el = document.createElement('div')
@@ -2770,9 +2770,9 @@ export class HouseScene {
   }
 
   /**
-   * Peint des formes sur le terrain (repère maison, mètres) : la carte du terrain d'une tondeuse —
-   * zones, obstacles, câbles —, qui épouse le relief. Liste vide = rien. Gardées, elles se repeignent
-   * d'elles-mêmes quand le terrain change.
+   * Paints shapes on the terrain (house reference frame, meters): a mower's terrain map —
+   * zones, obstacles, wires —, which hugs the relief. Empty list = nothing. Kept, they repaint
+   * themselves when the terrain changes.
    */
   setGroundOverlay(shapes: readonly GroundShape[]): void {
     this.groundShapes = shapes
@@ -2793,9 +2793,9 @@ export class HouseScene {
   }
 
   /**
-   * L'épingle ACTIVE : celle de la ligne choisie dans le panneau, ou celle qu'on vient de toucher.
-   * Tête grossie, étiquette visible ; `null` éteint tout. C'est ainsi qu'on lit l'incident depuis la
-   * scène sans avoir à retrouver sa ligne.
+   * The ACTIVE pin: that of the row selected in the panel, or the one just touched.
+   * Enlarged head, visible label; `null` turns everything off. That is how the incident is read from the
+   * scene without having to find its row.
    */
   setActiveJournalPoint(at: number | null): void {
     if (!this.journal) return
@@ -2808,7 +2808,7 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Cadre la caméra sur un incident du journal (même boîte de 3 m que sur un appareil). */
+  /** Frames the camera on a log incident (same 3 m box as on a device). */
   focusJournalPoint(at: number, animate = true): void {
     const hit = this.journal?.points.find((p) => p.at === at)
     if (!hit) return
@@ -2821,13 +2821,13 @@ export class HouseScene {
     this.flyTo(new Box3().setFromCenterAndSize(center, size), azimuth, clamp(polar, DEVICE_FOCUS_POLAR[0], DEVICE_FOCUS_POLAR[1]), animate, 1.1)
   }
 
-  /** Déplace un marqueur (aperçu) ; `position` dans le repère maison (z relatif au sol de l'ancre). */
+  /** Moves a marker (preview); `position` in the house reference frame (z relative to the anchor's floor). */
   moveMarker(key: string, position: Vec3): void {
     const marker = this.markers.get(key)
     if (!marker || !this.house || !this.index) return
     marker.object.position.set(position[0], position[1], this.localZ(marker.device, position[2], position))
     marker.setGuideHeight(position[2])
-    this.invalidateShadows()               // l'appareil déplacé emmène son ombre
+    this.invalidateShadows()               // the moved device takes its shadow along
     this.loop.invalidate()
   }
 
@@ -2849,7 +2849,7 @@ export class HouseScene {
     if (!marker) return
     if (this.controls) this.controls.enabled = false
     this.cameraTween?.cancel()
-    // plan horizontal à la hauteur de l'appareil : il suit exactement le doigt, sans saut initial
+    // horizontal plane at the device's height: it follows the finger exactly, without an initial jump
     const anchor = marker.worldAnchor()
     this.dragPlane.setFromNormalAndCoplanarPoint(WORLD_UP, anchor)
     const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
@@ -2864,7 +2864,7 @@ export class HouseScene {
     const hit = this.raycaster.ray.intersectPlane(this.dragPlane, new Vector3())
     if (!hit) return
     hit.sub(this.dragOffset)
-    const xy: [number, number] = [hit.x, -hit.z]   // monde (x, y, z) ← maison (x, z, -y)
+    const xy: [number, number] = [hit.x, -hit.z]   // world (x, y, z) ← house (x, z, -y)
     const roomId = this.roomAt(marker.device, xy)
     this.lastDrag = { xy, roomId }
     this.emit('deviceDrag', key, xy, roomId)
@@ -2876,7 +2876,7 @@ export class HouseScene {
     this.lastDrag = null
   }
 
-  /** Pièce du niveau de l'appareil contenant le point, sinon null (extérieur, hors de toute pièce). */
+  /** Room of the device's level containing the point, otherwise null (outdoors, outside any room). */
   private roomAt(device: HouseDevice, xy: [number, number]): string | null {
     if (!this.index) return null
     const levelId = this.markerLevelId(device)
@@ -2889,19 +2889,19 @@ export class HouseScene {
     return geoDistance(this.house.origin, state.location) < HOME_RADIUS_M
   }
 
-  // ---- états --------------------------------------------------------------
+  // ---- states -------------------------------------------------------------
   /**
-   * Diff par référence : seuls les appareils dont l'objet d'état a changé sont mis à jour — ou dont le
-   * SON a changé : une barre de son relaie l'état de la TV (`lib/audioRouting.ts`), elle bouge donc
-   * quand c'est la TV qui change.
+   * Diff by reference: only the devices whose state object changed are updated — or whose
+   * SOUND changed: a soundbar relays the TV's state (`lib/audioRouting.ts`), so it moves
+   * when it is the TV that changes.
    */
   updateStates(states: Record<string, DeviceState>, force = false): void {
     const prev = this.states
     this.states = states
-    // Un véhicule qui a bougé change de PLACE, pas seulement d'état : son marqueur n'existe
-    // peut-être pas encore (il vient de rentrer) ou n'a plus lieu d'être (il est parti). Rare —
-    // une lecture toutes les dix minutes — donc refaire les marqueurs coûte moins cher que de
-    // maintenir un cas particulier dans la boucle d'états.
+    // A vehicle that moved changes PLACE, not just state: its marker may
+    // not exist yet (it just came home) or no longer have a reason to (it left). Rare —
+    // one reading every ten minutes — so redoing the markers costs less than
+    // maintaining a special case in the state loop.
     if (!force && this.house) {
       const moved = this.drawable().some((d) => {
         if (d.position || !d.deviceId) return false
@@ -2926,42 +2926,42 @@ export class HouseScene {
         marker.update(next, sound)
         if (fanId) marker.setCompanionFan(fanNext)
         touched = true
-        // Seuls ces trois-là DÉPLACENT quelque chose qui porte une ombre (un tablier, une voiture) ou
-        // en allument une (une lampe de jardin). Un capteur qui publie sa mesure toutes les secondes
-        // ne doit pas relancer un relevé d'ombres.
+        // Only these three MOVE something that casts a shadow (a curtain, a car) or
+        // light one (a garden lamp). A sensor that publishes its measurement every second
+        // must not restart a shadow capture.
         if (next && (next.kind === 'cover' || next.kind === 'vehicle' || next.kind === 'light')) this.invalidateShadows()
       }
     }
     if (touched) this.syncWindowGlow()
   }
 
-  // ---- focus / caméra -----------------------------------------------------
+  // ---- focus / camera -----------------------------------------------------
   setOptions(opts: Partial<HouseSceneOptions>): void {
     this.invalidateShadows()
     const before = this.options.quality
     const projectionBefore = this.options.projection
     this.options = { ...this.options, ...opts }
     if (this.renderer) this.renderer.shadowMap.enabled = this.options.shadows
-    if (this.options.quality !== before) { this.autoQuality = null; this.applyQuality() }   // un choix explicite repart de la détection
+    if (this.options.quality !== before) { this.autoQuality = null; this.applyQuality() }   // an explicit choice starts from detection again
     if (this.options.projection !== projectionBefore) this.applyProjectionMode()
     this.applyLevelFocus()
     this.loop.invalidate()
   }
 
   /**
-   * Change de projection. La pose ne bouge PAS : c'est le tronc qui change. Le zoom orthographique
-   * est choisi pour montrer la même hauteur de monde au point visé, et le retour en perspective
-   * retrouve la distance qui montrait cette hauteur — sinon la maison sauterait d'un facteur dix au
-   * moment où l'on coche la case.
+   * Changes projection. The pose does NOT move: it is the frustum that changes. The orthographic zoom
+   * is chosen to show the same world height at the aimed point, and going back to perspective
+   * finds again the distance that showed that height — otherwise the house would jump by a factor of ten at the
+   * moment the box is ticked.
    */
   private applyProjectionMode(): void {
     const mode = this.options.projection
     const target = this.controls?.target ?? new Vector3()
-    // la hauteur de monde montrée au point visé, relevée AVANT tout changement : c'est elle qui tient
+    // the world height shown at the aimed point, read BEFORE any change: it is what holds
     const height = this.camera instanceof OrthographicCamera
       ? ORTHO_BASE_M / this.camera.zoom
       : visibleHeight(this.camera.position.distanceTo(target), this.perspectiveCamera.fov)
-    // l'isométrie est une perspective à champ ÉTROIT ; l'orthographique se rapporte au champ de base
+    // the isometric view is a NARROW-field perspective; the orthographic relates to the base field
     this.perspectiveCamera.fov = mode === 'iso' ? ISO_FOV_DEG : BASE_FOV_DEG
     this.applyControlLimits()
     if (mode === 'ortho') {
@@ -2972,11 +2972,11 @@ export class HouseScene {
       const lo = this.controls?.minDistance ?? 1, hi = this.controls?.maxDistance ?? Infinity
       const distance = clamp(distanceForHeight(height, this.perspectiveCamera.fov), lo, hi)
       this.swapCamera(this.perspectiveCamera)
-      this.applyProjection()                 // le champ a pu changer sans changer de caméra
+      this.applyProjection()                 // the field may have changed without changing camera
       const { azimuth, polar } = this.currentSpherical()
       this.camera.position.copy(this.poseAt(azimuth, polar, distance).position)
     }
-    // l'isométrie ne se contente pas d'un tronc : elle impose ses angles, et la vue s'y range
+    // the isometric view is not content with a frustum: it imposes its angles, and the view complies
     if (mode === 'iso') {
       const { azimuth, distance } = this.currentSpherical()
       this.moveCamera(this.poseAt(snapIsoAzimuth(azimuth, DEFAULT_AZIMUTH), ISO_POLAR, distance), true)
@@ -2984,7 +2984,7 @@ export class HouseScene {
     this.controls?.update()
   }
 
-  /** Échange la caméra active en lui passant pose, couches et cadrage ; la chaîne d'image la suit. */
+  /** Swaps the active camera, handing it pose, layers and framing; the image chain follows it. */
   private swapCamera(next: PerspectiveCamera | OrthographicCamera): void {
     const from = this.camera
     if (next === from) return
@@ -2994,21 +2994,21 @@ export class HouseScene {
     this.camera = next
     if (this.controls) this.controls.object = next
     this.applyProjection()
-    // l'occlusion ambiante tient une référence sur la caméra : la chaîne se refait avec la neuve
+    // the ambient occlusion holds a reference to the camera: the chain is redone with the new one
     this.applyQuality()
   }
 
   /**
-   * Ce que les contrôles autorisent, selon la projection. En orthographique la molette ne change
-   * plus la distance mais le ZOOM : les bornes de l'une se traduisent dans l'autre. En isométrie la
-   * rotation libre est coupée — doigt et bouton gauche déplacent la vue, et les boutons de la vue
-   * tournent par quarts de tour (`orbitBy`).
+   * What the controls allow, depending on the projection. In orthographic the wheel no longer changes
+   * the distance but the ZOOM: the bounds of one translate into the other. In isometric, free
+   * rotation is cut — finger and left button pan the view, and the view buttons
+   * rotate by quarter turns (`orbitBy`).
    */
   private applyControlLimits(): void {
     const c = this.controls
     if (!c) return
     const fov = this.perspectiveCamera.fov
-    // le champ étroit de l'isométrie recule la caméra d'autant : les bornes de la molette suivent
+    // the narrow field of the isometric view moves the camera back accordingly: the wheel bounds follow
     const k = Math.tan((BASE_FOV_DEG * Math.PI) / 360) / Math.tan((fov * Math.PI) / 360)
     c.minDistance = MIN_DISTANCE_M * k
     c.maxDistance = MAX_DISTANCE_M * k
@@ -3025,8 +3025,8 @@ export class HouseScene {
   focusLevel(levelId: string | null): void {
     this.focusedLevelId = levelId
     this.applyLevelFocus()
-    // un niveau masqué ne porte plus d'ombre (et un niveau rendu en porte de nouveau) : sans relevé,
-    // l'étage caché continuait d'assombrir celui qu'on regarde
+    // a hidden level no longer casts a shadow (and a level shown again casts one again): without a recapture,
+    // the hidden upper floor kept darkening the one being looked at
     this.invalidateShadows()
     this.loop.invalidate()
   }
@@ -3040,22 +3040,22 @@ export class HouseScene {
       const above = !!focused && level.elevation > focused.elevation
       const ghost = above && this.options.levelFocusMode === 'ghost'
       this.liftTo(`level:${id}`, () => this.nodes?.levels.get(id)?.group, level.elevation, !above || ghost, this.topBelow(level.elevation))
-      // …et avec eux les poignées d'ouverture et les cotes. Un étage qui s'ENVOLE garde les siens
-      // pendant le vol (ses pilules montent et s'estompent avec lui) : c'est son groupe, masqué à
-      // l'arrivée, qui les retire. Le fantôme, lui, reste en place sans ses marqueurs.
+      // …and with them the opening handles and the dimensions. An upper floor that FLIES OFF keeps its own
+      // during the flight (its pills rise and fade with it): it is its group, hidden on
+      // arrival, that removes them. The ghost, for its part, stays in place without its markers.
       nodes.markers.visible = !ghost
       for (const mesh of [...nodes.walls, ...nodes.floors.values(), ...nodes.panes]) {
         mesh.material = ghost ? this.materials.ghost : (mesh.userData.material as Material)
       }
-      // pilules : seulement le niveau focalisé (lisibilité) ; l'appareil sélectionné reste visible
+      // pills: only the focused level (readability); the selected device stays visible
       for (const m of this.markers.values()) if (m.object.parent === nodes.markers) pills.push([m, focused?.id === id])
     }
     this.fadePills(pills)
-    // le toit se voit en vue d'ensemble et depuis le niveau qu'il porte (le toit déclaré comme un
-    // niveau, pour ses panneaux) ; depuis un étage, il cacherait les pièces
+    // the roof shows in the overview and from the level it carries (the roof declared as a
+    // level, for its panels); from an upper floor, it would hide the rooms
     if (this.nodes.roof) this.liftTo('roof', () => this.nodes?.roof ?? undefined, 0, !focused || this.isRoofLevel(focused), this.topBelow(this.geometry?.roof?.zBase ?? 0))
-    // jardin : pilules visibles — sauf un GPS coincé SOUS le plancher focalisé (même XY qu'une
-    // pièce de cet étage, plus bas). Une voiture sans place finissait ainsi à percer le 1er.
+    // garden: pills visible — except a GPS stuck UNDER the focused floor (same XY as a
+    // room of that floor, lower). A car without a space thus ended up poking through the upper floor.
     for (const m of this.markers.values()) {
       if (m.object.parent !== this.nodes.outdoorMarkers) continue
       m.setPillVisible(!focused || !this.coveredByFocusedFloor(m))
@@ -3064,14 +3064,14 @@ export class HouseScene {
   }
 
   /**
-   * Montre ou masque un étage (ou le toit) en le faisant S'ENVOLER : il monte en accélérant puis
-   * disparaît ; il redescend et se pose en revenant. Un déplacement, et non un fondu TRANSPARENT :
-   * aucune matière ne devient transparente, aucun programme ne change. `get` relit l'objet à chaque image — un
-   * niveau reconstruit en plein vol (réglage d'une ouverture) reprend la course où elle en est.
-   * Sans renderer (tests), la bascule est immédiate, comme avant.
+   * Shows or hides an upper floor (or the roof) by making it FLY OFF: it rises while accelerating then
+   * disappears; it comes back down and lands on returning. A displacement, and not a TRANSPARENT fade:
+   * no material becomes transparent, no program changes. `get` rereads the object every frame — a
+   * level rebuilt mid-flight (adjusting an opening) resumes the travel where it is.
+   * Without a renderer (tests), the switch is immediate, as before.
    *
-   * Il s'efface en même temps qu'il monte (`core/levelFade.ts`) : tout ce qui est au-dessus de
-   * `fadeCutY` — le haut du niveau qui reste — perd des pixels à mesure que l'étage s'élève.
+   * It fades out at the same time as it rises (`core/levelFade.ts`): everything above
+   * `fadeCutY` — the top of the level that stays — loses pixels as the upper floor rises.
    */
   private liftTo(key: string, get: () => Object3D | undefined, baseZ: number, shown: boolean, fadeCutY: number): void {
     let s = this.lifts.get(key)
@@ -3090,9 +3090,9 @@ export class HouseScene {
     const to = shown ? 0 : LEVEL_LIFT_M
     if (!this.renderer) { state.offset = to; apply(); return }
     const from = state.offset
-    // la carte d'ombre suit l'étage pendant tout le vol, et se refait une fois posé
+    // the shadow map follows the upper floor during the whole flight, and is redone once it has landed
     this.invalidateShadows(LEVEL_LIFT_MS + SHADOW_SETTLE_MS)
-    // plusieurs étages partent ensemble (rez-de-chaussée depuis « Tout ») : le seuil le plus bas
+    // several upper floors leave together (ground floor from "All"): the lowest threshold
     this.fadeCutY = Math.min(this.fadeCutY, fadeCutY)
     const tw = createTween({
       durationMs: LEVEL_LIFT_MS, now: this.deps.now?.() ?? performance.now(),
@@ -3106,8 +3106,8 @@ export class HouseScene {
         state.tween = null
         apply()
         this.padLamps()
-        this.invalidateShadows()             // l'étage vient d'être masqué (ou posé) : son ombre suit
-        // plus rien en vol : le fondu se lève, l'image redevient celle d'avant au pixel près
+        this.invalidateShadows()             // the upper floor has just been hidden (or landed): its shadow follows
+        // nothing in flight anymore: the fade lifts, the image becomes the one from before again, pixel for pixel
         if ([...this.lifts.values()].every((l) => !l.tween)) { this.fadeCutY = Infinity; setLevelFade(1e9, 1) }
       },
     })
@@ -3117,11 +3117,11 @@ export class HouseScene {
   }
 
   /**
-   * Montre ou masque les pilules des niveaux EN FONDU, au rythme de l'envol des étages : celles qui
-   * apparaissent partent de 0, celles qui partent s'estompent (et montent avec leur étage) puis se
-   * masquent. Auparavant elles basculaient d'un coup — les pilules du rez-de-chaussée surgissaient
-   * alors que l'étage, encore là, s'envolait sans les siennes. Une pilule neuve (marqueurs refaits)
-   * se pose sans fondu : elle n'a jamais été vue.
+   * Shows or hides the levels' pills WITH A FADE, in step with the upper floors' flight: those that
+   * appear start from 0, those that leave fade (and rise with their upper floor) then are
+   * hidden. Previously they switched all at once — the ground floor pills popped up
+   * while the upper floor, still there, flew off without its own. A new pill (markers redone)
+   * is set without a fade: it has never been seen.
    */
   private fadePills(wanted: readonly [DeviceMarker, boolean][]): void {
     const changes: [DeviceMarker, boolean][] = []
@@ -3132,11 +3132,11 @@ export class HouseScene {
       if (was !== want) changes.push([m, want])
     }
     if (changes.length === 0) return
-    // un fondu en cours se termine d'un coup : ses pilules prennent leur état final
+    // a fade in progress ends at once: its pills take their final state
     this.finishPillFade()
     for (const [m, want] of changes) if (want) { m.setPillFade(0); m.setPillVisible(true) }
     this.pillFading = changes
-    // une seule course, en temps : la sortie finit avec le vol, l'entrée part après un délai
+    // a single travel, in time: the exit ends with the flight, the entry starts after a delay
     const total = Math.max(LEVEL_LIFT_MS, PILL_IN_DELAY_MS + PILL_IN_MS)
     const phase = (ms: number, from: number, len: number) => easeInOutCubic(Math.min(1, Math.max(0, (ms - from) / len)))
     const tw = createTween({
@@ -3159,21 +3159,21 @@ export class HouseScene {
     this.pillFading = []
   }
 
-  /** Le haut (z maison, donc hauteur monde) du plus haut niveau posé sous `z` : là où l'étage qui s'envole commence. */
+  /** The top (house z, hence world height) of the highest level placed below `z`: where the upper floor flying off begins. */
   private topBelow(z: number): number {
     let top = -Infinity
     for (const l of this.nodes?.levels.values() ?? []) if (l.elevation < z - 1e-3) top = Math.max(top, l.elevation + l.height)
-    // le seuil passe JUSTE au-dessus du dessus de ses murs : posé pile dessus, il faisait basculer
-    // chaque pixel de ces faces d'un côté ou de l'autre — un grain qui scintillait pendant l'envol
+    // the threshold passes JUST above the top of its walls: placed right on it, it flipped
+    // each pixel of those faces to one side or the other — a grain that flickered during the flight
     return (Number.isFinite(top) ? Math.min(top, z) : z) + LEVEL_FADE_MARGIN_M
   }
 
   /**
-   * Garde CONSTANT le nombre de lumières ponctuelles que voit le rendu. Three compile un programme
-   * par nombre de lumières : masquer l'étage retirait ses lampes, et la première visite du
-   * rez-de-chaussée recompilait toutes les matières — 2,2 s d'image figée sur l'iGPU (mesuré le
-   * 2026-09-24). Une lampe éteinte, posée hors de tout niveau, prend la place de chaque lampe
-   * masquée ; le shader ne calcule rien pour elle (`core/levelLight.ts`).
+   * Keeps the number of point lights the render sees CONSTANT. Three compiles one program
+   * per number of lights: hiding the upper floor removed its lamps, and the first visit to the
+   * ground floor recompiled every material — 2.2 s of frozen frame on the iGPU (measured on
+   * 2026-09-24). A lamp that is off, placed outside any level, takes the place of each hidden
+   * lamp; the shader computes nothing for it (`core/levelLight.ts`).
    */
   private padLamps(): void {
     if (!this.nodes) return
@@ -3188,14 +3188,14 @@ export class HouseScene {
   }
 
   /**
-   * Marqueur d'extérieur caché par le plancher de l'étage qu'on regarde : plus bas que ce niveau,
-   * et son XY tombe dans une pièce de ce niveau (garage sous chambre, etc.).
+   * Outdoor marker hidden by the floor of the upper level being looked at: lower than that level,
+   * and its XY falls inside a room of that level (garage under a bedroom, etc.).
    */
   private coveredByFocusedFloor(m: DeviceMarker): boolean {
     if (!this.focusedLevelId || !this.house || !this.index) return false
     const focused = this.house.levels.find((l) => l.id === this.focusedLevelId)
     if (!focused) return false
-    // altitude absolue Z-up : somme des z locaux jusqu'à la racine de la maison
+    // absolute Z-up altitude: sum of the local z values up to the house root
     let absZ = 0
     for (let o: Object3D | null = m.object; o && o !== this.nodes!.root; o = o.parent) absZ += o.position.z
     if (absZ >= focused.elevation - 0.05) return false
@@ -3204,16 +3204,16 @@ export class HouseScene {
     return rooms.some((r) => pointInPolygon(xy, r.polygon))
   }
 
-  /** Les nœuds Three d'un niveau (tests, diagnostic). */
+  /** The Three nodes of a level (tests, diagnostics). */
   nodesOf(levelId: string): LevelNodes | undefined { return this.nodes?.levels.get(levelId) }
 
-  /** Niveau posé au niveau du toit ou au-dessus : le toit lui appartient, il ne le masque pas. */
+  /** Level placed at the roof's height or above: the roof belongs to it, it does not hide it. */
   private isRoofLevel(level: Level): boolean {
     const roof = this.geometry?.roof
     return !!roof && level.elevation >= roof.zBase - 1e-3
   }
 
-  /** Le niveau que porte le toit, s'il est déclaré (pour ses panneaux, sa caméra…). */
+  /** The level the roof carries, if it is declared (for its panels, its camera…). */
   private roofLevel(): Level | undefined {
     return this.house?.levels.find((l) => this.isRoofLevel(l))
   }
@@ -3247,18 +3247,18 @@ export class HouseScene {
   }
 
   /**
-   * Cadre l'appareil lui-même (et non sa pièce) : boîte fixe autour de son ancre, donc la même
-   * distance quelle que soit la taille de la pièce. `controls.minDistance` borne le rapproché.
+   * Frames the device itself (and not its room): a fixed box around its anchor, hence the same
+   * distance whatever the size of the room. `controls.minDistance` bounds the close-up.
    *
-   * Plongée plus forte que pour une pièce (`DEVICE_FOCUS_POLAR`) : de près, un mur extérieur à
-   * moins de deux mètres passe devant l'appareil sous 30° au-dessus de l'horizon. L'azimut, lui,
-   * est choisi (`roomSideAzimuth`) et non conservé.
+   * Steeper tilt than for a room (`DEVICE_FOCUS_POLAR`): up close, an exterior wall less than
+   * two meters away passes in front of the device below 30° above the horizon. The azimuth, for its part,
+   * is chosen (`roomSideAzimuth`) and not preserved.
    */
   focusDevice(key: string, animate = true): void {
     if (!this.house || !this.index) return
     const found = this.drawable().find((d) => d.id === key)
     const marker = this.markers.get(key)
-    // un marqueur existe : l'appareil a donc une place (`buildMarkers` n'en fait pas pour les autres)
+    // a marker exists: the device therefore has a place (`buildMarkers` makes none for the others)
     const position = found ? this.effectivePosition(found) : null
     if (!found || !position || !marker) return
     const device: PlacedHouseDevice = { ...found, position }
@@ -3272,10 +3272,10 @@ export class HouseScene {
   }
 
   /**
-   * Azimut qui regarde l'appareil DEPUIS le centre de sa pièce. Sans ça, un appareil contre un mur
-   * extérieur (lampe, volet, téléviseur : le cas courant) se cadrait derrière ce mur, et l'on ne
-   * voyait que sa face et la pelouse. `null` s'il est au milieu de la pièce ou hors pièce : on garde
-   * alors l'azimut de l'utilisateur.
+   * Azimuth that looks at the device FROM the center of its room. Without this, a device against an exterior
+   * wall (lamp, shutter, TV: the common case) was framed from behind that wall, and one only
+   * saw its back and the lawn. `null` if it is in the middle of the room or outside any room: we then keep
+   * the user's azimuth.
    */
   private roomSideAzimuth(device: PlacedHouseDevice): number | null {
     if (!device.roomId || !this.house) return null
@@ -3284,7 +3284,7 @@ export class HouseScene {
     const c = boundsCenter(b)
     const dx = c[0] - device.position[0], dy = c[1] - device.position[1]
     if (Math.hypot(dx, dy) < 0.5) return null
-    return Math.atan2(dx, -dy)   // repère monde : x est, z = -y maison
+    return Math.atan2(dx, -dy)   // world frame: x east, z = house -y
   }
 
   focusOutdoor(animate = true): void {
@@ -3295,28 +3295,28 @@ export class HouseScene {
   }
 
   /**
-   * Regarde la parcelle DEPUIS un point cardinal (le vrai, `origin.heading` compris), presque à
-   * l'horizontale : c'est de profil qu'on juge une pente ou un talus. `top` : d'aplomb, pour viser un
-   * point dans le plan.
+   * Looks at the plot FROM a cardinal point (the true one, `origin.heading` included), almost
+   * horizontally: it is in profile that a slope or a bank is judged. `top`: from straight above, to aim at a
+   * point in the plane.
    */
   viewTerrainFrom(side: TerrainView, animate = true): void {
     if (!this.geometry || !this.house) return
     if (side === 'top') { this.flyTo(boundsToWorldBox(this.geometry.bounds), this.currentSpherical().azimuth, 0.01, animate, 1.0); return }
     const h = (this.house.origin.heading * Math.PI) / 180
-    const north: Vec2 = [-Math.sin(h), Math.cos(h)]      // le nord en repère maison (+y est tourné du cap)
+    const north: Vec2 = [-Math.sin(h), Math.cos(h)]      // north in the house reference frame (+y is rotated by the heading)
     const turn = { north: 0, east: -Math.PI / 2, south: Math.PI, west: Math.PI / 2 }[side]
     const d: Vec2 = [north[0] * Math.cos(turn) - north[1] * Math.sin(turn), north[0] * Math.sin(turn) + north[1] * Math.cos(turn)]
-    // caméra du côté `d` : en monde (x, z = −y), azimut three = atan2(x, z)
+    // camera on side `d`: in world (x, z = −y), three azimuth = atan2(x, z)
     this.flyTo(boundsToWorldBox(this.geometry.bounds), Math.atan2(d[0], -d[1]), Math.PI / 2 - 0.12, animate, 1.0)
   }
 
-  /** Cadre un niveau entier (après un changement d'onglet). */
+  /** Frames a whole level (after a tab change). */
   focusLevelView(levelId: string, animate = true): void {
     if (!this.house || !this.geometry) return
     this.focusLevel(levelId)
     this.highlightRoom(null)
-    // le niveau du toit se cadre SUR le toit (il n'a ni pièce ni contour à cadrer autrement) : cadrer
-    // le bâti entier le laissait petit et lointain, alors que c'est lui qu'on vient voir
+    // the roof level is framed ON the roof (it has neither room nor outline to frame otherwise): framing
+    // the whole structure left it small and distant, whereas it is what one came to see
     const level = this.house.levels.find((l) => l.id === levelId)
     const roof = level && this.isRoofLevel(level) ? this.geometry.roof : undefined
     const box = boundsToWorldBox(roof ? roofBounds(roof) : buildingBounds(this.house, resolveDefaults(this.house.defaults)))
@@ -3330,10 +3330,10 @@ export class HouseScene {
   }
 
   /**
-   * La POSE est la même dans les deux projections — c'est le champ de vision de référence qui la
-   * calcule, même quand la caméra n'en a plus. L'orthographique y ajoute son zoom : les deux cadrent
-   * alors la même chose, et basculer de l'une à l'autre ne déplace rien. L'isométrie, elle, ramène
-   * l'angle demandé sur ses rails avant de cadrer.
+   * The POSE is the same in both projections — it is the reference field of view that
+   * computes it, even when the camera no longer has one. The orthographic adds its zoom: both then
+   * frame the same thing, and switching from one to the other moves nothing. The isometric, for its part, brings
+   * the requested angle back onto its rails before framing.
    */
   private flyTo(box: Box3, azimuth: number, polar: number, animate: boolean, padding: number): void {
     const iso = this.options.projection === 'iso'
@@ -3375,18 +3375,18 @@ export class HouseScene {
     this.loop.addTween(tw)
   }
 
-  /** Surbrillance d'une pièce : le sol tire vers l'accent (comme un onglet actif). */
+  /** Highlight of a room: the floor leans toward the accent (like an active tab). */
   /**
-   * La pièce sélectionnée porte un TRAIT d'accent le long de ses murs et un voile léger sur son sol,
-   * tous deux NON éclairés : ils ne réagissent pas aux lampes et n'altèrent pas le sol dessous.
-   * Auparavant (jusqu'au 2026-09-15) le sol lui-même tirait vers l'accent (`color.lerp` 0,45 et une
-   * part émise la nuit) : les flaques colorées des lampes en étaient faussées, et la teinte se
-   * perdait sur un parquet sombre ou sous un ciel noir. Le trait est plus clair que le blanc
-   * (couleur × 1,6) : la nuit, le bloom en fait un néon, comme la maquette.
+   * The selected room carries an accent LINE along its walls and a light veil on its floor,
+   * both UNLIT: they do not react to the lamps and do not alter the floor beneath.
+   * Previously (until 2026-09-15) the floor itself leaned toward the accent (`color.lerp` 0.45 and an
+   * emitted share at night): the colored pools of the lamps were skewed by it, and the tint got
+   * lost on a dark parquet or under a black sky. The line is lighter than white
+   * (color × 1.6): at night, the bloom turns it into a neon, like the maquette.
    */
   highlightRoom(roomId: string | null): void {
     if (!this.nodes) return
-    // les clones de sol reprennent la couleur de leur nature (après un changement de style ou d'heure)
+    // the floor clones take back the color of their kind (after a change of style or hour)
     for (const nodes of this.nodes.levels.values()) {
       for (const mesh of nodes.floors.values()) {
         const m = mesh.userData.material as MeshStandardMaterial
@@ -3401,13 +3401,13 @@ export class HouseScene {
     const level = floor ? this.nodes.levels.get(floor.levelId) : undefined
     if (floor && level) {
       const accent = this.theme.primary
-      // Le trait est éclairci (un accent sombre, le sarcelle du thème Kasbah, resterait un filet
-      // terne) et poussé JUSTE au-dessus de 1 : c'est ce dépassement que le bloom accroche la nuit.
-      // Réglé à l'œil avec l'utilisateur : × 1,8 brûlait en blanc, × 1 « ne glow plus assez ».
-      // Le voile est léger, il ne teinte qu'à peine.
-      // Dessiné PAR-DESSUS les murs (`ringThrough`, comme le guide du mode déplacer) : en vue
-      // oblique, le pied d'un mur cachait le trait qui le longe.
-      // Ces cinq nombres sont ceux que le banc de réglage (`styles/tuning.ts`) met sous curseur.
+      // The line is lightened (a dark accent, the Kasbah theme's teal, would stay a dull
+      // thread) and pushed JUST above 1: it is this overshoot that the bloom catches at night.
+      // Tuned by eye with the user: × 1.8 burned to white, × 1 "doesn't glow enough anymore".
+      // The veil is light, it barely tints.
+      // Drawn ON TOP OF the walls (`ringThrough`, like the guide of the move mode): in an oblique
+      // view, the foot of a wall hid the line that runs along it.
+      // These five numbers are the ones the tuning bench (`styles/tuning.ts`) puts under sliders.
       const tn = this.tuning
       const ring = new Mesh(
         flatRing(floor.polygon, insetPolygon(floor.polygon, tn.ringWidth), floor.z1 + 0.012),
@@ -3418,10 +3418,10 @@ export class HouseScene {
         new MeshBasicMaterial({ color: accent, transparent: true, opacity: tn.fillOpacity, depthWrite: false }),
       )
       for (const m of [fill, ring]) { m.name = 'highlight'; level.group.add(m); this.highlightMeshes.push(m) }
-      // …et le reste de la maison s'efface derrière elle (`core/roomFocus.ts`) : son contour élargi
-      // d'un mur extérieur (ses murs restent entiers), de sous sa dalle au haut de ses murs. La
-      // limite tombe dans le VIDE, au-delà du mur : posée pile sur sa face extérieure, elle faisait
-      // basculer chaque pixel d'un côté ou de l'autre — un grain qui scintillait au moindre geste.
+      // …and the rest of the house fades behind it (`core/roomFocus.ts`): its outline widened
+      // by an exterior wall (its walls stay whole), from under its slab to the top of its walls. The
+      // boundary falls in the VOID, beyond the wall: placed right on its outer face, it
+      // flipped each pixel to one side or the other — a grain that flickered at the slightest gesture.
       const wall = this.house ? resolveDefaults(this.house.defaults).exteriorWallThickness : 0.3
       setRoomFocusShape(offsetPolygon(floor.polygon, wall + ROOM_FOCUS_MARGIN_M), level.elevation - ROOM_FOCUS_SLAB_M, level.elevation + level.height + ROOM_FOCUS_MARGIN_M)
     }
@@ -3430,7 +3430,7 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Amène la mise en valeur d'une pièce à `to` (0 = aucune) en `ROOM_FOCUS_MS`, sans rejouer si elle y va déjà. */
+  /** Brings a room's highlight to `to` (0 = none) in `ROOM_FOCUS_MS`, without replaying if it is already heading there. */
   private fadeRoomFocus(to: number): void {
     if (this.roomFocusTarget === to) return
     this.roomFocusTarget = to
@@ -3448,11 +3448,11 @@ export class HouseScene {
   }
 
   /**
-   * Les fenêtres d'une pièce dont une lampe est allumée s'éclairent, vues de dehors : le verre de la
-   * pièce (un clone par pièce, `buildLevel`) émet la couleur de ses lampes, poussée au-dessus de 1
-   * pour que le bloom l'accroche, et devient plus opaque — un verre à 30 % n'émettrait que 30 %.
-   * Seulement la nuit (`theme.night`) : en plein jour, une fenêtre éclairée ne se voit pas.
-   * Ne change qu'une couleur et une opacité : aucune variante de programme.
+   * The windows of a room with a lamp on light up, seen from outside: the room's glass
+   * (one clone per room, `buildLevel`) emits the color of its lamps, pushed above 1
+   * so that the bloom catches it, and becomes more opaque — a glass at 30 % would only emit 30 %.
+   * Only at night (`theme.night`): in broad daylight, a lit window does not show.
+   * Only changes a color and an opacity: no program variant.
    */
   private syncWindowGlow(): void {
     if (!this.nodes || !this.house) return
@@ -3488,7 +3488,7 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  // ---- sélection ----------------------------------------------------------
+  // ---- selection ----------------------------------------------------------
   setSelected(key: string | null): void {
     if (this.selectedKey) this.markers.get(this.selectedKey)?.setSelected(false)
     this.selectedKey = key
@@ -3497,23 +3497,23 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Sélection au point NDC par lancer de rayon : objet d'appareil, sol de pièce, toit, zone. */
+  /** Selection at the NDC point by raycasting: device object, room floor, roof, zone. */
   pick(ndc: { x: number; y: number }): { kind: 'device'; key: string } | { kind: 'room'; roomId: string } | { kind: 'level'; levelId: string } | { kind: 'zone'; zoneId: string } | { kind: 'journal'; at: number } | { kind: 'opening'; openingId: string } | { kind: 'parking'; parkingId: string } | { kind: 'garden'; itemId: string } | null {
     if (!this.nodes) return null
     this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
-    // Une poignée d'ouverture ou une place ne passe devant le bâti que si le bâti ne la CACHE pas :
-    // sans ce garde, un tap sur le plancher du 1er traversait et attrapait la fenêtre ou la place du
-    // RDC juste dessous. La distance du bâti touché le premier n'est calculée qu'au besoin.
+    // An opening handle or a space only wins over the structure if the structure does not HIDE it:
+    // without this guard, a tap on the upper floor's floor went through and grabbed the window or the space of the
+    // ground floor right below. The distance of the structure hit first is only computed when needed.
     let front: number | undefined
     const hidden = (d: number) => d > (front ??= this.nearestBuiltHit()) + WALL_PICK_TOLERANCE_M
-    // En mode édition, un arbre passe avant tout le reste : c'est le seul moment où on le touche.
+    // In edit mode, a tree takes precedence over everything else: it is the only moment it is touched.
     if (this.editingGarden) {
       const hitItem = this.raycaster.intersectObjects(this.garden.pickables(), false)[0]
       const itemId = hitItem ? this.garden.idOf(hitItem) : null
       if (itemId) return { kind: 'garden', itemId }
     }
-    // En mode édition, une place passe avant le sol qui la porte — mais APRÈS les appareils : la
-    // voiture garée dessus reste ce qu'on touche en premier, c'est elle qu'on vient piloter.
+    // In edit mode, a space takes precedence over the floor that carries it — but AFTER the devices: the
+    // car parked on it stays what is touched first, it is what one comes to control.
     if (this.editingParkings) {
       const fills: Mesh[] = []
       for (const n of this.parkingNodes.values()) if (shownInScene(n.group)) fills.push(n.fill)
@@ -3525,15 +3525,15 @@ export class HouseScene {
         return { kind: 'parking', parkingId: hitParking.object.userData.parkingId as string }
       }
     }
-    // En mode édition, la poignée d'une ouverture passe AVANT l'appareil : c'est elle qu'on vient
-    // chercher, et le tablier d'un volet couvre justement sa fenêtre.
+    // In edit mode, an opening's handle takes precedence BEFORE the device: it is what one comes
+    // looking for, and a shutter's curtain covers precisely its window.
     if (this.editingOpenings) {
       const fills: Mesh[] = []
       for (const h of this.openingHandles.values()) if (shownInScene(h.group)) fills.push(h.fill)
       const hitHandle = this.raycaster.intersectObjects(fills, false)[0]
       if (hitHandle && !hidden(hitHandle.distance)) return { kind: 'opening', openingId: hitHandle.object.userData.openingId as string }
     }
-    // une épingle du journal d'abord : petite, posée au sol, elle perdrait contre le sol de la pièce
+    // a log pin first: small, laid on the ground, it would lose against the room's floor
     if (this.journal) {
       const hitPin = this.raycaster.intersectObjects(this.journal.pickables, false)[0]
       if (hitPin) return { kind: 'journal', at: hitPin.object.userData.at as number }
@@ -3547,20 +3547,20 @@ export class HouseScene {
       if (nodes.group.visible && nodes.markers.visible) { floors.push(...nodes.floors.values()); walls.push(...nodes.walls) }
     }
     const hitFloor = this.raycaster.intersectObjects(floors, false)[0]
-    // Un mur ARRÊTE le rayon : sans lui, le tap sur une cloison traversait et tombait sur le sol de
-    // la pièce voisine. Il sélectionne la pièce dont on voit la face (`roomOfWallHit`).
+    // A wall STOPS the ray: without it, the tap on a partition went through and landed on the floor of
+    // the neighboring room. It selects the room whose face is seen (`roomOfWallHit`).
     const hitWall = this.raycaster.intersectObjects(walls, false)[0]
-    // Le toit cache ce qu'il couvre : un tap dessus va au niveau qui le porte, jamais à la pièce
-    // qu'on ne voit pas dessous (sans quoi le toit disparaissait au profit de l'étage).
+    // The roof hides what it covers: a tap on it goes to the level that carries it, never to the room
+    // that cannot be seen below (otherwise the roof disappeared in favor of the upper floor).
     const roofNode = this.nodes.roof
     const roofLevel = roofNode?.visible ? this.roofLevel() : undefined
     const hitRoof = roofNode && roofLevel ? this.raycaster.intersectObject(roofNode, false)[0] : undefined
-    // Un appareil SOUS un plancher (voiture au garage sous la chambre) est plus loin que le sol :
-    // on ne le prend que s'il est le plus proche — sinon on touche le plancher qu'on voit.
+    // A device UNDER a floor (car in the garage under the bedroom) is farther than the floor:
+    // it is only taken if it is the closest — otherwise one touches the floor one sees.
     const deviceWins = !!hitDevice
       && (!hitFloor || hitDevice.distance <= hitFloor.distance)
       && (!hitRoof || hitDevice.distance <= hitRoof.distance)
-      // une applique, une télé murale sont DEVANT leur mur : la marge ne les fait pas perdre contre lui
+      // a wall light, a wall-mounted TV are IN FRONT OF their wall: the margin does not make them lose against it
       && (!hitWall || hitDevice.distance <= hitWall.distance + WALL_PICK_TOLERANCE_M)
     if (deviceWins) return { kind: 'device', key: hitDevice!.object.userData.key as string }
     if (hitRoof && (!hitFloor || hitRoof.distance <= hitFloor.distance) && (!hitWall || hitRoof.distance <= hitWall.distance)) return { kind: 'level', levelId: roofLevel!.id }
@@ -3569,7 +3569,7 @@ export class HouseScene {
       return roomId ? { kind: 'room', roomId } : null
     }
     if (hitFloor) return { kind: 'room', roomId: hitFloor.object.userData.roomId as string }
-    // les zones du jardin ne se sélectionnent qu'en vue d'ensemble / jardin
+    // the garden zones can only be selected in the overview / garden
     if (this.focusedLevelId === null) {
       const hitZone = this.raycaster.intersectObjects([...this.nodes.zones.values()], false)[0]
       if (hitZone) return { kind: 'zone', zoneId: hitZone.object.userData.zoneId as string }
@@ -3578,8 +3578,8 @@ export class HouseScene {
   }
 
   /**
-   * Distance du premier élément BÂTI sous le rayon courant : sol ou mur d'un niveau montré, toit
-   * visible. `Infinity` si le rayon ne touche rien de bâti. Mêmes filtres que la sélection d'une pièce.
+   * Distance of the first BUILT element under the current ray: floor or wall of a shown level, visible
+   * roof. `Infinity` if the ray hits nothing built. Same filters as selecting a room.
    */
   private nearestBuiltHit(): number {
     if (!this.nodes) return Infinity
@@ -3592,9 +3592,9 @@ export class HouseScene {
   }
 
   /**
-   * La pièce d'un mur touché : celle DEVANT la face vue (une cloison sépare deux pièces, on veut
-   * celle qu'on regarde), sinon celle DERRIÈRE (la façade vue du jardin ouvre la pièce qu'elle
-   * ferme). Le dessus d'un mur n'a pas de face verticale : c'est le côté caméra qui compte.
+   * The room of a touched wall: the one IN FRONT OF the seen face (a partition separates two rooms, we want
+   * the one being looked at), otherwise the one BEHIND (the facade seen from the garden opens the room it
+   * closes). The top of a wall has no vertical face: it is the camera side that counts.
    */
   private roomOfWallHit(hit: Intersection): string | null {
     if (!this.nodes || !this.index) return null
@@ -3606,7 +3606,7 @@ export class HouseScene {
     if (Math.hypot(n.x, n.y) < 0.5) n.copy(this.raycaster.ray.direction).transformDirection(toHouse).negate()
     const h = new Vector2(n.x, n.y).normalize()
     const roomAt = (d: number) => rooms.find((r) => pointInPolygon([p.x + h.x * d, p.y + h.y * d], r.polygon))?.id
-    // devant, à peine décollé ; derrière, au-delà de l'épaisseur du mur (une façade fait ~0,4 m)
+    // in front, barely set off; behind, beyond the wall thickness (a facade is ~0.4 m)
     let roomId = roomAt(0.1)
     for (let d = 0.1; !roomId && d <= 1; d += 0.1) roomId = roomAt(-d)
     return roomId ?? null
@@ -3614,35 +3614,35 @@ export class HouseScene {
 
   private handleTap(ev: TapEvent): void {
     if (this.shapeEditor?.active()) return
-    // les poignées de la forme d'une pièce prennent le tap qui les touche ; ailleurs, il continue
+    // the handles of a room's shape take the tap that touches them; elsewhere, it carries on
     if (this.shapeEditor?.tap(ev)) return
-    if (this.drag?.active() || this.openingDragger?.active() || this.parkingDragger?.active() || this.gardenDragger?.active() || this.reliefEditor?.active() || this.outlineEditor?.active()) return   // fin d'un glissement, pas un tap
-    // on modèle le terrain : un tap choisit un point, il n'ouvre ni une pièce ni un appareil
+    if (this.drag?.active() || this.openingDragger?.active() || this.parkingDragger?.active() || this.gardenDragger?.active() || this.reliefEditor?.active() || this.outlineEditor?.active()) return   // end of a drag, not a tap
+    // shaping the terrain: a tap selects a dot, it opens neither a room nor a device
     if (this.reliefGrid) { (this.terrainTab === 'outline' ? this.outlineEditor : this.reliefEditor)?.tap(ev); return }
-    // Une ouverture armée prend le tap AVANT toute sélection : on est venu désigner un mur, pas
-    // ouvrir la pièce ou l'appareil qui se trouve devant. Tapé à côté du bâti, c'est un tap de fond
-    // — l'appelant y lit un renoncement, comme partout ailleurs dans la vue.
+    // An armed opening takes the tap BEFORE any selection: one came to designate a wall, not
+    // to open the room or the device in front of it. Tapped beside the structure, it is a background tap
+    // — the caller reads it as a cancellation, as everywhere else in the view.
     if (this.placingOpening) {
       const xy = this.buildingPoint(this.placingOpening.roomId, this.placingOpening.type, ev.ndc)
       if (xy) this.emit('placeTap', xy)
       else this.emit('backgroundTap')
       return
     }
-    // Une pièce armée : n'importe quel sol donne le point (un niveau neuf n'a pas encore de plancher)
+    // An armed room: any floor gives the point (a new level has no floor yet)
     if (this.placingRoom) {
       const hit = this.groundPoint(ev.ndc)
       if (hit) this.emit('roomPlaceTap', hit.xy)
       else this.emit('backgroundTap')
       return
     }
-    // Une place armée prend le tap de la même façon, mais au SOL : c'est là qu'on la pose.
+    // An armed space takes the tap the same way, but on the FLOOR: that is where it is placed.
     if (this.placingParking) {
       const hit = this.groundPoint(ev.ndc)
       if (hit) this.emit('groundTap', hit.xy, hit.levelId)
       else this.emit('backgroundTap')
       return
     }
-    // Un élément du jardin armé : seul le TERRAIN (pelouse, zones) l'accueille, pas un plancher.
+    // An armed garden element: only the TERRAIN (lawn, zones) accepts it, not a floor.
     if (this.placingGarden) {
       const hit = this.groundPoint(ev.ndc)
       if (hit && hit.levelId === null) this.emit('gardenPlaceTap', hit.xy)
@@ -3661,15 +3661,15 @@ export class HouseScene {
     else this.emit('zoneTap', hit.zoneId)
   }
 
-  // ---- apparence / taille / rendu ----------------------------------------
+  // ---- appearance / size / render ----------------------------------------
   /**
-   * (Re)construit le ciel et le pose sur `scene.environment` : c'est la seule source de reflets de
-   * la scène, et sans elle tout matériau un peu métallique ou lisse rend de l'argile. Il se refait à
-   * chaque changement de style ou d'heure — et l'ancien se libère, une carte PMREM tient en mémoire
-   * vidéo. Le ciel n'est jamais affiché : le fond du canvas est sa couleur d'horizon, à plat.
+   * (Re)builds the sky and sets it on `scene.environment`: it is the only source of reflections in
+   * the scene, and without it any slightly metallic or smooth material renders as clay. It is redone at
+   * every change of style or hour — and the old one is freed, a PMREM map holds video
+   * memory. The sky is never displayed: the canvas background is its horizon color, flat.
    */
   private applySky(): void {
-    // la météo grise le ciel du style (nuages) et, quand l'air se voit, noie le lointain dans le fond
+    // the weather grays the style's sky (clouds) and, when the air is visible, drowns the distance in the background
     const sky = overcastSky(this.look.sky, this.ambience.cloudiness)
     this.skyEnv?.dispose()
     this.skyEnv = createSkyEnvironment(this.renderer, sky, this.sunDir)
@@ -3677,9 +3677,9 @@ export class HouseScene {
     this.scene.environmentIntensity = sky.intensity
     const backdrop = backdropColor(sky)
     this.renderer?.setClearColor(backdrop, 1)
-    // Le brouillard est TOUJOURS posé, rejeté à perte de vue quand l'air est clair : three compile un
-    // programme avec et un sans, et le faire apparaître (visibilité sous 5 km) recompilait toutes les
-    // matières — 2,1 s d'image figée mesurées sur le curseur de visibilité des Réglages (2026-09-25).
+    // The fog is ALWAYS set, pushed back out of sight when the air is clear: three compiles one
+    // program with and one without, and making it appear (visibility below 5 km) recompiled every
+    // material — 2.1 s of frozen frame measured on the visibility slider in Settings (2026-09-25).
     const far = fogDistance(this.ambience)
     const fog = this.scene.fog instanceof Fog ? this.scene.fog : (this.scene.fog = new Fog(backdrop, NO_FOG_M, NO_FOG_M))
     fog.color.copy(backdrop)
@@ -3689,9 +3689,9 @@ export class HouseScene {
   }
 
   /**
-   * La brume basse de l'aube et de la nuit (`core/heightMist.ts`), posée sur le terrain. Sa couleur
-   * est l'horizon du ciel, éclairci vers le ciel qui l'éclaire d'en haut (la lune, l'aube) : une
-   * nappe un peu plus claire que le fond, qui se lit contre lui.
+   * The low mist of dawn and night (`core/heightMist.ts`), laid on the terrain. Its color
+   * is the sky's horizon, lightened toward the sky that lights it from above (the moon, the dawn): a
+   * layer a little lighter than the background, which reads against it.
    */
   private applyMist(): void {
     const sky = new Color().copy(this.look.lighting.hemiSky).multiplyScalar(this.look.lighting.hemiIntensity * MIST_SKY_SHARE)
@@ -3700,38 +3700,38 @@ export class HouseScene {
   }
 
   /**
-   * Le seul point d'entrée de l'apparence. Les trois axes sont indépendants : on peut changer
-   * l'heure sans changer de style, et le thème de l'app sans toucher ni l'un ni l'autre.
+   * The single entry point for the appearance. The three axes are independent: the
+   * hour can be changed without changing style, and the app theme without touching either one.
    *
-   * Changer de STYLE repasse des cartes aux matériaux (donc recompile leurs shaders) ; changer
-   * d'HEURE ne fait que muter des couleurs et des intensités. C'est pour cette différence de prix
-   * que `applyLook` compare les cartes avant de demander une recompilation.
+   * Changing STYLE hands maps to the materials again (hence recompiles their shaders); changing
+   * the HOUR only mutates colors and intensities. It is because of this difference in cost
+   * that `applyLook` compares the maps before requesting a recompilation.
    */
   /**
-   * Redemande un relevé des ombres : après un changement de géométrie, d'appareil ou de soleil. La
-   * fenêtre couvre les courses animées (un volet met 400 ms à descendre) sans quoi l'ombre resterait
-   * celle d'avant. Une caméra qui tourne n'appelle JAMAIS ceci — c'est tout l'intérêt.
+   * Requests a shadow recapture again: after a change of geometry, device or sun. The
+   * window covers the animated travels (a shutter takes 400 ms to come down), otherwise the shadow would stay
+   * the old one. A rotating camera NEVER calls this — that is the whole point.
    */
   invalidateShadows(ms = SHADOW_SETTLE_MS): void {
     this.shadowsDirtyUntil = (this.deps.now?.() ?? performance.now()) + ms
-    // …et, quoi que dure l'attente, les PROCHAINES images dessinées : une fenêtre en temps seule
-    // expirait pendant le voile de chargement (aucune image, shaders en compilation) — l'étage
-    // masqué pendant ce temps laissait son ombre sur le rez-de-chaussée.
+    // …and, however long the wait lasts, the NEXT frames drawn: a time window alone
+    // expired during the loading veil (no frame, shaders compiling) — the upper floor
+    // hidden in the meantime left its shadow on the ground floor.
     this.shadowFramesPending = SHADOW_MIN_FRAMES
   }
 
   /**
-   * Montre ou cache la couche des pilules (DOM). Outil de DIAGNOSTIC du voile de débogage : soixante
-   * pilules déplacées à chaque image ont un coût que ni `renderer.info` ni le temps passé dans
-   * `render()` ne montrent entièrement — le reste est payé par le style et le compositeur du
-   * navigateur. Les éteindre le chiffre, sur la machine qui a le problème.
+   * Shows or hides the pills layer (DOM). A DIAGNOSTIC tool of the debug overlay: sixty
+   * pills moved every frame have a cost that neither `renderer.info` nor the time spent in
+   * `render()` fully shows — the rest is paid by the browser's style and compositor.
+   * Turning them off puts a figure on it, on the machine that has the problem.
    */
   /**
-   * Marque la couche des étiquettes comme EN MOUVEMENT. C'est ce qui autorise leur promotion en
-   * couche de composition (`will-change`, `styles/app.css`) — et seulement à ce moment-là : une
-   * promotion permanente sur quarante éléments garde autant de textures vivantes pour rien, et c'est
-   * précisément ce que la spécification déconseille. Le drapeau retombe une demi-seconde après la
-   * dernière image.
+   * Marks the labels layer as MOVING. That is what allows their promotion to a
+   * compositing layer (`will-change`, `styles/app.css`) — and only at that moment: a
+   * permanent promotion on forty elements keeps as many textures alive for nothing, and that is
+   * precisely what the specification advises against. The flag drops half a second after the
+   * last frame.
    */
   private markLabelsMoving(): void {
     const layer = this.labelRenderer?.domElement
@@ -3747,10 +3747,10 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Branche (ou débranche) une sonde autour de chaque image rendue — `stats.js` du voile de débogage. */
+  /** Plugs (or unplugs) a probe around each rendered frame — the debug overlay's `stats.js`. */
   setProbe(probe: FrameProbe | null): void { this.probe = probe }
 
-  /** Relevé pour le voile de débogage (Réglages → Rendu 3D). Lu à la demande, jamais pendant le rendu. */
+  /** Readout for the debug overlay (Settings → 3D rendering). Read on demand, never during the render. */
   debugStats(): SceneDebugStats {
     const info = this.renderer?.info
     let pointShadows = 0
@@ -3780,7 +3780,7 @@ export class HouseScene {
     if (next.tuning) this.tuning = next.tuning
     if (next.style || next.ambience || next.tuning) this.look = applyTuning(this.style.look(this.ambience), this.tuning)
     this.theme = resolveSceneTheme(next.ui ?? this.theme, this.look.palette, this.ambience)
-    this.photoGen++                        // les images d'un style ou d'un réglage quittés n'ont plus preneur
+    this.photoGen++                        // the images of a style or setting that was left have no taker anymore
     this.applyMaterials()
     this.applySky()
     this.applyLighting()
@@ -3790,28 +3790,28 @@ export class HouseScene {
       this.renderer.toneMappingExposure = this.look.post.exposure
     }
     for (const m of this.markers.values()) m.setTheme(this.theme, this.look.glow)
-    this.buildOpeningHandles()             // les poignées sont teintées de l'accent, qui vient de changer
-    this.buildParkings()                   // le marquage au sol suit le thème, comme le reste
-    this.buildGarden()                     // l'anneau d'accent suit le thème, le jardin la palette du style
-    this.buildOriginMark()                 // le repère d'origine aussi
+    this.buildOpeningHandles()             // the handles are tinted with the accent, which just changed
+    this.buildParkings()                   // the ground marking follows the theme, like the rest
+    this.buildGarden()                     // the accent ring follows the theme, the garden the style's palette
+    this.buildOriginMark()                 // the origin marker too
     this.highlightRoom(this.highlightedRoom)
-    this.syncWindowGlow()                  // le verre du style, et l'heure qui dit s'il fait nuit
-    this.invalidateShadows()               // le soleil a pu bouger
+    this.syncWindowGlow()                  // the style's glass, and the hour that says whether it is night
+    this.invalidateShadows()               // the sun may have moved
     this.syncStorm()
     this.syncPrecipitation()
     this.syncBats()
     this.syncDisco()
     this.syncParade()
-    this.syncWater()                       // le style dit si l'eau bouge, l'heure ce que le fond reçoit
+    this.syncWater()                       // the style says whether the water moves, the hour what the bottom receives
     this.loop.invalidate()
     void this.compileBeforeShow()
   }
 
   /**
-   * Le banc de réglage, pendant qu'on tire un curseur. `setAppearance` referait les matières, le
-   * ciel, les ombres et les textures à chaque image du glissement — or un multiplicateur du banc ne
-   * touche QUE la chaîne d'image, le halo des lampes et le trait de la pièce. C'est le même look
-   * recalculé, mais seulement ce qui en dépend est réappliqué.
+   * The tuning bench, while a slider is being dragged. `setAppearance` would redo the materials, the
+   * sky, the shadows and the textures at every frame of the drag — yet a bench multiplier
+   * touches ONLY the image chain, the lamps' halo and the room's line. It is the same look
+   * recomputed, but only what depends on it is reapplied.
    */
   setTuning(tuning: SceneTuning): void {
     this.tuning = tuning
@@ -3826,16 +3826,16 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Ce que la chaîne d'image applique VRAIMENT, réglage compris : de quoi en déduire un défaut. */
+  /** What the image chain REALLY applies, tuning included: enough to derive a default from it. */
   tunedLook(): { post: PostLook; glow: GlowLook } {
     return { post: this.look.post, glow: this.look.glow }
   }
 
   /**
-   * Orage : un éclair de temps en temps — deux éclats, un court et un plus long, comme un vrai. Ce
-   * n'est PAS une animation de la boucle (qui tournerait à 20 Hz tout l'orage pour rien) : des
-   * minuteries qui ne demandent qu'une image par éclat, par l'exposition. Le seul état est la
-   * minuterie en cours, arrêtée dès que l'orage passe ou que la scène est détruite.
+   * Storm: a lightning strike from time to time — two flashes, a short one and a longer one, like a real one. It
+   * is NOT a loop animation (which would run at 20 Hz for the whole storm for nothing): timers
+   * that only request one frame per flash, through the exposure. The only state is the
+   * current timer, stopped as soon as the storm passes or the scene is destroyed.
    */
   private syncStorm(): void {
     const on = !!this.ambience.storm
@@ -3854,7 +3854,7 @@ export class HouseScene {
     this.stormTimer = setTimeout(() => this.stormStep(i + 1), step[1])
   }
 
-  /** Multiplie l'exposition du style, le temps d'un éclat ; 1 la rend au style. */
+  /** Multiplies the style's exposure for the duration of a flash; 1 gives it back to the style. */
   private setExposureFactor(k: number): void {
     const post = { ...this.look.post, exposure: this.look.post.exposure * k }
     if (this.post) this.post.setLook(post)
@@ -3863,17 +3863,17 @@ export class HouseScene {
   }
 
   /**
-   * Pluie ou neige selon l'ambiance — le seul effet météo qui fait tourner la boucle (à 20 Hz, comme
-   * toute animation décorative). Coupé en qualité BASSE : sur une tablette qui peine déjà, une averse
-   * de deux mille traits n'est pas ce qu'on lui demande. Le vent vient de l'ambiance aussi ; sans
-   * météo réelle, une brise d'ouest.
+   * Rain or snow according to the ambience — the only weather effect that runs the loop (at 20 Hz, like
+   * every decorative animation). Cut in LOW quality: on a tablet already struggling, a downpour
+   * of two thousand streaks is not what it is asked to do. The wind comes from the ambience too; without
+   * real weather, a west breeze.
    */
   private syncPrecipitation(): void {
     const p = this.ambience.precipitation
     if (!p || this.quality === 'low' || !this.nodes || !this.geometry) { this.removePrecipitation(); return }
     const params = { kind: p.kind, intensity: p.intensity, windKmh: this.ambience.windKmh ?? 10, windDirDeg: (this.ambience.windDirDeg ?? 250) - this.headingDeg }
-    // même nature et intensité voisine : on règle sans reconstruire ; sinon on repart (le nombre
-    // de particules est fixé à la création)
+    // same kind and similar intensity: we adjust without rebuilding; otherwise we start over (the number
+    // of particles is fixed at creation)
     if (this.precip && this.precip.kind === p.kind && this.precip.object.parent === this.nodes.root && Math.abs(this.precipIntensity - p.intensity) < 0.25) {
       this.precip.setParams(params)
       return
@@ -3888,8 +3888,8 @@ export class HouseScene {
   }
 
   /**
-   * Les chauves-souris du style : une animation décorative de plus (20 Hz), coupée en qualité basse
-   * comme la pluie. Même nombre : on garde la nuée en vol ; sinon on la refait.
+   * The style's bats: one more decorative animation (20 Hz), cut in low quality
+   * like the rain. Same number: we keep the swarm in flight; otherwise we redo it.
    */
   private syncBats(): void {
     const n = this.look.bats?.count ?? 0
@@ -3919,8 +3919,8 @@ export class HouseScene {
   }
 
   /**
-   * La boule à facettes et les projecteurs du style (`effects/disco.ts`) : même régime que les
-   * chauves-souris (20 Hz, coupés en qualité basse). Même nombre de projecteurs : on garde la fête.
+   * The style's mirror ball and spotlights (`effects/disco.ts`): same regime as the
+   * bats (20 Hz, cut in low quality). Same number of spotlights: we keep the party going.
    */
   private syncDisco(): void {
     const n = this.look.disco?.spots ?? 0
@@ -3942,8 +3942,8 @@ export class HouseScene {
   }
 
   /**
-   * Les personnages du style (`effects/parade.ts`) : même régime que les chauves-souris (20 Hz,
-   * coupés en qualité basse). Même sorte : on garde le défilé en cours ; sinon on le refait.
+   * The style's characters (`effects/parade.ts`): same regime as the bats (20 Hz,
+   * cut in low quality). Same kind: we keep the parade in progress; otherwise we redo it.
    */
   private syncParade(): void {
     const kind = this.look.parade?.kind
@@ -3965,7 +3965,7 @@ export class HouseScene {
     this.stopParade = this.loop.addAnimation({ step: (_now, dtS) => { if (this.parade !== parade) return false; parade.step(dtS); return true } })
   }
 
-  /** Les piscines, en boîtes : ce qui défile autour de la maison les contourne (`effects/roam.ts`). */
+  /** The pools, as boxes: what parades around the house skirts them (`effects/roam.ts`). */
   private poolBoxes(): Box[] {
     return (this.geometry?.zones ?? []).filter((z) => z.kind === 'pool').map((z) => {
       const xs = z.polygon.map((p) => p[0]), ys = z.polygon.map((p) => p[1])
@@ -3974,19 +3974,19 @@ export class HouseScene {
   }
 
   /**
-   * Ce que les personnages contournent dès leur tracé : le jardin, et les voitures et la tondeuse là
-   * où elles sont garées à ce moment (pas des arbres : le traîneau et les X-wings les survolent). Une
-   * voiture garée contre la maison, évitée seulement au passage, faisait se battre l'écart et la
-   * maison : un squelette sautait de 11 m (mesuré sur la maison démo).
+   * What the characters skirt from their path onward: the garden, and the cars and the mower where
+   * they are parked at that moment (not the trees: the sleigh and the X-wings fly over them). A
+   * car parked against the house, avoided only on the way, made the swerve and the
+   * house fight each other: a skeleton jumped by 11 m (measured on the demo house).
    */
   private roamStatics(): { x: number; y: number; r: number; tall: boolean }[] {
     return [...this.garden.footprints(), ...this.roamObstacles().map((c) => ({ ...c, tall: false }))]
   }
 
   /**
-   * Ce dont s'écartent AU PASSAGE les personnages et les chauves-souris : les voitures et la tondeuse
-   * là où elles sont MAINTENANT (relu à chaque pas, 20 Hz). Le jardin, fixe, est contourné dès le
-   * tracé (`statics`).
+   * What the characters and the bats steer clear of ON THE WAY: the cars and the mower
+   * where they are NOW (read again at every step, 20 Hz). The garden, being fixed, is skirted from the
+   * path onward (`statics`).
    */
   private roamObstacles(): Circle[] {
     const out: Circle[] = []
@@ -4012,22 +4012,22 @@ export class HouseScene {
   }
 
   /**
-   * L'eau qui bouge (`effects/water.ts`). Le shader ne coûte que les pixels de la piscine ; ce qui
-   * coûte, c'est la BOUCLE — une eau animée redessine toute la scène, dix fois par seconde. D'où
-   * trois conditions, dans cet ordre de gratuité : le style veut de l'eau vivante (la maquette non),
-   * la qualité n'est pas basse (même règle que la pluie), et une piscine est DANS LE CHAMP. Le
-   * dernier point se réévalue à chaque mouvement de caméra : une maison qu'on regarde côté rue ne
-   * paie pas la piscine du jardin.
+   * The water that moves (`effects/water.ts`). The shader only costs the pool's pixels; what
+   * costs is the LOOP — animated water redraws the whole scene, ten times per second. Hence
+   * three conditions, in this order of cheapness: the style wants living water (the maquette does not),
+   * the quality is not low (same rule as the rain), and a pool is IN THE FIELD OF VIEW. The
+   * last point is reevaluated at every camera movement: a house seen from the street side does not
+   * pay for the garden pool.
    *
-   * Les caustiques du fond suivent le jour : un bassin qui s'allume tout seul à minuit ne trompe
-   * personne. La houle, elle, ondule aussi sous la lune.
+   * The bottom's caustics follow the daylight: a basin that lights up by itself at midnight fools
+   * nobody. The swell, for its part, ripples under the moon too.
    */
   private syncWater(): void {
     const flow = this.look.surfaces.zones.pool.flow ?? 1
     this.waterStrength.surface.value = flow
     setWaterTint(this.water, this.theme.zones.pool)
     setWaterSun(this.water, this.sunDir)
-    setWaterWind(this.water, this.ambience.windKmh ?? 10, (this.ambience.windDirDeg ?? 250) - this.headingDeg)   // sans météo, la brise de la pluie
+    setWaterWind(this.water, this.ambience.windKmh ?? 10, (this.ambience.windDirDeg ?? 250) - this.headingDeg)   // without weather, the rain's breeze
     this.waterStrength.basin.value = flow * (0.25 + 0.75 * dayFactor(this.ambience))
     const wanted = flow > 0 && this.quality !== 'low' && this.poolInView()
     if (wanted === (this.stopWater !== null)) return
@@ -4038,14 +4038,14 @@ export class HouseScene {
     })
   }
 
-  /** Une piscine est-elle dans le tronc de projection ? Sans piscine, la réponse est non. */
+  /** Is a pool inside the view frustum? Without a pool, the answer is no. */
   private poolInView(): boolean {
     if (!this.nodes || !this.geometry) return false
     this.camera.updateMatrixWorld()
     waterFrustum.setFromProjectionMatrix(waterMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse))
-    // La racine pend à l'origine de la scène, et `matrixWorldAutoUpdate` est coupé (les matrices
-    // monde ne se refont qu'à l'image) : sa matrice LOCALE est donc sa matrice monde, et c'est la
-    // seule qui sépare un maillage de zone du repère du monde.
+    // The root hangs at the scene's origin, and `matrixWorldAutoUpdate` is off (the world
+    // matrices are only redone per frame): its LOCAL matrix is therefore its world matrix, and it is the
+    // only one that separates a zone mesh from the world frame.
     this.nodes.root.updateMatrix()
     for (const z of this.geometry.zones) {
       if (z.kind !== 'pool') continue
@@ -4060,10 +4060,10 @@ export class HouseScene {
   }
 
   /**
-   * Les matériaux, avec les matières en images si le style porte un pack et que l'utilisateur les
-   * veut. Les images arrivent APRÈS : en attendant, le procédural tient la place, et chaque rôle
-   * chargé repasse par ici avec une carte de plus. Le jeton écarte les arrivées pour un style ou un
-   * réglage qu'on a quitté depuis — et une scène détruite, qui l'incrémente en partant.
+   * The materials, with the photo materials if the style carries a pack and the user wants
+   * them. The images arrive AFTERWARD: meanwhile, the procedural holds the place, and each loaded role
+   * comes back through here with one more map. The token discards arrivals for a style or a
+   * setting that has been left since — and a destroyed scene, which increments it on leaving.
    */
   private applyMaterials(): void {
     const pack = this.photoPack()
@@ -4072,11 +4072,11 @@ export class HouseScene {
       ? loadPackTextures(pack, this.photoRoles(), () => {
         if (gen !== this.photoGen) return
         this.applyMaterials()
-        this.highlightRoom(this.highlightedRoom)   // recopie les couleurs des clones, et redessine
-        void this.compileBeforeShow()              // une carte de plus = un autre programme
+        this.highlightRoom(this.highlightedRoom)   // copies the clones' colors again, and redraws
+        void this.compileBeforeShow()              // one more map = another program
       })
       : undefined
-    // les finitions de la maison : seuls les styles qui portent un pack d'images les interprètent
+    // the house finishes: only the styles that carry an image pack interpret them
     const honor = !!this.style.assets
     const finishPhotos = honor && pack
       ? loadFinishTextures(this.usedFinishes(), () => {
@@ -4091,7 +4091,7 @@ export class HouseScene {
     this.syncFloorClones()
   }
 
-  /** Les finitions employées par la maison chargée (sols, murs des pièces, façade). */
+  /** The finishes used by the loaded house (floors, room walls, facade). */
   private usedFinishes(): FinishId[] {
     const g = this.geometry
     if (!g) return []
@@ -4104,12 +4104,12 @@ export class HouseScene {
     return [...out]
   }
 
-  // ---- forme d'une pièce (mode édition, section « Dimensions ») -----------------------------------
+  // ---- shape of a room (edit mode, "Dimensions" section) ------------------------------------------
   private shapeEditor: RoomShapeEditor | null = null
   private shapeRoomId: string | null = null
   private shapeLast: [number, number][] = []
 
-  /** Ouvre (ou ferme, `null`) l'éditeur de forme sur une pièce. */
+  /** Opens (or closes, `null`) the shape editor on a room. */
   setShapeEditing(roomId: string | null): void {
     if (roomId === this.shapeRoomId && (this.shapeEditor || !roomId)) return
     this.shapeRoomId = roomId
@@ -4117,13 +4117,13 @@ export class HouseScene {
     this.rebuildShapeEditor()
   }
 
-  /** La forme à montrer (cotes, m, repère maison) — celle que le store vient de calculer. */
+  /** The shape to show (dimensions, m, house reference frame) — the one the store just computed. */
   setShapeOutline(points: readonly [number, number][]): void {
     this.shapeLast = points.map(([x, y]) => [x, y])
     this.shapeEditor?.setShape(this.shapeLast)
   }
 
-  /** Choisit une poignée depuis le panneau (un côté de la liste). */
+  /** Selects a handle from the panel (a side in the list). */
   setShapeSelection(sel: ShapeSelection): void { this.shapeEditor?.setSelection(sel) }
 
   private rebuildShapeEditor(): void {
@@ -4151,11 +4151,11 @@ export class HouseScene {
   }
 
   /**
-   * Seul le BÂTI a changé — finitions (sol, murs, façade) ou forme des pièces (cotes, ouvertures
-   * recalées, emprise des niveaux) : les maillages des niveaux se refont, le toit si son emprise a
-   * bougé, le terrain écrêté sous les planchers, et les marqueurs (un appareil auto-placé suit le
-   * centre de sa pièce). Ni caméra, ni voile de préparation : c'est le chemin de chaque clic du
-   * sélecteur de finitions et de chaque mur poussé.
+   * Only the STRUCTURE changed — finishes (floor, walls, facade) or shape of the rooms (dimensions, openings
+   * readjusted, level footprints): the level meshes are redone, the roof if its footprint
+   * moved, the terrain clipped under the floors, and the markers (an auto-placed device follows the
+   * center of its room). Neither camera nor preparation veil: it is the path of every click of the
+   * finish picker and of every pushed wall.
    */
   updateBuilding(house: House): void {
     if (!this.nodes || !this.house) { this.load(house); return }
@@ -4164,7 +4164,7 @@ export class HouseScene {
     this.house = house
     this.index = indexHouse(house)
     this.geometry = computeHouseGeometry(house)
-    // seuls les niveaux dont la géométrie a changé (un mur poussé ne touche que le sien) ; tous si la façade a changé
+    // only the levels whose geometry changed (a pushed wall only touches its own); all of them if the facade changed
     const levelKey = (l: HouseGeometry['levels'][number]) => JSON.stringify([l.walls, l.floors, l.openings, l.wallFinishes ?? null])
     const was = new Map(before?.levels.map((l) => [l.levelId, levelKey(l)]))
     const facadeChanged = JSON.stringify(before?.facade ?? null) !== JSON.stringify(this.geometry.facade ?? null)
@@ -4172,30 +4172,30 @@ export class HouseScene {
     if (JSON.stringify(before?.roof) !== JSON.stringify(this.geometry.roof)) this.rebuildRoof()
     if (JSON.stringify(before?.terrain.footprints) !== JSON.stringify(this.geometry.terrain.footprints)) this.shapeTerrainNow()
     if (devicesMoved) { this.buildMarkers(); this.updateStates(this.states, true) }
-    this.applyMaterials()                  // les photos d'une finition qu'on vient de choisir
+    this.applyMaterials()                  // the photos of a finish that was just chosen
     if (this.editingOpenings) this.buildOpeningHandles()
     this.refreshOpeningNotes()
     this.highlightRoom(this.highlightedRoom)
-    this.syncWindowGlow()                  // les niveaux refaits ont des verres neufs
+    this.syncWindowGlow()                  // the redone levels have new glass panes
     this.applyLevelFocus()
     this.invalidateShadows()
     this.loop.invalidate()
   }
 
-  /** Le pack de matières photo du style, si l'utilisateur les veut. */
+  /** The style's pack of photo materials, if the user wants them. */
   private photoPack(): TexturePack | undefined {
     return this.assets ? packById(this.style.assets) : undefined
   }
 
-  /** Les rôles à habiller de photos. `poolTile` n'est dans aucun look (le bassin l'impose dans `applyLook`) : on le charge quand même. */
+  /** The roles to dress with photos. `poolTile` is in no look (the basin imposes it in `applyLook`): it is loaded anyway. */
   private photoRoles(): SurfaceRole[] {
     return [...rolesOf(this.look.surfaces), 'poolTile']
   }
 
   /**
-   * Les sols portent un CLONE du matériau de leur nature, pour que la surbrillance d'une pièce ne
-   * teinte pas toutes les autres. Un changement de style change les cartes du matériau d'origine :
-   * sans cette recopie, un clone garderait la matière du style précédent.
+   * The floors carry a CLONE of the material of their kind, so that the highlight of one room does not
+   * tint all the others. A style change changes the maps of the original material:
+   * without this copy, a clone would keep the previous style's material.
    */
   private syncFloorClones(): void {
     if (!this.nodes) return
@@ -4215,9 +4215,9 @@ export class HouseScene {
   }
 
   /**
-   * L'éclairage vient du STYLE, la direction du soleil de l'AMBIANCE. Il n'y a plus de « jour en
-   * thème clair, nuit en thème sombre » : la maison a sa propre heure (`core/ambience.ts`), et c'est
-   * elle qui décide si ce qui l'éclaire est le soleil ou ses propres lampes.
+   * The lighting comes from the STYLE, the sun's direction from the AMBIENCE. There is no longer "day in
+   * light theme, night in dark theme": the house has its own hour (`core/ambience.ts`), and it is
+   * that hour that decides whether what lights it is the sun or its own lamps.
    */
   private applyLighting(): void {
     const l = this.look.lighting
@@ -4227,30 +4227,30 @@ export class HouseScene {
     this.ambient.intensity = l.ambientIntensity
     this.sun.color.copy(l.sunColor)
     this.sun.intensity = l.sunIntensity
-    // Sous un ciel couvert ou une lune basse, une ombre portée franche est un mensonge : on la coupe
-    // plutôt que de la laisser trancher une scène qui n'a plus de source ponctuelle.
+    // Under an overcast sky or a low moon, a crisp cast shadow is a lie: we cut it
+    // rather than let it slice a scene that no longer has a point source.
     this.sun.castShadow = l.shadowOpacity > 0.15
     this.fitSunShadow()
   }
 
-  /** Le budget de rendu : (re)construit la chaîne de post-traitement et le rapport de pixels. */
+  /** The render budget: (re)builds the post-processing chain and the pixel ratio. */
   private applyQuality(): void {
     this.post?.dispose()
     this.post = null
     const auto = this.options.quality === 'auto'
     const wanted = this.options.quality === 'auto' ? (this.autoQuality ?? detectQuality(this.renderer ? gpuName(this.renderer) : '')) : this.options.quality
     this.quality = wanted
-    this.syncPrecipitation()               // la qualité basse coupe la pluie
-    this.syncBats()                        // …et les chauves-souris
-    this.syncDisco()                       // …et la boule à facettes
-    this.syncParade()                      // …et le défilé
-    this.syncWater()                       // …et fige l'eau
+    this.syncPrecipitation()               // low quality cuts the rain
+    this.syncBats()                        // …and the bats
+    this.syncDisco()                       // …and the mirror ball
+    this.syncParade()                      // …and the parade
+    this.syncWater()                       // …and freezes the water
     if (!this.renderer) return
     const pixelRatio = Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[wanted])
     this.renderer.setPixelRatio(pixelRatio)
     this.renderer.setSize(this.size.width, this.size.height, false)
     if (wanted === 'low') {
-      // Pas de chaîne : le tone mapping revient au renderer, et l'image part droit à l'écran.
+      // No chain: tone mapping goes back to the renderer, and the image goes straight to the screen.
       this.renderer.toneMapping = toneMappingOf(this.look.post)
       this.renderer.toneMappingExposure = this.look.post.exposure
       return
@@ -4258,9 +4258,9 @@ export class HouseScene {
     this.post = createPostPipeline({
       renderer: this.renderer, scene: this.scene, camera: this.camera, quality: wanted,
       draw: (target) => { this.renderer!.setRenderTarget(target); this.renderScene(this.renderer!) },
-      // La machine ne suit pas : on descend d'un cran, sans rien demander à personne — en « auto »
-      // seulement. Une qualité choisie est un choix : le garde-fou l'écrasait (mesuré le 2026-09-27,
-      // « high » forcé sur l'iGPU redescendait en « medium » au bout de 13 s).
+      // The machine cannot keep up: we step down a notch, without asking anyone — in "auto"
+      // only. A chosen quality is a choice: the safeguard overrode it (measured on 2026-09-27,
+      // "high" forced on the iGPU dropped back to "medium" after 13 s).
       ...(auto ? { onDowngrade: (to: EffectiveQuality) => { this.autoQuality = to; this.applyQuality(); this.loop.invalidate() } } : {}),
       ...(this.deps.now ? { now: this.deps.now } : {}),
     })
@@ -4269,10 +4269,10 @@ export class HouseScene {
   }
 
   /**
-   * Le panneau flottant couvre le bord droit du canvas : le cadrage (`fitBox`) et le centre de la vue
-   * visent la partie LIBRE. `setViewOffset` élargit le tronc de projection vers la droite au lieu de
-   * le recentrer, donc tout ce qui se calcule sur le canvas entier (NDC du lancer de rayon, pilules
-   * du CSS2DRenderer) reste juste sans rien changer.
+   * The floating panel covers the canvas's right edge: the framing (`fitBox`) and the center of the view
+   * aim at the FREE part. `setViewOffset` widens the view frustum to the right instead of
+   * recentering it, so everything computed on the whole canvas (raycaster NDC, CSS2DRenderer
+   * pills) stays correct without changing anything.
    */
   setViewInset(rightPx: number): void {
     this.viewInsetRight = Math.max(0, rightPx)
@@ -4280,7 +4280,7 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Rapport largeur/hauteur de la partie LIBRE du canvas : ce que les deux projections cadrent. */
+  /** Width/height ratio of the FREE part of the canvas: what both projections frame. */
   private get viewAspect(): number {
     const { width, height } = this.size
     return Math.max(1, width - Math.min(this.viewInsetRight, width * 0.6)) / height
@@ -4291,7 +4291,7 @@ export class HouseScene {
     const free = Math.max(1, width - Math.min(this.viewInsetRight, width * 0.6))
     const cam = this.camera
     if (cam instanceof OrthographicCamera) {
-      // le tronc porte la FORME (hauteur de base, rapport de l'écran) ; la taille, c'est le zoom
+      // the frustum carries the SHAPE (base height, screen ratio); the size is the zoom
       const half = ORTHO_BASE_M / 2
       cam.top = half
       cam.bottom = -half
@@ -4313,9 +4313,9 @@ export class HouseScene {
   }
 
   /**
-   * Tourne la vue autour de la cible de `delta` radians (boutons de la vue), sans changer la
-   * plongée. En isométrie, les angles sont verrouillés : le bouton fait un QUART de tour, quelle
-   * que soit l'amplitude demandée, et ramène la vue sur le coin le plus proche si elle l'avait quitté.
+   * Rotates the view around the target by `delta` radians (view buttons), without changing the
+   * tilt. In isometric, the angles are locked: the button makes a QUARTER turn, whatever
+   * the requested amplitude, and brings the view back to the nearest corner if it had left it.
    */
   orbitBy(delta: number): void {
     const { azimuth, polar, distance } = this.currentSpherical()
@@ -4328,8 +4328,8 @@ export class HouseScene {
   }
 
   /**
-   * Rapproche (`factor` < 1) ou éloigne la caméra, dans les bornes des contrôles. En orthographique
-   * la caméra ne bouge pas : c'est le zoom qui s'ouvre ou se ferme, comme le fait la molette.
+   * Moves the camera closer (`factor` < 1) or farther, within the controls' bounds. In orthographic
+   * the camera does not move: it is the zoom that opens or closes, as the wheel does.
    */
   dollyBy(factor: number): void {
     const { azimuth, polar, distance } = this.currentSpherical()
@@ -4354,20 +4354,20 @@ export class HouseScene {
     if (this.holdFrames || this.compiling) return
     this.probe?.begin()
     const t0 = this.deps.now?.() ?? performance.now()
-    // Les matrices monde, UNE fois par image. Three les recalcule au début de CHAQUE `render()` —
-    // or une image en compte plusieurs (la scène, celle de l'occlusion ambiante) plus celle du
-    // `CSS2DRenderer`, et rien ne bouge entre elles. `matrixWorldAutoUpdate = false` coupe le
-    // recalcul automatique ; c'est nous qui le demandons, ici, avant le premier rendu.
+    // The world matrices, ONCE per frame. Three recomputes them at the start of EVERY `render()` —
+    // yet one frame counts several (the scene, that of the ambient occlusion) plus that of the
+    // `CSS2DRenderer`, and nothing moves between them. `matrixWorldAutoUpdate = false` cuts the
+    // automatic recomputation; it is we who request it, here, before the first render.
     this.scene.updateMatrixWorld()
-    // Les compteurs de three se remettent à zéro à chaque `render()` : avec plusieurs rendus par
-    // image, il faut les tenir nous-mêmes pour lire un total d'IMAGE et non de dernière passe.
+    // three's counters reset to zero at every `render()`: with several renders per
+    // frame, we must keep them ourselves to read a FRAME total and not that of the last pass.
     if (this.renderer) { this.renderer.info.autoReset = false; this.renderer.info.reset() }
-    // les caustiques d'abord : le fond du bassin les lit dans cette image-ci
+    // the caustics first: the basin bottom reads them in this very frame
     if (this.renderer) this.caustics?.update(this.renderer)
     if (this.renderer) this.updateReflection(this.renderer, t0)
-    // Avec une chaîne d'effets, c'est elle qui appelle notre rendu (par `draw`) puis ses passes ;
-    // sans elle, on dessine droit à l'écran.
-    // Seules les images d'un geste SANS relevé d'ombres disent quelque chose de la machine au garde-fou.
+    // With an effect chain, it is the chain that calls our render (through `draw`) then its passes;
+    // without it, we draw straight to the screen.
+    // Only the frames of a gesture WITHOUT a shadow capture tell the safeguard something about the machine.
     if (this.post) this.post.render(interactive && t0 > this.shadowsDirtyUntil && this.shadowFramesPending === 0)
     else if (this.renderer) { this.renderer.setRenderTarget(null); this.renderScene(this.renderer) }
     this.measure(t0, interactive)
@@ -4378,15 +4378,15 @@ export class HouseScene {
   }
 
   /**
-   * UNE passe : toute la scène, lampes comprises. Une lampe d'intérieur n'éclaire que son niveau par
-   * le masque de hauteur que chaque matière porte (`core/levelLight.ts`), plus par un rendu en passes.
-   * Reste, comme avant : dans un même niveau, une lampe éclaire encore à travers une cloison.
+   * ONE pass: the whole scene, lamps included. An indoor lamp only lights its level through
+   * the height mask each material carries (`core/levelLight.ts`), no longer through rendering in passes.
+   * What remains, as before: within the same level, a lamp still lights through a partition.
    */
   private renderScene(r: WebGLRenderer): void {
-    // les tranches du masque : les élévations MONDE des niveaux (la racine peut être déplacée)
+    // the mask's slices: the WORLD elevations of the levels (the root may be moved)
     if (this.nodes) setLevelHeights([...this.nodes.levels.values()].map((n) => n.group.matrixWorld.elements[13]!))
-    // Les ombres ne se refont qu'après un changement de scène, pas parce que la caméra a tourné :
-    // le relevé redessine tout le bâti depuis le soleil, et six faces de plus par lampe de jardin.
+    // The shadows are only redone after a scene change, not because the camera turned:
+    // the capture redraws the whole structure from the sun, and six more faces per garden lamp.
     const rebuildShadows = (this.deps.now?.() ?? performance.now()) <= this.shadowsDirtyUntil || this.shadowFramesPending > 0
     if (this.shadowFramesPending > 0) this.shadowFramesPending--
     this.perf.shadowsRebuilt = rebuildShadows
@@ -4395,13 +4395,13 @@ export class HouseScene {
     r.shadowMap.autoUpdate = false
   }
 
-  /** Temps passé dans `render()`, temps passé AILLEURS, et cadence. Lu par le voile de débogage. */
+  /** Time spent in `render()`, time spent ELSEWHERE, and rate. Read by the debug overlay. */
   private measure(t0: number, interactive: boolean): void {
     const t1 = this.deps.now?.() ?? performance.now()
     this.perf.cpuMs = this.perf.cpuMs ? this.perf.cpuMs * 0.85 + (t1 - t0) * 0.15 : t1 - t0
-    // Ce qui sépare deux images et qu'on n'a pas passé à dessiner : c'est le navigateur, pas nous.
-    // Seulement sur les images ENCHAÎNÉES par un geste : entre deux réveils d'animation décorative,
-    // l'écart est celui qu'on a nous-mêmes imposé (20 Hz = 50 ms), et le compter serait se mentir.
+    // What separates two frames and was not spent drawing: it is the browser, not us.
+    // Only on frames CHAINED by a gesture: between two wake-ups of a decorative animation,
+    // the gap is the one we imposed ourselves (20 Hz = 50 ms), and counting it would be lying to ourselves.
     if (this.perf.lastStart && interactive && this.perf.wasInteractive) {
       const outside = Math.max(0, t0 - this.perf.lastStart - (t1 - t0))
       this.perf.outsideMs = this.perf.outsideMs ? this.perf.outsideMs * 0.85 + outside * 0.15 : outside
@@ -4418,12 +4418,12 @@ export class HouseScene {
     }
   }
 
-  /** Le rendu est à la demande : la distance n'est relue que quand quelque chose a bougé. */
+  /** Rendering is on demand: the distance is only reread when something has moved. */
   private updatePillLod(): void {
     const layer = this.labelRenderer?.domElement
     if (!layer || !this.controls) return
     const d = this.camera.position.distanceTo(this.controls.target)
-    // en orthographique la distance ne dit plus rien de l'échelle : c'est le zoom qui la porte
+    // in orthographic the distance no longer says anything about the scale: it is the zoom that carries it
     const pxPerM = this.camera instanceof OrthographicCamera
       ? (this.size.height * this.camera.zoom) / ORTHO_BASE_M
       : this.size.height / (2 * d * Math.tan((this.perspectiveCamera.fov * Math.PI) / 360))
@@ -4434,13 +4434,13 @@ export class HouseScene {
   }
 
   /**
-   * Les pilules suivent la bande nette du tilt-shift. Elles sont en DOM et le flou de la chaîne
-   * d'image ne les atteint pas : nettes au-dessus d'une maison floutée, elles cassent la maquette.
+   * The pills follow the tilt-shift's sharp band. They are in the DOM and the image chain's blur
+   * does not reach them: sharp above a blurred house, they break the miniature effect.
    *
-   * La courbe est celle du shader (`tiltBlurFactor`), lue à la place de la pilule PROJETÉE plutôt
-   * qu'en fouillant le `transform` que `CSS2DRenderer` vient d'écrire — une chaîne à re-parser à
-   * chaque image, et un détail d'implémentation de three. Rien n'est fait quand l'effet est éteint,
-   * sauf l'image qui l'éteint : celle-là rend leur netteté à toutes.
+   * The curve is the shader's (`tiltBlurFactor`), read at the PROJECTED pill's location rather
+   * than by digging through the `transform` that `CSS2DRenderer` has just written — a string to re-parse at
+   * every frame, and an implementation detail of three. Nothing is done when the effect is off,
+   * except the frame that turns it off: that one gives all of them back their sharpness.
    */
   private updatePillFocus(): void {
     const ts = this.look.post.tiltShift
@@ -4448,7 +4448,7 @@ export class HouseScene {
     if (!band && !this.pillsFaded) return
     for (const m of this.markers.values()) {
       if (!band) { m.setPillFocus(1); continue }
-      // NDC → UV : +1 en haut vaut 1, comme le `vUv.y` du shader
+      // NDC → UV: +1 at the top is 1, like the shader's `vUv.y`
       const uvY = (m.worldAnchor(this.pillFocusAt).project(this.camera).y + 1) * 0.5
       m.setPillFocus(1 - band.pills * tiltBlurFactor(uvY, band))
     }
@@ -4460,9 +4460,9 @@ export class HouseScene {
   dispose(): void {
     this.shapeEditor?.dispose()
     this.shapeEditor = null
-    this.photoGen++                        // une matière qui arrive après n'a plus de scène à habiller
-    this.prepareGen++                      // …et une préparation en cours, plus de maison à montrer
-    this.compileGen++                      // …ni une compilation, plus d'image à retenir
+    this.photoGen++                        // a material that arrives afterward has no scene left to dress
+    this.prepareGen++                      // …and a preparation in progress, no house left to show
+    this.compileGen++                      // …nor a compilation, no frame left to hold
     this.detachInput?.()
     this.detachWheel?.()
     if (this.labelsIdle !== null) clearTimeout(this.labelsIdle)
@@ -4493,9 +4493,9 @@ export class HouseScene {
 }
 
 /**
- * Le contour et l'intérieur d'un cadre rectangulaire de `w` × `h`, large de `b` : les deux polygones
- * que `flatRing` et `extrudeRing` attendent. La largeur est bornée au cinquième de la plus petite
- * cote — sur une fenêtre de salle de bain de 80 cm, un cadre de 7,5 cm mange déjà le verre.
+ * The outline and the inside of a rectangular frame of `w` × `h`, `b` wide: the two polygons
+ * that `flatRing` and `extrudeRing` expect. The width is bounded to a fifth of the smallest
+ * dimension — on an 80 cm bathroom window, a 7.5 cm frame already eats into the glass.
  */
 function frameRect(w: number, h: number, b: number): [Vec2[], Vec2[]] {
   const x = w / 2, y = h / 2, t = Math.min(b, w * 0.2, h * 0.2)
@@ -4506,16 +4506,16 @@ function frameRect(w: number, h: number, b: number): [Vec2[], Vec2[]] {
 }
 
 /**
- * Une étiquette que la scène écrit elle-même : le nom d'une ouverture, l'une de ses deux cotes, ou la
- * lettre d'un axe du repère d'origine.
+ * A label the scene writes itself: the name of an opening, one of its two dimensions, or the
+ * letter of an axis of the origin marker.
  *
- * Styles EN LIGNE et non une classe de `styles/app.css` : la feuille de l'application appartient à
- * l'interface, et la scène sait déjà s'habiller seule (`core/theme.ts`). Les couleurs sont prises aux
- * variables du thème, donc les deux thèmes marchent sans rien de plus.
+ * INLINE styles and not a class from `styles/app.css`: the application stylesheet belongs to
+ * the interface, and the scene already knows how to dress itself (`core/theme.ts`). The colors are taken from the
+ * theme variables, so both themes work with nothing more.
  *
- * Une cote a des chiffres à CHASSE FIXE et une largeur minimale : « 0.35 m » puis « 1.40 m » ne
- * doivent pas faire danser l'étiquette sous le doigt, alors que c'est précisément le moment où sa
- * valeur change dix fois par seconde.
+ * A dimension has FIXED-WIDTH digits and a minimum width: "0.35 m" then "1.40 m" must
+ * not make the label dance under the finger, precisely when its
+ * value changes ten times per second.
  */
 function sceneNote(kind: 'name' | 'gap' | 'axis'): CSS2DObject {
   const el = document.createElement('div')
@@ -4524,19 +4524,19 @@ function sceneNote(kind: 'name' | 'gap' | 'axis'): CSS2DObject {
     'pointer-events:none;position:absolute;left:0;top:0;transform:translate(-50%,-50%)',
     'padding:3px 8px;border-radius:8px;white-space:nowrap;font:600 11px/1.25 var(--font)',
     kind === 'axis'
-      // un axe se nomme d'une lettre : pas de cartouche autour, juste la lettre lisible sur ciel
-      // comme sur pelouse (une ombre portée, pas un fond)
+      // an axis is named by a letter: no box around it, just the letter readable against sky
+      // as against lawn (a drop shadow, not a background)
       ? 'color:var(--accent);font:700 12px/1 var(--font);text-shadow:0 1px 3px rgba(0,0,0,.55),0 0 2px rgba(0,0,0,.4)'
       : kind === 'name'
       ? 'background:var(--accent);color:var(--on-accent);border:1px solid transparent;max-width:220px;overflow:hidden;text-overflow:ellipsis'
-      // 66 px : la largeur de « 12.34 m » à cette fonte, chiffres à chasse fixe — au-delà de dix
-      // mètres, un mur de maison n'existe plus. La boîte ne bouge donc pas d'un pixel pendant le geste.
+      // 66 px: the width of "12.34 m" in this font, fixed-width digits — beyond ten
+      // meters, a house wall no longer exists. The box therefore does not move by a pixel during the gesture.
       : 'background:color-mix(in srgb, var(--surface) 92%, transparent);color:var(--text);border:1px solid var(--line);font-variant-numeric:tabular-nums;min-width:66px;text-align:center',
   ].join(';')
   return new CSS2DObject(el)
 }
 
-/** Visible POUR DE BON : un objet visible dans un groupe masqué (un niveau au-dessus) ne l'est pas. */
+/** Visible FOR REAL: a visible object in a hidden group (a level above) is not. */
 function shownInScene(object: Object3D): boolean {
   for (let o: Object3D | null = object; o; o = o.parent) if (!o.visible) return false
   return true

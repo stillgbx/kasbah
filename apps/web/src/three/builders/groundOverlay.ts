@@ -3,23 +3,23 @@ import { terrainHeight, type TerrainDescriptor, type Vec2 } from '@kasbah/shared
 import { SITE_DECOR_LAYER } from '../core/layers'
 import { applyTerrainHeights, drapeGeometry } from './terrain'
 
-// Des formes PEINTES sur le terrain : aplats et traits qui épousent le relief, posés juste au-dessus
-// de l'herbe. Première utilisation : la carte du terrain d'une tondeuse (zones, obstacles, câbles),
-// dans le repère de la maison. Le style (teinte, opacité, largeur) est décidé par l'appelant.
+// Shapes PAINTED on the terrain: fills and strokes that hug the relief, laid just above
+// the grass. First use: a mower's terrain map (zones, obstacles, wires),
+// in the house reference frame. The style (tint, opacity, width) is decided by the caller.
 
 export interface GroundShape {
   points: readonly Vec2[]
-  /** Polygone (aplat + contour) ou ligne (trait seul). */
+  /** Polygon (fill + outline) or line (stroke only). */
   closed: boolean
   fill?: { color: string; opacity: number }
   line?: { color: string; opacity: number; widthM: number }
 }
 
-/** Maille de l'aplat : plus lâche que le terrain (0,5 m), une zone de 100 m reste légère. */
+/** Mesh of the fill: looser than the terrain (0.5 m), a 100 m zone stays light. */
 const FILL_RES = 1
-/** Pas d'échantillonnage d'un trait le long du relief. */
+/** Sampling step of a stroke along the relief. */
 const LINE_STEP_M = 0.5
-/** Au-dessus du terrain : l'aplat, puis le trait par-dessus (assez pour ne pas scintiller de loin). */
+/** Above the terrain: the fill, then the stroke on top (enough not to flicker from afar). */
 const FILL_LIFT = 0.03
 const LINE_LIFT = 0.05
 
@@ -30,7 +30,7 @@ function material(color: string, opacity: number): MeshBasicMaterial {
   })
 }
 
-/** Le trait recoupé tous les `LINE_STEP_M` : chaque point prendra la hauteur du terrain. */
+/** The stroke cut every `LINE_STEP_M`: each point will take the terrain height. */
 function densify(points: readonly Vec2[], closed: boolean): Vec2[] {
   const pts = closed ? [...points, points[0]!] : [...points]
   const out: Vec2[] = []
@@ -43,7 +43,7 @@ function densify(points: readonly Vec2[], closed: boolean): Vec2[] {
   return out
 }
 
-/** Un ruban de `width` le long du trait, chaque sommet posé sur le relief. */
+/** A ribbon of `width` along the stroke, each vertex laid on the relief. */
 export function ribbonGeometry(points: readonly Vec2[], closed: boolean, width: number, terrain: TerrainDescriptor): BufferGeometry {
   const pts = densify(points, closed)
   const half = width / 2
@@ -53,7 +53,7 @@ export function ribbonGeometry(points: readonly Vec2[], closed: boolean, width: 
     let dx = next[0] - prev[0], dy = next[1] - prev[1]
     const len = Math.hypot(dx, dy) || 1
     dx /= len; dy /= len
-    // la normale au trait, dans le plan : (-dy, dx)
+    // the normal to the stroke, in the plane: (-dy, dx)
     const lx = p[0] - dy * half, ly = p[1] + dx * half, rx = p[0] + dy * half, ry = p[1] - dx * half
     pos.set([lx, ly, terrainHeight(terrain, lx, ly) + LINE_LIFT, rx, ry, terrainHeight(terrain, rx, ry) + LINE_LIFT], i * 6)
   })
@@ -69,11 +69,11 @@ export function ribbonGeometry(points: readonly Vec2[], closed: boolean, width: 
 }
 
 /**
- * Les formes, peintes sur le terrain : un aplat drapé (la maille du terrain, posée par
- * `applyTerrainHeights` — sous un plancher, il passe sous le plancher comme l'herbe) et un ruban de
- * contour. Rien ne se touche : la carte peinte ne prend aucun tap (le terrain dessous reste à lui).
- * Elle vit sur `SITE_DECOR_LAYER` : l'occlusion ambiante (qualité haute) prenait les rubans, 5 cm
- * au-dessus de l'herbe, pour des obstacles et cernait chaque trait d'un liseré sombre.
+ * The shapes, painted on the terrain: a draped fill (the terrain mesh, laid by
+ * `applyTerrainHeights` — under a floor, it passes under the floor like the grass) and an outline
+ * ribbon. Nothing is touchable: the painted map takes no tap (taps stay with the terrain below).
+ * It lives on `SITE_DECOR_LAYER`: ambient occlusion (high quality) took the ribbons, 5 cm
+ * above the grass, for obstacles and ringed every stroke with a dark edge.
  */
 export function buildGroundOverlay(shapes: readonly GroundShape[], terrain: TerrainDescriptor): Group {
   const group = new Group()

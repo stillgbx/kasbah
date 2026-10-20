@@ -3,31 +3,31 @@ import {
   MeshBasicMaterial, MeshStandardMaterial, Points, PointsMaterial, SpotLight, Vector3,
 } from 'three'
 
-// La BOULE À FACETTES et les PROJECTEURS du style disco, dans le repère LOCAL de la maison (Z-up,
-// enfant de la racine), comme les chauves-souris. Trois pièces, toutes animées par `step` :
-//  - la boule, un icosaèdre subdivisé à facettes plates, en métal miroir : c'est la carte
-//    d'environnement (le ciel du style) qui la fait briller, elle tourne sur elle-même ;
-//  - ses éclats, un nuage de points additifs sur une grande sphère qui tourne AVEC elle : les
-//    taches de lumière que la boule renvoie, lues dans l'air plutôt que sur les murs ;
-//  - les projecteurs, posés aux coins du terrain : un cône de lumière additif (le faisceau
-//    visible) et une `SpotLight` sans ombre (la tache de couleur sur la maison), qui balaient et
-//    changent de couleur.
+// The MIRROR BALL and the SPOTLIGHTS of the disco style, in the house's LOCAL reference frame (Z-up,
+// child of the root), like the bats. Three pieces, all animated by `step`:
+//  - the ball, a subdivided icosahedron with flat facets, in mirror metal: it is the environment
+//    map (the style's sky) that makes it shine, and it spins on itself;
+//  - its sparkles, a cloud of additive points on a large sphere that turns WITH it: the
+//    spots of light the ball throws back, read in the air rather than on the walls;
+//  - the spotlights, set at the corners of the terrain: an additive cone of light (the visible
+//    beam) and a `SpotLight` without shadow (the spot of color on the house), which sweep and
+//    change color.
 //
-// Rien de tout cela n'est cliquable : un faisceau couvre la maison, il intercepterait les appareils.
+// None of this is clickable: a beam covers the house, it would intercept the devices.
 
-/** L'emprise de la maison (repère local, mètres) et la hauteur du toit, au-dessus duquel pend la boule. */
+/** The house footprint (local reference frame, meters) and the roof height, above which the ball hangs. */
 export interface DiscoArea { min: readonly [number, number]; max: readonly [number, number]; roofZ: number }
 
-/** Rayon (m) de la boule : plus grande que nature, comme les chauves-souris, pour se voir à l'échelle de la maison. */
+/** Radius (m) of the ball: larger than life, like the bats, to be seen at the scale of the house. */
 const BALL_R = 1.1
-/** Hauteur (m) de la boule au-dessus du faîtage. */
+/** Height (m) of the ball above the ridge. */
 const BALL_LIFT = 2.5
-/** Tour de la boule, en rad/s. */
+/** Spin of the ball, in rad/s. */
 const BALL_SPIN = 0.5
 const SPARKLES = 240
-/** Longueur (m) d'un faisceau visible. */
+/** Length (m) of a visible beam. */
 const BEAM_LEN = 14
-/** Secondes que met un projecteur à passer d'une couleur à la suivante. */
+/** Seconds a spotlight takes to go from one color to the next. */
 const COLOR_PERIOD_S = 2.5
 
 interface Spot { light: SpotLight; beam: Mesh; beamMat: MeshBasicMaterial; base: Vector3; phase: number; speed: number }
@@ -53,14 +53,14 @@ export class Disco {
     this.object = new Group()
     this.object.name = 'disco'
 
-    // la boule : facettes plates, sinon le miroir est une bille lisse
+    // the ball: flat facets, otherwise the mirror is a smooth marble
     const ballGeo = new IcosahedronGeometry(BALL_R, 3)
     const ballMat = new MeshStandardMaterial({ color: 0xe8e8f0, metalness: 1, roughness: 0.08, flatShading: true, envMapIntensity: 2.5 })
     this.ball = new Mesh(ballGeo, ballMat)
     this.ball.position.set(cx, cy, area.roofZ + BALL_LIFT)
-    this.ball.rotation.x = Math.PI / 2                   // l'axe de rotation de l'icosaèdre vertical en Z-up
+    this.ball.rotation.x = Math.PI / 2                   // the icosahedron's rotation axis vertical in Z-up
     this.object.add(this.ball)
-    // le fil qui la tient : un cylindre fin jusqu'à hors champ
+    // the wire holding it: a thin cylinder up to out of frame
     const wireGeo = new ConeGeometry(0.02, 6, 4, 1, true)
     const wireMat = new MeshBasicMaterial({ color: 0x777788 })
     const wire = new Mesh(wireGeo, wireMat)
@@ -68,13 +68,13 @@ export class Disco {
     wire.position.set(cx, cy, area.roofZ + BALL_LIFT + BALL_R + 3)
     this.object.add(wire)
 
-    // les éclats : des points répartis au hasard sur une sphère autour de la boule
+    // the sparkles: points spread at random on a sphere around the ball
     const sparkPos = new Float32Array(SPARKLES * 3)
     const sparkCol = new Float32Array(SPARKLES * 3)
     for (let i = 0; i < SPARKLES; i++) {
       const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2, s = Math.sqrt(1 - u * u)
       const r = reach * (0.6 + 0.5 * Math.random())
-      // hémisphère du bas surtout : la boule éclaire ce qui est sous elle
+      // mostly the lower hemisphere: the ball lights what is below it
       sparkPos.set([Math.cos(th) * s * r, Math.sin(th) * s * r, -Math.abs(u) * r * 0.8 + 0.2 * r], i * 3)
       const c = Math.random() < 0.6 ? new Color(0xffffff) : this.colors[i % this.colors.length]!
       sparkCol.set([c.r, c.g, c.b], i * 3)
@@ -87,11 +87,11 @@ export class Disco {
     this.sparkles.position.copy(this.ball.position)
     this.object.add(this.sparkles)
 
-    // les projecteurs, répartis autour de la maison, au sol, un peu au-delà des façades
+    // the spotlights, spread around the house, on the ground, a little beyond the facades
     const beamGeo = new ConeGeometry(0.9, BEAM_LEN, 20, 1, true)
-    beamGeo.translate(0, -BEAM_LEN / 2, 0)               // la pointe à l'origine : le cône s'ouvre vers −Y
-    // le faisceau s'éteint sur sa longueur : en mélange additif, un sommet noir ne rend rien, et le
-    // bout du cône ne s'arrête plus net sur un disque
+    beamGeo.translate(0, -BEAM_LEN / 2, 0)               // the tip at the origin: the cone opens toward −Y
+    // the beam fades out along its length: in additive blending, a black vertex renders nothing, and the
+    // end of the cone no longer stops sharply on a disc
     const beamY = beamGeo.getAttribute('position')
     const fade = new Float32Array(beamY.count * 3)
     for (let v = 0; v < beamY.count; v++) fade.fill((1 + beamY.getY(v) / BEAM_LEN) ** 2, v * 3, v * 3 + 3)
@@ -113,12 +113,12 @@ export class Disco {
       return { light, beam, beamMat, base, phase: i * 1.7, speed: 0.6 + 0.25 * (i % 3) }
     })
     this.disposables.push(ballGeo, ballMat, wireGeo, wireMat, sparkGeo, sparkMat, beamGeo)
-    // ni les faisceaux ni les éclats ne se prennent au clic, et leur volume englobant bouge
+    // neither the beams nor the sparkles catch clicks, and their bounding volume moves
     this.object.traverse((o) => { o.raycast = () => {}; o.frustumCulled = false })
     this.write()
   }
 
-  /** Change les couleurs sans refaire les projecteurs (l'heure tourne). */
+  /** Changes the colors without rebuilding the spotlights (the hour turns). */
   setColors(colors: readonly Color[]): void {
     if (!colors.length) return
     this.colors.length = 0
@@ -126,7 +126,7 @@ export class Disco {
     this.write()
   }
 
-  /** Avance l'animation de `dtS` secondes. */
+  /** Advances the animation by `dtS` seconds. */
   step(dtS: number): void {
     this.time += Math.min(0.1, Math.max(0, dtS))
     this.write()
@@ -142,7 +142,7 @@ export class Disco {
     this.sparkles.rotation.z = t * BALL_SPIN
     const n = this.colors.length
     for (const s of this.spots) {
-      // un balayage en huit autour de la maison : la cible dessine une lissajous
+      // a figure-eight sweep around the house: the target draws a Lissajous curve
       const k = t * s.speed + s.phase
       this.aim.set(
         this.target.x + Math.sin(k) * 6,
@@ -151,9 +151,9 @@ export class Disco {
       )
       s.light.target.position.copy(this.aim)
       s.light.target.updateMatrixWorld()
-      // le cône s'ouvre vers −Y : on tourne son axe vers la cible
+      // the cone opens toward −Y: we turn its axis toward the target
       s.beam.quaternion.setFromUnitVectors(DOWN, this.dir.subVectors(this.aim, s.base).normalize())
-      // la couleur glisse d'une teinte de la palette à la suivante
+      // the color glides from one hue of the palette to the next
       const p = (t / COLOR_PERIOD_S + s.phase) % n
       const i = Math.floor(p)
       this.color.copy(this.colors[i]!).lerp(this.colors[(i + 1) % n]!, p - i)

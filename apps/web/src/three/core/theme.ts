@@ -2,31 +2,31 @@ import { Color } from 'three'
 import { dayFactor, type SceneAmbience } from './ambience'
 import type { ScenePalette } from '../styles/types'
 
-// Les couleurs que la scène emploie viennent de DEUX sources, et c'est voulu :
+// The colors the scene uses come from TWO sources, and that is intended:
 //
-//  - la MATIÈRE (murs, sols, verre, toit, pelouse…) vient du STYLE DE RENDU choisi
-//    (`three/styles/`) — elle ne dépend ni du thème de l'app, ni de son mode clair/sombre ;
-//  - les REPÈRES posés sur la maison (accent de sélection, onde d'un lecteur, jauges) viennent du
-//    thème Vuetify, lus dans les variables CSS `--v-theme-*`. C'est l'arbitrage de l'utilisateur du
-//    2026-09-12 : « thémer les points, pastilles, bulles, labels, ondes… les éléments 3d restent ».
+//  - the MATERIAL (walls, floors, glass, roof, lawn…) comes from the chosen RENDER STYLE
+//    (`three/styles/`) — it depends neither on the app theme nor on its light/dark mode;
+//  - the MARKERS laid on the house (selection accent, a player's wave, gauges) come from the
+//    Vuetify theme, read from the CSS variables `--v-theme-*`. This is the user's ruling of
+//    2026-09-12: "theme the dots, badges, bubbles, labels, waves… the 3D elements stay".
 //
-// `SceneTheme` est le résultat de la fusion des deux, plus l'heure qu'il fait (`night`). Aucun
-// consommateur — matériaux, marqueurs, scène — n'a à savoir d'où vient quelle couleur.
+// `SceneTheme` is the result of merging the two, plus the time of day (`night`). No
+// consumer — materials, markers, scene — has to know where which color comes from.
 //
-// Le parseur accepte "r,g,b" (Vuetify 3), "r g b", "rgb(…)" et "#hex".
+// The parser accepts "r,g,b" (Vuetify 3), "r g b", "rgb(…)" and "#hex".
 
-/** Ce que la scène lit du thème de l'APPLICATION : des repères, jamais de la matière. */
+/** What the scene reads from the APPLICATION theme: markers, never material. */
 export interface UiTheme {
-  /** Fond de l'app : le sol infini s'y fond exactement, la parcelle ne flotte pas. */
+  /** App background: the infinite ground blends into it exactly, the plot does not float. */
   background: Color
-  /** Onde du lecteur en diffusion : un bleu propre à la scène, égal au `catMedia` du thème. */
+  /** Wave of a player that is streaming: a blue of the scene's own, equal to the theme's `catMedia`. */
   media: Color
   primary: Color
   secondary: Color
-  /** Repères posés sur une mesure : `warning` pour une limite, `success` pour un record. */
+  /** Markers laid on a measurement: `warning` for a limit, `success` for a record. */
   warning: Color
   success: Color
-  /** États d'un appareil qui se signale : `info` pour un flux qui sort, `error` pour un appareil muet. */
+  /** States of a device that signals itself: `info` for an outgoing stream, `error` for a silent device. */
   info: Color
   error: Color
   onSurface: Color
@@ -34,9 +34,9 @@ export interface UiTheme {
 
 export interface SceneTheme extends UiTheme, ScenePalette {
   /**
-   * 0 = plein jour, 1 = nuit noire. À NE PAS confondre avec le mode clair/sombre de l'app : l'interface
-   * peut être en thème sombre devant une maison en plein soleil. Ce qui se lit ici, c'est
-   * la position du soleil au-dessus de la maison (`core/ambience.ts`).
+   * 0 = broad daylight, 1 = pitch-dark night. NOT to be confused with the app's light/dark mode: the interface
+   * can be in dark theme in front of a house in full sun. What is read here is
+   * the position of the sun above the house (`core/ambience.ts`).
    */
   night: number
 }
@@ -57,7 +57,7 @@ const FALLBACK: Record<string, string> = {
   warning: '#d38b22', success: '#4f7a4a', info: '#3f7fbf', error: '#d24a43',
 }
 
-/** Lit le thème de l'app dans les variables CSS (au mount et à chaque changement de thème). */
+/** Reads the app theme from the CSS variables (on mount and on every theme change). */
 export function readUiTheme(el: Element = document.documentElement): UiTheme {
   const cs = getComputedStyle(el)
   const get = (name: string) => parseCssColor(cs.getPropertyValue(`--v-theme-${name}`), FALLBACK[name] ?? '#888888')
@@ -68,7 +68,7 @@ export function readUiTheme(el: Element = document.documentElement): UiTheme {
   }
 }
 
-/** Thème d'app par défaut (tests, ou avant le premier rendu). */
+/** Default app theme (tests, or before the first render). */
 export function defaultUiTheme(): UiTheme {
   const c = (k: string) => new Color(FALLBACK[k] ?? '#888888')
   return {
@@ -78,7 +78,7 @@ export function defaultUiTheme(): UiTheme {
   }
 }
 
-/** La fusion : matière du style, repères du thème, heure de l'ambiance. */
+/** The merge: material from the style, markers from the theme, time of day from the ambience. */
 export function resolveSceneTheme(ui: UiTheme, palette: ScenePalette, ambience: SceneAmbience): SceneTheme {
   return { ...ui, ...palette, night: 1 - dayFactor(ambience) }
 }

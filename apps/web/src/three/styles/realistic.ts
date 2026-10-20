@@ -2,15 +2,15 @@ import { Color } from 'three'
 import { dayFactor, duskFactor, type SceneAmbience } from '../core/ambience'
 import { hourGrade, mix, mixRgb, toPalette, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
 
-// Le style de la MAQUETTE : une maison réelle, de nuit, dont les lampes font toute la lumière.
+// The MAQUETTE style: a real house, at night, whose lamps make all the light.
 //
-// Un point de méthode qui explique presque tout ce fichier : la palette est une palette d'ALBÉDOS,
-// c'est-à-dire la couleur qu'a la matière en plein jour, et elle ne change PAS avec l'heure. Avant
-// l'arrivée du tone mapping, la scène peignait ses murs en gris sombre pour « faire nuit » — ce qui
-// donnait des murs gris sombre en plein soleil dès qu'une lampe s'allumait. Maintenant c'est la
-// LUMIÈRE qui fait la nuit (soleil devenu lune, ciel presque noir, exposition relevée), et un mur
-// blanc reste un mur blanc : il est simplement très peu éclairé. C'est la seule façon d'obtenir à la
-// fois la flaque chaude de la maquette et un vrai midi.
+// A point of method that explains almost all of this file: the palette is a palette of ALBEDOS,
+// that is the color the material has in broad daylight, and it does NOT change with the hour. Before
+// tone mapping arrived, the scene painted its walls dark gray to "make it night" — which
+// gave dark gray walls in full sun as soon as a lamp came on. Now it is the
+// LIGHT that makes the night (sun turned moon, almost black sky, raised exposure), and a white
+// wall stays a white wall: it is simply very dimly lit. It is the only way to get both
+// the warm pool of light of the maquette and a true noon.
 
 const PALETTE: PaletteSpec = {
   wall: '#cfc9c0',
@@ -42,7 +42,7 @@ const SURFACES: SurfaceLooks = {
   terrain: { texture: 'grass', roughness: 1 },
   zones: {
     lawn: { texture: 'grass', roughness: 1 },
-    // l'eau : lisse et un peu métallique, c'est ce qui fait qu'elle attrape le ciel et les lampes
+    // the water: smooth and a little metallic, that is what makes it catch the sky and the lamps
     pool: { texture: 'water', roughness: 0.06, metalness: 0.35 },
     driveway: { texture: 'concrete', roughness: 0.85 },
     path: { texture: 'pavers', roughness: 0.8 },
@@ -52,14 +52,14 @@ const SURFACES: SurfaceLooks = {
   },
 }
 
-// Ciel de nuit et ciel de jour, en linéaire non borné : le soleil dépasse 1, et de loin.
-// Le ciel de nuit est TRÈS sombre, et ce n'est pas un réglage d'ambiance : c'est la condition pour
-// que la maison se détache. Premier essai avec un horizon à 0,03 — le fond et les murs éclairés par
-// la lune tombaient à deux valeurs près l'une de l'autre (41 contre 45 sur 255), et la maison
-// disparaissait dans le ciel. Ce qu'on regarde la nuit, c'est un objet clair sur du noir.
+// Night sky and day sky, in unbounded linear: the sun exceeds 1, and by far.
+// The night sky is VERY dark, and that is not an ambience setting: it is the condition for
+// the house to stand out. First attempt with a horizon at 0.03 — the background and the walls lit by
+// the moon fell within two values of each other (41 versus 45 out of 255), and the house
+// vanished into the sky. What one looks at at night is a light object on black.
 const SKY_NIGHT = { zenith: [0.002, 0.003, 0.009], horizon: [0.012, 0.016, 0.032], ground: [0.001, 0.001, 0.002], sunGlare: 2.5, sunColor: [0.68, 0.78, 1] } as const
 const SKY_DAY = { zenith: [0.18, 0.32, 0.62], horizon: [0.72, 0.80, 0.94], ground: [0.09, 0.09, 0.08], sunGlare: 16, sunColor: [1, 0.95, 0.86] } as const
-/** Ce que le crépuscule AJOUTE à l'horizon : la bande orange, qui ne s'obtient par aucun mélange des deux autres. */
+/** What twilight ADDS to the horizon: the orange band, which no mix of the other two can produce. */
 const DUSK_HORIZON = [0.85, 0.42, 0.20] as const
 
 export const realisticStyle: RenderStyle = {
@@ -78,7 +78,7 @@ export const realisticStyle: RenderStyle = {
       glass: { opacity: 0.28, roughness: 0.05, metalness: 0, emissive: 0 },
       sky: {
         zenith: mixRgb(SKY_NIGHT.zenith, SKY_DAY.zenith, day),
-        // la bande chaude du couchant se pose SUR l'horizon du moment, elle ne le remplace pas
+        // the warm band of sunset is laid ON the current horizon, it does not replace it
         horizon: mixRgb(horizon, DUSK_HORIZON, dusk * 0.7 * clear),
         ground: mixRgb(SKY_NIGHT.ground, SKY_DAY.ground, day),
         sunGlare: mix(SKY_NIGHT.sunGlare, SKY_DAY.sunGlare, day) * clear,
@@ -86,41 +86,41 @@ export const realisticStyle: RenderStyle = {
         intensity: mix(0.9, 1, day),
       },
       lighting: {
-        // la lune est froide et faible ; le soleil rasant du couchant est franchement orange
+        // the moon is cold and weak; the grazing sun of sunset is frankly orange
         sunColor: new Color(0x9fb4e8).lerp(new Color(0xfff4e2), day).lerp(new Color(0xff9d52), dusk * 0.75 * clear),
-        // La lune éclaire VRAIMENT : elle doit poser la maison au-dessus du noir du ciel, sans quoi
-        // on ne voit qu'une silhouette. Le contraste de nuit se joue entre ces deux valeurs.
+        // The moon REALLY lights: it must set the house above the black of the sky, otherwise
+        // only a silhouette is seen. The night contrast plays out between these two values.
         sunIntensity: mix(1.1, 2.8, day) * mix(0.35, 1, clear),
-        // Le REMPLISSAGE de nuit n'est pas un détail d'ambiance : en `auto`, la lune tombe où elle
-        // tombe, et les faces qu'on regarde peuvent toutes être à l'ombre. Sans un ciel nocturne qui
-        // éclaire vraiment, la maison n'existe plus dès que la source passe derrière elle.
+        // The night FILL is not an ambience detail: in `auto`, the moon falls where it
+        // falls, and the faces being looked at can all be in shadow. Without a night sky that
+        // really lights, the house no longer exists as soon as the source passes behind it.
         hemiSky: new Color(0x5d7099).lerp(new Color(0xbcd4f2), day),
         hemiGround: new Color(0x141a26).lerp(new Color(0x6a6455), day),
         hemiIntensity: mix(0.9, 0.55, day) * mix(1.6, 1, clear),
         ambientIntensity: mix(0.12, 0.08, day),
-        // sous un ciel couvert, et sous la lune, les ombres portées s'adoucissent
+        // under an overcast sky, and under the moon, cast shadows soften
         shadowOpacity: mix(0.5, 1, day) * clear,
       },
       post: {
         toneMapping: 'aces',
-        // le diaphragme s'ouvre la nuit : c'est lui, et non la couleur des murs, qui rend la maison lisible
+        // the aperture opens at night: it, and not the color of the walls, is what makes the house readable
         exposure: mix(1.2, 0.9, day),
         bloom: {
           strength: mix(0.8, 0.22, day),
           radius: mix(0.55, 0.4, day),
           threshold: mix(0.72, 1, day),
         },
-        // 60 cm : l'échelle des angles d'une PIÈCE. Plus court, l'occlusion ne fait qu'un liseré au
-        // pied des murs ; plus long, elle salit les grandes surfaces planes.
+        // 60 cm: the scale of a ROOM's corners. Shorter, the occlusion only makes a thin line at the
+        // foot of the walls; longer, it dirties the large flat surfaces.
         ao: { intensity: mix(1.1, 0.9, day), radius: 0.6 },
         vignette: mix(0.45, 0.18, day),
         grade: hourGrade(a),
       },
       glow: {
         scale: mix(1.2, 0.9, day),
-        // Le halo et la lampe étaient réglés SANS tone mapping, pour une image qui ne débordait
-        // jamais : avec la courbe filmique, une lampe à 16 brûlait un pan de mur entier en blanc pur.
-        // Ce qui compte n'est plus l'intensité brute, c'est ce qui reste après la courbe.
+        // The halo and the lamp were tuned WITHOUT tone mapping, for an image that never
+        // overflowed: with the filmic curve, a lamp at 16 burned a whole wall section to pure white.
+        // What matters is no longer the raw intensity, it is what remains after the curve.
         opacity: mix(0.6, 0.18, day),
         lightIntensity: mix(11, 5, day),
         emissive: mix(2.2, 1.2, day),

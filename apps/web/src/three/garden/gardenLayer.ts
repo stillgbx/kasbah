@@ -8,11 +8,11 @@ import { GARDEN_VARIANTS, gardenSeed, gardenShape, rng, type GardenPart, type Ga
 import { speciesOf } from './species'
 import { speciesShape } from './speciesShape'
 
-// Le jardin dessiné : une `InstancedMesh` par (famille, forme, matière). Trente arbres de quatre
-// formes coûtent donc huit appels de dessin, pas soixante. Les éléments sont posés dans le groupe
-// du SITE (repère maison, Z vers le haut), le pied sur le terrain relief compris.
+// The drawn garden: one `InstancedMesh` per (family, shape, material). Thirty trees of four
+// shapes therefore cost eight draw calls, not sixty. The elements are placed in the
+// SITE group (house reference frame, Z up), the foot on the terrain, relief included.
 
-/** Teinte de base par famille et matière ; chaque instance s'en écarte un peu (`jitter`). */
+/** Base tint per family and material; each instance deviates from it a little (`jitter`). */
 const COLORS: Record<GardenKind, Partial<Record<GardenPart, number>>> = {
   broadleaf: { bark: 0x7a5236, leaf: 0x6fa84a },
   fruit: { bark: 0x5e4a38, leaf: 0x5f9a40, accent: 0xc0392b },
@@ -24,28 +24,28 @@ const COLORS: Record<GardenKind, Partial<Record<GardenPart, number>>> = {
   hedge: { bark: 0x5a4a3a, leaf: 0x4f8a3c },
 }
 /**
- * Feuillage des familles CADUQUES hors de l'été (feuillus, fruitiers, buissons) : vert tendre au printemps,
- * roux en automne, terne en hiver. Conifères et palmiers gardent le leur.
+ * Foliage of the DECIDUOUS families outside summer (broadleaves, fruit trees, bushes): tender green in spring,
+ * russet in autumn, dull in winter. Conifers and palms keep theirs.
  */
 const SEASON_LEAF: Partial<Record<Season, Partial<Record<GardenKind, number>>>> = {
   spring: { broadleaf: 0x8cc152, fruit: 0x8cc152, shrub: 0x7cb342 },
   autumn: { broadleaf: 0xd08a2e, fruit: 0xc49a34, shrub: 0xb5652b },
   winter: { broadleaf: 0x8d8272, fruit: 0x8d8272, shrub: 0x7d7a5a },
 }
-/** Enfoncement du pied (m) : sur une pente, un tronc posé au centre flotterait côté aval. */
+/** Sinking of the foot (m): on a slope, a trunk placed at the center would float on the downhill side. */
 const FOOT_SINK_M = 0.05
 const RING_MARGIN_M = 0.25
-/** Ombre de contact : son rayon rapporté à celui de l'élément, son opacité au centre. */
+/** Contact shadow: its radius relative to the element's, its opacity at the center. */
 const CONTACT_SCALE = 1.25
 const CONTACT_OPACITY = 0.38
 
-/** Longueur et largeur d'une haie (m) ; les autres éléments n'en ont pas. */
+/** Length and width of a hedge (m); the other elements have none. */
 const lengthOf = (it: GardenItem) => it.length ?? DEFAULT_HEDGE_LENGTH
 const widthOf = (it: GardenItem) => it.width ?? DEFAULT_HEDGE_WIDTH
 
 /**
- * Le disque de l'ombre de contact : noir, opaque au centre, qui s'efface vers le bord. Calculé en
- * mémoire (pas de canevas) pour qu'il existe aussi dans les tests.
+ * The contact shadow disc: black, opaque at the center, fading toward the edge. Computed in
+ * memory (no canvas) so that it also exists in the tests.
  */
 function contactTexture(): DataTexture {
   const n = 64
@@ -62,7 +62,7 @@ function contactTexture(): DataTexture {
   return t
 }
 
-/** `owned` : matière propre à la tranche (néon d'un style), à libérer avec elle. */
+/** `owned`: material specific to the batch (a style's neon), to be freed with it. */
 interface Slot { mesh: InstancedMesh; ids: string[]; owned?: MeshStandardMaterial }
 
 export class GardenLayer {
@@ -71,18 +71,18 @@ export class GardenLayer {
   private items = new Map<string, GardenItem>()
   private signature = ''
   private readonly materials: Record<GardenPart, MeshStandardMaterial> = {
-    // `vertexColors` : la clarté par face des formes facettées (`shapes.ts`, `facet`)
+    // `vertexColors`: the per-face lightness of the faceted shapes (`shapes.ts`, `facet`)
     bark: new MeshStandardMaterial({ color: 0xffffff, roughness: 1, vertexColors: true }),
     leaf: new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, vertexColors: true }),
     stone: new MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, vertexColors: true }),
     accent: new MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, vertexColors: true }),
   }
-  /** Ombres de contact : un disque au pied de chaque élément, une seule instance pour tout le jardin. */
+  /** Contact shadows: a disc at the foot of each element, a single instance for the whole garden. */
   private readonly contactMap = contactTexture()
   private readonly contactMaterial = new MeshBasicMaterial({ color: 0x000000, map: this.contactMap, transparent: true, opacity: CONTACT_OPACITY, depthWrite: false })
   private contact: InstancedMesh | null = null
   private season: Season = 'summer'
-  /** Palette de jardin du style courant ; absente = couleurs naturelles. */
+  /** Garden palette of the current style; absent = natural colors. */
   private look: GardenLook | undefined
   private readonly ringMaterial = new MeshBasicMaterial({ transparent: true, opacity: 0.9, depthWrite: false, depthTest: false, side: DoubleSide })
   private readonly ring = new Mesh(new RingGeometry(0.92, 1, 48), this.ringMaterial)
@@ -95,27 +95,27 @@ export class GardenLayer {
     this.ring.renderOrder = 10
     this.ring.visible = false
     this.group.add(this.ring)
-    // Comme la pelouse : aucune lampe d'INTÉRIEUR sur le jardin (`core/levelLight.ts`). Un arbre au
-    // ras de la façade est à la hauteur du rez-de-chaussée, le plafonnier du salon l'éclairait à
-    // travers le mur. Les lampes de jardin, elles, l'éclairent toujours.
+    // Like the lawn: no INDOOR lamp on the garden (`core/levelLight.ts`). A tree right
+    // against the facade is at the height of the ground floor, the living room ceiling light lit it through
+    // the wall. The garden lamps, for their part, still light it.
     for (const m of Object.values(this.materials)) m.userData.noLamps = true
   }
 
   setAccent(color: Color): void { this.ringMaterial.color.copy(color) }
 
   /**
-   * Pose les éléments. Même liste d'éléments, mêmes familles et mêmes formes (on en glisse un, on
-   * change sa hauteur) → seules les matrices sont réécrites, sans recréer de tampon à chaque image.
+   * Places the elements. Same list of elements, same families and same shapes (one is dragged, its
+   * height is changed) → only the matrices are rewritten, without recreating a buffer on every frame.
    */
   build(items: readonly GardenItem[], groundZ: (x: number, y: number) => number, season: Season, look?: GardenLook): void {
     this.groundZ = groundZ
     this.season = season
     this.look = look
     this.items = new Map(items.map((it) => [it.id, it]))
-    // Sous une palette de style, la teinte du feuillage est tirée par élément : elle entre dans la
-    // clé, pour qu'une tranche n'ait qu'une teinte — c'est ce qui permet au néon d'en émettre une.
+    // Under a style palette, the foliage tint is drawn per element: it goes into the
+    // key, so that a batch has only one tint — that is what lets the neon emit one.
     const tintOf = (it: GardenItem) => (look ? gardenSeed(it) % look.leaf.length : 0)
-    // une haie est construite à ses dimensions : deux haies de tailles différentes n'ont pas la même forme
+    // a hedge is built at its dimensions: two hedges of different sizes do not have the same shape
     const keyOf = (it: GardenItem) => `${it.kind}:${speciesOf(it)?.id ?? ''}:${gardenSeed(it) % GARDEN_VARIANTS}:${tintOf(it)}${it.kind === 'hedge' ? `:${lengthOf(it).toFixed(2)}:${widthOf(it).toFixed(2)}:${it.height.toFixed(2)}:${it.spacing?.toFixed(2) ?? 'auto'}:${gardenSeed(it)}` : ''}`
     const lookKey = look ? JSON.stringify([look.leaf, look.bark, look.stone, look.accent, look.emissive, look.foliage]) : ''
     const signature = `${season}|${lookKey}|${items.map((it) => `${it.id}:${keyOf(it)}`).join('|')}`
@@ -124,7 +124,7 @@ export class GardenLayer {
       this.signature = signature
       const groups = new Map<string, GardenItem[]>()
       for (const it of items) groups.set(keyOf(it), [...(groups.get(keyOf(it)) ?? []), it])
-      // une ombre de contact par élément, en couche de décor : l'occlusion ambiante ne la prend pas pour un objet
+      // one contact shadow per element, on a decor layer: the ambient occlusion does not take it for an object
       this.contact = new InstancedMesh(new PlaneGeometry(2, 2), this.contactMaterial, Math.max(1, items.length))
       this.contact.count = items.length
       this.contact.layers.set(SITE_DECOR_LAYER)
@@ -134,7 +134,7 @@ export class GardenLayer {
         const first = list[0]!
         this.shapeOf(first).parts.forEach(({ geometry, part }, pi) => {
           const base = look ? this.styledColor(look, part, first) : this.naturalColor(part, first)
-          // le néon : une matière par tranche, qui émet sa propre teinte (l'émission ignore la couleur d'instance)
+          // the neon: one material per batch, which emits its own tint (emission ignores the instance color)
           const glows = !!look?.emissive && (part === 'leaf' || part === 'accent')
           const owned = glows ? this.materials[part].clone() : undefined
           if (owned) { owned.emissive.copy(base); owned.emissiveIntensity = look!.emissive! }
@@ -158,10 +158,10 @@ export class GardenLayer {
       slot.ids.forEach((id, i) => {
         const it = this.items.get(id)!
         const next = rng(gardenSeed(it))
-        const squash = 0.9 + next() * 0.2           // deux arbres de même forme n'ont pas la même carrure
+        const squash = 0.9 + next() * 0.2           // two trees of the same shape do not have the same build
         p.set(it.center[0], it.center[1], this.groundZ(it.center[0], it.center[1]) - FOOT_SINK_M)
-        q.setFromAxisAngle(up, ((it.yaw ?? 0) * Math.PI) / 180)   // sens trigonométrique, comme le yaw d'un appareil
-        // une haie est déjà à ses mètres en plan : seule sa hauteur s'étire
+        q.setFromAxisAngle(up, ((it.yaw ?? 0) * Math.PI) / 180)   // counterclockwise, like a device's yaw
+        // a hedge is already at its meters in plan: only its height stretches
         if (it.kind === 'hedge') s.set(1, 1, it.height)
         else s.set(it.height * squash, it.height * squash, it.height)
         slot.mesh.setMatrixAt(i, m.compose(p, q, s))
@@ -175,10 +175,10 @@ export class GardenLayer {
     let i = 0
     for (const it of this.items.values()) {
       const r = this.radiusOf(it) * CONTACT_SCALE
-      // à peine au-dessus du sol ; sur une pente le disque, plat, s'enfonce d'un côté : c'est le
-      // `depthWrite: false` + l'ordre de rendu qui le gardent lisible
+      // barely above the ground; on a slope the flat disc sinks on one side: it is the
+      // `depthWrite: false` + the render order that keep it readable
       p.set(it.center[0], it.center[1], this.groundZ(it.center[0], it.center[1]) + 0.03)
-      // une haie : un disque étiré le long de son axe, tourné avec elle
+      // a hedge: a disc stretched along its axis, rotated with it
       if (it.kind === 'hedge') {
         q.setFromAxisAngle(up, ((it.yaw ?? 0) * Math.PI) / 180)
         contact.setMatrixAt(i++, m.compose(p, q, s.set(lengthOf(it) / 2 + 0.3, widthOf(it) / 2 + 0.35, 1)))
@@ -188,7 +188,7 @@ export class GardenLayer {
     contact.computeBoundingSphere()
   }
 
-  /** Boîte MONDE de tout le jardin (pour le cadre des ombres du soleil), `null` s'il est vide. */
+  /** WORLD box of the whole garden (for the sun shadow frame), `null` if it is empty. */
   worldBounds(): Box3 | null {
     let box: Box3 | null = null
     for (const id of this.items.keys()) {
@@ -199,10 +199,10 @@ export class GardenLayer {
   }
 
   /**
-   * Ce dont s'écartent les personnages qui défilent (`effects/roam.ts`), en disques au sol. Un arbre
-   * ne bloque que la moitié de sa couronne (on passe sous le bord, pas dans le tronc) ; un buisson,
-   * un rocher ou une haie bloquent tout leur volume — une haie en chapelet de disques. `tall` = un
-   * arbre : le traîneau et les X-wings, qui volent au-dessus du reste, ne contournent que ceux-là.
+   * What the parading characters steer clear of (`effects/roam.ts`), as discs on the ground. A tree
+   * blocks only half of its crown (one passes under the edge, not into the trunk); a bush,
+   * a rock or a hedge block their whole volume — a hedge as a string of discs. `tall` = a
+   * tree: the sleigh and the X-wings, which fly above the rest, only skirt those.
    */
   footprints(): { x: number; y: number; r: number; tall: boolean }[] {
     const out: { x: number; y: number; r: number; tall: boolean }[] = []
@@ -224,7 +224,7 @@ export class GardenLayer {
     return out
   }
 
-  /** L'élément réglé en mode édition : un anneau d'accent au pied. `null` = aucun. */
+  /** The element being adjusted in edit mode: an accent ring at its foot. `null` = none. */
   setSelected(id: string | null): void {
     this.selectedId = id
     this.placeRing()
@@ -245,8 +245,8 @@ export class GardenLayer {
   }
 
   /**
-   * La forme d'un élément : celle de son espèce (à la saison courante), sinon celle de sa famille.
-   * Sous une palette de style, l'espèce est tirée en ombrage seul et le feuillage du style s'applique.
+   * The shape of an element: that of its species (at the current season), otherwise that of its family.
+   * Under a style palette, the species is drawn as shading only and the style's foliage applies.
    */
   private shapeOf(it: GardenItem): GardenShape {
     const variant = gardenSeed(it) % GARDEN_VARIANTS
@@ -257,13 +257,13 @@ export class GardenLayer {
     return gardenShape(it.kind, variant, foliage)
   }
 
-  /** Couleurs naturelles : une espèce porte les siennes dans ses sommets, l'instance n'y module que la clarté. */
+  /** Natural colors: a species carries its own in its vertices, the instance only modulates their lightness. */
   private naturalColor(part: GardenPart, it: GardenItem): Color {
     if (speciesOf(it)) return new Color(0xffffff)
     return new Color((part === 'leaf' ? SEASON_LEAF[this.season]?.[it.kind] : undefined) ?? COLORS[it.kind][part] ?? 0x808080)
   }
 
-  /** Couleurs du style ; les fruits d'une espèce gardent les leurs si le style n'en impose pas. */
+  /** Style colors; a species' fruit keeps its own if the style does not impose any. */
   private styledColor(look: GardenLook, part: GardenPart, it: GardenItem): Color {
     if (part === 'leaf') return look.leaf[gardenSeed(it) % look.leaf.length]!.clone()
     if (part === 'bark') return look.bark.clone()
@@ -275,10 +275,10 @@ export class GardenLayer {
     return new Color(accent?.color ?? 0xffffff)
   }
 
-  /** Ce que le lancer de rayon peut toucher : les instances, toutes familles confondues. */
+  /** What the raycaster can hit: the instances, all families together. */
   pickables(): Object3D[] { return [...this.slots.values()].map((s) => s.mesh) }
 
-  /** L'élément sous une intersection renvoyée par `pickables()`, sinon `null`. */
+  /** The element under an intersection returned by `pickables()`, otherwise `null`. */
   idOf(hit: Intersection): string | null {
     for (const slot of this.slots.values()) {
       if (slot.mesh === hit.object && hit.instanceId !== undefined) return slot.ids[hit.instanceId] ?? null
@@ -286,13 +286,13 @@ export class GardenLayer {
     return null
   }
 
-  /** Pied de l'élément dans le repère du site (maison, Z vers le haut). */
+  /** Foot of the element in the site's reference frame (house, Z up). */
   footOf(id: string): Vector3 | null {
     const it = this.items.get(id)
     return it ? new Vector3(it.center[0], it.center[1], this.groundZ(it.center[0], it.center[1])) : null
   }
 
-  /** Boîte MONDE de l'élément, pour le cadrer. */
+  /** WORLD box of the element, to frame it. */
   boxOf(id: string): Box3 | null {
     const it = this.items.get(id)
     const foot = this.footOf(id)
@@ -304,7 +304,7 @@ export class GardenLayer {
   }
 
   private clearSlots(): void {
-    // les géométries sont au cache des formes, partagées : seule l'instance part
+    // the geometries are in the shape cache, shared: only the instance goes
     for (const slot of this.slots.values()) { slot.mesh.removeFromParent(); slot.mesh.dispose(); slot.owned?.dispose() }
     this.slots.clear()
     if (this.contact) { this.contact.removeFromParent(); this.contact.geometry.dispose(); this.contact.dispose(); this.contact = null }
@@ -322,7 +322,7 @@ export class GardenLayer {
   }
 }
 
-/** Une teinte voisine de `base`, tirée de la graine : un bosquet n'est pas d'un vert uniforme. */
+/** A tint close to `base`, drawn from the seed: a grove is not a uniform green. */
 function jitter(base: Color, seed: number): Color {
   const next = rng(seed ^ 0x5bd1e995)
   const hsl = { h: 0, s: 0, l: 0 }

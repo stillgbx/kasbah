@@ -2,10 +2,10 @@ import { Color } from 'three'
 import { dayFactor, type SceneAmbience } from '../core/ambience'
 import { mix, mixRgb, toPalette, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
 
-// CANDY : la maquette en plastique, pastel et laquée. Tout est `gloss` — une seule matière presque
-// lisse — et c'est assumé : ce style-là ne raconte pas des matériaux, il raconte un objet moulé.
-// L'éclairage reste clair même la nuit (une maison de poupée sous une lampe de bureau), l'occlusion
-// est faible pour ne pas salir les pastels, et il n'y a pas de vignette.
+// CANDY: the plastic maquette, pastel and lacquered. Everything is `gloss` — a single almost
+// smooth material — and that is deliberate: this style does not tell of materials, it tells of a molded object.
+// The lighting stays bright even at night (a dollhouse under a desk lamp), the occlusion
+// is weak so as not to dirty the pastels, and there is no vignette.
 
 const PALETTE: PaletteSpec = {
   wall: '#ffe9ef',
@@ -44,7 +44,7 @@ const SURFACES: SurfaceLooks = {
 }
 
 const SKY_NIGHT = { zenith: [0.06, 0.05, 0.12], horizon: [0.3, 0.24, 0.36], ground: [0.04, 0.035, 0.05], sunGlare: 5, sunColor: [1, 0.9, 1] } as const
-// le jour reste PASTEL, pas blanc : un horizon à 1 noyait la maison dans sa propre brume
+// the day stays PASTEL, not white: a horizon at 1 drowned the house in its own haze
 const SKY_DAY = { zenith: [0.3, 0.42, 0.7], horizon: [0.8, 0.8, 0.9], ground: [0.18, 0.19, 0.16], sunGlare: 5, sunColor: [1, 0.97, 0.92] } as const
 
 export const candyStyle: RenderStyle = {
@@ -66,7 +66,7 @@ export const candyStyle: RenderStyle = {
       },
       lighting: {
         sunColor: new Color(0xd8c8ff).lerp(new Color(0xfff6ea), day),
-        // même la nuit la lumière reste franche : une maquette posée sous une lampe, pas une maison
+        // even at night the light stays clear: a maquette under a lamp, not a house
         sunIntensity: mix(1.1, 1.7, day),
         hemiSky: new Color(0x6a5f96).lerp(new Color(0xe8f2ff), day),
         hemiGround: new Color(0x40395c).lerp(new Color(0xc0b6a8), day),
@@ -75,14 +75,14 @@ export const candyStyle: RenderStyle = {
         shadowOpacity: 0.8,
       },
       post: {
-        toneMapping: 'neutral',                          // il ne doit RIEN faire aux pastels
+        toneMapping: 'neutral',                          // it must do NOTHING to the pastels
         exposure: mix(1.15, 0.9, day),
         bloom: { strength: mix(0.45, 0.2, day), radius: 0.7, threshold: 0.9 },
         ao: { intensity: 0.5, radius: 0.5 },
         vignette: 0,
       },
       glow: { scale: mix(1.3, 1, day), opacity: mix(0.7, 0.3, day), lightIntensity: mix(10, 5, day), emissive: mix(2, 1.3, day) },
-      // jardin : confiserie : pastels rose, menthe, lilas, citron ; troncs caramel, fruits framboise
+      // garden: confectionery: pink, mint, lilac, lemon pastels; caramel trunks, raspberry fruit
       garden: { leaf: [new Color(0xffb3d9), new Color(0xb8f2e6), new Color(0xd7b8ff), new Color(0xfff3b0)], bark: new Color(0xc98b6b), stone: new Color(0xffd6e8), accent: new Color(0xff4f9a) },
     }
   },

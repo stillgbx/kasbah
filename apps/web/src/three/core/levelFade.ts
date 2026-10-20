@@ -1,40 +1,40 @@
 import type { Material, WebGLProgramParametersWithUniforms } from 'three'
 
-// L'OPACITÉ, sur toute matière, sans en faire une matière transparente.
+// OPACITY, on any material, without making it a transparent material.
 //
-// `transparent: true` n'est pas un simple réglage dans three : la matière change de file (tri de
-// l'arrière vers l'avant, mélange des couleurs), de programme (define `OPAQUE`), et une maison à 50 %
-// laisse voir ses cloisons à travers ses façades. Ici, chaque matière porte en plus une opacité À
-// NOUS, lue par le shader comme un uniform :
-//   - une matière OPAQUE reste opaque : sous 1, une part de ses pixels est écartée (trame de bruit
-//     entrelacé, stable à l'écran) — elle garde sa file, sa profondeur, et aucun tri ne se trompe ;
-//   - une matière déjà TRANSPARENTE (verre, halo) voit son alpha multiplié : un vrai fondu.
-// Le choix se fait dans le shader (`#ifdef OPAQUE`, posé par three) : le même crochet sert les deux.
+// `transparent: true` is not a simple setting in three: the material changes queue (sorting
+// back to front, color blending), program (`OPAQUE` define), and a house at 50 %
+// shows its partitions through its facades. Here, each material additionally carries an opacity of
+// OUR OWN, read by the shader as a uniform:
+//   - an OPAQUE material stays opaque: below 1, a share of its pixels is discarded (interleaved
+//     noise pattern, stable on screen) — it keeps its queue, its depth, and no sort goes wrong;
+//   - an already TRANSPARENT material (glass, halo) has its alpha multiplied: a true fade.
+// The choice is made in the shader (`#ifdef OPAQUE`, set by three): the same hook serves both.
 //
-// Cette opacité est distincte de `material.opacity` et de l'alpha des textures : une carrosserie
-// dont l'image a un canal alpha, une lame de volet vitrée à 0,45 ne sont pas tramées pour autant.
+// This opacity is distinct from `material.opacity` and from texture alpha: a car body
+// whose image has an alpha channel, a glazed shutter slat at 0.45 are not dithered for all that.
 //
-// Deux usages aujourd'hui : l'opacité d'une matière (`materialOpacity`), et le FONDU de l'étage qui
-// s'envole (`HouseScene.liftTo`) — tout ce qui est au-dessus d'une hauteur s'efface ensemble. Au
-// repos, tout vaut 1 : rien n'est écarté, l'image est rendue à l'identique, et changer une opacité
-// ne recompile jamais rien.
+// Two uses today: a material's opacity (`materialOpacity`), and the FADE of the level that
+// flies off (`HouseScene.liftTo`) — everything above a height fades out together. At
+// rest, everything is 1: nothing is discarded, the image is rendered identically, and changing an opacity
+// never recompiles anything.
 
 export const levelFadeUniforms = {
-  /** Hauteur MONDE au-dessus de laquelle le fondu s'applique (le dessus du niveau qui reste). */
+  /** WORLD height above which the fade applies (the top of the level that stays). */
   kasbahFadeY: { value: 1e9 },
-  /** Part visible au-dessus de cette hauteur : 1 = tout, 0 = rien. */
+  /** Visible share above that height: 1 = all, 0 = nothing. */
   kasbahFadeVisibility: { value: 1 },
 }
 
-/** Pose le fondu des étages ; `visibility` 1 le lève. */
+/** Sets the level fade; `visibility` 1 lifts it. */
 export function setLevelFade(cutY: number, visibility: number): void {
   levelFadeUniforms.kasbahFadeY.value = cutY
   levelFadeUniforms.kasbahFadeVisibility.value = visibility
 }
 
 /**
- * L'opacité propre d'une matière (1 = pleine), à modifier par `.value` : c'est l'uniform même que
- * lit son shader. Un clone de la matière en reçoit une à lui (les `userData` sont recopiés).
+ * A material's own opacity (1 = full), to modify through `.value`: it is the very uniform that
+ * its shader reads. A clone of the material receives one of its own (the `userData` are copied).
  */
 export function materialOpacity(material: Material): { value: number } {
   const u = material.userData as { kasbahOpacity?: { value: number } }
@@ -47,7 +47,7 @@ uniform float kasbahFadeY;
 uniform float kasbahFadeVisibility;
 uniform float kasbahOpacity;
 `
-// Bruit en gradient entrelacé (Jimenez 2014) : une trame sans motif visible, à coût quasi nul.
+// Interleaved gradient noise (Jimenez 2014): a pattern with no visible motif, at almost no cost.
 const FRAGMENT = /* glsl */ `
   {
     float kasbahA = kasbahOpacity;
@@ -61,12 +61,12 @@ const FRAGMENT = /* glsl */ `
 `
 
 /**
- * Ajoute l'opacité à un shader en cours de compilation (toute matière de three qui a un brouillard).
+ * Adds the opacity to a shader being compiled (any three material that has fog).
  *
- * Et à la matière de PROFONDEUR de la passe d'ombre (`MeshDepthMaterial`, sans brouillard) : l'étage
- * qui s'efface y perd la même part de ses pixels, et le flou de la carte VSM fait de cette trame une
- * ombre qui pâlit avec lui au lieu de disparaître d'un coup à l'arrivée. Le calcul de hauteur ne
- * dépend que de `viewMatrix` : celle du soleil y vaut celle de la caméra.
+ * And to the DEPTH material of the shadow pass (`MeshDepthMaterial`, without fog): the level
+ * that fades loses the same share of its pixels there, and the blur of the VSM map turns this pattern into a
+ * shadow that pales with it instead of vanishing all at once at the end. The height computation only
+ * depends on `viewMatrix`: the sun's stands in for the camera's there.
  */
 export function applyLevelFade(shader: WebGLProgramParametersWithUniforms, material: Material): void {
   if (!shader.fragmentShader.includes('#include <alphatest_fragment>')) return

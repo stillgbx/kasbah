@@ -3,8 +3,8 @@ import { Box3 } from 'three'
 import { GARDEN_KINDS } from '@kasbah/shared'
 import { GARDEN_VARIANTS, gardenSeed, gardenShape } from './shapes'
 
-describe('formes du jardin', () => {
-  it('chaque forme mesure exactement 1 de haut, pied à zéro (pierre enterrée)', () => {
+describe('garden shapes', () => {
+  it('every shape is exactly 1 tall, foot at zero (buried stone)', () => {
     for (const kind of GARDEN_KINDS) {
       for (let v = 0; v < GARDEN_VARIANTS; v++) {
         const shape = gardenShape(kind, v)
@@ -17,7 +17,7 @@ describe('formes du jardin', () => {
     }
   })
 
-  it('la graine vient de l\'élément, sinon de son id, toujours la même', () => {
+  it('the seed comes from the element, otherwise from its id, always the same', () => {
     expect(gardenSeed({ id: 'a', seed: 42 })).toBe(42)
     expect(gardenSeed({ id: 'garden.conifer-1' })).toBe(gardenSeed({ id: 'garden.conifer-1' }))
     expect(gardenSeed({ id: 'garden.conifer-1' })).not.toBe(gardenSeed({ id: 'garden.conifer-2' }))

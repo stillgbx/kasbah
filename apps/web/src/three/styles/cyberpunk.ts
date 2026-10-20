@@ -2,10 +2,10 @@ import { Color } from 'three'
 import { dayFactor, type SceneAmbience } from '../core/ambience'
 import { mix, mixPalette, mixRgb, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
 
-// CYBERPUNK : métal brossé, dalles techniques, néon. C'est le style qui éprouve la couture, parce
-// qu'il contredit le réaliste sur tout — il ÉMET (les cloisons et les sols rendent de la lumière,
-// `SurfaceLook.emissive`), il change de palette avec l'heure (le jour y est blafard, la nuit y est
-// violette) et il pousse le bloom jusqu'à baver. Si ces trois-là passent, un style peut tout dire.
+// CYBERPUNK: brushed metal, technical floor tiles, neon. This is the style that tests the seam, because
+// it contradicts realistic on everything — it EMITS (partitions and floors give off light,
+// `SurfaceLook.emissive`), it changes palette with the hour (the day is wan, the night is
+// violet) and it pushes bloom until it bleeds. If those three pass, a style can say anything.
 
 const NIGHT: PaletteSpec = {
   wall: '#2b2f48',
@@ -23,7 +23,7 @@ const NIGHT: PaletteSpec = {
   device: '#8a93bb',
 }
 
-/** Le même quartier à midi : le néon ne se voit plus, il ne reste que du béton et de l'acier. */
+/** The same neighborhood at noon: the neon no longer shows, only concrete and steel remain. */
 const DAY: PaletteSpec = {
   wall: '#8b90a4',
   wallInterior: '#9a93ad',
@@ -42,7 +42,7 @@ const DAY: PaletteSpec = {
 
 const SURFACES: SurfaceLooks = {
   wall: { texture: 'metal', roughness: 0.4, metalness: 0.8 },
-  // la cloison intérieure est la source du violet : elle rend une part de sa couleur
+  // the interior partition is the source of the violet: it gives off part of its color
   wallInterior: { texture: 'grid', roughness: 0.35, metalness: 0.5, emissive: 0.35 },
   floor: { texture: 'grid', roughness: 0.3, metalness: 0.6, emissive: 0.12 },
   floors: {
@@ -75,7 +75,7 @@ export const cyberpunkStyle: RenderStyle = {
     return {
       palette: mixPalette(NIGHT, DAY, day),
       surfaces: SURFACES,
-      // la vitre est une enseigne : opaque de loin, franchement lumineuse
+      // the glass is a sign: opaque from afar, frankly luminous
       glass: { opacity: 0.4, roughness: 0.02, metalness: 0.3, emissive: mix(0.7, 0.05, day) },
       sky: {
         zenith: mixRgb(SKY_NIGHT.zenith, SKY_DAY.zenith, day),
@@ -83,7 +83,7 @@ export const cyberpunkStyle: RenderStyle = {
         ground: mixRgb(SKY_NIGHT.ground, SKY_DAY.ground, day),
         sunGlare: mix(SKY_NIGHT.sunGlare, SKY_DAY.sunGlare, day),
         sunColor: mixRgb(SKY_NIGHT.sunColor, SKY_DAY.sunColor, day),
-        intensity: mix(1.4, 1, day),                     // les reflets font tout le travail ici
+        intensity: mix(1.4, 1, day),                     // the reflections do all the work here
       },
       lighting: {
         sunColor: new Color(0xc86bff).lerp(new Color(0xdfe6f2), day),
@@ -102,7 +102,7 @@ export const cyberpunkStyle: RenderStyle = {
         vignette: mix(0.6, 0.3, day),
       },
       glow: { scale: mix(1.6, 1, day), opacity: mix(1, 0.3, day), lightIntensity: mix(20, 7, day), emissive: mix(3, 1.4, day) },
-      // jardin : néon : le feuillage ÉMET, cyan, magenta, violet ; troncs noirs, fruits jaune fluo
+      // garden: neon: the foliage EMITS, cyan, magenta, violet; black trunks, fluorescent yellow fruit
       garden: { leaf: [new Color(0x00e5ff), new Color(0xff2bd6), new Color(0x7c4dff)], bark: new Color(0x121218), stone: new Color(0x1c2030), accent: new Color(0xfff200), emissive: 0.3 },
     }
   },

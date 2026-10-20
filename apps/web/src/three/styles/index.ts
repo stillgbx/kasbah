@@ -15,25 +15,25 @@ import { realisticStyle } from './realistic'
 import { tatooineStyle } from './tatooine'
 import type { RenderStyle } from './types'
 
-// Le catalogue des styles de rendu. UNE ligne à ajouter pour en offrir un de plus, plus deux clés
-// i18n (`scene.styles.<id>`) : ni la scène, ni les builders, ni les réglages ne connaissent la liste.
+// The catalog of render styles. ONE line to add to offer one more, plus two i18n keys
+// (`scene.styles.<id>`): neither the scene, nor the builders, nor the settings know the list.
 
 export const RENDER_STYLES: readonly RenderStyle[] = [realisticStyle, natureStyle, indigoStyle, maquetteStyle, cyberpunkStyle, candyStyle, hauntedStyle, discoStyle, halloweenStyle, noelStyle, tatooineStyle, akiraStyle, girlyversaireStyle]
 
-/** Celui de la maquette, et le défaut de l'application. */
+/** The maquette's, and the application default. */
 export const DEFAULT_STYLE_ID = realisticStyle.id
 
 export function styleById(id: string | null | undefined): RenderStyle {
   return RENDER_STYLES.find((s) => s.id === id) ?? realisticStyle
 }
 
-/** L'ambiance de départ, avant qu'on sache où est la maison : la nuit de la maquette. */
+/** The starting ambience, before we know where the house is: the maquette's night. */
 export const defaultAmbience = (): SceneAmbience => resolveAmbience({ mode: 'night' })
 
-/** Le rendu par défaut : le style de la maquette, à son heure de nuit. Valeur initiale, et des tests. */
+/** The default render: the maquette style, at its night hour. Initial value, and for tests. */
 export const defaultLook = () => realisticStyle.look(defaultAmbience())
 
-/** Thème de scène par défaut (tests, et avant le premier rendu). */
+/** Default scene theme (tests, and before the first render). */
 export function defaultSceneTheme(): SceneTheme {
   const a = defaultAmbience()
   return resolveSceneTheme(defaultUiTheme(), realisticStyle.look(a).palette, a)

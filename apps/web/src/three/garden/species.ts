@@ -1,12 +1,12 @@
 import { z } from 'zod'
 import { GARDEN_KINDS } from '@kasbah/shared'
 
-// Espèces du jardin : une RECETTE (proportions, port du houppier, couleurs, fruits) par fichier
-// `species/<id>.json`, lue par le même générateur facetté que les familles (`speciesShape.ts`). C'est ce que la skill
-// `garden-species` écrit à partir d'une photo : ajouter une espèce = déposer un fichier, sans code.
+// Garden species: one RECIPE (proportions, crown habit, colors, fruit) per file
+// `species/<id>.json`, read by the same faceted generator as the families (`speciesShape.ts`). It is what the skill
+// `garden-species` writes from a photo: adding a species = dropping a file, no code.
 //
-// Toutes les mesures sont RELATIVES à la hauteur de l'arbre (1) : la hauteur réelle est celle de
-// l'élément, `height` n'est que la valeur proposée quand on le plante.
+// All measurements are RELATIVE to the tree's height (1): the real height is that of the
+// element, `height` is only the value proposed when it is planted.
 
 const hex = z.string().regex(/^#[0-9a-f]{6}$/i)
 const unit = z.number().min(0).max(1)
@@ -16,8 +16,8 @@ export const CROWN_SHAPES = ['round', 'spreading', 'oval', 'cone', 'column', 'ti
 const accentSchema = z.object({ color: hex, count: z.number().int().min(1).max(200), size: z.number().min(0.003).max(0.08) })
 
 /**
- * Ce qu'une saison change à la recette de base (qui est l'ÉTÉ) : feuillage restant (0 = nu, les
- * charpentières se voient), couleurs des feuilles, fruits ou fleurs (`null` = aucun).
+ * What a season changes in the base recipe (which is SUMMER): remaining foliage (0 = bare, the
+ * main branches show), leaf colors, fruit or flowers (`null` = none).
  */
 const seasonSchema = z.object({
   foliage: unit.optional(),
@@ -29,57 +29,57 @@ export const speciesSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   kind: z.enum(GARDEN_KINDS),
   name: z.object({ fr: z.string().min(1), en: z.string().min(1) }),
-  /** Hauteur proposée à la plantation (m). */
+  /** Height proposed at planting (m). */
   height: z.number().min(0.1).max(40),
   trunk: z.object({
-    /** Hauteur du fût nu, en part de la hauteur totale. */
+    /** Height of the bare trunk, as a share of the total height. */
     height: unit,
-    /** Rayon au pied, en part de la hauteur totale. */
+    /** Radius at the foot, as a share of the total height. */
     radius: z.number().min(0.005).max(0.2),
-    /** Inclinaison du fût (radians, vers une direction tirée au hasard). */
+    /** Lean of the trunk (radians, toward a randomly drawn direction). */
     lean: z.number().min(0).max(0.6),
-    /** Charpentières qui partent du haut du fût vers le houppier (0 = aucune). */
+    /** Main branches that go from the top of the trunk toward the crown (0 = none). */
     forks: z.number().int().min(0).max(6),
-    /** Départ des charpentières sur le fût, en part de la hauteur totale (absent = haut du fût) : bas pour une cépée. */
+    /** Start of the main branches on the trunk, as a share of the total height (absent = top of the trunk): low for a multi-stem tree. */
     forkAt: unit.optional(),
-    /** Écart des pieds des charpentières autour du fût, en part de la hauteur (absent = un seul point) : chaumes parallèles d'un bambou. */
+    /** Spread of the main branches' feet around the trunk, as a share of the height (absent = a single point): parallel culms of a bamboo. */
     spread: z.number().min(0).max(0.3).optional(),
     color: hex,
   }),
   crown: z.object({
     shape: z.enum(CROWN_SHAPES),
-    /** Diamètre du houppier rapporté à la hauteur totale (1,2 = plus large que haut). */
+    /** Crown diameter relative to the total height (1.2 = wider than tall). */
     width: z.number().min(0.1).max(3),
-    /** Nombre de masses de feuillage (formes à masses : round, spreading, oval). */
+    /** Number of foliage masses (mass-based habits: round, spreading, oval). */
     masses: z.number().int().min(1).max(16),
-    /** Bosselage de chaque masse (0 = lisse, 0,3 = très irrégulier). */
+    /** Bumpiness of each mass (0 = smooth, 0.3 = very irregular). */
     roughness: z.number().min(0).max(0.5),
-    /** Retombée des masses du bord (0 = aucune, 1 = pleureur). */
+    /** Droop of the edge masses (0 = none, 1 = weeping). */
     droop: unit,
-    /** Plateaux du port `tiered` (absent = 3) : 1 pour un pin parasol, 4 ou 5 pour un vieux cèdre. */
+    /** Platforms of the `tiered` habit (absent = 3): 1 for an umbrella pine, 4 or 5 for an old cedar. */
     tiers: z.number().int().min(1).max(6).optional(),
   }),
   leaf: z.object({ color: hex, top: hex }),
-  /** Fruits ou fleurs : petites facettes semées à la surface du houppier. */
+  /** Fruit or flowers: small facets sown on the surface of the crown. */
   accent: accentSchema.optional(),
-  /** Variantes saisonnières ; une saison absente = celle de base. */
+  /** Seasonal variants; a missing season = the base one. */
   seasons: z.object({ spring: seasonSchema, autumn: seasonSchema, winter: seasonSchema, summer: seasonSchema }).partial().optional(),
-  /** D'où vient la recette (photo, note) : pour la retrouver et la reprendre. */
+  /** Where the recipe comes from (photo, note): to find it again and rework it. */
   source: z.string().optional(),
 })
 export type SpeciesRecipe = z.infer<typeof speciesSchema>
 
 const files = import.meta.glob<{ default: unknown }>('./species/*.json', { eager: true })
 
-/** Le catalogue, trié par nom. Un fichier invalide est ÉCARTÉ avec un avertissement, pas bloquant. */
+/** The catalog, sorted by name. An invalid file is DROPPED with a warning, not blocking. */
 export const SPECIES: readonly SpeciesRecipe[] = Object.entries(files).flatMap(([path, mod]) => {
   const parsed = speciesSchema.safeParse(mod.default)
   if (parsed.success) return [parsed.data]
-  console.warn(`[garden] espèce ignorée ${path}:`, parsed.error.issues[0]?.message)
+  console.warn(`[garden] species ignored ${path}:`, parsed.error.issues[0]?.message)
   return []
 }).sort((a, b) => a.name.fr.localeCompare(b.name.fr))
 
-/** Une espèce du catalogue, si elle existe ET appartient à cette famille (sinon la famille gagne). */
+/** A species of the catalog, if it exists AND belongs to this family (otherwise the family wins). */
 export function speciesOf(item: { kind: string; species?: string }): SpeciesRecipe | undefined {
   const s = item.species ? SPECIES.find((x) => x.id === item.species) : undefined
   return s && s.kind === item.kind ? s : undefined

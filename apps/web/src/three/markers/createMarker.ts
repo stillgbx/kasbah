@@ -4,7 +4,7 @@ import type { DeviceMarker, MarkerContext } from './DeviceMarker'
 import { CoverMarker, GenericMarker, LightMarker, MowerMarker, PanelMarker, VehicleMarker } from './markers'
 
 export function createMarker(device: PlacedHouseDevice, ctx: MarkerContext, atHome: (state: DeviceState) => boolean): DeviceMarker {
-  // un module d'un champ de panneaux est un `sensor` comme un autre : sa forme vient de son champ, pas de son kind
+  // a module of a panel array is a `sensor` like any other: its shape comes from its array, not its kind
   const panel = panelOf(device)
   if (panel) return new PanelMarker(device, ctx, panel)
   const kind = ctx.descriptor?.kind ?? device.kind

@@ -8,80 +8,80 @@ import { applyHeightMist } from '../core/heightMist'
 import { applyLevelFade } from '../core/levelFade'
 import { applyRoomFocus } from '../core/roomFocus'
 
-// L'eau d'une piscine qui ne fait plus semblant. Trois gestes, sur les deux matériaux du bassin
-// (`builders/materials.ts`) :
-//  - la SURFACE ondule : une houle d'une vingtaine d'ondes incline la normale (point brillant du soleil, reflet
-//    du ciel), et elle suit FRESNEL : transparente vue d'en haut, miroir vue en rasant ;
-//  - le FOND reçoit des CAUSTIQUES par RÉFRACTION : chaque point d'une grille de la surface dévie
-//    la lumière selon sa pente, et là où les rayons se resserrent sur le carrelage, la lumière se
-//    concentre. C'est la méthode de *WebGL Water* (Evan Wallace, MIT) reprise par clearwater
-//    (Aureliengmz, MIT) ; les lignes sont réécrites ici ;
-//  - le fond est vu À TRAVERS l'eau : la lumière y perd ses couleurs selon le chemin parcouru (le
-//    rouge d'abord), et l'eau diffuse sa propre teinte à la place. D'où le bleu qui fonce avec la
-//    profondeur et avec l'angle.
+// Pool water that no longer pretends. Three moves, on the two materials of the basin
+// (`builders/materials.ts`):
+//  - the SURFACE ripples: a swell of some twenty waves tilts the normal (the sun's highlight, reflection
+//    of the sky), and it follows FRESNEL: transparent seen from above, a mirror seen at a grazing angle;
+//  - the BOTTOM receives CAUSTICS by REFRACTION: each point of a grid on the surface bends
+//    the light according to its slope, and where the rays converge on the tiling, the light
+//    concentrates. It is the method of *WebGL Water* (Evan Wallace, MIT) taken up by clearwater
+//    (Aureliengmz, MIT); the lines are rewritten here;
+//  - the bottom is seen THROUGH the water: the light loses its colors there according to the path traveled (the
+//    red first), and the water scatters its own tint instead. Hence the blue that deepens with
+//    depth and with the angle.
 //
-// Ce que ça coûte : une passe de 512 × 512 px par pas d'animation (la grille réfractée, en additif)
-// et quelques dizaines d'instructions sur les PIXELS DE LA PISCINE. Le vrai coût reste la boucle de
-// rendu qu'une eau animée fait tourner (`core/renderLoop.ts`) ; c'est `HouseScene.syncWater` qui
-// décide quand.
+// What it costs: a 512 × 512 px pass per animation step (the refracted grid, additive)
+// and a few dozen instructions on the POOL'S PIXELS. The real cost remains the render loop
+// that animated water keeps running (`core/renderLoop.ts`); it is `HouseScene.syncWater` that
+// decides when.
 
-/** Le rôle du matériau patché : la lame d'eau, ou les parois et le fond vus de l'intérieur. */
+/** The role of the patched material: the water sheet, or the walls and the bottom seen from inside. */
 export type WaterRole = 'surface' | 'basin'
 
-/** Le temps de l'animation, en secondes. PARTAGÉ : houle et caustiques doivent battre ensemble. */
+/** The animation time, in seconds. SHARED: swell and caustics must beat together. */
 export type WaterTime = { value: number }
 
-/** Ce qui reste réglable après coup : 0 = eau figée (le style « maquette », la qualité basse). */
+/** What stays adjustable afterward: 0 = frozen water (the "maquette" style, low quality). */
 export type WaterStrength = { value: number }
 
-/** Ce que les deux matériaux partagent : le temps, la carte des caustiques, la teinte de l'eau. */
+/** What the two materials share: the time, the caustics map, the water tint. */
 export interface WaterUniforms {
   time: WaterTime
   caustics: { value: Texture | null }
-  /** Teinte que l'eau DIFFUSE (celle du style), et ce qu'elle absorbe par mètre, déduit d'elle. */
+  /** Tint the water SCATTERS (the style's), and what it absorbs per meter, derived from it. */
   tint: { value: Color }
   sigma: { value: Vector3 }
-  /** La lumière du soleil qui ENTRE dans l'eau (monde, vers le bas), et ce rayon une fois réfracté par une eau plane. */
+  /** The sunlight ENTERING the water (world, downward), and that ray once refracted by flat water. */
   light: { value: Vector3 }
   refracted: { value: Vector3 }
-  /** Le vent : (x, y) = vers où il pousse, dans le plan xz du monde (unitaire) ; z = amplitude de la houle (1 = une brise de 10 km/h). */
+  /** The wind: (x, y) = where it pushes, in the world xz plane (unit); z = swell amplitude (1 = a 10 km/h breeze). */
   wind: { value: Vector3 }
 }
 
-/** Nom de l'attribut de sommet du bassin : sa profondeur sous la lame d'eau, en mètres. */
+/** Name of the basin's vertex attribute: its depth under the water sheet, in meters. */
 export const WATER_DEPTH_ATTRIBUTE = 'waterDepth'
 
 /**
- * Le motif est PÉRIODIQUE sur une tuile de 5 m : toutes les ondes y font un nombre entier de
- * périodes, la carte des caustiques se répète donc sans couture sur le fond — et à 5 m, plus que la
- * longueur d'un demi-bassin, la répétition ne se lit plus.
+ * The pattern is PERIODIC over a 5 m tile: all waves have a whole number of
+ * periods in it, so the caustics map repeats seamlessly over the bottom — and at 5 m, more than the
+ * length of half a basin, the repetition no longer reads.
  */
 const TILE_M = 5
-/** Distance de la lame au fond (`POOL_DEPTH − POOL_WATER_DROP` de `buildHouse`) : là où la lumière se concentre. */
+/** Distance from the water sheet to the bottom (`POOL_DEPTH − POOL_WATER_DROP` of `buildHouse`): where the light concentrates. */
 const FLOOR_DEPTH_M = 1.38
 const CAUSTIC_PX = 512
 const CAUSTIC_GRID = 256
-/** Les caustiques valent 1 en moyenne et montent à ~4 sur les lignes : stockées au quart en 8 bits. */
+/** The caustics average 1 and climb to ~4 on the lines: stored at a quarter in 8 bits. */
 const CAUSTIC_RANGE = 4
-/** Ce que l'eau absorbe, par mètre, de ce qui n'est PAS sa teinte (-ln de la teinte × ce facteur). */
+/** What the water absorbs, per meter, of what is NOT its tint (-ln of the tint × this factor). */
 const ABSORPTION_PER_M = 0.3
 
-/** Une onde : vecteur d'onde (rad/m), amplitude (m), pulsation (rad/s), phase à l'origine. */
+/** A wave: wave vector (rad/m), amplitude (m), angular frequency (rad/s), phase at the origin. */
 export interface Wave { kx: number; ky: number; a: number; w: number; phase: number }
 
 /**
- * La houle : une vingtaine d'ondes TIRÉES (graine fixe, donc la même eau à chaque chargement), pas
- * choisies — huit ondes posées à la main faisaient un réseau trop régulier. Longueurs d'onde de
- * 25 cm à 2,5 m, réparties en logarithme ; directions groupées autour du vent (±70°), un tiers en
- * clapot libre ; phases au hasard, sinon toutes les crêtes se rencontrent à l'origine. Les ondes
- * sont tirées dans le REPÈRE DU VENT (+x = vers où il pousse) : le shader y ramène chaque point
- * (`kasbahToWind`), et la houle tourne avec le vent réel sans être retirée.
+ * The swell: some twenty DRAWN waves (fixed seed, so the same water at every load), not
+ * chosen — eight hand-placed waves made a network that was too regular. Wavelengths from
+ * 25 cm to 2.5 m, spread logarithmically; directions grouped around the wind (±70°), a third as
+ * free chop; random phases, otherwise all the crests meet at the origin. The waves
+ * are drawn in the WIND FRAME (+x = where it pushes): the shader brings each point into it
+ * (`kasbahToWind`), and the swell turns with the real wind without being redrawn.
  *
- * C'est la COURBURE (A·k²) qui concentre la lumière : au fond d'1,4 m il en faut ~3 pour une ligne
- * nette. Chaque onde en porte ~0,6 ; ce sont leurs rencontres qui dessinent le réseau. L'amplitude
- * est plafonnée à 1,2 cm : les longues ondes font les reflets, pas des vagues de plage. Chaque
- * vecteur est arrondi sur la grille de la tuile (périodicité). La pulsation suit la dispersion des
- * ondes de gravité (√gk), ralentie.
+ * It is the CURVATURE (A·k²) that concentrates the light: at a 1.4 m bottom ~3 is needed for a sharp
+ * line. Each wave carries ~0.6; it is their meetings that draw the network. The amplitude
+ * is capped at 1.2 cm: the long waves make the reflections, not beach waves. Each
+ * vector is rounded onto the tile grid (periodicity). The angular frequency follows the dispersion of
+ * gravity waves (√gk), slowed down.
  */
 function drawWaves(): Wave[] {
   let seed = 0x6b617362
@@ -112,15 +112,15 @@ function drawWaves(): Wave[] {
   }
   return waves
 }
-/** Exporté pour les tests : qu'elles partent bien sous le vent. */
+/** Exported for the tests: that they do start downwind. */
 export const WAVES: readonly Wave[] = drawWaves()
 
 const glsl = (x: number): string => (Number.isInteger(x) ? x.toFixed(1) : String(x))
 
 /**
- * Le repère du vent : `uWaterWind.xy` est la direction où il pousse (plan xz du monde). Les ondes y
- * sont tirées ; un point du monde y entre par `kasbahToWind`, une pente en sort par `kasbahFromWind`.
- * La carte des caustiques est une tuile de CE repère : le fond la lit donc par `kasbahToWind` aussi.
+ * The wind frame: `uWaterWind.xy` is the direction it pushes (world xz plane). The waves are
+ * drawn in it; a world point enters it through `kasbahToWind`, a slope leaves it through `kasbahFromWind`.
+ * The caustics map is a tile of THIS frame: the bottom therefore reads it through `kasbahToWind` too.
  */
 const WIND_FRAME = /* glsl */`
 uniform vec3 uWaterWind;
@@ -129,11 +129,11 @@ vec2 kasbahFromWind(vec2 v) { return vec2(v.x * uWaterWind.x - v.y * uWaterWind.
 `
 
 /**
- * La PENTE de la houle (son gradient), pas sa hauteur : c'est elle qui incline la normale. `px` est
- * la taille d'un pixel au sol (m) : une onde plus courte que quelques pixels s'efface au lieu de
- * scintiller. La passe des caustiques la demande à 0 (elle veut toutes les ondes). La phase est
- * `k·p − ωt` : chaque onde AVANCE dans le sens de son vecteur, donc sous le vent. `p` et le
- * résultat sont dans le repère du vent, l'amplitude est celle du vent (`uWaterWind.z`).
+ * The SLOPE of the swell (its gradient), not its height: it is what tilts the normal. `px` is
+ * the size of a pixel on the ground (m): a wave shorter than a few pixels fades out instead of
+ * flickering. The caustics pass asks for it at 0 (it wants all the waves). The phase is
+ * `k·p − ωt`: each wave ADVANCES in the direction of its vector, hence downwind. `p` and the
+ * result are in the wind frame, the amplitude is the wind's (`uWaterWind.z`).
  */
 const WAVE_GRAD = /* glsl */`
 vec2 kasbahWaveGrad(vec2 p, float t, float px) {
@@ -160,10 +160,10 @@ uniform vec3 uWaterRefracted;
 `
 
 /**
- * La surface : la houle incline la normale (pente en repère MONDE, le plan d'eau est horizontal ;
- * `normal` en repère CAMÉRA — d'où `viewMatrix`), puis Fresnel décide de l'opacité : vue d'en haut
- * on voit le fond (que `BASIN_*` teinte), vue en rasant on ne voit plus que le reflet. F₀ = 0,02,
- * celui de l'eau.
+ * The surface: the swell tilts the normal (slope in the WORLD frame, the water plane is horizontal;
+ * `normal` in the CAMERA frame — hence `viewMatrix`), then Fresnel decides the opacity: seen from above
+ * one sees the bottom (which `BASIN_*` tints), seen at a grazing angle one only sees the reflection. F₀ = 0.02,
+ * that of water.
  */
 const SURFACE = /* glsl */`
   float waterPx = length(fwidth(vWaterPos.xz));
@@ -175,12 +175,12 @@ const SURFACE = /* glsl */`
 `
 
 /**
- * Le bassin, avant l'éclairage : où tombe-t-il dans la carte des caustiques ? La carte est celle du
- * FOND ; un point de paroi y lit l'endroit où le rayon de soleil qui le touche aurait fini sa course
- * (prolongé jusqu'au fond, dans l'axe du soleil réfracté). La paroi qui fait face au soleil reçoit
- * donc le réseau, celle qui lui tourne le dos non (l'éclairage de three la laisse déjà sans soleil
- * direct). Plus un point est près de la surface, moins la houle y a concentré la lumière : le poids
- * suit la profondeur.
+ * The basin, before lighting: where does it fall in the caustics map? The map is that of the
+ * BOTTOM; a wall point reads in it the spot where the sun ray hitting it would have ended its course
+ * (extended down to the bottom, along the refracted sun's axis). The wall facing the sun therefore
+ * receives the network, the one turning its back on it does not (three's lighting already leaves it without direct
+ * sun). The closer a point is to the surface, the less the swell has concentrated the light there: the weight
+ * follows the depth.
  */
 const BASIN_PRE = /* glsl */`
   float causticDepth = clamp(vWaterDepth, 0.0, ${glsl(FLOOR_DEPTH_M)});
@@ -190,17 +190,17 @@ const BASIN_PRE = /* glsl */`
 `
 
 /**
- * Les caustiques redistribuent la lumière DIRECTE (le soleil) : elles s'éteignent seules à l'ombre
- * et la nuit, et leur moyenne reste 1 — le fond n'est pas plus clair, il est tramé.
+ * The caustics redistribute the DIRECT light (the sun): they go out by themselves in the shade
+ * and at night, and their average stays 1 — the bottom is not lighter, it is patterned.
  */
 const BASIN_LIGHT = /* glsl */`
   reflectedLight.directDiffuse *= mix(1.0, caustic, causticWeight * uWaterStrength);
 `
 
 /**
- * Le fond vu à travers l'eau : le chemin de la lumière (descendre jusqu'au fond, remonter vers
- * l'œil, d'autant plus long que le regard rase), l'absorption qui en découle, et la teinte que l'eau
- * diffuse à la place, à la mesure de la lumière reçue ici.
+ * The bottom seen through the water: the path of the light (down to the bottom, back up toward
+ * the eye, all the longer as the gaze grazes), the absorption that results, and the tint that the water
+ * scatters instead, in proportion to the light received here.
  */
 const BASIN_POST = /* glsl */`
   float waterUp = max(normalize(cameraPosition - vWaterPos).y, 0.1);
@@ -210,7 +210,7 @@ const BASIN_POST = /* glsl */`
   outgoingLight = outgoingLight * waterT + uWaterTint * waterLum * (1.0 - waterT);
 `
 
-/** Les uniformes partagés, teinte neutre en attendant la première `setWaterTint`. */
+/** The shared uniforms, neutral tint until the first `setWaterTint`. */
 export function createWaterUniforms(): WaterUniforms {
   return {
     time: { value: 0 },
@@ -223,15 +223,15 @@ export function createWaterUniforms(): WaterUniforms {
   }
 }
 
-/** Indice de l'eau : l'air sur l'eau, pour `refract`. */
+/** Index of water: air over water, for `refract`. */
 const ETA = 1 / 1.333
-/** Un soleil plus bas que ça (ou couché : la lune suit le même chemin) est tenu à cette hauteur. */
+/** A sun lower than this (or set: the moon follows the same path) is held at this elevation. */
 const MIN_SUN_ELEVATION = Math.sin((5 * Math.PI) / 180)
 
 /**
- * La direction du soleil (monde three, VERS lui) : les caustiques la suivent. Un soleil bas entre en
- * biais — le réseau se décale et s'étire dans son axe, et c'est la paroi qui lui fait face qui le
- * reçoit. La réfraction ramène le rayon vers la verticale (au plus 48,6°, l'angle limite de l'eau).
+ * The direction of the sun (three world, TOWARD it): the caustics follow it. A low sun enters
+ * at a slant — the network shifts and stretches along its axis, and it is the wall facing it that
+ * receives it. Refraction brings the ray back toward the vertical (at most 48.6°, the critical angle of water).
  */
 export function setWaterSun(u: WaterUniforms, sunDir: Vector3): void {
   const l = u.light.value.copy(sunDir).normalize().negate()
@@ -240,21 +240,21 @@ export function setWaterSun(u: WaterUniforms, sunDir: Vector3): void {
     const c = Math.sqrt(1 - MIN_SUN_ELEVATION * MIN_SUN_ELEVATION)
     l.set((l.x / h) * c, -MIN_SUN_ELEVATION, (l.z / h) * c)
   }
-  // refract(l, n = (0, 1, 0), ETA), écrit à plat : eau calme
+  // refract(l, n = (0, 1, 0), ETA), written out flat: calm water
   const cosI = -l.y
   const k = Math.sqrt(1 - ETA * ETA * (1 - cosI * cosI))
   u.refracted.value.set(ETA * l.x, ETA * l.y + (ETA * cosI - k), ETA * l.z).normalize()
 }
 
-/** Sans vent, la piscine ne dort pas tout à fait (la filtration) ; par gros vent, la houle plafonne. */
+/** Without wind, the pool does not quite sleep (the filtration); in strong wind, the swell caps out. */
 const CALM_WAVES = 0.15
 const MAX_WAVES = 1.5
 
 /**
- * Le vent (convention météo : `windDirDeg` est d'où il VIENT, sens horaire, compté depuis le +y du
- * plan — le cap de la maison déjà retranché par l'appelant) : la houle
- * part sous le vent, et son amplitude suit la racine de la vitesse — 1 à 10 km/h, la houle d'avant.
- * Repère three : +x du plan = +x, +y du plan = −z.
+ * The wind (weather convention: `windDirDeg` is where it COMES FROM, clockwise, counted from the plan's
+ * +y — the house heading already subtracted by the caller): the swell
+ * heads downwind, and its amplitude follows the square root of the speed — 1 at 10 km/h, the former swell.
+ * three frame: plan +x = +x, plan +y = −z.
  */
 export function setWaterWind(u: WaterUniforms, windKmh: number, windDirDeg: number): void {
   const a = (windDirDeg * Math.PI) / 180
@@ -262,7 +262,7 @@ export function setWaterWind(u: WaterUniforms, windKmh: number, windDirDeg: numb
   u.wind.value.set(-Math.sin(a), Math.cos(a), amp)
 }
 
-/** La teinte de l'eau (celle du style, linéaire) : ce qu'elle diffuse, et donc ce qu'elle absorbe. */
+/** The water tint (the style's, linear): what it scatters, and therefore what it absorbs. */
 export function setWaterTint(u: WaterUniforms, tint: Color): void {
   u.tint.value.copy(tint)
   const s = (c: number) => -Math.log(Math.max(c, 0.03)) * ABSORPTION_PER_M
@@ -270,14 +270,14 @@ export function setWaterTint(u: WaterUniforms, tint: Color): void {
 }
 
 /**
- * Rend un matériau d'eau VIVANT. Le patch survit aux changements de style : `applyLook` mute les
- * mêmes matériaux (il ne les recrée pas), et une recompilation repasse par `onBeforeCompile`.
- * La force revient en retour : c'est le seul réglage qui bouge ensuite, image après image.
+ * Makes a water material ALIVE. The patch survives style changes: `applyLook` mutates the
+ * same materials (it does not recreate them), and a recompilation goes through `onBeforeCompile` again.
+ * The strength is returned: it is the only setting that moves afterward, frame after frame.
  */
 export function makeWaterAlive(mat: MeshStandardMaterial, role: WaterRole, water: WaterUniforms): WaterStrength {
   const strength: WaterStrength = { value: 0 }
   const basin = role === 'basin'
-  // l'eau est au jardin : aucune lampe d'intérieur ne l'atteint (`core/levelLight.ts`)
+  // the water is in the garden: no indoor lamp reaches it (`core/levelLight.ts`)
   mat.userData.noLamps = true
   mat.onBeforeCompile = (shader) => {
     applyLevelLight(shader, mat)
@@ -298,8 +298,8 @@ export function makeWaterAlive(mat: MeshStandardMaterial, role: WaterRole, water
       .replace('#include <project_vertex>', `#include <project_vertex>\n  vWaterPos = (modelMatrix * vec4(transformed, 1.0)).xyz;${basin ? `\n  vWaterDepth = ${WATER_DEPTH_ATTRIBUTE};` : ''}`)
     let frag = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${COMMON}${basin ? BASIN_COMMON : WAVE_GRAD}`)
-      // après l'émissive : la normale y est posée (cartes comprises) et `lights_fragment_begin`,
-      // qui la lira, n'est pas encore passé.
+      // after the emissive: the normal is set there (maps included) and `lights_fragment_begin`,
+      // which will read it, has not run yet.
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n${basin ? BASIN_PRE : SURFACE}`)
     if (basin) {
       frag = frag
@@ -308,8 +308,8 @@ export function makeWaterAlive(mat: MeshStandardMaterial, role: WaterRole, water
     }
     shader.fragmentShader = frag
   }
-  // Sans clé propre, three réutiliserait le programme d'un matériau standard aux mêmes réglages —
-  // et l'eau serait rendue par un shader qui n'a pas reçu le patch.
+  // Without its own key, three would reuse the program of a standard material with the same settings —
+  // and the water would be rendered by a shader that did not receive the patch.
   mat.customProgramCacheKey = () => `kasbah-water-${role}`
   mat.needsUpdate = true
   return strength
@@ -322,11 +322,11 @@ out vec2 vOld;
 out vec2 vNew;
 ${WIND_FRAME}${WAVE_GRAD}
 void main() {
-  // neuf copies de la tuile (3 × 3) : un rayon dévié hors de la tuile retombe chez la voisine
+  // nine copies of the tile (3 × 3): a ray bent out of the tile lands in the neighboring one
   vec2 offset = vec2(float(gl_InstanceID % 3) - 1.0, float(gl_InstanceID / 3) - 1.0);
   vec2 p = position.xy * ${glsl(TILE_M)};
   vec2 g = kasbahWaveGrad(p, uTime, 0.0);
-  // la tuile est dans le repère du vent : le soleil y entre aussi
+  // the tile is in the wind frame: the sun enters it too
   vec2 l = kasbahToWind(uLight.xz);
   vec3 r = refract(vec3(l.x, uLight.y, l.y), normalize(vec3(-g.x, 1.0, -g.y)), ${glsl(ETA)});
   vec2 q = p + r.xz * (${glsl(FLOOR_DEPTH_M)} / -r.y);
@@ -336,8 +336,8 @@ void main() {
 }
 `
 
-// L'intensité : l'aire d'une maille à la surface sur l'aire qu'elle couvre au fond. Des mailles
-// repliées se recouvrent, et le mélange additif les somme.
+// The intensity: the area of a cell at the surface over the area it covers at the bottom. Folded
+// cells overlap, and additive blending sums them.
 const CAUSTIC_FRAGMENT = /* glsl */`
 in vec2 vOld;
 in vec2 vNew;
@@ -351,8 +351,8 @@ void main() {
 const clearColor = new ThreeColor()
 
 /**
- * La carte des caustiques : une tuile de fond, redessinée quand l'eau ou le soleil ont bougé. Rendue
- * AVANT l'image, par `HouseScene.render` ; lue par le matériau du bassin, en répétition.
+ * The caustics map: a bottom tile, redrawn when the water or the sun has moved. Rendered
+ * BEFORE the frame, by `HouseScene.render`; read by the basin material, repeated.
  */
 export class WaterCaustics {
   readonly target = new WebGLRenderTarget(CAUSTIC_PX, CAUSTIC_PX, {
@@ -385,7 +385,7 @@ export class WaterCaustics {
 
   get texture(): Texture { return this.target.texture }
 
-  /** Redessine la carte si l'eau, le soleil ou le vent ont bougé depuis ; remet le renderer comme il l'a trouvé. */
+  /** Redraws the map if the water, the sun or the wind has moved since; puts the renderer back as it found it. */
   update(r: WebGLRenderer): void {
     const w = this.water
     if (w.time.value === this.drawnAt && w.light.value.equals(this.drawnLight) && w.wind.value.equals(this.drawnWind)) return

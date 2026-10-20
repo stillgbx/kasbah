@@ -1,18 +1,18 @@
 import { CubeCamera, HalfFloatType, LinearMipmapLinearFilter, WebGLCubeRenderTarget, type Object3D, type Scene, type Texture, type Vector3, type WebGLRenderer } from 'three'
 
-// Reflet FIGÉ de la piscine : une sonde cubique posée au-dessus de l'eau, qui photographie la scène
-// (façade, arbres, ciel) dans les six directions et sert de carte d'environnement à la seule surface
-// de l'eau. Sans elle, l'eau ne reflète que le ciel (`scene.environment`).
+// FROZEN reflection of the pool: a cube probe placed above the water, which photographs the scene
+// (facade, trees, sky) in all six directions and serves as the environment map of the water
+// surface alone. Without it, the water reflects only the sky (`scene.environment`).
 //
-// Figé parce qu'un miroir recalculé à chaque image coûte un rendu complet de plus par image — ruineux
-// sur l'iGPU visé (voir la mémoire « perf GPU hybride »). La sonde ne se refait que quand ce qu'elle
-// voit change (maison, jardin, relief, style, heure), et c'est `HouseScene` qui en décide.
+// Frozen because a mirror recomputed every frame costs one more full render per frame — ruinous
+// on the targeted iGPU (see the "hybrid GPU perf" memory). The probe is only redone when what it
+// sees changes (house, garden, relief, style, hour), and `HouseScene` decides that.
 //
-// Seule la couche 0 est photographiée (les six caméras d'un `CubeCamera` n'en voient pas d'autre) :
-// halos, anneaux d'édition et ombres de contact, tous en couche de décor, n'apparaissent pas dans le
-// reflet — c'est voulu, ce ne sont pas des objets.
+// Only layer 0 is photographed (the six cameras of a `CubeCamera` see no other):
+// halos, edit rings and contact shadows, all on a decor layer, do not appear in the
+// reflection — that is intended, they are not objects.
 
-/** Côté d'une face (px) : le reflet est flouté par la rugosité et ridé par la houle, 256 suffit. */
+/** Side of a face (px): the reflection is blurred by roughness and rippled by the swell, 256 is enough. */
 const PROBE_SIZE = 256
 
 export class ReflectionProbe {
@@ -22,9 +22,9 @@ export class ReflectionProbe {
   get texture(): Texture { return this.target.texture }
 
   /**
-   * Photographie la scène depuis `at` (monde). `hide` : ce qui ne doit pas se refléter lui-même (la
-   * surface de l'eau). `background` : le ciel, posé le temps des six rendus — la scène n'a pas de
-   * fond (le canvas est vidé à la couleur d'horizon), le reflet aurait sinon un ciel uni.
+   * Photographs the scene from `at` (world). `hide`: what must not reflect itself (the
+   * water surface). `background`: the sky, set for the duration of the six renders — the scene has no
+   * background (the canvas is cleared to the horizon color), the reflection would otherwise have a flat sky.
    */
   update(renderer: WebGLRenderer, scene: Scene, at: Vector3, hide: readonly Object3D[], background: Texture | null): void {
     const shown = hide.map((o) => o.visible)
@@ -32,14 +32,14 @@ export class ReflectionProbe {
     const previous = scene.background
     const previousIntensity = scene.backgroundIntensity
     scene.background = background
-    // le ciel du reflet brille comme celui qui éclaire les matières, pas plus : la nuit reste la nuit
+    // the reflection's sky shines like the one lighting the materials, no more: the night stays night
     scene.backgroundIntensity = scene.environmentIntensity
     this.camera.position.copy(at)
     this.camera.update(renderer, scene)
     scene.background = previous
     scene.backgroundIntensity = previousIntensity
     hide.forEach((o, i) => { o.visible = shown[i]! })
-    // le flou selon la rugosité passe par un PMREM que three refait à la demande
+    // the roughness-dependent blur goes through a PMREM that three rebuilds on demand
     this.target.texture.needsPMREMUpdate = true
   }
 

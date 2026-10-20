@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import './textures/prebake' // cuit les matières à l'import, hors du délai du premier test
+import './textures/prebake' // bakes the materials at import, outside the first test's timeout
 import { BackSide, Box3, BoxGeometry, type OrthographicCamera, type PerspectiveCamera, type BufferGeometry, CylinderGeometry, type Material, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshStandardMaterial, type Object3D, type ShaderMaterial, ShaderLib, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
 import { computeHouseGeometry, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type OpeningRect, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
@@ -32,10 +32,10 @@ import type { Animation } from './core/renderLoop'
 import { Precipitation } from './effects/precipitation'
 import { createWaterUniforms, makeWaterAlive, setWaterWind, WAVES } from './effects/water'
 
-/** La cadence que `HouseScene` demande pour l'eau (`WATER_HZ`) — répétée ici, le test la vérifie. */
+/** The rate `HouseScene` requests for the water (`WATER_HZ`) — repeated here, the test checks it. */
 const WATER_HZ_TEST = 10
 
-/** Tous les maillages d'un objet, à plat. */
+/** All the meshes of an object, flattened. */
 const meshesOf = (o: Object3D): Mesh[] => {
   const out: Mesh[] = []
   o.traverse((x) => { if (x instanceof Mesh) out.push(x) })
@@ -69,7 +69,7 @@ describe('camera fit', () => {
     const pose = fitBox(box, 45, 4 / 3, { azimuth: 0, polar: Math.PI / 4, padding: 1 })
     const dist = pose.position.distanceTo(pose.target)
     expect(dist).toBeCloseTo(fitDistance(box.getSize(new Vector3()).length() / 2, 45, 4 / 3, 1))
-    // portrait : le champ horizontal est le plus étroit → distance plus grande
+    // portrait: the horizontal field is the narrowest → greater distance
     const portrait = fitBox(box, 45, 3 / 4, { azimuth: 0, polar: Math.PI / 4, padding: 1 })
     expect(portrait.position.distanceTo(portrait.target)).toBeGreaterThan(dist)
   })
@@ -77,11 +77,11 @@ describe('camera fit', () => {
 
 describe('render loop', () => {
   /**
-   * Une onde de lecteur dure 5,75 s et une respiration de batterie 2,6 s : les animer à la cadence de
-   * l'écran redessinait TOUTE la scène soixante fois par seconde pour une fraction de pixel. Une
-   * maison où une enceinte joue ne doit pas charger le navigateur en permanence.
+   * A player's wave lasts 5.75 s and a battery's breath 2.6 s: animating them at the screen's
+   * refresh rate redrew the WHOLE scene sixty times per second for a fraction of a pixel. A
+   * house where a speaker is playing must not load the browser permanently.
    */
-  it('une animation décorative ne redessine pas à la cadence de l’écran', () => {
+  it('a decorative animation does not redraw at the screen refresh rate', () => {
     const frames: ((now: number) => void)[] = []
     let renders = 0, now = 0
     const loop = createRenderLoop({
@@ -92,15 +92,15 @@ describe('render loop', () => {
       now: () => now,
     })
     const tick = () => { const cb = frames.shift(); if (cb) { now += 16; cb(now) } }
-    loop.addAnimation({ step: () => true })          // une onde qui ne s'arrête jamais
-    for (let i = 0; i < 12; i++) tick()              // ~192 ms d'images à 60 Hz
-    expect(loop.running).toBe(true)                  // la boucle reste vivante…
-    expect(renders).toBeLessThanOrEqual(5)           // …mais elle dessine à ~20 Hz, pas à 60
+    loop.addAnimation({ step: () => true })          // a wave that never stops
+    for (let i = 0; i < 12; i++) tick()              // ~192 ms of frames at 60 Hz
+    expect(loop.running).toBe(true)                  // the loop stays alive…
+    expect(renders).toBeLessThanOrEqual(5)           // …but it draws at ~20 Hz, not at 60
     expect(renders).toBeGreaterThanOrEqual(2)
     loop.dispose()
   })
 
-  it('l’image où une tween finit est dessinée, même quand le décor n’est pas encore dû', () => {
+  it('the frame where a tween ends is drawn, even when the decor is not yet due', () => {
     const frames: ((now: number) => void)[] = []
     let renders = 0, now = 0, done = false
     const loop = createRenderLoop({
@@ -111,17 +111,17 @@ describe('render loop', () => {
       now: () => now,
     })
     const tick = (ms: number) => { const cb = frames.shift(); if (cb) { now += ms; cb(now) } }
-    loop.addAnimation({ hz: 1, step: () => true })                     // un décor lent (1 Hz)
-    tick(1000)                                                          // il vient d'être servi
+    loop.addAnimation({ hz: 1, step: () => true })                     // a slow decor (1 Hz)
+    tick(1000)                                                          // it has just been served
     const before = renders
     loop.addTween(createTween({ durationMs: 10, now, onUpdate: () => {}, onDone: () => { done = true } }))
-    tick(16)                                                            // la tween finit ici, le décor n'est pas dû
+    tick(16)                                                            // the tween ends here, the decor is not due
     expect(done).toBe(true)
-    expect(renders).toBe(before + 1)                                    // l'état final est à l'écran
+    expect(renders).toBe(before + 1)                                    // the final state is on screen
     loop.dispose()
   })
 
-  it('une animation qui demande 10 Hz dessine deux fois moins qu’une qui en demande 20', () => {
+  it('an animation that requests 10 Hz draws half as often as one that requests 20', () => {
     const run = (hz: number | undefined) => {
       const frames: ((now: number) => void)[] = []
       let renders = 0, now = 0
@@ -137,8 +137,8 @@ describe('render loop', () => {
       loop.dispose()
       return renders
     }
-    const fast = run(undefined)                      // 20 Hz par défaut
-    const slow = run(WATER_HZ_TEST)                  // l'eau : 10 Hz
+    const fast = run(undefined)                      // 20 Hz by default
+    const slow = run(WATER_HZ_TEST)                  // the water: 10 Hz
     expect(slow).toBeLessThan(fast)
     expect(slow).toBeGreaterThanOrEqual(fast / 2 - 1)
   })
@@ -159,11 +159,11 @@ describe('render loop', () => {
     expect(loop.running).toBe(true)
     tick()
     expect(renders).toBe(1)
-    expect(loop.running).toBe(false)                 // rien ne bouge → arrêt
+    expect(loop.running).toBe(false)                 // nothing moves → stop
     controlsBusy = true
     loop.invalidate(); tick(); tick()
     expect(renders).toBe(3)
-    expect(loop.running).toBe(true)                  // amortissement en cours
+    expect(loop.running).toBe(true)                  // damping in progress
     controlsBusy = false
     tick()
     expect(loop.running).toBe(false)
@@ -192,7 +192,7 @@ describe('builders', () => {
   it('builds the whole house with levels, floors, panes, zones and roof', () => {
     const mats = createMaterials(defaultSceneTheme(), defaultLook())
     const nodes = buildHouse(geometry, mats)
-    expect(nodes.levels.size).toBe(3)                        // rdc, étage, et le toit (niveau sans pièce qui porte les panneaux)
+    expect(nodes.levels.size).toBe(3)                        // ground floor, upper floor, and the roof (a level without rooms that carries the panels)
     expect(nodes.levels.get('rdc')!.floors.size).toBe(3)
     expect(nodes.levels.get('rdc')!.panes.length).toBeGreaterThan(0)
     expect(nodes.zones.size).toBe(4)
@@ -201,7 +201,7 @@ describe('builders', () => {
     expect(nodes.levels.get('etage')!.group.position.z).toBeCloseTo(3.05)
     expect(countTriangles(nodes.root)).toBeGreaterThan(100)
   })
-  it('les murs vont du sol au plafond, cloisons comprises, et le sol infini est sous la parcelle', () => {
+  it('the walls go from floor to ceiling, partitions included, and the infinite ground is under the plot', () => {
     const level = geometry.levels[0]!
     const interior = wallMesh('walls:interior', level).geometry
     interior.computeBoundingBox()
@@ -209,39 +209,39 @@ describe('builders', () => {
     const nodes = buildHouse(geometry, createMaterials(defaultSceneTheme(), defaultLook()))
     expect(nodes.ground.position.z).toBeLessThan(geometry.terrain.z)
   })
-  it('habille chaque surface d’une matière répétée à l’échelle du mètre, avec sa normale et sa rugosité', () => {
+  it('dresses each surface with a material repeated at the meter scale, with its normal and its roughness', () => {
     const tex = createSurfaceTextures(['tile', 'water', 'plaster'])
     for (const t of Object.values(tex)) {
       expect((t.map.image as { width: number }).width).toBeGreaterThanOrEqual(256)
       expect(t.map.repeat.x).toBeGreaterThan(0)
-      expect(t.map.repeat.x).toBeLessThanOrEqual(1)   // un motif d'au moins un mètre
+      expect(t.map.repeat.x).toBeLessThanOrEqual(1)   // a pattern of at least one meter
     }
     const px = (t: SurfaceTexture, u: number, v: number) => {
       const img = t.map.image as { data: Uint8Array; width: number }
       return img.data[(Math.floor(v * img.width) * img.width + Math.floor(u * img.width)) * 4]!
     }
-    // les carreaux : le joint (le plus sombre de la rangée) tranche sur le carreau (son centre)
+    // the tiles: the joint (the darkest of the row) stands out against the tile (its center)
     const row = Array.from({ length: 512 }, (_, x) => px(tex.tile!, (x + 0.5) / 512, 0.125))
     expect(Math.min(...row)).toBeLessThan(px(tex.tile!, 0.125, 0.125) - 40)
-    // une matière presque plane a sa normale vers le haut : le canal bleu au maximum
+    // an almost flat material has its normal pointing up: the blue channel at its maximum
     expect((tex.plaster!.normalMap.image as { data: Uint8Array }).data[2]!).toBeGreaterThan(200)
     const mats = createMaterials(defaultSceneTheme(), defaultLook(), tex)
     expect(mats.floors.tile.map).toBe(tex.tile!.map)
     expect(mats.zones.pool.map).toBe(tex.water!.map)
     expect(mats.wall.normalMap).toBe(tex.plaster!.normalMap)
-    // la même carte packée sert de rugosité ET de métallicité : three lit le canal qu'il lui faut
+    // the same packed map serves as roughness AND metalness: three reads the channel it needs
     expect(mats.wall.roughnessMap).toBe(tex.plaster!.roughnessMap)
     expect(mats.wall.metalnessMap).toBe(tex.plaster!.roughnessMap)
   })
 })
 
-describe('caméra et niveaux', () => {
+describe('camera and levels', () => {
   const scene = new HouseScene(document.createElement('canvas'), { headless: true })
   scene.load(parseHouse(demo))
-  /** La caméra active est d'une espèce ou de l'autre selon la projection ; ici on la sait perspective. */
+  /** The active camera is of one kind or the other depending on the projection; here we know it is perspective. */
   const persp = () => scene.camera as PerspectiveCamera
 
-  it('cadre la partie libre du canvas quand un panneau couvre le bord droit', () => {
+  it('frames the free part of the canvas when a panel covers the right edge', () => {
     scene.resize(1000, 500)
     expect(persp().aspect).toBeCloseTo(2)
     scene.setViewInset(400)
@@ -253,8 +253,8 @@ describe('caméra et niveaux', () => {
   })
 })
 
-describe('projection de la vue', () => {
-  it('cadre la même hauteur de monde des deux côtés de la bascule', () => {
+describe('view projection', () => {
+  it('frames the same world height on both sides of the switch', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(parseHouse(demo))
     scene.resize(1000, 500)
@@ -264,11 +264,11 @@ describe('projection de la vue', () => {
     scene.setOptions({ projection: 'ortho' })
     const ortho = scene.camera as OrthographicCamera
     expect(ortho.isOrthographicCamera).toBe(true)
-    // la pose ne bouge pas : seul le tronc change
+    // the pose does not move: only the frustum changes
     expect(scene.camera.position.distanceTo(before)).toBeCloseTo(0)
-    // et le zoom montre la hauteur de monde que le champ de vision montrait à cette distance
+    // and the zoom shows the world height that the field of view showed at that distance
     expect(ORTHO_BASE_M / ortho.zoom).toBeCloseTo(visibleHeight(distance, 38), 3)
-    // le tronc suit le rapport de l'écran, comme `aspect` en perspective
+    // the frustum follows the screen's aspect ratio, like `aspect` in perspective
     expect((ortho.right - ortho.left) / (ortho.top - ortho.bottom)).toBeCloseTo(2)
 
     scene.setOptions({ projection: 'perspective' })
@@ -276,35 +276,35 @@ describe('projection de la vue', () => {
     expect(scene.camera.position.distanceTo(before)).toBeCloseTo(0, 2)
   })
 
-  it('l’isométrie verrouille la plongée et tourne par quarts de tour', () => {
+  it('the isometric view locks the tilt and rotates by quarter turns', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(parseHouse(demo))
     scene.resize(1000, 500)
     const shown = () => visibleHeight(scene.camera.position.length(), (scene.camera as PerspectiveCamera).fov)
     const before = shown()
     scene.setOptions({ projection: 'iso' })
-    // une perspective à champ ÉTROIT, reculée d'autant : la maison garde sa taille à l'écran
+    // a NARROW-field perspective, moved back accordingly: the house keeps its size on screen
     expect((scene.camera as PerspectiveCamera).isPerspectiveCamera).toBe(true)
     expect((scene.camera as PerspectiveCamera).fov).toBe(ISO_FOV_DEG)
     expect(shown()).toBeCloseTo(before, 3)
-    // headless : pas de contrôles, donc pas d'animation — la pose est posée d'un coup
+    // headless: no controls, hence no animation — the pose is set in one go
     const poseOf = () => sphericalOf(scene.camera.position, new Vector3())
     expect(poseOf().polar).toBeCloseTo(ISO_POLAR, 5)
     const quarters = [poseOf().azimuth]
     for (let i = 0; i < 3; i++) { scene.orbitBy(Math.PI / 6); quarters.push(poseOf().azimuth) }
-    // l'amplitude demandée ne compte pas : chaque appui fait un quart de tour, et la plongée tient
-    // (l'écart est ramené dans ]-π, π] : `Spherical` repart de -π après un tour complet)
+    // the requested amplitude does not count: each press makes a quarter turn, and the tilt holds
+    // (the gap is brought back into ]-π, π]: `Spherical` restarts from -π after a full turn)
     const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
     for (let i = 1; i < quarters.length; i++) expect(wrap(quarters[i]! - quarters[i - 1]!)).toBeCloseTo(Math.PI / 2, 5)
     expect(poseOf().polar).toBeCloseTo(ISO_POLAR, 5)
-    // retour en perspective : le champ de base, la même hauteur montrée
+    // back to perspective: the base field, the same height shown
     const inIso = shown()
     scene.setOptions({ projection: 'perspective' })
     expect((scene.camera as PerspectiveCamera).fov).toBe(38)
     expect(shown()).toBeCloseTo(inIso, 3)
   })
 
-  it('ramène un azimut quelconque sur le coin isométrique le plus proche', () => {
+  it('brings any azimuth back to the nearest isometric corner', () => {
     const origin = -Math.PI / 4
     expect(snapIsoAzimuth(origin + 0.2, origin)).toBeCloseTo(origin, 5)
     expect(snapIsoAzimuth(origin + 1.4, origin)).toBeCloseTo(origin + Math.PI / 2, 5)
@@ -313,53 +313,53 @@ describe('projection de la vue', () => {
 })
 
 
-describe("pochette sur l'écran d'un lecteur 3D", () => {
-  /** Sommet dont l'UV est (u, v) : (0,1) = haut gauche de l'image, (1,1) = haut droit. */
+describe("cover art on a 3D player's screen", () => {
+  /** Vertex whose UV is (u, v): (0,1) = top left of the image, (1,1) = top right. */
   const corner = (g: ReturnType<typeof screenArtGeometry>, u: number, v: number) => {
     const uv = g.getAttribute('uv') as BufferAttribute
     const pos = g.getAttribute('position') as BufferAttribute
     for (let i = 0; i < uv.count; i++) {
       if (uv.getX(i) === u && uv.getY(i) === v) return new Vector3().fromBufferAttribute(pos, i)
     }
-    throw new Error(`aucun sommet en uv ${u},${v}`)
+    throw new Error(`no vertex at uv ${u},${v}`)
   }
 
-  it("regarde vers +y, le haut de l'image en haut, et sans miroir pour qui est devant", () => {
+  it("faces +y, the top of the image at the top, and not mirrored for whoever is in front", () => {
     const g = screenArtGeometry(1, 1)
     const normal = g.getAttribute('normal') as BufferAttribute
     const n = new Vector3().fromBufferAttribute(normal, 0)
     expect(n.x).toBeCloseTo(0)
     expect(n.y).toBeCloseTo(1)
     expect(n.z).toBeCloseTo(0)
-    // haut de l'image vers +z (le repère local d'une boîte d'écran est Z-up)
+    // top of the image toward +z (the local frame of a screen box is Z-up)
     expect(corner(g, 0, 1).z).toBeCloseTo(0.5)
     expect(corner(g, 0, 0).z).toBeCloseTo(-0.5)
-    // quelqu'un placé devant (en +y, regardant vers -y) a sa droite en -x : le haut DROIT de l'image y est
+    // someone standing in front (at +y, looking toward -y) has their right at -x: the top RIGHT of the image is there
     expect(corner(g, 1, 1).x).toBeCloseTo(-0.5)
     expect(corner(g, 0, 1).x).toBeCloseTo(0.5)
   })
 
-  it("remplit l'écran en rognant, jamais en déformant (comme object-fit: cover)", () => {
-    // pochette carrée sur une dalle 16:9 : on montre la bande centrale, 56 % de la hauteur
+  it("fills the screen by cropping, never by distorting (like object-fit: cover)", () => {
+    // square cover on a 16:9 panel: we show the central band, 56 % of the height
     const square = coverCrop(1, 16 / 9)
     expect(square.repeat[0]).toBe(1)
     expect(square.repeat[1]).toBeCloseTo(0.5625)
     expect(square.offset[1]).toBeCloseTo(0.21875)
-    // image plus large que l'écran : ce sont les côtés qui sont rognés
+    // image wider than the screen: it is the sides that are cropped
     const wide = coverCrop(2, 16 / 9)
     expect(wide.repeat[1]).toBe(1)
     expect(wide.repeat[0]).toBeCloseTo(0.8889)
     expect(wide.offset[0]).toBeCloseTo(0.0556)
-    // même format : rien à rogner
+    // same aspect ratio: nothing to crop
     expect(coverCrop(16 / 9, 16 / 9)).toEqual({ repeat: [1, 1], offset: [0, 0] })
-    // format inconnu : supposée carrée — surtout pas étirée pour remplir
+    // unknown aspect ratio: assumed square — above all not stretched to fill
     expect(coverCrop(0, 16 / 9)).toEqual(coverCrop(1, 16 / 9))
   })
 
-  it('charge, remplace et libère la texture, et ignore une réponse périmée', () => {
+  it('loads, replaces and frees the texture, and ignores a stale response', () => {
     const loads: { url: string; done: (t: Texture) => void; fail: () => void }[] = []
     const disposed: string[] = []
-    // une pochette est carrée : 600 × 600, comme celles que servent les catalogues
+    // a cover is square: 600 × 600, like those the catalogs serve
     const fakeTexture = (url: string) => ({
       colorSpace: '', image: { width: 600, height: 600 },
       repeat: { set: () => {} }, offset: { set: () => {} },
@@ -374,37 +374,37 @@ describe("pochette sur l'écran d'un lecteur 3D", () => {
     expect(art.mesh.position.y).toBeCloseTo(0.03)
 
     art.set('/art?a')
-    art.set('/art?a')                                     // même image : une seule requête
+    art.set('/art?a')                                     // same image: a single request
     expect(loads).toHaveLength(1)
     loads[0]!.done(fakeTexture('a'))
     expect(art.mesh.visible).toBe(true)
     expect(ready).toBe(1)
-    // le cadrage vit dans les UNIFORMES : un shader écrit à la main ignore `texture.repeat`, et
-    // l'image sortait étirée quand le calcul n'atterrissait que sur la texture
+    // the framing lives in the UNIFORMS: a hand-written shader ignores `texture.repeat`, and
+    // the image came out stretched when the computation only landed on the texture
     const uniforms = art.mesh.material.uniforms
-    expect(uniforms.uCrop!.value.y).toBeCloseTo(0.5625)     // pochette carrée sur une dalle 16:9
+    expect(uniforms.uCrop!.value.y).toBeCloseTo(0.5625)     // square cover on a 16:9 panel
     expect(uniforms.uCropOffset!.value.y).toBeCloseTo(0.21875)
     expect(uniforms.uCrop!.value.x).toBe(1)
 
-    // le morceau change : l'ancienne texture est libérée quand la nouvelle arrive
+    // the track changes: the old texture is freed when the new one arrives
     art.set('/art?b')
     loads[1]!.done(fakeTexture('b'))
     expect(disposed).toEqual(['a'])
 
-    // réponse d'une image qu'on n'attend plus (zapping) : jetée, l'écran garde la sienne
+    // response for an image no longer expected (channel switching): discarded, the screen keeps its own
     art.set('/art?c')
     art.set('/art?b')
     loads[2]!.done(fakeTexture('c'))
     expect(disposed).toEqual(['a', 'c'])
     expect(art.mesh.visible).toBe(true)
 
-    // plus rien ne joue : écran nu, texture libérée
+    // nothing plays anymore: bare screen, texture freed
     art.set(undefined)
     expect(art.mesh.visible).toBe(false)
     expect(disposed).toEqual(['a', 'c', 'b'])
   })
 
-  it("garde l'écran nu quand l'image est illisible", () => {
+  it("keeps the screen bare when the image is unreadable", () => {
     const loads: { fail: () => void }[] = []
     const art = new ScreenArt({ width: 1, height: 0.56, offsetY: 0.03, load: (_url, _done, fail) => loads.push({ fail }) })
     art.set('/art?boom')
@@ -414,9 +414,9 @@ describe("pochette sur l'écran d'un lecteur 3D", () => {
   })
 })
 
-describe('marqueurs 3D', () => {
-  // Un marqueur a besoin d'un contexte de scène ; on garde les animations sous la main pour les
-  // dérouler jusqu'au bout (les ouvrants tweenent leur course sur 400 ms).
+describe('3D markers', () => {
+  // A marker needs a scene context; we keep the animations at hand to
+  // run them to the end (the covers tween their travel over 400 ms).
   const animations: Animation[] = []
   const marker = (device: PlacedHouseDevice, descriptor: DeviceDescriptor) => {
     animations.length = 0
@@ -426,7 +426,7 @@ describe('marqueurs 3D', () => {
       invalidate: () => {}, onTap: () => {}, label: descriptor.name,
     }, () => true)
   }
-  /** Déroule les tweens en cours : une seule étape très tard suffit à les terminer. */
+  /** Runs the pending tweens: a single step very late is enough to finish them. */
   const settle = () => { for (const a of animations) a.step(performance.now() + 10_000, 10) }
   const meshes = (o: { traverse(cb: (x: unknown) => void): void }) => {
     const out: Mesh[] = []
@@ -440,15 +440,15 @@ describe('marqueurs 3D', () => {
     ({ kind: 'cover', updatedAt: 0, available: true, motion: 'stopped', ...(position === undefined ? {} : { position }) } as DeviceState)
 
   /**
-   * Un volet fermé doit BARRER la lumière : son maillage porte `castShadow` et vit sur la couche
-   * commune. Sa lampe aussi — le shader la cantonne à son niveau (`core/levelLight.ts`) ; seuls les
-   * DÉCORS translucides ont leur couche, pour sortir du relevé d'occlusion.
+   * A closed shutter must BLOCK the light: its mesh carries `castShadow` and lives on the shared
+   * layer. Its lamp too — the shader confines it to its level (`core/levelLight.ts`); only the
+   * translucent DECORATIONS have their own layer, to leave the occlusion capture.
    */
-  it('un appareil porte son ombre ; seuls ses décors ont leur couche', () => {
+  it('a device casts its shadow; only its decorations have their own layer', () => {
     const shutter = marker(device({ size: { width: 2, height: 1.2 } }), cover('shutter'))
     for (const mesh of meshes(shutter.object)) {
       expect(mesh.castShadow).toBe(true)
-      expect(mesh.layers.mask).toBe(1)               // couche commune : la passe globale la voit
+      expect(mesh.layers.mask).toBe(1)               // shared layer: the global pass sees it
     }
     const lamp = marker(device(), { id: 'p:l', pluginId: 'p', externalId: 'l', kind: 'light', name: 'Lampe', capabilities: ['on_off'], meta: {} } as DeviceDescriptor)
     const parts: { light: number[]; sprite: number[] } = { light: [], sprite: [] }
@@ -461,10 +461,10 @@ describe('marqueurs 3D', () => {
   })
 
   /**
-   * Une lampe de JARDIN, elle, doit éclairer la façade sans traverser le mur. Aucune couche ne sait
-   * faire ça : il lui faut une vraie ombre portée — et seulement tant qu'elle est allumée.
+   * A GARDEN lamp, for its part, must light the facade without going through the wall. No layer knows how
+   * to do that: it needs a real cast shadow — and only as long as it is on.
    */
-  it('une lampe de jardin éclaire partout, mais porte son ombre', () => {
+  it('a garden lamp lights everywhere, but casts its shadow', () => {
     const lamp = createMarker(device(), {
       materials: createMaterials(defaultSceneTheme(), defaultLook()), theme: defaultSceneTheme(), glow: defaultLook().glow,
       outdoor: true,
@@ -472,16 +472,16 @@ describe('marqueurs 3D', () => {
       addAnimation: () => () => {}, invalidate: () => {}, onTap: () => {}, label: 'Borne',
     }, () => true)
     const light = (() => { let f: { layers: { mask: number }; castShadow: boolean } | null = null; lamp.object.traverse((o) => { if ((o as { isLight?: boolean }).isLight) f = o as never }); return f! })()
-    expect(light.layers.mask).toBe(1)                // couche commune, comme toute lampe
-    expect(light.castShadow).toBe(false)             // éteinte : pas six rendus de profondeur pour rien
+    expect(light.layers.mask).toBe(1)                // shared layer, like every lamp
+    expect(light.castShadow).toBe(false)             // off: not six depth renders for nothing
     lamp.update({ kind: 'light', updatedAt: 0, available: true, on: true, brightness: 100 } as DeviceState)
     expect(light.castShadow).toBe(true)
     const sprites: number[] = []
     lamp.object.traverse((o) => { if ((o as { isSprite?: boolean }).isSprite) sprites.push(o.layers.mask) })
-    expect(sprites).toEqual([1 << SITE_DECOR_LAYER])  // son halo est un décor du jardin
+    expect(sprites).toEqual([1 << SITE_DECOR_LAYER])  // its halo is a garden decoration
   })
 
-  it('un plafonnier pose une tache de lumière au sol, de sa couleur, sans lumière de plus', () => {
+  it('a ceiling light lays a spot of light on the floor, in its color, without extra light', () => {
     const make = (d: PlacedHouseDevice, outdoor = false) => createMarker(d, {
       materials: createMaterials(defaultSceneTheme(), defaultLook()), theme: defaultSceneTheme(), glow: defaultLook().glow,
       ...(outdoor ? { outdoor } : {}),
@@ -491,14 +491,14 @@ describe('marqueurs 3D', () => {
     const lamp = make(device({ position: [3, 2, 2.5], mount: 'ceiling' }))
     lamp.object.position.set(3, 2, 2.5)
     const pool = lamp.object.getObjectByName('lamp-pool') as Mesh
-    expect(pool.visible).toBe(false)                                   // éteinte : pas de tache
+    expect(pool.visible).toBe(false)                                   // off: no spot
     lamp.update({ kind: 'light', updatedAt: 0, available: true, on: true, brightness: 100, colorTempMirek: 153 } as DeviceState)
     expect(pool.visible).toBe(true)
     const m = pool.material as MeshBasicMaterial
     expect(m.opacity).toBeGreaterThan(0)
-    expect(m.color.b).toBeGreaterThan(m.color.r * 0.9)                   // 6500 K : un blanc froid, pas le chaud par défaut
+    expect(m.color.b).toBeGreaterThan(m.color.r * 0.9)                   // 6500 K: a cold white, not the warm default
     pool.onBeforeRender(null as never, null as never, null as never, null as never, null as never, null as never)
-    expect(pool.position.z).toBeCloseTo(0.004 - 2.5, 5)                 // posée sur le sol du niveau
+    expect(pool.position.z).toBeCloseTo(0.004 - 2.5, 5)                 // laid on the level's floor
     expect(pool.layers.mask).toBe(1 << DECOR_LAYER)
     let lights = 0
     lamp.object.traverse((o) => { if ((o as { isLight?: boolean }).isLight) lights++ })
@@ -507,7 +507,7 @@ describe('marqueurs 3D', () => {
     expect(make(device({ position: [3, 2, 2.5], mount: 'ceiling' }), true).object.getObjectByName('lamp-pool')).toBeUndefined()
   })
 
-  it('une lumière liée à un ventilateur pose un hub et trois pales, pas une sphère seule', () => {
+  it('a light tied to a fan lays a hub and three blades, not a sphere alone', () => {
     const lamp = createMarker(device(), {
       materials: createMaterials(defaultSceneTheme(), defaultLook()), theme: defaultSceneTheme(), glow: defaultLook().glow,
       linkedFan: true, linkedFanId: 'p:fan',
@@ -518,11 +518,11 @@ describe('marqueurs 3D', () => {
     expect(lamp.object.getObjectByName('ceiling-fan-blades')).toBeTruthy()
     let meshCount = 0
     lamp.object.getObjectByName('ceiling-fan')!.traverse((o) => { if ((o as { isMesh?: boolean }).isMesh) meshCount++ })
-    // hub + globe + 3 pales
+    // hub + globe + 3 blades
     expect(meshCount).toBe(5)
   })
 
-  it('les pales tournent quand le ventilateur lié est allumé, et s\'arrêtent sinon', () => {
+  it('the blades turn when the linked fan is on, and stop otherwise', () => {
     const steps: { step: (now: number, dt: number) => boolean }[] = []
     const lamp = createMarker(device(), {
       materials: createMaterials(defaultSceneTheme(), defaultLook()), theme: defaultSceneTheme(), glow: defaultLook().glow,
@@ -541,7 +541,7 @@ describe('marqueurs 3D', () => {
     expect(steps).toHaveLength(0)
   })
 
-  it('les pales suivent la vitesse et le sens, et le flux d\'air dit frais (bas, bleu) ou chaud (haut, rouge)', () => {
+  it('the blades follow the speed and the direction, and the airflow says cool (down, blue) or warm (up, red)', () => {
     const steps: { step: (now: number, dt: number) => boolean }[] = []
     const lamp = createMarker(device(), {
       materials: createMaterials(defaultSceneTheme(), defaultLook()), theme: defaultSceneTheme(), glow: defaultLook().glow,
@@ -559,18 +559,18 @@ describe('marqueurs 3D', () => {
     fan(1, 'forward')
     const slow = turn()
     fan(6, 'forward')
-    expect(steps).toHaveLength(1)                       // changer de vitesse ne relance pas une 2e animation
+    expect(steps).toHaveLength(1)                       // changing speed does not start a 2nd animation
     const fast = turn()
-    expect(slow).toBeLessThan(0)                        // été : horaire vu d'en haut
+    expect(slow).toBeLessThan(0)                        // summer: clockwise seen from above
     expect(Math.abs(fast)).toBeGreaterThan(Math.abs(slow) * 2)
     fan(6, 'reverse')
     expect(turn()).toBeCloseTo(-fast)
 
-    // couleur des anneaux, et sens vertical : un anneau large est en bas de la colonne
+    // ring color, and vertical direction: a wide ring is at the bottom of the column
     const rings = () => air.children as Mesh<BufferGeometry, ShaderMaterial>[]
     const sample = () => {
       const c = rings()[0]!.material.uniforms.uColor!.value as { r: number; b: number }
-      // tout le flux reste SOUS le plan des pales, quel que soit le sens
+      // the whole flow stays BELOW the plane of the blades, whatever the direction
       for (const r of rings()) expect(r.position.z).toBeLessThan(0)
       return { r: c.r, b: c.b }
     }
@@ -586,22 +586,22 @@ describe('marqueurs 3D', () => {
     expect(cool.b).toBeGreaterThan(cool.r)
     const ring = narrowest(), z0 = ring.position.z
     steps[0]!.step(0, 0.05)
-    expect(ring.position.z).toBeLessThan(z0)          // été : l'air descend
+    expect(ring.position.z).toBeLessThan(z0)          // summer: the air goes down
     fan(6, 'reverse')
     const low = widest(), zl = low.position.z
     steps[0]!.step(0, 0.05)
-    expect(low.position.z).toBeGreaterThan(zl)        // hiver : il monte
+    expect(low.position.z).toBeGreaterThan(zl)        // winter: it goes up
     lamp.setCompanionFan({ kind: 'fan', updatedAt: 1, available: true, on: false } as DeviceState)
     expect(air.visible).toBe(false)
     expect(steps).toHaveLength(0)
   })
 
-  // La carrosserie 3D arrive APRÈS le marqueur (le .glb se télécharge). Ce qui se vérifie ici, c'est
-  // que la substitution ne déplace rien : la silhouette générique est dessinée aux cotes du modèle
-  // attendu, et la vraie carrosserie prend exactement sa place.
-  describe('carrosserie 3D d un véhicule', () => {
+  // The 3D car body arrives AFTER the marker (the .glb is downloaded). What is checked here is
+  // that the substitution moves nothing: the generic silhouette is drawn at the dimensions of the expected
+  // model, and the real car body takes exactly its place.
+  describe('3D car body of a vehicle', () => {
     const tesla = { id: 'tesla:5YJ', pluginId: 'tesla', externalId: '5YJ', kind: 'vehicle', name: 'Model S', capabilities: [], meta: {} } as unknown as DeviceDescriptor
-    /** Faux .glb : une boîte aux cotes du catalogue, déjà passée dans le repère de la maison. */
+    /** Fake .glb: a box at the catalog dimensions, already converted to the house reference frame. */
     const fakeShell = () => new BoxGeometry(2.32, 4.98, 1.52).translate(0, 0, 0.76)
     const vehicleMarker = (extra: Partial<PlacedHouseDevice>, load?: (url: string, ok: (g: BufferGeometry) => void, ko: () => void) => void) =>
       createMarker({ id: 'vehicle.s', position: [0, 0, 0], ...extra }, {
@@ -610,29 +610,29 @@ describe('marqueurs 3D', () => {
         ...(load ? { loadModel: load } : {}),
       }, () => true)
 
-    it('dessine la silhouette aux cotes du modèle attendu, puis lui substitue la carrosserie sans rien déplacer', () => {
+    it('draws the silhouette at the expected model\'s dimensions, then replaces it with the car body without moving anything', () => {
       let deliver: ((g: BufferGeometry) => void) | undefined
       const marker = vehicleMarker({}, (url, ok) => { expect(url).toContain('models/tesla/model-s.glb'); deliver = ok })
 
       const before = new Box3().setFromObject(marker.object)
-      expect(meshes(marker.object).length).toBe(2)          // caisse + habitacle
+      expect(meshes(marker.object).length).toBe(2)          // body + cabin
       expect(marker.pickables.length).toBe(2)
 
       deliver!(fakeShell())
       const after = new Box3().setFromObject(marker.object)
-      expect(meshes(marker.object).length).toBe(1)          // la silhouette a cédé la place
-      expect(marker.pickables.length).toBe(1)               // et cessé d'être cliquable
+      expect(meshes(marker.object).length).toBe(1)          // the silhouette gave way
+      expect(marker.pickables.length).toBe(1)               // and stopped being clickable
       expect(after.min.distanceTo(before.min)).toBeLessThan(0.02)
       expect(after.max.distanceTo(before.max)).toBeLessThan(0.02)
     })
 
-    it('garde la silhouette quand la carrosserie ne se charge pas', () => {
+    it('keeps the silhouette when the car body does not load', () => {
       const marker = vehicleMarker({}, (_url, _ok, ko) => ko())
       expect(meshes(marker.object).length).toBe(2)
       expect(marker.pickables.length).toBe(2)
     })
 
-    it("ne charge rien quand l'utilisateur a demandé la silhouette générique", () => {
+    it("loads nothing when the user asked for the generic silhouette", () => {
       let asked = false
       const marker = vehicleMarker({ model3d: 'none' }, () => { asked = true })
       expect(asked).toBe(false)
@@ -640,63 +640,63 @@ describe('marqueurs 3D', () => {
     })
   })
 
-  it("un store rentre son avancée en se repliant, sans décoller du mur", () => {
+  it("an awning retracts its projection when folding up, without leaving the wall", () => {
     const m = marker(device({ size: { width: 4, height: 3 } }), cover('awning'))
     const box = meshes(m.object)[0]!
-    // déployé (position 0 = « baissé ») : l'avancée déclarée, centrée sur le point posé
+    // deployed (position 0 = "lowered"): the declared projection, centered on the placed point
     m.update(coverState(0)); settle()
     expect(box.scale.y).toBeCloseTo(1)
     expect(box.position.y).toBeCloseTo(0)
-    // replié (position 100 = « remonté ») : il ne reste que le coffre, et le bord CÔTÉ MUR n'a pas bougé
+    // retracted (position 100 = "raised"): only the cassette remains, and the WALL-SIDE edge has not moved
     m.update(coverState(100)); settle()
     expect(box.scale.y * 3).toBeCloseTo(0.3)
     expect(box.position.y - (box.scale.y * 3) / 2).toBeCloseTo(-1.5)
-    // position inconnue : AU REPOS, comme partout ailleurs — un store au repos est rentré
+    // unknown position: AT REST, as everywhere else — an awning at rest is retracted
     m.update(coverState(undefined)); settle()
     expect(box.scale.y * 3).toBeCloseTo(0.3)
   })
 
-  it("un ouvrant reconstruit se POSE dans sa position, sans rejouer sa course", () => {
-    // toute écriture dans la maison reconstruit les marqueurs : un volet fermé rouvrait puis se
-    // refermait à chaque placement enregistré, le temps du tween
+  it("a rebuilt cover is SET in its position, without replaying its travel", () => {
+    // every write to the house rebuilds the markers: a closed shutter reopened then
+    // closed again at every saved placement, for the duration of the tween
     const m = marker(device({ size: { width: 4, height: 3 } }), cover('awning'))
     const box = meshes(m.object)[0]!
-    m.update(coverState(100))                       // premier état, SANS dérouler les animations
-    expect(box.scale.y * 3).toBeCloseTo(0.3)        // déjà replié : rien ne s'est joué à l'écran
-    m.update(coverState(0))                         // une vraie course, elle, s'anime
+    m.update(coverState(100))                       // first state, WITHOUT running the animations
+    expect(box.scale.y * 3).toBeCloseTo(0.3)        // already retracted: nothing played on screen
+    m.update(coverState(0))                         // a real travel, for its part, is animated
     expect(box.scale.y * 3).toBeCloseTo(0.3)
     settle()
     expect(box.scale.y).toBeCloseTo(1)
   })
 
-  it('un portail ouvre ses battants, un ou deux selon le JSON', () => {
+  it('a gate opens its leaves, one or two according to the JSON', () => {
     const two = marker(device({ size: { width: 4, height: 1.5 } }), cover('gate'))
     const hinges = () => meshes(two.object).map((x) => x.parent!)
     expect(hinges()).toHaveLength(2)
-    two.update(coverState(0)); settle()          // fermé : les deux battants dans le plan du portail
+    two.update(coverState(0)); settle()          // closed: both leaves in the gate's plane
     expect(hinges()[0]!.rotation.z).toBeCloseTo(0)
     expect(hinges()[1]!.rotation.z).toBeCloseTo(0)
-    two.update(coverState(100)); settle()        // ouvert : un quart de tour, chacun de son côté
+    two.update(coverState(100)); settle()        // open: a quarter turn, each to its side
     expect(hinges()[0]!.rotation.z).toBeCloseTo(Math.PI / 2)
     expect(hinges()[1]!.rotation.z).toBeCloseTo(-Math.PI / 2)
-    // position inconnue : au repos, donc clos — un portail muet ne se dessine pas ouvert
+    // unknown position: at rest, hence shut — a silent gate is not drawn open
     two.update(coverState(undefined)); settle()
     expect(hinges()[0]!.rotation.z).toBeCloseTo(0)
-    // un seul battant : un seul panneau, de toute la largeur
+    // a single leaf: a single panel, the full width
     const one = marker(device({ size: { width: 4, height: 1.5 }, leaves: 1 }), cover('gate'))
     expect(meshes(one.object)).toHaveLength(1)
   })
 
   /**
-   * Le TABLIER d'un volet lié à une ouverture : il épouse la baie, et ses vantaux ne font que le
-   * découper — la course reste verticale, c'est elle que l'état publie.
+   * The CURTAIN of a shutter linked to an opening: it fits the opening, and its leaves only
+   * divide it — the travel stays vertical, it is what the state publishes.
    */
-  describe('tablier de volet', () => {
+  describe('shutter curtain', () => {
     const rect = (extra: Partial<OpeningRect> = {}): OpeningRect => ({
       openingId: 'win', roomId: 'salon', levelId: 'rdc', type: 'window', host: 'wall',
       origin: [2, 0, 1], u: [1, 0], normal: [0, -1], width: 2, height: 1.2, depth: 0.3, leaves: 1, ...extra,
     })
-    /** Même contexte que `marker`, plus l'ouverture que l'ouvrant habille (et le jeu de matériaux, qu'on inspecte). */
+    /** Same context as `marker`, plus the opening the cover dresses (and the material set, which we inspect). */
     const dressed = (device: PlacedHouseDevice, opening = rect()) => {
       animations.length = 0
       const materials = createMaterials(defaultSceneTheme(), defaultLook())
@@ -709,46 +709,46 @@ describe('marqueurs 3D', () => {
     }
     const width = (x: Mesh) => (x.geometry as BoxGeometry).parameters.width
 
-    it("est d'un seul tenant par défaut, et se refend au nombre de vantaux", () => {
+    it("is in one piece by default, and splits by the number of leaves", () => {
       const one = meshes(dressed(device({ position: [3, 0, 1.5] })).m.object)
       expect(one).toHaveLength(1)
-      expect(width(one[0]!)).toBeCloseTo(2 * 0.98)      // il coulisse DANS l'embrasure, pas dessus
+      expect(width(one[0]!)).toBeCloseTo(2 * 0.98)      // it slides INSIDE the reveal, not over it
 
       const two = meshes(dressed(device({ position: [3, 0, 1.5], leaves: 2 })).m.object)
       expect(two).toHaveLength(2)
       expect(width(two[0]!)).toBeCloseTo(width(two[1]!))
-      // le jeu entre les deux panneaux : 2 cm, le même trait que les vantaux d'une porte
+      // the gap between the two panels: 2 cm, the same line as the leaves of a door
       expect(two[1]!.position.x - two[0]!.position.x - width(two[0]!)).toBeCloseTo(0.02)
-      // les deux couvrent la baie, jeu compris, et restent centrés sur elle (origine 2, largeur 2)
+      // both cover the opening, gap included, and stay centered on it (origin 2, width 2)
       expect((two[0]!.position.x + two[1]!.position.x) / 2 + 3).toBeCloseTo(3)
     })
 
-    it('descend ses deux vantaux ensemble', () => {
+    it('lowers its two leaves together', () => {
       const { m } = dressed(device({ position: [3, 0, 1.5], leaves: 2 }))
-      m.update(coverState(0)); settle()                 // fermé : toute la hauteur de la baie
+      m.update(coverState(0)); settle()                 // closed: the full height of the opening
       for (const slat of meshes(m.object)) {
         expect(slat.scale.z).toBeCloseTo(1.2)
         expect(slat.visible).toBe(true)
       }
-      m.update(coverState(100)); settle()               // ouvert : le tablier est rentré, on ne le voit plus
+      m.update(coverState(100)); settle()               // open: the curtain is retracted, it can no longer be seen
       for (const slat of meshes(m.object)) expect(slat.visible).toBe(false)
     })
 
-    it('garde le matériau de la scène, sauf matière ou couleur voulue', () => {
+    it('keeps the scene\'s material, unless a material or color is requested', () => {
       const plain = dressed(device({ position: [3, 0, 1.5] }))
       expect(meshes(plain.m.object)[0]!.material).toBe(plain.materials.slat)
 
       const painted = dressed(device({ position: [3, 0, 1.5], leaves: 2, coverMaterial: 'metal', coverColor: '#ffffff' }))
       const mats = meshes(painted.m.object).map((x) => x.material as MeshStandardMaterial)
       expect(mats[0]).not.toBe(painted.materials.slat)
-      expect(mats[1]).toBe(mats[0])                     // les deux vantaux d'un même volet partagent leur matériau
+      expect(mats[1]).toBe(mats[0])                     // the two leaves of the same shutter share their material
       expect(mats[0]!.color.getHexString()).toBe('ffffff')
-      expect(mats[0]!.metalness).toBeCloseTo(0.85)      // le métal réfléchit, le bois non
+      expect(mats[0]!.metalness).toBeCloseTo(0.85)      // metal reflects, wood does not
       expect(mats[0]!.roughness).toBeCloseTo(0.3)
     })
 
-    it('devient translucide en VERRE, et cesse alors de porter son ombre', () => {
-      // une porte de garage vitrée : le verre ne vitre pas la baie ici, il rend le panneau translucide
+    it('becomes translucent in GLASS, and then stops casting its shadow', () => {
+      // a glazed garage door: here the glass does not glaze the opening, it makes the panel translucent
       const { m } = dressed(device({ position: [3, 0, 1.5], coverMaterial: 'glass' }))
       const slat = meshes(m.object)[0]!
       const mat = slat.material as MeshStandardMaterial
@@ -757,42 +757,42 @@ describe('marqueurs 3D', () => {
       expect(slat.castShadow).toBe(false)
     })
 
-    it("montre la teinte qu'on survole sans tacher les autres volets", () => {
+    it("shows the hovered tint without staining the other shutters", () => {
       const { m, materials } = dressed(device({ position: [3, 0, 1.5] }))
       const shared = materials.slat.color.getHexString()
       m.previewColor('#ff0000')
-      expect(materials.slat.color.getHexString()).toBe(shared)   // le matériau partagé n'a pas bougé
+      expect(materials.slat.color.getHexString()).toBe(shared)   // the shared material has not moved
       expect((meshes(m.object)[0]!.material as MeshStandardMaterial).color.getHexString()).toBe('ff0000')
-      m.previewColor(null)                                       // choix abandonné : la teinte d'avant revient
+      m.previewColor(null)                                       // choice abandoned: the previous tint comes back
       expect((meshes(m.object)[0]!.material as MeshStandardMaterial).color.getHexString()).toBe(shared)
     })
   })
 
-  it("le cône d'un module montre où regarde son verre, châssis négatif compris", () => {
+  it("a module's cone shows where its glass faces, negative rack included", () => {
     const sensor = { id: 'p:s', pluginId: 'p', externalId: 's', kind: 'sensor', name: 'Onduleur', capabilities: ['measure'], meta: { sensor: { unit: 'W', deviceClass: 'power', precision: 0 } } } as unknown as DeviceDescriptor
     const panel = { arrayId: 'pv', row: 0, col: 0, width: 1.13, height: 1.76, peakW: 500, maxOutputW: 480, tilt: 35 }
     const cone = (m: { object: { traverse(cb: (x: unknown) => void): void } }) => meshes(m.object).find((x) => x.geometry instanceof ShapeGeometry)
     const tilted = marker(device({ yaw: 90, meta: { panel } }), sensor)
-    // le verre penche VERS +y local (l'azimut) : tourner autour de +x le pencherait vers −y, d'où le moins
+    // the glass leans TOWARD local +y (the azimuth): rotating around +x would lean it toward −y, hence the minus
     expect(meshes(tilted.object)[0]!.rotation.x).toBeCloseTo(-(35 * Math.PI) / 180)
     tilted.setMoving(true, 0)
-    // le verre regarde dans l'azimut du champ : le cône le suit, sans détour
+    // the glass faces the array's azimuth: the cone follows it, without detour
     expect(cone(tilted)!.rotation.z).toBeCloseTo(yawToRad(90))
-    // châssis négatif : le verre bascule en arrière, le cône fait demi-tour
+    // negative rack: the glass tilts backward, the cone turns around
     const back = marker(device({ yaw: 90, meta: { panel: { ...panel, tilt: -20 } } }), sensor)
     back.setMoving(true, 0)
     expect(cone(back)!.rotation.z).toBeCloseTo(yawToRad(90) + Math.PI)
-    // posé à plat, un module ne regarde NULLE PART : pas de cône plutôt qu'une flèche inventée
+    // laid flat, a module faces NOWHERE: no cone rather than an invented arrow
     const flat = marker(device({ yaw: 90, meta: { panel: { ...panel, tilt: 0 } } }), sensor)
     flat.setMoving(true, 0)
     expect(cone(flat)).toBeUndefined()
   })
 
-  it("un module se teinte de sa part de crête, et son trait de bord la chiffre", () => {
+  it("a module tints itself by its share of peak, and its edge bar puts a figure on it", () => {
     const sensor = { id: 'p:s', pluginId: 'p', externalId: 's', kind: 'sensor', name: 'Onduleur', capabilities: ['measure'], meta: { sensor: { unit: 'W', deviceClass: 'power', precision: 0 } } } as unknown as DeviceDescriptor
     const panel = { arrayId: 'pv', row: 0, col: 0, width: 1.13, height: 1.76, peakW: 500, maxOutputW: 480, tilt: 35 }
     const glassOf = (m: { object: { traverse(cb: (x: unknown) => void): void } }) => meshes(m.object)[0]!
-    // le trait est le dernier enfant de la dalle (piste, puis jauge)
+    // the bar is the last child of the slab (track, then gauge)
     const gaugeOf = (m: { object: { traverse(cb: (x: unknown) => void): void } }) => glassOf(m).children[1] as Mesh
     const lit = (m: { object: { traverse(cb: (x: unknown) => void): void } }) => {
       const e = (glassOf(m).material as MeshStandardMaterial).emissive
@@ -800,46 +800,46 @@ describe('marqueurs 3D', () => {
     }
     const m = marker(device({ meta: { panel } }), sensor)
     m.update({ kind: 'sensor', updatedAt: 0, available: true, value: 0 } as DeviceState)
-    expect(lit(m)).toBe(0)                                        // au repos : bleu nuit, éteint
+    expect(lit(m)).toBe(0)                                        // at rest: midnight blue, off
     expect(gaugeOf(m).visible).toBe(false)
     m.update({ kind: 'sensor', updatedAt: 0, available: true, value: 250 } as DeviceState)
     const half = lit(m)
     expect(half).toBeGreaterThan(0)
     expect(gaugeOf(m).scale.y).toBeCloseTo(0.5)
-    // ancré sur le bord BAS (+y local, là où le verre penche) : à mi-hauteur, son centre remonte
+    // anchored on the BOTTOM edge (local +y, where the glass leans): at half height, its center moves up
     expect(gaugeOf(m).position.y).toBeCloseTo((1.76 * 0.88) / 4)
-    // la crête est celle du CHAMP : le même onduleur sous un module de 250 Wc est déjà à fond
+    // the peak is the ARRAY's: the same inverter under a 250 Wp module is already at full
     const small = marker(device({ meta: { panel: { ...panel, peakW: 250, maxOutputW: 0 } } }), sensor)
     small.update({ kind: 'sensor', updatedAt: 0, available: true, value: 250 } as DeviceState)
     expect(lit(small)).toBeGreaterThan(half)
     expect(gaugeOf(small).scale.y).toBeCloseTo(1)
     expect(gaugeOf(small).position.y).toBeCloseTo(0)
-    // un onduleur muet ne vaut pas sa dernière valeur : le verre s'éteint, le trait disparaît
+    // a silent inverter is not worth its last value: the glass goes out, the bar disappears
     m.update({ kind: 'sensor', updatedAt: 0, available: false, value: 250 } as DeviceState)
     expect(lit(m)).toBe(0)
     expect(gaugeOf(m).visible).toBe(false)
   })
 
-  it("les deux repères de la jauge d'un module restent visibles, plafond par-dessus record", () => {
+  it("the two markers of a module's gauge stay visible, ceiling over record", () => {
     const sensor = { id: 'p:s', pluginId: 'p', externalId: 's', kind: 'sensor', name: 'Onduleur', capabilities: ['measure'], meta: { sensor: { unit: 'W', deviceClass: 'power', precision: 0 } } } as unknown as DeviceDescriptor
     const panel = { arrayId: 'pv', row: 0, col: 0, width: 1.13, height: 1.76, peakW: 500, maxOutputW: 480, tilt: 35 }
     const h = 1.76 * 0.88
     const m = marker(device({ meta: { panel } }), sensor)
     const slab = meshes(m.object)[0]!
     const [record, output] = [slab.children[2] as Mesh, slab.children[3] as Mesh]
-    // un onduleur qui ne publie pas de record : le plafond du champ est seul sur la jauge
+    // an inverter that publishes no record: the array's ceiling is alone on the gauge
     m.update({ kind: 'sensor', updatedAt: 0, available: true, value: 300 } as DeviceState)
     expect([output.visible, record.visible]).toEqual([true, false])
     expect(output.position.y).toBeCloseTo((h / 2) * (1 - 2 * 0.96))
-    expect(output.renderOrder).toBeGreaterThan(record.renderOrder)   // à valeur égale, il le cache
-    // le record vient de l'appareil, et survit à son silence : la nuit ne l'efface pas
+    expect(output.renderOrder).toBeGreaterThan(record.renderOrder)   // at equal value, it hides it
+    // the record comes from the device, and survives its silence: the night does not erase it
     m.update({ kind: 'sensor', updatedAt: 0, available: true, value: 300, maxValue: 431 } as DeviceState)
     expect(record.visible).toBe(true)
     expect(record.position.y).toBeCloseTo((h / 2) * (1 - 2 * (431 / 500)))
     m.update({ kind: 'sensor', updatedAt: 0, available: false, value: 300, maxValue: 431 } as DeviceState)
     expect(record.visible).toBe(true)
-    // un plafond plus haut que la crête du module (un IQ8P sous un 450 Wc) ne disparaît pas :
-    // c'est l'ÉCHELLE qui s'ouvre, et le repère se pose alors au bout de la jauge
+    // a ceiling higher than the module's peak (an IQ8P under a 450 Wp) does not disappear:
+    // it is the SCALE that opens up, and the marker then sits at the end of the gauge
     const over = marker(device({ meta: { panel: { ...panel, peakW: 450, maxOutputW: 480 } } }), sensor)
     over.update({ kind: 'sensor', updatedAt: 0, available: true, value: 200 } as DeviceState)
     const mark = meshes(over.object)[0]!.children[3] as Mesh
@@ -847,7 +847,7 @@ describe('marqueurs 3D', () => {
     expect(mark.position.y).toBeCloseTo(-h / 2)
   })
 
-  it("un coffret de batterie souffle sa couleur : vert en charge, bleu en décharge, rouge s'il se tait", () => {
+  it("a battery cabinet breathes its color: green while charging, blue while discharging, red if it goes silent", () => {
     const theme = defaultSceneTheme()
     const stored = { id: 'p:b', pluginId: 'p', externalId: 'b', kind: 'energy', name: 'Batterie', capabilities: ['storage'], meta: {} } as unknown as DeviceDescriptor
     const site = { ...stored, id: 'p:site', capabilities: ['production', 'consumption', 'grid', 'storage'] } as unknown as DeviceDescriptor
@@ -860,44 +860,44 @@ describe('marqueurs 3D', () => {
     }
 
     const m = marker(device(), stored)
-    // au repos (sous le seuil des compteurs) : rien ne souffle, et la boucle n'est pas réveillée
+    // at rest (below the meters' threshold): nothing breathes, and the loop is not woken up
     m.update(energy({ batteryW: 3, batterySoc: 74 }))
     expect(matOf(m).emissiveIntensity).toBe(0)
     expect(animations.length).toBe(0)
     expect(pillOn(m)).toBe('0')
-    // charge : vert. La pilule s'allume aussi — une batterie ne produit jamais rien, et « actif »
-    // pour elle, c'est déplacer de l'énergie
+    // charging: green. The pill lights up too — a battery never produces anything, and "active"
+    // for it means moving energy
     m.update(energy({ batteryW: 1200 }))
     expect(matOf(m).emissive.getHex()).toBe(theme.success.getHex())
     expect(animations.length).toBe(1)
     expect(pillOn(m)).toBe('1')
-    // décharge : bleu, et le souffle en cours continue — seule la couleur change
+    // discharging: blue, and the ongoing breath continues — only the color changes
     m.update(energy({ batteryW: -246 }))
     expect(matOf(m).emissive.getHex()).toBe(theme.info.getHex())
     expect(animations.length).toBe(1)
-    // plus de réponse : rouge. C'est la seule panne que le contrat porte pour un `energy`
+    // no more response: red. It is the only failure the contract carries for an `energy`
     m.update(energy({ batteryW: -246, available: false }))
     expect(matOf(m).emissive.getHex()).toBe(theme.error.getHex())
 
-    // le souffle monte et redescend en cosinus, sans jamais s'éteindre ni saturer
+    // the breath rises and falls in a cosine, without ever going out or saturating
     const at = (ms: number) => { animations[0]!.step(ms, 0); return matOf(m).emissiveIntensity }
     expect(at(1000)).toBeCloseTo(0.06)
     expect(at(1000 + 1300)).toBeCloseTo(0.6)
     expect(at(1000 + 2600)).toBeCloseTo(0.06)
 
-    // retour au repos : le coffret s'éteint franchement et rend la main (le rendu est à la demande)
+    // back to rest: the cabinet goes out cleanly and hands control back (rendering is on demand)
     m.update(energy({ batteryW: 0 }))
     expect(matOf(m).emissiveIntensity).toBe(0)
     expect(animations[0]!.step(4000, 0)).toBe(false)
 
-    // la passerelle de l'installation porte les mêmes chiffres, mais ce n'est pas une batterie
+    // the installation's gateway carries the same figures, but it is not a battery
     const gateway = marker(device(), site)
     gateway.update(energy({ batteryW: -246 }))
     expect(matOf(gateway).emissive.getHex()).toBe(0x000000)
     expect(animations.length).toBe(0)
   })
 
-  it('une borne de recharge souffle en vert seulement quand elle charge', () => {
+  it('a charger breathes green only while it is charging', () => {
     const theme = defaultSceneTheme()
     const desc = { id: 'p:c', pluginId: 'p', externalId: 'c', kind: 'ev_charger', name: 'Borne', capabilities: [], meta: {} } as unknown as DeviceDescriptor
     const charger = (status: 'disconnected' | 'connected' | 'charging' | 'error') =>
@@ -909,12 +909,12 @@ describe('marqueurs 3D', () => {
     }
 
     const m = marker(device(), desc)
-    // branchée, pas en charge : rien ne souffle — le rendu reste à la demande
+    // plugged in, not charging: nothing breathes — rendering stays on demand
     m.update(charger('connected'))
     expect(matOf(m).emissiveIntensity).toBe(0)
     expect(animations.length).toBe(0)
     expect(pillOn(m)).toBe('0')
-    // en charge : vert, même à 0 W — Enphase n'a pas encore montré le champ des watts
+    // charging: green, even at 0 W — Enphase has not shown the watts field yet
     m.update(charger('charging'))
     expect(matOf(m).emissive.getHex()).toBe(theme.success.getHex())
     expect(animations.length).toBe(1)
@@ -923,31 +923,31 @@ describe('marqueurs 3D', () => {
     expect(at(1000)).toBeCloseTo(0.06)
     expect(at(1000 + 1300)).toBeCloseTo(0.6)
     expect(at(1000 + 2600)).toBeCloseTo(0.06)
-    // retour au repos : le coffret s'éteint et rend la main
+    // back to rest: the cabinet goes out and hands control back
     m.update(charger('connected'))
     expect(matOf(m).emissiveIntensity).toBe(0)
     expect(animations[0]!.step(4000, 0)).toBe(false)
     expect(pillOn(m)).toBe('0')
   })
 
-  it("la jauge d'un coffret de batterie monte avec sa charge, sur ses deux faces", () => {
+  it("a battery cabinet's gauge rises with its charge, on both its faces", () => {
     const stored = { id: 'p:b', pluginId: 'p', externalId: 'b', kind: 'energy', name: 'Batterie', capabilities: ['storage'], meta: {} } as unknown as DeviceDescriptor
     const site = { ...stored, id: 'p:site', capabilities: ['production', 'consumption', 'grid', 'storage'] } as unknown as DeviceDescriptor
     const energy = (extra: Record<string, unknown>) =>
       ({ kind: 'energy', updatedAt: 0, available: true, productionW: 0, consumptionW: 0, gridW: 0, ...extra }) as DeviceState
-    const h = 1 * 0.86                                          // le trait fait 86 % de la hauteur du coffret
+    const h = 1 * 0.86                                          // the bar is 86 % of the cabinet's height
     const m = marker(device(), stored)
     const box = meshes(m.object)[0]!
-    // une piste et un trait PAR grande face : le coffret se lit de devant comme de derrière
+    // a track and a bar PER large face: the cabinet reads from the front as from the back
     expect(box.children).toHaveLength(4)
     const [frontTrack, frontFill, , backFill] = box.children as Mesh[]
-    expect(frontTrack!.position.y).toBeCloseTo(0.078)           // posé sur la tôle, 3 mm devant
+    expect(frontTrack!.position.y).toBeCloseTo(0.078)           // laid on the sheet metal, 3 mm in front
     expect(backFill!.position.y).toBeCloseTo(-0.078)
     for (const f of [frontFill!, backFill!]) {
-      // le trait monte vers le HAUT du coffret, quelle que soit la face qui le porte
+      // the bar rises toward the TOP of the cabinet, whichever face carries it
       expect(new Vector3(0, 1, 0).applyEuler(f.rotation).z).toBeCloseTo(1)
     }
-    // et chaque face regarde vers le dehors du coffret
+    // and each face looks out of the cabinet
     expect(new Vector3(0, 0, 1).applyEuler(frontFill!.rotation).y).toBeCloseTo(1)
     expect(new Vector3(0, 0, 1).applyEuler(backFill!.rotation).y).toBeCloseTo(-1)
 
@@ -955,32 +955,32 @@ describe('marqueurs 3D', () => {
     for (const f of [frontFill!, backFill!]) {
       expect(f.visible).toBe(true)
       expect(f.scale.y).toBeCloseTo(0.5)
-      expect(f.position.z).toBeCloseTo(-h / 4)                  // ancré sur le bord BAS : son centre descend
+      expect(f.position.z).toBeCloseTo(-h / 4)                  // anchored on the BOTTOM edge: its center goes down
     }
     m.update(energy({ batterySoc: 100 }))
     expect(frontFill!.scale.y).toBeCloseTo(1)
     expect(frontFill!.position.z).toBeCloseTo(0)
-    // à plat : la piste reste, le trait s'efface — un coffret vide le DIT
+    // flat: the track stays, the bar fades out — an empty cabinet SAYS so
     m.update(energy({ batterySoc: 0 }))
     expect([frontTrack!.visible, frontFill!.visible]).toEqual([true, false])
-    // muet : le dernier niveau connu tient. Une charge ne s'évapore pas avec la liaison, et le
-    // souffle rouge dit déjà que le chiffre est gelé
+    // silent: the last known level holds. A charge does not evaporate with the link, and the
+    // red breath already says the figure is frozen
     m.update(energy({ batterySoc: 62, available: false }))
     expect(frontFill!.visible).toBe(true)
     expect(frontFill!.scale.y).toBeCloseTo(0.62)
-    // charge inconnue : rien, pas même la piste — une jauge vide se lirait comme une batterie à plat
+    // unknown charge: nothing, not even the track — an empty gauge would read as a flat battery
     m.update(energy({}))
     expect([frontTrack!.visible, frontFill!.visible]).toEqual([false, false])
-    // la passerelle de l'installation n'est pas un coffret : elle n'a aucune jauge à porter
+    // the installation's gateway is not a cabinet: it has no gauge to carry
     expect(meshes(marker(device(), site).object)[0]!.children).toHaveLength(0)
   })
 
-  it('un thermostat est une pastille couchée contre son mur, tournée du yaw', () => {
+  it('a thermostat is a disc lying against its wall, rotated by the yaw', () => {
     const desc = { id: 'p:t', pluginId: 'p', externalId: 't', kind: 'climate', name: 'Thermostat', capabilities: [], meta: {} } as unknown as DeviceDescriptor
     const m = marker(device({ yaw: 90 }), desc)
     const puck = meshes(m.object)[0]!
     expect(puck.geometry).toBeInstanceOf(CylinderGeometry)
-    // l'axe du cylindre reste horizontal (pas de bascule en Z-up) : ses disques sont verticaux
+    // the cylinder axis stays horizontal (no Z-up tilt): its discs are vertical
     expect(puck.rotation.x).toBe(0)
     expect(puck.rotation.z).toBeCloseTo(Math.PI / 2)
     const params = (puck.geometry as CylinderGeometry).parameters
@@ -988,63 +988,63 @@ describe('marqueurs 3D', () => {
   })
 
   /**
-   * Le MÊME kind porte deux objets qui n'ont rien à voir : le thermostat ci-dessus, et le module
-   * d'une pompe à chaleur. Dessiner la seconde en pastille faisait passer toute une installation de
-   * chauffage pour un boîtier de salon posé dans la chaufferie.
+   * The SAME kind carries two objects that have nothing to do with each other: the thermostat above, and the module
+   * of a heat pump. Drawing the latter as a disc made a whole heating installation
+   * look like a living room box placed in the boiler room.
    */
-  it('une pompe à chaleur est un BLOC au sol, pas une pastille de thermostat', () => {
+  it('a heat pump is a BLOCK on the floor, not a thermostat disc', () => {
     const desc = {
       id: 'p:hp', pluginId: 'p', externalId: 'hp', kind: 'climate', name: 'Chauffage', capabilities: [],
       meta: { climate: { modes: ['heat'], deviceClass: 'heat_pump' } },
     } as unknown as DeviceDescriptor
     const box = meshes(marker(device({ yaw: 90 }), desc).object)[0]!
     expect(box.geometry).toBeInstanceOf(BoxGeometry)
-    // 60 × 36 × 120 cm : une machine qui monte du sol, comme un coffret de batterie
+    // 60 × 36 × 120 cm: a machine rising from the floor, like a battery cabinet
     const p = (box.geometry as BoxGeometry).parameters
     expect([p.width, p.height, p.depth]).toEqual([0.6, 0.36, 1.2])
-    expect(p.depth).toBeGreaterThan(1)                   // bien plus haute que large : elle se voit
-    expect(box.rotation.z).toBeCloseTo(Math.PI / 2)      // elle suit son yaw, comme le reste du mobilier
+    expect(p.depth).toBeGreaterThan(1)                   // much taller than wide: it shows
+    expect(box.rotation.z).toBeCloseTo(Math.PI / 2)      // it follows its yaw, like the rest of the furniture
   })
 
-  it("une station de traitement d'eau est un caisson mural aux cotes du constructeur, tourné du yaw", () => {
+  it("a water treatment station is a wall housing at the vendor's dimensions, rotated by the yaw", () => {
     const desc = { id: 'p:w', pluginId: 'p', externalId: 'w', kind: 'water', name: 'Station', capabilities: [], meta: {} } as unknown as DeviceDescriptor
     const m = marker(device({ yaw: 90 }), desc)
     const box = meshes(m.object)[0]!
-    // 59 × 59 × 17 cm (COMAP Proteo 2) : large et PLAT, l'épaisseur est l'axe y, celui du mur
-    // (les paramètres de three sont x, y, z : `height` est l'axe y, donc l'épaisseur en repère Z-up)
+    // 59 × 59 × 17 cm (COMAP Proteo 2): wide and FLAT, the thickness is the y axis, the wall's
+    // (three's parameters are x, y, z: `height` is the y axis, hence the thickness in the Z-up frame)
     const p = (box.geometry as BoxGeometry).parameters
     expect([p.width, p.height, p.depth]).toEqual([0.59, 0.17, 0.59])
-    expect(box.rotation.z).toBeCloseTo(Math.PI / 2)      // il se pose contre son mur, comme le thermostat
+    expect(box.rotation.z).toBeCloseTo(Math.PI / 2)      // it sits against its wall, like the thermostat
   })
 
-  it("une enceinte prend la silhouette demandée : cylindre, galet, barre ou bloc orientable", () => {
+  it("a speaker takes the requested silhouette: cylinder, puck, bar or orientable block", () => {
     const speaker = {
       id: 'p:s', pluginId: 'p', externalId: 's', kind: 'media_player', name: 'Enceinte', capabilities: [],
       meta: { mediaPlayer: { deviceClass: 'speaker' } },
     } as unknown as DeviceDescriptor
-    // défaut (champ absent) : cylindre debout, sans yaw
+    // default (field absent): upright cylinder, without yaw
     const tube = meshes(marker(device({ yaw: 90 }), speaker).object)[0]!
     expect(tube.geometry).toBeInstanceOf(CylinderGeometry)
     const tubeP = (tube.geometry as CylinderGeometry).parameters
     expect([tubeP.radiusTop, tubeP.height]).toEqual([0.13, 0.32])
-    expect(tube.rotation.x).toBeCloseTo(Math.PI / 2)     // axe Y → Z-up
-    expect(tube.rotation.z).toBe(0)                      // un tube n'a pas de face
+    expect(tube.rotation.x).toBeCloseTo(Math.PI / 2)     // Y axis → Z-up
+    expect(tube.rotation.z).toBe(0)                      // a tube has no face
 
-    // galet : cylindre court, toujours sans yaw
+    // puck: short cylinder, still without yaw
     const pebble = meshes(marker(device({ speakerShape: 'pebble', yaw: 90 }), speaker).object)[0]!
     expect(pebble.geometry).toBeInstanceOf(CylinderGeometry)
     const pebbleP = (pebble.geometry as CylinderGeometry).parameters
     expect([pebbleP.radiusTop, pebbleP.height]).toEqual([0.14, 0.1])
     expect(pebble.rotation.z).toBe(0)
 
-    // barre : boîte allongée, yaw appliqué
+    // bar: elongated box, yaw applied
     const bar = meshes(marker(device({ speakerShape: 'bar', yaw: 90 }), speaker).object)[0]!
     expect(bar.geometry).toBeInstanceOf(BoxGeometry)
     const barP = (bar.geometry as BoxGeometry).parameters
     expect([barP.width, barP.height, barP.depth]).toEqual([0.55, 0.08, 0.07])
     expect(bar.rotation.z).toBeCloseTo(Math.PI / 2)
 
-    // bloc-réveil : petit rectangle, yaw appliqué (face avant)
+    // clock block: small rectangle, yaw applied (front face)
     const block = meshes(marker(device({ speakerShape: 'block', yaw: 90 }), speaker).object)[0]!
     expect(block.geometry).toBeInstanceOf(BoxGeometry)
     const blockP = (block.geometry as BoxGeometry).parameters
@@ -1052,7 +1052,7 @@ describe('marqueurs 3D', () => {
     expect(block.rotation.z).toBeCloseTo(Math.PI / 2)
   })
 
-  it("une mangeoire ou une fontaine est une tour un peu plus haute que large, pas une boule", () => {
+  it("a feeder or a fountain is a tower a little taller than wide, not a ball", () => {
     for (const kind of ['pet_feeder', 'pet_fountain'] as const) {
       const desc = {
         id: `p:${kind}`, pluginId: 'p', externalId: kind, kind, name: kind, capabilities: [], meta: {},
@@ -1061,15 +1061,15 @@ describe('marqueurs 3D', () => {
       expect(box.geometry).toBeInstanceOf(BoxGeometry)
       const p = (box.geometry as BoxGeometry).parameters
       expect([p.width, p.height, p.depth]).toEqual([0.12, 0.12, 0.2])
-      expect(p.depth).toBeGreaterThan(p.width)            // plus haute que large (Z-up)
-      expect(box.position.z).toBeCloseTo(0.1)             // posée au sol, pas à moitié enterrée
+      expect(p.depth).toBeGreaterThan(p.width)            // taller than wide (Z-up)
+      expect(box.position.z).toBeCloseTo(0.1)             // standing on the floor, not half buried
     }
   })
 })
 
-describe('tap sur un mur', () => {
-  // Le rayon traversait les murs : un tap sur la cloison de la chambre1 tombait sur le sol de la
-  // chambre2, derrière elle. Étage : chambre1 x∈[0 ; 4,9], cloison, chambre2 x∈[5,1 ; 10].
+describe('tap on a wall', () => {
+  // The ray went through walls: a tap on chambre1's partition landed on the floor of
+  // chambre2, behind it. Upper floor: chambre1 x∈[0; 4.9], partition, chambre2 x∈[5.1; 10].
   const scene = new HouseScene(document.createElement('canvas'), { headless: true })
   scene.load(parseHouse(demo))
   scene.resize(600, 600)
@@ -1081,40 +1081,40 @@ describe('tap sur un mur', () => {
     scene.scene.updateMatrixWorld(true)
   }
 
-  it('la face vue d’une cloison donne la pièce de devant, pas celle de derrière', () => {
+  it('the visible face of a partition gives the room in front, not the one behind', () => {
     aim([2, 2.5, 4.8], [5, 2.5, 4])
     expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'room', roomId: 'chambre1' })
     aim([8, 2.5, 4.8], [5, 2.5, 4])
     expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'room', roomId: 'chambre2' })
   })
 
-  it('une façade vue du jardin donne la pièce qu’elle ferme', () => {
-    aim([1, -6, 4.3], [1, 3, 4.1])            // x = 1 : à côté de la fenêtre de la chambre1
+  it('a facade seen from the garden gives the room it closes', () => {
+    aim([1, -6, 4.3], [1, 3, 4.1])            // x = 1: next to chambre1's window
     expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'room', roomId: 'chambre1' })
   })
 })
 
-describe('tap sur le toit', () => {
-  // Le toit est déclaré comme un NIVEAU (il porte panneaux et caméra) mais n'a ni pièce ni sol :
-  // sans lui, le rayon traversait jusqu'à la pièce cachée dessous et le toit disparaissait.
+describe('tap on the roof', () => {
+  // The roof is declared as a LEVEL (it carries panels and a camera) but has neither room nor floor:
+  // without it, the ray went through to the hidden room below and the roof disappeared.
   const scene = new HouseScene(document.createElement('canvas'), { headless: true })
   scene.load(parseHouse(demo))
   scene.resize(600, 600)
-  // au-dessus de la chambre1 (2,5 ; 2,5), regard presque vertical
+  // above chambre1 (2.5; 2.5), almost vertical gaze
   const lookDown = () => {
     scene.camera.position.set(2.5, 40, -2.4)
     scene.camera.lookAt(2.5, 5, -2.5)
     scene.camera.updateMatrixWorld(true)
-    scene.scene.updateMatrixWorld(true)   // sans rendu (headless), les matrices monde ne sont pas à jour
+    scene.scene.updateMatrixWorld(true)   // without a render (headless), the world matrices are not up to date
   }
 
-  it('emmène au niveau que le toit porte', () => {
+  it('leads to the level the roof carries', () => {
     lookDown()
     scene.focusLevel(null)
     expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'level', levelId: 'toit' })
   })
 
-  it('laisse toucher la pièce quand le toit est masqué', () => {
+  it('lets the room be touched when the roof is hidden', () => {
     lookDown()
     scene.focusLevel('etage')
     expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'room', roomId: 'chambre1' })
@@ -1122,12 +1122,12 @@ describe('tap sur le toit', () => {
 })
 
 /**
- * Une porte de garage LIÉE à son ouverture : c'est l'appareil qui porte le panneau, à ses cotes et à
- * ses couleurs. Le bâti cesse d'en dessiner un — sinon la porte remontée laisse un vantail fixe
- * derrière elle.
+ * A garage door LINKED to its opening: it is the device that carries the panel, at its dimensions and in
+ * its colors. The structure stops drawing one — otherwise the raised door leaves a fixed leaf
+ * behind it.
  */
-describe('ouverture habillée par un ouvrant', () => {
-  /** La maison de démo, dont la porte de la terrasse devient un garage que le volet de la cuisine ferme. */
+describe('opening dressed by a cover', () => {
+  /** The demo house, whose terrace door becomes a garage that the kitchen shutter closes. */
   const garaged = () => {
     const doc = JSON.parse(JSON.stringify(demo)) as typeof demo
     const cuisine = doc.rooms.find((r) => r.id === 'cuisine')!
@@ -1147,54 +1147,54 @@ describe('ouverture habillée par un ouvrant', () => {
     capabilities: ['open_close'], meta: { cover: { deviceClass: 'garage' } },
   } as DeviceDescriptor
 
-  it("laisse son panneau à l'appareil, même quand le descripteur arrive après la maison", () => {
+  it("leaves its panel to the device, even when the descriptor arrives after the house", () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(garaged())
-    // le KIND vient du descripteur : tant qu'il manque, le bâti dessine son vantail comme avant
+    // the KIND comes from the descriptor: as long as it is missing, the structure draws its leaf as before
     const before = leafTriangles(scene)
     expect(before).toBeGreaterThan(0)
     scene.setDescriptors({ 'mock:cover-kitchen': shutter })
     expect(leafTriangles(scene)).toBeLessThan(before)
-    // et le volet, lui, est bien là : c'est lui qu'on voit maintenant dans la baie
+    // and the shutter, for its part, is indeed there: it is what we now see in the opening
     expect(meshesOf(scene.markers.get('cover.cuisine')!.object).length).toBeGreaterThan(0)
   })
 })
 
 /**
- * Un ouvrant lié à une ouverture n'occupe pas un point : il HABILLE une baie. Son tablier y était
- * déjà dessiné, mais sa pilule restait sur la `position` du JSON — posée une fois par l'auto-placement,
- * puis figée pendant qu'on affinait la baie au doigt.
+ * A cover linked to an opening does not occupy a point: it DRESSES an opening. Its curtain was
+ * already drawn there, but its pill stayed on the JSON's `position` — set once by the auto-placement,
+ * then frozen while the opening was refined by finger.
  */
-describe('ouvrant lié à une ouverture', () => {
-  it('épouse le rectangle de sa baie, pilule comprise', () => {
+describe('cover linked to an opening', () => {
+  it('fits its opening\'s rectangle, pill included', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(parseHouse(demo))
     const marker = scene.markers.get('cover.baie')!
-    // la baie du salon : mur y = 0 à partir de x = 3,2 ; à 1,5 m du coin, large de 2,4 → centre 5,9
+    // the living room opening: wall y = 0 from x = 3.2; 1.5 m from the corner, 2.4 wide → center 5.9
     expect(marker.object.position.x).toBeCloseTo(5.9)
-    // la `position` du JSON, elle, est restée à 4,2 : 1,7 m à côté de ce qui est dessiné
+    // the JSON's `position`, for its part, stayed at 4.2: 1.7 m away from what is drawn
     const written = demo.devices.find((d) => d.id === 'cover.baie')!.position as [number, number, number]
     expect(written[0]).toBeCloseTo(4.2)
-    // et en hauteur : le milieu de la baie (allège 0,2 + 2,15 / 2), non le 1,3 du fichier
+    // and in height: the middle of the opening (sill 0.2 + 2.15 / 2), not the file's 1.3
     expect(marker.object.position.z).toBeCloseTo(0.2 + 2.15 / 2)
-    // le tablier, lui, n'a pas bougé d'un pouce : il était déjà sur la baie
+    // the curtain, for its part, has not moved an inch: it was already on the opening
     const slat = meshesOf(marker.object)[0]!
     expect(marker.object.position.x + slat.position.x).toBeCloseTo(5.9)
   })
 })
 
 /**
- * Une voiture n'a pas de place écrite dans la maison : c'est son GPS qui la pose, corrigé du
- * décalage que l'utilisateur a mesuré à l'œil, et orientée par ce qu'on sait d'elle.
+ * A car has no place written in the house: it is its GPS that places it, corrected by the
+ * offset the user measured by eye, and oriented by what is known about it.
  */
-describe('véhicule placé par son GPS', () => {
+describe('vehicle placed by its GPS', () => {
   const VEHICLE = 'mock:vehicle-r5'
   const descriptor = {
     id: VEHICLE, pluginId: 'mock', externalId: 'r5', kind: 'vehicle', name: 'R5',
     capabilities: ['soc', 'range', 'location'], meta: {},
   } as DeviceDescriptor
 
-  /** La maison de démo, mais la R5 n'y est plus PLACÉE : son GPS fait foi. */
+  /** The demo house, but the R5 is no longer PLACED there: its GPS is authoritative. */
   function unplaced(gpsOffset?: [number, number], yawOffset?: number) {
     const doc = JSON.parse(JSON.stringify(demo)) as typeof demo
     const car = doc.devices.find((d) => d.deviceId === VEHICLE) as Record<string, unknown>
@@ -1204,7 +1204,7 @@ describe('véhicule placé par son GPS', () => {
     return parseHouse(doc)
   }
 
-  /** L'état du véhicule, posé au point LOCAL demandé (le GPS est calculé à l'envers). */
+  /** The vehicle's state, set at the requested LOCAL point (the GPS is computed in reverse). */
   const stateAt = (house: ReturnType<typeof parseHouse>, xy: [number, number], headingDeg?: number): DeviceState => {
     const g = localToGeo(house.origin, [xy[0], xy[1], 0])
     return {
@@ -1213,7 +1213,7 @@ describe('véhicule placé par son GPS', () => {
     } as DeviceState
   }
 
-  /** Le corps de la voiture tourne dans son propre groupe : c'est LUI qui porte l'orientation. */
+  /** The car body turns in its own group: it is THIS group that carries the orientation. */
   const bodyYaw = (scene: HouseScene): number => {
     let body: Mesh | null = null
     scene.markers.get('vehicle.r5')!.object.traverse((x) => { if (!body && x instanceof Mesh) body = x as Mesh })
@@ -1227,7 +1227,7 @@ describe('véhicule placé par son GPS', () => {
     return scene
   }
 
-  it('se pose à son relevé, décalé de la correction du JSON', () => {
+  it('sits at its reading, offset by the JSON correction', () => {
     const plain = unplaced()
     const scene = sceneWith(plain)
     scene.updateStates({ [VEHICLE]: stateAt(plain, [-3.5, -6]) })
@@ -1242,35 +1242,35 @@ describe('véhicule placé par son GPS', () => {
     expect(moved.object.position.y).toBeCloseTo(-8, 2)
   })
 
-  it('suit le cap du fabricant quand il le donne, ramené dans le repère de la maison', () => {
-    const house = unplaced()                       // demo : origin.heading = 15
+  it('follows the vendor\'s heading when it gives one, brought into the house reference frame', () => {
+    const house = unplaced()                       // demo: origin.heading = 15
     const scene = sceneWith(house)
     scene.updateStates({ [VEHICLE]: stateAt(house, [-3.5, -6], 90) })
     expect(bodyYaw(scene)).toBeCloseTo(yawToRad(15 - 90), 4)
   })
 
-  it('sans cap, prend l’axe de la pièce qui l’entoure — le garage range la voiture dans son sens', () => {
+  it('without a heading, takes the axis of the surrounding room — the garage parks the car along its length', () => {
     const house = unplaced()
     const scene = sceneWith(house)
-    // (6 ; 2) tombe dans le salon (rdc, allongé selon x) ET dans la chambre 2 (étage) : le bas gagne
+    // (6; 2) falls in the living room (ground floor, elongated along x) AND in chambre 2 (upper floor): the lower one wins
     scene.updateStates({ [VEHICLE]: stateAt(house, [6, 2]) })
     expect(Math.abs(bodyYaw(scene))).toBeCloseTo(Math.PI / 2, 4)
-    // dehors, rien à quoi s'aligner : le marqueur garde son défaut
+    // outside, nothing to align with: the marker keeps its default
     scene.updateStates({ [VEHICLE]: stateAt(house, [-3.5, -6]) })
     expect(bodyYaw(scene)).toBe(0)
   })
 
   /**
-   * Ni un cap mesuré ni l'axe d'un garage ne disent de quel côté la voiture s'est garée : la
-   * correction du JSON s'AJOUTE au cap déduit, elle ne le remplace pas.
+   * Neither a measured heading nor a garage's axis says which way round the car was parked: the
+   * JSON correction is ADDED to the derived heading, it does not replace it.
    */
-  it('ajoute la correction du JSON au cap déduit, quelle qu en soit la source', () => {
+  it('adds the JSON correction to the derived heading, whatever its source', () => {
     const plain = unplaced()
     const turned = unplaced(undefined, 30)
     const base = sceneWith(plain)
     const corrected = sceneWith(turned)
-    for (const xy of [[-3.5, -6], [6, 2]] as [number, number][]) {                    // dehors (rien) puis dans le salon (axe)
-      for (const heading of [undefined, 90]) {                           // sans cap, puis avec le cap du fabricant
+    for (const xy of [[-3.5, -6], [6, 2]] as [number, number][]) {                    // outside (nothing) then in the living room (axis)
+      for (const heading of [undefined, 90]) {                           // without a heading, then with the vendor's heading
         base.updateStates({ [VEHICLE]: stateAt(plain, xy, heading) })
         corrected.updateStates({ [VEHICLE]: stateAt(turned, xy, heading) })
         expect(bodyYaw(corrected) - bodyYaw(base)).toBeCloseTo(yawToRad(30), 4)
@@ -1280,18 +1280,18 @@ describe('véhicule placé par son GPS', () => {
 })
 
 /**
- * Le relevé d'un véhicule est bon à quelques mètres près : assez pour dire « il est rentré », pas
- * pour le poser dans son garage. Une PLACE de stationnement le range exactement, quand il est au
- * repos à côté d'elle — et lui donne son sens, que ni son GPS ni un garage ne disent.
+ * A vehicle's reading is good to within a few meters: enough to say "it is home", not
+ * to place it in its garage. A parking SPACE parks it exactly, when it is at
+ * rest next to it — and gives it its direction, which neither its GPS nor a garage says.
  */
-describe('places de stationnement', () => {
+describe('parking spaces', () => {
   const VEHICLE = 'mock:vehicle-r5'
   const descriptor = {
     id: VEHICLE, pluginId: 'mock', externalId: 'r5', kind: 'vehicle', name: 'R5',
     capabilities: ['soc', 'range', 'location'], meta: {},
   } as DeviceDescriptor
 
-  /** La maison de démo, R5 dé-placée (son GPS fait foi), avec les places données. */
+  /** The demo house, R5 unplaced (its GPS is authoritative), with the given spaces. */
   function withParkings(parkings: Record<string, unknown>[]) {
     const doc = JSON.parse(JSON.stringify(demo)) as typeof demo
     const car = doc.devices.find((d) => d.deviceId === VEHICLE) as Record<string, unknown>
@@ -1323,27 +1323,27 @@ describe('places de stationnement', () => {
 
   const BAY = { id: 'park.garage', accepts: 'vehicle', center: [-3.5, -6], size: [2.5, 5], yaw: 40 }
 
-  it('range la voiture au repos sur la place proche, et lui donne le cap de la place', () => {
+  it('parks the car at rest on the nearby space, and gives it the space\'s heading', () => {
     const house = withParkings([BAY])
     const scene = sceneWith(house)
-    scene.updateStates({ [VEHICLE]: stateAt(house, [-2, -7]) })       // à 1,5 m du centre : dans la place
+    scene.updateStates({ [VEHICLE]: stateAt(house, [-2, -7]) })       // 1.5 m from the center: in the space
     const marker = scene.markers.get('vehicle.r5')!
     expect(marker.object.position.x).toBeCloseTo(-3.5, 2)
     expect(marker.object.position.y).toBeCloseTo(-6, 2)
     expect(bodyYaw(scene)).toBeCloseTo(yawToRad(40), 4)
   })
 
-  it('laisse où elle est la voiture trop loin, et celle qui ROULE', () => {
+  it('leaves the car that is too far, and the one that is MOVING, where they are', () => {
     const house = withParkings([BAY])
     const scene = sceneWith(house)
-    scene.updateStates({ [VEHICLE]: stateAt(house, [6, 2]) })         // sur le terrain, loin de la place
+    scene.updateStates({ [VEHICLE]: stateAt(house, [6, 2]) })         // on the terrain, far from the space
     expect(scene.markers.get('vehicle.r5')!.object.position.x).toBeCloseTo(6, 2)
-    // au même point qu'au test précédent, mais en mouvement : le relevé reprend la main
+    // at the same point as in the previous test, but moving: the reading takes over again
     scene.updateStates({ [VEHICLE]: stateAt(house, [-2, -7], { speedKmh: 30, gear: 'D' }) })
     expect(scene.markers.get('vehicle.r5')!.object.position.x).toBeCloseTo(-2, 2)
   })
 
-  it('dessine le marquage au sol, en édition comme hors édition', () => {
+  it('draws the ground marking, in edit mode as outside it', () => {
     const scene = sceneWith(withParkings([BAY]))
     const find = (): Object3D | undefined => {
       let found: Object3D | undefined
@@ -1356,10 +1356,10 @@ describe('places de stationnement', () => {
   })
 
   /**
-   * La place ne suit pas le geste sans que rien ne bouge d'autre : `updateParkings` est le chemin
-   * court (pas de `load`, donc pas de caméra recentrée) et il refait la place de la voiture.
+   * The space does not follow the gesture without anything else moving: `updateParkings` is the short
+   * path (no `load`, hence no recentered camera) and it redoes the car's placement.
    */
-  it('la voiture suit la place qu on déplace', () => {
+  it('the car follows the space being moved', () => {
     const house = withParkings([BAY])
     const scene = sceneWith(house)
     scene.updateStates({ [VEHICLE]: stateAt(house, [-2, -7]) })
@@ -1370,21 +1370,21 @@ describe('places de stationnement', () => {
   })
 
   /**
-   * Une place sous le 1er étage : vue « etage », la voiture ne perce ni en pilule ni au tap — le
-   * plancher de la chambre gagne contre le mesh du garage.
+   * A space under the upper floor: in the "etage" view, the car pokes through neither as a pill nor on tap — the
+   * bedroom floor wins against the garage mesh.
    */
-  it('sous un étage focalisé, la voiture garée ne se voit ni ne se touche', () => {
+  it('under a focused upper floor, the parked car can be neither seen nor touched', () => {
     const bay = { id: 'park.sous-ch1', accepts: 'vehicle', center: [2, 2], size: [2.5, 5], yaw: 0, levelId: 'rdc' }
     const house = withParkings([bay])
     const scene = sceneWith(house)
     scene.resize(600, 600)
     scene.updateStates({ [VEHICLE]: stateAt(house, [2, 2]) })
     const marker = scene.markers.get('vehicle.r5')!
-    // parentée au niveau de la place, pas au jardin
+    // parented to the space's level, not to the garden
     expect(marker.object.parent?.name).toBe('markers')
     scene.focusLevel('etage')
     expect(marker.visibleInScene).toBe(false)
-    // regard vertical sur la chambre 1 (2,5 ; 2,5) — le sol d'étage est devant la voiture
+    // vertical gaze on chambre 1 (2.5; 2.5) — the upper floor's floor is in front of the car
     scene.camera.position.set(2.5, 40, -2.4)
     scene.camera.lookAt(2.5, 5, -2.5)
     scene.camera.updateMatrixWorld(true)
@@ -1394,20 +1394,20 @@ describe('places de stationnement', () => {
 })
 
 /**
- * Une tondeuse Husqvarna publie sa position en GPS, pas dans le repère de la maison : elle se pose
- * comme une voiture (projetée sur le terrain), mais son marqueur SUIT ensuite chaque relevé sans
- * être reconstruit — en tonte, il en arrive toutes les quelques secondes.
+ * A Husqvarna mower publishes its position as GPS, not in the house reference frame: it is placed
+ * like a car (projected onto the terrain), but its marker then FOLLOWS each reading without
+ * being rebuilt — while mowing, one arrives every few seconds.
  */
 /**
- * Les incidents du journal d'un robot se posent sur le terrain quand le panneau les montre : une
- * épingle par point DANS le terrain, rien pour un point au large, et tout s'en va avec `null`.
+ * The incidents of a robot's log are laid on the terrain when the panel shows them: one
+ * pin per point INSIDE the terrain, nothing for a point far out, and everything goes away with `null`.
  */
-describe('incidents du journal posés sur le terrain', () => {
+describe('log incidents laid on the terrain', () => {
   const MOWER = 'automower:c7233734'
   const house = parseHouse(demo)
   const geo = (xy: [number, number]) => { const g = localToGeo(house.origin, [xy[0], xy[1], 0]); return { lat: g.lat, lon: g.lon } }
 
-  it('une épingle par point du terrain, pas pour un point au large ; `null` retire tout ; le cadrage ne plante pas', () => {
+  it('one pin per terrain point, none for a point far out; `null` removes everything; framing does not crash', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(house)
     const pins = () => (scene as unknown as { journal: { group: { children: unknown[] } } | null }).journal?.group.children.length ?? 0
@@ -1417,7 +1417,7 @@ describe('incidents du journal posés sur le terrain', () => {
       { at: 3, ...geo([900, 900]), severity: 'warning' },
     ])
     expect(pins()).toBe(2)
-    // l'épingle active grossit et montre son étiquette ; les autres non ; `null` éteint tout
+    // the active pin grows and shows its label; the others do not; `null` turns everything off
     const journal = () => (scene as unknown as { journal: { points: { at: number; head: { scale: { x: number } }; label: { visible: boolean } | null }[] } }).journal
     scene.focusJournalPoint(2, false)
     expect(journal().points.find((p) => p.at === 2)!.head.scale.x).toBeCloseTo(1.6)
@@ -1427,7 +1427,7 @@ describe('incidents du journal posés sur le terrain', () => {
     scene.setActiveJournalPoint(null)
     expect(journal().points.find((p) => p.at === 2)!.label?.visible).toBe(false)
     scene.focusJournalPoint(999, false)
-    // le rendu 2D pose les étiquettes dans le DOM : refermer le journal doit les en retirer
+    // the 2D renderer puts the labels in the DOM: closing the log must remove them from it
     const el = journal().points[0]!.label as unknown as { element: HTMLElement } | null
     if (el) document.body.appendChild(el.element)
     scene.setJournalPoints(null, [])
@@ -1437,7 +1437,7 @@ describe('incidents du journal posés sur le terrain', () => {
   })
 })
 
-describe('tondeuse placée par son GPS', () => {
+describe('mower placed by its GPS', () => {
   const MOWER = 'automower:c7233734'
   const descriptor = {
     id: MOWER, pluginId: 'automower', externalId: 'c7233734', kind: 'mower', name: 'Tondeuse',
@@ -1449,7 +1449,7 @@ describe('tondeuse placée par son GPS', () => {
     return { kind: 'mower', updatedAt: 1, available: true, activity: 'mowing', battery: 80, location: { lat: g.lat, lon: g.lon, at: 1 } } as DeviceState
   }
 
-  it('non déclarée dans la maison, elle apparaît à son relevé ; un relevé suivant ne la reconstruit pas ; hors terrain, elle disparaît', () => {
+  it('not declared in the house, it appears at its reading; a following reading does not rebuild it; off the terrain, it disappears', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(house)
     scene.setDescriptors({ [MOWER]: descriptor })
@@ -1459,17 +1459,17 @@ describe('tondeuse placée par son GPS', () => {
     expect(marker).toBeDefined()
     expect(marker.object.position.x).toBeCloseTo(12, 2)
     expect(marker.object.position.y).toBeCloseTo(16, 2)
-    // un pas de plus dans le jardin : même marqueur, il suivra par animation
+    // one more step in the garden: same marker, it will follow by animation
     scene.updateStates({ [MOWER]: stateAt([14, 17]) })
     expect(scene.markers.get(MOWER)).toBe(marker)
-    // emportée hors du terrain (au bureau…) : plus rien à dessiner
+    // carried off the terrain (to the office…): nothing left to draw
     scene.updateStates({ [MOWER]: stateAt([900, 900]) })
     expect(scene.markers.get(MOWER)).toBeUndefined()
     scene.dispose()
   })
 })
 
-describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
+describe('a lamp only lights its level (a single pass)', () => {
   const compile = (mat: Material) => {
     const lit = mat.type !== 'MeshBasicMaterial'
     const shader = { uniforms: {} as Record<string, { value: unknown }>, vertexShader: '', fragmentShader: lit ? '#include <lights_pars_begin>\n#include <lights_fragment_begin>' : '#include <common>' }
@@ -1478,29 +1478,29 @@ describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
   }
 
   /**
-   * La scène se rendait en passes — une par niveau allumé — pour qu'une lampe du salon n'éclaire pas
-   * le sas d'en dessous à travers la dalle. Mesuré le 2026-09-24 : 14 ms de CPU par image perdus à
-   * réévaluer les programmes. Le masque est désormais dans la boucle des lumières de CHAQUE matière
-   * éclairée, par le prototype : une matière créée à la volée par un marqueur le reçoit aussi.
+   * The scene rendered in passes — one per lit level — so that a living room lamp would not light
+   * the airlock below through the slab. Measured on 2026-09-24: 14 ms of CPU per frame lost
+   * re-evaluating programs. The mask now lives in the light loop of EVERY lit material,
+   * through the prototype: a material created on the fly by a marker receives it too.
    */
-  it('toute matière éclairée reçoit le masque de hauteur, pas une matière non éclairée', () => {
+  it('every lit material receives the height mask, not an unlit material', () => {
     const lit = compile(new MeshStandardMaterial())
     expect(lit.fragmentShader).toContain('kasbahLampReaches( pointLight.position, geometryPosition )')
-    expect(lit.fragmentShader).toContain('UNROLLED_LOOP_INDEX >= NUM_POINT_LIGHT_SHADOWS')   // le jardin passe
-    expect(lit.fragmentShader).toContain('if ( directLight.visible ) RE_Direct')              // masquée : rien à calculer
-    expect(lit.uniforms.kasbahLevelY).toBe(levelLightUniforms.kasbahLevelY)                   // partagé, pas copié
+    expect(lit.fragmentShader).toContain('UNROLLED_LOOP_INDEX >= NUM_POINT_LIGHT_SHADOWS')   // the garden passes
+    expect(lit.fragmentShader).toContain('if ( directLight.visible ) RE_Direct')              // masked: nothing to compute
+    expect(lit.uniforms.kasbahLevelY).toBe(levelLightUniforms.kasbahLevelY)                   // shared, not copied
     expect(lit.uniforms.kasbahLamps!.value).toBe(1)
     const basic = compile(new MeshBasicMaterial())
     expect(basic.fragmentShader).not.toContain('kasbah')
   })
 
-  it('le terrain, les zones, le toit et l’eau ne reçoivent aucune lampe d’intérieur ; les murs, si', () => {
+  it('the terrain, the zones, the roof and the water receive no indoor lamp; the walls do', () => {
     const mats = createMaterials(defaultSceneTheme(), defaultLook())
     for (const m of [mats.terrain, mats.roof, mats.roofFlat, ...Object.values(mats.zones)]) expect(compile(m).uniforms.kasbahLamps!.value).toBe(0)
     for (const m of [mats.wall, mats.wallInterior, mats.floor, mats.device]) expect(compile(m).uniforms.kasbahLamps!.value).toBe(1)
   })
 
-  it('les tranches sont les élévations des niveaux, sans la plus basse', () => {
+  it('the slices are the levels\' elevations, without the lowest', () => {
     setLevelHeights([2.85, 0, 5.45])
     expect([...levelLightUniforms.kasbahLevelY.value.slice(0, 2)].map((v) => +v.toFixed(2))).toEqual([2.85, 5.45])
     expect(levelLightUniforms.kasbahLevelCount.value).toBe(2)
@@ -1509,10 +1509,10 @@ describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
   })
 
   /**
-   * Masquer l'étage retire son plancher de la carte d'ombre — à condition de la refaire. Sans
-   * relevé, l'étage caché continuait d'assombrir le rez-de-chaussée qu'on explorait.
+   * Hiding the upper floor removes its floor from the shadow map — provided the map is redone. Without
+   * a recapture, the hidden upper floor kept darkening the ground floor being explored.
    */
-  it('focaliser un niveau redemande un relevé des ombres', () => {
+  it('focusing a level requests a shadow recapture', () => {
     let t = 1000
     const scene = new HouseScene(document.createElement('canvas'), { headless: true, now: () => t })
     const house = parseHouse(demo)
@@ -1522,8 +1522,8 @@ describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
     expect(dirty()).toBeLessThan(t)
     scene.focusLevel(house.levels[0]!.id)
     expect(dirty()).toBeGreaterThan(t)
-    // …et ce relevé survit à une attente sans image (voile de chargement, shaders en compilation) :
-    // la fenêtre en temps expire, les prochaines images dessinées le refont quand même
+    // …and that recapture survives a wait without a frame (loading veil, shaders compiling):
+    // the time window expires, the next frames drawn redo it anyway
     t += 60_000
     expect(dirty()).toBeLessThan(t)
     expect((scene as unknown as { shadowFramesPending: number }).shadowFramesPending).toBeGreaterThan(0)
@@ -1531,46 +1531,46 @@ describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
   })
 
   /**
-   * Three compile un programme par NOMBRE de lumières. Masquer un étage retirait ses lampes : la
-   * première visite du rez-de-chaussée recompilait toutes les matières, 2,2 s d'image figée sur
-   * l'iGPU. Des lampes éteintes tiennent la place des lampes masquées.
+   * Three compiles one program per NUMBER of lights. Hiding an upper floor removed its lamps: the
+   * first visit to the ground floor recompiled every material, 2.2 s of frozen frame on
+   * the iGPU. Lamps that are off stand in for the hidden lamps.
    */
-  it('un étage masqué s’envole puis disparaît, et redescend se poser', () => {
+  it('a hidden upper floor flies off then disappears, and comes back down to land', () => {
     let t = 0
     const scene = new HouseScene(document.createElement('canvas'), { headless: true, now: () => t, requestFrame: () => 0, cancelFrame: () => {} })
     const house = parseHouse(demo)
     scene.load(house)
-    // un renderer « présent » : c'est lui qui autorise l'animation ; la boucle, elle, ne dessine jamais
+    // a "present" renderer: it is what allows the animation; the loop, for its part, never draws
     ;(scene as unknown as { renderer: object }).renderer = {}
     const lifts = (scene as unknown as { lifts: Map<string, { tween: { step(now: number): boolean } | null }> }).lifts
     const [low, high] = [...house.levels].sort((a, b) => a.elevation - b.elevation)
     const group = scene.nodesOf(high!.id)!.group
     scene.focusLevel(low!.id)
-    expect(group.visible).toBe(true)                                    // il part, il n'a pas disparu
+    expect(group.visible).toBe(true)                                    // it is leaving, it has not disappeared
     lifts.get(`level:${high!.id}`)!.tween!.step(t = 200)
     expect(group.position.z).toBeGreaterThan(high!.elevation)
     expect(group.position.z).toBeLessThan(high!.elevation + 8)
-    // il s'efface en montant, au-dessus du haut du rez-de-chaussée — qui, lui, reste entier
+    // it fades out while rising, above the top of the ground floor — which, for its part, stays whole
     const fade = levelFadeUniforms.kasbahFadeVisibility.value
     expect(fade).toBeGreaterThan(0)
     expect(fade).toBeLessThan(1)
-    // juste AU-DESSUS du dessus de ses murs : posé pile dessus, ces faces scintillaient
+    // just ABOVE the top of its walls: placed right on it, those faces flickered
     expect(levelFadeUniforms.kasbahFadeY.value).toBeCloseTo(low!.elevation + scene.nodesOf(low!.id)!.height + 0.03, 6)
     for (const key of lifts.keys()) lifts.get(key)!.tween?.step(t = 500)
     expect(group.visible).toBe(false)
-    expect(levelFadeUniforms.kasbahFadeVisibility.value).toBe(1)        // plus rien en vol : le fondu est levé
-    scene.focusLevel(low!.id)                                           // même focus : rien ne repart
+    expect(levelFadeUniforms.kasbahFadeVisibility.value).toBe(1)        // nothing in flight anymore: the fade is lifted
+    scene.focusLevel(low!.id)                                           // same focus: nothing starts again
     expect(lifts.get(`level:${high!.id}`)!.tween).toBeNull()
     scene.focusLevel(null)
     expect(group.visible).toBe(true)
     for (const key of lifts.keys()) lifts.get(key)!.tween?.step(t = 1100)
-    expect(group.position.z).toBeCloseTo(high!.elevation, 6)            // reposé exactement à sa place
+    expect(group.position.z).toBeCloseTo(high!.elevation, 6)            // set back down exactly in its place
     expect(group.visible).toBe(true)
     ;(scene as unknown as { renderer: null }).renderer = null
     scene.dispose()
   })
 
-  it('les pilules d’un niveau apparaissent et s’effacent en fondu, au lieu de surgir', () => {
+  it('a level\'s pills appear and fade out smoothly, instead of popping up', () => {
     let t = 0
     const scene = new HouseScene(document.createElement('canvas'), { headless: true, now: () => t, requestFrame: () => 0, cancelFrame: () => {} })
     const house = parseHouse(demo)
@@ -1583,18 +1583,18 @@ describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
     const lows = on(low!.id), highs = on(high!.id)
     expect(lows.length).toBeGreaterThan(0)
     expect(highs.length).toBeGreaterThan(0)
-    scene.focusLevel(low!.id)                                           // vue d'ensemble → rez-de-chaussée
+    scene.focusLevel(low!.id)                                           // overview → ground floor
     expect(pill(lows[0]!).visible).toBe(true)
-    expect(pill(lows[0]!).element.style.opacity).toBe('0.00')           // elles partent de rien…
+    expect(pill(lows[0]!).element.style.opacity).toBe('0.00')           // they start from nothing…
     tween()!.step(t = 100)
-    expect(pill(lows[0]!).element.style.opacity).toBe('0.00')           // …attendent que l'étage se dégage…
+    expect(pill(lows[0]!).element.style.opacity).toBe('0.00')           // …wait for the upper floor to clear…
     tween()!.step(t = 450)
     expect(Number(pill(lows[0]!).element.style.opacity)).toBeGreaterThan(0.2)
     tween()!.step(t = 800)
-    expect(pill(lows[0]!).element.style.opacity).toBe('')               // …et finissent pleines, sans style
-    scene.focusLevel(high!.id)                                          // rez-de-chaussée → étage
+    expect(pill(lows[0]!).element.style.opacity).toBe('')               // …and end up full, without a style
+    scene.focusLevel(high!.id)                                          // ground floor → upper floor
     tween()!.step(t = 1025)
-    expect(pill(lows[0]!).visible).toBe(true)                           // elle s'estompe, elle n'a pas disparu
+    expect(pill(lows[0]!).visible).toBe(true)                           // it fades, it has not disappeared
     expect(Number(pill(lows[0]!).element.style.opacity)).toBeLessThan(0.8)
     tween()!.step(t = 1250)
     expect(Number(pill(highs[0]!).element.style.opacity)).toBeGreaterThan(0.2)
@@ -1605,7 +1605,7 @@ describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
     scene.dispose()
   })
 
-  it('le nombre de lumières ponctuelles ne change pas quand on focalise un niveau', () => {
+  it('the number of point lights does not change when a level is focused', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     const house = parseHouse(demo)
     const descriptors: Record<string, DeviceDescriptor> = {}
@@ -1617,7 +1617,7 @@ describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
     expect(all).toBeGreaterThan(0)
     const lowest = [...house.levels].sort((a, b) => a.elevation - b.elevation)[0]!
     scene.focusLevel(lowest.id)
-    expect((scene as unknown as { lampPadding: { children: unknown[] } }).lampPadding.children.length).toBeGreaterThan(0)   // l'étage masqué avait des lampes
+    expect((scene as unknown as { lampPadding: { children: unknown[] } }).lampPadding.children.length).toBeGreaterThan(0)   // the hidden upper floor had lamps
     expect(lights()).toBe(all)
     scene.focusLevel(null)
     expect(lights()).toBe(all)
@@ -1625,12 +1625,12 @@ describe('une lampe n’éclaire que son niveau (une seule passe)', () => {
   })
 })
 
-describe('préparer la maison avant de la montrer', () => {
+describe('preparing the house before showing it', () => {
   /**
-   * Le voile de chargement suit ces étapes et ne part qu'au `null` final : une préparation qui ne
-   * finirait pas laisserait la maison cachée. Sans renderer (tests), elle s'arrête après les matières.
+   * The loading veil follows these stages and only leaves at the final `null`: a preparation that
+   * did not finish would leave the house hidden. Without a renderer (tests), it stops after the materials.
    */
-  it('publie ses étapes et finit toujours par « prête »', async () => {
+  it('publishes its stages and always ends with "ready"', async () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     const seen: (string | null)[] = []
     scene.on('prepare', (stage) => seen.push(stage))
@@ -1643,11 +1643,11 @@ describe('préparer la maison avant de la montrer', () => {
   })
 
   /**
-   * Un style jamais vu (ou quitté : three jette les programmes que plus rien n'utilise) demande de
-   * nouveaux shaders. Compilés par la première image, ils figeaient TOUT le fil principal — 2,5 à
-   * 5,5 s sur l'iGPU pour « réaliste », sélection du style comprise, qui ne se peignait qu'après.
+   * A style never seen (or left: three discards the programs nothing uses anymore) requires
+   * new shaders. Compiled by the first frame, they froze the WHOLE main thread — 2.5 to
+   * 5.5 s on the iGPU for "realistic", style selection included, which only painted afterward.
    */
-  it('un changement de style compile ses shaders sans dessiner, puis redessine', async () => {
+  it('a style change compiles its shaders without drawing, then redraws', async () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true, requestFrame: () => 0, cancelFrame: () => {} })
     scene.load(parseHouse(demo))
     let ready = false
@@ -1658,11 +1658,11 @@ describe('préparer la maison avant de la montrer', () => {
       compile: () => { compiled++ },
       properties: { get: () => ({ currentProgram: { isReady: () => ready } }) },
     }
-    ;(scene as unknown as { applySky(): void }).applySky = () => {}   // le ciel veut un vrai renderer (PMREM)
+    ;(scene as unknown as { applySky(): void }).applySky = () => {}   // the sky wants a real renderer (PMREM)
     const holding = () => (scene as unknown as { compiling: boolean }).compiling
     scene.setAppearance({ style: styleById('realistic') })
     expect(compiled).toBe(1)
-    expect(holding()).toBe(true)                       // l'ancienne image reste, le fil principal est libre
+    expect(holding()).toBe(true)                       // the old frame stays, the main thread is free
     ready = true
     await new Promise((resolve) => setTimeout(resolve, 40))
     expect(holding()).toBe(false)
@@ -1671,7 +1671,7 @@ describe('préparer la maison avant de la montrer', () => {
   })
 })
 
-describe('régler les ouvertures', () => {
+describe('adjusting the openings', () => {
   const house = parseHouse(demo)
   const openingCount = computeHouseGeometry(house).levels.reduce((n, l) => n + l.openings.length, 0)
   const handles = (scene: HouseScene) => {
@@ -1681,10 +1681,10 @@ describe('régler les ouvertures', () => {
   }
 
   /**
-   * Les poignées vivent et meurent avec le mode : hors édition, la scène doit être exactement celle
-   * d'avant, au triangle près.
+   * The handles live and die with the mode: outside edit mode, the scene must be exactly the one
+   * from before, down to the triangle.
    */
-  it('pose une poignée par ouverture et ne laisse rien en sortant', () => {
+  it('lays one handle per opening and leaves nothing behind on exit', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(house)
     const before = countTriangles(scene.scene)
@@ -1700,10 +1700,10 @@ describe('régler les ouvertures', () => {
   })
 
   /**
-   * Poignées, cotes et repère sont des décors de NIVEAU : `DECOR_LAYER` (hors du relevé d'occlusion,
-   * ouverte au lancer de rayon), dans le groupe des MARQUEURS du niveau (masqués avec lui).
+   * Handles, dimensions and origin marker are LEVEL decorations: `DECOR_LAYER` (outside the occlusion capture,
+   * open to the raycaster), in the level's MARKERS group (hidden with it).
    */
-  it('range poignées et cotes dans les décors de leur niveau', () => {
+  it('stores handles and dimensions in their level\'s decorations', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(house)
     scene.setEditingOpenings(true)
@@ -1716,20 +1716,20 @@ describe('régler les ouvertures', () => {
       const mesh = o.children.find((c) => c instanceof Mesh)!
       decors.push({ name: o.name, inMarkers, layer: mesh.layers.mask === 1 << DECOR_LAYER })
     })
-    expect(decors).toHaveLength(openingCount + 2)          // les poignées, le tracé, le repère d'origine
+    expect(decors).toHaveLength(openingCount + 2)          // the handles, the outline, the origin marker
     expect(decors.filter((d) => !d.inMarkers)).toEqual([])
     expect(decors.filter((d) => !d.layer)).toEqual([])
     scene.dispose()
   })
 
   /**
-   * PIÈGE À MÉMORISER. La `Scene` tourne avec `matrixWorldAutoUpdate = false` (une seule mise à jour
-   * par image, `render()`). Un objet neuf garde donc une matrice monde à l'IDENTITÉ jusqu'à la
-   * prochaine image : le lancer de rayon le teste à l'origine du monde, et un tap sur une poignée
-   * traversait jusqu'au sol de la pièce. Onze poignées sur onze étaient périmées, jusqu'à douze
-   * mètres d'écart. Ce qui doit être touchable doit entrer dans le monde avec sa matrice.
+   * PITFALL TO REMEMBER. The `Scene` runs with `matrixWorldAutoUpdate = false` (a single update
+   * per frame, `render()`). A new object therefore keeps a world matrix at IDENTITY until the
+   * next frame: the raycaster tests it at the world origin, and a tap on a handle
+   * went through to the room's floor. Eleven handles out of eleven were stale, up to twelve
+   * meters off. What must be touchable must enter the world with its matrix.
    */
-  it('entre dans le monde avec une matrice juste, sans attendre une image', () => {
+  it('enters the world with a correct matrix, without waiting for a frame', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(house)
     scene.setEditingOpenings(true)
@@ -1738,17 +1738,17 @@ describe('régler les ouvertures', () => {
     expect(groups).toHaveLength(openingCount)
     const posOf = (o: Object3D) => new Vector3().setFromMatrixPosition(o.matrixWorld)
     const asBuilt = groups.map((g) => [posOf(g), ...g.children.map(posOf)])
-    scene.scene.updateMatrixWorld(true)          // ce que la première image aurait fait
+    scene.scene.updateMatrixWorld(true)          // what the first frame would have done
     groups.forEach((g, i) => {
       const after = [posOf(g), ...g.children.map(posOf)]
       after.forEach((p, k) => expect(p.distanceTo(asBuilt[i]![k]!)).toBeLessThan(1e-9))
-      expect(after[0]!.length()).toBeGreaterThan(0.2)   // et ce n'est pas l'origine du monde
+      expect(after[0]!.length()).toBeGreaterThan(0.2)   // and it is not the world origin
     })
     scene.dispose()
   })
 
-  /** Le bout du chemin : un tap sur une poignée est vu comme tel, et pas comme un tap sur le sol. */
-  it('se laisse piquer là où elle est dessinée', () => {
+  /** The end of the road: a tap on a handle is seen as such, and not as a tap on the floor. */
+  it('can be picked where it is drawn', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(house)
     scene.resize(1200, 800)
@@ -1756,9 +1756,9 @@ describe('régler les ouvertures', () => {
     let handle: Object3D | null = null
     scene.scene.traverse((o) => { if (!handle && o.name === 'opening:baie') handle = o })
     const target = new Vector3().setFromMatrixPosition(handle!.matrixWorld)
-    // `focusOpening` pose la caméra, mais en headless il n'y a pas d'`OrbitControls` pour l'ORIENTER
-    // (c'est `controls.update()` qui le fait) : on la fait regarder la poignée nous-mêmes, et le
-    // centre de l'image est alors exactement sur elle.
+    // `focusOpening` sets the camera, but in headless there is no `OrbitControls` to ORIENT it
+    // (it is `controls.update()` that does it): we make it look at the handle ourselves, and the
+    // center of the image is then exactly on it.
     scene.focusOpening('baie', false)
     scene.camera.lookAt(target)
     scene.camera.updateMatrixWorld(true)
@@ -1767,17 +1767,17 @@ describe('régler les ouvertures', () => {
   })
 
   /**
-   * Trois états à distinguer : rien, une ouverture, celle qu'on règle. TOUTES portent un cadre fin —
-   * sans lui, les autres ouvertures devenaient introuvables (retour de l'utilisateur) —, et une seule
-   * porte le cadre ÉPAIS. Ce qui s'éteint est un MATÉRIAU, jamais l'objet : `Object3D.visible` dit
-   * « mon niveau est masqué », et c'est lui qui décide si une poignée est touchable.
+   * Three states to tell apart: nothing, an opening, the one being adjusted. ALL carry a thin frame —
+   * without it, the other openings became impossible to find (user feedback) —, and only one
+   * carries the THICK frame. What turns off is a MATERIAL, never the object: `Object3D.visible` says
+   * "my level is hidden", and it is what decides whether a handle is touchable.
    */
-  it('cerne toutes les ouvertures d’un trait fin, une seule d’un trait épais, et garde les deux touchables', () => {
+  it('rings every opening with a thin line, only one with a thick line, and keeps both touchable', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(house)
     scene.resize(1200, 800)
     scene.setEditingOpenings(true)
-    /** Pour chaque poignée : [cadre fin dessiné ?, cadre épais dessiné ?]. */
+    /** For each handle: [thin frame drawn?, thick frame drawn?]. */
     const rings = () => {
       const drawn: [boolean, boolean][] = []
       scene.scene.traverse((o) => {
@@ -1787,21 +1787,21 @@ describe('régler les ouvertures', () => {
       })
       return drawn
     }
-    expect(rings().filter(([thin]) => thin)).toHaveLength(openingCount)   // toutes cernées, finement
-    expect(rings().filter(([, bold]) => bold)).toHaveLength(0)            // aucune n'est « celle-ci »
+    expect(rings().filter(([thin]) => thin)).toHaveLength(openingCount)   // all ringed, thinly
+    expect(rings().filter(([, bold]) => bold)).toHaveLength(0)            // none is "this one"
     scene.setSelectedOpening('fen-ch1')
     expect(rings().filter(([, bold]) => bold)).toHaveLength(1)
     expect(rings().filter(([thin]) => thin)).toHaveLength(openingCount - 1)
-    // le cadre épais est le SEUL à traverser les murs ; le fin reste soumis à la profondeur, sinon
-    // dix-neuf cadres transparaissent à travers le toit
+    // the thick frame is the ONLY one to go through walls; the thin one stays subject to depth, otherwise
+    // nineteen frames show through the roof
     const matOf = (id: string, child: number) => {
       let found: MeshBasicMaterial | null = null
       scene.scene.traverse((o) => { if (o.name === `opening:${id}`) found = (o.children[child] as Mesh).material as MeshBasicMaterial })
       return found!
     }
-    expect(matOf('baie', 1).depthTest).toBe(true)          // le cadre fin d'une poignée au repos
-    expect(matOf('fen-ch1', 2).depthTest).toBe(false)      // le cadre épais de la sélectionnée
-    // la poignée NON sélectionnée est toujours visible en tant qu'objet (donc toujours piquable)
+    expect(matOf('baie', 1).depthTest).toBe(true)          // the thin frame of a handle at rest
+    expect(matOf('fen-ch1', 2).depthTest).toBe(false)      // the thick frame of the selected one
+    // the NON-selected handle is still visible as an object (hence still pickable)
     let other: Object3D | null = null
     scene.scene.traverse((o) => { if (!other && o.name === 'opening:baie') other = o })
     expect((other! as Object3D).visible).toBe(true)
@@ -1814,10 +1814,10 @@ describe('régler les ouvertures', () => {
   })
 
   /**
-   * Le repère d'origine : le (0, 0, 0) du fichier, ses deux axes et le nord vrai. Il naît et meurt
-   * avec le mode édition, et il est posé à l'origine du REPÈRE — pas au centre du bâti.
+   * The origin marker: the file's (0, 0, 0), its two axes and true north. It is born and dies
+   * with edit mode, and it is placed at the origin of the REFERENCE FRAME — not at the center of the building.
    */
-  it('pose un repère à l’origine du fichier, en mode édition seulement', () => {
+  it('places a marker at the file\'s origin, in edit mode only', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(house)
     const mark = () => {
@@ -1830,10 +1830,10 @@ describe('régler les ouvertures', () => {
     const group = mark()!
     expect(group).not.toBeNull()
     expect(new Vector3().setFromMatrixPosition(group.matrixWorld).length()).toBeCloseTo(0, 6)
-    // deux axes et le nord : trois bras, plus l'anneau
+    // two axes and north: three arms, plus the ring
     const bars = group.children.filter((o) => o instanceof Mesh)
     expect(bars).toHaveLength(4)
-    // le nord suit le cap de +y : à cap 0, il est confondu avec l'axe des y
+    // north follows the heading of +y: at heading 0, it coincides with the y axis
     const letters: string[] = []
     group.traverse((o) => { const el = (o as unknown as { element?: HTMLElement }).element; if (el) letters.push(el.textContent ?? '') })
     expect(letters.sort()).toEqual(['N', 'x', 'y'])
@@ -1843,12 +1843,12 @@ describe('régler les ouvertures', () => {
   })
 
   /**
-   * Le chemin du temps réel : `rooms` porte `openings[]`, donc régler une fenêtre passait par un
-   * `load()` complet — toute la maison reconstruite ET la caméra recentrée, à chaque mouvement de
-   * doigt. Ici : les maillages du seul niveau touché, et les seuls marqueurs qui épousent une
-   * ouverture qui a bougé (un volet taille sa lame sur le rectangle de sa fenêtre).
+   * The real-time path: `rooms` carries `openings[]`, so adjusting a window went through a
+   * full `load()` — the whole house rebuilt AND the camera recentered, at every finger
+   * movement. Here: the meshes of the touched level only, and only the markers that fit an
+   * opening that moved (a shutter cuts its slat to its window's rectangle).
    */
-  it('ne refait que le niveau touché : caméra, marqueurs et poignées survivent', () => {
+  it('only redoes the touched level: camera, markers and handles survive', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(house)
     scene.setEditingOpenings(true)
@@ -1872,7 +1872,7 @@ describe('régler les ouvertures', () => {
     expect(scene.nodesOf(room.levelId)!.group.uuid).not.toBe(was.touched)
     expect(scene.nodesOf(other.id)!.group.uuid).toBe(was.untouched)
     expect(handles(scene)).toBe(openingCount)
-    // seul l'ouvrant de CETTE ouverture est refait ; les autres marqueurs sont les mêmes objets
+    // only the cover of THIS opening is redone; the other markers are the same objects
     const rebuilt = [...scene.markers].filter(([k, m]) => was.markers.get(k) !== m.object.uuid).map(([k]) => k)
     expect(rebuilt).toEqual(bound ? [bound.id] : [])
     expect(scene.markers.size).toBe(was.markers.size)
@@ -1880,8 +1880,8 @@ describe('régler les ouvertures', () => {
   })
 })
 
-describe('natures d’ouverture vitrées et posées au sol', () => {
-  /** La maison de démo, dont la grande fenêtre du salon devient une BAIE et la porte de la terrasse une PORTE VITRÉE. */
+describe('glazed and floor-standing opening kinds', () => {
+  /** The demo house, whose large living room window becomes a BAY WINDOW and the terrace door a GLAZED DOOR. */
   const retyped = () => {
     const raw = JSON.parse(JSON.stringify(demo)) as typeof demo & { rooms: { id: string; openings: { id: string; type: string }[] }[] }
     for (const room of raw.rooms) {
@@ -1895,62 +1895,62 @@ describe('natures d’ouverture vitrées et posées au sol', () => {
   const mats = () => createMaterials(defaultSceneTheme(), defaultLook())
   const rdcOf = (house: ReturnType<typeof parseHouse>) => computeHouseGeometry(house).levels.find((l) => l.levelId === 'rdc')!
 
-  it('vitre une baie et une porte vitrée, jamais une porte pleine ni un passage', () => {
+  it('glazes a bay window and a glazed door, never a solid door nor a passage', () => {
     const before = buildLevel(rdcOf(parseHouse(demo)), mats())
     const after = buildLevel(rdcOf(retyped()), mats())
     const glazed = (nodes: typeof after) => new Set(nodes.panes.map((p) => p.userData.openingId as string))
-    // la baie était déjà une fenêtre : elle garde son vitrage ; la porte de terrasse en gagne un
+    // the bay window was already a window: it keeps its glazing; the terrace door gains one
     expect(glazed(before).has('baie')).toBe(true)
     expect(glazed(before).has('porte-terrasse')).toBe(false)
     expect(glazed(after).has('baie')).toBe(true)
     expect(glazed(after).has('porte-terrasse')).toBe(true)
-    // les portes pleines et les passages n'ont toujours rien de vitré
+    // solid doors and passages still have nothing glazed
     expect(glazed(after).has('porte-entree')).toBe(false)
     expect(glazed(after).has('porte-salon')).toBe(false)
   })
 
   /**
-   * Une porte VITRÉE n'a pas de vantail plein : ce serait cacher ce qui la définit. Son battant est
-   * un cadre autour du verre, donc il pèse sur le maillage des menuiseries, pas sur celui des portes.
+   * A GLAZED door has no solid leaf: that would hide what defines it. Its leaf is
+   * a frame around the glass, so it weighs on the joinery mesh, not on the doors mesh.
    */
-  it('remplace le vantail plein d’une porte vitrée par un cadre de battant', () => {
+  it('replaces the solid leaf of a glazed door with a leaf frame', () => {
     const mesh = (nodes: ReturnType<typeof buildLevel>, name: string) => nodes.walls.find((m) => m.name === name)
     const before = buildLevel(rdcOf(parseHouse(demo)), mats())
     const after = buildLevel(rdcOf(retyped()), mats())
     const doorsBefore = countTriangles(mesh(before, 'details:doors')!)
     const doorsAfter = countTriangles(mesh(after, 'details:doors')!)
-    expect(doorsAfter).toBeLessThan(doorsBefore)          // un tablier de moins
+    expect(doorsAfter).toBeLessThan(doorsBefore)          // one curtain fewer
     expect(countTriangles(mesh(after, 'details:frames')!)).toBeGreaterThan(countTriangles(mesh(before, 'details:frames')!))
   })
 
   /**
-   * Une baie descend au sol : pas d'appui de fenêtre qui déborde de la façade (il pendrait dans le
-   * vide), mais un rail bas et un refend par vantail — trois mètres de verre d'un seul tenant ne
-   * ressemblent à rien.
+   * A bay window goes down to the floor: no window sill projecting from the facade (it would hang in
+   * the void), but a bottom rail and a mullion per leaf — three meters of glass in one piece
+   * look like nothing.
    */
-  it('retire l’appui d’une baie et lui donne ses refends', () => {
+  it('removes a bay window\'s sill and gives it its mullions', () => {
     const only = (house: ReturnType<typeof parseHouse>, id: string) => {
       const level = rdcOf(house)
       return buildLevel({ ...level, openings: level.openings.filter((o) => o.openingId === id), walls: [] }, mats())
     }
     const asWindow = only(parseHouse(demo), 'baie')
     const asBay = only(retyped(), 'baie')
-    // sans murs, il ne reste dans les lisses que l'appui : une baie n'en a aucun
+    // without walls, only the sill remains in the rails: a bay window has none
     expect(asWindow.walls.some((m) => m.name === 'details:trim')).toBe(true)
     expect(asBay.walls.some((m) => m.name === 'details:trim')).toBe(false)
-    // et elle porte un montant de plus que la fenêtre qu'elle remplace (2,4 m → deux vantaux)
+    // and it carries one more jamb than the window it replaces (2.4 m → two leaves)
     const frames = (n: typeof asBay) => countTriangles(n.walls.find((m) => m.name === 'details:frames')!)
     expect(frames(asBay)).toBeGreaterThan(frames(asWindow))
   })
 })
 
-describe('cotes et nom de l’ouverture réglée', () => {
+describe('dimensions and name of the adjusted opening', () => {
   const notes = (scene: HouseScene) => {
     const found: { kind: string; text: string; position: [number, number, number] }[] = []
     scene.scene.traverse((o) => {
       const el = (o as unknown as { element?: HTMLElement }).element
-      // les lettres d'axe du repère d'origine portent la même classe de base : on ne veut ici que
-      // ce qui annote l'ouverture réglée
+      // the axis letters of the origin marker carry the same base class: here we only want
+      // what annotates the adjusted opening
       if (el?.classList.contains('scene-note--name') || el?.classList.contains('scene-note--gap')) {
         found.push({ kind: el.className.includes('--name') ? 'name' : 'gap', text: el.textContent ?? '', position: o.position.toArray() as [number, number, number] })
       }
@@ -1959,11 +1959,11 @@ describe('cotes et nom de l’ouverture réglée', () => {
   }
 
   /**
-   * Les deux cotes sont celles du panneau, au centimètre : mêmes fonctions partagées
-   * (`openingGaps`, `openingLabel`), même format. Une fenêtre nommée s'annonce par son nom, une
-   * fenêtre sans nom par son identifiant de relevé.
+   * The two dimensions are the panel's, to the centimeter: same shared functions
+   * (`openingGaps`, `openingLabel`), same format. A named window announces itself by its name, a
+   * window without a name by its survey identifier.
    */
-  it('annote le nom et les deux distances aux bouts du mur, et n’annote que la sélection', () => {
+  it('annotates the name and the two distances to the ends of the wall, and annotates only the selection', () => {
     const raw = JSON.parse(JSON.stringify(demo)) as typeof demo & { rooms: { id: string; openings: { id: string; name?: string }[] }[] }
     for (const room of raw.rooms) for (const o of room.openings ?? []) if (o.id === 'fen-ch1') o.name = 'Fenêtre de Paul'
     const house = parseHouse(raw)
@@ -1972,18 +1972,18 @@ describe('cotes et nom de l’ouverture réglée', () => {
     const gaps = openingGaps(room, opening)
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(house)
-    expect(notes(scene)).toHaveLength(0)              // hors édition, aucune étiquette
+    expect(notes(scene)).toHaveLength(0)              // outside edit mode, no label
     scene.setEditingOpenings(true)
-    expect(notes(scene)).toHaveLength(0)              // en édition mais sans sélection, non plus
+    expect(notes(scene)).toHaveLength(0)              // in edit mode but without a selection, none either
     scene.setSelectedOpening('fen-ch1')
     const shown = notes(scene)
     expect(shown.filter((n) => n.kind === 'name').map((n) => n.text)).toEqual(['Fenêtre de Paul'])
     expect(shown.filter((n) => n.kind === 'gap').map((n) => n.text).sort())
       .toEqual([`${gaps.left.toFixed(2)} m`, `${gaps.right.toFixed(2)} m`].sort())
-    // le nom flotte au-dessus du linteau, les cotes à mi-hauteur et de part et d'autre
+    // the name floats above the lintel, the dimensions at mid height and on either side
     const name = shown.find((n) => n.kind === 'name')!
     expect(name.position[2]).toBeGreaterThan(opening.height)
-    // les cotes sont à mi-hauteur de l'ouverture, un peu au-dessus de leur trait, et sous son nom
+    // the dimensions are at the opening's mid height, a little above their line, and below its name
     const mid = opening.height / 2 + (opening.sill ?? 0.95)
     for (const gap of shown.filter((n) => n.kind === 'gap')) {
       expect(gap.position[2]).toBeGreaterThan(mid)
@@ -1995,12 +1995,12 @@ describe('cotes et nom de l’ouverture réglée', () => {
   })
 
   /**
-   * Une ligne de cote ne vaut que si son trait matérialise EXACTEMENT l'intervalle annoncé : du bord
-   * de l'ouverture au coin du mur. Le trait est une boîte unitaire étirée (`scale.x`), fermée par deux
-   * tirets posés à ses deux bouts, dans le repère de l'ouverture — donc x est la distance le long du
-   * mur depuis son bord gauche.
+   * A dimension line is only worth anything if its line materializes EXACTLY the announced interval: from the edge
+   * of the opening to the corner of the wall. The line is a stretched unit box (`scale.x`), closed by two
+   * ticks placed at its two ends, in the opening's frame — so x is the distance along the
+   * wall from its left edge.
    */
-  it('trace les deux cotes sur exactement l’intervalle qu’elles annoncent, tirets aux deux bouts', () => {
+  it('draws the two dimensions over exactly the interval they announce, ticks at both ends', () => {
     const house = parseHouse(demo)
     const room = house.rooms.find((r) => r.id === 'chambre1')!
     const opening = room.openings.find((o) => o.id === 'fen-ch1')!
@@ -2012,24 +2012,24 @@ describe('cotes et nom de l’ouverture réglée', () => {
     let cotes: Object3D | null = null
     scene.scene.traverse((o) => { if (!cotes && o.name === 'opening-cotes') cotes = o })
     const meshes = (cotes! as Object3D).children as Mesh[]
-    expect(meshes).toHaveLength(6)                 // deux cotes : un trait et deux tirets chacune
+    expect(meshes).toHaveLength(6)                 // two dimensions: one line and two ticks each
     const [line, a, b, line2, a2, b2] = meshes
-    // côté droit (vu de la pièce) : de -right à 0 ; côté gauche : de width à width + left
+    // right side (seen from the room): from -right to 0; left side: from width to width + left
     expect(line!.scale.x).toBeCloseTo(gaps.right, 6)
     expect(a!.position.x).toBeCloseTo(-gaps.right, 6)
     expect(b!.position.x).toBeCloseTo(0, 6)
     expect(line2!.scale.x).toBeCloseTo(gaps.left, 6)
     expect(a2!.position.x).toBeCloseTo(opening.width, 6)
     expect(b2!.position.x).toBeCloseTo(opening.width + gaps.left, 6)
-    // le trait est au milieu de son intervalle, et le nombre AU-DESSUS de lui (jamais dessus)
+    // the line is in the middle of its interval, and the number ABOVE it (never on it)
     expect(line!.position.x).toBeCloseTo(-gaps.right / 2, 6)
     const gapNote = notes(scene).find((n) => n.kind === 'gap')!
     expect(gapNote.position[2]).toBeGreaterThan(line!.position.z)
     scene.dispose()
   })
 
-  /** Une cote NULLE n'a pas d'intervalle : le trait s'efface, les deux tirets se confondent. */
-  it('efface le trait d’une cote nulle et garde ses tirets', () => {
+  /** A ZERO dimension has no interval: the line fades out, the two ticks merge. */
+  it('erases the line of a zero dimension and keeps its ticks', () => {
     const house = parseHouse(demo)
     const room = house.rooms.find((r) => r.id === 'chambre1')!
     const flush = {
@@ -2052,7 +2052,7 @@ describe('cotes et nom de l’ouverture réglée', () => {
     scene.dispose()
   })
 
-  it('suit le brouillon : la cote change avec l’ouverture qui glisse, et l’autre avec elle', () => {
+  it('follows the draft: the dimension changes with the sliding opening, and the other one with it', () => {
     const house = parseHouse(demo)
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(house)
@@ -2068,41 +2068,41 @@ describe('cotes et nom de l’ouverture réglée', () => {
     })
     const now = read()
     expect(now).not.toEqual(was)
-    // et le TRACÉ suit : il vit dans les marqueurs du niveau, qui survivent à sa reconstruction —
-    // posé dans le groupe du niveau, il se retrouvait orphelin au premier mouvement de doigt
+    // and the OUTLINE follows: it lives in the level's markers, which survive its rebuild —
+    // placed in the level's group, it ended up orphaned at the first finger movement
     let cotes: Object3D | null = null
     scene.scene.traverse((o) => { if (!cotes && o.name === 'opening-cotes') cotes = o })
     expect(cotes).not.toBeNull()
     expect((cotes! as Object3D).parent!.name).toBe('markers')
     expect(((cotes! as Object3D).children[0] as Mesh).scale.x).toBeCloseTo(parseFloat(now[0]!), 2)
-    // ce que l'une gagne, l'autre le perd : la longueur du mur ne change pas
+    // what one gains, the other loses: the wall length does not change
     const sum = (xs: string[]) => xs.reduce((n, t) => n + parseFloat(t), 0)
     expect(sum(now)).toBeCloseTo(sum(was), 2)
     scene.dispose()
   })
 })
 
-describe('heure de la maison', () => {
-  // Le soleil se calcule, il ne se devine pas : la maison est géoréférencée et l'horloge fait le
-  // reste. Repère pris à Dijon (la maison de démo), au solstice d'été — le soleil y culmine autour
-  // de 66° (90 − 47,3 + 23,4) et passe au sud peu avant midi UTC.
+describe('time of day at the house', () => {
+  // The sun is computed, not guessed: the house is georeferenced and the clock does the
+  // rest. Reference taken at Dijon (the demo house), at the summer solstice — the sun culminates there around
+  // 66° (90 − 47.3 + 23.4) and passes due south shortly before noon UTC.
   const DIJON = { lat: 47.32, lon: 5.04 }
 
-  it('place le soleil au-dessus de la maison, à l’heure et au bon azimut', () => {
+  it('places the sun above the house, at the right hour and the right azimuth', () => {
     const noon = sunPosition(new Date('2026-06-21T12:00:00Z'), DIJON.lat, DIJON.lon)
     expect(noon.altitudeDeg).toBeGreaterThan(60)
     expect(noon.altitudeDeg).toBeLessThan(68)
-    expect(noon.azimuthDeg).toBeGreaterThan(170)          // plein sud, à peine passé
+    expect(noon.azimuthDeg).toBeGreaterThan(170)          // due south, barely past
     expect(noon.azimuthDeg).toBeLessThan(210)
     const midnight = sunPosition(new Date('2026-12-21T00:00:00Z'), DIJON.lat, DIJON.lon)
-    expect(midnight.altitudeDeg).toBeLessThan(-40)        // sous l'horizon, et franchement
-    // le matin, le soleil est à l'EST : c'est le signe de l'angle horaire qui le décide
+    expect(midnight.altitudeDeg).toBeLessThan(-40)        // below the horizon, and well below
+    // in the morning, the sun is in the EAST: it is the sign of the hour angle that decides it
     const morning = sunPosition(new Date('2026-06-21T05:00:00Z'), DIJON.lat, DIJON.lon)
     expect(morning.azimuthDeg).toBeGreaterThan(50)
     expect(morning.azimuthDeg).toBeLessThan(110)
   })
 
-  it('passe de la nuit au jour SANS marche d’escalier', () => {
+  it('goes from night to day WITHOUT a staircase step', () => {
     expect(dayFactor({ sunAltitudeDeg: -20, sunAzimuthDeg: 0, cloudiness: 0 })).toBe(0)
     expect(dayFactor({ sunAltitudeDeg: 20, sunAzimuthDeg: 0, cloudiness: 0 })).toBe(1)
     const dusk = dayFactor({ sunAltitudeDeg: 1, sunAzimuthDeg: 0, cloudiness: 0 })
@@ -2110,38 +2110,38 @@ describe('heure de la maison', () => {
     expect(dusk).toBeLessThan(0.9)
   })
 
-  it('ne rend JAMAIS une ambiance NaN : un mode inconnu retombe sur le soleil réel', () => {
-    // Vécu : un réglage écrit à la main donnait une exposition NaN, et toute l'image devenait noire
-    // sans la moindre erreur en console.
+  it('NEVER renders a NaN ambience: an unknown mode falls back on the real sun', () => {
+    // Happened: a hand-written setting gave a NaN exposure, and the whole image went black
+    // without the slightest error in the console.
     const a = resolveAmbience({ mode: '"night"' as AmbienceMode, date: new Date('2026-06-21T12:00:00Z'), geo: DIJON })
     expect(Number.isFinite(a.sunAltitudeDeg)).toBe(true)
     expect(Number.isFinite(dayFactor(a))).toBe(true)
   })
 
-  it('relève la source sous l’horizon sans changer d’où elle vient', () => {
+  it('raises the source below the horizon without changing where it comes from', () => {
     const night = resolveAmbience({ mode: 'night' })
     expect(night.sunAltitudeDeg).toBeLessThan(0)
     const dir = sunDirection(night)
-    expect(dir.y).toBeGreaterThan(0.2)                    // une lumière enterrée n'éclaire rien
-    // azimut 215° (sud-ouest) : x négatif (ouest), z positif (sud, car le nord de la maison est en −z)
+    expect(dir.y).toBeGreaterThan(0.2)                    // a buried light lights nothing
+    // azimuth 215° (south-west): negative x (west), positive z (south, since the house's north is at −z)
     expect(dir.x).toBeLessThan(0)
     expect(dir.z).toBeGreaterThan(0)
   })
 
-  it('retranche le cap de la maison : le haut du plan n’est pas forcément le nord', () => {
-    const noon = { ...resolveAmbience({ mode: 'day' }), sunAltitudeDeg: 30, sunAzimuthDeg: 90 }   // soleil à l'EST
-    // maison tournée de 90° : son +y regarde l'est, donc le soleil est sur le +y du plan, −z du monde
+  it('subtracts the house heading: the top of the plan is not necessarily north', () => {
+    const noon = { ...resolveAmbience({ mode: 'day' }), sunAltitudeDeg: 30, sunAzimuthDeg: 90 }   // sun in the EAST
+    // house rotated by 90°: its +y faces east, so the sun is on the plan's +y, the world's −z
     const dir = sunDirection(noon, undefined, 90)
     expect(dir.x).toBeCloseTo(0)
     expect(dir.z).toBeLessThan(-0.5)
   })
 })
 
-describe('styles de rendu', () => {
+describe('render styles', () => {
   const HOURS: AmbienceMode[] = ['day', 'dusk', 'night']
   const house = computeHouseGeometry(parseHouse(demo))
 
-  it('chaque style rend des valeurs finies à toute heure, et ne cite que des matières du catalogue', () => {
+  it('every style renders finite values at any hour, and only cites materials from the catalog', () => {
     for (const style of RENDER_STYLES) {
       for (const mode of HOURS) {
         const look = style.look(resolveAmbience({ mode }))
@@ -2149,32 +2149,32 @@ describe('styles de rendu', () => {
         expect(look.post.exposure).toBeGreaterThan(0)
         expect(Number.isFinite(look.lighting.sunIntensity)).toBe(true)
         for (const v of [...look.sky.zenith, ...look.sky.horizon, ...look.sky.ground]) expect(Number.isFinite(v)).toBe(true)
-        // le catalogue est la seule source de matières : un rôle inconnu ne se cuit pas
+        // the catalog is the only source of materials: an unknown role is not baked
         for (const role of rolesOf(look.surfaces)) expect(typeof role).toBe('string')
       }
     }
   })
 
-  it('changer de style repasse d’autres matières aux MÊMES matériaux (aucune géométrie touchée)', () => {
+  it('changing style hands other materials to the SAME materials objects (no geometry touched)', () => {
     const theme = defaultSceneTheme()
     const mats = createMaterials(theme, defaultLook())
     const nodes = buildHouse(house, mats)
     const wallMesh = nodes.levels.get('rdc')!.walls[0]!
     const before = { material: wallMesh.material, map: mats.wall.map }
     applyLook(mats, theme, styleById('cyberpunk').look(resolveAmbience({ mode: 'night' })))
-    expect(wallMesh.material).toBe(before.material)       // le maillage pointe toujours le même matériau
-    expect(mats.wall.map).not.toBe(before.map)            // mais la matière, elle, a changé
-    expect(mats.wall.metalness).toBeGreaterThan(0.5)      // le cyberpunk a des murs de métal
+    expect(wallMesh.material).toBe(before.material)       // the mesh still points to the same material
+    expect(mats.wall.map).not.toBe(before.map)            // but the texture, for its part, has changed
+    expect(mats.wall.metalness).toBeGreaterThan(0.5)      // cyberpunk has metal walls
   })
 })
 
-describe('qualité de rendu', () => {
+describe('render quality', () => {
   /**
-   * Un GPU intégré n'est plus rétrogradé sur son nom : la Radeon d'un portable hybride tient
-   * « high » à 26-46 ms par image avec la vraie maison (mesuré le 2026-09-27), et c'est le garde-fou
-   * qui en juge. Seul un rendu logiciel part d'office en « low ».
+   * An integrated GPU is no longer downgraded based on its name: the Radeon of a hybrid laptop sustains
+   * "high" at 26-46 ms per frame with the real house (measured on 2026-09-27), and it is the safeguard
+   * that judges. Only a software renderer starts out in "low".
    */
-  it('un rendu logiciel part en low, tout vrai GPU, intégré compris, part en high', () => {
+  it('a software renderer starts in low, any real GPU, integrated included, starts in high', () => {
     expect(detectQuality('ANGLE (AMD, AMD Radeon(TM) Graphics (0x00001638) Direct3D11 vs_5_0 ps_5_0, D3D11)')).toBe('high')
     expect(detectQuality('ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)')).toBe('high')
     expect(detectQuality('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)')).toBe('low')
@@ -2183,19 +2183,19 @@ describe('qualité de rendu', () => {
     expect(detectQuality('')).toBe('high')
   })
 
-  it('le garde-fou ignore la chauffe et les pointes isolées, puis ne descend qu une fois, sur la médiane', () => {
+  it('the safeguard ignores warm-up and isolated spikes, then steps down only once, on the median', () => {
     let over = 0
     const guard = createCostGuard(() => over++, 40, 8, 2)
-    // deux images de chauffe hors de prix : ignorées
+    // two outrageously expensive warm-up frames: ignored
     guard.sample(500); guard.sample(500)
-    // six images observées, médiane 50 ms > 40 : une seule descente, puis plus rien
+    // six observed frames, median 50 ms > 40: a single step down, then nothing more
     for (const ms of [30, 50, 50, 50, 50, 60]) guard.sample(ms)
     expect(over).toBe(1)
     for (let i = 0; i < 20; i++) guard.sample(500)
     expect(over).toBe(1)
 
-    // deux pointes (une texture envoyée, une carte d'environnement) sur des images à 30 ms :
-    // la moyenne dirait 87 ms, la médiane dit 30 — la machine tient.
+    // two spikes (an uploaded texture, an environment map) on frames at 30 ms:
+    // the average would say 87 ms, the median says 30 — the machine keeps up.
     let spiky = 0
     const calm = createCostGuard(() => spiky++, 40, 8, 2)
     for (const ms of [30, 30, 30, 30, 30, 30, 200, 200]) calm.sample(ms)
@@ -2203,14 +2203,14 @@ describe('qualité de rendu', () => {
   })
 })
 
-describe('détail architectural', () => {
+describe('architectural detail', () => {
   const house = computeHouseGeometry(parseHouse(demo))
   const rdc = house.levels.find((l) => l.levelId === 'rdc')!
   const mats = createMaterials(defaultSceneTheme(), defaultLook())
   const meshes = buildDetails(rdc, mats)
   const byName = (n: string) => meshes.find((m) => m.name === n)!
 
-  it('fabrique au plus quatre maillages fusionnés : lisses, encadrements, soubassement, vantaux', () => {
+  it('makes at most four merged meshes: rails, surrounds, plinth, leaves', () => {
     expect(meshes.map((m) => m.name).sort()).toEqual(['details:doors', 'details:frames', 'details:plinth', 'details:trim'])
     expect(byName('details:trim').material).toBe(mats.trim)
     expect(byName('details:frames').material).toBe(mats.frame)
@@ -2220,39 +2220,39 @@ describe('détail architectural', () => {
   })
 
   /**
-   * Une baie HABILLÉE par un ouvrant : son vantail appartient à l'appareil, qui le dessine et
-   * l'ouvre. Le bâti n'en pose pas un second — sinon une porte de garage remontée laisse derrière
-   * elle le panneau fixe, et la baie n'est jamais vide.
+   * An opening DRESSED by a cover: its leaf belongs to the device, which draws it and
+   * opens it. The structure does not lay a second one — otherwise a raised garage door leaves the
+   * fixed panel behind it, and the opening is never empty.
    */
-  it("laisse son vantail à l'ouvrant qui habille la baie, et garde le reste du bâti", () => {
+  it("leaves its leaf to the cover that dresses the opening, and keeps the rest of the structure", () => {
     const dressed = buildDetails(rdc, mats, new Set(['porte-entree']))
     const doorsOf = (list: Mesh[]) => list.find((m) => m.name === 'details:doors')
     expect(countTriangles(doorsOf(dressed)!)).toBeLessThan(countTriangles(byName('details:doors')))
-    // le dormant, les lisses et le soubassement restent au mur : un volet ne retire pas le cadre
+    // the fixed frame, the rails and the plinth stay on the wall: a shutter does not remove the frame
     for (const name of ['details:frames', 'details:trim', 'details:plinth']) {
       expect(countTriangles(dressed.find((m) => m.name === name)!)).toBe(countTriangles(byName(name)))
     }
-    // toutes les portes habillées : plus un seul vantail à dessiner
+    // all doors dressed: not a single leaf left to draw
     const all = new Set(rdc.openings.map((o) => o.openingId))
     expect(buildDetails(rdc, mats, all).map((m) => m.name)).not.toContain('details:doors')
   })
 
-  it('le couronnement dépasse le haut des murs de cinq millimètres, jamais plus', () => {
+  it('the coping sticks out above the top of the walls by five millimeters, never more', () => {
     const g = byName('details:trim').geometry
     g.computeBoundingBox()
     const top = Math.max(...rdc.walls.map((w) => w.z1))
     expect(g.boundingBox!.max.z).toBeCloseTo(top + 0.005, 3)
   })
 
-  it('le soubassement reste au ras du sol fini et s’arrête à hauteur de plinthe', () => {
+  it('the plinth stays flush with the finished floor and stops at baseboard height', () => {
     const g = byName('details:plinth').geometry
     g.computeBoundingBox()
     expect(g.boundingBox!.min.z).toBeCloseTo(0.002, 3)
     expect(g.boundingBox!.max.z).toBeCloseTo(0.28, 3)
   })
 
-  it('cadres dans l’épaisseur du mur, appuis côté FAÇADE : rien ne dépasse dans la pièce', () => {
-    // un niveau réduit à la seule baie : chaque sommet se projette sur SA normale extérieure
+  it('frames within the wall thickness, sills on the FACADE side: nothing sticks out into the room', () => {
+    // a level reduced to the single opening: each vertex is projected onto ITS outward normal
     const baie = rdc.openings.find((o) => o.openingId === 'baie')!
     const only = buildDetails({ ...rdc, walls: [], openings: [baie] }, mats)
     const along = (mesh: Mesh) => {
@@ -2260,71 +2260,71 @@ describe('détail architectural', () => {
       return Array.from({ length: pos.count }, (_, i) =>
         (pos.getX(i) - baie.origin[0]) * baie.normal[0] + (pos.getY(i) - baie.origin[1]) * baie.normal[1])
     }
-    const s = along(only.find((m) => m.name === 'details:trim')!)      // l'appui seul, sans mur donc sans couronnement
+    const s = along(only.find((m) => m.name === 'details:trim')!)      // the sill alone, no wall hence no coping
     const f = along(only.find((m) => m.name === 'details:frames')!)
-    expect(Math.min(...s)).toBeGreaterThan(baie.depth / 2)          // l'appui est du côté extérieur…
-    expect(Math.max(...s)).toBeGreaterThan(baie.depth)              // …et déborde de la façade
-    expect(Math.min(...f)).toBeGreaterThanOrEqual(-1e-6)            // le cadre ne sort pas côté pièce
-    expect(Math.max(...f)).toBeLessThanOrEqual(baie.depth + 1e-6)   // ni côté façade
+    expect(Math.min(...s)).toBeGreaterThan(baie.depth / 2)          // the sill is on the outer side…
+    expect(Math.max(...s)).toBeGreaterThan(baie.depth)              // …and projects from the facade
+    expect(Math.min(...f)).toBeGreaterThanOrEqual(-1e-6)            // the frame does not stick out on the room side
+    expect(Math.max(...f)).toBeLessThanOrEqual(baie.depth + 1e-6)   // nor on the facade side
   })
 
-  it('un passage n’a ni cadre ni vantail', () => {
+  it('a passage has neither frame nor leaf', () => {
     const level = { ...rdc, walls: [], openings: rdc.openings.map((o) => ({ ...o, type: 'passage' as const })) }
     expect(buildDetails(level, mats)).toEqual([])
   })
 
-  /** Le même niveau, réduit à UNE ouverture à laquelle on impose ce qu'on veut éprouver. */
+  /** The same level, reduced to ONE opening on which we impose what we want to test. */
   const only = (o: Partial<OpeningRect>) => {
     const porte = rdc.openings.find((x) => x.type === 'door')!
     return buildDetails({ ...rdc, walls: [], openings: [{ ...porte, ...o }] }, mats)
   }
 
-  it('deux vantaux découpent le panneau d’une porte pleine, et refendent une baie vitrée', () => {
+  it('two leaves split the panel of a solid door, and add mullions to a bay window', () => {
     const one = only({ leaves: 1 })
     const two = only({ leaves: 2 })
-    // un panneau de plus, donc une boîte de plus : le trait vertical qui fait la porte à deux battants
+    // one more panel, hence one more box: the vertical line that makes a double door
     expect(countTriangles(two.find((m) => m.name === 'details:doors')!))
       .toBe(2 * countTriangles(one.find((m) => m.name === 'details:doors')!))
-    // vitrée, ce ne sont plus des panneaux mais des refends, comptés dans les encadrements
+    // glazed, these are no longer panels but mullions, counted among the surrounds
     const bay1 = only({ type: 'bay', leaves: 1 }), bay3 = only({ type: 'bay', leaves: 3 })
     expect(countTriangles(bay3.find((m) => m.name === 'details:frames')!))
       .toBeGreaterThan(countTriangles(bay1.find((m) => m.name === 'details:frames')!))
   })
 
-  it('la matière verre vitre l’ouverture : une porte pleine perd son panneau opaque', () => {
+  it('the glass material glazes the opening: a solid door loses its opaque panel', () => {
     expect(only({}).some((m) => m.name.startsWith('details:doors'))).toBe(true)
     const glazed = only({ material: 'glass' })
     expect(isGlazed({ ...rdc.openings[0]!, type: 'door', material: 'glass' })).toBe(true)
-    // le vantail plein a laissé place à un cadre de battant, rangé avec les encadrements
+    // the solid leaf gave way to a leaf frame, stored with the surrounds
     expect(glazed.some((m) => m.name.startsWith('details:doors'))).toBe(false)
     expect(glazed.some((m) => m.name.startsWith('details:frames'))).toBe(true)
   })
 
-  it('une menuiserie teintée prend son propre maillage ; sans réglage, rien ne se dédouble', () => {
+  it('a tinted joinery gets its own mesh; without a setting, nothing is duplicated', () => {
     expect(meshes.filter((m) => m.name.startsWith('details:frames'))).toHaveLength(1)
     const tinted = only({ color: '#c0c4c8' })
     const frame = tinted.find((m) => m.name.startsWith('details:frames'))!
     expect(frame.name).toBe('details:frames#|#c0c4c8')
     expect(frame.material).not.toBe(mats.frame)
     expect((frame.material as MeshStandardMaterial).color.getHexString()).toBe('c0c4c8')
-    // deux ouvertures de la MÊME teinte partagent leur matériau : une teinte, un appel de dessin
+    // two openings of the SAME tint share their material: one tint, one draw call
     expect(only({ color: '#c0c4c8' }).find((m) => m.name.startsWith('details:frames'))!.material).toBe(frame.material)
   })
 
-  it('le métal d’une menuiserie réfléchit, le bois non, le tissu encore moins', () => {
+  it('metal joinery reflects, wood does not, fabric even less', () => {
     const metal = only({ material: 'metal' }).find((m) => m.name.startsWith('details:frames'))!.material as MeshStandardMaterial
     const wood = only({ material: 'wood' }).find((m) => m.name.startsWith('details:frames'))!.material as MeshStandardMaterial
     expect(metal.metalness).toBeGreaterThan(0.5)
     expect(wood.metalness).toBe(0)
     expect(wood.color.getHexString()).toBe(mats.floors.wood.color.getHexString())
-    // une TOILE : aucun reflet, et plus mate que le bois — c'est ce qui la distingue à l'œil
+    // a CANVAS: no reflection, and more matte than wood — that is what tells it apart to the eye
     const fabric = only({ material: 'fabric' }).find((m) => m.name.startsWith('details:frames'))!.material as MeshStandardMaterial
     expect(fabric.metalness).toBe(0)
     expect(fabric.roughness).toBeGreaterThan(wood.roughness)
-    expect(fabric.transparent).toBe(false)              // le tissu ne fait rien à la géométrie, lui
+    expect(fabric.transparent).toBe(false)              // fabric does nothing to the geometry, for its part
   })
 
-  it('les couleurs du détail se déduisent de la palette : lisse plus claire, menuiseries et soubassement plus sombres', () => {
+  it('the detail colors are derived from the palette: lighter rail, darker joinery and plinth', () => {
     const wall = mats.wall.color.getHSL({ h: 0, s: 0, l: 0 }).l
     expect(mats.trim.color.getHSL({ h: 0, s: 0, l: 0 }).l).toBeGreaterThan(wall)
     expect(mats.frame.color.getHSL({ h: 0, s: 0, l: 0 }).l).toBeLessThan(wall)
@@ -2332,20 +2332,20 @@ describe('détail architectural', () => {
   })
 })
 
-describe('toit et piscine', () => {
+describe('roof and pool', () => {
   const geometry = computeHouseGeometry(parseHouse(demo))
   const mats = createMaterials(defaultSceneTheme(), defaultLook())
 
-  it('un toit à deux pentes reçoit des planches de rive sous ses égouts et ses pignons, jamais au faîte', () => {
+  it('a gable roof receives fascia boards under its eaves and its gables, never at the ridge', () => {
     const [fascia] = buildRoofDetails(geometry.roof!, mats)
     expect(fascia!.name).toBe('roof:fascia')
     expect(fascia!.material).toBe(mats.frame)
     fascia!.geometry.computeBoundingBox()
-    expect(fascia!.geometry.boundingBox!.max.z).toBeLessThanOrEqual(geometry.roof!.zRidge + 1e-6) // les rives montent au faîte, rien au-dessus
-    expect(fascia!.geometry.boundingBox!.min.z).toBeCloseTo(geometry.roof!.zBase - 0.18, 3)  // pendu sous l'égout
+    expect(fascia!.geometry.boundingBox!.max.z).toBeLessThanOrEqual(geometry.roof!.zRidge + 1e-6) // the verges rise to the ridge, nothing above
+    expect(fascia!.geometry.boundingBox!.min.z).toBeCloseTo(geometry.roof!.zBase - 0.18, 3)  // hanging below the eaves
   })
 
-  it('un toit plat reçoit un acrotère dans le matériau des murs, couronné, et une dalle qui n’est pas en tuiles', () => {
+  it('a flat roof receives a parapet in the walls\' material, coped, and a slab that is not tiled', () => {
     const flat = { ...geometry.roof!, type: 'flat' as const, zRidge: geometry.roof!.zBase + 0.2, faces: [] }
     const meshes = buildRoofDetails(flat, mats)
     expect(meshes.map((m) => m.name)).toEqual(['roof:parapet', 'roof:parapet-cap'])
@@ -2357,18 +2357,18 @@ describe('toit et piscine', () => {
     expect(mats.roofFlat.map).not.toBe(mats.roof.map)
   })
 
-  it('la dalle végétalisée de nature ne survit pas au retour au réaliste', () => {
+  it('nature\'s green slab does not survive the return to realistic', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(parseHouse(demo))
     const flatMat = () => (scene as unknown as { materials: { roofFlat: MeshStandardMaterial; roof: MeshStandardMaterial } }).materials
     scene.setAppearance({ style: styleById('nature') })
     expect(flatMat().roofFlat.color.getHexString()).toBe('5f7a42')
     scene.setAppearance({ style: styleById('realistic') })
-    expect(flatMat().roofFlat.color.equals(flatMat().roof.color)).toBe(true)   // la couleur du versant, pas l'herbe
+    expect(flatMat().roofFlat.color.equals(flatMat().roof.color)).toBe(true)   // the slope's color, not the grass
     scene.dispose()
   })
 
-  it('une piscine est un bassin : margelle, parois vues de l’intérieur, eau translucide en retrait', () => {
+  it('a pool is a basin: coping, walls seen from inside, translucent water set back', () => {
     const nodes = buildHouse(geometry, mats)
     const water = nodes.zones.get('piscine')!
     expect(water.name).toBe('zone:piscine')
@@ -2384,9 +2384,9 @@ describe('toit et piscine', () => {
   })
 })
 
-describe('bassin aligné sur ses bords', () => {
-  it('les carreaux du fond suivent les côtés d’une piscine tournée, pas les axes du monde', () => {
-    // un rectangle 8 × 4 tourné de 30° : en UV monde, sa boîte englobante serait bien plus grande que 32 m²
+describe('basin aligned on its edges', () => {
+  it('the bottom tiles follow the sides of a rotated pool, not the world axes', () => {
+    // an 8 × 4 rectangle rotated by 30°: in world UVs, its bounding box would be much larger than 32 m²
     const c = Math.cos(Math.PI / 6), s = Math.sin(Math.PI / 6)
     const rot = ([x, y]: [number, number]): [number, number] => [x * c - y * s, x * s + y * c]
     const poly = ([[-4, -2], [4, -2], [4, 2], [-4, 2]] as [number, number][]).map(rot)
@@ -2394,18 +2394,18 @@ describe('bassin aligné sur ses bords', () => {
     const nrm = g.getAttribute('normal'), uv = g.getAttribute('uv')
     let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity
     for (let i = 0; i < nrm.count; i++) {
-      if (nrm.getZ(i) > -0.999) continue                                  // le fond seulement (normale vers le bas)
+      if (nrm.getZ(i) > -0.999) continue                                  // the bottom only (normal pointing down)
       minU = Math.min(minU, uv.getX(i)); maxU = Math.max(maxU, uv.getX(i))
       minV = Math.min(minV, uv.getY(i)); maxV = Math.max(maxV, uv.getY(i))
     }
     expect((maxU - minU) * (maxV - minV)).toBeCloseTo(32, 1)
-    g.computeBoundingBox()                                               // et la géométrie est bien revenue à sa place
+    g.computeBoundingBox()                                               // and the geometry has indeed returned to its place
     expect(g.boundingBox!.max.x).toBeCloseTo(4 * c + 2 * s, 3)
   })
 })
 
-describe('mise en évidence d’une pièce', () => {
-  it('pose un trait et un voile non éclairés, sans toucher la couleur du sol', () => {
+describe('highlighting a room', () => {
+  it('lays an unlit line and veil, without touching the floor color', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(parseHouse(demo))
     const geometry = computeHouseGeometry(parseHouse(demo))
@@ -2424,7 +2424,7 @@ describe('mise en évidence d’une pièce', () => {
     scene.dispose()
   })
 
-  it('le reste de la maison s’efface derrière la pièce, par un masque et non par transparence', () => {
+  it('the rest of the house fades behind the room, through a mask and not through transparency', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     const house = parseHouse(demo)
     scene.load(house)
@@ -2433,14 +2433,14 @@ describe('mise en évidence d’une pièce', () => {
     const u = roomFocusUniforms
     expect(u.kasbahFocus.value).toBe(1)
     expect(u.kasbahFocusCount.value).toBe(floor.polygon.length)
-    // le y de la maison est le −z du monde ; le contour est élargi d'un mur : il contient le sien
+    // the house's y is the world's −z; the outline is widened by a wall: it contains its own
     const [x, y] = floor.polygon[0]!
     const p = u.kasbahFocusPoly.value[0]!
     expect(Math.abs(p.x - x)).toBeLessThan(0.5)
     expect(Math.abs(p.y + y)).toBeLessThan(0.5)
     scene.highlightRoom(null)
     expect(u.kasbahFocus.value).toBe(0)
-    // injecté sur toute matière, après la lumière (`opaque_fragment`)
+    // injected into every material, after the lighting (`opaque_fragment`)
     const mats = createMaterials(defaultSceneTheme(), defaultLook())
     const shader = { uniforms: {} as Record<string, unknown>, vertexShader: ShaderLib.physical.vertexShader, fragmentShader: ShaderLib.physical.fragmentShader }
     mats.wall.onBeforeCompile(shader as never, null as never)
@@ -2450,8 +2450,8 @@ describe('mise en évidence d’une pièce', () => {
   })
 })
 
-describe('fenêtres éclairées', () => {
-  it('le verre d’une pièce s’allume avec ses lampes, la nuit seulement, sans toucher aux voisines', () => {
+describe('lit windows', () => {
+  it('a room\'s glass lights up with its lamps, at night only, without touching the neighbors', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(parseHouse(demo))
     scene.setAppearance({ ambience: resolveAmbience({ mode: 'night' }) })
@@ -2461,13 +2461,13 @@ describe('fenêtres éclairées', () => {
     const glass = (p: Mesh) => p.material as MeshStandardMaterial
     const base = (p: Mesh) => p.userData.baseMaterial as MeshStandardMaterial
     const salon = of('salon'), cuisine = of('cuisine')
-    expect(glass(salon)).not.toBe(glass(cuisine))                     // un verre par pièce
+    expect(glass(salon)).not.toBe(glass(cuisine))                     // one glass per room
     scene.updateStates({ 'mock:light-living': { kind: 'light', updatedAt: 0, available: true, on: true, brightness: 100 } as DeviceState })
     expect(glass(salon).emissive.r).toBeGreaterThan(base(salon).emissive.r + 0.3)
     expect(glass(salon).opacity).toBeGreaterThan(base(salon).opacity)
     expect(glass(cuisine).emissive.getHex()).toBe(base(cuisine).emissive.getHex())
     expect(glass(cuisine).opacity).toBe(base(cuisine).opacity)
-    // le puits de lumière du salon est dans une dalle : il ne s'allume pas avec la pièce
+    // the living room skylight is in a slab: it does not light up with the room
     const puits = panes.find((p) => p.userData.openingId === 'puits-salon')!
     expect(glass(puits)).toBe(base(salon))
     expect(glass(puits).opacity).toBeLessThan(glass(salon).opacity)
@@ -2478,8 +2478,8 @@ describe('fenêtres éclairées', () => {
   })
 })
 
-describe('météo dans la scène', () => {
-  it('traduit une condition en ce que les surfaces en gardent', () => {
+describe('weather in the scene', () => {
+  it('translates a condition into what the surfaces keep of it', () => {
     expect(weatherEffects('rain')).toEqual({ wetness: 1, precipitation: { kind: 'rain', intensity: 0.8 } })
     expect(weatherEffects('thunderstorm')).toMatchObject({ wetness: 1, storm: true, precipitation: { kind: 'rain', intensity: 1 } })
     expect(weatherEffects('snow')).toEqual({ snow: 1, precipitation: { kind: 'snow', intensity: 0.8 } })
@@ -2490,21 +2490,21 @@ describe('météo dans la scène', () => {
     expect(resolveAmbience({ mode: 'day', condition: 'thunderstorm', cloudiness: 0.9, visibilityM: 3000 })).toMatchObject({ cloudiness: 0.9, wetness: 1, storm: true, visibilityM: 3000 })
   })
 
-  it('ne pose un brouillard qu’en dessous de 5 km, à l’échelle de la maison', () => {
+  it('only sets a fog below 5 km, at the scale of the house', () => {
     expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0 })).toBeNull()
     expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0, visibilityM: 25_000 })).toBeNull()
     expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0, visibilityM: 2000 })).toBe(220)
-    // le brouillard le plus épais voile la maison, il ne la fait pas disparaître
+    // the thickest fog veils the house, it does not make it disappear
     expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0, visibilityM: 60 })).toBe(123)
   })
 
-  it('ignore la visibilité annoncée quand rien n’est en l’air (couvert à 100 % d’humidité)', () => {
+  it('ignores the reported visibility when nothing is in the air (overcast at 100 % humidity)', () => {
     expect(resolveAmbience({ mode: 'day', condition: 'cloudy', cloudiness: 1, visibilityM: 60 })).not.toHaveProperty('visibilityM')
     expect(resolveAmbience({ mode: 'day', condition: 'fog', cloudiness: 1, visibilityM: 60 })).toMatchObject({ visibilityM: 60 })
     expect(resolveAmbience({ mode: 'day', visibilityM: 800 })).toMatchObject({ visibilityM: 800 })
   })
 
-  it('la pluie fonce et lisse ce qui est dehors, la neige le blanchit, l’intérieur ne bouge pas', () => {
+  it('rain darkens and smooths what is outdoors, snow whitens it, the inside does not change', () => {
     const theme = defaultSceneTheme()
     const look = defaultLook()
     const dry = createMaterials(theme, look)
@@ -2513,20 +2513,20 @@ describe('météo dans la scène', () => {
     expect(wet.terrain.roughness).toBeLessThan(dry.terrain.roughness)
     expect(wet.roof.roughness).toBeLessThan(dry.roof.roughness)
     expect(wet.terrain.color.r).toBeLessThan(dry.terrain.color.r)
-    expect(wet.floor.roughness).toBe(dry.floor.roughness)              // dedans, il ne pleut pas
-    expect(wet.zones.pool.roughness).toBe(dry.zones.pool.roughness)    // l'eau est déjà de l'eau
+    expect(wet.floor.roughness).toBe(dry.floor.roughness)              // indoors, it does not rain
+    expect(wet.zones.pool.roughness).toBe(dry.zones.pool.roughness)    // the water is already water
     const snowy = createMaterials(theme, look)
     applyLook(snowy, theme, look, undefined, { wetness: 0, snow: 1 })
     const lum = (c: { r: number; g: number; b: number }) => c.r + c.g + c.b
     expect(lum(snowy.terrain.color)).toBeGreaterThan(lum(dry.terrain.color))
     expect(snowy.terrain.roughness).toBeGreaterThan(0.9)
-    // remettre le beau temps rend les valeurs du style
+    // bringing back fine weather restores the style's values
     applyLook(snowy, theme, look)
     expect(snowy.terrain.roughness).toBe(dry.terrain.roughness)
     expect(snowy.terrain.color.getHex()).toBe(dry.terrain.color.getHex())
   })
 
-  it('un orage allume une minuterie d’éclairs, que la fin de l’orage ou la destruction éteint', () => {
+  it('a storm starts a lightning timer, which the end of the storm or disposal stops', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.setAppearance({ ambience: { ...resolveAmbience({ mode: 'day' }), storm: true } })
     expect((scene as unknown as { stormTimer: unknown }).stormTimer).not.toBeNull()
@@ -2538,17 +2538,17 @@ describe('météo dans la scène', () => {
   })
 })
 
-describe('précipitations (palier C)', () => {
+describe('precipitation (tier C)', () => {
   const box = { min: [0, 0] as const, max: [10, 8] as const, height: 14 }
 
-  it('garde chaque goutte dans le volume, la fait retomber en haut, et l’incline avec le vent', () => {
-    const rain = new Precipitation(box, { kind: 'rain', intensity: 1, windKmh: 36, windDirDeg: 270 })   // vent d'OUEST : pousse vers +x
+  it('keeps every drop in the volume, makes it fall back to the top, and tilts it with the wind', () => {
+    const rain = new Precipitation(box, { kind: 'rain', intensity: 1, windKmh: 36, windDirDeg: 270 })   // WEST wind: pushes toward +x
     expect(rain.count).toBe(2600)
     const pos = (rain.object as unknown as { geometry: { getAttribute(n: string): { array: Float32Array } } }).geometry.getAttribute('position').array
-    // le trait d'une goutte penche vers d'où elle vient : la queue est à l'ouest (x plus petit) et plus haut
+    // a drop's streak leans toward where it comes from: the tail is to the west (smaller x) and higher
     expect(pos[3]!).toBeLessThan(pos[0]!)
     expect(pos[5]!).toBeGreaterThan(pos[2]!)
-    for (let f = 0; f < 60; f++) rain.step(0.05)                   // trois secondes : tout est retombé au moins une fois
+    for (let f = 0; f < 60; f++) rain.step(0.05)                   // three seconds: everything has fallen back at least once
     for (let i = 0; i < rain.count; i++) {
       const x = pos[i * 6]!, y = pos[i * 6 + 1]!, z = pos[i * 6 + 2]!
       expect(x).toBeGreaterThanOrEqual(-3); expect(x).toBeLessThanOrEqual(13)
@@ -2562,7 +2562,7 @@ describe('précipitations (palier C)', () => {
     snow.dispose()
   })
 
-  it('la scène pose la pluie sur sa racine et anime la boucle, puis la retire quand il ne pleut plus ou en qualité basse', () => {
+  it('the scene sets the rain on its root and animates the loop, then removes it when it stops raining or in low quality', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.load(parseHouse(demo))
     const priv = scene as unknown as { loop: { animationCount: number }; nodes: { root: { children: { name: string }[] } } }
@@ -2571,14 +2571,14 @@ describe('précipitations (palier C)', () => {
     scene.setAppearance({ ambience: rainy })
     expect(priv.loop.animationCount).toBe(1)
     expect(falling()).toEqual(['precipitation:rain'])
-    // même pluie un peu plus forte : réglée, pas reconstruite
+    // same rain a little stronger: adjusted, not rebuilt
     scene.setAppearance({ ambience: { ...rainy, precipitation: { kind: 'rain', intensity: 0.9 } } })
     expect(priv.loop.animationCount).toBe(1)
-    // la neige remplace la pluie
+    // snow replaces rain
     scene.setAppearance({ ambience: { ...rainy, precipitation: { kind: 'snow', intensity: 0.8 } } })
     expect(falling()).toEqual(['precipitation:snow'])
     expect(priv.loop.animationCount).toBe(1)
-    // qualité basse : plus rien ne tombe ; haute : ça reprend
+    // low quality: nothing falls anymore; high: it starts again
     scene.setOptions({ quality: 'low' })
     expect(priv.loop.animationCount).toBe(0)
     expect(falling()).toEqual([])
@@ -2590,13 +2590,13 @@ describe('précipitations (palier C)', () => {
   })
 })
 
-/** Centre (monde) de la piscine de la maison de démonstration. */
+/** Center (world) of the demo house's pool. */
 const POOL_CENTER = new Vector3(18, 0, -4)
 
-describe('brume basse', () => {
-  it('rien le jour ni le soir, modérée la nuit, à son plus fort à l’aube, dispersée par le vent', () => {
+describe('low mist', () => {
+  it('none by day or in the evening, moderate at night, strongest at dawn, dispersed by the wind', () => {
     const night = resolveAmbience({ mode: 'night' })
-    const dusk = resolveAmbience({ mode: 'dusk' })                       // soleil rasant à l'OUEST
+    const dusk = resolveAmbience({ mode: 'dusk' })                       // grazing sun in the WEST
     expect(mistAmount(resolveAmbience({ mode: 'day' }))).toBe(0)
     expect(mistAmount(night)).toBeGreaterThan(0.5)
     const dawn = mistAmount({ ...dusk, sunAzimuthDeg: 80 })
@@ -2605,7 +2605,7 @@ describe('brume basse', () => {
     expect(mistAmount({ ...night, windKmh: 45 })).toBe(0)
   })
 
-  it('s’injecte derrière le brouillard de three, sur les seules matières du dehors', () => {
+  it('is injected after three\'s fog, on outdoor materials only', () => {
     const mats = createMaterials(defaultSceneTheme(), defaultLook())
     const inject = (mat: Material) => {
       const shader = { uniforms: {} as Record<string, { value: unknown }>, vertexShader: ShaderLib.physical.vertexShader, fragmentShader: ShaderLib.physical.fragmentShader }
@@ -2615,10 +2615,10 @@ describe('brume basse', () => {
     const terrain = inject(mats.terrain)
     expect(terrain.vertexShader).toContain('kasbahMistView = mvPosition.xyz;')
     expect(terrain.fragmentShader).toContain('kasbahMistDensity * length( kasbahMistView )')
-    expect(terrain.uniforms.kasbahMistDensity).toBe(heightMistUniforms.kasbahMistDensity)   // partagée : l'heure ne recompile rien
-    // un sol de pièce est à la hauteur du jardin : sans ce tri, la maison de poupée s'embrumait
+    expect(terrain.uniforms.kasbahMistDensity).toBe(heightMistUniforms.kasbahMistDensity)   // shared: the hour recompiles nothing
+    // a room's floor is at the height of the garden: without this filter, the dollhouse filled with mist
     expect(inject(mats.floor).fragmentShader).not.toContain('kasbahMist')
-    // l'opacité (et le fondu des étages), elle, est sur TOUTES les matières : c'est l'étage entier qui s'efface
+    // the opacity (and the level fade), for its part, is on ALL materials: it is the whole upper floor that fades
     expect(inject(mats.ground).fragmentShader).not.toContain('kasbahMist')
     const floor = inject(mats.floor)
     expect(floor.fragmentShader).toContain('#ifdef OPAQUE')
@@ -2626,7 +2626,7 @@ describe('brume basse', () => {
     expect(floor.uniforms.kasbahFadeY).toBe(levelFadeUniforms.kasbahFadeY)
   })
 
-  it('la passe d’ombre reçoit le fondu : l’ombre de l’étage qui s’envole pâlit avec lui', () => {
+  it('the shadow pass receives the fade: the shadow of the level flying off pales with it', () => {
     const shader = { uniforms: {} as Record<string, { value: unknown }>, vertexShader: ShaderLib.depth.vertexShader, fragmentShader: ShaderLib.depth.fragmentShader }
     new MeshDepthMaterial().onBeforeCompile(shader as never, null as never)
     expect(shader.vertexShader).toContain('kasbahFadeView = mvPosition.xyz;')
@@ -2634,22 +2634,22 @@ describe('brume basse', () => {
     expect(shader.uniforms.kasbahFadeVisibility).toBe(levelFadeUniforms.kasbahFadeVisibility)
   })
 
-  it('chaque matière a son opacité, réglable sans recompiler, et un clone la sienne', () => {
+  it('every material has its opacity, adjustable without recompiling, and a clone its own', () => {
     const mats = createMaterials(defaultSceneTheme(), defaultLook())
     const shader = { uniforms: {} as Record<string, { value: unknown }>, vertexShader: ShaderLib.physical.vertexShader, fragmentShader: ShaderLib.physical.fragmentShader }
     mats.wall.onBeforeCompile(shader as never, null as never)
     const opacity = materialOpacity(mats.wall)
-    expect(shader.uniforms.kasbahOpacity).toBe(opacity)                 // l'uniform MÊME : le changer suffit
-    expect(opacity.value).toBe(1)                                        // opaque par défaut
+    expect(shader.uniforms.kasbahOpacity).toBe(opacity)                 // the VERY uniform: changing it is enough
+    expect(opacity.value).toBe(1)                                        // opaque by default
     opacity.value = 0.4
     const clone = mats.wall.clone()
     expect(materialOpacity(clone)).not.toBe(opacity)
-    expect(mats.wall.transparent).toBe(false)                           // la matière reste dans la file opaque
+    expect(mats.wall.transparent).toBe(false)                           // the material stays in the opaque queue
   })
 })
 
-describe('eau vivante', () => {
-  it('injecte ses ondes et ses caustiques aux points que three lui laisse', () => {
+describe('living water', () => {
+  it('injects its waves and its caustics at the points three leaves it', () => {
     const mats = createMaterials(defaultSceneTheme(), defaultLook())
     const water = createWaterUniforms()
     const time = water.time
@@ -2661,79 +2661,79 @@ describe('eau vivante', () => {
     }
     const surface = patch(mats.zones.pool, 'surface')
     const basin = patch(mats.poolBasin, 'basin')
-    // le temps est PARTAGÉ, la force ne l'est pas : le fond suit le jour, la houle non
+    // the time is SHARED, the strength is not: the bottom follows the daylight, the swell does not
     expect(surface.shader.uniforms.uWaterTime).toBe(time)
     expect(basin.shader.uniforms.uWaterTime).toBe(time)
     expect(basin.shader.uniforms.uWaterStrength).not.toBe(surface.shader.uniforms.uWaterStrength)
-    // les points d'injection existent encore dans le shader de three : c'est CE test qui le dit le
-    // jour où une version en déplace un (le patch échouerait sinon en silence, eau figée)
+    // the injection points still exist in three's shader: it is THIS test that will say so the
+    // day a version moves one (the patch would otherwise fail silently, frozen water)
     expect(surface.shader.vertexShader).toContain('vWaterPos = (modelMatrix')
     expect(surface.shader.fragmentShader).toContain('kasbahWaveGrad(kasbahToWind(vWaterPos.xz)')
     expect(surface.shader.fragmentShader).toContain('waterFresnel')
-    // le fond : caustiques sur la lumière directe, puis absorption par le chemin dans l'eau
+    // the bottom: caustics on the direct light, then absorption along the path through the water
     expect(basin.shader.uniforms.uWaterCaustics).toBe(water.caustics)
     expect(basin.shader.uniforms.uWaterRefracted).toBe(water.refracted)
     expect(basin.shader.vertexShader).toContain('vWaterDepth = waterDepth')
     expect(basin.shader.fragmentShader).toContain('reflectedLight.directDiffuse *= mix(1.0, caustic')
     expect(basin.shader.fragmentShader).toMatch(/outgoingLight = outgoingLight \* waterT[\s\S]*#include <opaque_fragment>/)
     expect(surface.shader.fragmentShader).not.toContain('waterT')
-    // le vent est le même pour la surface et pour le fond (qui lit la carte dans son repère)
+    // the wind is the same for the surface and for the bottom (which reads the map in its frame)
     expect(surface.shader.uniforms.uWaterWind).toBe(water.wind)
     expect(basin.shader.uniforms.uWaterWind).toBe(water.wind)
     expect(basin.shader.fragmentShader).toContain('kasbahToWind(causticAt)')
-    // deux programmes distincts, et distincts de tout matériau standard aux mêmes réglages
+    // two distinct programs, and distinct from any standard material with the same settings
     expect(mats.zones.pool.customProgramCacheKey!()).not.toBe(mats.poolBasin.customProgramCacheKey!())
   })
 
-  it('la houle part sous le vent réel, et son amplitude suit sa force', () => {
-    // tirées dans le repère du vent, les ondes avancent (phase k·p − ωt) surtout vers +x
+  it('the swell heads downwind of the real wind, and its amplitude follows its strength', () => {
+    // drawn in the wind frame, the waves advance (phase k·p − ωt) mostly toward +x
     const push = WAVES.reduce((acc, w) => ({ x: acc.x + w.a * w.kx, y: acc.y + w.a * w.ky }), { x: 0, y: 0 })
     expect(push.x).toBeGreaterThan(3 * Math.abs(push.y))
     const water = createWaterUniforms()
-    // vent d'OUEST (270°) : pousse vers l'est, +x du monde
+    // WEST wind (270°): pushes east, world +x
     setWaterWind(water, 10, 270)
     expect(water.wind.value.x).toBeCloseTo(1)
     expect(water.wind.value.y).toBeCloseTo(0)
-    expect(water.wind.value.z).toBeCloseTo(1)                     // une brise de 10 km/h : la houle d'avant
-    // vent du NORD (0°) : pousse vers le sud, +z du monde (nord = −z)
+    expect(water.wind.value.z).toBeCloseTo(1)                     // a 10 km/h breeze: the former swell
+    // NORTH wind (0°): pushes south, world +z (north = −z)
     setWaterWind(water, 10, 0)
     expect(water.wind.value.x).toBeCloseTo(0)
     expect(water.wind.value.y).toBeCloseTo(1)
     setWaterWind(water, 0, 0)
-    expect(water.wind.value.z).toBeCloseTo(0.15)                  // calme : presque plate
+    expect(water.wind.value.z).toBeCloseTo(0.15)                  // calm: almost flat
     setWaterWind(water, 80, 0)
-    expect(water.wind.value.z).toBeCloseTo(1.5)                   // tempête : plafonnée
+    expect(water.wind.value.z).toBeCloseTo(1.5)                   // storm: capped
   })
 
-  it('compte le vent depuis le nord VRAI : le cap de la maison tourne la houle', () => {
+  it('counts the wind from TRUE north: the house heading turns the swell', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     const house = parseHouse(demo)
-    scene.load({ ...house, origin: { ...house.origin, heading: 90 } })   // +y du plan = est
-    scene.setAppearance({ ambience: { ...resolveAmbience({ mode: 'day' }), windKmh: 10, windDirDeg: 270 } })   // vent d'ouest
-    // il pousse vers l'est, c'est-à-dire le +y du plan : −z du monde
+    scene.load({ ...house, origin: { ...house.origin, heading: 90 } })   // plan +y = east
+    scene.setAppearance({ ambience: { ...resolveAmbience({ mode: 'day' }), windKmh: 10, windDirDeg: 270 } })   // west wind
+    // it pushes east, that is, the plan's +y: the world's −z
     const wind = (scene as unknown as { water: { wind: { value: Vector3 } } }).water.wind.value
     expect(wind.x).toBeCloseTo(0)
     expect(wind.y).toBeCloseTo(-1)
   })
 
-  it('ne fait tourner la boucle que si le style, la qualité ET le champ de la caméra le veulent', () => {
+  it('only runs the loop if the style, the quality AND the camera field want it', () => {
     const scene = new HouseScene(document.createElement('canvas'), { headless: true })
     scene.resize(1000, 600)
     scene.load(parseHouse(demo))
-    // headless : pas de contrôles, donc personne n'a tourné la caméra vers la maison — on la vise
-    // à la main sur la piscine de la maison de démonstration, puis on repasse par `syncWater`.
+    // headless: no controls, so nobody turned the camera toward the house — we aim it
+    // by hand at the demo house's pool, then go through `syncWater` again.
     const aim = (at: Vector3, quality: 'high' | 'medium') => { scene.camera.lookAt(at); scene.setOptions({ quality }) }
     aim(POOL_CENTER, 'high')
     expect(scene.debugStats().animations).toBe(1)
     scene.setOptions({ quality: 'low' })
-    expect(scene.debugStats().animations).toBe(0)      // même règle que la pluie
+    expect(scene.debugStats().animations).toBe(0)      // same rule as the rain
     scene.setOptions({ quality: 'high' })
     expect(scene.debugStats().animations).toBe(1)
     scene.setAppearance({ style: styleById('maquette') })
-    expect(scene.debugStats().animations).toBe(0)      // une maquette a de l'eau en résine
+    expect(scene.debugStats().animations).toBe(0)      // a maquette has resin water
     scene.setAppearance({ style: styleById(null) })
     expect(scene.debugStats().animations).toBe(1)
-    // et le jardin qu'on ne regarde plus ne coûte plus rien
+    // and the garden no longer being looked at no longer costs anything
     aim(new Vector3(-40, 0, 40), 'medium')
     expect(scene.debugStats().animations).toBe(0)
   })

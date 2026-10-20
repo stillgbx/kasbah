@@ -1,5 +1,5 @@
-// Détection de « tap » et de survol au-dessus des pointer events, en parallèle d'OrbitControls
-// (qui ne stoppe pas la propagation). Un tap = appui court sans glissement.
+// "Tap" and hover detection on top of pointer events, alongside OrbitControls
+// (which does not stop propagation). A tap = a short press without dragging.
 
 export interface TapEvent { ndc: { x: number; y: number }; pointerType: string; clientX: number; clientY: number }
 
@@ -61,9 +61,9 @@ export function createTapDetector(el: HTMLElement, opts: TapDetectorOptions): ()
   }
 }
 
-// Glissement d'un objet (mode « déplacer un appareil »). L'appui ne démarre un glissement que si
-// `hitTest` l'accepte ; sinon il suit son cours normal (orbite, tap). Le détecteur de tap voit aussi
-// le pointerup final : `DragDetector.active()` lui permet d'ignorer ce faux tap.
+// Dragging an object ("move a device" mode). A press only starts a drag if
+// `hitTest` accepts it; otherwise it follows its normal course (orbit, tap). The tap detector also sees
+// the final pointerup: `DragDetector.active()` lets it ignore that false tap.
 
 export interface DragDetectorOptions {
   hitTest(ev: TapEvent): boolean
@@ -74,7 +74,7 @@ export interface DragDetectorOptions {
 
 export interface DragDetector {
   detach(): void
-  /** Vrai pendant le glissement et juste après sa fin (le pointerup de fin est encore en cours de dispatch). */
+  /** True during the drag and right after it ends (the final pointerup is still being dispatched). */
   active(): boolean
 }
 
@@ -91,7 +91,7 @@ export function createDragDetector(el: HTMLElement, opts: DragDetectorOptions): 
     if (!opts.hitTest(ev)) return
     id = e.pointerId
     moved = false
-    try { el.setPointerCapture(e.pointerId) } catch { /* pointeur déjà relâché */ }
+    try { el.setPointerCapture(e.pointerId) } catch { /* pointer already released */ }
     opts.onStart(ev)
   }
   const onMove = (e: PointerEvent) => {

@@ -1,23 +1,23 @@
 import { BufferAttribute, BufferGeometry, ShapeUtils, Vector2 } from 'three'
 import { ensureCCW, footprintCeiling, padWeight, reliefDelta, signedArea, type Footprint, type TerrainDescriptor, type Vec2 } from '@kasbah/shared'
 
-// Terrain EN RELIEF : un polygone (percé de ses bassins) découpé en mailles carrées de
-// `TERRAIN_MESH_RES`, dont chaque sommet prend la hauteur de la surface (`terrainHeight`).
+// Terrain WITH RELIEF: a polygon (pierced by its pools) cut into square cells of
+// `TERRAIN_MESH_RES`, each vertex of which takes the height of the surface (`terrainHeight`).
 //
-// Pourquoi des mailles et pas `ShapeGeometry` : la triangulation d'un polygone ne met des sommets
-// que sur son contour — de longs triangles qui traversent la parcelle et n'ont rien pour suivre une
-// bosse. Chaque maille est le carré coupé par le contour (Sutherland–Hodgman, le carré étant
-// convexe) puis privé des triangles de ses bassins ; les mailles sont calées sur les multiples du
-// pas, donc le terrain et une zone posée dessus partagent leurs sommets intérieurs.
+// Why cells and not `ShapeGeometry`: triangulating a polygon only puts vertices
+// on its outline — long triangles that cross the plot and have nothing to follow a
+// bump. Each cell is the square clipped by the outline (Sutherland–Hodgman, the square being
+// convex) then stripped of the triangles of its pools; the cells are aligned on multiples of the
+// step, so the terrain and a zone laid on it share their inner vertices.
 //
-// La géométrie est construite UNE fois par contour ; bouger le relief ne refait que les z
-// (`applyTerrainHeights`) — c'est ce qui rend l'édition au doigt fluide.
+// The geometry is built ONCE per outline; moving the relief only redoes the z values
+// (`applyTerrainHeights`) — that is what makes finger editing smooth.
 
 export const TERRAIN_MESH_RES = 0.5
 
 type Line = (p: Vec2) => number
 
-/** Garde la partie de `poly` où `f(p) ≥ 0` (f affine) : Sutherland–Hodgman sur un demi-plan. */
+/** Keeps the part of `poly` where `f(p) ≥ 0` (f affine): Sutherland–Hodgman on a half-plane. */
 function clipHalf(poly: readonly Vec2[], f: Line): Vec2[] {
   const out: Vec2[] = []
   for (let k = 0; k < poly.length; k++) {
@@ -32,7 +32,7 @@ function clipHalf(poly: readonly Vec2[], f: Line): Vec2[] {
   return out
 }
 
-/** Retire les points confondus qui se suivent (la découpe en laisse sur les coins). */
+/** Removes coincident consecutive points (clipping leaves some at the corners). */
 function clean(poly: Vec2[]): Vec2[] {
   const out: Vec2[] = []
   for (const p of poly) {
@@ -43,7 +43,7 @@ function clean(poly: Vec2[]): Vec2[] {
   return out
 }
 
-/** `poly` privé du triangle CCW `t` : trois morceaux au plus, un par côté du triangle. */
+/** `poly` minus the CCW triangle `t`: three pieces at most, one per side of the triangle. */
 function subtractTriangle(poly: Vec2[], t: readonly [Vec2, Vec2, Vec2]): Vec2[][] {
   const out: Vec2[][] = []
   let rest = poly
@@ -57,15 +57,15 @@ function subtractTriangle(poly: Vec2[], t: readonly [Vec2, Vec2, Vec2]): Vec2[][
   return out
 }
 
-/** Une maille grossière longeant un mur est découpée en `REFINE` × `REFINE`. */
+/** A coarse cell running along a wall is cut into `REFINE` × `REFINE`. */
 const REFINE = 4
 
 /**
- * Les mailles traversées par une arête d'emprise où le PLAFOND change d'un côté à l'autre : c'est là
- * que le terrain passe de libre à écrêté. Une cloison entre deux pièces du même niveau n'en est pas.
- * Une façade sous un étage en porte-à-faux, si : dehors, le plafond est le plancher de l'étage.
- * (Première version : « les deux côtés sont dans une pièce » — elle sautait ces façades-là, et le
- * raccord s'étalait sur des mailles de 50 cm qui dépassaient du mur, en dents de scie le long d'une pente.)
+ * The cells crossed by a footprint edge where the CEILING changes from one side to the other: that is where
+ * the terrain goes from free to clipped. A partition between two rooms of the same level is not one.
+ * A facade under a cantilevered upper floor is: outside, the ceiling is the upper floor's floor.
+ * (First version: "both sides are in a room" — it skipped those facades, and the
+ * join spread over 50 cm cells that stuck out of the wall, sawtoothed along a slope.)
  */
 function refinedCells(footprints: Footprint[], res: number): Set<string> {
   const out = new Set<string>()
@@ -87,7 +87,7 @@ function refinedCells(footprints: Footprint[], res: number): Set<string> {
   return out
 }
 
-/** Ajoute les points `sub` des côtés de maille `near` le long des arêtes de `piece` qui y reposent. */
+/** Adds the `sub` points of the `near` cell sides along the edges of `piece` that rest on them. */
 function densifyBorders(piece: Vec2[], x0: number, y0: number, x1: number, y1: number, sub: number, near: { l: boolean; r: boolean; b: boolean; t: boolean }): Vec2[] {
   const eps = 1e-7
   const out: Vec2[] = []
@@ -109,7 +109,7 @@ function densifyBorders(piece: Vec2[], x0: number, y0: number, x1: number, y1: n
   return out
 }
 
-/** Convexe, points alignés admis (ceux qu'ajoute `densifyBorders`). */
+/** Convex, collinear points allowed (those added by `densifyBorders`). */
 function isConvex(poly: readonly Vec2[]): boolean {
   const sign = Math.sign(signedArea(poly))
   for (let k = 0; k < poly.length; k++) {
@@ -125,8 +125,8 @@ function triangles(poly: readonly Vec2[]): [Vec2, Vec2, Vec2][] {
 }
 
 /**
- * Le polygone `outer` percé de `holes`, maillé en carrés de `res` à plat (z = 0). UV = (x, y) en
- * mètres, comme `ShapeGeometry` : les matières du terrain se posent pareil sur l'une ou l'autre.
+ * The `outer` polygon pierced by `holes`, meshed in `res` squares, flat (z = 0). UV = (x, y) in
+ * meters, like `ShapeGeometry`: the terrain materials lay the same way on either.
  */
 export function drapeGeometry(
   outer: readonly Vec2[], holes: readonly (readonly Vec2[])[], res = TERRAIN_MESH_RES, footprints: Footprint[] = [],
@@ -153,10 +153,10 @@ export function drapeGeometry(
     if (Math.abs(area) < 1e-10) return
     const ia = vertex(a), ib = vertex(b), ic = vertex(c)
     if (ia === ib || ib === ic || ia === ic) return
-    if (area > 0) index.push(ia, ib, ic)                 // normale vers +z
+    if (area > 0) index.push(ia, ib, ic)                 // normal toward +z
     else index.push(ia, ic, ib)
   }
-  /** Maille [x0, x1] × [y0, y1] de `column` (la parcelle déjà coupée à cette bande de x), bassins retirés. */
+  /** Cell [x0, x1] × [y0, y1] of `column` (the plot already cut to this x band), pools removed. */
   const region = (column: readonly Vec2[], x0: number, y0: number, x1: number, y1: number, densify?: (piece: Vec2[]) => Vec2[]) => {
     const cell = clean(clipHalf(clipHalf(column, (p) => p[1] - y0), (p) => y1 - p[1]))
     if (cell.length < 3) return
@@ -170,8 +170,8 @@ export function drapeGeometry(
       const piece = densify ? densify(base) : base
       if (piece.length < 3 || Math.abs(signedArea(piece)) < 1e-9) continue
       if (piece.length === 3) emit(piece[0]!, piece[1]!, piece[2]!)
-      // la triangulation retire les points ALIGNÉS — justement ceux qu'on vient d'ajouter sur un côté :
-      // un morceau convexe se triangule donc en éventail depuis son centre, qui les garde tous
+      // triangulation removes COLLINEAR points — precisely the ones just added on a side:
+      // a convex piece is therefore triangulated as a fan from its center, which keeps them all
       else if (piece !== base && isConvex(piece)) {
         const c: Vec2 = [piece.reduce((t, p) => t + p[0], 0) / piece.length, piece.reduce((t, p) => t + p[1], 0) / piece.length]
         for (let k = 0; k < piece.length; k++) emit(c, piece[k]!, piece[(k + 1) % piece.length]!)
@@ -185,7 +185,7 @@ export function drapeGeometry(
     for (let iy = Math.floor(Math.min(...ys) / res); iy * res < Math.max(...ys); iy++) {
       const y0 = iy * res, y1 = y0 + res
       if (refined.has(`${ix},${iy}`)) {
-        // le long d'un mur : mailles fines, le raccord entre terrain libre et écrêté reste dans le mur
+        // along a wall: fine cells, the join between free and clipped terrain stays inside the wall
         for (let sx = 0; sx < REFINE; sx++) {
           const sx0 = x0 + sx * sub, sx1 = sx0 + sub
           const subColumn = clipHalf(clipHalf(column, (p) => p[0] - sx0), (p) => sx1 - p[0])
@@ -194,8 +194,8 @@ export function drapeGeometry(
         }
         continue
       }
-      // une maille voisine d'une maille fine reçoit ses sommets sur le côté commun : sans eux, le
-      // bord de la maille fine aurait des points que celle-ci n'a pas, et le terrain se fendrait
+      // a cell next to a fine cell receives its vertices on the shared side: without them, the
+      // edge of the fine cell would have points this one lacks, and the terrain would crack
       const near = { l: refined.has(`${ix - 1},${iy}`), r: refined.has(`${ix + 1},${iy}`), b: refined.has(`${ix},${iy - 1}`), t: refined.has(`${ix},${iy + 1}`) }
       const densify = near.l || near.r || near.b || near.t
         ? (piece: Vec2[]) => densifyBorders(piece, x0, y0, x1, y1, sub, near)
@@ -214,9 +214,9 @@ export function drapeGeometry(
 }
 
 /**
- * La jupe : un ruban vertical le long du contour, du terrain jusqu'au sol infini. Sans elle, une
- * bosse au bord de la parcelle laisserait voir le vide sous le terrain, et un creux, le sol infini
- * par-dessus. Échantillonnée où le maillage coupe le contour, pour épouser son bord.
+ * The skirt: a vertical ribbon along the outline, from the terrain down to the infinite ground. Without it, a
+ * bump at the edge of the plot would reveal the void under the terrain, and a hollow, the infinite ground
+ * on top. Sampled where the mesh crosses the outline, to hug its edge.
  */
 export function skirtGeometry(outer: readonly Vec2[], res = TERRAIN_MESH_RES): BufferGeometry {
   const poly = ensureCCW(outer)
@@ -231,13 +231,13 @@ export function skirtGeometry(outer: readonly Vec2[], res = TERRAIN_MESH_RES): B
     ts.sort((u, v) => u - v)
     for (const t of ts) pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t])
   }
-  // deux sommets par point du contour : le haut (pair, z posé par `applyTerrainHeights`) et le bas (impair)
+  // two vertices per outline point: the top (even, z set by `applyTerrainHeights`) and the bottom (odd)
   const pos = new Float32Array(pts.length * 6)
   pts.forEach(([x, y], i) => { pos.set([x, y, 0, x, y, 0], i * 6) })
   const index: number[] = []
   for (let i = 0; i < pts.length; i++) {
     const j = (i + 1) % pts.length
-    // les deux faces : le ruban monte vers une bosse ou descend dans un creux, il se voit des deux côtés
+    // both faces: the ribbon rises toward a bump or descends into a hollow, it is seen from both sides
     index.push(i * 2 + 1, j * 2 + 1, j * 2, i * 2 + 1, j * 2, i * 2)
     index.push(i * 2 + 1, j * 2, j * 2 + 1, i * 2 + 1, i * 2, j * 2)
   }
@@ -249,10 +249,10 @@ export function skirtGeometry(outer: readonly Vec2[], res = TERRAIN_MESH_RES): B
 }
 
 /**
- * Pose les z d'une géométrie de `drapeGeometry` (ou de `skirtGeometry`) sur la surface du terrain,
- * décalés de `lift`. La part de relief de chaque sommet (`padWeight`) et le plancher qui le couvre
- * (`footprintCeiling`), les coûteux, sont retenus sur la géométrie tant que les emprises sont les
- * mêmes : pendant un glissement, seul le relief change.
+ * Sets the z values of a `drapeGeometry` (or `skirtGeometry`) geometry on the terrain surface,
+ * offset by `lift`. Each vertex's share of relief (`padWeight`) and the floor that covers it
+ * (`footprintCeiling`), the costly ones, are kept on the geometry as long as the footprints are the
+ * same: during a drag, only the relief changes.
  */
 export function applyTerrainHeights(g: BufferGeometry, terrain: TerrainDescriptor, lift = 0): void {
   const pos = g.getAttribute('position') as BufferAttribute
@@ -273,7 +273,7 @@ export function applyTerrainHeights(g: BufferGeometry, terrain: TerrainDescripto
   }
   const relief = terrain.relief
   for (let i = 0; i < pos.count; i++) {
-    if (skirt && i % 2 === 1) { pos.setZ(i, terrain.z - 0.02); continue }   // pied de la jupe : le sol infini
+    if (skirt && i % 2 === 1) { pos.setZ(i, terrain.z - 0.02); continue }   // foot of the skirt: the infinite ground
     const d = relief && w[i]! > 0 ? w[i]! * reliefDelta(relief, pos.getX(i), pos.getY(i)) : 0
     pos.setZ(i, Math.min(terrain.z + d, ceil[i]!) + lift)
   }

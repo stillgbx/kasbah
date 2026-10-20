@@ -2,13 +2,13 @@ import { Color } from 'three'
 import { dayFactor, type SceneAmbience } from '../core/ambience'
 import { mix, mixPalette, mixRgb, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
 
-// DISCO : la boule à facettes et la piste de danse. Les murs sont de l'argent poli qui renvoie un
-// ciel bleu nuit à l'horizon magenta, le toit est en or, les sols sont des dalles laquées qui ÉMETTENT
-// (magenta, or, cyan selon le revêtement), et deux projecteurs de couleurs opposées se partagent la maison : le
-// ciel de l'hémisphère est cyan, son sol magenta. Comme la maison hantée, le style refuse en partie
-// le jour (`dayFactor` écrasé) : à midi la fête baisse d'un ton, elle ne s'arrête pas.
-// La boule à facettes au-dessus du toit et les projecteurs qui balaient la maison sont un EFFET animé
-// (`effects/disco.ts`), demandé par `StyleLook.disco`.
+// DISCO: the mirror ball and the dance floor. The walls are polished silver reflecting a
+// midnight-blue sky with a magenta horizon, the roof is gold, the floors are lacquered tiles that EMIT
+// (magenta, gold, cyan depending on the covering), and two spotlights of opposite colors share the house: the
+// hemisphere's sky is cyan, its ground magenta. Like the haunted house, the style partly refuses
+// the day (`dayFactor` crushed): at noon the party drops a notch, it does not stop.
+// The mirror ball above the roof and the spotlights sweeping the house are an animated EFFECT
+// (`effects/disco.ts`), requested by `StyleLook.disco`.
 
 const NIGHT: PaletteSpec = {
   wall: '#c9c4dc',
@@ -26,7 +26,7 @@ const NIGHT: PaletteSpec = {
   device: '#e0d8ff',
 }
 
-/** La même piste au grand jour : les couleurs restent franches, l'argent se refroidit. */
+/** The same dance floor in broad daylight: the colors stay frank, the silver cools down. */
 const DAY: PaletteSpec = {
   wall: '#dcd9e8',
   wallInterior: '#a878bd',
@@ -44,10 +44,10 @@ const DAY: PaletteSpec = {
 }
 
 const SURFACES: SurfaceLooks = {
-  // l'argent : presque un miroir, c'est le ciel (bleu nuit, horizon magenta) qui lui donne ses reflets
+  // the silver: almost a mirror, it is the sky (midnight blue, magenta horizon) that gives it its reflections
   wall: { texture: 'metal', roughness: 0.18, metalness: 0.95, relief: 0.6 },
   wallInterior: { texture: 'gloss', roughness: 0.3, metalness: 0.4, emissive: 0.3 },
-  // la piste : des dalles de 60 cm laquées qui rendent leur couleur
+  // the dance floor: lacquered 60 cm tiles that give off their color
   floor: { texture: 'tile', roughness: 0.12, metalness: 0.3, emissive: 0.4 },
   floors: {
     wood: { texture: 'tile', roughness: 0.12, metalness: 0.5, emissive: 0.35 },
@@ -55,7 +55,7 @@ const SURFACES: SurfaceLooks = {
     carpet: { texture: 'carpet', roughness: 0.85, emissive: 0.15 },
     concrete: { texture: 'tile', roughness: 0.12, metalness: 0.3, emissive: 0.4 },
   },
-  // l'or : moins miroir que l'argent, et il rend un peu sa couleur, sinon il ne renvoie que le ciel
+  // the gold: less of a mirror than the silver, and it gives off a little of its color, otherwise it only reflects the sky
   roof: { texture: 'metal', roughness: 0.3, metalness: 0.6, emissive: 0.15, relief: 0.6 },
   terrain: { texture: 'gloss', roughness: 0.35, metalness: 0.3, relief: 0.5 },
   zones: {
@@ -69,7 +69,7 @@ const SURFACES: SurfaceLooks = {
   },
 }
 
-// le ciel est la carte d'environnement : c'est LUI qui colore l'argent des murs
+// the sky is the environment map: it is the sky that colors the silver of the walls
 const SKY_NIGHT = { zenith: [0.015, 0.025, 0.16], horizon: [0.32, 0.05, 0.36], ground: [0.02, 0.005, 0.03], sunGlare: 8, sunColor: [1, 0.75, 0.3] } as const
 const SKY_DAY = { zenith: [0.12, 0.2, 0.55], horizon: [0.75, 0.5, 0.8], ground: [0.08, 0.05, 0.1], sunGlare: 10, sunColor: [1, 0.9, 0.7] } as const
 
@@ -77,11 +77,11 @@ export const discoStyle: RenderStyle = {
   id: 'disco',
   labelKey: 'render.styles.disco',
   look(a: SceneAmbience): StyleLook {
-    const day = dayFactor(a) * 0.7                      // la fête baisse d'un ton à midi, elle ne s'arrête pas
+    const day = dayFactor(a) * 0.7                      // the party drops a notch at noon, it does not stop
     return {
       palette: mixPalette(NIGHT, DAY, day),
       surfaces: SURFACES,
-      // la vitre dorée d'une boîte de nuit : on devine la fête derrière
+      // the golden glass of a nightclub: you can make out the party behind it
       glass: { opacity: 0.45, roughness: 0.03, metalness: 0.4, emissive: mix(0.8, 0.2, day) },
       sky: {
         zenith: mixRgb(SKY_NIGHT.zenith, SKY_DAY.zenith, day),
@@ -89,10 +89,10 @@ export const discoStyle: RenderStyle = {
         ground: mixRgb(SKY_NIGHT.ground, SKY_DAY.ground, day),
         sunGlare: mix(SKY_NIGHT.sunGlare, SKY_DAY.sunGlare, day),
         sunColor: mixRgb(SKY_NIGHT.sunColor, SKY_DAY.sunColor, day),
-        intensity: mix(1.6, 1.1, day),                   // les reflets de l'argent font le style
+        intensity: mix(1.6, 1.1, day),                   // the silver's reflections make the style
       },
       lighting: {
-        // le soleil est un projecteur doré ; l'hémisphère, deux gélatines opposées
+        // the sun is a golden spotlight; the hemisphere, two opposite gels
         sunColor: new Color(0xffb13d).lerp(new Color(0xfff0d8), day),
         sunIntensity: mix(0.9, 1.8, day),
         hemiSky: new Color(0x19c8ff).lerp(new Color(0x9ab8e8), day),
@@ -111,7 +111,7 @@ export const discoStyle: RenderStyle = {
       },
       disco: { spots: 4, colors: [new Color(0xff1fa8), new Color(0x19c8ff), new Color(0xffc21a), new Color(0x9b4dff)] },
       glow: { scale: mix(1.8, 1.1, day), opacity: mix(1, 0.4, day), lightIntensity: mix(22, 8, day), emissive: mix(3.2, 1.5, day) },
-      // jardin : paillettes : rose fluo, or, cyan, violet qui émettent ; troncs noirs, fruits argent
+      // garden: glitter: neon pink, gold, cyan, violet that emit; black trunks, silver fruit
       garden: { leaf: [new Color(0xff2bb4), new Color(0xffc21a), new Color(0x19d8ff), new Color(0x9b4dff)], bark: new Color(0x141018), stone: new Color(0xc9c4dc), accent: new Color(0xf2f0ff), emissive: 0.35 },
     }
   },

@@ -2,12 +2,12 @@ import { Color } from 'three'
 import { dayFactor, type SceneAmbience } from '../core/ambience'
 import { mix, mixPalette, mixRgb, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
 
-// AKIRA : Neo-Tokyo 2019. Béton gris-bleu et bitume mouillé qui renvoie le ciel, et une seule
-// couleur qui compte : le rouge de Kaneda — vitres, allées et cloisons intérieures l'émettent. Le
-// cyan de la piscine et de la lune en contrepoint, comme dans le film. La nuit, l'horizon rougeoie
-// (une ville qui brûle) ; le jour, un ciel laiteux de smog où le rouge reste la seule tache vive.
-// L'image est celle d'un celluloïd des années 80 : noirs écrasés, couleurs poussées, gros halo.
-// La moto de Kaneda tourne autour de la maison, feu arrière en traînée (`StyleLook.parade`).
+// AKIRA: Neo-Tokyo 2019. Blue-gray concrete and wet asphalt that reflects the sky, and a single
+// color that matters: Kaneda's red — windows, paths and interior partitions emit it. The
+// cyan of the pool and the moon as a counterpoint, as in the film. At night, the horizon glows red
+// (a burning city); by day, a milky smog sky where the red remains the only vivid spot.
+// The image is that of an '80s cel: crushed blacks, pushed colors, big halo.
+// Kaneda's bike circles the house, its tail light trailing (`StyleLook.parade`).
 
 const NIGHT: PaletteSpec = {
   wall: '#6e7888',
@@ -25,13 +25,13 @@ const NIGHT: PaletteSpec = {
   device: '#8a8f9a',
 }
 
-/** Le même quartier sous le smog de midi : béton délavé, le rouge seul garde sa force. */
+/** The same neighborhood under the noon smog: washed-out concrete, only the red keeps its strength. */
 const DAY: PaletteSpec = {
   wall: '#9a9ea6',
   wallInterior: '#b8a8a4',
   floor: '#7a7c84',
   floors: { wood: '#8a6a5a', tile: '#8a8e98', carpet: '#9a5a56', concrete: '#8a8e96' },
-  glass: '#c25a4e',                                     // les vitres gardent un reflet rouge : la signature reste sur la maison
+  glass: '#c25a4e',                                     // the windows keep a red reflection: the signature stays on the house
   roof: '#6e727c',
   terrain: '#5a5e66',
   zones: {
@@ -44,7 +44,7 @@ const DAY: PaletteSpec = {
 
 const SURFACES: SurfaceLooks = {
   wall: { texture: 'concrete', roughness: 0.85, relief: 1.2 },
-  // les pièces sont éclairées de rouge : la cloison en rend une part
+  // the rooms are lit red: the partition gives back part of it
   wallInterior: { texture: 'plaster', roughness: 0.8, emissive: 0.3 },
   floor: { texture: 'concrete', roughness: 0.6 },
   floors: {
@@ -54,7 +54,7 @@ const SURFACES: SurfaceLooks = {
     concrete: { texture: 'concrete', roughness: 0.6 },
   },
   roof: { texture: 'metal', roughness: 0.7, metalness: 0.1 },
-  // le bitume après la pluie : un peu de brillant, pas trop — un sol qui reflète un ciel noir est noir
+  // the asphalt after rain: a little shine, not too much — a floor that reflects a black sky is black
   terrain: { texture: 'concrete', roughness: 0.6 },
   zones: {
     lawn: { texture: 'grass', roughness: 0.9 },
@@ -88,7 +88,7 @@ export const akiraStyle: RenderStyle = {
         intensity: mix(1.3, 1, day),
       },
       lighting: {
-        // la lune est cyan, le ciel qui renvoie la ville est rouge : les deux couleurs du film
+        // the moon is cyan, the sky that reflects the city is red: the film's two colors
         sunColor: new Color(0x4a8aaa).lerp(new Color(0xf2efe8), day),
         sunIntensity: mix(1.2, 2, day),
         hemiSky: new Color(0x5a1c22).lerp(new Color(0xb0b4ba), day),
@@ -103,13 +103,13 @@ export const akiraStyle: RenderStyle = {
         bloom: { strength: mix(1.3, 0.4, day), radius: 0.7, threshold: mix(0.5, 0.9, day) },
         ao: { intensity: 1.2, radius: 0.35 },
         vignette: mix(0.6, 0.35, day),
-        // le celluloïd : contraste, rouge poussé, saturation forte ; les noirs ne s'écrasent que de
-        // jour (lift négatif) — la nuit, ils tombaient dans le noir
+        // the cel: contrast, pushed red, strong saturation; the blacks are only crushed by
+        // day (negative lift) — at night, they fell into black
         grade: { lift: [-0.01 * day, -0.015 * day, -0.01 * day], gamma: [0.97, 0.95, 0.96], gain: [1.08, 0.97, 0.96], saturation: 1.25 },
       },
       glow: { scale: mix(1.5, 1, day), opacity: mix(0.9, 0.3, day), lightIntensity: mix(16, 7, day), emissive: mix(2.6, 1.4, day) },
       parade: { kind: 'akira' },
-      // jardin : feuillage presque noir, fruits et fleurs rouges qui luisent un peu
+      // garden: almost black foliage, red fruit and flowers that glow a little
       garden: { leaf: [new Color(0x14201c), new Color(0x1c1a1e), new Color(0x22181a)], bark: new Color(0x0c0c0e), stone: new Color(0x2a2e36), accent: new Color(0xff2a1a), emissive: 0.15 },
     }
   },

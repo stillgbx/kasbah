@@ -1,3 +1,3 @@
-// Le calcul du soleil vit dans `@kasbah/shared` depuis que le serveur en a besoin (automatisations
-// au lever, au coucher, au crépuscule). Ré-exporté ici pour les appelants de la scène.
+// The sun computation lives in `@kasbah/shared` since the server needs it (automations at
+// sunrise, sunset, dusk). Re-exported here for the scene's callers.
 export { approximateSunPosition, sunPosition, type SunPosition } from '@kasbah/shared'

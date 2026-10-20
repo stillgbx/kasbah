@@ -2,48 +2,48 @@ import { BufferAttribute, BufferGeometry, CanvasTexture, Color, Material, Points
 import { footprintCeiling, padWeight, pointInPolygon, reliefNodeXY, reliefSurface, type ReliefGrid, type TerrainDescriptor } from '@kasbah/shared'
 import { createDragDetector, type DragDetector, type TapEvent } from '../core/input'
 
-// Éditeur du RELIEF (Réglages → Rendu 3D → « Modeler le terrain ») : un point par nœud de la grille,
-// qu'on tire vers le haut ou le bas au doigt. Un point bouge SEUL — ses voisins ne suivent pas : on
-// modèle nœud par nœud, et la surface lisse fait le reste. Le glissement est VERTICAL À L'ÉCRAN,
-// converti en mètres à la profondeur du point : un centimètre de doigt vaut plus de relief vu de
-// loin que de près, comme on s'y attend.
+// Editor of the RELIEF (Settings → 3D rendering → "Shape the terrain"): a dot per grid node,
+// pulled up or down with the finger. A dot moves ALONE — its neighbors do not follow: one
+// shapes node by node, and the smooth surface does the rest. The drag is VERTICAL ON SCREEN,
+// converted to meters at the dot's depth: a centimeter of finger is worth more relief seen from
+// afar than up close, as one would expect.
 //
-// Les nœuds SOUS la maison ont aussi leur point : ils modèlent les abords (un talus qui vient
-// toucher un mur) sans percer les sols, le terrain étant écrêté sous chaque plancher. Leur point est
-// à la hauteur du NŒUD, pas du terrain écrêté, et se dessine à travers les murs, plus pâle.
+// The nodes UNDER the house have their dot too: they shape the surroundings (a bank that comes
+// to touch a wall) without piercing the floors, the terrain being clipped under each floor. Their dot is
+// at the height of the NODE, not of the clipped terrain, and is drawn through the walls, paler.
 //
-// CHOISIR, puis glisser : un tap choisit un point (ou, dans le vide, n'en choisit plus aucun) ; seul
-// le point choisi se glisse. Un glissement qui part ailleurs — même sur un autre point — fait
-// orbiter la caméra : sans cela, on déplaçait un point chaque fois qu'on voulait tourner autour.
+// SELECT, then drag: a tap selects a dot (or, in empty space, deselects all); only
+// the selected dot can be dragged. A drag that starts elsewhere — even on another dot — orbits
+// the camera: without that, a dot got moved every time one wanted to turn around.
 //
-// Chaque modification (geste, saisie, import) s'annule et se rétablit, sur `RELIEF_HISTORY` pas.
+// Every change (gesture, entry, import) can be undone and redone, over `RELIEF_HISTORY` steps.
 //
-// La grille vit ici tant qu'on édite ; c'est la scène qui la pose sur le terrain (`changed`) et le
-// panneau qui l'enregistre.
+// The grid lives here while editing; it is the scene that lays it on the terrain (`changed`) and the
+// panel that saves it.
 
 export interface ReliefEditorHost {
   canvas: HTMLCanvasElement
   camera: Camera
-  /** Groupe en repère MAISON qui porte les poignées (le site). */
+  /** Group in the HOUSE reference frame that carries the handles (the site). */
   parent: Object3D
-  /** Le terrain tel qu'il est dessiné, brouillon compris : il place les poignées. */
+  /** The terrain as drawn, draft included: it places the handles. */
   terrain(): TerrainDescriptor
   setControls(enabled: boolean): void
   invalidate(): void
-  /** La grille a bougé ; `final` à la fin du geste (un glissement en envoie un par image avant). */
+  /** The grid moved; `final` at the end of the gesture (a drag sends one per frame before). */
   changed(final: boolean): void
-  /** Le point choisi a changé (ou l'historique) : le panneau se remet à jour, rien à redessiner du terrain. */
+  /** The selected dot changed (or the history): the panel updates, nothing of the terrain to redraw. */
   selectionChanged(): void
   accent: Color
 }
 
-/** Pas d'accroche d'un glissement (cm) : assez fin pour une bosse, assez gros pour viser juste. */
+/** Snap step of a drag (cm): fine enough for a bump, coarse enough to aim right. */
 export const RELIEF_SNAP_CM = 5
 const HANDLE_LIFT = 0.06
 const HIT_PX = { mouse: 14, touch: 26 }
-/** Le doigt doit avoir parcouru ça (px) avant que le point bouge : un tremblement ne vaut pas 5 cm. */
+/** The finger must have traveled this far (px) before the dot moves: a tremor is not worth 5 cm. */
 const DEAD_PX = 6
-/** Pas d'annulation retenus. */
+/** Undo steps kept. */
 export const RELIEF_HISTORY = 10
 
 export function dotTexture(): CanvasTexture | null {
@@ -58,7 +58,7 @@ export function dotTexture(): CanvasTexture | null {
   return new CanvasTexture(c)
 }
 
-/** Le point CHOISI : un anneau d'accent autour d'un cœur blanc, plus gros que les autres. */
+/** The SELECTED dot: an accent ring around a white core, bigger than the others. */
 export function ringTexture(accent: Color): CanvasTexture | null {
   if (typeof document === 'undefined') return null
   const c = document.createElement('canvas')
@@ -74,22 +74,22 @@ export function ringTexture(accent: Color): CanvasTexture | null {
   g.fillStyle = '#ffffff'
   g.beginPath(); g.arc(32, 32, 14, 0, Math.PI * 2); g.fill()
   const tex = new CanvasTexture(c)
-  tex.colorSpace = SRGBColorSpace                 // l'accent du thème, pas une teinte délavée
+  tex.colorSpace = SRGBColorSpace                 // the theme's accent, not a washed-out tint
   return tex
 }
 
 /**
- * Les poignées s'effacent avec la PROFONDEUR : plus loin, plus transparentes, plus petites, plus
- * sombres — l'œil lit la parcelle en perspective et trouve d'abord les points proches. Tout se fait
- * dans le shader, sur une plage [près, loin] recalée à chaque image sur la parcelle vue de la
- * caméra (`onBeforeRender`) : aucun calcul par point, et la plage suit le zoom comme l'orbite.
+ * The handles fade with DEPTH: farther, more transparent, smaller, darker
+ * — the eye reads the plot in perspective and finds the near dots first. Everything is done
+ * in the shader, over a [near, far] range readjusted every frame to the plot as seen from the
+ * camera (`onBeforeRender`): no per-dot computation, and the range follows the zoom as well as the orbit.
  */
 const FAR_ALPHA = 0.08, FAR_SIZE = 0.45, FAR_SHADE = 0.45
 
 function fadeWithDepth(points: Points, material: PointsMaterial): void {
   const near = { value: 0 }, far = { value: 1 }
   material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms, renderer: WebGLRenderer) => {
-    Material.prototype.onBeforeCompile.call(material, shader, renderer)   // les crochets communs (fondu des étages…)
+    Material.prototype.onBeforeCompile.call(material, shader, renderer)   // the shared hooks (level fade…)
     shader.uniforms.reliefNear = near
     shader.uniforms.reliefFar = far
     shader.vertexShader = shader.vertexShader
@@ -110,28 +110,28 @@ function fadeWithDepth(points: Points, material: PointsMaterial): void {
     if (!bs) return
     center.copy(bs.center).applyMatrix4(points.matrixWorld)
     const d = center.distanceTo(camera.position)
-    // l'effacement part du premier rang et a fini avant le bord du fond : le dernier tiers reste discret
+    // the fading starts from the first row and is done before the far edge: the last third stays discreet
     near.value = Math.max(0, d - bs.radius)
     far.value = d + bs.radius * 0.6
   }
 }
 
-/** Un jeu de poignées : celles du jardin (cachées par ce qui est devant), ou celles sous la maison. */
+/** A set of handles: those of the garden (hidden by what is in front), or those under the house. */
 interface HandleSet { points: Points; material: PointsMaterial; nodes: { i: number; j: number }[]; base: Color }
 
 export class ReliefEditor {
   grid: ReliefGrid
-  /** Le nœud qu'on vient de tirer : le panneau affiche sa hauteur. */
+  /** The node just pulled: the panel shows its height. */
   selected: { i: number; j: number } | null = null
-  /** Dernier choix fait au tap, et avec quoi (souris, stylet, doigt) : le panneau y donne la main au champ. */
+  /** Last selection made by tap, and with what (mouse, pen, finger): the panel hands over to the field accordingly. */
   pick = { seq: 0, by: '' }
   private readonly sets: [HandleSet, HandleSet]
   private readonly map: CanvasTexture | null
-  /** Marqueur du point choisi : dessiné par-dessus tout, on ne le perd pas derrière une bosse ou un mur. */
+  /** Marker of the selected dot: drawn over everything, it is not lost behind a bump or a wall. */
   private readonly mark: Points
   private drag: DragDetector | null = null
   private gesture: { k: number; startY: number; pxPerM: number; startCm: number; moved: boolean } | null = null
-  /** Nœuds qui ont une poignée (`j * cols + i`) : la navigation au clavier saute les autres. */
+  /** Nodes that have a handle (`j * cols + i`): keyboard navigation skips the others. */
   private handled = new Set<number>()
   private undoStack: ReliefGrid[] = []
   private redoStack: ReliefGrid[] = []
@@ -140,9 +140,9 @@ export class ReliefEditor {
   constructor(private readonly host: ReliefEditorHost, grid: ReliefGrid, headless: boolean) {
     this.grid = grid
     this.map = dotTexture()
-    // hors tone mapping, et SOUS le seuil du bloom : blanches, les poignées bavaient en halos la nuit
+    // outside tone mapping, and BELOW the bloom threshold: white, the handles bled into halos at night
     const make = (name: string, base: Color, depthTest: boolean): HandleSet => {
-      // seuil bas : un point lointain descend à 8 % d’alpha, un seuil à 0,4 l’aurait fait disparaître
+      // low threshold: a distant dot drops to 8 % alpha, a threshold at 0.4 would have made it disappear
       const material = new PointsMaterial({ size: 12, sizeAttenuation: false, vertexColors: true, transparent: true, alphaTest: 0.02, depthWrite: false, depthTest, toneMapped: false, ...(this.map ? { map: this.map } : {}) })
       const points = new Points(new BufferGeometry(), material)
       fadeWithDepth(points, material)
@@ -171,16 +171,16 @@ export class ReliefEditor {
     }
   }
 
-  /** Vrai pendant un glissement et juste après : le tap de fin n'en est pas un. */
+  /** True during a drag and right after: the closing tap is not one. */
   active(): boolean { return this.drag?.active() ?? false }
 
-  /** Hauteur (cm) du nœud choisi, `null` sans choix. */
+  /** Height (cm) of the selected node, `null` without a selection. */
   selectedCm(): number | null {
     const s = this.selected
     return s ? this.grid.cm[s.j * this.grid.cols + s.i]! : null
   }
 
-  /** Pose la hauteur (cm) du point choisi ; faux s'il n'y en a pas, ou si elle ne change pas. */
+  /** Sets the height (cm) of the selected dot; false if there is none, or if it does not change. */
   setSelectedCm(cm: number): boolean {
     const s = this.selected
     if (!s) return false
@@ -191,7 +191,7 @@ export class ReliefEditor {
     return true
   }
 
-  /** Montre (ou cache) les poignées : l'onglet Contour garde l'éditeur, sans qu'il réponde. */
+  /** Shows (or hides) the handles: the Outline tab keeps the editor, without it responding. */
   setEnabled(on: boolean): void {
     this.enabled = on
     for (const set of this.sets) set.points.visible = on
@@ -200,8 +200,8 @@ export class ReliefEditor {
   }
 
   /**
-   * La même grille, agrandie pour un contour qu'on vient d'étendre (`extendReliefGrid`) : pas un pas
-   * d'historique — rien n'a changé de hauteur. Le point choisi suit son nœud.
+   * The same grid, enlarged for an outline that was just extended (`extendReliefGrid`): not a history
+   * step — no height changed. The selected dot follows its node.
    */
   adoptGrid(grid: ReliefGrid): void {
     const s = this.selected
@@ -213,7 +213,7 @@ export class ReliefEditor {
     this.layout()
   }
 
-  /** Nouvelle grille (import) : un pas d'historique, et les poignées se refont sur ses nœuds. */
+  /** New grid (import): one history step, and the handles are rebuilt on its nodes. */
   setGrid(grid: ReliefGrid): void {
     this.record(this.snapshot())
     this.grid = grid
@@ -224,7 +224,7 @@ export class ReliefEditor {
   get canUndo(): boolean { return this.undoStack.length > 0 }
   get canRedo(): boolean { return this.redoStack.length > 0 }
 
-  /** Revient au pas précédent ; faux s'il n'y en a pas. La grille est un NOUVEL objet : relire `grid`. */
+  /** Goes back to the previous step; false if there is none. The grid is a NEW object: read `grid` again. */
   undo(): boolean { return this.travel(this.undoStack, this.redoStack) }
   redo(): boolean { return this.travel(this.redoStack, this.undoStack) }
 
@@ -233,7 +233,7 @@ export class ReliefEditor {
     if (!g) return false
     to.push(this.snapshot())
     this.grid = g
-    // le point choisi le reste, s'il existe dans la grille retrouvée (un import peut en changer la taille)
+    // the selected dot stays selected, if it exists in the restored grid (an import can change its size)
     if (this.selected && (this.selected.i >= g.cols || this.selected.j >= g.rows)) this.selected = null
     this.layout()
     return true
@@ -243,7 +243,7 @@ export class ReliefEditor {
     return { ...this.grid, origin: [this.grid.origin[0], this.grid.origin[1]], cm: [...this.grid.cm] }
   }
 
-  /** Retient l'état d'AVANT une modification ; une nouvelle modification efface ce qu'on pouvait rétablir. */
+  /** Records the state BEFORE a change; a new change clears what could have been redone. */
   private record(before: ReliefGrid): void {
     this.undoStack.push(before)
     if (this.undoStack.length > RELIEF_HISTORY) this.undoStack.shift()
@@ -251,9 +251,9 @@ export class ReliefEditor {
   }
 
   /**
-   * Passe au point voisin dans une direction de l'ÉCRAN (`sx`, `sy` : (1, 0) = droite, (0, 1) = haut) :
-   * l'axe de la grille le mieux aligné, projeté à l'écran autour du point — ↑ s'éloigne de la caméra
-   * quelle que soit la vue. Un nœud sans poignée est sauté. Faux sans point choisi ou sans voisin.
+   * Moves to the neighboring dot in a SCREEN direction (`sx`, `sy`: (1, 0) = right, (0, 1) = up):
+   * the best-aligned grid axis, projected on screen around the dot — ↑ moves away from the camera
+   * whatever the view. A node without a handle is skipped. False without a selected dot or without a neighbor.
    */
   stepSelection(sx: number, sy: number): boolean {
     const s = this.selected
@@ -283,7 +283,7 @@ export class ReliefEditor {
     }
   }
 
-  /** Un tap : choisit le point sous le doigt, ou aucun si le doigt tombe à côté. */
+  /** A tap: selects the dot under the finger, or none if the finger lands beside it. */
   tap(ev: TapEvent): void {
     this.selected = this.nearest(ev)
     this.pick = { seq: this.pick.seq + 1, by: ev.pointerType }
@@ -292,8 +292,8 @@ export class ReliefEditor {
   }
 
   /**
-   * Les nœuds qui ont une poignée : ceux de la parcelle, sauf autour d'un bassin, où le terrain reste
-   * plat et une poignée ne ferait rien. Sous la maison, ils vont dans le second jeu.
+   * The nodes that have a handle: those of the plot, except around a pool, where the terrain stays
+   * flat and a handle would do nothing. Under the house, they go into the second set.
    */
   layout(): void {
     const t = this.host.terrain()
@@ -316,7 +316,7 @@ export class ReliefEditor {
     this.refresh()
   }
 
-  /** Reposent les poignées à la hauteur de leur nœud ; le point choisi porte l'anneau et s'efface de son jeu. */
+  /** Lays the handles back at the height of their node; the selected dot carries the ring and disappears from its set. */
   refresh(): void {
     const t = this.host.terrain()
     const s = this.selected
@@ -347,7 +347,7 @@ export class ReliefEditor {
     return out.set(x, y, z).applyMatrix4(this.host.parent.matrixWorld).project(this.host.camera)
   }
 
-  /** La poignée la plus proche du doigt, à quelques pixels près ; `null` s'il n'y en a pas. */
+  /** The handle closest to the finger, within a few pixels; `null` if there is none. */
   private nearest(ev: TapEvent): { i: number; j: number } | null {
     const r = this.host.canvas.getBoundingClientRect()
     const limit = ev.pointerType === 'mouse' ? HIT_PX.mouse : HIT_PX.touch
@@ -357,7 +357,7 @@ export class ReliefEditor {
       const pos = set.points.geometry.getAttribute('position') as BufferAttribute
       for (let n = 0; n < set.nodes.length; n++) {
         this.screenOf(pos.getX(n), pos.getY(n), pos.getZ(n), v)
-        if (v.z > 1) continue                                 // derrière la caméra
+        if (v.z > 1) continue                                 // behind the camera
         const d = Math.hypot(((v.x - ev.ndc.x) * r.width) / 2, ((v.y - ev.ndc.y) * r.height) / 2)
         if (d < bestD) { bestD = d; best = set.nodes[n]! }
       }
@@ -373,7 +373,7 @@ export class ReliefEditor {
     const z = reliefSurface(this.host.terrain(), x, y)
     const r = this.host.canvas.getBoundingClientRect()
     const a = this.screenOf(x, y, z), b = this.screenOf(x, y, z + 1)
-    // un point vu d'aplomb n'a pas de hauteur à l'écran : un plancher évite des mètres par pixel
+    // a dot seen from straight above has no height on screen: a floor avoids meters per pixel
     const pxPerM = Math.max(8, Math.abs(((b.y - a.y) * r.height) / 2))
     const k = s.j * this.grid.cols + s.i
     this.gesture = { k, startY: ev.clientY, pxPerM, startCm: this.grid.cm[k]!, moved: false }

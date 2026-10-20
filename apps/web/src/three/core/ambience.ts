@@ -2,53 +2,53 @@ import { Vector3 } from 'three'
 import type { WeatherCondition } from '@kasbah/shared'
 import { approximateSunPosition, sunPosition } from './sun'
 
-// L'AMBIANCE, c'est l'heure qu'il fait dans la scène — pas le goût du rendu. Les deux axes sont
-// volontairement séparés :
+// The AMBIENCE is the time of day in the scene — not the taste of the render. The two axes are
+// deliberately separate:
 //
-//   style   (`three/styles/`)  = COMMENT c'est rendu (réaliste, nature, cyberpunk, candy…)
-//   ambiance (ce fichier)      = QUELLE lumière il y a (position du soleil, couverture du ciel)
+//   style    (`three/styles/`) = HOW it is rendered (realistic, nature, cyberpunk, candy…)
+//   ambience (this file)       = WHAT light there is (sun position, sky cover)
 //
-// Et ni l'un ni l'autre n'est le thème clair/sombre de l'application : demande explicite de
-// l'utilisateur — « le mode de l'app est une chose, pour la maison c'est en fonction de la position
-// gps, du soleil, de la météo ». Un écran en thème sombre devant une maison en plein soleil est
-// donc un état normal.
+// And neither is the application's light/dark theme: an explicit request from
+// the user — "the app's mode is one thing, for the house it depends on the gps
+// position, the sun, the weather". A screen in dark theme in front of a house in full sun is
+// therefore a normal state.
 //
-// La météo est branchée depuis le 2026-09-16 : `useHouseScene` lit l'appareil `weather` (nébulosité,
-// visibilité, condition) et le reste vient d'ici — ce que la pluie mouille, ce que la neige blanchit,
-// quand l'orage éclaire (`weatherEffects`). Sans météo, tout vaut « dégagé ».
+// The weather is wired in since 2026-09-16: `useHouseScene` reads the `weather` device (cloud cover,
+// visibility, condition) and the rest comes from here — what the rain wets, what the snow whitens,
+// when the storm flashes (`weatherEffects`). Without weather, everything counts as "clear".
 
-/** Ce que l'utilisateur choisit dans les réglages. `auto` suit le soleil réel au-dessus de la maison. */
+/** What the user chooses in the settings. `auto` follows the real sun above the house. */
 export type AmbienceMode = 'auto' | 'day' | 'dusk' | 'night'
 export const AMBIENCE_MODES: readonly AmbienceMode[] = ['auto', 'day', 'dusk', 'night']
 
 export interface SceneAmbience {
-  /** Hauteur du soleil en degrés (négative = sous l'horizon). */
+  /** Sun elevation in degrees (negative = below the horizon). */
   sunAltitudeDeg: number
-  /** Azimut en degrés depuis le nord, sens horaire (convention de la maison : x est, y nord). */
+  /** Azimuth in degrees from north, clockwise (house convention: x east, y north). */
   sunAzimuthDeg: number
-  /** Couverture nuageuse, 0 (ciel dégagé) à 1 (couvert). Diffuse la lumière et éteint les ombres. */
+  /** Cloud cover, 0 (clear sky) to 1 (overcast). Diffuses the light and kills the shadows. */
   cloudiness: number
   /**
-   * Visibilité (m) annoncée par la météo. Absente = dégagée. En dessous de quelques kilomètres
-   * (brouillard, forte pluie), la scène pose un brouillard à l'échelle de la maison.
+   * Visibility (m) reported by the weather. Absent = clear. Below a few kilometers
+   * (fog, heavy rain), the scene sets a fog at the scale of the house.
    */
   visibilityM?: number
-  /** Ce que la pluie laisse : sols et toits sombres et luisants, 0 (sec) à 1 (trempé). */
+  /** What the rain leaves: dark, glistening floors and roofs, 0 (dry) to 1 (soaked). */
   wetness?: number
-  /** Ce que la neige pose : un blanc mat sur tout ce qui est dehors, 0 à 1. */
+  /** What the snow lays down: a matte white on everything outdoors, 0 to 1. */
   snow?: number
-  /** Orage : la scène s'éclaire d'un éclair de temps en temps. */
+  /** Storm: the scene lights up with a lightning flash from time to time. */
   storm?: boolean
-  /** Ce qui TOMBE : pluie ou neige en particules (`effects/precipitation.ts`), et combien. */
+  /** What FALLS: rain or snow as particles (`effects/precipitation.ts`), and how much. */
   precipitation?: { kind: 'rain' | 'snow'; intensity: number }
-  /** Le vent, pour incliner ce qui tombe : vitesse et provenance (degrés depuis le nord, sens horaire). */
+  /** The wind, to tilt what falls: speed and origin (degrees from north, clockwise). */
   windKmh?: number
   windDirDeg?: number
 }
 
 /**
- * Ce qu'une condition météo fait aux surfaces. La bruine et le brouillard mouillent moins qu'une
- * averse ; la neige fondue est à moitié neige, à moitié flaque ; seul l'orage fait des éclairs.
+ * What a weather condition does to the surfaces. Drizzle and fog wet less than a
+ * shower; sleet is half snow, half puddle; only the storm makes lightning.
  */
 export function weatherEffects(condition: WeatherCondition | undefined): Pick<SceneAmbience, 'wetness' | 'snow' | 'storm' | 'precipitation'> {
   switch (condition) {
@@ -63,40 +63,40 @@ export function weatherEffects(condition: WeatherCondition | undefined): Pick<Sc
 }
 
 /**
- * Les conditions où rien n'est EN L'AIR. La visibilité d'Open-Meteo est une sortie de modèle, qui
- * tombe à quelques dizaines de mètres dès que l'humidité touche 100 % : un matin annoncé « couvert »
- * à cette visibilité-là noyait la maison alors qu'on y voyait clair. Sous ces conditions-là, elle ne
- * fait pas de brouillard ; le brouillard, la pluie et la neige gardent le leur.
+ * The conditions where nothing is IN THE AIR. Open-Meteo's visibility is a model output, which
+ * drops to a few tens of meters as soon as humidity hits 100 %: a morning reported "overcast"
+ * at that visibility drowned the house even though one could see clearly. Under those conditions, it does
+ * not make fog; fog, rain and snow keep theirs.
  */
 const DRY_AIR: ReadonlySet<WeatherCondition> = new Set(['clear', 'partly_cloudy', 'cloudy'])
 
-/** Heures figées des modes manuels : une journée franche, un crépuscule bas, une nuit. */
+/** Fixed hours of the manual modes: a frank day, a low twilight, a night. */
 const FIXED: Record<Exclude<AmbienceMode, 'auto'>, SceneAmbience> = {
   day: { sunAltitudeDeg: 52, sunAzimuthDeg: 160, cloudiness: 0 },
   dusk: { sunAltitudeDeg: 2, sunAzimuthDeg: 283, cloudiness: 0 },
-  // La lune est placée au SUD-OUEST, d'où la scène se regarde par défaut (`DEFAULT_AZIMUTH`) : une
-  // source dans le dos de la caméra ne montre que des faces à l'ombre, et la maison disparaît.
+  // The moon is placed in the SOUTH-WEST, from where the scene is viewed by default (`DEFAULT_AZIMUTH`): a
+  // source behind the camera only shows faces in shadow, and the house disappears.
   night: { sunAltitudeDeg: -20, sunAzimuthDeg: 215, cloudiness: 0 },
 }
 
 export interface AmbienceInput {
   mode: AmbienceMode
-  /** Maintenant, injectable pour les tests. */
+  /** Now, injectable for tests. */
   date?: Date
-  /** Origine géographique de la maison (`house.origin`), ou `null` si elle n'est pas géoréférencée. */
+  /** Geographic origin of the house (`house.origin`), or `null` if it is not georeferenced. */
   geo?: { lat: number; lon: number } | null
   cloudiness?: number
   visibilityM?: number
-  /** La condition annoncée par la météo : pluie, neige, orage… (`weatherEffects`). */
+  /** The condition reported by the weather: rain, snow, storm… (`weatherEffects`). */
   condition?: WeatherCondition
   windKmh?: number
   windDirDeg?: number
 }
 
 export function resolveAmbience({ mode, date = new Date(), geo = null, cloudiness = 0, visibilityM, condition, windKmh, windDirDeg }: AmbienceInput): SceneAmbience {
-  // Un mode inconnu (réglage écrit à la main, valeur d'une version précédente) ne doit PAS produire
-  // une ambiance `NaN` : tout le rendu en dépend — exposition comprise — et une exposition NaN rend
-  // une image entièrement noire, sans la moindre erreur en console.
+  // An unknown mode (hand-written setting, value from a previous version) must NOT produce
+  // a `NaN` ambience: the whole render depends on it — exposure included — and a NaN exposure renders
+  // an entirely black image, without the slightest error in the console.
   const weather: Omit<SceneAmbience, 'sunAltitudeDeg' | 'sunAzimuthDeg'> = { cloudiness, ...weatherEffects(condition) }
   if (visibilityM !== undefined && !(condition && DRY_AIR.has(condition))) weather.visibilityM = visibilityM
   if (windKmh !== undefined) weather.windKmh = windKmh
@@ -107,18 +107,18 @@ export function resolveAmbience({ mode, date = new Date(), geo = null, cloudines
   return { sunAltitudeDeg: p.altitudeDeg, sunAzimuthDeg: p.azimuthDeg, ...weather }
 }
 
-/** Portée (m) du brouillard le plus épais : au-delà de la maison, que la caméra regarde de 50 à 90 m. */
+/** Range (m) of the thickest fog: beyond the house, which the camera looks at from 50 to 90 m. */
 const FOG_MIN_M = 120
 
 /**
- * Portée du brouillard de scène (m), ou `null` s'il n'y a pas lieu d'en poser. La visibilité
- * météo se compte en kilomètres, la maison en mètres : on la ramène à l'échelle de la scène, et une
- * pluie à 6 km ne fait rien — le seuil est celui où l'œil commence à voir l'air.
+ * Range of the scene fog (m), or `null` if there is no reason to set one. The weather
+ * visibility is counted in kilometers, the house in meters: we bring it back to the scene's scale, and
+ * rain at 6 km does nothing — the threshold is where the eye starts to see the air.
  *
- * La portée ne descend JAMAIS sous `FOG_MIN_M` : la caméra regarde la maison de 50 à 90 m, et la
- * vue est un tableau de bord, pas une simulation. L'ancienne échelle (400 m réels → 33 m, plancher
- * 18 m) rendait la scène entièrement grise ; ici le brouillard le plus épais voile la maison et
- * efface le jardin lointain, sans jamais la faire disparaître.
+ * The range NEVER goes below `FOG_MIN_M`: the camera looks at the house from 50 to 90 m, and the
+ * view is a dashboard, not a simulation. The old scale (400 real m → 33 m, floor
+ * 18 m) made the scene entirely gray; here the thickest fog veils the house and
+ * erases the distant garden, without ever making it disappear.
  */
 export function fogDistance(a: SceneAmbience): number | null {
   if (a.visibilityM === undefined || a.visibilityM >= 5000) return null
@@ -126,10 +126,10 @@ export function fogDistance(a: SceneAmbience): number | null {
 }
 
 /**
- * 0 = nuit noire, 1 = plein jour, et tout le dégradé du crépuscule entre les deux. C'est le seul
- * nombre dont les styles ont besoin pour mélanger leurs deux palettes : entre −6° (fin du crépuscule
- * civil, on ne lit plus dehors) et +8° (le soleil a décollé, les ombres se posent), la maison passe
- * continûment de sa nuit à son jour. Un seuil binaire ferait claquer la scène à la minute près.
+ * 0 = pitch-dark night, 1 = broad daylight, and the whole twilight gradient in between. It is the only
+ * number the styles need to blend their two palettes: between −6° (end of civil
+ * twilight, one can no longer read outdoors) and +8° (the sun has lifted off, the shadows settle), the house goes
+ * continuously from its night to its day. A binary threshold would make the scene snap to the minute.
  */
 export function dayFactor(a: SceneAmbience): number {
   const t = (a.sunAltitudeDeg + 6) / 14
@@ -137,21 +137,21 @@ export function dayFactor(a: SceneAmbience): number {
   return k * k * (3 - 2 * k)
 }
 
-/** La part CRÉPUSCULAIRE : maximale quand le soleil rase l'horizon, nulle en plein jour et en pleine nuit. */
+/** The TWILIGHT share: maximal when the sun skims the horizon, zero in broad daylight and in the dead of night. */
 export function duskFactor(a: SceneAmbience): number {
   const d = Math.abs(a.sunAltitudeDeg - 1) / 11
   return d > 1 ? 0 : 1 - d
 }
 
 /**
- * Direction d'où vient la lumière, dans le repère MONDE de three (x est, y haut, z sud — la racine
- * de la maison porte `rotation.x = -π/2`, donc le +y du plan est en −z). Le +y du plan n'est au
- * nord vrai que si la maison n'est pas tournée : `headingDeg` (`origin.heading`, le cap de +y) se
- * retranche de l'azimut. Vecteur unitaire pointant VERS le soleil ; la lumière se pose dessus, à distance.
+ * Direction the light comes from, in three's WORLD reference frame (x east, y up, z south — the house
+ * root carries `rotation.x = -π/2`, so the plan's +y is at −z). The plan's +y only points to
+ * true north if the house is not rotated: `headingDeg` (`origin.heading`, the heading of +y) is
+ * subtracted from the azimuth. Unit vector pointing TOWARD the sun; the light is placed on it, at a distance.
  *
- * La nuit, le soleil est sous l'horizon et une `DirectionalLight` enterrée n'éclaire plus rien : on
- * garde l'azimut, et on relève la source à une hauteur plancher — c'est la lune, qui se lève rarement
- * exactement à l'opposé mais dont personne ne vérifiera la déclinaison.
+ * At night, the sun is below the horizon and a buried `DirectionalLight` lights nothing anymore: we
+ * keep the azimuth, and raise the source to a floor elevation — it is the moon, which rarely rises
+ * exactly opposite but whose declination nobody will check.
  */
 export function sunDirection(a: SceneAmbience, minAltitudeDeg = 18, headingDeg = 0): Vector3 {
   const alt = Math.max(a.sunAltitudeDeg, minAltitudeDeg) * (Math.PI / 180)

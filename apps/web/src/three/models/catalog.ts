@@ -1,25 +1,25 @@
-// Les carrosseries 3D livrées avec l'app. Pure donnée, aucun accès réseau : le catalogue dit CE
-// QUI EXISTE, le chargeur va le chercher. C'est cette indirection qui permet de déplacer un jour
-// les fichiers (dossier du plugin servi par le serveur, CDN…) sans toucher ni la scène ni l'UI.
+// The 3D car bodies shipped with the app. Pure data, no network access: the catalog says WHAT
+// EXISTS, the loader fetches it. That indirection is what will let us move the files some day
+// (plugin folder served by the server, CDN…) without touching either the scene or the UI.
 //
-// L'identifiant `<pluginId>/<modèle>` est AUSSI le chemin sous `public/models/` : un fichier
-// s'ajoute en déposant le .glb dans le bon dossier et en ajoutant une ligne ici. Le préfixe sert
-// au filtrage — la fiche d'un véhicule ne propose que les carrosseries de SON plugin.
+// The `<pluginId>/<model>` identifier is ALSO the path under `public/models/`: a file
+// is added by dropping the .glb in the right folder and adding a line here. The prefix serves
+// for filtering — a vehicle's card only offers the car bodies of ITS plugin.
 
 export interface CarModel {
-  /** `<pluginId>/<modèle>` : identifiant stocké dans la maison ET chemin du fichier. */
+  /** `<pluginId>/<model>`: identifier stored in the house AND path of the file. */
   id: string
   pluginId: string
   /**
-   * Constructeur, tel que les plugins le publient dans `meta.manufacturer`. Il sert de SECONDE clé :
-   * une même voiture peut être lue par un autre plugin que celui de sa marque — la simulation
-   * (`pluginId: 'mock'`) publie ainsi une Tesla et une Renault, et un plugin générique le ferait
-   * aussi. Sans ce repli, ces véhicules-là n'auraient jamais de carrosserie.
+   * Manufacturer, as plugins publish it in `meta.manufacturer`. It serves as a SECOND key:
+   * the same car can be read by a plugin other than its brand's — the simulation
+   * (`pluginId: 'mock'`) thus publishes a Tesla and a Renault, and a generic plugin would do it
+   * too. Without this fallback, those vehicles would never have a car body.
    */
   brand: string
-  /** Nom commercial du modèle. Un nom propre ne se traduit pas : pas de clé i18n ici. */
+  /** Commercial name of the model. A proper name is not translated: no i18n key here. */
   label: string
-  /** Cotes du fichier (m, repère maison) : largeur X, longueur Y, hauteur Z. */
+  /** Dimensions of the file (m, house reference frame): width X, length Y, height Z. */
   size: readonly [number, number, number]
 }
 
@@ -28,21 +28,21 @@ export const CAR_MODELS: readonly CarModel[] = [
   { id: 'tesla/model-s', pluginId: 'tesla', brand: 'Tesla', label: 'Model S', size: [2.32, 4.98, 1.52] },
 ]
 
-/** Valeur de `model3d` qui demande explicitement la silhouette générique plutôt qu'une carrosserie. */
+/** Value of `model3d` that explicitly requests the generic silhouette rather than a car body. */
 export const NO_MODEL = 'none'
 
 /**
- * `base: './'` dans la configuration Vite : les URL doivent rester RELATIVES pour que le build
- * fonctionne aussi bien servi à la racine par Fastify que depuis un sous-dossier.
+ * `base: './'` in the Vite configuration: URLs must stay RELATIVE so that the build
+ * works as well served at the root by Fastify as from a subfolder.
  */
 export const modelUrl = (id: string): string => `${import.meta.env.BASE_URL}models/${id}.glb`
 
 export const modelById = (id: string): CarModel | undefined => CAR_MODELS.find((m) => m.id === id)
 
 /**
- * Ce que la fiche d'un véhicule propose : les carrosseries de SON plugin — on ne gare pas une
- * Model S dans le garage d'une R5 — et, à défaut, celles de sa marque, pour le véhicule qu'un
- * plugin générique publie.
+ * What a vehicle's card offers: the car bodies of ITS plugin — you don't park a
+ * Model S in an R5's garage — and, failing that, those of its brand, for the vehicle a
+ * generic plugin publishes.
  */
 export function modelsFor(pluginId: string | undefined, manufacturer?: string): readonly CarModel[] {
   const byPlugin = CAR_MODELS.filter((m) => m.pluginId === pluginId)
@@ -52,12 +52,12 @@ export function modelsFor(pluginId: string | undefined, manufacturer?: string): 
 }
 
 /**
- * La carrosserie à dessiner pour un véhicule : son choix s'il en a fait un, sinon la seule que son
- * plugin (ou sa marque) apporte — un plugin de marque ne couvre aujourd'hui qu'un modèle, et
- * l'utilisateur tranchera depuis sa fiche le jour où il y en aura deux.
+ * The car body to draw for a vehicle: its choice if it made one, otherwise the only one its
+ * plugin (or its brand) brings — a brand plugin covers only one model today, and
+ * the user will decide from its card the day there are two.
  *
- * `undefined` = silhouette générique, soit parce qu'elle est demandée (`'none'`), soit parce
- * qu'aucune carrosserie ne correspond.
+ * `undefined` = generic silhouette, either because it is requested (`'none'`), or because
+ * no car body matches.
  */
 export function resolveModel(model3d: string | undefined, pluginId: string | undefined, manufacturer?: string): CarModel | undefined {
   if (model3d === NO_MODEL) return undefined

@@ -2,10 +2,10 @@ import { Color } from 'three'
 import { dayFactor, type SceneAmbience } from '../core/ambience'
 import { mix, mixPalette, mixRgb, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
 
-// HALLOWEEN : pas la maison hantée (grise, morte, délavée) mais la fête : noir, violet et ORANGE.
-// Les fenêtres brûlent comme des citrouilles (vitre très émissive), la piscine est une soupe verte
-// qui luit, l'horizon garde la lueur orangée d'une lune d'automne. Fantômes et squelettes rôdent
-// (`StyleLook.parade`), des chauves-souris passent. Le jour ne se lève qu'à moitié.
+// HALLOWEEN: not the haunted house (gray, dead, washed out) but the party: black, violet and ORANGE.
+// The windows burn like pumpkins (very emissive glass), the pool is a green soup
+// that glows, the horizon keeps the orange glow of an autumn moon. Ghosts and skeletons prowl
+// (`StyleLook.parade`), bats fly by. The day only half rises.
 
 const NIGHT: PaletteSpec = {
   wall: '#6a5580',
@@ -53,7 +53,7 @@ const SURFACES: SurfaceLooks = {
   terrain: { texture: 'soil', roughness: 1, relief: 1.2 },
   zones: {
     lawn: { texture: 'grass', roughness: 0.95, relief: 1.2 },
-    // la soupe de sorcière : elle luit et bouillonne
+    // the witch's soup: it glows and bubbles
     pool: { texture: 'water', roughness: 0.1, metalness: 0.2, emissive: 0.45 },
     driveway: { texture: 'gravel', roughness: 0.95, relief: 1.2 },
     path: { texture: 'stone', roughness: 0.9, relief: 1.4 },
@@ -63,7 +63,7 @@ const SURFACES: SurfaceLooks = {
   },
 }
 
-// un zénith violet, un horizon violacé qui tire sur l'orange : tout orange, la maison y fondait
+// a violet zenith, a purplish horizon tending to orange: all orange, the house melted into it
 const SKY_NIGHT = { zenith: [0.03, 0.01, 0.08], horizon: [0.24, 0.08, 0.16], ground: [0.015, 0.008, 0.02], sunGlare: 7, sunColor: [1, 0.6, 0.25] } as const
 const SKY_DAY = { zenith: [0.2, 0.14, 0.32], horizon: [0.75, 0.5, 0.35], ground: [0.08, 0.06, 0.06], sunGlare: 8, sunColor: [1, 0.8, 0.6] } as const
 
@@ -71,11 +71,11 @@ export const halloweenStyle: RenderStyle = {
   id: 'halloween',
   labelKey: 'render.styles.halloween',
   look(a: SceneAmbience): StyleLook {
-    const day = dayFactor(a) * 0.6                      // un midi d'octobre sous un ciel bas
+    const day = dayFactor(a) * 0.6                      // an October noon under a low sky
     return {
       palette: mixPalette(NIGHT, DAY, day),
       surfaces: SURFACES,
-      // les fenêtres sont des citrouilles : la vitre brûle d'orange, même sans lampe
+      // the windows are pumpkins: the glass burns orange, even without a lamp
       glass: { opacity: 0.5, roughness: 0.2, metalness: 0, emissive: mix(0.95, 0.3, day) },
       sky: {
         zenith: mixRgb(SKY_NIGHT.zenith, SKY_DAY.zenith, day),
@@ -105,7 +105,7 @@ export const halloweenStyle: RenderStyle = {
       glow: { scale: mix(1.6, 1.1, day), opacity: mix(1, 0.35, day), lightIntensity: mix(16, 7, day), emissive: mix(2.6, 1.4, day) },
       bats: { count: 6, color: new Color(0x140c1a) },
       parade: { kind: 'halloween' },
-      // jardin : l'automne poussé : orange, rouge sombre, violet presque noir ; les fruits sont des citrouilles
+      // garden: autumn pushed further: orange, dark red, near-black violet; the fruits are pumpkins
       garden: { leaf: [new Color(0xe0661a), new Color(0x8a1f12), new Color(0x2a1a33), new Color(0xd9a21a)], bark: new Color(0x120c10), stone: new Color(0x4a4450), accent: new Color(0xff7a0a), foliage: 0.7 },
     }
   },

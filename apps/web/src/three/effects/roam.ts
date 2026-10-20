@@ -1,61 +1,61 @@
 import { CatmullRomCurve3, Vector3 } from 'three'
 
-// Un PARCOURS sur tout le terrain, pour ce qui bouge autour de la maison (`parade.ts`, `bats.ts`) :
-// une boucle lisse tirée au hasard, qui passe par quelques points pris n'importe où dans le terrain,
-// et qui CONTOURNE la maison et la piscine (sauf si on ne lui en donne pas — les fantômes traversent
-// les murs). Le JARDIN (arbres, buissons, haies, rochers : `statics`) est planifié lui aussi : un
-// segment qui coupe un élément est détourné, et des boucles candidates on garde celle qui en touche
-// le moins. Seul ce qui BOUGE — voitures, tondeuse (`around`) — s'évite au passage, relu à chaque
-// position : la tondeuse roule, une voiture arrive ou repart.
+// A COURSE over the whole terrain, for what moves around the house (`parade.ts`, `bats.ts`):
+// a smooth loop drawn at random, which goes through a few points picked anywhere in the terrain,
+// and which SKIRTS the house and the pool (unless it is not given them — the ghosts go through
+// walls). The GARDEN (trees, bushes, hedges, rocks: `statics`) is planned too: a
+// segment that cuts an element is diverted, and among the candidate loops we keep the one that touches
+// the fewest. Only what MOVES — cars, mower (`around`) — is avoided on the way, read again at every
+// position: the mower drives, a car arrives or leaves.
 //
-// L'évitement au passage servait d'abord à tout, jardin compris : sur la vraie maison (122 disques),
-// les bosquets fusionnaient de proche en proche en disques géants et l'écart envoyait les
-// personnages à des dizaines de mètres, hors du terrain (mesuré le 2026-10-01).
+// Avoidance on the way first served for everything, garden included: on the real house (122 discs),
+// the groves merged step by step into giant discs and the swerve sent the
+// characters tens of meters away, out of the terrain (measured on 2026-10-01).
 //
-// Fonction du TEMPS, et non état qu'on intègre : `fly` lit la trajectoire un peu avant et un peu
-// après pour poser le nez, la traînée de la moto relit où elle était. La boucle se parcourt à
-// vitesse constante (abscisse curviligne) et recommence au bout d'un tour.
+// A function of TIME, and not a state being integrated: `fly` reads the trajectory a little before and a little
+// after to set the nose, the bike's trail reads back where it was. The loop is traveled at
+// constant speed (arc length) and starts over at the end of a lap.
 //
-// Construction : des points de passage tirés dans le terrain (loin du bord, hors des emprises), dans
-// un ordre quelconque ; un segment qui couperait une emprise est détourné par ses coins ; puis une
-// Catmull-Rom centripète lisse le tout. La courbe finie est ÉCHANTILLONNÉE et refusée si elle
-// mord sur une emprise ou sort du terrain — on retire, et en dernier recours on tourne autour.
+// Construction: waypoints drawn in the terrain (away from the edge, outside the footprints), in
+// any order; a segment that would cut a footprint is diverted through its corners; then a
+// centripetal Catmull-Rom smooths it all. The finished curve is SAMPLED and rejected if it
+// bites into a footprint or leaves the terrain — we redraw, and as a last resort we circle around.
 
 type XY = readonly [number, number]
 
 export interface Box { min: XY; max: XY }
 
-/** Un petit obstacle rond, dont on s'écarte au passage. */
+/** A small round obstacle, steered clear of on the way. */
 export interface Circle { x: number; y: number; r: number }
 
 /**
- * Les petits obstacles du moment : le propriétaire du parcours (`Parade`, `Bats`) remplace `list` à
- * chaque pas, le parcours la relit à chaque position.
+ * The small obstacles of the moment: the course's owner (`Parade`, `Bats`) replaces `list` at
+ * every step, the course reads it again at every position.
  */
 export interface Obstacles { list: readonly Circle[] }
 
 export interface RoamArea {
-  /** Le polygone du terrain, repère local de la maison. */
+  /** The terrain polygon, house local reference frame. */
   terrain: readonly XY[]
-  /** Les emprises à contourner (la maison, la piscine) ; vide pour passer à travers. */
+  /** The footprints to skirt (the house, the pool); empty to go through. */
   avoid: readonly Box[]
-  /** Les obstacles FIXES (le jardin), contournés dès le tracé. Absent = aucun. */
+  /** The FIXED obstacles (the garden), skirted from the path onward. Absent = none. */
   statics?: readonly Circle[]
-  /** Les obstacles qui BOUGENT (voitures, tondeuse), évités au passage. Absent = aucun. */
+  /** The obstacles that MOVE (cars, mower), avoided on the way. Absent = none. */
   around?: Obstacles
 }
 
 export interface RoamOptions {
-  /** Distance (m) gardée aux emprises. */
+  /** Distance (m) kept from the footprints. */
   margin?: number
-  /** Distance (m) gardée au bord du terrain. */
+  /** Distance (m) kept from the edge of the terrain. */
   edge?: number
-  /** Nombre de points de passage. */
+  /** Number of waypoints. */
   points?: number
   rnd?: () => number
 }
 
-/** Une trajectoire : la position au temps `t` (z = 0, à chacun sa hauteur), écrite dans `out`. */
+/** A trajectory: the position at time `t` (z = 0, each sets its own height), written into `out`. */
 export type Path = (t: number, out: Vector3) => Vector3
 
 interface Rect { x0: number; y0: number; x1: number; y1: number }
@@ -63,18 +63,18 @@ interface Rect { x0: number; y0: number; x1: number; y1: number }
 export function roam(area: RoamArea, speed: number, opts: RoamOptions = {}): Path {
   const { margin = 2, edge = 1.5, points = 8, rnd = Math.random } = opts
   const poly = area.terrain
-  // deux emprises qui se touchent une fois agrandies (la piscine collée à la maison) n'en font qu'une :
-  // le coin de l'une tomberait dans l'autre, et aucun détour ne passerait
+  // two footprints that touch once enlarged (the pool attached to the house) make only one:
+  // the corner of one would fall inside the other, and no detour would get through
   const boxes = merge(area.avoid.map((b) => grow({ x0: b.min[0], y0: b.min[1], x1: b.max[0], y1: b.max[1] }, margin)))
   const hit = (x: number, y: number, m: number) => boxes.some((r) => inRect(grow(r, m), x, y))
   const ok = (x: number, y: number, slack: number) =>
     inside(poly, x, y) && edgeDistance(poly, x, y) >= edge * slack && !hit(x, y, -margin * (1 - slack))
   const garden = new CircleGrid(area.statics ?? [])
 
-  // Plusieurs boucles candidates. Le terrain et les emprises sont des règles ; le jardin, une
-  // préférence : on garde celle qui touche le moins d'éléments, puis la plus COULANTE (celle dont
-  // le virage le plus serré est le plus large). Un jardin trop touffu laisse donc frôler un buisson
-  // plutôt que de tourner en rond autour de la maison.
+  // Several candidate loops. The terrain and the footprints are rules; the garden, a
+  // preference: we keep the one that touches the fewest elements, then the most FLOWING (the one whose
+  // tightest bend is the widest). A garden that is too dense thus lets one brush a bush
+  // rather than go round in circles around the house.
   let best: CatmullRomCurve3 | null = null, bestTouch = Infinity, bestRadius = -1, clean = 0, valid = 0
   for (let attempt = 0; attempt < 30 && clean < CANDIDATES && valid < MAX_VALID; attempt++) {
     const way = waypoints(poly, points, (x, y) => ok(x, y, 1) && !hit(x, y, margin * 0.5) && !garden.hit(x, y, 2 * STATIC_MARGIN), rnd)
@@ -83,14 +83,14 @@ export function roam(area: RoamArea, speed: number, opts: RoamOptions = {}): Pat
     const free = (x: number, y: number) => ok(x, y, 1)
     const loop = detour(order, boxes, margin, garden, free)
     const bare = detour(order, boxes, margin, NO_GARDEN, free)
-    // les coins arrondis d'abord ; s'ils mordent sur une emprise, les coins vifs ; et si les détours du
-    // jardin font sortir du terrain, la boucle qui l'ignore (elle le touchera, mais elle reste dedans)
+    // rounded corners first; if they bite into a footprint, sharp corners; and if the garden's
+    // detours lead out of the terrain, the loop that ignores it (it will touch it, but it stays inside)
     for (const pts of [spaced(chaikin(chaikin(loop))), spaced(loop), spaced(chaikin(chaikin(bare))), spaced(bare)]) {
       if (pts.length < 3) continue
       const curve = new CatmullRomCurve3(pts.map(([x, y]) => new Vector3(x, y, 0)), true, 'centripetal')
-      curve.arcLengthDivisions = Math.max(200, 16 * pts.length, Math.ceil(curve.getLength() / 0.5))   // la table est en pas de paramètre : assez fine sur les segments courts
+      curve.arcLengthDivisions = Math.max(200, 16 * pts.length, Math.ceil(curve.getLength() / 0.5))   // the table is in parameter steps: fine enough on short segments
       curve.updateArcLengths()
-      // la courbe lisse peut déborder entre deux points : on la vérifie pour de bon, avec un peu de jeu
+      // the smooth curve can overshoot between two points: we check it for real, with a little slack
       const samples = curve.getSpacedPoints(Math.min(600, Math.ceil(curve.getLength() / 0.5)))
       if (!samples.every((p) => ok(p.x, p.y, 0.5))) continue
       const touch = samples.reduce((n, p) => n + (garden.hit(p.x, p.y, STATIC_MARGIN * 0.5) ? 1 : 0), 0)
@@ -105,19 +105,19 @@ export function roam(area: RoamArea, speed: number, opts: RoamOptions = {}): Pat
   return area.around ? swerve(base, speed, area.around, (x, y) => hit(x, y, -margin * 0.5)) : base
 }
 
-/** Nombre de boucles qui ne touchent rien comparées avant de choisir. */
+/** Number of loops that touch nothing compared before choosing. */
 const CANDIDATES = 6
 /**
- * Boucles valides au plus : un jardin touffu n'en laisse aucune sans contact, et chacune coûte
- * (~3 ms sur la vraie maison) — on compare alors celles-là, au lieu d'aller au bout des 30 tirages.
+ * Valid loops at most: a dense garden leaves none without contact, and each one costs
+ * (~3 ms on the real house) — we then compare those, instead of going through all 30 draws.
  */
 const MAX_VALID = 10
-/** Distance (m) gardée aux éléments du jardin. */
+/** Distance (m) kept from the garden elements. */
 const STATIC_MARGIN = 0.6
 
 /**
- * Les disques du jardin rangés par cases de 4 m : la vraie maison en compte 122, et chaque
- * échantillon de chaque boucle candidate s'y teste.
+ * The garden discs sorted into 4 m cells: the real house has 122, and every
+ * sample of every candidate loop is tested against them.
  */
 class CircleGrid {
   private readonly cells = new Map<string, Circle[]>()
@@ -132,7 +132,7 @@ class CircleGrid {
     }
   }
 
-  /** Le premier disque à moins de `m` (m) de son bord, ou `null`. */
+  /** The first disc within `m` (m) of its edge, or `null`. */
   near(x: number, y: number, m: number): Circle | null {
     if (!this.all.length) return null
     const span = Math.ceil((this.reach + m) / CELL)
@@ -149,7 +149,7 @@ class CircleGrid {
     return this.near(x, y, m) !== null
   }
 
-  /** Le disque que le segment `a`-`b` coupe (à `m` près) le plus tôt, ou `null`. */
+  /** The disc that segment `a`-`b` cuts (within `m`) the earliest, or `null`. */
   crossing(a: XY, b: XY, m: number): Circle | null {
     let best: Circle | null = null, bestT = Infinity
     for (const c of this.all) {
@@ -164,13 +164,13 @@ const CELL = 4
 const NO_GARDEN = new CircleGrid([])
 
 /**
- * Le rayon (m) du virage le plus serré d'une boucle échantillonnée à pas régulier : l'angle dont le
- * cap tourne sur une fenêtre de quelques mètres, rapporté à sa longueur.
+ * The radius (m) of the tightest bend of a loop sampled at a regular step: the angle by which the
+ * heading turns over a window of a few meters, relative to its length.
  */
 function tightestTurn(samples: readonly Vector3[]): number {
-  const n = samples.length - 1                           // le dernier point répète le premier
+  const n = samples.length - 1                           // the last point repeats the first
   const step = samples[0]!.distanceTo(samples[1]!) || 1e-6
-  const w = Math.max(1, Math.round(1 / step))            // fenêtre de ~1 m : un nœud de 20 cm s'y voit
+  const w = Math.max(1, Math.round(1 / step))            // ~1 m window: a 20 cm knot shows up in it
   const heading = (i: number) => {
     const a = samples[((i % n) + n) % n]!, b = samples[(((i + 1) % n) + n) % n]!
     return Math.atan2(b.y - a.y, b.x - a.x)
@@ -185,8 +185,8 @@ function tightestTurn(samples: readonly Vector3[]): number {
 }
 
 /**
- * Un ordre de visite sans croisement : plus proche voisin, puis 2-opt (on décroise deux segments
- * tant que ça raccourcit la boucle). Un ordre au hasard faisait des huit et des demi-tours.
+ * A visiting order without crossings: nearest neighbor, then 2-opt (two segments are uncrossed
+ * as long as that shortens the loop). A random order made figure eights and U-turns.
  */
 function tour(way: readonly XY[]): XY[] {
   const left = [...way], out: XY[] = [left.shift()!]
@@ -211,10 +211,10 @@ function tour(way: readonly XY[]): XY[] {
   return out
 }
 
-/** Écart minimal (m) entre deux points de contrôle : plus près, la Catmull-Rom y fait un nœud serré. */
+/** Minimum gap (m) between two control points: closer, the Catmull-Rom makes a tight knot there. */
 const MIN_GAP = 1.5
 
-/** Retire les points de contrôle trop près du précédent gardé (boucle fermée : le dernier aussi du premier). */
+/** Removes the control points too close to the previous kept one (closed loop: the last one from the first too). */
 function spaced(loop: readonly XY[]): XY[] {
   const out: XY[] = []
   for (const p of loop) if (!out.length || dist(out[out.length - 1]!, p) >= MIN_GAP) out.push(p)
@@ -222,7 +222,7 @@ function spaced(loop: readonly XY[]): XY[] {
   return out
 }
 
-/** Une passe de Chaikin sur une boucle fermée : chaque coin est remplacé par deux points à 1/4 et 3/4. */
+/** One Chaikin pass on a closed loop: each corner is replaced by two points at 1/4 and 3/4. */
 function chaikin(loop: readonly XY[]): XY[] {
   const out: XY[] = []
   for (let i = 0; i < loop.length; i++) {
@@ -233,26 +233,26 @@ function chaikin(loop: readonly XY[]): XY[] {
 }
 
 /**
- * Marge (m) ajoutée au rayon d'un obstacle mobile. Sous `STATIC_MARGIN` : une voiture garée, déjà
- * contournée par le tracé, ne déclenche pas d'écart en plus.
+ * Margin (m) added to the radius of a moving obstacle. Below `STATIC_MARGIN`: a parked car, already
+ * skirted by the path, does not trigger an extra swerve.
  */
 const SWERVE_MARGIN = 0.5
-/** En deçà (m), un obstacle est « sur » le trajet : son côté ne se décide plus sur le signe. */
+/** Below this (m), an obstacle is "on" the path: its side is no longer decided by the sign. */
 const SIDE_DEADBAND = 0.05
-/** Part de la demi-fenêtre où l'écart est entier. */
+/** Share of the half window where the swerve is full. */
 const PLATEAU = 0.35
-/** Distance (m) au bord d'un obstacle sous laquelle le garde-fou reporte le point. */
+/** Distance (m) to an obstacle's edge below which the safeguard moves the point out. */
 const GUARD = 0.15
 
 const clusters = new WeakMap<readonly Circle[], readonly Circle[]>()
-/** Rayon (m) au-delà duquel deux obstacles mobiles ne fusionnent plus (deux voitures, oui ; un parking, non). */
+/** Radius (m) beyond which two moving obstacles no longer merge (two cars, yes; a parking lot, no). */
 const MAX_CLUSTER = 6
 
 /**
- * Les obstacles trop proches pour passer entre eux (deux voitures garées côte à côte, un bosquet)
- * fondus en un seul disque qui les contient : éviter l'un poussait sur l'autre, et les deux écarts
- * se battaient (mesuré : personnages dans une voiture, virages de 15 cm). Calculé une fois par liste
- * (le propriétaire la remplace à chaque pas), pas à chaque position.
+ * The obstacles too close to pass between them (two cars parked side by side, a grove)
+ * merged into a single disc that contains them: avoiding one pushed onto the other, and the two swerves
+ * fought each other (measured: characters inside a car, 15 cm bends). Computed once per list
+ * (the owner replaces it at every step), not at every position.
  */
 function clustered(list: readonly Circle[]): readonly Circle[] {
   let out = clusters.get(list)
@@ -264,7 +264,7 @@ function clustered(list: readonly Circle[]): readonly Circle[] {
       for (let j = i + 1; j < cs.length && !merged; j++) {
         const a = cs[i]!, b = cs[j]!, d = Math.hypot(b.x - a.x, b.y - a.y)
         if (d >= a.r + b.r + 2 * SWERVE_MARGIN) continue
-        // le plus petit disque qui contient les deux ; plafonné : au-delà, on garde les deux
+        // the smallest disc that contains both; capped: beyond it, we keep both
         const r = Math.max(a.r, b.r, (d + a.r + b.r) / 2)
         if (r > MAX_CLUSTER) continue
         const k = d > 1e-9 && r > a.r ? (r - a.r) / d : 0
@@ -280,23 +280,23 @@ function clustered(list: readonly Circle[]): readonly Circle[] {
 }
 
 /**
- * S'ÉCARTE des petits obstacles, par RENCONTRE : pour chaque obstacle proche, on cherche où le
- * parcours de base passe au plus près (sur une fenêtre de temps autour de `t`), on choisit le côté
- * une fois pour toute la rencontre — à l'opposé de l'obstacle, ou l'autre côté si celui-là entre
- * dans une emprise — et on décale en travers du cap PRIS À CE PASSAGE, d'autant qu'il faut pour
- * passer à `R`, avec une cloche centrée sur le passage au plus près.
+ * STEERS CLEAR of the small obstacles, by ENCOUNTER: for each nearby obstacle, we look for where the
+ * base course passes closest (over a time window around `t`), we choose the side
+ * once for the whole encounter — opposite the obstacle, or the other side if that one goes
+ * into a footprint — and we offset across the heading TAKEN AT THAT PASS, by as much as needed to
+ * pass at `R`, with a bell centered on the closest pass.
  *
- * Un premier essai repoussait le point RADIALEMENT depuis le centre de l'obstacle : quand le
- * parcours passait par ce centre, la poussée changeait de sens d'un coup et le personnage sautait
- * de l'autre côté (mesuré : rayon de virage 0 sur deux squelettes). Ici, rien ne dépend de `t` qu'à
- * travers des fonctions continues, et le passage au plus près est affiné (pas pris sur la grille
- * d'échantillons, qui bouge avec `t`).
+ * A first attempt pushed the point RADIALLY from the obstacle's center: when the
+ * course went through that center, the push reversed all at once and the character jumped
+ * to the other side (measured: bend radius 0 on two skeletons). Here, nothing depends on `t` except
+ * through continuous functions, and the closest pass is refined (not taken on the
+ * sample grid, which moves with `t`).
  */
 function swerve(base: Path, speed: number, obstacles: Obstacles, blocked: (x: number, y: number) => boolean): Path {
   const q = new Vector3(), a = new Vector3(), b = new Vector3()
   const grid = new Float64Array(21)
   const away = (tt: number, o: Circle) => { base(tt, q); return Math.hypot(q.x - o.x, q.y - o.y) }
-  /** Le cap unitaire du parcours de base au temps `tt`. */
+  /** The unit heading of the base course at time `tt`. */
   const heading = (tt: number): [number, number] => {
     base(tt - 0.05, a); base(tt + 0.05, b)
     const l = Math.hypot(b.x - a.x, b.y - a.y) || 1
@@ -308,20 +308,20 @@ function swerve(base: Path, speed: number, obstacles: Obstacles, blocked: (x: nu
     let dx = 0, dy = 0
     for (const o of clustered(obstacles.list)) {
       const R = o.r + SWERVE_MARGIN
-      const W = (2 * R) / speed + 0.5                    // on commence à s'écarter ~2 R avant
+      const W = (2 * R) / speed + 0.5                    // we start swerving ~2 R before
       if (Math.hypot(x0 - o.x, y0 - o.y) > R + speed * W) continue
-      // chaque passage au plus près — chaque MINIMUM LOCAL de la distance sur la fenêtre — est une
-      // rencontre à part. Prendre le seul minimum global faisait basculer d'un passage à l'autre quand
-      // le parcours contourne l'obstacle (deux passages proches), et le côté avec : le personnage
-      // sautait d'un bord à l'autre. Un minimum local garde son instant tant qu'il est dans la fenêtre.
-      // la grille déborde de deux pas de chaque côté : un minimum qui entre dans la fenêtre est vu
-      // avant, quand sa cloche vaut encore zéro (sinon il apparaîtrait d'un coup, déjà levé)
+      // each closest pass — each LOCAL MINIMUM of the distance over the window — is a separate
+      // encounter. Taking only the global minimum flipped from one pass to the other when
+      // the course goes around the obstacle (two nearby passes), and the side with it: the character
+      // jumped from one edge to the other. A local minimum keeps its instant as long as it is in the window.
+      // the grid overflows by two steps on each side: a minimum entering the window is seen
+      // beforehand, while its bell is still zero (otherwise it would appear all at once, already raised)
       const N = 16, h = (2 * W) / N, t0 = t - W - 2 * h
       for (let k = 0; k <= N + 4; k++) grid[k] = away(t0 + k * h, o)
       for (let k = 1; k < N + 4; k++) {
-        // strict d'un côté : un palier de deux valeurs égales ne compte qu'une fois
+        // strict on one side: a plateau of two equal values only counts once
         if (grid[k]! >= grid[k - 1]! || grid[k]! > grid[k + 1]! || grid[k]! >= R + h * speed) continue
-        // affiné par trichotomie entre les deux voisins : l'instant ne dépend plus de la grille
+        // refined by ternary search between the two neighbors: the instant no longer depends on the grid
         let lo = t0 + (k - 1) * h, hi = t0 + (k + 1) * h
         for (let it = 0; it < 12; it++) {
           const m1 = lo + (hi - lo) / 3, m2 = hi - (hi - lo) / 3
@@ -332,28 +332,28 @@ function swerve(base: Path, speed: number, obstacles: Obstacles, blocked: (x: nu
         if (away(tc, o) >= R) continue
         const qx = q.x, qy = q.y
         const [cx, cy] = heading(tc)
-        const s0 = (o.x - qx) * -cy + (o.y - qy) * cx    // > 0 : l'obstacle est à gauche du trajet
-        // le côté opposé, le plus court. Un obstacle PILE sur le trajet (|s0| ~ 0) se passe toujours à
-        // droite : son signe y flotte d'un millimètre d'un instant à l'autre, et le côté avec lui —
-        // chaque bascule faisait sauter le personnage de 2 R
+        const s0 = (o.x - qx) * -cy + (o.y - qy) * cx    // > 0: the obstacle is to the left of the path
+        // the opposite side, the shortest. An obstacle RIGHT ON the path (|s0| ~ 0) is always passed on the
+        // right: its sign wobbles by a millimeter from one instant to the next, and the side with it —
+        // each flip made the character jump by 2 R
         const left = s0 < -SIDE_DEADBAND
         let shift = left ? s0 + R : s0 - R
         if (blocked(qx - cy * shift, qy + cx * shift)) shift = left ? s0 - R : s0 + R
-        // une cloche à PLATEAU : plein écart sur le tiers central de la fenêtre (un gros obstacle se
-        // longe), puis un cosinus jusqu'à zéro — pente nulle aux deux raccords, le cap ne casse pas
+        // a PLATEAU bell: full swerve over the central third of the window (a large obstacle is
+        // followed along), then a cosine down to zero — zero slope at both joins, the heading does not break
         const u = Math.max(0, (Math.abs(t - tc) / W - PLATEAU) / (1 - PLATEAU))
         const bump = 0.5 * (1 + Math.cos(Math.PI * Math.min(1, u)))
-        // en travers du cap AU PASSAGE au plus près, vecteur fixe sur toute la rencontre : la normale
-        // du moment tournait avec un parcours qui contourne déjà l'obstacle, et l'écart y rentrait
+        // across the heading AT THE closest PASS, a fixed vector over the whole encounter: the normal
+        // of the moment turned with a course already going around the obstacle, and the swerve went into it
         dx += -cy * shift * bump
         dy += cx * shift * bump
       }
     }
     out.x = x0 + dx
     out.y = y0 + dy
-    // garde-fou : la cloche est une approximation (un parcours qui tourne pendant la rencontre) ; ce
-    // qui reste à moins de `GUARD` d'un obstacle est reporté sur son bord — une retouche de quelques
-    // centimètres, loin du centre, donc sans saut
+    // safeguard: the bell is an approximation (a course that turns during the encounter); what
+    // remains within `GUARD` of an obstacle is moved out onto its edge — a touch-up of a few
+    // centimeters, far from the center, hence without a jump
     for (const o of clustered(obstacles.list)) {
       const ex = out.x - o.x, ey = out.y - o.y, d = Math.hypot(ex, ey), r = o.r + GUARD
       if (d < r && d > 1e-6) { out.x = o.x + (ex / d) * r; out.y = o.y + (ey / d) * r }
@@ -362,7 +362,7 @@ function swerve(base: Path, speed: number, obstacles: Obstacles, blocked: (x: nu
   }
 }
 
-/** Parcourt `curve` à `speed` m/s, en boucle. */
+/** Travels `curve` at `speed` m/s, in a loop. */
 function along(curve: CatmullRomCurve3, speed: number): Path {
   const length = curve.getLength()
   return (t, out) => {
@@ -371,7 +371,7 @@ function along(curve: CatmullRomCurve3, speed: number): Path {
   }
 }
 
-/** Le dernier recours : un cercle autour de toutes les emprises (ou du terrain), sans rien vérifier. */
+/** The last resort: a circle around all the footprints (or the terrain), without checking anything. */
 function circle(terrain: readonly XY[], boxes: readonly Rect[], speed: number): Path {
   const t = bbox(terrain)
   const b = boxes.length ? merge([boxes.reduce(union)])[0]! : { x0: t.min[0], y0: t.min[1], x1: t.max[0], y1: t.max[1] }
@@ -392,9 +392,9 @@ function waypoints(poly: readonly XY[], n: number, ok: (x: number, y: number) =>
 }
 
 /**
- * Insère, entre deux points dont le segment couperait une emprise, les coins à contourner : ceux
- * d'un rectangle un peu plus grand, le plus court des deux sens de rotation. Les morceaux de détour
- * sont revérifiés contre les AUTRES emprises (la piscine à côté de la maison), à profondeur bornée.
+ * Inserts, between two points whose segment would cut a footprint, the corners to go around: those
+ * of a slightly larger rectangle, the shorter of the two directions of rotation. The detour pieces
+ * are rechecked against the OTHER footprints (the pool next to the house), to a bounded depth.
  */
 function detour(way: readonly XY[], boxes: readonly Rect[], margin: number, garden: CircleGrid, free: (x: number, y: number) => boolean): XY[] {
   const out: XY[] = []
@@ -406,14 +406,14 @@ function detour(way: readonly XY[], boxes: readonly Rect[], margin: number, gard
 }
 
 /**
- * Les points à passer entre `a` et `b` (exclus) pour ne couper aucune emprise, ni aucun élément du
- * jardin : une emprise se contourne par ses coins, un élément par un point posé à côté de lui, du
- * côté où passait déjà le segment.
+ * The points to pass through between `a` and `b` (excluded) so as to cut no footprint, nor any garden
+ * element: a footprint is skirted by its corners, an element by a point placed beside it, on the
+ * side where the segment already passed.
  */
 function between(a: XY, b: XY, boxes: readonly Rect[], margin: number, garden: CircleGrid, free: (x: number, y: number) => boolean, depth: number): XY[] {
   if (depth > 4) return []
   const box = boxes.find((r) => crosses(r, a, b))
-  if (box && depth > 3) return []                        // au-delà, les coins s'emboîtent en nœuds
+  if (box && depth > 3) return []                        // beyond that, the corners nest into knots
   let route: XY[] | null = box ? around(box, a, b, margin) : null
   if (!box) {
     const c = garden.crossing(a, b, STATIC_MARGIN)
@@ -425,7 +425,7 @@ function between(a: XY, b: XY, boxes: readonly Rect[], margin: number, garden: C
     if (l > 1e-6) { nx /= l; ny /= l } else { const lv = Math.sqrt(l2); nx = -vy / lv; ny = vx / lv }
     const off = c.r + 2 * STATIC_MARGIN + 0.5
     const x = c.x + nx * off, y = c.y + ny * off
-    // un détour qui sortirait du terrain ou entrerait dans une emprise : on frôlera l'élément
+    // a detour that would leave the terrain or enter a footprint: we will brush the element
     if (!free(x, y)) return []
     route = [[x, y]]
   }
@@ -439,7 +439,7 @@ function between(a: XY, b: XY, boxes: readonly Rect[], margin: number, garden: C
   return out
 }
 
-/** De `a` à `b` autour de `box`, par les coins d'un rectangle agrandi de `margin`. */
+/** From `a` to `b` around `box`, through the corners of a rectangle enlarged by `margin`. */
 function around(box: Rect, a: XY, b: XY, margin: number): XY[] | null {
   const c = grow(box, margin)
   const corners: XY[] = [[c.x0, c.y0], [c.x1, c.y0], [c.x1, c.y1], [c.x0, c.y1]]
@@ -447,7 +447,7 @@ function around(box: Rect, a: XY, b: XY, margin: number): XY[] | null {
   for (let s = 0; s < 4; s++) {
     if (crosses(box, a, corners[s]!)) continue
     for (const dir of [1, 3]) {
-      // de coin en coin dans un sens, jusqu'au premier d'où l'on voit `b`
+      // from corner to corner in one direction, up to the first one from which `b` is visible
       const route: XY[] = [corners[s]!]
       for (let k = s; crosses(box, route[route.length - 1]!, b) && route.length < 4;) {
         k = (k + dir) % 4
@@ -461,7 +461,7 @@ function around(box: Rect, a: XY, b: XY, margin: number): XY[] | null {
   return best
 }
 
-// ---- géométrie plane ----------------------------------------------------------------------------
+// ---- plane geometry -----------------------------------------------------------------------------
 
 const grow = (r: Rect, m: number): Rect => ({ x0: r.x0 - m, y0: r.y0 - m, x1: r.x1 + m, y1: r.y1 + m })
 const inRect = (r: Rect, x: number, y: number) => x > r.x0 && x < r.x1 && y > r.y0 && y < r.y1
@@ -469,7 +469,7 @@ const dist = (a: XY, b: XY) => Math.hypot(b[0] - a[0], b[1] - a[1])
 const union = (a: Rect, b: Rect): Rect => ({ x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) })
 const overlap = (a: Rect, b: Rect) => a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1
 
-/** Fond en une seule boîte celles qui se chevauchent, jusqu'à ce qu'aucune ne touche plus une autre. */
+/** Merges the overlapping boxes into a single one, until none touches another. */
 function merge(boxes: readonly Rect[]): Rect[] {
   const out = [...boxes]
   for (let i = 0; i < out.length; i++) {
@@ -477,7 +477,7 @@ function merge(boxes: readonly Rect[]): Rect[] {
       if (!overlap(out[i]!, out[j]!)) continue
       out[i] = union(out[i]!, out[j]!)
       out.splice(j, 1)
-      j = i                                              // la boîte a grandi : tout revérifier
+      j = i                                              // the box grew: recheck everything
     }
   }
   return out
@@ -488,7 +488,7 @@ function bbox(poly: readonly XY[]): Box {
   return { min: [Math.min(...xs), Math.min(...ys)], max: [Math.max(...xs), Math.max(...ys)] }
 }
 
-/** Le segment `a`-`b` traverse-t-il l'intérieur du rectangle ? (Liang-Barsky.) */
+/** Does segment `a`-`b` cross the interior of the rectangle? (Liang-Barsky.) */
 function crosses(r: Rect, a: XY, b: XY): boolean {
   const dx = b[0] - a[0], dy = b[1] - a[1]
   let t0 = 0, t1 = 1

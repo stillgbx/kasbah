@@ -2,9 +2,9 @@ import { Color } from 'three'
 import { dayFactor, type SceneAmbience } from '../core/ambience'
 import { mix, mixPalette, mixRgb, type PaletteSpec, type RenderStyle, type StyleLook, type SurfaceLooks } from './types'
 
-// MAISON HANTÉE : bois délavé, ardoise, herbe morte, une lune verdâtre et des fenêtres qui luisent
-// d'une lumière qu'on n'a pas allumée. Le jour n'y vient jamais tout à fait : `dayFactor` est écrasé,
-// un midi d'été reste un ciel bas et gris — mais on y voit la maison, sinon le style ne sert que la nuit. Le relief est poussé partout — rien n'y est neuf.
+// HAUNTED HOUSE: washed-out wood, slate, dead grass, a greenish moon and windows glowing
+// with a light nobody turned on. Day never quite comes: `dayFactor` is crushed,
+// a summer noon stays a low gray sky — but the house can be seen, otherwise the style only serves at night. The relief is pushed everywhere — nothing is new.
 
 const NIGHT: PaletteSpec = {
   wall: '#7a7a84',
@@ -22,7 +22,7 @@ const NIGHT: PaletteSpec = {
   device: '#6b6a70',
 }
 
-/** Le même lieu en plein jour : décoloré, pas réchauffé. */
+/** The same place in broad daylight: discolored, not warmed. */
 const DAY: PaletteSpec = {
   wall: '#8a8a8c',
   wallInterior: '#85757e',
@@ -53,7 +53,7 @@ const SURFACES: SurfaceLooks = {
   terrain: { texture: 'grass', roughness: 1 },
   zones: {
     lawn: { texture: 'grass', roughness: 1 },
-    // une eau croupie qui luit un peu, et bouge à peine
+    // stagnant water that glows a little, and barely moves
     pool: { texture: 'water', roughness: 0.1, metalness: 0.2, emissive: 0.35, flow: 0.3 },
     driveway: { texture: 'gravel', roughness: 1 },
     path: { texture: 'gravel', roughness: 1 },
@@ -70,11 +70,11 @@ export const hauntedStyle: RenderStyle = {
   id: 'haunted',
   labelKey: 'render.styles.haunted',
   look(a: SceneAmbience): StyleLook {
-    const day = dayFactor(a) * 0.8                      // le jour ne se lève jamais tout à fait
+    const day = dayFactor(a) * 0.8                      // the day never quite rises
     return {
       palette: mixPalette(NIGHT, DAY, day),
       surfaces: SURFACES,
-      // les fenêtres luisent verdâtre, même quand personne n'est là
+      // the windows glow greenish, even when nobody is there
       glass: { opacity: 0.45, roughness: 0.35, metalness: 0, emissive: mix(0.55, 0.15, day) },
       sky: {
         zenith: mixRgb(SKY_NIGHT.zenith, SKY_DAY.zenith, day),
@@ -101,10 +101,10 @@ export const hauntedStyle: RenderStyle = {
         vignette: mix(0.75, 0.4, day),
       },
       glow: { scale: mix(1.4, 1, day), opacity: mix(0.8, 0.4, day), lightIntensity: mix(11, 6, day), emissive: mix(2.2, 1.3, day) },
-      // jardin : arbres à moitié morts : feuillage terne et clairsemé, troncs presque noirs, fruits phosphorescents
+      // garden: half-dead trees: dull, sparse foliage, almost black trunks, phosphorescent fruit
       garden: { leaf: [new Color(0x33332a), new Color(0x2b2531), new Color(0x3d3a33)], bark: new Color(0x1e1a1f), stone: new Color(0x57555c), accent: new Color(0x9cff57), emissive: 0.6, foliage: 0.45 },
-      // une nuée la nuit, deux ou trois égarées en plein jour ; gris violacé la nuit (le jardin y est
-      // noir), noires sur le jour gris
+      // a swarm at night, two or three strays in broad daylight; purplish gray at night (the garden is
+      // black then), black against the gray day
       bats: { count: Math.round(mix(12, 3, day)), color: new Color(0x5a4d6b).lerp(new Color(0x141018), day / 0.8) },
     }
   },
