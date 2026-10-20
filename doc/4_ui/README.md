@@ -21,7 +21,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 
 | Page | Résumé | Dernière mise à jour |
 |---|---|---|
-| [4_3 Vues Lumières, Ouvrants et Caméras](4_3_vues-lumieres-ouvrants-cameras.md) | Vues en bandes par niveau (`RoomBands`), pièces réordonnables, interrupteurs maîtres, contrôles d'ouvrant (vocabulaires, position inconnue, position favorite, vignette verticale), volets solaires, cartes et tuiles caméra avec leur vidéo. | 2026-10-13 |
+| [4_3 Vues Lumières, Ouvrants et Caméras](4_3_vues-lumieres-ouvrants-cameras.md) | Vues en bandes par niveau (`RoomBands`), pièces réordonnables, interrupteurs maîtres, contrôles d'ouvrant (vocabulaires, position inconnue, position favorite, vignette verticale), volets solaires, cartes et tuiles caméra avec leur vidéo. | 2026-10-20 |
 | [4_4 Vues Énergie et Véhicules](4_4_vues-energie-vehicules.md) | Vue Énergie (schéma de flux, onduleurs, champs de panneaux, tuiles par voiture) et vue Véhicules : carte du véhicule, carte plan / satellite, réveil, charge et limite, climatisation, logiciel, apparence. | 2026-10-19 |
 | [4_5 Musique et médias](4_5_musique-et-medias.md) | Vue Médias et lignes de lecteur (diffusion, direct, barre de son), panneau et barre du lecteur, page Musique : sources (YouTube Music, radios, Mixcloud), recherche, file d'attente, genres, détail d'album, lecture dans le navigateur. | 2026-10-13 |
 | [4_6 Autres vues](4_6_autres-vues.md) | Vues d'un domaine : Météo (radar, autre lieu, tendance, lune, vigilance), Robots (tondeuse, aspirateur, journal, zones, carte), Eau, Chauffage, Animaux, Agenda, École, Courses, Automatisations. | 2026-10-19 |

@@ -213,7 +213,7 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 | **École** | Devoirs, cahier de liaison et publications de la classe (TouteMonAnnée). |
 | **Musique** | Lecteur commun : recherche et file d'attente YouTube Music, Mixcloud ou radios, joués sur une enceinte Cast ou Sonos. |
 | **Lumières** | Bandes par niveau et pièce, interrupteur d'ensemble, curseur de luminosité ; ventilateurs (Tuya) au même endroit. |
-| **Ouvrants** | Volets, stores, portails : position, favori « my », gestes d'ensemble (sécuriser / ouvrir). |
+| **Ouvrants** | Volets, stores, portails : position, favori « my », gestes d'ensemble (sécuriser / ouvrir la maison, volets d'une pièce). |
 | **Médias** | Lecteurs Cast et Sonos : transport, volume, pochette, relais son (barre HDMI ARC). |
 | **Caméras** | Vignettes et direct (MSE / ffmpeg). |
 | **Énergie** | Schéma de flux (solaire, maison, réseau, batterie), champs de panneaux, historique. |

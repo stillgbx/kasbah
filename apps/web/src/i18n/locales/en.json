@@ -195,6 +195,8 @@
   "rooms": {
     "noRoom": "No room", "notInHouse": "Not in the house",
     "allLights": "All lights in the room", "brightness": "Room brightness",
+    "shuttersOpen": "Open the room's shutters", "shuttersStop": "Stop the room's shutters",
+    "shuttersClose": "Close the room's shutters",
     "reorder": "Reorder (drag)", "orderError": "Order not saved: {message}",
     "dangling": "Dead bindings", "danglingHint": "The JSON points at an id no plugin reports",
     "origins": {

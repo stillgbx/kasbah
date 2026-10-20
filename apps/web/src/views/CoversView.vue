@@ -5,6 +5,7 @@ import { openingLabel, type DeviceEntry, type HouseDevice, type StateFor } from 
 import PageHeader from '../components/layout/PageHeader.vue'
 import CoversMaster from '../components/devices/CoversMaster.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
+import RoomShutterKeys from '../components/devices/RoomShutterKeys.vue'
 import CoverPill from '../components/covers/CoverPill.vue'
 import PulseDot from '../components/ui/PulseDot.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
@@ -158,6 +159,10 @@ function commit(id: string, v: number) {
     <div class="page__scroll">
       <div v-if="covers.length === 0" class="card card--soft empty muted">{{ $t('covers.none') }}</div>
       <RoomBands kind="cover">
+        <!-- ouvrir / arrêter / fermer tous les VOLETS de la pièce d'un appui -->
+        <template #room-action="{ entries }">
+          <RoomShutterKeys :entries="entries" />
+        </template>
         <!-- l'ouvrant vu de face, à la place de l'icône : se lit OUVERT sans lire la ligne, et se
              manœuvre dans le sens où il bouge (voir `CoverPill`). Glissable seulement pour un moteur
              qui sait viser une position, et une fois son ouverture connue. -->

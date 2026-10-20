@@ -1,6 +1,6 @@
 # Vues Lumières, Ouvrants et Caméras
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-20
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre les vues Lumières, Ouvrants et Caméras (bandes par niveau, `RoomBands`), les contrôles d'ouvrant et la position favorite, les interrupteurs maîtres, les cartes et tuiles caméra. Elle est née du découpage de
@@ -858,3 +858,37 @@ fait 44 px de large : un appui de travers sur la ligne peut désormais bouger un
 à l'usage, il faudra limiter l'appui au panneau. Tests : `components/covers/CoverPill.test.ts` (appui
 vertical, appui de côté, glissement relatif, ouvrant qui ne vise pas). Vérifié dans la preview :
 panneau (75 %) et liste (40 %).
+
+## Mise à jour 2026-10-20 — vue Ouvrants : ouvrir, arrêter, fermer les volets d'une pièce d'un appui
+
+Demande de l'utilisateur : « des boutons au niveau de la pièce afin de pouvoir ouvrir / stop / fermer
+tous les volets de la pièce en un seul click ». `components/devices/RoomShutterKeys.vue` pose dans
+l'en-tête de chaque carte de pièce (slot `room-action` de `RoomBands`, celui de l'interrupteur des
+lampes d'une pièce dans la vue Lumières) les trois touches d'une ligne d'ouvrant, à 32 px.
+
+**Les volets seulement**, choix de l'utilisateur parmi trois portées proposées (touches de ligne
+appliquées à tout, touches de ligne sans ouvrir un passage, doctrine « au repos » de `CoversMaster`) :
+ni store, ni portail, ni porte de garage. Un ouvrant sans nature déclarée compte comme un volet,
+la nature par défaut (`coverWords`). Une pièce sans volet n'a pas de touches — une différence entre
+pièces, jamais un élément qui apparaît dans le temps.
+
+Comme les autres commandes d'ensemble, c'est un **lot** (`devices.runScene`) :
+
+- Ouvrir et Fermer lisent la position **visée** (`targetPosition ?? position`, comme `CoversMaster`,
+  section 2026-09-18 (4)) et n'écrivent qu'aux volets qui doivent bouger : on peut se raviser en pleine
+  course. Une position inconnue reçoit la commande quand même ;
+- Stop n'existe que si un volet de la pièce déclare `stop`, et part à tous les volets joignables qui
+  la déclarent, immobiles compris — le même effet que la touche Stop d'une ligne. Sur une radio sans
+  retour, cela efface la position déduite (`../3_plugins/3_4_somfy-tahoma.md`) ; ce que fait un moteur
+  RTS immobile qui reçoit `stop` n'a pas été vérifié ;
+- plus aucun volet joignable : les touches restent, grisées (règle « rien ne doit bouger »).
+
+**Rien ne bouge** : les touches débordent de 5 px sur la marge de l'en-tête (`margin: -5px 0`) au lieu
+de l'agrandir. Mesuré dans la preview : en-tête et première ligne au même endroit pour une carte avec
+ou sans touches, aux zooms 1 / 1,25 / 1,5 ; thèmes clair et sombre. À −4 px, l'en-tête gagnait 1 px.
+
+Libellés (infobulle et `aria-label` seulement) : `rooms.shuttersOpen`, `rooms.shuttersStop`,
+`rooms.shuttersClose` (fr/en).
+
+Sources : `apps/web/src/components/devices/RoomShutterKeys.vue` (+ `RoomShutterKeys.test.ts`),
+`apps/web/src/views/CoversView.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.

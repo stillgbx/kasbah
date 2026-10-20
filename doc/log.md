@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-20] update | Vue Ouvrants : touches de pièce pour les volets
+
+**Trigger** : demande de l'utilisateur, ouvrir / arrêter / fermer tous les volets d'une pièce en un seul appui depuis la vue Ouvrants.
+
+**Pages modified** :
+- 4_ui/4_3_vues-lumieres-ouvrants-cameras.md - section 2026-10-20 : `RoomShutterKeys.vue` dans le slot `room-action`, volets seulement (portée choisie par l'utilisateur), lot sur la position visée, Stop aux volets qui le déclarent (effet RTS non vérifié), marge négative pour que l'en-tête ne grandisse pas
+
+**Index** : catalogue 4_ui (1 ligne, date), index.md régénéré.
+
 ## [2026-10-19] update | Vue École : visionneuse des photos
 
 **Trigger** : demande de l'utilisateur, les photos des publications ouvraient le navigateur ; les voir dans l'app, passer de l'une à l'autre, zoomer et télécharger.
