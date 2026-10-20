@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import '../textures/prebake' // cuit les matières à l'import, hors du délai du premier test
 import type { Mesh, MeshStandardMaterial } from 'three'
 import { applyAppearanceToJson, computeHouseGeometry, FINISHES, parseHouse, pointInPolygon, type AppearancePatch } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'

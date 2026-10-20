@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import '../textures/prebake' // cuit les matières à l'import, hors du délai du premier test
 import { type BufferAttribute, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, ShapeGeometry, Vector3 } from 'three'
 import { computeHouseGeometry, emptyReliefGrid, footprintCeiling, offsetPolygon, padWeight, parseHouse, parseRelief, pointInPolygon, reliefNodeXY, resolveDefaults, serializeRelief, signedArea, terrainFootprints, terrainHeight, terrainPads, type House } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'

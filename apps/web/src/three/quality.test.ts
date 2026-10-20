@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import './textures/prebake' // cuit les matières à l'import, hors du délai du premier test
 import type * as Post from './core/post'
 import type { PostPipelineDeps } from './core/post'
 import { HouseScene } from './HouseScene'

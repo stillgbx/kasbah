@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import './textures/prebake' // cuit les matières à l'import, hors du délai du premier test
 import { parseHouse } from '@kasbah/shared'
 import { HouseScene } from './HouseScene'
 import { DEMO_PROPERTIES } from '../api/demoProperties'

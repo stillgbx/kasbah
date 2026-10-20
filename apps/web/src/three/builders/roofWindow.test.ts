@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import '../textures/prebake' // cuit les matières à l'import, hors du délai du premier test
 import { Vector3 } from 'three'
 import { computeHouseGeometry, parseHouse, type OpeningRect, type Vec3 } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
