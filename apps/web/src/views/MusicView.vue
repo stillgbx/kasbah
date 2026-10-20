@@ -1,11 +1,11 @@
 <script lang="ts">
 import type { YtmusicSearchResult } from '../api/transport'
 
-// Dernière recherche servie, gardée AU NIVEAU DU MODULE (donc hors du composant) : aller voir
-// l'appareil en 3D puis revenir remonte la vue, et le même terme repartait alors au serveur, donc à
-// InnerTube. Le terme sert de clé : dès qu'il change, on redemande. Mémoire du module et non
-// `localStorage` — le cache dure ce que dure l'onglet, un rechargement de page redonne des
-// résultats frais.
+// Last search served, kept AT MODULE LEVEL (so outside the component): going to look at the
+// device in 3D then coming back remounts the view, and the same term then went back to the
+// server, hence to InnerTube. The term serves as the key: as soon as it changes, we ask again.
+// Module memory and not `localStorage` — the cache lasts as long as the tab, a page reload gives
+// fresh results.
 let lastSearch: { query: string; result: YtmusicSearchResult } | null = null
 </script>
 
@@ -41,30 +41,31 @@ import { isLocalPlayer, useLocalPlayerStore } from '../stores/localPlayer'
 import { useNotificationsStore } from '../stores/notifications'
 import { usePluginsStore } from '../stores/plugins'
 
-// Page Musique. Trois zones qui ne bougent jamais : la recherche en tête (simple : tuiles par
-// section ; avancée : cinq colonnes artistes / albums / EP / compilations / titres avec tris), le
-// panneau « Écoute » à droite (un lecteur = une session : là où partent les lectures et ce que pilote
-// la barre), et le lecteur en bas. Sans recherche, la zone centrale sert à parcourir : récents, likes,
-// playlists. Sources : YouTube Music (non officiel) et, si le plugin `radio` est actif, les Radios —
-// les pastilles en haut à droite choisissent celle qui occupe la recherche et la zone centrale ; le
-// panneau Écoute et le lecteur du bas restent communs. « Genres » et « Ambiances » ouvrent les « Humeurs et genres » de YouTube
-// Music : une grille de pastilles, puis la page d'une catégorie en rangées de tuiles (titres,
-// playlists officielles, albums), chaque rangée jouable comme une liste.
+// Music page. Three zones that never move: the search at the top (simple: tiles by section;
+// advanced: five columns artists / albums / EPs / compilations / tracks with sorts), the
+// "Listening" panel on the right (one player = one session: where playbacks go and what the bar
+// drives), and the player at the bottom. Without a search, the central zone is for browsing:
+// recents, likes, playlists. Sources: YouTube Music (unofficial) and, if the `radio` plugin is
+// active, Radios — the pills at the top right choose the one that occupies the search and the
+// central zone; the Listening panel and the bottom player stay shared. "Genres" and "Moods" open
+// YouTube Music's "Moods & genres": a grid of pills, then the page of a category in rows of tiles
+// (tracks, official playlists, albums), each row playable as a list.
 //
-// File d'attente : elle vit sur le SERVEUR, par lecteur (l'enceinte ne connaît qu'un « fichier » à la
-// fois). Jouer un titre d'une liste (album, playlist, likes, résultats) y met la liste entière, à
-// partir de ce titre ; « lire ensuite » et « ajouter à la fin » la complètent sans interrompre. La
-// barre en tire précédent / suivant et la répétition du titre ; la file s'affiche à la place de la
-// zone centrale (touche File de la barre).
+// Queue: it lives on the SERVER, per player (the speaker only knows one "file" at a time).
+// Playing a track from a list (album, playlist, likes, results) puts the whole list in it,
+// starting from that track; "play next" and "add to the end" complete it without interrupting.
+// The bar draws previous / next and the track repeat from it; the queue is displayed in place of
+// the central zone (Queue button of the bar).
 //
-// Le transfert (bureau → salon) passe par le serveur : il connaît le titre que joue la source, le
-// relance sur la cible qui se place à la même position, puis arrête la source. Il n'est possible que
-// pour une lecture lancée d'ici (`GET /sessions`) : une appli native sur le Chromecast n'est pas à nous.
+// The transfer (desktop → living room) goes through the server: it knows the track the source is
+// playing, restarts it on the target, which positions itself at the same point, then stops the
+// source. It is only possible for a playback started from here (`GET /sessions`): a native app
+// on the Chromecast is not ours.
 
 defineOptions({ name: 'MusicView' })
 
 type BrowseTab = 'recent' | 'liked' | 'playlists' | 'new' | 'genres' | 'moods'
-/** Ce que le détail affiche dans sa colonne de gauche : l'élément tel que la liste d'où il vient le connaissait. */
+/** What the detail shows in its left column: the item as the list it comes from knew it. */
 interface DetailHead { art: string | null; artists?: string[]; year?: string | null; explicit?: boolean; releaseType?: YtmusicAlbum['releaseType'] }
 type Browse =
   | ({ kind: 'playlist'; id: string; title: string } & DetailHead)
@@ -82,14 +83,14 @@ const notifications = useNotificationsStore()
 const plugins = usePluginsStore()
 const local = useLocalPlayerStore()
 
-// ---- recherche et catalogue -------------------------------------------------------------------
+// ---- search and catalog -----------------------------------------------------------------------
 const query = useLocalStorage('kasbah.ytmusic.query', '')
 const advanced = useLocalStorage('kasbah.music.advanced', false)
 const browseTab = useLocalStorage<BrowseTab>('kasbah.music.browse', 'recent')
-/** Derniers titres joués. */
+/** Latest tracks played. */
 const recentPlays = useLocalStorage<YtmusicTrack[]>('kasbah.ytmusic.recentPlays', [])
 const recentQueries = useLocalStorage<string[]>('kasbah.ytmusic.recentQueries', [])
-/** Vrai après une recherche : la zone centrale montre les résultats, pas le parcours. */
+/** True after a search: the central zone shows the results, not the browsing. */
 const searched = ref(false)
 const tracks = ref<YtmusicTrack[]>([])
 const searchArtists = ref<YtmusicArtist[]>([])
@@ -101,10 +102,10 @@ const playlists = ref<YtmusicPlaylist[]>([])
 const browse = ref<Browse | null>(null)
 const busy = ref(false)
 const playingId = ref<string | null>(null)
-/** false tant que le statut cookie n'a pas été lu — éviter le faux « manquant ». */
+/** false until the cookie status has been read — avoids a false "missing". */
 const statusReady = ref(false)
 const linked = ref(false)
-/** Un compte relié : likes et playlists. Un utilisateur connecté sans cookie cherche en anonyme. */
+/** A linked account: likes and playlists. A signed-in user without a cookie searches anonymously. */
 const personal = ref(true)
 
 const sortArtists = useLocalStorage<SectionSort>('kasbah.ytmusic.sort.artists', 'relevance')
@@ -115,10 +116,10 @@ const sortTracks = useLocalStorage<SectionSort>('kasbah.ytmusic.sort.tracks', 'r
 const hideExplicit = useLocalStorage('kasbah.ytmusic.hideExplicit', false)
 const RECENT_MAX = 10
 const RECENT_PLAYS_MAX = 20
-/** Tuiles par rangée en recherche simple (le reste attend « Voir tout »). */
+/** Tiles per row in simple search (the rest waits for "See all"). */
 const SIMPLE_MAX = 12
 
-/** Les sources de musique : YouTube Music, puis chaque plugin source actif (les radios). */
+/** The music sources: YouTube Music, then each active source plugin (the radios). */
 type SourceId = 'ytmusic' | 'radio' | 'mixcloud'
 const sources = computed(() => {
   const out: { id: SourceId; label: string; icon: IconName }[] = [{ id: 'ytmusic', label: 'YouTube Music', icon: 'sourceYtmusic' }]
@@ -127,9 +128,9 @@ const sources = computed(() => {
   return out
 })
 const sourceChoice = useLocalStorage<SourceId>('kasbah.music.source', 'ytmusic')
-/** La source affichée : le choix mémorisé, s'il est encore actif. */
+/** The displayed source: the remembered choice, if it is still active. */
 const activeSource = computed<SourceId>(() => (sources.value.some((s) => s.id === sourceChoice.value) ? sourceChoice.value : 'ytmusic'))
-/** Des logos seuls : `Segmented` donne alors le nom en infobulle et en libellé accessible. */
+/** Logos only: `Segmented` then gives the name as a tooltip and accessible label. */
 const sourceOptions = computed(() => sources.value.map((s) => ({ value: s.id, label: s.label, icon: s.icon })))
 
 const browseOptions = computed(() => [
@@ -158,7 +159,7 @@ function sortedBy<T>(items: T[], mode: SectionSort, nameOf: (item: T) => string,
     copy.sort((a, b) => nameOf(a).localeCompare(nameOf(b), undefined, { sensitivity: 'base' }))
     return copy
   }
-  // date : année desc ; sans année → fin de liste (ordre relatif conservé)
+  // date: year desc; without a year → end of list (relative order kept)
   copy.sort((a, b) => {
     const ya = Number.parseInt(String(dateOf?.(a) ?? '').slice(0, 4), 10)
     const yb = Number.parseInt(String(dateOf?.(b) ?? '').slice(0, 4), 10)
@@ -179,7 +180,7 @@ const singlesView = computed(() => sortedBy(withoutExplicit(searchSingles.value)
 const compilationsView = computed(() => sortedBy(withoutExplicit(searchCompilations.value), sortCompilations.value, (a) => a.title, (a) => a.year))
 const tracksView = computed(() => sortedBy(withoutExplicit(searchTracks.value), sortTracks.value, (a) => a.title, (a) => a.year))
 const browseTracksView = computed(() => withoutExplicit(tracks.value))
-/** Recherche simple : toutes les sorties dans une seule rangée, albums d'abord. */
+/** Simple search: all releases in a single row, albums first. */
 const releasesSimple = computed(() => withoutExplicit([...searchAlbums.value, ...searchSingles.value, ...searchCompilations.value]).slice(0, SIMPLE_MAX))
 const artistsSimple = computed(() => searchArtists.value.slice(0, SIMPLE_MAX))
 const tracksSimple = computed(() => withoutExplicit(searchTracks.value).slice(0, SIMPLE_MAX))
@@ -198,29 +199,29 @@ const searchEmpty = computed(() =>
   && searchArtists.value.length === 0 && searchAlbums.value.length === 0 && searchSingles.value.length === 0
   && searchCompilations.value.length === 0 && searchTracks.value.length === 0)
 
-// ---- sessions d'écoute ---------------------------------------------------------------------------
+// ---- listening sessions --------------------------------------------------------------------------
 /**
- * Tous les lecteurs de la maison : on voit ce qui joue partout, même là où on ne peut rien envoyer.
- * En plus, CE navigateur (le son de la tablette, de l'ordinateur, du téléphone) : un lecteur privé,
- * tenu par le store `localPlayer`, que seul cet écran voit.
+ * All the house's players: you see what is playing everywhere, even where nothing can be sent.
+ * Plus THIS browser (the sound of the tablet, the computer, the phone): a private player,
+ * held by the `localPlayer` store, that only this screen sees.
  */
 const players = computed(() => [local.entry, ...devices.list.filter((e: DeviceEntry) => e.state.kind === 'media_player')])
 const localSelected = computed(() => isLocalPlayer(sessionId.value))
 const canReceive = (e: DeviceEntry) => e.state.available && e.descriptor.capabilities.includes('play_url')
 const sessionId = useLocalStorage('kasbah.music.session', '')
-/** Même clé que l'étoile du panneau Écoute : le lecteur par défaut est le premier favori. */
+/** Same key as the star in the Listening panel: the default player is the first favorite. */
 const favoriteSessions = useLocalStorage<string[]>('kasbah.music.favoriteSessions', [])
 const selected = computed<DeviceEntry | null>(() => players.value.find((e) => e.descriptor.id === sessionId.value) ?? null)
 const selectedName = computed(() => selected.value ? (house.houseDeviceFor(selected.value.descriptor.id)?.name ?? selected.value.descriptor.name) : '')
-/** Les lecteurs qui jouent en ce moment un flux servi par Kasbah, par id plugin — transférables, déplaçables. */
+/** The players currently playing a stream served by Kasbah, by plugin id — transferable, movable. */
 const ourSessions = ref<Map<string, MusicSession>>(new Map())
 const selectedSession = computed(() => (localSelected.value ? local.barSession : selected.value ? ourSessions.value.get(selected.value.descriptor.id) ?? null : null))
-/** La dernière radio lancée sur chaque lecteur : la barre en tire la qualité (l'enceinte ne la dit pas). */
+/** The last radio launched on each player: the bar draws its quality from it (the speaker does not say it). */
 const radioStations = ref<Map<string, RadioStation>>(new Map())
 const selectedStation = computed(() => (selected.value ? radioStations.value.get(selected.value.descriptor.id) ?? null : null))
 /**
- * Le titre que JOUE le lecteur choisi (servi par nous), pour le signaler dans les listes : surligné,
- * et un point qui pulse tant qu'il joue (immobile en pause). Rien si le lecteur est au repos.
+ * The track the chosen player PLAYS (served by us), to flag it in the lists: highlighted,
+ * and a dot that pulses while it plays (still when paused). Nothing if the player is idle.
  */
 const nowPlayingTrack = computed<{ source: string; id: string } | null>(() => {
   const st = selected.value?.state
@@ -228,28 +229,28 @@ const nowPlayingTrack = computed<{ source: string; id: string } | null>(() => {
   const s = selectedSession.value
   return s ? { source: s.source, id: s.id } : null
 })
-/** Les listes YouTube Music de cette page : un id n'y a de sens que venu de lui. */
+/** The YouTube Music lists of this page: an id only makes sense coming from it. */
 const nowPlayingId = computed(() => (nowPlayingTrack.value?.source === 'ytmusic' ? nowPlayingTrack.value.id : null))
 const nowPulsing = computed(() => selected.value?.state.kind === 'media_player' && selected.value.state.playback === 'playing')
-/** Titre en cours d'envoi : la barre le montre tout de suite, avec un sablier, le temps que l'enceinte suive. */
+/** Track being sent: the bar shows it right away, with an hourglass, while the speaker catches up. */
 const pendingTrack = ref<YtmusicTrack | null>(null)
 /**
- * La dernière écoute de chaque lecteur qui ne joue plus rien de nous (serveur redémarré, arrêt) : la
- * barre la montre en pause à sa position, et lecture la relance de là.
+ * The last listen of each player that no longer plays anything of ours (server restarted, stop):
+ * the bar shows it paused at its position, and play restarts it from there.
  */
 const lastPlayed = ref<Map<string, MusicLastPlayed>>(new Map())
-/** Position choisie au curseur avant de relancer ; sinon celle retenue par le serveur. */
+/** Position chosen on the slider before restarting; otherwise the one kept by the server. */
 const resumeAt = ref<number | null>(null)
 const selectedLast = computed(() => {
   const s = selected.value
   if (!s || localSelected.value || selectedSession.value || s.state.kind !== 'media_player') return null
   const e = lastPlayed.value.get(s.descriptor.id)
   if (!e) return null
-  // le lecteur joue autre chose (une radio lancée ailleurs, une appli) : c'est ça que la barre montre
+  // the player is playing something else (a radio launched elsewhere, an app): that is what the bar shows
   const st = s.state
   if (st.playback === 'playing') return null
   const shown = st.nowPlaying?.title?.trim().toLowerCase() ?? ''
-  // en pause, l'enceinte peut encore montrer NOTRE titre (flux mort) ou le nom du fichier servi
+  // paused, the speaker may still show OUR track (dead stream) or the name of the served file
   const dead = !shown || shown === e.track.title?.trim().toLowerCase() || /^[0-9a-f]{24}(\.[a-z0-9]{2,4})?$/.test(shown) || /^https?:\/\//.test(shown)
   if (st.playback === 'paused' && !dead) return null
   return e
@@ -286,10 +287,10 @@ const canTransfer = computed(() => {
 })
 
 watch(players, (list) => {
-  // Ne pas écraser le choix persisté tant que l'inventaire n'est pas arrivé ; sinon le premier
-  // FAVORI qui sait recevoir (ordre alphabétique, comme le panneau), puis le premier lecteur qui sait
-  // recevoir, à défaut le premier tout court.
-  // le lecteur local est toujours là : attendre l'inventaire avant de juger un choix persisté
+  // Do not overwrite the persisted choice until the inventory has arrived; otherwise the first
+  // FAVORITE that can receive (alphabetical order, like the panel), then the first player that can
+  // receive, failing that the first one at all.
+  // the local player is always there: wait for the inventory before judging a persisted choice
   if (!devices.list.length && sessionId.value) return
   if (!sessionId.value || !list.some((e) => e.descriptor.id === sessionId.value)) {
     const byName = [...list].sort((a, b) => a.descriptor.name.localeCompare(b.descriptor.name, undefined, { sensitivity: 'base' }))
@@ -303,19 +304,19 @@ async function refreshSessions(): Promise<void> {
     const [r, l] = await Promise.all([getTransport().musicSessions(), getTransport().musicLast()])
     ourSessions.value = new Map(r.sessions.map((s) => [s.deviceId, s]))
     lastPlayed.value = new Map(l.last.map((e) => [e.deviceId, e]))
-  } catch { /* plugin absent ou serveur muet : rien à transférer */ }
-  // la station n'a de sens que pour un direct : inutile de la demander le reste du temps
+  } catch { /* plugin absent or server silent: nothing to transfer */ }
+  // the station only makes sense for a live stream: no point asking for it the rest of the time
   const st = selected.value?.state
   if (st?.kind !== 'media_player' || !st.nowPlaying?.live) return
   try {
     const r = await getTransport().radioPlaying()
     radioStations.value = new Map(r.playing.map((p) => [p.deviceId, p.station]))
-  } catch { /* plugin radio absent : pas de qualité à montrer */ }
+  } catch { /* radio plugin absent: no quality to show */ }
 }
 let sessionsTicker: ReturnType<typeof setInterval> | undefined
-// Le serveur enchaîne tout seul : quand le lecteur change de titre ou d'état, relire les sessions
-// tout de suite (titre, file) plutôt qu'au prochain tour de 20 s. Un peu de retard, pour laisser le
-// serveur finir de lancer le titre qu'il enchaîne.
+// The server chains on its own: when the player changes track or state, re-read the sessions
+// right away (track, queue) rather than at the next 20 s round. A little delay, to let the
+// server finish launching the track it is chaining.
 let sessionsSoon: ReturnType<typeof setTimeout> | undefined
 watch(() => {
   const st = selected.value?.state
@@ -325,8 +326,8 @@ watch(() => {
   sessionsSoon = setTimeout(() => { void refreshSessions() }, 800)
 })
 
-// ---- file d'attente --------------------------------------------------------------------------------
-/** Une liste de plus de titres que la file n'en accepte : on en envoie une fenêtre autour du titre choisi. */
+// ---- queue -----------------------------------------------------------------------------------------
+/** A list with more tracks than the queue accepts: we send a window around the chosen track. */
 const QUEUE_WINDOW = 1000
 const queueOpen = ref(false)
 const queue = ref<MusicQueue | null>(null)
@@ -343,7 +344,7 @@ function toQueueTrack(tr: YtmusicTrack): MusicTrack {
     ...(tr.explicit ? { explicit: true } : {}),
   }
 }
-/** Un titre de la file vu comme un titre du catalogue (barre pendant l'envoi, lignes de la file). */
+/** A queue track seen as a catalog track (bar while sending, queue rows). */
 function fromQueueTrack(qt: MusicTrack): YtmusicTrack {
   return {
     videoId: qt.id, title: qt.title ?? qt.id, artists: qt.artist ? [qt.artist] : [],
@@ -363,12 +364,12 @@ async function loadQueue(): Promise<void> {
   try { queue.value = await getTransport().musicQueue(id) }
   catch { queue.value = null }
 }
-// relire la file dès que la session dit qu'elle a bougé (titre suivant, ajout, retrait, répétition)
+// re-read the queue as soon as the session says it has moved (next track, add, remove, repeat)
 watch(() => {
   const s = selectedSession.value
   return s?.queue ? `${s.deviceId}|${s.sid}|${s.queue.index}|${s.queue.length}|${s.queue.repeat}` : ''
 }, () => { void loadQueue() }, { immediate: true })
-// à l'ouverture, amener le titre qui joue sous les yeux
+// on opening, bring the playing track into view
 watch(queueOpen, async (open) => {
   if (!open) return
   await loadQueue()
@@ -383,9 +384,9 @@ function patchSessionQueue(q: MusicQueue) {
   next.set(s.deviceId, { ...s, queue: { length: q.items.length, index: q.index, repeat: q.repeat } })
   ourSessions.value = next
 }
-// la file locale change sans aller au serveur : la montrer telle quelle
+// the local queue changes without going to the server: show it as is
 watch(() => local.queue, (q) => { if (localSelected.value) queue.value = q })
-/** Suivant / précédent / un titre choisi : le serveur lance le titre, la barre le montre tout de suite. */
+/** Next / previous / a chosen track: the server launches the track, the bar shows it right away. */
 async function queueGo(step: 'next' | 'previous' | number) {
   const id = selected.value?.descriptor.id
   if (!id) return
@@ -429,7 +430,7 @@ async function clearQueue() {
   try { patchSessionQueue(await getTransport().musicQueueClear(id)) }
   catch (err) { fail(err) }
 }
-/** Lire ensuite / ajouter à la fin, sans interrompre. Rien ne joue ici ? Le serveur lance le titre. */
+/** Play next / add to the end, without interrupting. Nothing playing here? The server launches the track. */
 async function addToQueue(track: YtmusicTrack, where: 'next' | 'end') {
   const target = selected.value
   if (!target || !canReceive(target)) {
@@ -453,19 +454,19 @@ async function addToQueue(track: YtmusicTrack, where: 'next' | 'end') {
 function selectSession(id: string) {
   sessionId.value = id
 }
-/** Voir le lecteur dans la maison 3D. Naviguer d'abord, sélectionner ensuite (HomeView sous keep-alive, cf. 6_1). */
+/** See the player in the 3D house. Navigate first, select afterwards (HomeView under keep-alive, see 6_1). */
 async function locate(id: string) {
   await router.push({ name: 'home' }).catch(() => { /* navigation redondante */ })
   house.selectDevice(house.houseDeviceFor(id)?.id ?? id)
 }
 function barCommand(cmd: CommandInput) {
   if (!selected.value) return
-  // la dernière écoute : lecture la relance, file et position comprises
+  // the last listen: play restarts it, queue and position included
   if (cmd.type === 'media_player.play' && selectedLast.value) {
     void resumeLast()
     return
   }
-  // une file : c'est elle qui saute, l'enceinte n'a qu'un titre
+  // a queue: it is the one that skips, the speaker only has a single track
   if ((cmd.type === 'media_player.next' || cmd.type === 'media_player.previous') && selectedSession.value?.queue) {
     void queueGo(cmd.type === 'media_player.next' ? 'next' : 'previous')
     return
@@ -478,17 +479,17 @@ function barCommand(cmd: CommandInput) {
     if (cmd.type === 'media_player.stop') void refreshSessions()
   })
 }
-// Pas de toast de succès ici ni au lancement d'un titre : la barre et le panneau montrent déjà le
-// résultat, et le toast passait par-dessus le lecteur. Les erreurs, elles, restent des toasts.
-/** Lecture / pause depuis une ligne du panneau : le lecteur local n'est pas un appareil du serveur. */
+// No success toast here nor when launching a track: the bar and the panel already show the
+// result, and the toast went over the player. Errors, for their part, stay toasts.
+/** Play / pause from a panel row: the local player is not a server device. */
 function panelCommand(id: string, cmd: CommandInput) {
   if (isLocalPlayer(id)) local.command(cmd)
   else void devices.sendCommand(id, cmd)
 }
 /**
- * Transférer, dans les deux sens avec ce navigateur : vers une enceinte, le serveur reprend la position
- * et la file que le navigateur lui donne, puis le navigateur se tait ; depuis une enceinte, le serveur
- * l'arrête et rend au navigateur de quoi reprendre (fichier, position, file).
+ * Transfer, both ways with this browser: to a speaker, the server takes over the position
+ * and the queue that the browser gives it, then the browser goes quiet; from a speaker, the server
+ * stops it and gives the browser what it needs to resume (file, position, queue).
  */
 async function transferTo(toId: string) {
   const from = selected.value
@@ -514,7 +515,7 @@ async function transferTo(toId: string) {
     void refreshSessions()
   }
 }
-/** Se placer dans le morceau : la commande du lecteur suffit, notre flux est un « fichier » pour lui. */
+/** Seek within the track: the player's command is enough, our stream is a "file" for it. */
 function barSeek(positionS: number) {
   const s = selected.value
   if (selectedLast.value) {
@@ -525,9 +526,9 @@ function barSeek(positionS: number) {
   else if (s) void devices.sendCommand(s.descriptor.id, { type: 'media_player.seek', positionS: Math.round(positionS) })
 }
 
-// ---- liaison et chargement ---------------------------------------------------------------------
+// ---- linking and loading -----------------------------------------------------------------------
 async function refreshLink(): Promise<void> {
-  // L'inventaire plugins n'est chargé que dans Réglages — le charger ici aussi.
+  // The plugin inventory is only loaded in Settings — load it here too.
   if (!plugins.loaded) await plugins.load()
   const plug = plugins.byId.ytmusic
   if (!plug?.enabled) {
@@ -540,7 +541,7 @@ async function refreshLink(): Promise<void> {
     personal.value = !s.anonymous
     if (s.anonymous && (browseTab.value === 'liked' || browseTab.value === 'playlists')) browseTab.value = 'recent'
   } catch {
-    // Fallback santé (peut être stale) si /status échoue.
+    // Health fallback (may be stale) if /status fails.
     linked.value = plug.health.status !== 'needs_pairing'
   }
 }
@@ -566,7 +567,7 @@ function albumMeta(al: YtmusicAlbum): string {
   return al.artists.length ? al.artists.join(', ') : ''
 }
 const fail = (err: unknown) => notifications.error(t('errors.UNKNOWN', { name: 'YouTube Music', message: (err as Error).message }))
-/** Le navigateur refuse de lire (lecture automatique bloquée, format) : ce n'est pas une erreur du serveur. */
+/** The browser refuses to play (autoplay blocked, format): it is not a server error. */
 const failLocal = (err: unknown) => (err instanceof DOMException ? notifications.error(t('music.localFailed')) : fail(err))
 
 function clearSearchResults() {
@@ -616,13 +617,13 @@ async function runSearch() {
   queueOpen.value = false
   searched.value = true
   rememberQuery(q)
-  // Même terme qu'au dernier passage : on réaffiche, on ne redemande pas.
+  // Same term as on the last pass: we redisplay, we do not ask again.
   if (lastSearch?.query === q) {
     applySearch(lastSearch.result)
     return
   }
-  // Vider AVANT d'attendre : garder les résultats de la requête précédente le temps de la nouvelle
-  // (plusieurs secondes) laissait croire qu'on n'avait pas cliqué, ou pire, que c'était la réponse.
+  // Clear BEFORE waiting: keeping the previous request's results while the new one runs (several
+  // seconds) made it look like the click had not registered, or worse, that they were the answer.
   clearSearchResults()
   tracks.value = []
   busy.value = true
@@ -633,7 +634,7 @@ async function runSearch() {
   } catch (err) { fail(err) }
   finally { busy.value = false }
 }
-/** Effacer la recherche : retour au parcours. */
+/** Clear the search: back to browsing. */
 async function clearSearch() {
   lastSearch = null
   query.value = ''
@@ -653,12 +654,12 @@ async function loadBrowseTab(): Promise<void> {
   else tracks.value = []
 }
 
-// ---- humeurs et genres ---------------------------------------------------------------------------
-/** Les catégories, dans la langue de l'app (YouTube les nomme) ; relues seulement si la langue change. */
+// ---- moods and genres ----------------------------------------------------------------------------
+/** The categories, in the app's language (YouTube names them); re-read only if the language changes. */
 const explore = ref<YtmusicExplore | null>(null)
 let exploreLang = ''
 const categoryShelves = ref<YtmusicExploreShelf[]>([])
-/** Ce qu'on a ouvert DEPUIS une catégorie (une playlist, un album) revient à elle par « Retour ». */
+/** What was opened FROM a category (a playlist, an album) returns to it through "Back". */
 const backStack = ref<Browse[]>([])
 async function loadExplore() {
   if (explore.value && exploreLang === locale.value) return
@@ -672,19 +673,19 @@ async function loadExplore() {
   finally { busy.value = false }
 }
 /**
- * Pochettes des cartes : la page de YouTube n'en a pas, le serveur les prend dans chaque catégorie
- * (lent la première fois, ~10 s, puis gardé 6 h). Les cartes n'attendent pas : les pochettes y entrent
- * en fondu à leur arrivée, dans un emplacement déjà réservé. Un échec les laisse simplement nues.
+ * Card cover art: YouTube's page has none, the server takes them from each category
+ * (slow the first time, ~10 s, then kept 6 h). The cards do not wait: the cover art fades in
+ * as it arrives, in an already reserved slot. A failure simply leaves them bare.
  */
 const covers = ref<Record<string, string[]>>({})
 async function loadCovers(lang: string) {
   try { covers.value = (await getTransport().ytmusicExploreCovers(lang)).covers }
-  catch { /* cartes sans pochettes */ }
+  catch { /* cards without cover art */ }
 }
-/** Une pochette n'apparaît qu'une fois chargée : jamais de carré vide ni d'image qui se dessine par bandes. */
+/** Cover art only appears once loaded: never an empty square nor an image drawn in bands. */
 const coverLoaded = ref<Set<string>>(new Set())
 function markCover(url: string) { coverLoaded.value = new Set(coverLoaded.value).add(url) }
-/** Genres : « Pour vous » en tête (s'il y en a), puis les genres ; Ambiances : les humeurs et moments. */
+/** Genres: "For you" first (if any), then the genres; Moods: the moods and moments. */
 const exploreGroups = computed(() => {
   const e = explore.value
   if (!e) return []
@@ -703,7 +704,7 @@ async function openCategory(c: YtmusicExploreCategory) {
   catch (err) { fail(err) }
   finally { busy.value = false }
 }
-/** « Masquer explicit » vaut aussi ici ; une rangée vidée par le filtre disparaît. */
+/** "Hide explicit" applies here too; a row emptied by the filter disappears. */
 function visibleShelves(shelves: YtmusicExploreShelf[]): YtmusicExploreShelf[] {
   return shelves
     .map((sh) => ({ ...sh, tracks: withoutExplicit(sh.tracks), albums: withoutExplicit(sh.albums) }))
@@ -711,7 +712,7 @@ function visibleShelves(shelves: YtmusicExploreShelf[]): YtmusicExploreShelf[] {
 }
 const categoryView = computed(() => visibleShelves(categoryShelves.value))
 
-/** Les nouveautés : gardées pour la séance, relues si la langue change (le serveur les garde 10 min). */
+/** The new releases: kept for the session, re-read if the language changes (the server keeps them 10 min). */
 const newShelves = ref<YtmusicExploreShelf[]>([])
 let newLang = ''
 async function loadNew() {
@@ -739,18 +740,17 @@ async function loadPlaylists() {
   catch (err) { fail(err) }
   finally { busy.value = false }
 }
-/** Le texte de présentation de l'album ou de l'artiste ouvert (YouTube Music, souvent tiré de Wikipédia), s'il y en a un. */
+/** The introduction text of the opened album or artist (YouTube Music, often taken from Wikipedia), if there is one. */
 const detailDescription = ref<string | null>(null)
 const descOpen = ref(false)
 /**
- * La colonne de gauche du détail reste FIXE pendant qu'on fait défiler les titres, tant qu'elle tient
- * en entier dans la zone visible (sous « Retour »). Sinon — écran trop bas, présentation dépliée — elle
- * défile avec la liste, pour que sa touche de lecture ne sorte jamais de la vue. On MESURE (et on
- * remesure à chaque changement de taille de l'une ou de l'autre) plutôt que de deviner par des seuils
- * d'écran.
+ * The detail's left column stays FIXED while the tracks scroll, as long as it fits entirely in
+ * the visible zone (under "Back"). Otherwise — screen too short, introduction expanded — it
+ * scrolls with the list, so that its play button never leaves the view. We MEASURE (and re-measure
+ * on every size change of either) rather than guess with screen thresholds.
  */
 const scrollEl = ref<HTMLElement | null>(null)
-/** File, catégorie ou détail ouverts : la ligne « Retour » s'affiche au-dessus de la zone qui défile. */
+/** Queue, category or detail open: the "Back" row is displayed above the scrolling zone. */
 const hasBackRow = computed(() => statusReady.value && linked.value && (queueOpen.value || !!browse.value))
 const sideEl = ref<HTMLElement | null>(null)
 const sideFits = ref(false)
@@ -759,11 +759,11 @@ function measureSide() {
   if (!sc || !side) { sideFits.value = false; return }
   sideFits.value = side.offsetHeight <= sc.clientHeight
 }
-// `useResizeObserver` suit les références du gabarit quand elles apparaissent ou changent (la colonne
-// n'existe qu'une fois un détail ouvert) ; la présentation qui arrive, ou qu'on déplie, la redimensionne
+// `useResizeObserver` follows the template refs when they appear or change (the column only
+// exists once a detail is open); the introduction that arrives, or that is expanded, resizes it
 useResizeObserver(scrollEl, measureSide)
 useResizeObserver(sideEl, measureSide)
-/** Le texte, et sa mention de source et de licence (Wikipédia), écrite à part en petit. */
+/** The text, and its source and license mention (Wikipedia), written separately in small print. */
 const detailParts = computed(() => splitCredit(detailDescription.value))
 const detailText = computed(() => detailParts.value.text)
 const detailCredit = computed(() => detailParts.value.credit)
@@ -788,11 +788,11 @@ const openAlbum = (al: YtmusicAlbum) => openDetail({
 }, () => getTransport().ytmusicAlbum(al.id, locale.value))
 const openArtist = (ar: YtmusicArtist) => openDetail({ kind: 'artist', id: ar.id, title: ar.name, art: ar.artUrl }, () => getTransport().ytmusicArtist(ar.id, locale.value))
 
-// ---- colonne de gauche du détail (album, playlist, artiste), à la manière de YouTube Music ----------
-/** Une pochette seule, en grand : la liste des titres d'un album n'a pas à la répéter à chaque ligne. */
+// ---- left column of the detail (album, playlist, artist), YouTube Music style -----------------------
+/** A lone cover art, large: an album's track list need not repeat it on every row. */
 const detail = computed(() => (browse.value && browse.value.kind !== 'category' ? browse.value : null))
 const detailArtless = computed(() => detail.value?.kind === 'album')
-/** « Album · 2012 » : le type de sortie (ou playlist / artiste) et l'année. */
+/** "Album · 2012": the release type (or playlist / artist) and the year. */
 const detailKind = computed(() => {
   const d = detail.value
   if (!d) return ''
@@ -801,7 +801,7 @@ const detailKind = computed(() => {
     : ({ single: t('music.kindSingle'), ep: t('music.kindEp'), compilation: t('music.kindCompilation') } as Record<string, string>)[d.releaseType ?? ''] ?? t('music.kindAlbum')
   return [kind, d.year].filter(Boolean).join(' · ')
 })
-/** « 8 titres · 33 min » — rien pendant le chargement (la ligne garde sa place). */
+/** "8 tracks · 33 min" — nothing while loading (the row keeps its place). */
 const detailStats = computed(() => {
   const list = browseTracksView.value
   if (!list.length) return ''
@@ -814,7 +814,7 @@ function backFromDetail() {
   tracks.value = []
   const prev = backStack.value.at(-1)
   if (prev) {
-    // la catégorie d'où l'on vient : ses rangées sont encore en mémoire
+    // the category we came from: its rows are still in memory
     backStack.value = backStack.value.slice(0, -1)
     browse.value = prev
     return
@@ -823,7 +823,7 @@ function backFromDetail() {
   if (!searched.value) void loadBrowseTab()
 }
 
-/** Jouer `track` ; la liste d'où il vient (album, playlist, likes, résultats) devient la file, à partir de lui. */
+/** Play `track`; the list it comes from (album, playlist, likes, results) becomes the queue, starting from it. */
 async function play(track: YtmusicTrack, list: YtmusicTrack[] = [track]) {
   const target = selected.value
   if (!target || !canReceive(target)) {
@@ -835,8 +835,9 @@ async function play(track: YtmusicTrack, list: YtmusicTrack[] = [track]) {
 }
 
 /**
- * Jouer `all[at]`, d'où que viennent les pistes (YouTube Music, Mixcloud) : la liste devient la file
- * du lecteur choisi — enceinte (file côté serveur) ou ce navigateur —, par fenêtre de `QUEUE_WINDOW`.
+ * Play `all[at]`, wherever the tracks come from (YouTube Music, Mixcloud): the list becomes the
+ * chosen player's queue — speaker (server-side queue) or this browser —, by windows of
+ * `QUEUE_WINDOW`.
  */
 async function playTracks(all: MusicTrack[], at: number) {
   const target = selected.value
@@ -871,10 +872,10 @@ async function playTracks(all: MusicTrack[], at: number) {
   }
 }
 
-/** Album ou artiste joué d'un geste (sa tuile, sa ligne) : ses titres deviennent la file, depuis le premier. */
+/** Album or artist played with one gesture (its tile, its row): its tracks become the queue, from the first. */
 const playingCollection = ref<string | null>(null)
 async function playCollection(id: string, load: () => Promise<{ tracks: YtmusicTrack[] }>) {
-  // le déverrouillage du son doit avoir lieu dans le geste, avant le chargement de la liste
+  // the sound unlock must happen within the gesture, before the list loads
   if (localSelected.value) local.prime()
   playingCollection.value = id
   try {
@@ -890,21 +891,21 @@ const playPlaylist = (pl: YtmusicPlaylist) => playCollection(pl.id, () => getTra
 
 watch(browseTab, () => { queueOpen.value = false; if (linked.value && !searched.value) void loadBrowseTab() })
 const playTarget = computed(() => !!selected.value && canReceive(selected.value))
-/** Une recherche est partie et sa réponse n'est pas là : la zone des résultats montre des squelettes. */
+/** A search has gone out and its answer is not there: the results zone shows skeletons. */
 const searching = computed(() => busy.value && searched.value && !browse.value)
 </script>
 
 <template>
   <div class="page">
     <PageHeader>
-      <!-- sources : YouTube Music et chaque plugin source actif ; la choisie occupe la recherche et la zone centrale -->
+      <!-- sources: YouTube Music and each active source plugin; the chosen one occupies the search and the central zone -->
       <Segmented v-model="sourceChoice" :options="sourceOptions" :label="$t('music.sources')" />
     </PageHeader>
 
     <div class="body">
       <section class="main">
-        <!-- la file, ouverte depuis la barre pendant qu'une autre source que YouTube Music est affichée : elle
-             prend la zone centrale ; la source reste montée (masquée), on la retrouve telle quelle au retour -->
+        <!-- the queue, opened from the bar while a source other than YouTube Music is displayed: it
+             takes the central zone; the source stays mounted (hidden), we find it as it was on return -->
         <div v-if="queueOpen && activeSource !== 'ytmusic'" class="main__body">
           <div class="back-row">
             <button type="button" class="pill" @click="queueOpen = false">
@@ -934,7 +935,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               <StrokeIcon name="close" :size="14" />
             </button>
           </div>
-          <!-- la présentation des RÉSULTATS : sans recherche affichée, rien à présenter — grisée, le choix reste mémorisé -->
+          <!-- the presentation of the RESULTS: with no search displayed, nothing to present — greyed out, the choice stays remembered -->
           <button type="button" class="pill" :data-on="advanced && searched ? '1' : '0'" :disabled="!searched" :title="$t('music.advancedHint')" @click="advanced = !advanced">
             <StrokeIcon name="layers" :size="16" />
             <span>{{ $t('music.advanced') }}</span>
@@ -948,15 +949,15 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                  :remove-label="$t('ytmusic.recentRemove')" @pick="runRecent" @remove="removeRecent" />
 
         <div class="main__body">
-        <!-- le voile de la pochette d'un détail (album, playlist, artiste), flou, derrière « Retour » et la zone
-             qui défile — jamais sous la recherche —, fondu sur ses quatre bords : aucune démarcation, et fixe,
-             puisqu'il n'est pas dans la zone qui défile -->
+        <!-- the veil of a detail's cover art (album, playlist, artist), blurred, behind "Back" and the
+             zone that scrolls — never under the search —, faded on its four edges: no demarcation,
+             and fixed, since it is not in the scrolling zone -->
         <div v-if="detail?.art && !queueOpen" class="veil" aria-hidden="true">
           <img :key="detail.art" :src="detail.art" alt="" referrerpolicy="no-referrer">
         </div>
-        <!-- « Retour » (file, catégorie, détail) HORS de la zone qui défile : rien ne passe plus sous lui, et
-             pas de bande de fond pour le séparer du voile — le haut de la zone se fond, les lignes s'y
-             effacent en douceur -->
+        <!-- "Back" (queue, category, detail) OUTSIDE the scrolling zone: nothing passes under it
+             anymore, and no background band to separate it from the veil — the top of the zone
+             fades, rows disappear into it softly -->
         <div v-if="hasBackRow" class="back-row">
           <button type="button" class="pill" @click="queueOpen ? (queueOpen = false) : backFromDetail()">
             <StrokeIcon name="back" :size="16" />
@@ -972,13 +973,13 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
           <div v-if="!statusReady" class="muted empty">{{ $t('common.loading') }}</div>
           <div v-else-if="!linked" class="card card--soft empty muted">{{ $t('ytmusic.needCookie') }}</div>
           <template v-else>
-            <!-- file d'attente du lecteur choisi : ce qui joue, ce qui suit -->
+            <!-- queue of the chosen player: what is playing, what follows -->
             <template v-if="queueOpen">
               <QueueList :queue="queue" :waiting="queueWaiting" :pulsing="nowPulsing" :can-play="playTarget" :busy-index="queueBusyIndex"
                          @play="queueGo" @remove="removeFromQueue" />
             </template>
 
-            <!-- une catégorie (genre, ambiance) : ses rangées de tuiles -->
+            <!-- a category (genre, mood): its rows of tiles -->
             <template v-else-if="browse?.kind === 'category'">
               <template v-if="categoryLoading">
                 <section v-for="n in 3" :key="n" class="shelf" aria-hidden="true">
@@ -999,21 +1000,21 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               </template>
             </template>
 
-            <!-- détail : album, artiste, playlist — une colonne fixe à gauche (pochette, titre, lecture), les titres à droite -->
+            <!-- detail: album, artist, playlist — a fixed column on the left (cover art, title, play), the tracks on the right -->
             <template v-else-if="detail">
               <div class="detail">
                 <aside ref="sideEl" class="detail__side" :class="{ 'is-fixed': sideFits }">
-                  <!-- en 600 px : la pochette s'affiche jusqu'à 300 px, sur des écrans à haute densité -->
+                  <!-- in 600 px: the cover art displays up to 300 px, on high-density screens -->
                   <ArtThumb :key="detail.art ?? 'none'" :src="artAt(detail.art, 600)" :size="176" :round="detail.kind === 'artist'"
                             :icon="detail.kind === 'artist' ? 'person' : detail.kind === 'album' ? 'disc' : 'list'" class="detail__art" />
                   <h2 class="detail__title" :title="detail.title">{{ detail.title }}</h2>
                   <div class="detail__artist">{{ detail.artists?.length ? detail.artists.join(', ') : '\u00a0' }}</div>
-                  <!-- type, année, titres et durée sur UNE ligne : la colonne gagne une ligne de hauteur -->
+                  <!-- type, year, tracks and duration on ONE line: the column gains a line of height -->
                   <div class="detail__meta muted">
                     <ExplicitBadge v-if="detail.explicit" />
                     <span>{{ [detailKind, detailStats].filter(Boolean).join(' · ') || '\u00a0' }}</span>
                   </div>
-                  <!-- la présentation de l'album ou de l'artiste, repliée sur deux lignes : un clic la déplie -->
+                  <!-- the album's or artist's introduction, collapsed to two lines: a click expands it -->
                   <p v-if="detailText" class="detail__desc muted" :class="{ 'is-open': descOpen }" :title="descOpen ? undefined : detailText"
                      role="button" tabindex="0" :aria-expanded="descOpen" @click="descOpen = !descOpen" @keydown.enter="descOpen = !descOpen">{{ detailText }}</p>
                   <p v-if="detailCredit" class="detail__credit muted">{{ detailCredit }}</p>
@@ -1033,7 +1034,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               </div>
             </template>
 
-            <!-- l'attente : même forme que les résultats à venir, pour que rien ne saute quand ils arrivent -->
+            <!-- waiting: same shape as the coming results, so that nothing jumps when they arrive -->
             <template v-else-if="searching">
               <section v-for="n in 3" :key="n" class="shelf" aria-hidden="true">
                 <div class="shelf__head"><span class="skel skel--label" /></div>
@@ -1048,7 +1049,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               <p class="muted empty" role="status">{{ $t('ytmusic.searching') }}</p>
             </template>
 
-            <!-- recherche simple : une rangée de tuiles par section -->
+            <!-- simple search: a row of tiles per section -->
             <template v-else-if="searched && !advanced">
               <section v-if="artistsSimple.length" class="shelf">
                 <div class="shelf__head"><h2 class="section-label">{{ $t('ytmusic.sectionArtists') }}</h2><button type="button" class="see-all" @click="advanced = true">{{ $t('music.seeAll') }}</button></div>
@@ -1074,7 +1075,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               <p v-if="searchEmpty" class="muted empty">{{ $t('ytmusic.empty') }}</p>
             </template>
 
-            <!-- recherche avancée : colonnes classées avec tris -->
+            <!-- advanced search: ranked columns with sorts -->
             <div v-else-if="searched" class="search-grid">
               <section v-for="sec in advancedSections" :key="sec.key" class="section">
                 <div class="section__head">
@@ -1102,7 +1103,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
               <p v-if="searchEmpty" class="muted empty">{{ $t('ytmusic.empty') }}</p>
             </div>
 
-            <!-- parcourir : récents, likes, playlists, genres, ambiances -->
+            <!-- browse: recents, likes, playlists, genres, moods -->
             <template v-else>
               <div class="browse-head">
                 <Segmented v-model="browseTab" dense :options="browseOptions" :label="$t('music.browse')" />
@@ -1123,7 +1124,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                               @play="play(tr, browseTracksView)" @play-next="addToQueue(tr, 'next')" @add-end="addToQueue(tr, 'end')" />
                 <p v-if="!busy && browseTracksView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
               </div>
-              <!-- nouveautés : les rangées de la page de YouTube Music -->
+              <!-- new releases: the rows of the YouTube Music page -->
               <div v-else-if="browseTab === 'new'">
                 <template v-if="busy && !newShelves.length">
                   <section v-for="n in 2" :key="n" class="shelf" aria-hidden="true">
@@ -1143,7 +1144,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
                   <p v-if="!busy && newView.length === 0" class="muted empty">{{ $t('ytmusic.empty') }}</p>
                 </template>
               </div>
-              <!-- genres / ambiances : cartes de taille fixe, dégradé de la couleur de YouTube Music, deux pochettes inclinées -->
+              <!-- genres / moods: fixed-size cards, gradient of the YouTube Music color, two tilted covers -->
               <div v-else-if="browseTab === 'genres' || browseTab === 'moods'">
                 <div v-if="busy && !exploreGroups.length" class="cat-grid" aria-hidden="true">
                   <span v-for="i in 12" :key="i" class="skel cat-skel" />
@@ -1198,16 +1199,16 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
   display: grid; grid-template-columns: minmax(0, 1fr) var(--aside-w); gap: 16px;
   padding: 0 var(--page-x) 16px;
 }
-/* Téléphone en portrait : les lecteurs passent SOUS la zone centrale, sur un gros tiers de la hauteur. */
+/* Phone in portrait: the players go UNDER the central zone, on a good third of the height. */
 @media (max-width: 599px) {
   .body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 38%); gap: 10px; padding-bottom: 10px; }
 }
 .main { display: flex; flex-direction: column; min-height: 0; min-width: 0; gap: 10px; }
-/* sous la recherche : « Retour », la zone qui défile, et le voile derrière eux */
+/* under the search: "Back", the scrolling zone, and the veil behind them */
 .main__body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
 .main__body > :not(.veil) { position: relative; z-index: 1; }
-/* voile : fondu sur ses QUATRE bords (deux masques croisés) — aucune ligne nette —, gardé dans la colonne
-   et rogné dans sa boîte : l'image floue agrandie ne déborde pas */
+/* veil: faded on its FOUR edges (two crossed masks) — no sharp line —, kept in the column
+   and clipped in its box: the enlarged blurred image does not overflow */
 .veil {
   position: absolute; z-index: 0; inset: 0 0 auto; height: 540px; overflow: hidden; pointer-events: none;
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 38%, transparent 100%), linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%);
@@ -1218,7 +1219,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .veil img { width: 100%; height: 100%; object-fit: cover; display: block; filter: blur(70px) saturate(1.35); opacity: .3; transform: scale(1.15); }
 .main__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
 
-/* la recherche : le geste premier de la page, d'où sa taille */
+/* the search: the page's first gesture, hence its size */
 .search { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
 .search__field {
   flex: 1 1 auto; min-width: 0; height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 16px;
@@ -1232,7 +1233,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .search__clear:hover { color: var(--text); }
 .is-hidden { visibility: hidden; }
 .hide-explicit { display: flex; align-items: center; gap: 6px; cursor: pointer; flex: 0 0 auto; }
-/* Téléphone en portrait : la recherche prend sa ligne, « Avancée » et le filtre explicite passent dessous. */
+/* Phone in portrait: the search takes its row, "Advanced" and the explicit filter go underneath. */
 @media (max-width: 599px) {
   .search { flex-wrap: wrap; row-gap: 8px; }
   .search__field { flex: 1 1 100%; }
@@ -1240,17 +1241,17 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .small { font-size: 12px; }
 
 .browse-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 10px; }
-/* « Retour » : au-dessus de la zone qui défile, sans fond (le voile passe dessous sans démarcation) */
+/* "Back": above the scrolling zone, without background (the veil passes underneath with no demarcation) */
 .back-row { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; min-height: 36px; }
-/* sous « Retour », le haut de la zone qui défile se fond sur quelques pixels : une ligne qui monte s'y
-   efface au lieu d'être tranchée net */
+/* under "Back", the top of the scrolling zone fades over a few pixels: a row that goes up
+   disappears into it instead of being cut off sharply */
 .main__scroll--under {
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px); mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
 }
 .back-row__title { min-width: 0; flex: 1 1 auto; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .back-row__end { flex: 0 0 auto; white-space: nowrap; }
 
-/* attente d'une recherche : des blocs de la taille des tuiles, qui respirent doucement */
+/* waiting for a search: blocks the size of the tiles, breathing gently */
 .skel { display: block; border-radius: 8px; background: var(--surface2); animation: skel 1.4s ease-in-out infinite; }
 .skel-tile { width: 128px; flex: 0 0 auto; display: grid; gap: 6px; }
 .skel--art { width: 128px; height: 128px; border-radius: 10px; }
@@ -1260,7 +1261,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 @keyframes skel { 0%, 100% { opacity: .45; } 50% { opacity: .9; } }
 @media (prefers-reduced-motion: reduce) { .skel { animation: none; opacity: .6; } }
 
-/* recherche simple : rangées défilantes de tuiles */
+/* simple search: scrolling rows of tiles */
 .shelf { margin: 4px 0 18px; }
 .shelf__head { display: flex; align-items: baseline; justify-content: space-between; margin: 0 4px 8px; }
 .see-all { border: 0; background: transparent; color: var(--accent); font: inherit; font-size: 13px; font-weight: 500; padding: 0; }
@@ -1268,27 +1269,28 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .shelf__row::-webkit-scrollbar { height: 6px; }
 .shelf__row::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
 
-/* recherche avancée : colonnes dès qu'il y a la place */
+/* advanced search: columns as soon as there is room */
 .search-grid { display: grid; gap: 18px; align-items: start; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
 .section { min-width: 0; }
 .section__head { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0 0 6px; }
 .section-label { margin: 0 4px; }
 .list { display: grid; gap: 2px; }
 
-/* détail : colonne à gauche (pochette, titre, lecture), les titres à droite. `overflow-x: clip` (et non
-   `hidden`) : le voile flou ne crée pas de barre horizontale, et la colonne peut rester collante. */
+/* detail: column on the left (cover art, title, play), the tracks on the right. `overflow-x: clip`
+   (not `hidden`): the blurred veil does not create a horizontal bar, and the column can stay
+   sticky. */
 .detail {
-  /* la pochette grandit avec l'écran ; la colonne suit (pochette + marges) */
+  /* the cover art grows with the screen; the column follows (cover art + margins) */
   --cover: 208px;
   position: relative; display: grid; grid-template-columns: calc(var(--cover) + 40px) minmax(0, 1fr); gap: 36px; align-items: start; overflow-x: clip;
 }
 @media (min-width: 1500px) { .detail { --cover: 260px; gap: 48px; } }
 @media (min-width: 1800px) { .detail { --cover: 300px; gap: 56px; } }
 .detail__side { position: relative; z-index: 1; display: grid; justify-items: center; gap: 5px; padding: 14px 20px 10px; text-align: center; }
-/* fixe quand elle tient en entier sous « Retour » (mesuré : `sideFits`), accrochée EXACTEMENT à sa
-   place de départ — sinon elle glissait de quelques pixels avant de se fixer */
+/* fixed when it fits entirely under "Back" (measured: `sideFits`), hooked EXACTLY at its
+   starting place — otherwise it slid a few pixels before sticking */
 .detail__side.is-fixed { position: sticky; top: 0; }
-/* `--art` est posé en ligne par ArtThumb : seul !important le remplace */
+/* `--art` is set inline by ArtThumb: only !important overrides it */
 .detail__art { --art: var(--cover) !important; box-shadow: 0 14px 36px rgb(0 0 0 / .38); border-radius: 10px; margin-bottom: 10px; }
 .detail__art.art-wrap--round { border-radius: 999px; }
 .detail__art:not(.art-wrap--round) :deep(.art) { border-radius: 10px; }
@@ -1315,10 +1317,10 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .detail__play:disabled { opacity: .45; cursor: default; }
 .detail__list { position: relative; z-index: 1; min-width: 0; }
 
-/* genres / ambiances : cartes de taille FIXE (les pochettes arrivent après, dans une place déjà faite).
-   Fond : la couleur de YouTube Music assombrie en dégradé — ces couleurs sont pastel (#a4ffa4,
-   #cccccc…), en aplat le texte blanc y serait illisible. Même carte dans les deux thèmes : c'est une
-   vignette, comme une pochette. */
+/* genres / moods: FIXED-size cards (the cover art arrives afterwards, in a slot already made).
+   Background: the YouTube Music color darkened into a gradient — these colors are pastel
+   (#a4ffa4, #cccccc…), as a flat fill the white text would be unreadable there. Same card in
+   both themes: it is a thumbnail, like a cover art. */
 .cat-head { margin: 4px 4px 8px; }
 .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: 12px; margin: 0 0 20px; }
 .cat {
@@ -1333,7 +1335,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .cat:hover { filter: brightness(1.1); }
 .cat:active { transform: scale(.985); }
 .cat:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* deux lignes au plus, à gauche : les pochettes occupent le coin opposé */
+/* two lines at most, on the left: the cover art occupies the opposite corner */
 .cat__title {
   position: relative; z-index: 1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   max-width: 62%; font-size: 17px; font-weight: 700; line-height: 1.2; letter-spacing: -.01em; text-shadow: 0 1px 8px rgb(0 0 0 / .35);
@@ -1343,7 +1345,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
   position: absolute; width: 76px; height: 76px; border-radius: 6px; object-fit: cover;
   box-shadow: 0 6px 18px rgb(0 0 0 / .45); opacity: 0; transition: opacity .35s ease, transform .3s ease;
 }
-/* la première pochette devant, penchée vers la droite ; la seconde derrière, en retrait */
+/* the first cover art in front, tilted to the right; the second behind, set back */
 .cat__cover--1 { right: -10px; bottom: -12px; transform: rotate(22deg); }
 .cat__cover--2 { right: 44px; bottom: -22px; width: 64px; height: 64px; transform: rotate(-10deg); filter: brightness(.85); }
 .cat__cover.is-in { opacity: 1; }

@@ -1,10 +1,10 @@
 <script setup lang="ts">
-// Point pulsant « quelque chose est en cours ». Son ESPACE EST TOUJOURS RÉSERVÉ : éteint, il reste
-// un carré transparent de la même taille. Un indicateur qui apparaît et disparaît en occupant de
-// la place décale ses voisins — un curseur qui change de largeur, une ligne qui pousse celle du
-// dessous. Règle de l'utilisateur, appliquée ici une fois pour les trois endroits qui l'affichent.
+// Pulsing dot "something is in progress". Its SPACE IS ALWAYS RESERVED: off, it stays a
+// transparent square of the same size. An indicator that appears and disappears while taking up
+// room shifts its neighbors — a slider that changes width, a row that pushes the one below. User
+// rule, applied here once for the three places that display it.
 //
-// Le parent gère l'espacement (une ligne en `flex` a son `gap`, un texte a besoin d'une marge).
+// The parent handles the spacing (a `flex` row has its `gap`, a text needs a margin).
 defineProps<{ on: boolean; size?: number }>()
 </script>
 

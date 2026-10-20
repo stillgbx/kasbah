@@ -1,7 +1,7 @@
-/* Jetons de design. Toutes les COULEURS sont posées sur <html> par le store des réglages depuis la
-   palette du thème choisi (src/themes/, `cssVars`) : les valeurs ci-dessous ne servent que de repli
-   avant l'exécution du script, et reprennent la variante claire du thème « Kasbah ». Les couleurs
-   de la scène 3D vivent à part (variables --v-theme-scene*, voir plugins/vuetify.ts). */
+/* Design tokens. All COLORS are set on <html> by the settings store from the palette of the
+   chosen theme (src/themes/, `cssVars`): the values below only serve as a fallback before the
+   script runs, and match the light variant of the "Kasbah" theme. The colors of the 3D scene
+   live apart (--v-theme-scene* variables, see plugins/vuetify.ts). */
 :root {
   --bg: #e9edf1;
   --surface: #ffffff;
@@ -13,8 +13,8 @@
   --accent-soft: rgba(31, 111, 120, 0.12);
   --on-accent: #ffffff;
   --shadow: 0 8px 30px rgba(20, 26, 34, 0.08);
-  /* Catégories d'appareils (disque d'icône des marqueurs 3D) : la palette du thème les porte, tout
-     comme `sceneMedia` dont Médias reprend la couleur (l'onde et la pilule disent la même chose). */
+  /* Device categories (icon disc of the 3D markers): the theme palette carries them, as it does
+     `sceneMedia`, whose color Media reuses (the wave and the pill say the same thing). */
   --cat-light: #d18f0a;
   --cat-cover: #5b7086;
   --cat-camera: #7a4fcf;
@@ -23,39 +23,39 @@
   --radius: 16px;
   --radius-sm: 12px;
   /*
-   * Plus Jakarta Sans et non DM Sans (changée le 2026-09-18) : DM Sans n'a AUCUN chiffre tabulaire,
-   * et `font-variant-numeric: tabular-nums` y reste donc sans effet — mesuré, son « 0 » fait 9,08 px
-   * quand son « 1 » en fait 4,53, si bien que « 00.00 » et « 11.11 » diffèrent de 17,55 px. Toute
-   * l'app s'appuie sur cette propriété pour la règle « rien ne bouge » : cinquante-trois
-   * déclarations ne faisaient rien. Jakarta a les mêmes métriques de texte à 0,2 % près — le reste
-   * de la mise en page n'a donc pas bougé — et de vrais chiffres tabulaires : l'écart tombe à 0.
+   * Plus Jakarta Sans and not DM Sans (changed on 2026-09-18): DM Sans has NO tabular figures,
+   * and `font-variant-numeric: tabular-nums` therefore has no effect on it — measured, its "0" is
+   * 9.08 px wide when its "1" is 4.53, so "00.00" and "11.11" differ by 17.55 px. The whole app
+   * relies on this property for the "nothing moves" rule: fifty-three declarations did nothing.
+   * Jakarta has the same text metrics to within 0.2% — the rest of the layout therefore did not
+   * move — and real tabular figures: the gap drops to 0.
    */
   --font: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --rail-w: 72px;
   --aside-w: 340px;
-  /* marge du panneau flottant de la vue Maison autour de la scène */
+  /* margin of the floating panel of the House view around the scene */
   --panel-gap: 16px;
-  /* ce qui flotte en bas de la vue Maison : la carte météo à gauche, les boutons de vue à droite.
-     Leurs largeurs sont ici parce que la barre de recherche se loge ENTRE les deux et s'ancre
-     dessus — un 152 px recopié dans HomeView se serait décalé au premier changement. */
+  /* what floats at the bottom of the House view: the weather card on the left, the view buttons
+     on the right. Their widths are here because the search bar sits BETWEEN the two and anchors
+     to them — a 152 px copied into HomeView would have shifted at the first change. */
   --wx-w: 152px;
   --ctl-w: 44px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
-  /* hauteur de la barre de navigation du bas (téléphone en portrait), encoche comprise : 0 ailleurs.
-     Elle garde 14 px sous ses boutons même sans encoche déclarée : le doigt posé trop bas tombait
-     dans la zone des gestes du système, qui prenait le glissement pour lui (changer d'app). */
+  /* height of the bottom navigation bar (phone in portrait), notch included: 0 elsewhere.
+     It keeps 14 px under its buttons even without a declared notch: a finger placed too low fell
+     into the system gesture zone, which took the swipe for itself (switching app). */
   --dock-h: 0px;
-  /* marge latérale des pages */
+  /* side margin of the pages */
   --page-x: 24px;
 }
-/* Téléphone en portrait : le rail devient une barre en bas, qui rend toute la largeur aux vues. */
+/* Phone in portrait: the rail becomes a bar at the bottom, which gives the views back the full width. */
 @media (max-width: 599px) {
   :root { --rail-w: 0px; --dock-h: calc(72px + var(--safe-bottom)); --page-x: 16px; --wx-w: 108px; }
 }
-/* Téléphone en paysage : la hauteur est rare, le rail se resserre et défile. */
+/* Phone in landscape: height is scarce, the rail tightens and scrolls. */
 @media (min-width: 600px) and (max-height: 500px) {
   :root { --rail-w: 60px; --wx-w: 108px; }
 }

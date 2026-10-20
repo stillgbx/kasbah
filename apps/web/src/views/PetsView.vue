@@ -14,16 +14,16 @@ import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 import { CUP_GRAMS_MAX, CUP_GRAMS_MIN, CUP_GRAMS_STEP, useSettingsStore } from '../stores/settings'
 
-// Vue Animaux : les mangeoires et les fontaines de la maison, une carte chacune.
+// Pets view: the house's feeders and fountains, one card each.
 //
-// Deux kinds dans la même vue, comme la vue Robots réunit tondeuse et aspirateur : ce qui les
-// rassemble n'est pas leur contrat mais l'usage — on vient voir si le chat a mangé et bu, pas
-// piloter un appareil. Les mangeoires d'abord : ce sont elles qui portent le seul geste quotidien
-// (servir une ration) ; les fontaines se consultent plus qu'elles ne se pilotent.
+// Two kinds in the same view, as the Robots view brings mower and vacuum together: what unites
+// them is not their contract but their use — you come to see whether the cat has eaten and
+// drunk, not to drive a device. Feeders first: they carry the only daily gesture (serving a
+// portion); fountains are consulted more than they are driven.
 //
-// Chaque carte réutilise le contrôle du panneau d'appareil de la scène 3D (`PetFeederCard` /
-// `PetFountainCard`) plutôt que de redessiner les mêmes lignes : une seule mise en page à tenir,
-// et les capacités y décident déjà des sections.
+// Each card reuses the control of the 3D scene's device panel (`PetFeederCard` /
+// `PetFountainCard`) rather than redrawing the same rows: a single layout to maintain,
+// and the capabilities already decide the sections there.
 const devices = useDevicesStore()
 const house = useHouseStore()
 const settings = useSettingsStore()
@@ -35,15 +35,15 @@ const feeders = computed(() => devices.list.filter((e): e is FeederEntry => e.st
 const fountains = computed(() => devices.list.filter((e): e is FountainEntry => e.state.kind === 'pet_fountain'))
 const isEmpty = computed(() => feeders.value.length === 0 && fountains.value.length === 0)
 
-/** Le nom choisi dans la maison l'emporte sur celui du fabricant (même règle que la vue Robots). */
+/** The name chosen in the house wins over the vendor's (same rule as the Robots view). */
 const displayName = (e: DeviceEntry) => house.houseDeviceFor(e.descriptor.id)?.name ?? e.descriptor.name
 const brand = (e: DeviceEntry) => [e.descriptor.meta.manufacturer, e.descriptor.meta.model].filter(Boolean).join(' · ')
 const headline = (e: DeviceEntry) => headlineValue(e.descriptor, e.state, t, locale.value)
 const status = (e: DeviceEntry) => statusLabel(e.descriptor, e.state, t, locale.value)
 /**
- * La contrepartie en grammes de la grande valeur, pour une mangeoire qui compte en tasses. En
- * petit À CÔTÉ du chiffre et non en dessous : une troisième ligne ferait grandir l'en-tête des
- * seules mangeoires, et les deux cartes de la rangée n'auraient plus la même hauteur de tête.
+ * The gram counterpart of the large value, for a feeder that counts in cups. Small NEXT TO the
+ * figure and not below it: a third line would make the header of the feeders alone grow, and the
+ * two cards of the row would no longer have the same header height.
  */
 function headlineGrams(e: FeederEntry): string {
   const u = e.descriptor.meta.petFeeder?.unit
@@ -82,9 +82,9 @@ async function send(id: string, cmd: CommandInput): Promise<void> {
           <PetFeederCard :descriptor="e.descriptor" :state="e.state" :disabled="!e.state.available"
                          :pending="devices.isPending(e.descriptor.id)"
                          @command="(c: CommandInput) => send(e.descriptor.id, c)" />
-          <!-- Réglage d'AFFICHAGE, pas une commande : la mangeoire compte en volume et ne pèse
-               rien. Ce chiffre-là n'est connu que de l'utilisateur, qui pèse une ration une fois.
-               Discret, au pied de la carte, comme la taille du foyer sur la vue Eau. -->
+          <!-- DISPLAY setting, not a command: the feeder counts in volume and weighs
+               nothing. That figure is only known to the user, who weighs a portion once.
+               Discreet, at the foot of the card, like the household size on the Water view. -->
           <div v-if="e.descriptor.meta.petFeeder?.unit === 'cup'" class="hero__cup" :title="$t('pets.cupGramsHint')">
             <span class="muted">{{ $t('pets.cupGrams') }}</span>
             <div class="stepper">
@@ -130,8 +130,8 @@ async function send(id: string, cmd: CommandInput): Promise<void> {
 .page { height: 100%; display: flex; flex-direction: column; }
 .page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); display: grid; gap: 20px; align-content: start; }
 .empty { padding: 24px; text-align: center; }
-/* Même seuil que la vue Traitement de l'eau (1040px, mesuré là-bas) : l'en-tête de carte réserve
-   une largeur fixe à droite (valeur + statut), et en dessous la marque passerait sur deux lignes. */
+/* Same threshold as the Water view (1040px, measured there): the card header reserves
+   a fixed width on the right (value + status), and below it the brand would wrap onto two lines. */
 .pets__grid { display: grid; gap: 20px; min-width: 0; }
 @media (min-width: 1040px) { .pets__grid { grid-template-columns: 1fr 1fr; } }
 .hero { padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
@@ -139,30 +139,30 @@ async function send(id: string, cmd: CommandInput): Promise<void> {
 .hero__main { flex: 1 1 auto; min-width: 0; }
 .hero__name { font-size: 15px; font-weight: 600; }
 .hero__sub { font-size: 12px; margin-top: 2px; min-height: 1em; }
-/* Largeur RÉSERVÉE, pas ajustée au contenu : sans elle, « Trémie garnie » (76 px mesurés) devenant
-   « Croquettes à remettre » (128 px) fait maigrir `.hero__main` de 484 à 432 px et le nom de
-   l'appareil se met à défiler — la maison bouge sous une valeur qui change toute seule.
-   208 px couvre le pire cas des DEUX langues, mesuré au `getBoundingClientRect()` : 128 px pour le
-   plus long statut (FR « Croquettes à remettre »), et surtout la grande valeur suivie de son
-   équivalent en poids — « 1,0 tasse ~ 100 g » tient tout juste en 196, et « 12,0 tasse ~ 1 200 g »
-   en demande 201. La marge est là pour la maison à plusieurs chats, pas pour faire joli. */
-/* `min-width: 0` n'est PAS décoratif : la taille minimale automatique d'un élément flex vaut sa
-   largeur min-content, et le statut est en `nowrap` — sans lui, un message d'erreur du fabricant
-   fait passer la réserve de 144 à 295 px (mesuré), soit exactement le décalage qu'elle évite. */
+/* RESERVED width, not adjusted to the content: without it, "Trémie garnie" (76 px measured)
+   becoming "Croquettes à remettre" (128 px) makes `.hero__main` shrink from 484 to 432 px and
+   the device name starts to scroll — the house moves under a value that changes on its own.
+   208 px covers the worst case of BOTH languages, measured with `getBoundingClientRect()`: 128 px
+   for the longest status (FR "Croquettes à remettre"), and above all the large value followed by
+   its weight equivalent — "1,0 tasse ~ 100 g" just fits in 196, and "12,0 tasse ~ 1 200 g"
+   needs 201. The margin is there for a household with several cats, not for looks. */
+/* `min-width: 0` is NOT decorative: the automatic minimum size of a flex item equals its
+   min-content width, and the status is `nowrap` — without it, a vendor error message
+   takes the reserve from 144 to 295 px (measured), exactly the shift it prevents. */
 .hero__stat { flex: 0 0 208px; min-width: 0; max-width: 208px; text-align: right; }
 .hero__value { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* L'équivalent en poids, petit et discret, sur la MÊME ligne que la grande valeur : il la précise
-   sans lui voler la vedette ni ajouter de ligne à l'en-tête. */
+/* The weight equivalent, small and discreet, on the SAME line as the large value: it qualifies it
+   without stealing the show or adding a line to the header. */
 .hero__grams { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 6px; white-space: nowrap; }
-/* Le statut peut porter le message d'erreur BRUT du fabricant, de longueur inconnue : il se coupe
-   plutôt que d'emporter la réserve avec lui. */
+/* The status may carry the vendor's RAW error message, of unknown length: it is cut
+   rather than carrying the reserve away with it. */
 .hero__status { font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Réglage d'affichage, séparé des données du dessus par un filet — le même patron que la taille
-   du foyer sur la vue Traitement de l'eau. */
+/* Display setting, separated from the data above by a hairline — the same pattern as the household
+   size on the Water view. */
 .hero__cup { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; }
 .stepper { display: inline-flex; align-items: center; gap: 8px; }
 .stepper__btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; }
 .stepper__btn:disabled { opacity: .35; cursor: default; }
-/* largeur fixe : « 95 g » -> « 100 g » ne fait pas bouger les boutons de part et d'autre. */
+/* fixed width: "95 g" -> "100 g" does not make the buttons on either side move. */
 .stepper__val { min-width: 5ch; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
 </style>

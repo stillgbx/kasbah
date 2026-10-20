@@ -2,9 +2,9 @@
 import { computed, ref, watch } from 'vue'
 import { useDevicesStore } from '../stores/devices'
 
-// Bandeau discret en haut : visible seulement quand le lien serveur n'est pas nominal.
+// Discreet banner at the top: visible only when the server link is not nominal.
 const devices = useDevicesStore()
-// pas de clignotement au chargement : la connexion initiale n'est signalée qu'au-delà de 1,5 s
+// no flicker on load: the initial connection is only reported after 1.5 s
 const visible = ref(false)
 let timer: ReturnType<typeof setTimeout> | null = null
 watch(() => devices.connection, (s) => {

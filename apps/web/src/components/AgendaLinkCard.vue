@@ -7,11 +7,12 @@ import { useNotificationsStore } from '../stores/notifications'
 import { usePluginsStore } from '../stores/plugins'
 import StrokeIcon from './ui/StrokeIcon.vue'
 
-// Les agendas de la maison, dans Réglages → Plugins → agenda. On ajoute un agenda par son adresse
-// iCal secrète (le serveur la lit aussitôt et refuse ce qui n'en est pas une), on choisit sa
-// couleur, on le remonte ou le descend (la vue Agenda les liste dans cet ordre), on le retire. L'adresse ne revient jamais du serveur : on ne peut que la recoller.
+// The house calendars, in Settings → Plugins → agenda. A calendar is added by its secret iCal
+// address (the server reads it right away and rejects anything that is not one), then you pick its
+// color, move it up or down (the Calendar view lists them in that order), or remove it. The
+// address never comes back from the server: it can only be pasted again.
 
-/** Les couleurs proposées ; le serveur donne la suivante de la même liste à un agenda ajouté. */
+/** The colors on offer; the server gives an added calendar the next one in the same list. */
 const COLORS = ['#3f8cff', '#e5534b', '#2da44e', '#d38b22', '#a371f7', '#1bb3a7', '#db61a2', '#8d96a0']
 
 const agenda = useAgendaStore()
@@ -35,7 +36,7 @@ async function run(action: () => Promise<void>) {
   busy.value = true
   try {
     await action()
-    // le détail du plugin (« 2 calendars ») vient de l'inventaire : relu avec la santé
+    // the plugin detail ("2 calendars") comes from the inventory: re-read along with health
     await Promise.all([devices.refreshHealth(), plugins.load()])
   } catch (err) { fail(err) }
   finally { busy.value = false }
@@ -51,14 +52,14 @@ const recolor = (id: string, color: string) => run(async () => {
   await agenda.update(id, { color })
 })
 
-/** Échange un agenda avec son voisin (`-1` au-dessus, `+1` en dessous). */
+/** Swaps a calendar with its neighbor (`-1` above, `+1` below). */
 const move = (index: number, dir: -1 | 1) => run(async () => {
   const ids = agenda.calendars.map((c) => c.id)
   ;[ids[index], ids[index + dir]] = [ids[index + dir]!, ids[index]!]
   await agenda.reorder(ids)
 })
 
-// Retrait : premier appui arme, second confirme, on désarme tout seul.
+// Removal: first press arms, second confirms, disarms by itself.
 const armed = ref<string | null>(null)
 let armTimer: ReturnType<typeof setTimeout> | null = null
 function remove(id: string) {
@@ -134,10 +135,10 @@ const readAt = (ms: number | null) => (ms === null ? t('agenda.neverRead') : t('
 .ag__swatch { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 7px; border: 0; cursor: pointer; }
 .ag__swatch[data-on='1'] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text); }
 .ag__palette { display: flex; gap: 10px; padding: 4px 0 4px 36px; flex-wrap: wrap; }
-/* largeur fixe : « Retirer » et « Confirmer le retrait » occupent la même place */
+/* fixed width: "Remove" and "Confirm removal" take the same space */
 .ag__remove { flex: 0 0 auto; width: 190px; justify-content: center; height: 34px; font-size: 13px; }
 .ag__order { flex: 0 0 auto; display: flex; gap: 4px; }
-/* une flèche sans voisin reste à sa place, grisée : les boutons ne se décalent pas */
+/* an arrow with no neighbor stays in place, greyed out: the buttons do not shift */
 .ag__move {
   width: 34px; height: 34px; border: 0; border-radius: 10px; background: transparent; color: var(--text);
   display: grid; place-items: center; cursor: pointer;

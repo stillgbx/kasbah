@@ -1,9 +1,9 @@
-/** File d'attente légère pour les pochettes (dédup URL + concurrence bornée). Pas de worker. */
+/** Lightweight queue for cover art (URL dedup + bounded concurrency). No worker. */
 
 const MAX_CONCURRENT = 4
 let running = 0
 const waiters: Array<() => void> = []
-/** Une promesse par URL absolue — plusieurs lignes (même album) partagent le fetch. */
+/** One promise per absolute URL — several rows (same album) share the fetch. */
 const primed = new Map<string, Promise<void>>()
 
 function pump(): void {
@@ -28,7 +28,7 @@ function enqueue(task: () => Promise<void>): Promise<void> {
   })
 }
 
-/** Précharge `url` (cache navigateur ensuite). No-op si déjà en cours / fait. */
+/** Preloads `url` (browser cache afterwards). No-op if already in progress / done. */
 export function primeArtUrl(url: string): Promise<void> {
   const key = url.trim()
   if (!key) return Promise.resolve()

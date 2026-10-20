@@ -8,8 +8,8 @@ import { useNotificationsStore } from '../stores/notifications'
 import { usePluginsStore } from '../stores/plugins'
 import StrokeIcon from './ui/StrokeIcon.vue'
 
-// Liaison YouTube Music (NON OFFICIEL) : coller le cookie OU l'importer via yt-dlp
-// `--cookies-from-browser` sur la machine qui héberge Kasbah (pas l'écran qui affiche Kasbah).
+// YouTube Music linking (UNOFFICIAL): paste the cookie OR import it via yt-dlp
+// `--cookies-from-browser` on the machine that hosts Kasbah (not the screen that displays Kasbah).
 
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()
@@ -72,7 +72,7 @@ async function unlink() {
 <template>
   <div v-if="status" class="ytm card card--soft">
     <p class="ytm__badge muted small">{{ $t('settings.ytmusic.unofficial') }}</p>
-    <!-- connecté : c'est SON compte qu'on règle ici, celui de la maison n'est pas touché -->
+    <!-- connected: it is THEIR account being set here, the house's is not touched -->
     <p v-if="status.user" class="muted small ytm__hint">{{ $t('settings.musicAccountOf', { user: status.user }) }}</p>
     <p v-if="status.anonymous" class="muted small ytm__hint">{{ $t('settings.ytmusic.anonymous') }}</p>
 
@@ -107,7 +107,7 @@ async function unlink() {
         </form>
       </section>
 
-      <!-- l'import lit un navigateur de la machine serveur : pour le compte de la maison seulement -->
+      <!-- the import reads a browser on the server machine: for the house account only -->
       <section v-if="!status.user" class="ytm__block">
         <h3 class="ytm__title">{{ $t('settings.ytmusic.importTitle') }}</h3>
         <p class="muted small ytm__steps">{{ $t('settings.ytmusic.importSteps') }}</p>

@@ -3,10 +3,10 @@ import { computed } from 'vue'
 import { useAppUpdateStore } from '../stores/appUpdate'
 import { useDevicesStore } from '../stores/devices'
 
-// Pastille en bas : une nouvelle version est servie. Pas en haut comme celle de la connexion : elle
-// est cliquable et y masquerait le sélecteur d'étage tant qu'on ne recharge pas ; et au-dessus de la
-// barre de recherche de l'accueil (16 px du bas, 44 de haut). Montrée seulement en ligne (recharger
-// hors ligne ne mènerait nulle part). En superposition : rien ne bouge dessous.
+// Pill at the bottom: a new version is being served. Not at the top like the connection one: it is
+// clickable and would hide the level selector there until the page is reloaded; and above the
+// home search bar (16 px from the bottom, 44 tall). Shown only online (reloading offline would
+// lead nowhere). Overlaid: nothing moves beneath it.
 const update = useAppUpdateStore()
 const devices = useDevicesStore()
 const visible = computed(() => update.available && devices.connection === 'online')
@@ -29,7 +29,7 @@ const visible = computed(() => update.available && devices.connection === 'onlin
   max-width: calc(100vw - 32px);
   font-size: 13px; font-weight: 500; z-index: 2000; box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
 }
-/* écran étroit ou zoomé : le texte s'abrège, le bouton reste entier */
+/* narrow or zoomed screen: the text is shortened, the button stays whole */
 .update-banner__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .update-banner :deep(.v-btn) { flex-shrink: 0; }
 </style>

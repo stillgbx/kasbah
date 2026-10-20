@@ -9,7 +9,7 @@ const open = (forMin?: number): ActionDraft =>
 
 function forField(w: ReturnType<typeof mount>) {
   const inputs = w.findAll('input.act__input--num')
-  return inputs[inputs.length - 1]!                              // « pendant » ferme la carte
+  return inputs[inputs.length - 1]!                              // "For" closes the card
 }
 const lastForMin = (w: ReturnType<typeof mount>) => (w.emitted('update:modelValue')!.at(-1)![0] as { forMin?: number }).forMin
 
@@ -21,7 +21,7 @@ describe('ActionEditor — pendant N min', () => {
     const input = forField(w)
     ;(input.element as HTMLInputElement).value = '60'
     await input.trigger('input')
-    w.vm.$forceUpdate()                                          // un état d'appareil redessine la carte avant la validation
+    w.vm.$forceUpdate()                                          // a device state redraws the card before validation
     await w.vm.$nextTick()
     expect((input.element as HTMLInputElement).value).toBe('60')
   })

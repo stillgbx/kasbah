@@ -17,9 +17,9 @@ import AddMenu from './AddMenu.vue'
 import DayPills from './DayPills.vue'
 import PredicateEditor from './PredicateEditor.vue'
 
-// Éditeur d'une automatisation : « Quand », « Alors », « Sauf si ». Le BROUILLON est local — un
-// message du serveur qui arrive pendant la frappe ne l'écrase pas — et ne part qu'à
-// l'enregistrement. Page entière (`AutomationEditView`) : trois colonnes Quand / Alors / Sauf si.
+// Editor of an automation: "When", "Then", "Unless". The DRAFT is local — a server message that
+// arrives while typing does not overwrite it — and is only sent on save. Full page
+// (`AutomationEditView`): three columns When / Then / Unless.
 const props = defineProps<{ id: string; isNew: boolean }>()
 const emit = defineEmits<{ close: []; saved: [id: string]; open: [id: string] }>()
 const store = useAutomationsStore()
@@ -41,7 +41,7 @@ const dirty = computed(() => JSON.stringify(draft.value) !== saved.value)
 const missing = computed(() => missingPart(draft.value))
 const summary = computed(() => (missing.value ? '' : describeAutomation(draft.value, names, t, locale.value)))
 const exists = computed(() => !!store.entries[props.id])
-// Écrite par un assistant (MCP) et pas encore relue ici : « Appliquer » la valide même sans changement.
+// Written by an assistant (MCP) and not yet reviewed here: "Apply" approves it even without changes.
 const byAssistant = computed(() => store.entries[props.id]?.automation.byAssistant)
 const assistantNote = computed(() => {
   const b = byAssistant.value
@@ -50,12 +50,12 @@ const assistantNote = computed(() => {
   return b.user ? t('automations.editor.byAssistantUser', { user: b.user, at }) : t('automations.editor.byAssistant', { at })
 })
 
-// ── déclencheur ──────────────────────────────────────────────────────────────────────────────
+// ── trigger ──────────────────────────────────────────────────────────────────────────────────
 const trigger = computed(() => draft.value.trigger)
 const triggerKind = computed<'clock' | 'sun' | 'state'>(() => (trigger.value.type === 'state' ? 'state' : trigger.value.at.kind))
 
-// Chaque mode garde ce qu'on y a saisi le temps de l'édition (heure → soleil → heure rend l'heure),
-// et passer de l'heure au soleil ne change que l'instant : jours et période restent.
+// Each mode keeps what was typed into it for the duration of the edit (time → sun → time gives the
+// time back), and going from time to sun only changes the instant: days and period stay.
 let stash: { clock?: TimeTrigger['at']; sun?: TimeTrigger['at']; time?: TimeTrigger; state?: StateTrigger } = {}
 function setTriggerKind(k: 'clock' | 'sun' | 'state') {
   const prev = trigger.value
@@ -73,11 +73,11 @@ const triggerOptions = computed(() => [
   { value: 'sun' as const, label: t('automations.trigger.sun') },
   { value: 'state' as const, label: t('automations.trigger.state') },
 ])
-// L'aube et le crépuscule sont CIVILS (soleil à −6°) : le menu le dit sous leur nom, sinon « après le
-// crépuscule » se lit « après son début », qui est le coucher.
+// Dawn and dusk are CIVIL (sun at −6°): the menu says so under their name, otherwise "after dusk"
+// reads as "after its start", which is sunset.
 const sunItems = computed(() => SUN_EVENTS.map((e) => ({
   value: e, title: t(`automations.sun.${e}`),
-  // deux lignes permises : une colonne étroite (zoom 1,5) coupait la précision
+  // two lines allowed: a narrow column (zoom 1.5) cut off the precision
   ...(e === 'dawn' || e === 'dusk' ? { subtitle: t(`automations.sunHint.${e}`), lines: 'two' as const } : {}),
 })))
 
@@ -88,8 +88,8 @@ function setAt(patch: Record<string, unknown>) {
   for (const [k, v] of Object.entries(patch)) if (v === '' || v === undefined) delete at[k]
   draft.value.trigger = { ...tr, at: at as typeof tr.at }
 }
-// Décalage au soleil : un SENS (avant, après) et des minutes. Le sens vit ici tant que le décalage
-// est nul, sinon « après » choisi avant de taper le nombre serait perdu.
+// Sun offset: a DIRECTION (before, after) and minutes. The direction lives here while the offset
+// is zero, otherwise "after" chosen before typing the number would be lost.
 const initialOffset = trigger.value.type === 'time' && trigger.value.at.kind === 'sun' ? trigger.value.at.offsetMin ?? 0 : 0
 const sunDir = ref<'before' | 'after'>(initialOffset > 0 ? 'after' : 'before')
 const offsetAbs = computed(() => (trigger.value.type === 'time' && trigger.value.at.kind === 'sun' ? Math.abs(trigger.value.at.offsetMin ?? 0) : 0))
@@ -113,7 +113,7 @@ function setRange(which: 'from' | 'to', value: string) {
   const next = { from: dateRange?.from ?? iso, to: dateRange?.to ?? iso, [which]: value }
   draft.value.trigger = value ? { ...rest, dateRange: next } : rest
 }
-/** Borne de « depuis au moins », celle du schéma ; 0 ou vide = sans attente. */
+/** Bound of "for at least", that of the schema; 0 or empty = no wait. */
 const FOR_MAX = 1440
 function setForMin(raw: string) {
   const tr = trigger.value
@@ -122,8 +122,8 @@ function setForMin(raw: string) {
   const { forMin: _f, ...rest } = tr
   draft.value.trigger = Number.isFinite(n) && n > 0 ? { ...rest, forMin: Math.min(FOR_MAX, n) } : rest
 }
-// Texte en cours de frappe, montré à la place du brouillon jusqu'à la validation : un message du
-// serveur qui redessine la page ne remet plus l'ancienne valeur dans le champ (cf. ActionEditor).
+// Text being typed, shown in place of the draft until validation: a server message that redraws
+// the page no longer puts the old value back into the field (see ActionEditor).
 const forText = ref<string | null>(null)
 function commitForMin(e: Event) {
   forText.value = null
@@ -132,7 +132,7 @@ function commitForMin(e: Event) {
   void nextTick(() => { input.value = trigger.value.type === 'state' && trigger.value.forMin ? String(trigger.value.forMin) : '' })
 }
 
-// ── sauf si, alors ───────────────────────────────────────────────────────────────────────────
+// ── unless, then ─────────────────────────────────────────────────────────────────────────────
 const predicateItems = computed(() => PREDICATE_TYPES.map((x) => ({ value: x, title: t(`automations.predicate.${x}`) })))
 const actionItems = computed(() => [
   { value: 'command' as const, title: t('automations.action.command') },
@@ -145,9 +145,9 @@ const addAction = (type: ActionDraft['type']) => { draft.value.actions = [...dra
 const setAction = (i: number, x: ActionDraft) => { draft.value.actions = draft.value.actions.map((y, k) => (k === i ? x : y)) }
 const removeAction = (i: number) => { draft.value.actions = draft.value.actions.filter((_, k) => k !== i) }
 
-// ── pied ─────────────────────────────────────────────────────────────────────────────────────
-// « Appliquer » enregistre et reste ; « Enregistrer » enregistre puis revient à la liste (directement
-// s'il n'y a rien à enregistrer). `pending` dit lequel affiche « Enregistrement… ».
+// ── footer ───────────────────────────────────────────────────────────────────────────────────
+// "Apply" saves and stays; "Save" saves then returns to the list (directly if there is nothing to
+// save). `pending` says which one shows "Saving…".
 const pending = ref<'apply' | 'save' | null>(null)
 async function save(close: boolean) {
   if (missing.value) return
@@ -178,8 +178,8 @@ async function runNow() {
   else notifications.error(t('automations.toast.ranWithErrors', { name, errors: run.errors.map((e) => `${e.deviceId ? `${names.deviceName(e.deviceId)} : ` : ''}${e.message}`).join(' · ') }))
 }
 
-// Copie de la version ENREGISTRÉE (bouton grisé tant qu'il y a des changements), désactivée, puis
-// ouverte : on la retouche avant de l'activer.
+// Copy of the SAVED version (button greyed out while there are changes), disabled, then opened: it
+// is touched up before being enabled.
 async function duplicate() {
   const id = newAutomationId()
   const e = await store.save(id, duplicateBody(bodyOf(props.id), t('automations.editor.copyName', { name: draft.value.name })))
@@ -188,7 +188,7 @@ async function duplicate() {
   emit('open', id)
 }
 
-// suppression en deux temps : le premier appui arme, le second (dans les 4 s) confirme
+// deletion in two steps: the first press arms, the second (within 4 s) confirms
 const removeArmed = ref(false)
 let disarm: ReturnType<typeof setTimeout> | null = null
 async function clickRemove() {
@@ -212,7 +212,7 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
         <span class="icon-square icon-square--lg" data-on="1"><StrokeIcon :name="triggerIcon(draft.trigger)" :size="22" /></span>
         <input v-model="draft.name" class="edit__name" maxlength="80" :placeholder="$t('automations.editor.namePlaceholder')" :aria-label="$t('automations.editor.name')">
         <div class="edit__actions">
-          <!-- place réservée pour une automatisation neuve : les boutons apparaissent sans rien déplacer -->
+          <!-- reserved space for a new automation: the buttons appear without moving anything -->
           <button type="button" class="pill edit__btn" :style="{ visibility: exists ? 'visible' : 'hidden' }" :disabled="dirty || store.isBusy(id)"
                   :title="dirty ? $t('automations.editor.runDirty') : $t('automations.editor.runNowHint')" @click="runNow">
             <StrokeIcon name="play" :size="14" /> {{ $t('automations.editor.runNow') }}
@@ -234,15 +234,15 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
           </button>
         </div>
       </div>
-      <!-- deux lignes réservées pour la phrase, une pour l'indice : rien ne pousse les colonnes -->
+      <!-- two lines reserved for the sentence, one for the hint: nothing pushes the columns -->
       <p class="muted edit__summary">{{ summary || $t('automations.editor.summaryPending') }}</p>
-      <!-- une ligne, qui défile si l'indice est trop long (téléphone) : il ne pousse pas les colonnes -->
+      <!-- one line, which scrolls if the hint is too long (phone): it does not push the columns -->
       <MarqueeText class="edit__hint" :data-warn="missing || (!dirty && byAssistant) ? '1' : '0'"
                    :text="missing ? $t(`automations.editor.missing.${missing}`) : (dirty ? $t('automations.editor.unsaved') : assistantNote)" />
     </header>
 
-    <!-- trois colonnes qui défilent chacune de leur côté, dans l'ordre où la règle se lit (quand,
-         alors, sauf si) : une liste d'exceptions qui s'allonge ne pousse ni le déclencheur ni les actions -->
+    <!-- three columns that each scroll on their own, in the order the rule reads (when,
+         then, unless): a growing list of exceptions pushes neither the trigger nor the actions -->
     <div class="edit__cols">
       <section class="col">
         <div class="section-label">{{ $t('automations.editor.when') }}</div>
@@ -322,7 +322,7 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
   background: var(--surface); color: var(--text); font: 600 18px/1 var(--font);
 }
 .edit__actions { display: flex; gap: 8px; flex-wrap: wrap; }
-/* boîtes FIXES : « Confirmer », « Enregistrement… » prennent la place du libellé sans rien pousser */
+/* FIXED boxes: "Confirm", "Saving…" take the label's place without pushing anything */
 .edit__btn { width: 132px; justify-content: center; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .edit__btn--armed { border-color: var(--error, #e5484d); color: var(--error, #e5484d); }
 .edit__summary {
@@ -340,18 +340,18 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
   min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
   padding: 14px; border-radius: var(--radius); background: var(--surface2);
 }
-/* un champ Vuetify grandit par défaut (`flex: 1 1 auto`) : dans une colonne, il s'étirait en hauteur */
+/* a Vuetify field grows by default (`flex: 1 1 auto`): in a column, it stretched in height */
 .col > * { flex: 0 0 auto; }
-/* téléphone : les six boutons en deux rangées de trois, pas une colonne de six */
+/* phone: the six buttons in two rows of three, not a column of six */
 @media (max-width: 600px) {
   .edit__actions { flex: 1 1 100%; }
   .edit__btn { width: calc((100% - 16px) / 3); }
 }
-/* écran étroit : les colonnes s'empilent et c'est la zone entière qui défile */
+/* narrow screen: the columns stack and the whole area scrolls */
 @media (max-width: 900px) {
   .edit__cols { grid-template-columns: minmax(0, 1fr); overflow-y: auto; align-content: start; }
-  /* `min-height: auto` : avec le 0 du bureau, la grille de hauteur fixe écrasait les rangées et les
-     colonnes se chevauchaient */
+  /* `min-height: auto`: with the desktop's 0, the fixed-height grid squashed the rows and the
+     columns overlapped */
   .col { overflow: visible; min-height: auto; }
 }
 .line { display: flex; align-items: center; gap: 8px; min-width: 0; }

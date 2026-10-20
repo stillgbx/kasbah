@@ -13,21 +13,21 @@ import { MIN_QUERY } from '../composables/useSearch'
 import { normalize, queryTerms, scoreQuery } from '../lib/search'
 import { useAutomationsStore } from '../stores/automations'
 
-// Automatisations de la maison : la liste (recherche, filtre, ordre rangé à la main). Toucher une ligne
-// ouvre sa page d'édition (`AutomationEditView`) : une règle qui accumule des exceptions et des
-// actions ne tient pas dans un panneau de 340 px.
+// House automations: the list (search, filter, hand-arranged order). Touching a row
+// opens its edit page (`AutomationEditView`): a rule that accumulates exceptions and
+// actions does not fit in a 340 px panel.
 const store = useAutomationsStore()
 const { names } = useAutomationNames()
 const { t, locale } = useI18n()
 const router = useRouter()
-/** Téléphone : les compteurs se taisent, le bouton de création perd son texte, le filtre prend la largeur. */
+/** Phone: the counters go quiet, the create button loses its text, the filter takes the width. */
 const narrow = useMediaQuery('(max-width: 600px)')
 
 type Filter = 'all' | 'enabled' | 'disabled' | 'check'
 const filter = useLocalStorage<Filter>('kasbah.automations.filter', 'all')
 const query = ref('')
 
-// « il y a 3 h » se tient à jour sans relire le serveur
+// "3 h ago" stays up to date without re-reading the server
 const now = ref(Date.now())
 let tick: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
@@ -48,7 +48,7 @@ const filterOptions = computed(() => [
   { value: 'check' as const, label: t('automations.filters.check') },
 ])
 
-/** Ce que la recherche lit : le nom, la phrase, les appareils et les pièces nommés. */
+/** What the search reads: the name, the sentence, the devices and rooms named. */
 function haystack(e: (typeof store.list)[number]): string {
   const a = e.automation
   return normalize([
@@ -69,10 +69,10 @@ const shown = computed(() => {
   })
 })
 
-// ---- ranger la liste -------------------------------------------------------------------------
-// Le glissement part de la POIGNÉE (la ligne ouvre l'éditeur, l'interrupteur bascule) ; la liste se
-// réorganise sous le doigt, l'ordre part au relâchement. Filtrée, seules les lignes affichées
-// échangent leurs places : les autres gardent les leurs dans le fichier.
+// ---- arranging the list ----------------------------------------------------------------------
+// The drag starts from the HANDLE (the row opens the editor, the switch toggles); the list
+// reorders under the finger, the order is sent on release. Filtered, only the displayed rows
+// swap their places: the others keep theirs in the file.
 const drag = ref<{ id: string; ids: string[]; from: string[] } | null>(null)
 const rows = computed(() => {
   const ids = drag.value?.ids
@@ -83,7 +83,7 @@ function startDrag(ev: PointerEvent, id: string) {
   ev.preventDefault()
   const ids = shown.value.map((e) => e.automation.id)
   drag.value = { id, ids, from: ids }
-  // sur la FENÊTRE : Vue déplace la ligne (donc la poignée) à chaque échange, ce qui relâche la capture
+  // on the WINDOW: Vue moves the row (hence the handle) on each swap, which releases the capture
   window.addEventListener('pointermove', moveDrag)
   window.addEventListener('pointerup', endDrag)
   window.addEventListener('pointercancel', endDrag)
@@ -111,7 +111,7 @@ function endDrag() {
   let k = 0
   void store.reorder(store.list.map((e) => (moved.has(e.automation.id) ? d.ids[k++]! : e.automation.id)))
 }
-onBeforeUnmount(endDrag)   // quitter la vue en plein glissement ne doit pas laisser d'écouteurs
+onBeforeUnmount(endDrag)   // leaving the view mid-drag must not leave listeners behind
 
 const open = (id: string) => router.push({ name: 'automation-edit', params: { id } })
 const create = () => open('new')
@@ -122,7 +122,7 @@ const create = () => open('new')
     <PageHeader>
       <div class="head">
         <span class="muted count">{{ $t('automations.count', counts.enabled) }}</span>
-        <!-- toujours affiché, estompé à 0 : le compteur ne saute pas d'apparence -->
+        <!-- always displayed, dimmed to 0: the counter does not jump in appearance -->
         <span class="muted count count--check" :data-zero="counts.check === 0 ? '1' : '0'">{{ $t('automations.checkCount', counts.check) }}</span>
         <button type="button" class="pill" data-on="1" :aria-label="$t('automations.new')" :title="$t('automations.new')" @click="create">
           <StrokeIcon name="plus" :size="16" /><span class="head__new">{{ $t('automations.new') }}</span>

@@ -6,11 +6,11 @@ import { ApiRequestError, type McpUser } from '../../api/transport'
 import { useNotificationsStore } from '../../stores/notifications'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Comptes (`apps/server/mcp-users.json`), dans Réglages : ceux qui ouvrent Kasbah par l'adresse
-// publique, et la page de connexion d'un assistant (Claude sur le téléphone, Claude Desktop…). Le
-// serveur ne rend que les noms. Un nom déjà pris dans le formulaire = changer son mot de passe. Le
-// script `mcp-user` reste en secours. Sous l'adresse publique, la liste est refusée (`LAN_ONLY`, l'aide
-// le dit) : on n'y montre que la session, et de quoi la fermer.
+// Accounts (`apps/server/mcp-users.json`), in Settings: those that open Kasbah through the public
+// address, and the sign-in page of an assistant (Claude on the phone, Claude Desktop…). The
+// server only returns the names. A name already taken in the form = change its password. The
+// `mcp-user` script remains as a fallback. Under the public address, the list is refused
+// (`LAN_ONLY`, the help says so): only the session is shown there, and a way to close it.
 
 const NAME = /^[\w.@-]{1,64}$/
 const MIN_PASSWORD = 8
@@ -20,9 +20,9 @@ const { t } = useI18n()
 
 const users = ref<McpUser[]>([])
 const loaded = ref(false)
-/** Compte de la session (adresse publique) ; `null` sur le réseau local. */
+/** Account of the session (public address); `null` on the local network. */
 const sessionUser = ref<string | null>(null)
-/** Ouvert par l'adresse publique : les comptes se gèrent depuis le réseau local. */
+/** Opened through the public address: accounts are managed from the local network. */
 const lanOnly = ref(false)
 const busy = ref(false)
 const name = ref('')
@@ -45,7 +45,7 @@ const fail = (err: unknown) => notifications.error(t('errors.UNKNOWN', { name: '
 onMounted(async () => {
   try {
     sessionUser.value = (await getTransport().session()).user
-    // Une session, c'est l'adresse publique : la liste y serait refusée, inutile de la demander.
+    // A session means the public address: the list would be refused there, no point requesting it.
     if (sessionUser.value) { lanOnly.value = true; return }
     users.value = (await getTransport().mcpUsers()).users
   } catch (err) {
@@ -54,7 +54,7 @@ onMounted(async () => {
   } finally { loaded.value = true }
 })
 
-/** Rend vrai si l'écriture a réussi. */
+/** Returns true if the write succeeded. */
 async function run(action: () => Promise<{ users: McpUser[] }>, done?: string): Promise<boolean> {
   busy.value = true
   try {
@@ -74,7 +74,7 @@ async function save() {
   if (await run(() => getTransport().mcpSetUser(n, password.value), done)) reset()
 }
 
-/** « Mot de passe » sur une ligne : le formulaire passe en changement pour ce compte. */
+/** "Password" on a row: the form switches to change mode for that account. */
 async function edit(n: string) {
   name.value = n
   password.value = ''
@@ -83,7 +83,7 @@ async function edit(n: string) {
   passwordInput.value?.focus()
 }
 
-// Retrait : premier appui arme, second confirme, on désarme tout seul.
+// Removal: first press arms, second confirms, disarms by itself.
 const armed = ref<string | null>(null)
 let armTimer: ReturnType<typeof setTimeout> | null = null
 function remove(n: string) {
@@ -101,7 +101,7 @@ function remove(n: string) {
 
 <template>
   <div class="mu">
-    <!-- formulaire natif : le serveur ferme la session et renvoie à sa page de connexion -->
+    <!-- native form: the server closes the session and sends back to its sign-in page -->
     <form v-if="sessionUser" method="post" action="/logout" class="mu__row">
       <StrokeIcon name="person" :size="18" class="muted" />
       <div class="mu__name min0">{{ $t('mcpUsers.signedInAs', { name: sessionUser }) }}</div>
@@ -135,7 +135,7 @@ function remove(n: string) {
           <input v-model="confirm" type="password" autocomplete="new-password" maxlength="200" :disabled="busy" class="mu__input" />
         </label>
       </div>
-      <!-- place réservée : l'avertissement qui apparaît ne pousse pas les boutons -->
+      <!-- reserved space: the warning that appears does not push the buttons -->
       <div class="small mu__problem">{{ problem ?? ' ' }}</div>
       <div class="mu__actions">
         <button type="submit" class="pill" data-on="1" :disabled="busy || !ready">
@@ -152,7 +152,7 @@ function remove(n: string) {
 .mu__row { display: flex; align-items: center; gap: 10px; min-height: 40px; }
 .mu__name { flex: 1 1 0; font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mu__btn { flex: 0 0 auto; height: 34px; font-size: 13px; }
-/* largeur fixe : « Retirer » et « Confirmer le retrait » occupent la même place */
+/* fixed width: "Remove" and "Confirm removal" take the same space */
 .mu__remove { width: 190px; justify-content: center; }
 .mu__remove[data-armed='1'] { color: #d24a43; border-color: #d24a43; }
 .mu__form { display: grid; gap: 10px; padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--line); }

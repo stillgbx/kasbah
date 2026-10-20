@@ -2,9 +2,9 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-// Sept pastilles, lundi en tête, pour choisir des jours de la semaine. Au doigt, une pastille vaut
-// mieux qu'une case (et `v-checkbox-btn` s'affiche vide dans ce projet). Les valeurs sont celles de
-// `Date.getDay()` : 0 = dimanche. Aucun jour coché = tous les jours (`undefined`).
+// Seven pills, Monday first, to pick days of the week. With a finger, a pill beats a checkbox (and
+// `v-checkbox-btn` renders empty in this project). The values are those of `Date.getDay()`:
+// 0 = Sunday. No day checked = every day (`undefined`).
 const props = defineProps<{ modelValue: readonly number[] | undefined; disabled?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: number[] | undefined] }>()
 const { locale } = useI18n()
@@ -13,7 +13,7 @@ const ORDER = [1, 2, 3, 4, 5, 6, 0]
 const labels = computed(() => {
   const fmt = new Intl.DateTimeFormat(locale.value, { weekday: 'narrow' })
   const long = new Intl.DateTimeFormat(locale.value, { weekday: 'long' })
-  // 4 janvier 2026 est un dimanche
+  // January 4, 2026 is a Sunday
   return ORDER.map((d) => ({ d, short: fmt.format(new Date(2026, 0, 4 + d)), long: long.format(new Date(2026, 0, 4 + d)) }))
 })
 
@@ -23,7 +23,7 @@ function toggle(d: number) {
   const current = new Set(props.modelValue ?? ORDER)
   if (current.has(d)) current.delete(d)
   else current.add(d)
-  // tout coché = pas de filtre ; rien coché n'a pas de sens, on retombe aussi sur « tous les jours »
+  // all checked = no filter; none checked makes no sense, it also falls back to "every day"
   emit('update:modelValue', current.size === 7 || current.size === 0 ? undefined : ORDER.filter((x) => current.has(x)))
 }
 </script>
@@ -39,7 +39,7 @@ function toggle(d: number) {
 
 <style scoped>
 .days { display: flex; gap: 4px; }
-/* largeur fixe : les sept tiennent dans 296 px, et une lettre plus large ne décale rien */
+/* fixed width: the seven fit in 296 px, and a wider letter shifts nothing */
 .days__pill {
   flex: 1 1 0; min-width: 0; height: 32px; border-radius: 999px; border: 1px solid var(--line);
   background: var(--surface); color: var(--muted); font: 600 12px/1 var(--font); text-transform: uppercase;

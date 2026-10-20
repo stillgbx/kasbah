@@ -8,24 +8,24 @@ import { useNotificationsStore } from '../stores/notifications'
 import { usePluginsStore } from '../stores/plugins'
 import StrokeIcon from './ui/StrokeIcon.vue'
 
-// Liaison du compte MELCloud. Même situation que Renault, et calquée sur sa carte : le fabricant
-// n'offre aucune connexion déléguée, il n'y a que l'identifiant et le mot de passe. La seule façon
-// honnête de présenter ce formulaire est de dire ce qu'il advient du mot de passe — c'est `intro`.
+// Linking of the MELCloud account. Same situation as Renault, and modeled on its card: the vendor
+// offers no delegated login, there is only the identifier and the password. The only honest way
+// to present this form is to say what happens to the password — that is `intro`.
 //
-// Le mot de passe ne vit que le temps de la requête : il n'est pas gardé dans ce composant après
-// l'envoi, et le serveur ne l'écrit nulle part (seule la clé de session est conservée).
+// The password only lives for the duration of the request: it is not kept in this component after
+// sending, and the server writes it nowhere (only the session key is kept).
 //
-// La liste rendue est celle des MACHINES vues sur le compte ; ce que la maison reçoit, ce sont des
-// ZONES de chauffage, et il n'y a aucune raison qu'il y en ait autant. L'installation de référence
-// montre une machine (trois Zubadan en cascade derrière un seul régulateur) et deux zones. La carte
-// dit les deux nombres, parce que leur écart est exactement ce qui surprend.
+// The list rendered is that of the MACHINES seen on the account; what the house receives are
+// heating ZONES, and there is no reason for there to be as many. The reference installation shows
+// one machine (three Zubadan in cascade behind a single controller) and two zones. The card states
+// both numbers, because their gap is exactly what surprises.
 
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()
 const plugins = usePluginsStore()
 const { t } = useI18n()
 
-/** Santé lue dans l'INVENTAIRE des plugins : la carte doit apparaître dès qu'on allume le plugin. */
+/** Health read from the plugin INVENTORY: the card must appear as soon as the plugin is turned on. */
 const health = computed(() => plugins.byId.melcloud?.health)
 const status = ref<MelcloudStatus | null>(null)
 const busy = ref(false)
@@ -46,7 +46,7 @@ async function link() {
   busy.value = true
   try {
     status.value = await getTransport().melcloudLogin({ email: email.value.trim(), password: password.value })
-    // le mot de passe a servi, il n'a plus rien à faire en mémoire
+    // the password has been used, it has no business staying in memory
     password.value = ''
     notifications.success(t('settings.melcloud.linked', { n: status.value.devices.length }, status.value.devices.length))
     await devices.refreshHealth()
@@ -68,7 +68,7 @@ async function unlink() {
 
 <template>
   <div v-if="status" class="mel card card--soft">
-    <!-- compte lié : on ne redemande rien, on montre ce que le compte contient -->
+    <!-- account linked: nothing more is asked, we show what the account contains -->
     <template v-if="status.linked">
       <div class="mel__done">
         <StrokeIcon name="checkCircle" :size="16" />
@@ -85,7 +85,7 @@ async function unlink() {
       </div>
     </template>
 
-    <!-- compte non lié : le formulaire, précédé de ce qu'il advient du mot de passe -->
+    <!-- account not linked: the form, preceded by what happens to the password -->
     <template v-else>
       <p class="muted mel__text">{{ $t('settings.melcloud.intro') }}</p>
       <form class="mel__form" @submit.prevent="link">

@@ -10,18 +10,18 @@ import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import MusicItemRow from './MusicItemRow.vue'
 
-// Source « Radios » de la page Musique : l'annuaire libre radio-browser (via le plugin `radio`), les
-// favorites de la MAISON (gardées par le serveur) et les plus écoutées du pays. Une radio se lance en
-// direct sur le lecteur choisi dans le panneau Écoute — la barre du bas la montre comme telle (ni
-// curseur, ni piste voisine). Même gabarit que la recherche YouTube Music : rien ne bouge en
-// changeant de source.
+// "Radios" source of the Music page: the free radio-browser directory (via the `radio` plugin), the
+// HOUSE favorites (kept by the server) and the country's most listened. A radio starts live on
+// the player chosen in the Listening panel — the bottom bar shows it as such (no slider, no
+// neighboring track). Same template as the YouTube Music search: nothing moves when changing
+// source.
 
 type Tab = 'favorites' | 'top'
 
 const props = defineProps<{
-  /** Le lecteur choisi, s'il peut recevoir un flux (`play_url`). */
+  /** The chosen player, if it can receive a stream (`play_url`). */
   target: DeviceEntry | null
-  /** « Ce navigateur » est choisi : la radio n'y joue pas encore. */
+  /** "This browser" is chosen: the radio does not play there yet. */
   localSelected: boolean
 }>()
 
@@ -36,7 +36,7 @@ const results = ref<RadioStation[] | null>(null)
 const busy = ref(false)
 const failed = ref(false)
 const playingId = ref<string | null>(null)
-/** Le formulaire « ajouter une radio par son flux » est ouvert. */
+/** The "add a radio by its stream" form is open. */
 const adding = ref(false)
 const customName = ref('')
 const customUrl = ref('')
@@ -55,7 +55,7 @@ function meta(s: RadioStation): string {
   const quality = [s.codec, s.bitrateKbps ? `${s.bitrateKbps} kb/s` : ''].filter(Boolean).join(' ')
   return [s.country, quality, s.tags.slice(0, 3).join(', ')].filter(Boolean).join(' · ')
 }
-/** La radio joue sur le lecteur choisi : c'est le direct qu'il publie, sous le nom qu'on lui a donné. */
+/** The radio plays on the chosen player: it is the live stream it publishes, under the name we gave it. */
 function isPlaying(s: RadioStation): boolean {
   const st = props.target?.state
   if (!st || st.kind !== 'media_player' || st.playback !== 'playing') return false
@@ -142,7 +142,7 @@ onMounted(async () => {
         </button>
       </div>
     </form>
-    <!-- la rangée des onglets garde sa place pendant une recherche (grisée) : la liste ne remonte pas -->
+    <!-- the tabs row keeps its place during a search (greyed out): the list does not move up -->
     <div class="tabs">
       <div :class="{ 'is-dim': results !== null }">
         <Segmented v-model="tab" dense :options="tabOptions" :label="$t('radio.source')" />
@@ -184,7 +184,7 @@ onMounted(async () => {
 
 <style scoped>
 .radio { display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1 1 auto; }
-/* même recherche que celle de YouTube Music : changer de source ne déplace rien */
+/* same search as YouTube Music's: changing source moves nothing */
 .search { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
 .search__field {
   flex: 1 1 auto; min-width: 0; height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 16px;
@@ -206,7 +206,7 @@ onMounted(async () => {
 .custom__input--name { flex: 1 1 160px; }
 .custom__input:focus { border-color: var(--accent); }
 .radio__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
-/* en colonnes : une ligne de station est courte, pleine largeur elle laissait surtout du vide */
+/* in columns: a station row is short, at full width it mostly left empty space */
 .list { display: grid; gap: 2px 18px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); align-content: start; }
 .station { display: grid; grid-template-columns: minmax(0, 1fr) 36px; align-items: center; }
 .star { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent; color: color-mix(in srgb, var(--muted) 55%, transparent); }

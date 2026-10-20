@@ -16,30 +16,30 @@ import { compassPoint, conditionIcon } from '../lib/weather'
 import type { WeatherAlert } from '../api/transport'
 import { useHouseStore } from '../stores/house'
 
-// Vue Météo : tout ce que l'appareil météo sait. L'actuel en grand, le soleil, le vent, les 24
-// prochaines heures, la semaine, l'air et les pollens, les grandeurs secondaires en tuiles, la
-// carte des précipitations. Chaque bloc a une TAILLE FIXE quelle que soit la donnée : sans
-// prévisions, la bande horaire garde ses 24 colonnes et la semaine ses 7 lignes, avec des tirets.
+// Weather view: everything the weather device knows. The current conditions large, the sun, the
+// wind, the next 24 hours, the week, air and pollen, secondary quantities as tiles, the
+// precipitation map. Each block has a FIXED SIZE whatever the data: without forecasts, the hourly
+// strip keeps its 24 columns and the week its 7 rows, with dashes.
 const { d, n, t, locale } = useI18n()
 const house = useHouseStore()
 const weather = useWeather()
 const { forecast: homeForecast } = useForecast(computed(() => weather.entry.value?.descriptor.id))
-// Ailleurs qu'à la maison (barre de lieux de l'en-tête) : même mise en page, données lues à la demande.
+// Elsewhere than at home (places bar in the header): same layout, data read on demand.
 const places = useWeatherPlaces()
 const place = places.selected
 const elsewhere = useWeatherAt(place)
 const live = computed(() => (place.value ? elsewhere.data.value?.state : weather.live.value))
 const forecast = computed(() => (place.value ? elsewhere.data.value?.forecast ?? null : homeForecast.value))
-/** Ailleurs, Open-Meteo donne toujours air et pollens (des tirets hors d'Europe) : les cartes restent en place. */
+/** Elsewhere, Open-Meteo always gives air and pollen (dashes outside Europe): the cards stay in place. */
 const caps = computed(() => new Set(place.value ? ['forecast', 'air_quality', 'pollen'] : weather.descriptor.value?.capabilities ?? []))
 const attribution = computed(() => (place.value ? elsewhere.data.value?.attribution : weather.descriptor.value?.meta.weather?.attribution))
 const model = computed(() => (place.value ? undefined : weather.descriptor.value?.meta.weather?.model))
-/** Fuseau du lieu affiché ; `undefined` = celui du navigateur (la maison). */
+/** Time zone of the displayed place; `undefined` = the browser's (the house). */
 const tz = computed(() => (place.value ? elsewhere.data.value?.timezone : undefined))
 const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone
-/** Une heure du lieu affiché, dans SON fuseau : le lever à Tokyo est celui de Tokyo. */
+/** A time of the displayed place, in ITS time zone: sunrise in Tokyo is Tokyo's. */
 const fd = (ms: number, key: 'time' | 'hour' | 'weekday' | 'date') => d(new Date(ms), tz.value ? { key, timeZone: tz.value } : key)
-/** L'heure du relevé ; ailleurs, avec le décalage quand le fuseau n'est pas celui du navigateur. */
+/** The reading time; elsewhere, with the offset when the time zone is not the browser's. */
 const observed = (ms: number) => (tz.value && tz.value !== localTz ? d(new Date(ms), { key: 'time', timeZone: tz.value, timeZoneName: 'short' }) : fd(ms, 'time'))
 
 const now = ref(Date.now())
@@ -50,8 +50,8 @@ const icon = computed<IconName>(() => (live.value ? conditionIcon(live.value.con
 const deg = (v: number | undefined) => (v === undefined ? '—' : `${n(v, 'integer')}°`)
 const opt = (v: number | undefined, unit: string, fmt: 'integer' | 'decimal1' = 'integer') => (v === undefined ? '—' : `${n(v, fmt)}${unit}`)
 
-// Soleil : la course du jour, et où on en est. Hors du jour, le point reste caché : l'arc dit
-// seulement lever et coucher.
+// Sun: the day's course, and where we are in it. Outside daytime, the dot stays hidden: the arc says
+// only sunrise and sunset.
 const sun = computed(() => {
   const s = live.value
   if (!s || !s.sunrise || !s.sunset) return null
@@ -60,7 +60,7 @@ const sun = computed(() => {
   return { p, x: 100 + 86 * Math.cos(a), y: 96 - 86 * Math.sin(a), up: now.value >= s.sunrise && now.value <= s.sunset, lengthMin: (s.sunset - s.sunrise) / 60_000 }
 })
 
-// Lune : calculée ici (Open-Meteo n'en dit rien), pour le lieu affiché.
+// Moon: computed here (Open-Meteo says nothing about it), for the displayed place.
 const moon = computed(() => {
   const at = home.value
   if (!at) return null
@@ -78,15 +78,15 @@ const HOURS = 24
 const DAYS = 7
 const hourly = computed<(WeatherHourlyPoint | null)[]>(() => Array.from({ length: HOURS }, (_, i) => forecast.value?.hourly[i] ?? null))
 const daily = computed<(WeatherDailyPoint | null)[]>(() => Array.from({ length: DAYS }, (_, i) => forecast.value?.daily[i] ?? null))
-// Tendance des 24 heures, d'un coup d'œil : la courbe des températures (lissée) et les pluies en
-// barres, sous les colonnes, sur la même grille ; la nuit en fond. Unités du tracé : 10 par heure
-// en largeur, des pixels en hauteur (bande de TREND_H px).
+// 24-hour trend, at a glance: the (smoothed) temperature curve and the rain as
+// bars, under the columns, on the same grid; night in the background. Plot units: 10 per hour
+// in width, pixels in height (band of TREND_H px).
 const TREND_H = 48
-/** Teinte d'une température, sur une échelle FIXE (5 °C froid → 28 °C chaud) : la couleur dit le chaud, pas le rang dans la journée. */
+/** Tint of a temperature, on a FIXED scale (5 °C cold → 28 °C hot): the color says hot, not the rank in the day. */
 const tempTint = (c: number) => `color-mix(in oklab, var(--cat-light) ${Math.round(Math.min(1, Math.max(0, (c - 5) / 23)) * 100)}%, var(--cat-media))`
-/** Hauteur d'une barre de pluie (px) : racine des millimètres, plafond 4 mm/h. */
+/** Height of a rain bar (px): square root of the millimeters, capped at 4 mm/h. */
 const rainH = (mm: number) => Math.sqrt(Math.min(1, mm / 4)) * (TREND_H - 6)
-/** Graduations de la pluie, montrées seulement quand il pleut dans les 24 heures. */
+/** Rain graduations, shown only when it rains within the 24 hours. */
 const RAIN_TICKS = [1, 4].map((mm) => ({ mm, y: TREND_H - rainH(mm) }))
 const trend = computed(() => {
   const pts = hourly.value
@@ -96,23 +96,23 @@ const trend = computed(() => {
   const lo = Math.min(...temps)
   const span = Math.max(3, Math.max(...temps) - lo)
   const x = (i: number) => i * 10 + 5
-  // hors des bords, la première et la dernière heure se répètent
+  // beyond the edges, the first and the last hour repeat
   const y = (i: number) => 4 + (1 - (temps[Math.min(HOURS - 1, Math.max(0, i))]! - lo) / span) * (TREND_H - 12)
-  // Catmull-Rom → Bézier : la courbe passe par chaque heure sans angles
+  // Catmull-Rom → Bézier: the curve passes through each hour without angles
   let line = `M${x(0)} ${y(0).toFixed(1)}`
   for (let i = 0; i < HOURS - 1; i++) {
-    const dx = 10 / 3 // (x(i + 1) - x(i - 1)) / 6, constant : les heures sont équidistantes
+    const dx = 10 / 3 // (x(i + 1) - x(i - 1)) / 6, constant: the hours are equidistant
     line += ` C${x(i) + dx} ${(y(i) + (y(i + 1) - y(i - 1)) / 6).toFixed(1)} ${x(i + 1) - dx} ${(y(i + 1) - (y(i + 2) - y(i)) / 6).toFixed(1)} ${x(i + 1)} ${y(i + 1).toFixed(1)}`
   }
   const area = `${line} L${x(HOURS - 1)} ${TREND_H} L${x(0)} ${TREND_H} Z`
-  // pluie : hauteur selon les millimètres (racine, plafond 4 mm/h : la bruine se voit encore),
-  // opacité selon la probabilité
+  // rain: height by millimeters (square root, capped at 4 mm/h: drizzle is still visible),
+  // opacity by probability
   const rain = ps.filter((p) => p.precipMm >= 0.1).map((p) => ({ x: ps.indexOf(p) * 10 + 2, h: Math.max(3, rainH(p.precipMm)), o: 0.15 + 0.4 * ((p.precipProbability ?? 100) / 100) }))
-  // le plus froid et le plus chaud (première occurrence) : un point sur la courbe
+  // the coldest and the hottest (first occurrence): a dot on the curve
   const iMin = temps.indexOf(lo)
   const iMax = temps.indexOf(Math.max(...temps))
   const ext = [{ kind: 'min', i: iMin, y: y(iMin) }, { kind: 'max', i: iMax, y: y(iMax) }]
-  // nuit : les heures consécutives sans soleil, en une seule bande chacune
+  // night: the consecutive hours without sun, in a single band each
   const nights: { x: number; w: number }[] = []
   ps.forEach((p, i) => {
     if (p.isDay) return
@@ -123,11 +123,11 @@ const trend = computed(() => {
   const tints = temps.map((c, i) => ({ offset: (i + 0.5) / 24, color: tempTint(c) }))
   return { line, area, rain, nights, tints, ext, iMin, iMax }
 })
-/** La lune de chaque jour de la semaine, prise à midi (le jour commence à minuit local). */
+/** The moon of each day of the week, taken at noon (the day starts at local midnight). */
 const dailyMoon = computed(() => daily.value.map((p) => (p ? moonIllumination(p.t + 12 * 3_600_000) : null)))
-/** Libellé au survol d'un disque de la semaine : la phase et sa part éclairée. */
+/** Label on hover of a disc of the week: the phase and its illuminated share. */
 const moonTitle = (m: { fraction: number; phase: number }) => `${t(`weather.moon.phases.${moonPhaseName(m.phase)}`)} · ${t('weather.moon.lit', { n: n(Math.round(m.fraction * 100), 'integer') })}`
-/** Échelle commune des barres de la semaine : le froid et le chaud de la semaine entière. */
+/** Common scale of the week's bars: the cold and the heat of the whole week. */
 const weekRange = computed(() => {
   const pts = daily.value.filter((p): p is WeatherDailyPoint => !!p)
   if (!pts.length) return { min: 0, max: 1 }
@@ -140,10 +140,10 @@ const barStyle = (p: WeatherDailyPoint) => {
 const dayOf = (ms: number) => new Date(ms).toLocaleDateString('en-CA', tz.value ? { timeZone: tz.value } : {})
 const isToday = (tMs: number) => dayOf(tMs) === dayOf(now.value)
 
-// Vigilance Météo-France du département du lieu affiché (métropole seule) : une ligne, la plus
-// forte en cours d'abord ; les autres au survol. La ligne garde sa place même sans vigilance.
+// Météo-France warning for the department of the displayed place (mainland only): one row, the
+// strongest in effect first; the others on hover. The row keeps its place even without a warning.
 const alerts = useWeatherAlerts(home)
-/** « minuit » pour la fin du jour, l'heure pour aujourd'hui, le jour et l'heure au-delà. */
+/** "midnight" for the end of the day, the time for today, the day and the time beyond. */
 const when = (ms: number) => (isToday(ms - 1) && !isToday(ms) ? t('weather.alerts.midnight') : isToday(ms) ? fd(ms, 'time') : `${fd(ms, 'weekday')} ${fd(ms, 'time')}`)
 const alertText = (w: WeatherAlert) => {
   const on = w.onset <= now.value
@@ -161,9 +161,9 @@ const alert = computed(() => {
 })
 
 const aqiIndex = computed(() => (live.value?.aqiLevel ? AQI_LEVELS.indexOf(live.value.aqiLevel) : -1))
-/** Couleurs du palier européen, du bon au très mauvais (échelle officielle EAQI). */
+/** Colors of the European band, from good to very poor (official EAQI scale). */
 const AQI_COLORS = ['#50f0e6', '#50ccaa', '#f0e641', '#ff5050', '#960032', '#7d2181']
-/** Plages de l'indice européen, palier par palier (0-20 bon … au-delà de 100 extrêmement mauvais). */
+/** Ranges of the European index, band by band (0-20 good … above 100 extremely poor). */
 const AQI_RANGES = ['0 – 20', '20 – 40', '40 – 60', '60 – 80', '80 – 100', '> 100']
 const pollens = computed(() => POLLEN_TYPES.map((type) => ({ type, level: live.value?.pollen?.[type] })))
 
@@ -187,9 +187,9 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
     <div class="weather__scroll">
       <div v-if="!place && !weather.entry.value" class="card card--soft empty muted">{{ $t('weather.noDevice') }}</div>
       <div class="weather__grid" :data-live="live ? '1' : '0'">
-        <!-- Maintenant : la grande température et la condition ; ressenti et pluie du moment dessous -->
+        <!-- Now: the large temperature and the condition; feels-like and rain of the moment below -->
         <section class="card wx-now">
-          <!-- le lieu affiché, en toutes lettres : la maison ou le lieu choisi, sa région en retrait -->
+          <!-- the displayed place, spelled out: the house or the chosen place, its region set back -->
           <div class="wx-now__head">
             <span class="wx-now__place" :title="place?.region ? `${place.name} — ${place.region}` : undefined">
               <StrokeIcon :name="place ? 'pin' : 'home'" :size="16" class="wx-now__pin" />
@@ -205,7 +205,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
               <div class="wx-now__cond">{{ live ? $t(`weather.conditions.${live.condition}`) : '—' }}</div>
             </div>
           </div>
-          <!-- vigilance du département : place réservée, vide pendant la lecture -->
+          <!-- department warning: space reserved, empty while reading -->
           <div class="wx-alert-row">
             <div class="small wx-alert" :data-level="alert?.level ?? 'none'" :title="alert?.title">
               <template v-if="alert">
@@ -221,7 +221,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
           </div>
         </section>
 
-        <!-- Soleil : l'arc du jour -->
+        <!-- Sun: the day's arc -->
         <section class="card wx-sun">
           <div class="section-label">{{ $t('weather.sunMoon') }}</div>
           <svg viewBox="0 0 200 104" class="wx-sun__arc" aria-hidden="true">
@@ -235,7 +235,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
             <div class="text-center"><div class="muted small">{{ $t('weather.dayLength') }}</div><div class="wx-sun__t">{{ sun ? formatMinutes(sun.lengthMin, locale) : '—' }}</div></div>
             <div class="text-right"><div class="muted small">{{ $t('weather.sunset') }}</div><div class="wx-sun__t">{{ live?.sunset ? fd(live.sunset, 'time') : '—:—' }}</div></div>
           </div>
-          <!-- la lune, sous un filet : sa phase dessinée, sa part éclairée, ses prochains passages -->
+          <!-- the moon, under a hairline: its drawn phase, its illuminated share, its next passes -->
           <div class="wx-moon">
             <MoonDisc class="wx-moon__disc" :fraction="moon?.fraction ?? 0" :phase="moon?.phase ?? 0" :south="moon?.south" />
             <div class="wx-moon__text">
@@ -251,7 +251,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
           </div>
         </section>
 
-        <!-- Vent : la rose pointe là où il souffle (comme la houle de la piscine en 3D) ; le libellé dit d'où il vient -->
+        <!-- Wind: the rose points where it blows (like the pool swell in 3D); the label says where it comes from -->
         <section class="card wx-wind">
           <div class="section-label">{{ $t('weather.wind') }}</div>
           <div class="wx-wind__body">
@@ -270,22 +270,22 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
           </div>
         </section>
 
-        <!-- 24 heures : une colonne par heure, toujours 24 -->
+        <!-- 24 hours: one column per hour, always 24 -->
         <section class="card wx-hourly">
           <div class="section-label">{{ $t('weather.hourly') }}</div>
           <div class="wx-hourly__strip">
-            <!-- la nuit, en fond sur toute la hauteur des colonnes et de la courbe -->
+            <!-- the night, in the background over the whole height of the columns and the curve -->
             <svg class="wx-trend__night" viewBox="0 0 24 1" preserveAspectRatio="none" aria-hidden="true">
               <rect v-for="(b, i) in trend?.nights ?? []" :key="i" :x="b.x" y="0" :width="b.w" height="1" />
             </svg>
-            <!-- la tendance : la bande garde sa hauteur même sans prévisions -->
+            <!-- the trend: the band keeps its height even without forecasts -->
             <div class="wx-trend">
             <svg :viewBox="`0 0 240 ${TREND_H}`" preserveAspectRatio="none" aria-hidden="true">
               <template v-if="trend">
                 <template v-if="trend.rain.length">
                   <line v-for="tk in RAIN_TICKS" :key="tk.mm" class="wx-trend__tick" x1="0" :y1="tk.y" x2="240" :y2="tk.y" vector-effect="non-scaling-stroke" />
                 </template>
-                <!-- la couleur suit la température de chaque heure, de gauche à droite -->
+                <!-- the color follows each hour's temperature, from left to right -->
                 <defs>
                   <linearGradient id="wx-trend-tint" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="240" y2="0">
                     <stop v-for="(s, i) in trend.tints" :key="i" :offset="s.offset" :style="{ stopColor: s.color }" />
@@ -296,7 +296,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
                 <path :d="trend.line" fill="none" stroke="url(#wx-trend-tint)" stroke-width="2.5" stroke-linecap="round" vector-effect="non-scaling-stroke" />
               </template>
             </svg>
-            <!-- en HTML : un cercle dans un SVG étiré deviendrait une ellipse -->
+            <!-- in HTML: a circle in a stretched SVG would become an ellipse -->
             <template v-if="trend">
               <span v-for="e in trend.ext" :key="e.kind" class="wx-trend__dot" :data-kind="e.kind" :style="{ left: `${((e.i + 0.5) / HOURS) * 100}%`, top: `${e.y}px` }" />
               <template v-if="trend.rain.length">
@@ -313,7 +313,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
           </div>
         </section>
 
-        <!-- 7 jours : jour, condition, pluie, plage min-max sur une échelle commune -->
+        <!-- 7 days: day, condition, rain, min-max range on a common scale -->
         <section class="card wx-daily">
           <div class="section-label">{{ $t('weather.daily') }}</div>
           <div class="wx-daily__rows">
@@ -334,7 +334,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
           </div>
         </section>
 
-        <!-- Détails : le reste des grandeurs, en liste sobre — une ligne par mesure, hauteur fixe -->
+        <!-- Details: the rest of the quantities, in a plain list — one row per measurement, fixed height -->
         <div class="wx-bottom">
         <section class="card wx-details">
           <div class="section-label">{{ $t('weather.details') }}</div>
@@ -347,7 +347,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
           </div>
         </section>
 
-        <!-- Air et pollens : seulement si le fournisseur les donne (capacités) -->
+        <!-- Air and pollen: only if the provider gives them (capabilities) -->
         <div class="wx-side">
         <section v-if="caps.has('air_quality')" class="card wx-air">
           <div class="section-label">{{ $t('weather.airQuality') }}</div>
@@ -361,7 +361,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
           <div class="wx-air__scale">
             <span v-for="(c, i) in AQI_COLORS" :key="i" :style="{ background: c }" :data-on="i === aqiIndex ? '1' : '0'" />
           </div>
-          <!-- légende, poussée au bas de la carte et discrète : les six paliers et leurs plages, celui du moment en évidence -->
+          <!-- legend, pushed to the bottom of the card and discreet: the six bands and their ranges, the current one highlighted -->
           <div class="wx-legend">
             <div class="wx-air__legend">
               <div v-for="(lvl, i) in AQI_LEVELS" :key="lvl" class="wx-air__row" :data-on="i === aqiIndex ? '1' : '0'">
@@ -382,7 +382,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
               <div class="muted small wx-pollen__level">{{ p.level === undefined ? '—' : $t(`weather.pollenLevels[${p.level}]`) }}</div>
             </div>
           </div>
-          <!-- légende, poussée au bas de la carte : un point par cran, et ce que mesure l'indice -->
+          <!-- legend, pushed to the bottom of the card: one dot per step, and what the index measures -->
           <div class="wx-legend">
             <div class="wx-pollen__legend">
               <span v-for="k in 4" :key="k" class="wx-pollen__key">
@@ -396,12 +396,12 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 
         </div>
 
-        <!-- Radar des précipitations, centré sur la maison -->
+        <!-- Precipitation radar, centered on the house -->
         <section class="wx-radar">
           <RainRadar v-if="home" :home="home" :away="!!place" />
         </section>
 
-        <!-- le crédit ferme la page ; écran large : sous le radar, seul bloc qui sait céder de la hauteur -->
+        <!-- the credit closes the page; wide screen: under the radar, the only block that knows how to give up height -->
         <div class="muted small wx-credit">
           <template v-if="attribution">{{ $t('weather.attribution', { source: attribution }) }}<template v-if="model"> · {{ $t('weather.model', { model }) }}</template> · </template>
           <template v-if="alerts.data.value?.area">{{ $t('weather.alerts.source', { source: alerts.data.value.attribution }) }} · </template>
@@ -417,14 +417,14 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .weather { height: 100%; display: flex; flex-direction: column; }
 .weather__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); display: grid; gap: 20px; align-content: start; }
 .empty { padding: 24px; text-align: center; }
-/* étroit : les lieux passent sous le titre, sur toute la largeur — pastilles à gauche, recherche à droite */
+/* narrow: the places go under the title, across the full width — pills on the left, search on the right */
 @media (max-width: 1100px) {
   .wx-header { flex-wrap: wrap; row-gap: 10px; }
   .wx-header__places { flex: 1 1 100%; justify-content: space-between; }
 }
 .small { font-size: 12px; }
 .weather__grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 20px; }
-/* les sections de la grille, directes ou dans un bloc transparent (`.wx-side`, `.wx-bottom`) : mêmes marges, même largeur par défaut */
+/* the grid sections, direct or inside a transparent block (`.wx-side`, `.wx-bottom`): same margins, same default width */
 .weather__grid > section, .wx-side > section, .wx-bottom > section { grid-column: span 12; padding: 18px 20px; min-width: 0; }
 @media (min-width: 760px) {
   .wx-now { grid-column: span 6 !important; } .wx-sun { grid-column: span 6 !important; }
@@ -435,7 +435,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
   .wx-daily { grid-column: span 7 !important; } .wx-details { grid-column: span 5 !important; }
   .wx-air { grid-column: span 5 !important; } .wx-pollen { grid-column: span 7 !important; }
 }
-/* indisponible : tout reste en place, en grisé */
+/* unavailable: everything stays in place, greyed out */
 .weather__grid[data-live='0'] .wx-now__main, .weather__grid[data-live='0'] .wx-wind__body { opacity: .45; }
 .wx-dim { opacity: .3; }
 
@@ -451,7 +451,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .wx-now__temp { font-size: 56px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
 .wx-now__cond { font-size: 16px; margin-top: 6px; }
 .wx-now__foot { display: flex; gap: 18px; font-size: 13px; }
-/* vigilance : une pastille teintée de sa couleur, hauteur fixe ; la croix qui la masque à côté, dans la même rangée */
+/* warning: a pill tinted with its color, fixed height; the cross that hides it next to it, in the same row */
 .wx-alert-row { display: flex; align-items: center; gap: 4px; height: 24px; min-width: 0; max-width: 100%; align-self: flex-start; }
 .wx-alert { display: flex; align-items: center; gap: 8px; height: 24px; min-width: 0; max-width: 100%; flex: 0 1 auto; padding: 0 10px; border-radius: 12px; color: var(--muted); }
 .wx-alert[data-level='yellow'] { --alert: #f2c200; }
@@ -486,11 +486,11 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .wx-hourly__strip { display: grid; grid-template-columns: repeat(24, minmax(46px, 1fr)); gap: 4px; margin-top: 12px; overflow-x: auto; padding-bottom: 4px; }
 .wx-hourly__strip { grid-template-rows: auto 48px; }
 .wx-hour { grid-row: 1; display: grid; grid-template-rows: 16px 26px 20px 16px; justify-items: center; align-items: center; row-gap: 4px; min-width: 46px; }
-/* la tendance sous les colonnes, la nuit derrière tout : placées sur la même grille, elles suivent le défilement */
+/* the trend under the columns, the night behind everything: placed on the same grid, they follow the scroll */
 .wx-trend { grid-row: 2; grid-column: 1 / -1; position: relative; height: 48px; }
 .wx-trend > svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .wx-trend__tick { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 4; opacity: .35; }
-/* la valeur posée SUR sa ligne, dans une pastille du fond de la carte : lisible même quand la courbe passe dessous */
+/* the value set ON its line, in a pill of the card's background: readable even when the curve passes beneath */
 .wx-trend__tick-label { position: absolute; right: 0; transform: translateY(-50%); font-size: 10px; line-height: 1; padding: 1px 4px; border-radius: 4px; background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
 .wx-trend__dot { position: absolute; width: 8px; height: 8px; margin: -6px 0 0 -6px; border-radius: 50%; border: 2px solid var(--surface); box-sizing: content-box; }
 .wx-trend__dot[data-kind='min'] { background: var(--cat-media); }
@@ -504,12 +504,12 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .wx-hour__rain[data-on='1'], .wx-day__rain[data-on='1'] { color: var(--cat-media); }
 
 .wx-daily__rows { display: grid; gap: 6px; margin-top: 12px; }
-/* le nom du jour prend jusqu'à 72 px (« Aujourd'hui » en entier) sur la barre, qui garde au moins
-   48 px ; toutes les lignes ont la même largeur, donc les mêmes colonnes */
+/* the day name takes up to 72 px ("Today" in full) on the bar, which keeps at least
+   48 px; all rows have the same width, hence the same columns */
 .wx-day { display: grid; grid-template-columns: minmax(40px, 72px) 24px 44px 18px 40px minmax(48px, 1fr) 40px; align-items: center; gap: 8px; height: 30px; }
 .wx-day__short { display: none; }
-/* la semaine sur une demi-largeur (760-1099 px) : la place manque, « Aujourd'hui » s'abrège et la
-   colonne pluie se resserre, pour laisser une barre à l'amplitude */
+/* the week on a half width (760-1099 px): room is short, "Today" is abbreviated and the
+   rain column tightens, to leave a bar for the amplitude */
 @media (min-width: 760px) and (max-width: 1099px) {
   .wx-day { grid-template-columns: 44px 24px 36px 18px 40px minmax(0, 1fr) 40px; }
   .wx-day__long { display: none; }
@@ -536,7 +536,7 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 .wx-air__scale { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; height: 10px; }
 .wx-air__scale span { border-radius: 3px; opacity: .35; transition: opacity .2s; }
 .wx-air__scale span[data-on='1'] { opacity: 1; outline: 2px solid var(--text); outline-offset: 1px; }
-/* légendes : au bas de la carte (la marge automatique les y pousse), sous un filet, en petit et en retrait */
+/* legends: at the bottom of the card (the auto margin pushes them there), under a hairline, small and set back */
 .wx-legend { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); display: grid; gap: 8px; font-size: 11px; line-height: 1.35; color: var(--muted); opacity: .85; }
 .wx-air__legend { display: grid; gap: 0; }
 .wx-air__row { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px; height: 18px; }
@@ -559,47 +559,47 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 
 .wx-radar { padding: 0 !important; height: 400px; }
 .wx-radar > * { height: 100%; }
-/* en flux, le crédit ferme la page, centré */
+/* in flow, the credit closes the page, centered */
 .wx-credit { grid-column: span 12; text-align: center; }
-/* en flux, le bloc « bas gauche » est transparent : détails, air et pollens gardent leur place dans la grille */
+/* in flow, the "bottom left" block is transparent: details, air and pollen keep their place in the grid */
 .wx-bottom { display: contents; }
-/* en flux, la colonne air/pollens est transparente : ses deux cartes gardent leur place dans la grille */
+/* in flow, the air/pollen column is transparent: its two cards keep their place in the grid */
 .wx-side { display: contents; }
 
-/* TOUT TIENT SANS DÉFILER : sur un écran large et assez haut (1920 × 945 est le cas visé), la
-   SEMAINE prend le haut à droite, à côté de l'instant et des 24 heures ; la troisième rangée aligne
-   détails, air et pollens à gauche, et le radar ferme la page en bas à droite, dans la hauteur qui
-   reste. Les blocs gardent leurs tailles ; seule la disposition change. Le crédit passe sous le
-   radar, le seul bloc qui sait céder de la hauteur. Grille de 24 colonnes : la première rangée se
-   partage 5 / 5 / 4, le soleil et la lune prennent la place dont le vent n'a pas besoin.
-   Seuils MESURÉS (2026-10-01) : la lune demande ~1770 px de large, le contenu ~934 px de haut ;
-   en dessous, la page défile plutôt que de couper. */
+/* EVERYTHING FITS WITHOUT SCROLLING: on a wide and tall enough screen (1920 × 945 is the target
+   case), the WEEK takes the top right, next to the current conditions and the 24 hours; the third
+   row aligns details, air and pollen on the left, and the radar closes the page at the bottom
+   right, in the height that remains. The blocks keep their sizes; only the layout changes. The
+   credit goes under the radar, the only block that knows how to give up height. 24-column grid:
+   the first row splits 5 / 5 / 4, the sun and the moon take the room the wind does not need.
+   MEASURED thresholds (2026-10-01): the moon asks for ~1770 px of width, the content ~934 px of
+   height; below, the page scrolls rather than cutting. */
 @media (min-width: 1770px) and (min-height: 934px) {
   .weather__scroll { display: flex; flex-direction: column; overflow: hidden; gap: 0; }
   .weather__grid { flex: 1 1 auto; min-height: 0; grid-template-columns: repeat(24, minmax(0, 1fr)); grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 16px; align-content: start; }
   .wx-now { grid-column: 1 / 6 !important; grid-row: 1; }
   .wx-sun { grid-column: 6 / 11 !important; grid-row: 1; }
   .wx-wind { grid-column: 11 / 15 !important; grid-row: 1; }
-  /* l'arc se resserre pour faire place à la lune sans pousser la page au-delà de l'écran */
+  /* the arc tightens to make room for the moon without pushing the page beyond the screen */
   .wx-sun__arc { height: 72px; }
   .wx-hourly { grid-column: 1 / 15 !important; grid-row: 2; }
   .wx-hourly__strip { grid-template-columns: repeat(24, minmax(36px, 1fr)); gap: 2px; overflow: hidden; padding-bottom: 0; }
   .wx-hour { min-width: 36px; }
   .wx-hour__rain { font-size: 11px; }
-  /* la semaine en haut à droite, sur la hauteur des deux premières rangées : ses lignes s'espacent pour la remplir */
+  /* the week at the top right, over the height of the first two rows: its rows space out to fill it */
   .wx-daily { grid-column: 15 / 25 !important; grid-row: 1 / 3; min-height: 0; }
   .wx-daily__rows { gap: 6px; margin-top: 12px; }
   .wx-day { height: 38px; }
-  /* détails resserrés sur deux colonnes ; air et pollens à leur droite ; les deux blocs de DROITE
-     (semaine, radar) partagent les mêmes colonnes, donc le même bord gauche */
+  /* details tightened onto two columns; air and pollen to their right; the two RIGHT blocks
+     (week, radar) share the same columns, hence the same left edge */
   .wx-bottom { display: grid; grid-column: 1 / 15; grid-row: 3 / 5; grid-template-columns: 2fr 5fr; gap: 16px; align-items: stretch; min-height: 0; }
-  /* la carte Détails s'aligne sur la hauteur de ses voisines (air, pollens) plutôt que de s'arrêter à sa dernière ligne */
+  /* the Details card aligns to the height of its neighbors (air, pollen) rather than stopping at its last row */
   .wx-details { grid-column: 1 !important; grid-row: 1; }
   .wx-side { display: grid; grid-column: 2; grid-row: 1; grid-template-columns: 2fr 3fr; gap: 16px; }
-  /* les attributions sous le radar, sur deux lignes réservées : un lieu sans vigilance n'y fait rien bouger */
+  /* the attributions under the radar, on two reserved lines: a place without a warning moves nothing there */
   .wx-credit { grid-column: 15 / 25; grid-row: 4; text-align: left; line-height: 18px; height: 36px; overflow: hidden; }
   .wx-pollen__row { grid-template-columns: 84px auto 1fr; }
-  /* la carte ferme la page : en bas à droite, dans la hauteur qui reste, alignée sur la semaine */
+  /* the card closes the page: at the bottom right, in the height that remains, aligned with the week */
   .wx-radar { grid-column: 15 / 25 !important; grid-row: 3; height: auto; min-height: 0; }
   .wx-radar > * { min-height: 0; }
   .wx-air { grid-column: auto !important; }

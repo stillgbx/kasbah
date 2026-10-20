@@ -1,9 +1,10 @@
 import type { Theme } from './index'
 
-// Night Owl et Light Owl de Sarah Drasner (github.com/sdras/night-owl-vscode-theme). Les paliers de
-// surface sombres reprennent les bleus profonds du thème (#011627 → #0b2942 → #1d3b53 → #234d70).
-// Le texte secondaire est la couleur de commentaire de chaque variante (#989fb1, #637777), foncée
-// ou éclaircie à teinte égale jusqu'à 4,5:1 sur la surface et le fond : l'original tombait à 2,3-3,2.
+// Night Owl and Light Owl by Sarah Drasner (github.com/sdras/night-owl-vscode-theme). The dark
+// surface steps reuse the theme's deep blues (#011627 → #0b2942 → #1d3b53 → #234d70).
+// The secondary text is the comment color of each variant (#989fb1, #637777), darkened or
+// lightened at equal hue up to 4.5:1 on the surface and the background: the original fell to
+// 2.3-3.2.
 export const nightOwl = {
   id: 'night-owl',
   label: 'Night Owl',

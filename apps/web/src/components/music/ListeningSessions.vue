@@ -13,27 +13,27 @@ import PulseDot from '../ui/PulseDot.vue'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Panneau « Écoute » : un lecteur = une session. La ligne choisie est celle que pilote la barre du
-// bas et où partent les lectures ; toucher une autre ligne change de session (le salon, la suite…).
-// En mode transfert, la même liste sert à choisir la CIBLE : les lignes qui savent recevoir un
-// flux (`play_url`) montrent « Ici », la source reste visible mais grisée ; on en sort par le bouton
-// de la barre (Transférer devenu Annuler).
+// "Listening" panel: one player = one session. The chosen row is the one the bottom bar drives and
+// where playbacks go; touching another row changes session (the living room, the next one…).
+// In transfer mode, the same list serves to choose the TARGET: rows that can receive a stream
+// (`play_url`) show "Here", the source stays visible but greyed out; you leave through the bar's
+// button (Transfer turned into Cancel).
 //
-// Ordre : les FAVORIS d'abord (étoile, mémorisée dans le navigateur), puis les autres, chaque groupe
-// par ordre alphabétique — la pièce n'est qu'une légende. Un filtre segmenté en tête restreint aux
-// enceintes, téléviseurs ou écrans (`meta.mediaPlayer.deviceClass`), comme les filtres de pièce.
-// À droite de chaque ligne, trois touches de largeur fixe : lecture / pause du lecteur (invisible s'il
-// n'a rien de chargé, l'emplacement reste), « voir dans la maison » (la scène 3D, lecteur sélectionné) et l'étoile ; en
-// mode transfert, « Ici » prend la place des deux premières. Une ligne qui joue
-// porte sa pochette en fond, fondue vers la droite, comme les lignes de la vue Médias ; un titre
-// trop long défile avec un fondu (MarqueeText) au lieu d'être coupé.
+// Order: FAVORITES first (star, remembered in the browser), then the others, each group in
+// alphabetical order — the room is only a caption. A segmented filter at the top restricts to
+// speakers, TVs or displays (`meta.mediaPlayer.deviceClass`), like the room filters.
+// On the right of each row, three fixed-width buttons: the player's play / pause (invisible if it
+// has nothing loaded, the slot stays), "see in the house" (the 3D scene, player selected) and the
+// star; in transfer mode, "Here" takes the place of the first two. A row that is playing
+// carries its cover art as a background, faded toward the right, like the rows of the Media view;
+// a title that is too long scrolls with a fade (MarqueeText) instead of being cut.
 const props = defineProps<{
   players: DeviceEntry[]
   selectedId: string | null
   transferMode: boolean
-  /** Lecteur vers lequel un transfert est en cours (bouton occupé). */
+  /** Player toward which a transfer is in progress (busy button). */
   transferBusyId: string | null
-  /** Lecteur qui reçoit un titre en cours d'envoi (résolution du flux) : sablier sur sa ligne. */
+  /** Player receiving a track being sent (stream resolution): hourglass on its row. */
   pendingId: string | null
 }>()
 const emit = defineEmits<{ select: [id: string]; transferTo: [id: string]; command: [id: string, cmd: CommandInput]; locate: [id: string] }>()
@@ -61,11 +61,11 @@ const filterOptions = computed(() => {
 
 interface Row {
   entry: DeviceEntry; id: string; name: string; room: string; status: string; active: boolean; target: boolean; art: string | null; favorite: boolean
-  /** Ce qu'on entend sur cette ligne (une barre de son relaie sa TV) : c'est lui que lecture / pause commande. */
+  /** What you hear on this row (a soundbar relays its TV): it is what play / pause commands. */
   heardId: string; heardPlayback: StateFor<'media_player'>['playback']
-  /** Morceau signalé explicit par le service qui l'a lancé. */
+  /** Track flagged explicit by the service that launched it. */
   explicit: boolean
-  /** Ce navigateur : il n'est nulle part dans la maison 3D. */
+  /** This browser: it is nowhere in the 3D house. */
   local: boolean
 }
 interface Group { key: 'local' | 'favorites' | 'others'; title: string; rows: Row[] }
@@ -81,7 +81,7 @@ const rows = computed<Row[]>(() => {
       const relay = house.relaySource(e.descriptor.id)
       const heard = relay && relay.state.kind === 'media_player' ? relay.state : s
       const n = heard.nowPlaying
-      // un identifiant de flux ou une URL n'est ni un titre ni une source lisible (Sonos, serveur redémarré)
+      // a stream id or a URL is neither a title nor a readable source (Sonos, server restarted)
       const readable = (v: string | undefined) => (v && !/^([0-9a-f]{24}(\.[a-z0-9]{2,4})?|https?:\/\/.*)$/i.test(v.trim()) ? v : undefined)
       const title = readable(n?.title)
       const source = readable(n?.source)
@@ -109,8 +109,8 @@ const rows = computed<Row[]>(() => {
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
 })
 /**
- * Ce navigateur tout en haut, avant même les favoris : c'est le lecteur qu'on a sous la main. Puis
- * deux groupes, favoris au-dessus ; sans favori, une seule liste sans titre.
+ * This browser at the very top, even before the favorites: it is the player you have at hand. Then
+ * two groups, favorites above; without favorites, a single untitled list.
  */
 const groups = computed<Group[]>(() => {
   const mine = rows.value.filter((r) => r.local)
@@ -140,7 +140,7 @@ function tap(r: Row) {
 
 <template>
   <aside class="sessions card">
-    <!-- l'explication ne s'affiche qu'à la demande : infobulle sur le point d'information -->
+    <!-- the explanation only shows on demand: tooltip on the info dot -->
     <div class="sessions__head">
       <div class="sessions__title">{{ transferMode ? $t('music.transferTo') : $t('music.sessions') }}</div>
       <span class="sessions__info muted" :title="transferMode ? $t('music.transferHint') : $t('music.sessionsHint')" tabindex="0">
@@ -152,7 +152,7 @@ function tap(r: Row) {
     </div>
     <div class="sessions__scroll">
       <p v-if="rows.length === 0" class="muted empty">{{ $t('music.noSession') }}</p>
-      <!-- de vrais éléments par groupe : l'ordre favoris → autres ne dépend pas d'un fragment clé -->
+      <!-- real elements per group: the favorites → others order does not depend on a keyed fragment -->
       <section v-for="g in groups" :key="g.key" class="group">
         <div v-if="g.title" class="section-label group-title">{{ g.title }}</div>
         <div v-for="r in g.rows" :key="r.id" class="row"
@@ -178,14 +178,14 @@ function tap(r: Row) {
               </span>
             </span>
           </button>
-          <!-- touches à part : un bouton dans un bouton n'existe pas -->
+          <!-- separate buttons: a button inside a button does not exist -->
           <span v-if="transferMode" class="trail trail--wide">
             <v-progress-circular v-if="transferBusyId === r.id" indeterminate :size="18" :width="2" color="primary" />
             <span v-else-if="r.target && r.id !== selectedId" class="pill pill--here" data-on="1">{{ $t('music.transferHere') }}</span>
           </span>
           <template v-else>
-            <!-- pendant l'envoi d'un titre à ce lecteur, la touche lecture / pause laisse place au sablier ;
-                 rien de chargé : la touche disparaît mais garde sa place, les voisines ne bougent pas -->
+            <!-- while a track is being sent to this player, the play / pause button gives way to the
+                 hourglass; nothing loaded: the button disappears but keeps its place, the neighbors do not move -->
             <span v-if="pendingId === r.id" class="key" aria-busy="true">
               <v-progress-circular indeterminate :size="18" :width="2" color="primary" />
             </span>
@@ -194,7 +194,7 @@ function tap(r: Row) {
                     @click.stop="togglePlayback(r)">
               <StrokeIcon :name="r.heardPlayback === 'playing' ? 'pause' : 'play'" :size="16" />
             </button>
-            <!-- ce navigateur n'a pas de place dans la maison : la touche disparaît, son emplacement reste -->
+            <!-- this browser has no place in the house: the button disappears, its slot stays -->
             <button type="button" class="key" :class="{ 'is-hidden': r.local }" :disabled="r.local" :tabindex="r.local ? -1 : 0"
                     :title="$t('common.showIn3d')" :aria-label="$t('common.showIn3d')" @click.stop="emit('locate', r.id)">
               <StrokeIcon name="pin" :size="16" />
@@ -213,7 +213,7 @@ function tap(r: Row) {
 
 <style scoped>
 .sessions { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-/* en-tête de hauteur fixe : le titre, et un point d'information qui porte l'explication en infobulle */
+/* fixed-height header: the title, and an info dot that carries the explanation in a tooltip */
 .sessions__head { display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 16px; flex: 0 0 auto; }
 .sessions__title { font-size: 14px; font-weight: 600; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sessions__info { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 999px; cursor: help; flex: 0 0 auto; }
@@ -235,7 +235,7 @@ function tap(r: Row) {
   border: 0; background: transparent; color: inherit; text-align: left; font: inherit;
 }
 .row__main:disabled { cursor: default; }
-/* pochette derrière la ligne : sous l'icône et le nom, fondue avant la colonne de droite */
+/* cover art behind the row: under the icon and the name, faded before the right column */
 .row-art {
   position: absolute; inset: 0; z-index: -1; pointer-events: none; display: block;
   background-size: cover; background-position: center; opacity: .22;
@@ -255,11 +255,11 @@ function tap(r: Row) {
 .room { flex: 0 0 auto; white-space: nowrap; }
 .sep { flex: 0 0 auto; }
 .status { min-width: 0; flex: 1 1 auto; }
-/* en mode transfert, « Ici » occupe la largeur des deux touches qu'il remplace : rien ne bouge */
+/* in transfer mode, "Here" takes the width of the two buttons it replaces: nothing moves */
 .trail { flex: 0 0 auto; width: 36px; display: grid; place-items: center; }
 .trail--wide { width: 72px; }
 .pill--here { height: 30px; padding: 0 10px; font-size: 12.5px; }
-/* touches de ligne : même empreinte, discrètes tant qu'elles ne sont pas allumées */
+/* row buttons: same footprint, discreet as long as they are not lit */
 .key {
   flex: 0 0 auto; display: grid; place-items: center; width: 36px; height: 60px; padding: 0;
   border: 0; background: transparent; color: var(--muted);

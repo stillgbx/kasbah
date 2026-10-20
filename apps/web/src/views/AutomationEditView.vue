@@ -6,14 +6,14 @@ import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { newAutomationId } from '../lib/automations'
 import { useAutomationsStore } from '../stores/automations'
 
-// Page d'édition d'une automatisation (`/automations/:id`, ou `/automations/new`). L'éditeur a besoin
-// de la place d'une page : les exceptions et les actions s'y empilent en colonnes.
+// Edit page of an automation (`/automations/:id`, or `/automations/new`). The editor needs the
+// space of a page: the exceptions and the actions stack up in columns.
 //
-// Une automatisation neuve reçoit son id ici, une fois (le serveur fait un upsert sur `PUT /:id`) ;
-// après son premier enregistrement l'adresse devient la sienne, sans rouvrir l'éditeur.
+// A new automation gets its id here, once (the server does an upsert on `PUT /:id`);
+// after its first save the address becomes its own, without reopening the editor.
 //
-// La vue n'est pas recréée quand l'id de l'adresse change (« Dupliquer » ouvre la copie) : l'id est
-// donc calculé, et l'éditeur, clé sur lui, repart d'un brouillon neuf.
+// The view is not recreated when the address's id changes ("Duplicate" opens the copy): the id is
+// therefore computed, and the editor, keyed on it, starts again from a fresh draft.
 const props = defineProps<{ id: string }>()
 const store = useAutomationsStore()
 const router = useRouter()
@@ -21,7 +21,7 @@ const router = useRouter()
 const generated = newAutomationId()
 const isNew = computed(() => props.id === 'new')
 const realId = computed(() => (isNew.value ? generated : props.id))
-/** Adresse ouverte directement : la liste peut ne pas être encore arrivée. */
+/** Address opened directly: the list may not have arrived yet. */
 const ready = ref(isNew.value || !!store.entries[realId.value])
 const found = computed(() => isNew.value || !!store.entries[realId.value])
 

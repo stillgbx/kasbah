@@ -9,12 +9,12 @@ import { useAutomationsStore } from '../../stores/automations'
 import MarqueeText from '../ui/MarqueeText.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Une automatisation dans la liste, lisible sans l'ouvrir : le nom, puis « Quand », « Alors » et
-// « Sauf si » sur trois lignes étiquetées ; à droite, la prochaine exécution, la dernière et son issue,
-// et l'état (ce qui manque, ce qui ne répond pas). Empreinte FIXE : chaque ligne est toujours là
-// (« — » quand elle n'a rien à dire), chaque texte défile s'il déborde, la colonne de droite a sa
-// largeur réservée — basculer, perdre un appareil ou voir passer une exécution ne décale rien.
-// La poignée de gauche range la liste : le glissement lui-même est mené par la vue.
+// An automation in the list, readable without opening it: the name, then "When", "Then" and
+// "Unless" on three labeled lines; on the right, the next run, the last one and its outcome, and
+// the state (what is missing, what does not respond). FIXED footprint: every line is always there
+// ("—" when it has nothing to say), each text scrolls if it overflows, the right column has its
+// reserved width — toggling, losing a device or seeing a run go by shifts nothing.
+// The handle on the left reorders the list: the drag itself is driven by the view.
 const props = defineProps<{ entry: AutomationEntry; now: number; dragged?: boolean }>()
 const emit = defineEmits<{ open: []; grab: [ev: PointerEvent] }>()
 const store = useAutomationsStore()
@@ -50,7 +50,7 @@ const lastTitle = computed(() => {
   return run.errors.map((e) => `${e.deviceId ? `${names.deviceName(e.deviceId)} : ` : ''}${e.message}`).join('\n')
 })
 
-/** L'état en clair : ce qui manque d'abord (la règle ne peut pas marcher), puis ce qui ne répond pas. */
+/** The state in plain words: what is missing first (the rule cannot work), then what does not respond. */
 const state = computed(() => {
   const s = status.value
   if (s.health === 'incomplete') {
@@ -60,7 +60,7 @@ const state = computed(() => {
   if (s.health === 'unavailable') return t('automations.unavailableShort', { names: s.unavailableDeviceIds.map(names.deviceName).join(', ') })
   return t('automations.health.ok')
 })
-// écrite par un assistant (MCP) et pas encore relue dans l'éditeur
+// written by an assistant (MCP) and not yet reviewed in the editor
 const stateText = computed(() => (a.value.byAssistant ? `${state.value} · ${t('automations.row.byAssistant')}` : state.value))
 </script>
 
@@ -88,7 +88,7 @@ const stateText = computed(() => (a.value.byAssistant ? `${state.value} · ${t('
         </span>
       </span>
     </button>
-    <!-- hors du bouton de la ligne : basculer n'ouvre pas l'éditeur -->
+    <!-- outside the row button: toggling does not open the editor -->
     <v-switch :model-value="a.enabled" :disabled="store.isBusy(a.id)" hide-details density="compact" class="row__switch"
               :aria-label="$t('automations.enable')" :title="$t('automations.enable')"
               @update:model-value="(v: boolean | null) => store.setEnabled(a.id, v === true)" />
@@ -111,11 +111,11 @@ const stateText = computed(() => (a.value.byAssistant ? `${state.value} · ${t('
 }
 .row__icon { align-self: flex-start; margin-top: 12px; }
 .row__text { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-/* estompé désactivé : le texte seulement, l'interrupteur reste net */
+/* dimmed when disabled: the text only, the switch stays crisp */
 .row[data-on='0'] .row__icon, .row[data-on='0'] .row__text, .row[data-on='0'] .row__side { opacity: .6; }
 .row__name { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
 .row__line { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 12px; line-height: 17px; }
-/* étiquettes de largeur fixe : les trois valeurs commencent à la même colonne */
+/* fixed-width labels: the three values start at the same column */
 .row__label {
   flex: 0 0 auto; width: 7.5ch; color: var(--muted); font-size: 10px; font-weight: 600;
   letter-spacing: .05em; text-transform: uppercase; white-space: nowrap;
@@ -133,12 +133,12 @@ const stateText = computed(() => (a.value.byAssistant ? `${state.value} · ${t('
 .row__dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .row__switch { flex: 0 0 auto; }
 .row__chev { flex: 0 0 auto; color: var(--muted); }
-/* écran moyen : la colonne de droite se resserre */
+/* medium screen: the right column tightens */
 @media (max-width: 1100px) {
   .row__side { width: 24ch; }
 }
-/* téléphone : le nom et les trois lignes d'abord ; les faits de droite ne tiennent plus. Décidé par la
-   largeur de l'écran, jamais par l'état : rien ne bouge en cours d'usage. */
+/* phone: the name and the three lines first; the facts on the right no longer fit. Decided by the
+   screen width, never by the state: nothing moves during use. */
 @media (max-width: 600px) {
   .row__side, .row__chev { display: none; }
   .row__label { width: 6.5ch; }

@@ -8,23 +8,24 @@ import { useNotificationsStore } from '../stores/notifications'
 import { usePluginsStore } from '../stores/plugins'
 import StrokeIcon from './ui/StrokeIcon.vue'
 
-// Liaison du compte MY Renault. Contrairement à Tesla et Nest, il n'y a PAS d'OAuth : Gigya ne
-// connaît que l'identifiant et le mot de passe. D'où un vrai formulaire ici — et la seule façon
-// honnête de le présenter est de dire ce qu'il advient du mot de passe, ce que fait `intro`.
+// Linking of the MY Renault account. Unlike Tesla and Nest, there is NO OAuth: Gigya only knows
+// the identifier and the password. Hence a real form here — and the only honest way to present it
+// is to say what happens to the password, which is what `intro` does.
 //
-// La carte ne décide plus de son apparition : elle vit DANS la section du plugin, que l'utilisateur
-// déplie (ou qui s'ouvre seule quand le serveur signale une action à faire). Compte lié, elle n'a
-// donc plus à s'imposer en haut des Réglages — c'est ce qu'elle faisait, sans rien à demander.
+// The card no longer decides when it appears: it lives INSIDE the plugin section, which the user
+// expands (or which opens by itself when the server flags an action to take). With the account
+// linked, it therefore no longer has to impose itself at the top of Settings — which it did, with
+// nothing to ask.
 //
-// Le mot de passe ne vit que le temps de la requête : il n'est pas gardé dans ce composant après
-// l'envoi, et le serveur ne l'écrit nulle part (seul le jeton de session Gigya est conservé).
+// The password only lives for the duration of the request: it is not kept in this component after
+// sending, and the server writes it nowhere (only the Gigya session token is kept).
 
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()
 const plugins = usePluginsStore()
 const { t } = useI18n()
 
-/** Santé lue dans l'INVENTAIRE des plugins : la carte doit apparaître dès qu'on allume le plugin. */
+/** Health read from the plugin INVENTORY: the card must appear as soon as the plugin is turned on. */
 const health = computed(() => plugins.byId.renault?.health)
 const status = ref<RenaultStatus | null>(null)
 const busy = ref(false)
@@ -32,9 +33,9 @@ const email = ref('')
 const password = ref('')
 
 /**
- * Le dernier réveil de charge, dit en une phrase. Un refus n'est pas forcément une panne : Renault
- * répond « une commande est déjà en attente » quand on écrit trop vite — d'où trois libellés, et la
- * teinte d'alerte réservée aux deux qui méritent un coup d'œil.
+ * The last charge wake-up, said in one sentence. A refusal is not necessarily a failure: Renault
+ * answers "a command is already pending" when you write too fast — hence three labels, and the
+ * alert tint reserved for the two that deserve a look.
  */
 const WAKE_KEY = { sent: 'wakeSent', deferred: 'wakeDeferred', failed: 'wakeFailed' } as const
 
@@ -52,7 +53,7 @@ async function link() {
   busy.value = true
   try {
     status.value = await getTransport().renaultLogin({ email: email.value.trim(), password: password.value })
-    // le mot de passe a servi, il n'a plus rien à faire en mémoire
+    // the password has been used, it has no business staying in memory
     password.value = ''
     notifications.success(t('settings.renault.linked', { n: status.value.vehicles.length }, status.value.vehicles.length))
     await devices.refreshHealth()
@@ -74,7 +75,7 @@ async function unlink() {
 
 <template>
   <div v-if="status" class="rnl card card--soft">
-    <!-- compte lié : on ne redemande rien, on montre où on en est -->
+    <!-- account linked: nothing more is asked, we show where things stand -->
     <template v-if="status.linked">
       <div class="rnl__done">
         <StrokeIcon name="checkCircle" :size="16" />
@@ -88,7 +89,7 @@ async function unlink() {
       </div>
     </template>
 
-    <!-- compte non lié : le formulaire, précédé de ce qu'il advient du mot de passe -->
+    <!-- account not linked: the form, preceded by what happens to the password -->
     <template v-else>
       <p class="muted rnl__text">{{ $t('settings.renault.intro') }}</p>
       <form class="rnl__form" @submit.prevent="link">

@@ -14,59 +14,60 @@ import { formatPercent, formatSensor } from '../lib/format'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 
-// Vue Ouvrants : volets, stores, portails, fenêtres et portes de garage — tout ce qui est du kind
-// `cover`. La liste par pièce et son diagnostic de liaison viennent de `RoomBands` (partagé avec
-// la vue Lumières) ; il ne reste ici que le contrôle propre à un ouvrant.
+// Covers view: shutters, blinds, gates, windows and garage doors — everything of kind
+// `cover`. The per-room list and its link diagnostic come from `RoomBands` (shared with
+// the Lights view); only the control specific to a cover remains here.
 //
-// Ouvrir / Stop / Fermer sont conditionnés aux capacités, parce que le parc est hétérogène : un
-// moteur io-homecontrol sait viser une position (curseur), une radio RTS unidirectionnelle ne sait
-// que tout ou rien — lui afficher un curseur promettrait une commande qu'elle refuserait.
+// Open / Stop / Close are conditioned on capabilities, because the device set is heterogeneous: an
+// io-homecontrol motor can target a position (slider), a one-way RTS radio only knows
+// all or nothing — showing it a slider would promise a command it would refuse.
 //
-// Le pourcentage est une FERMETURE (0 % = ouvert, voir `lib/cover.ts`) et le curseur montre la
-// position VISÉE tant que le store la tient : un moteur qui ne publie sa position qu'en fin de
-// course ferait sinon revenir la poignée en arrière juste après le geste.
+// The percentage is a CLOSURE (0% = open, see `lib/cover.ts`) and the slider shows the
+// TARGETED position as long as the store holds one: a motor that only publishes its position at the
+// end of travel would otherwise make the handle jump back right after the gesture.
 const devices = useDevicesStore()
 const house = useHouseStore()
 const { t, locale } = useI18n()
 
 const covers = computed(() => devices.list.filter((e) => e.state.kind === 'cover'))
 
-// ---- résumé de l'en-tête : une NATURE à la fois, décrite par l'état qui se remarque — « 16 volets
-// ouverts · 2 stores déployés · 1 portail ouvert ». Un seul compte « ouverts » mélangeait des choses
-// qui ne se lisent pas dans le même sens : d'un volet on retient qu'il est OUVERT, d'un store qu'il
-// est DÉPLOYÉ (`coverActivity`, la même règle que les jauges de ligne et les marqueurs 3D).
+// ---- header summary: one KIND at a time, described by the state that stands out — "16 shutters
+// open · 2 blinds deployed · 1 gate open". A single "open" count mixed things
+// that are not read in the same direction: of a shutter we remember that it is OPEN, of a blind
+// that it is DEPLOYED (`coverActivity`, the same rule as the row gauges and the 3D markers).
 //
-// Une nature absente de la maison n'a pas de groupe ; une nature présente garde le sien même à zéro,
-// sinon le libellé sauterait dès qu'un volet s'ouvre (règle « rien ne bouge »). L'ordre est fixe, et
-// jamais celui des comptes, pour la même raison. Position inconnue = pas comptée : on n'affirme rien
-// d'un moteur muet.
+// A kind absent from the house has no group; a kind present keeps its own even at zero, otherwise
+// the label would jump as soon as a shutter opens ("nothing moves" rule). The order is fixed, and
+// never that of the counts, for the same reason. Unknown position = not counted: nothing is
+// asserted about a silent motor.
 const SUMMARY_ORDER = ['shutter', 'blind', 'awning', 'curtain', 'window', 'gate', 'garage', 'other']
 const summary = computed(() => {
   const counts = new Map<string, number>()
   for (const e of covers.value) {
     const cls = e.descriptor.meta.cover?.deviceClass ?? ''
     const key = SUMMARY_ORDER.includes(cls) ? cls : 'other'
-    // la position VISÉE quand le store en tient une, comme les jauges : le compte suit le geste
+    // the TARGETED position when the blind holds one, like the gauges: the count follows the gesture
     const active = e.state.available
       && coverActivity(e.descriptor, devices.targetPosition(e.descriptor.id) ?? (e.state as StateFor<'cover'>).position) > 0
     counts.set(key, (counts.get(key) ?? 0) + (active ? 1 : 0))
   }
   return [...counts.entries()]
     .sort((a, b) => SUMMARY_ORDER.indexOf(a[0]) - SUMMARY_ORDER.indexOf(b[0]))
-    // le nombre passe en 3e argument et rien d'autre : `n` interpolé écraserait l'accord du pluriel
+    // the number goes as the 3rd argument and nothing else: an interpolated `n` would overwrite the plural agreement
     .map(([key, n]) => t(`covers.counts.${key}`, n))
     .join(' · ')
 })
 
-// ---- ouvrants SANS OUVERTURE : la liste de travail qui apparaît après la découverte d'un plugin
-// (Somfy des mois après avoir dessiné la maison, six volets d'un coup sans savoir où ils vont).
-// `house.coversWithoutOpening` porte la règle (attend une ouverture, natures gate/garage exclues) ;
-// ici on l'affiche et on affecte, ligne par ligne. À ne pas confondre avec un appareil « non lié »
-// (sans `deviceId`) : la liaison au fabricant existe déjà, seule la place dans la maison manque.
+// ---- covers WITHOUT OPENING: the work list that appears after a plugin is discovered
+// (Somfy months after the house was drawn, six shutters at once with no idea where they go).
+// `house.coversWithoutOpening` carries the rule (waits for an opening, gate/garage kinds excluded);
+// here we display it and assign, row by row. Not to be confused with an "unlinked" device
+// (without `deviceId`): the link to the vendor already exists, only the place in the house is
+// missing.
 const waitingIds = computed(() => new Set(house.coversWithoutOpening.map((d) => d.id)))
 const waiting = (hd: HouseDevice | undefined) => !!hd && waitingIds.value.has(hd.id)
 
-/** Chaque ouverture de la maison, avec sa pièce et l'ouvrant qui l'occupe déjà (s'il y en a un). */
+/** Each opening of the house, with its room and the cover that already occupies it (if any). */
 interface OpeningOption { id: string; label: string; roomId: string; roomName: string; occupantId: string | null; occupantName: string }
 const openingIndex = computed<OpeningOption[]>(() => {
   const h = house.effective
@@ -83,11 +84,11 @@ const openingIndex = computed<OpeningOption[]>(() => {
   }))
 })
 /**
- * Options du sélecteur, pour l'ouvrant `hd` : les ouvertures de SA PIÈCE d'abord (c'est là qu'il
- * habite, donc le geste le plus probable), puis le reste de la maison — jamais masquées, seulement
- * reléguées, parce que la liste complète reste parfois nécessaire (un volet posé au mauvais endroit
- * par le plugin). Une ouverture déjà prise se distingue (« pris par … ») sans disparaître : la
- * reprendre est un geste voulu (`setCoverOpening` libère l'ancien).
+ * Selector options, for the cover `hd`: the openings of ITS ROOM first (that is where it
+ * lives, so the most likely gesture), then the rest of the house — never hidden, only
+ * relegated, because the full list is sometimes needed (a shutter put in the wrong place
+ * by the plugin). An opening already taken is flagged ("taken by …") without disappearing: taking
+ * it over is a deliberate gesture (`setCoverOpening` frees the old one).
  */
 function assignOptions(hd: HouseDevice) {
   const sorted = [...openingIndex.value].sort((a, b) => Number(b.roomId === hd.roomId) - Number(a.roomId === hd.roomId))
@@ -102,8 +103,8 @@ function assignOptions(hd: HouseDevice) {
   ]
 }
 
-// Volet solaire : son panneau est un capteur de luminosité à part (`meta.linkedTo` vers le volet).
-// Indexé une fois par volet, plutôt que cherché ligne par ligne à chaque rendu.
+// Solar shutter: its panel is a separate light sensor (`meta.linkedTo` toward the shutter).
+// Indexed once per shutter, rather than looked up row by row on every render.
 const lightByCover = computed(() => {
   const map = new Map<string, DeviceEntry>()
   for (const e of devices.list) {
@@ -118,19 +119,20 @@ const lightText = (coverId: string) => {
 }
 const batteryText = (s: StateFor<'cover'>) => (s.batteryPct === undefined ? '—' : formatPercent(s.batteryPct, locale.value))
 
-// Valeur locale pendant le glissement seulement ; ensuite c'est la cible du store qui s'affiche.
+// Local value during the drag only; afterwards it is the store's target that is displayed.
 const draft = ref<Record<string, number>>({})
-// Fermeture montrée par la vignette : le glissement, sinon la position VISÉE quand le store en tient
-// une (le tablier suit le geste, même d'un moteur qui ne publie qu'en fin de course), sinon la
-// position publiée. Inconnue = `undefined` : la vignette n'affirme rien d'un moteur muet.
+// Closure shown by the thumbnail: the drag, otherwise the TARGETED position when the store holds
+// one (the apron follows the gesture, even from a motor that only publishes at end of travel),
+// otherwise the published position. Unknown = `undefined`: the thumbnail asserts nothing about a
+// silent motor.
 const pillClosure = (e: DeviceEntry) => {
   const id = e.descriptor.id
   const p = devices.targetPosition(id) ?? (e.state as StateFor<'cover'>).position
   return draft.value[id] ?? (p === undefined ? undefined : toClosure(p))
 }
 
-// Position favorite du moteur : repère sur la vignette, et valeur dans le libellé accessible de la
-// touche (une ligne de liste n'a pas la place de l'écrire).
+// Favorite position of the motor: mark on the thumbnail, and value in the button's accessible
+// label (a list row has no room to write it out).
 const presetClosure = (s: StateFor<'cover'>) => s.presetPosition === undefined ? undefined : toClosure(s.presetPosition)
 function drag(id: string, v: number) { draft.value = { ...draft.value, [id]: v } }
 function commit(id: string, v: number) {
@@ -144,12 +146,12 @@ function commit(id: string, v: number) {
 <template>
   <div class="page">
     <PageHeader>
-      <!-- tout fermer ou tout ouvrir : deux gestes nommés plutôt qu'un interrupteur, parce que le
-           parc est rarement tout ouvert ou tout fermé ; « fermer » remonte un store (`CoversMaster`) -->
+      <!-- close all or open all: two named gestures rather than a switch, because the
+           device set is rarely all open or all closed; "close" raises a blind (`CoversMaster`) -->
       <div class="head">
         <div class="muted count">{{ summary }}</div>
-        <!-- place réservée : toujours affiché, même à 0, pour que rien ne saute d'apparence quand
-             la découverte d'un plugin fait passer le compte de 0 à six -->
+        <!-- reserved space: always displayed, even at 0, so that nothing jumps in appearance when
+             a plugin discovery takes the count from 0 to six -->
         <div class="muted count count--waiting" :data-zero="house.coversWithoutOpening.length === 0 ? '1' : '0'">
           {{ $t('covers.waitingCount', { n: house.coversWithoutOpening.length }, house.coversWithoutOpening.length) }}
         </div>
@@ -159,13 +161,13 @@ function commit(id: string, v: number) {
     <div class="page__scroll">
       <div v-if="covers.length === 0" class="card card--soft empty muted">{{ $t('covers.none') }}</div>
       <RoomBands kind="cover">
-        <!-- ouvrir / arrêter / fermer tous les VOLETS de la pièce d'un appui -->
+        <!-- open / stop / close all the SHUTTERS of the room with one press -->
         <template #room-action="{ entries }">
           <RoomShutterKeys :entries="entries" />
         </template>
-        <!-- l'ouvrant vu de face, à la place de l'icône : se lit OUVERT sans lire la ligne, et se
-             manœuvre dans le sens où il bouge (voir `CoverPill`). Glissable seulement pour un moteur
-             qui sait viser une position, et une fois son ouverture connue. -->
+        <!-- the cover seen from the front, in place of the icon: reads OPEN without reading the row,
+             and is operated in the direction it moves (see `CoverPill`). Draggable only for a motor
+             that can target a position, and once its opening is known. -->
         <template #leading="{ entry }">
           <CoverPill :closure="pillClosure(entry)" :preset="presetClosure(entry.state as StateFor<'cover'>)"
                      :interactive="entry.state.available && entry.descriptor.capabilities.includes('position')
@@ -176,18 +178,18 @@ function commit(id: string, v: number) {
                      @drag="(v: number) => drag(entry.descriptor.id, v)"
                      @commit="(v: number) => commit(entry.descriptor.id, v)" />
         </template>
-        <!-- le point pulsant accompagne le libellé (« Fermeture en cours »), qui est déjà dans le
-             statut : posé avant le curseur, il en changerait la largeur à chaque mouvement -->
+        <!-- the pulsing dot accompanies the label ("Closing"), which is already in the
+             status: placed before the slider, it would change its width on every movement -->
         <template #status-badge="{ entry }">
-          <!-- ouvrant sans ouverture : le mot avant le statut, pour qu'il se voie sans lire chaque
-               ligne (c'est la liste de travail qui suit la découverte d'un plugin) -->
+          <!-- cover without opening: the word before the status, so it shows without reading each
+               row (this is the work list that follows a plugin discovery) -->
           <span v-if="waiting(house.houseDeviceFor(entry.descriptor.id))" class="waiting-badge" :title="$t('covers.waitingHint')">
             <StrokeIcon name="linkOff" :size="12" />{{ $t('covers.waitingBadge') }}
           </span>
           <PulseDot :on="(entry.state as StateFor<'cover'>).motion !== 'stopped'" class="dot" />
         </template>
-        <!-- volet solaire : luminosité du panneau et batterie du moteur, au bout de la ligne d'état.
-             Largeurs MINIMALES réservées : un chiffre qui s'allonge ne pousse pas le statut. -->
+        <!-- solar shutter: panel luminosity and motor battery, at the end of the status line.
+             MINIMUM widths reserved: a figure that grows longer does not push the status. -->
         <template #status-after="{ entry }">
           <span v-if="lightText(entry.descriptor.id) !== undefined" class="fact fact--lux" :title="$t('lightHistory.title')">
             <StrokeIcon name="sun" :size="12" />{{ lightText(entry.descriptor.id) }}
@@ -198,8 +200,8 @@ function commit(id: string, v: number) {
           </span>
         </template>
         <template #control="{ entry }">
-          <!-- ouvrant sans ouverture : c'est ICI qu'on l'affecte — pas de sens à montrer Ouvrir/Fermer
-               tant qu'on ne sait pas quelle fenêtre il habille -->
+          <!-- cover without opening: it is assigned HERE — no sense showing Open/Close
+               as long as we do not know which window it dresses -->
           <div v-if="waiting(house.houseDeviceFor(entry.descriptor.id))" class="assign">
             <span class="muted assign__label">{{ $t('covers.assign') }}</span>
             <v-select class="assign__select" :model-value="''" :items="assignOptions(house.houseDeviceFor(entry.descriptor.id)!)"
@@ -207,7 +209,7 @@ function commit(id: string, v: number) {
                       :disabled="house.savingOpening" :aria-label="$t('covers.assign')"
                       @update:model-value="(id: string) => house.setCoverOpening(house.houseDeviceFor(entry.descriptor.id)!.id, id || null)" />
           </div>
-          <!-- une ligne à part : trois boutons dans la 4e colonne écraseraient le nom de l'ouvrant -->
+          <!-- a separate line: three buttons in the 4th column would crush the cover's name -->
           <div v-else class="controls">
             <div class="keys">
               <button type="button" class="key" :disabled="!entry.state.available"
@@ -227,9 +229,9 @@ function commit(id: string, v: number) {
                       @click="devices.sendCommand(entry.descriptor.id, { type: 'cover.close' })">
                 <StrokeIcon name="collapseDown" :size="18" />
               </button>
-              <!-- les RÉGLAGES (position perso, mode discret) poussés à droite, loin des manœuvres -->
+              <!-- the SETTINGS (custom position, discreet mode) pushed to the right, away from the maneuvers -->
               <span class="keys__gap" aria-hidden="true" />
-              <!-- la valeur ne tient pas dans une touche : elle passe par le libellé -->
+              <!-- the value does not fit in a button: it goes through the label -->
               <button v-if="entry.descriptor.capabilities.includes('preset')" type="button" class="key"
                       :disabled="!entry.state.available"
                       :title="presetClosure(entry.state as StateFor<'cover'>) !== undefined
@@ -239,7 +241,7 @@ function commit(id: string, v: number) {
                       @click="devices.sendCommand(entry.descriptor.id, { type: 'cover.preset' })">
                 <StrokeIcon name="crosshair" :size="18" />
               </button>
-              <!-- mode discret : une BASCULE (pas une manœuvre), allumée à la teinte d'accent -->
+              <!-- discreet mode: a TOGGLE (not a maneuver), lit in the accent tint -->
               <button v-if="entry.descriptor.capabilities.includes('quiet')" type="button" class="key key--toggle"
                       :disabled="!entry.state.available" :aria-pressed="!!(entry.state as StateFor<'cover'>).quiet"
                       :title="$t('cover.quietHint')" :aria-label="$t('cover.quiet')"
@@ -259,30 +261,30 @@ function commit(id: string, v: number) {
 .page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); }
 .head { display: flex; align-items: center; gap: 14px; }
 .count { font-size: 13px; }
-/* estompé à 0 plutôt que masqué : le compteur ne saute pas d'apparence à la découverte d'un plugin */
+/* dimmed to 0 rather than hidden: the counter does not jump in appearance when a plugin is discovered */
 .count--waiting[data-zero='1'] { opacity: .55; }
 .empty { padding: 24px; text-align: center; }
-/* Les touches sur leur propre ligne, SOUS le nom et à droite de la vignette (qui occupe la 1re
-   colonne sur les deux lignes, voir `CoverPill`) : trois boutons dans la 4e colonne écraseraient le
-   nom. La position se règle sur la vignette, dans le sens où l'ouvrant bouge : plus de curseur
-   horizontal, qui se lisait à l'envers d'un volet. */
-/* `min-width: 0` : sans lui, cinq touches élargiraient la colonne `1fr` au-delà de la carte (375 px) */
+/* The buttons on their own row, UNDER the name and to the right of the thumbnail (which occupies
+   the 1st column across both rows, see `CoverPill`): three buttons in the 4th column would crush
+   the name. The position is set on the thumbnail, in the direction the cover moves: no more
+   horizontal slider, which read backwards for a shutter. */
+/* `min-width: 0`: without it, five buttons would widen the `1fr` column beyond the card (375 px) */
 .controls { grid-column: 2 / -1; display: grid; margin-top: 8px; min-width: 0; }
-/* même empreinte que `.controls` : une ligne à part, pour ne pas écraser le nom de l'ouvrant */
+/* same footprint as `.controls`: a separate line, so as not to crush the cover's name */
 .assign { grid-column: 2 / -1; display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .assign__label { font-size: 12px; flex: 0 0 auto; }
 .assign__select { flex: 1 1 auto; min-width: 0; }
-/* pastille « sans ouverture » : même couleur que le badge « non placé » de `RoomBands` — un ouvrant
-   qui n'habille encore rien est le même genre d'inachevé */
+/* "no opening" pill: same color as the "not placed" badge of `RoomBands` — a cover
+   that still dresses nothing is the same kind of unfinished */
 .waiting-badge {
   display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; margin-right: 6px;
   font-size: 11px; font-weight: 600; color: #d38b22;
 }
 .dot { margin-right: 6px; color: var(--accent); }
-/* moteur injoignable : la vignette garde sa place et son dernier état connu, estompée comme les touches */
+/* motor unreachable: the thumbnail keeps its place and its last known state, dimmed like the buttons */
 .pill--off { opacity: .4; }
-/* retour à la ligne sur un téléphone : à côté de la vignette, cinq touches de 40 px n'y tiennent
-   plus, et les réglages passent sous les manœuvres. Cela ne dépend que de la largeur, jamais de l'état. */
+/* wrap on a phone: next to the thumbnail, five 40 px buttons no longer fit,
+   and the settings go under the maneuvers. This depends only on the width, never on the state. */
 .keys { display: flex; flex-wrap: wrap; gap: 6px; }
 .keys__gap { flex: 1 1 auto; }
 .key {

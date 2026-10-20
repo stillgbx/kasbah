@@ -1,7 +1,7 @@
 @import '@fontsource-variable/plus-jakarta-sans';
 @import './tokens.css';
 
-/* La page ne scrolle jamais ; chaque colonne gère son propre défilement. */
+/* The page never scrolls; each column handles its own scrolling. */
 html, body, #app { height: 100%; }
 body {
   margin: 0;
@@ -19,7 +19,7 @@ body {
 button, .v-btn, .v-chip, .v-slider, .v-switch, .touch-target { touch-action: manipulation; user-select: none; -webkit-user-select: none; }
 button { font-family: inherit; cursor: pointer; }
 
-/* ---- primitives du langage visuel ---- */
+/* ---- primitives of the visual language ---- */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
 .card--soft { background: var(--surface2); border: 0; }
 .section-label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
@@ -40,66 +40,66 @@ button { font-family: inherit; cursor: pointer; }
 .stat-value { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .big-value { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
 
-/* Vuetify recolorié sur les jetons. Les couleurs (accent, piste) passent par les props par défaut
-   (plugins/vuetify.ts) ; ne restent ici que les valeurs sans prop équivalente. Les styles Vuetify
-   vivent dans @layer vuetify-components : une règle non calquée suffit, sans !important. */
+/* Vuetify recolored on the tokens. The colors (accent, track) go through the default props
+   (plugins/vuetify.ts); only the values with no equivalent prop remain here. The Vuetify styles
+   live in @layer vuetify-components: an unlayered rule is enough, without !important. */
 .v-btn { text-transform: none; letter-spacing: 0; font-weight: 500; }
 .v-switch--inset .v-switch__track { opacity: 1; }
 .v-switch--inset .v-switch__thumb { background-color: var(--surface); }
 .v-switch--inset .v-selection-control--dirty .v-switch__thumb { background-color: var(--on-accent); }
 .v-overlay__scrim { background: rgba(0, 0, 0, .45); }
 
-/* Le canvas 3D capte tous les gestes (OrbitControls) : aucun défilement/zoom natif. */
+/* The 3D canvas captures all gestures (OrbitControls): no native scrolling/zoom. */
 .scene-canvas { touch-action: none; display: block; width: 100%; height: 100%; outline: none; }
 
-/* Couche des marqueurs DOM projetés (CSS2DRenderer) : contexte d'empilement isolé pour que le
-   z-index posé par le renderer ne passe jamais au-dessus des surcouches de l'app. */
+/* Layer of the projected DOM markers (CSS2DRenderer): isolated stacking context so that the
+   z-index set by the renderer never goes above the app's overlays. */
 .scene-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; isolation: isolate; }
-/* Pilule d'un marqueur : trois informations sur trois supports qui ne se marchent pas dessus.
-   - la CATÉGORIE (lumière, ouvrant, caméra, média) teinte le disque d'icône (`data-cat`) ;
-   - l'ÉTAT remplit le disque : cerné et pâle au repos, plein quand l'appareil est actif (`data-on`) ;
-   - la SÉLECTION prend la pilule entière sur l'accent (`data-sel`).
-   Le disque (24 px) est le point FIXE : l'ancre est un point de 0 × 0 et la pilule est décalée de
-   son centre, donc quand la distance retire le nom (`data-lod`) rien ne se déplace, le texte
-   disparaît vers la droite. */
+/* Pill of a marker: three pieces of information on three supports that do not step on each other.
+   - the CATEGORY (light, cover, camera, media) tints the icon disc (`data-cat`);
+   - the STATE fills the disc: outlined and pale at rest, solid when the device is active (`data-on`);
+   - the SELECTION takes the whole pill on the accent (`data-sel`).
+   The disc (24 px) is the FIXED point: the anchor is a 0 × 0 point and the pill is offset from
+   its center, so when distance removes the name (`data-lod`) nothing moves, the text
+   disappears to the right. */
 .marker-anchor {
   pointer-events: none; width: 0; height: 0;
-  /* Une étiquette se DÉPLACE à chaque image, au-dessus d'un canvas qui se redessine. Sans promotion,
-     chaque déplacement fait REPEINDRE la pilule entière — bordure, arrondi, ombre, disque de
-     catégorie, SVG de l'icône — plus la zone qu'elle libère. Promue en couche de composition, elle
-     n'est plus qu'une texture que le compositeur repose ailleurs : le déplacement ne coûte plus de
-     peinture. Sur une maison de quatre-vingts appareils, c'est ce poste qui plafonnait la vue Maison,
-     et il est invisible aux compteurs de three comme au temps passé dans `render()`.
-     `contain` borne en plus l'invalidation à la pilule : ce qu'elle fait ne concerne qu'elle. */
+  /* A label MOVES on every frame, above a canvas that redraws. Without promotion,
+     every move makes the whole pill REPAINT — border, rounding, shadow, category disc,
+     icon SVG — plus the area it frees. Promoted to a compositing layer, it is
+     no more than a texture that the compositor places elsewhere: moving no longer costs
+     any paint. On a house of eighty devices, this was the item that capped the House view,
+     and it is invisible to three's counters as well as to the time spent in `render()`.
+     `contain` also bounds the invalidation to the pill: what it does concerns only it. */
   contain: layout style;
 }
-/* La promotion n'est posée que PENDANT le mouvement (`data-moving`, `HouseScene.markLabelsMoving`).
-   Permanente, elle garderait quarante textures vivantes en permanence — la spécification le
-   déconseille explicitement, et c'est le genre de chose qui se paie en pression mémoire du
-   compositeur, donc en dégradation progressive plutôt qu'en coût fixe. */
+/* The promotion is only applied DURING the movement (`data-moving`, `HouseScene.markLabelsMoving`).
+   Permanent, it would keep forty textures alive all the time — the specification
+   explicitly advises against it, and it is the kind of thing that is paid for in compositor
+   memory pressure, so in gradual degradation rather than a fixed cost. */
 .scene-labels[data-moving='1'] .marker-anchor { will-change: transform; }
 .marker-pill {
   --cat: var(--cat-other);
   pointer-events: auto; position: absolute; left: 0; top: 0; height: 30px; padding: 0 10px 0 3px;
   border-radius: 999px; border: 1px solid var(--line);
-  /* PAS de `backdrop-filter` ici. Une pilule est posée sur un canvas qui se redessine à chaque image,
-     et un filtre de fond se recalcule dès que son fond change : soixante pilules sur la maison réelle,
-     c'était soixante floutages par image, payés par le compositeur — invisibles pour `renderer.info`
-     comme pour le coût CPU, et c'est ce qui plafonnait la fréquence de la vue Maison. Le fond passe
-     donc opaque : à cette taille, la différence ne se voit pas ; le prix, si. */
+  /* NO `backdrop-filter` here. A pill sits on a canvas that redraws every frame,
+     and a backdrop filter is recomputed as soon as its backdrop changes: sixty pills on the real
+     house meant sixty blurs per frame, paid by the compositor — invisible to `renderer.info`
+     as well as to CPU cost, and it is what capped the frame rate of the House view. The background
+     therefore goes opaque: at this size, the difference is not visible; the price is. */
   background: color-mix(in srgb, var(--surface) 92%, transparent); color: var(--muted);
   display: inline-flex; align-items: center; gap: 6px; font: 500 12px/1 var(--font); white-space: nowrap;
   transform-origin: 15px 15px; transform: translate(-15px, -15px);
   transition: background .15s, color .15s, transform .15s, box-shadow .15s;
 }
-/* Pilule bornée : un nom trop long (id d'un appareil dont le plugin ne dit rien, 50 caractères)
-   faisait une pilule plus large que la maison. Coupé aux points de suspension, le nom entier
-   reste dans l'infobulle et dans le panneau. */
+/* Bounded pill: a name that is too long (the id of a device whose plugin says nothing, 50
+   characters) made a pill wider than the house. Cut with an ellipsis, the full name stays in the
+   tooltip and in the panel. */
 .marker-pill { width: max-content; max-width: 210px; }
 .marker-pill__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* L'étiquette d'un incident du journal, au-dessus de son épingle : posée par la scène quand l'épingle
-   est ACTIVE seulement (dix-neuf étiquettes ouvertes se couvriraient). Même fond opaque que la pilule,
-   même raison : pas de flou de fond sur un canvas qui se redessine. */
+/* The label of a log incident, above its pin: set by the scene only when the pin is ACTIVE
+   (nineteen open labels would cover each other). Same opaque background as the pill,
+   same reason: no backdrop blur on a canvas that redraws. */
 .journal-pin {
   pointer-events: none; position: absolute; left: 0; top: 0; transform: translate(-50%, -100%);
   max-width: 240px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line);
@@ -121,12 +121,12 @@ button { font-family: inherit; cursor: pointer; }
 .marker-pill[data-on='1'] .marker-pill__icon { background: var(--cat); color: var(--surface); box-shadow: none; }
 .marker-pill[data-sel='1'] { background: var(--accent); color: var(--on-accent); border-color: transparent; transform: translate(-15px, -15px) scale(1.06); }
 .marker-pill[data-unavailable='1'] { --cat: var(--cat-other); opacity: .6; }
-/* mode « déplacer » : la pilule laisse passer le pointeur vers le canvas (glissement) */
+/* "move" mode: the pill lets the pointer through to the canvas (drag) */
 .marker-pill[data-moving='1'] { pointer-events: none; outline: 2px dashed var(--accent); outline-offset: 2px; }
 .marker-pill:hover { transform: translate(-15px, -15px) scale(1.04); }
-/* Niveau de détail selon la distance caméra (`HouseScene.updatePillLod`) : de loin l'icône seule
-   dans son disque, en vue d'ensemble un point de la couleur de sa catégorie. La sélection reste
-   entière. Le nom revient en se rapprochant, ou dans le panneau. */
+/* Level of detail by camera distance (`HouseScene.updatePillLod`): from afar the icon alone
+   in its disc, in the overview a dot of its category's color. The selection stays
+   whole. The name comes back when getting closer, or in the panel. */
 .scene-labels[data-lod='icon'] .marker-pill:not([data-sel='1']),
 .scene-labels[data-lod='dot'] .marker-pill:not([data-sel='1']) { padding-right: 3px; gap: 0; }
 .scene-labels[data-lod='icon'] .marker-pill:not([data-sel='1']) .marker-pill__label,
@@ -138,13 +138,14 @@ button { font-family: inherit; cursor: pointer; }
 
 * { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 
-/* En-tête COLLANT d'un panneau (fil d'Ariane + titre) : il reste en vue quand la liste défile.
-   Il reprend le verre du panneau (même teinte, flou de ce qui passe dessous) et déborde des marges du
-   conteneur de défilement pour couvrir toute sa largeur ; sous lui, un fondu de 18 px sur lequel les
-   lignes s'effacent au lieu d'être tranchées. Ses enfants gardent leur mise en page (colonne, 20 px).
-   Piège : Chrome cale la BOÎTE DE MARGE d'un élément collant, pas sa bordure. Avec une marge haute
-   négative de P et `top: 0`, la bordure se calait donc P px SOUS le haut du conteneur et le contenu
-   défilé passait au-dessus de l'en-tête. `top: -P` compense exactement : la bordure se cale au bord. */
+/* STICKY header of a panel (breadcrumb + title): it stays in view when the list scrolls.
+   It takes up the panel's glass (same tint, blur of what passes underneath) and overflows the
+   margins of the scroll container to cover its whole width; under it, an 18 px fade on which the
+   rows fade out instead of being cut off. Its children keep their layout (column, 20 px).
+   Pitfall: Chrome sticks the MARGIN BOX of a sticky element, not its border. With a negative top
+   margin of P and `top: 0`, the border therefore stuck P px BELOW the top of the container and the
+   scrolled content passed above the header. `top: -P` compensates exactly: the border sticks to
+   the edge. */
 .panel-head {
   position: sticky; top: calc(-1 * var(--panel-pad-top, 20px)); z-index: 2;
   display: flex; flex-direction: column; gap: 20px;

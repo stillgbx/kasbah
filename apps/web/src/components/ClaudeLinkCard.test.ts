@@ -5,8 +5,8 @@ import { setTransport } from '../api'
 import type { ClaudeAccount, Transport } from '../api/transport'
 import ClaudeLinkCard from './ClaudeLinkCard.vue'
 
-// La carte du plugin Claude : dire quel forfait sert (le sien, celui de la maison, la connexion du
-// serveur) et ranger le jeton de `claude setup-token`, qui ne s'affiche jamais une fois envoyé.
+// The Claude plugin card: say which plan is in use (the user's own, the house's, the server's
+// connection) and store the token from `claude setup-token`, which is never displayed once sent.
 
 function fake(account: ClaudeAccount) {
   const claudeSetToken = vi.fn(async () => ({ ...account, savedAt: Date.UTC(2026, 9, 7) }))
@@ -18,14 +18,14 @@ describe('ClaudeLinkCard', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
   afterEach(() => { setTransport(null) })
 
-  it('dit le repli d’un compte sans jeton : la maison si elle en a un', async () => {
+  it('states the fallback for an account without a token: the house one if it has one', async () => {
     fake({ user: 'lou', savedAt: null, house: true })
     const w = mount(ClaudeLinkCard)
     await flushPromises()
     expect(w.find('.cl__status').text()).toBe('Aucun jeton pour lou. Le forfait de la maison sert en attendant.')
   })
 
-  it('envoie un jeton bien formé, puis vide le champ', async () => {
+  it('sends a well-formed token, then clears the field', async () => {
     const claudeSetToken = fake({ user: null, savedAt: null, house: false })
     const w = mount(ClaudeLinkCard)
     await flushPromises()

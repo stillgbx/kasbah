@@ -3,18 +3,18 @@ import { useI18n } from 'vue-i18n'
 import type { YtmusicAlbum, YtmusicExploreShelf, YtmusicPlaylist, YtmusicTrack } from '../../api/transport'
 import MusicTile from './MusicTile.vue'
 
-// Rangées de tuiles d'une page YouTube Music (une catégorie de genre ou d'ambiance, les nouveautés) :
-// titres jouables (la rangée devient la file), playlists et albums qui s'ouvrent ou se jouent d'un
-// geste. Une rangée sans titre (la grille des playlists phares des nouveautés) prend le nom de ce
-// qu'elle contient. `grid` : les tuiles passent à la ligne au lieu de défiler (les nouveautés).
+// Rows of tiles from a YouTube Music page (a genre or mood category, the new releases):
+// playable tracks (the row becomes the queue), playlists and albums that open or play with one
+// gesture. A row without a title (the grid of featured playlists in the new releases) takes the
+// name of what it contains. `grid`: the tiles wrap instead of scrolling (the new releases).
 defineProps<{
   shelves: YtmusicExploreShelf[]
   playTarget: boolean
-  /** Titre en cours d'envoi. */
+  /** Track being sent. */
   playingId: string | null
-  /** Playlist ou album en cours d'envoi. */
+  /** Playlist or album being sent. */
   playingCollection: string | null
-  /** Tuiles en grille (passage à la ligne) plutôt qu'en rangée défilante. */
+  /** Tiles in a grid (wrapping) rather than in a scrolling row. */
   grid?: boolean
 }>()
 defineEmits<{
@@ -58,7 +58,7 @@ function shelfTitle(sh: YtmusicExploreShelf): string {
 .shelf__head { display: flex; align-items: baseline; justify-content: space-between; margin: 0 4px 8px; }
 .section-label { margin: 0 4px; }
 .shelf__row { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x proximity; padding: 2px 4px 8px; }
-/* grille : même largeur de tuile (128 px), autant de colonnes que la largeur en tient, alignées à gauche */
+/* grid: same tile width (128 px), as many columns as the width holds, left-aligned */
 .shelf__row--grid { display: grid; grid-template-columns: repeat(auto-fill, 128px); gap: 18px 14px; overflow: visible; scroll-snap-type: none; }
 .shelf__row::-webkit-scrollbar { height: 6px; }
 .shelf__row::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }

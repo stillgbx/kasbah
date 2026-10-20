@@ -5,10 +5,11 @@ import { getTransport } from '../api'
 import { useNotificationsStore } from '../stores/notifications'
 import StrokeIcon from './ui/StrokeIcon.vue'
 
-// Carte du plugin Transcription (Réglages → Plugins) : la voix des réponses parlées du compte courant,
-// la sienne une fois connecté (adresse publique), celle de la maison sur le réseau local. La liste vient
-// du fournisseur (les voix créées dans VoiceStudio) ; sans choix, un compte prend la voix de la maison,
-// la maison `TTS_VOICE`. Le choix est gardé par le serveur et vaut dès la réponse suivante.
+// Transcription plugin card (Settings → Plugins): the voice of the spoken replies of the current
+// account, its own once connected (public address), the house's on the local network. The list
+// comes from the provider (the voices created in VoiceStudio); without a choice, an account takes
+// the house voice, the house `TTS_VOICE`. The choice is kept by the server and applies from the
+// next reply.
 
 const notifications = useNotificationsStore()
 const { t } = useI18n()
@@ -16,22 +17,28 @@ const { t } = useI18n()
 const voices = ref<{ id: string; name: string; language?: string }[]>([])
 const voice = ref<string | null>(null)
 const defaultVoice = ref<string | null>(null)
-/** Le compte connecté (`null` : la maison, sur le réseau local) et la voix de la maison, qui lui sert sans choix. */
+/**
+ * The connected account (`null`: the house, on the local network) and the house voice, which it
+ * uses when no choice is made.
+ */
 const user = ref<string | null>(null)
 const houseVoice = ref<string | null>(null)
-/** `null` : chargé ; sinon la raison (fournisseur sans liste de voix, injoignable…). */
+/** `null`: loaded; otherwise the reason (provider without a voice list, unreachable…). */
 const listError = ref<string | null>(null)
 const loaded = ref(false)
 const busy = ref(false)
 
-/** Une voix retenue que le fournisseur ne propose plus (supprimée dans VoiceStudio) reste affichée. */
+/** A selected voice that the provider no longer offers (deleted in VoiceStudio) stays displayed. */
 const options = computed(() => {
   const list = voices.value.map((v) => ({ id: v.id, label: v.language ? `${v.name} (${v.language})` : v.name }))
   if (voice.value && !list.some((o) => o.id === voice.value)) list.push({ id: voice.value, label: t('voice.card.missing', { id: voice.value }) })
   return list
 })
 
-/** La première option : ce qui sert sans choix, la voix de la maison pour un compte, `TTS_VOICE` pour la maison. */
+/**
+ * The first option: what is used without a choice, the house voice for an account, `TTS_VOICE`
+ * for the house.
+ */
 const fallbackLabel = computed(() => {
   if (user.value === null) return t('voice.card.default', { voice: defaultVoice.value ?? '—' })
   const house = houseVoice.value
@@ -72,7 +79,7 @@ async function choose(id: string) {
         <option v-for="o in options" :key="o.id" :value="o.id">{{ o.label }}</option>
       </select>
     </label>
-    <!-- place réservée : l'explication ou l'erreur occupe la même ligne -->
+    <!-- reserved space: the explanation or the error takes the same line -->
     <p class="muted small tl__hint">{{ listError ? $t('voice.card.noList', { message: listError }) : user === null ? $t('voice.card.hint') : $t('voice.card.hintUser', { user }) }}</p>
   </div>
 </template>

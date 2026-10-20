@@ -8,17 +8,17 @@ import { useNotificationsStore } from '../stores/notifications'
 import { usePluginsStore } from '../stores/plugins'
 import StrokeIcon from './ui/StrokeIcon.vue'
 
-// Liaison du compte iRobot. Même forme que la carte Renault — un vrai formulaire, faute d'OAuth —
-// mais le propos est différent et mérite d'être dit à l'utilisateur : ici le mot de passe ne sert
-// qu'à obtenir le mot de passe LOCAL de chaque robot. Une fois relié, plus rien ne sort du réseau
-// de la maison : le robot pousse son état lui-même, sur son propre courtier MQTT.
+// Linking of the iRobot account. Same shape as the Renault card — a real form, for lack of OAuth —
+// but the point is different and worth telling the user: here the password is only used to obtain
+// the LOCAL password of each robot. Once linked, nothing leaves the house network anymore: the
+// robot pushes its state itself, on its own MQTT broker.
 //
-// Pourquoi ce détour plutôt qu'un appui sur le bouton du robot : les Roomba rendaient jadis ce mot
-// de passe en local, le firmware du parc ne le fait plus. C'est ce que dit `intro`.
+// Why this detour rather than pressing the button on the robot: Roombas used to hand out this
+// password locally, the firmware of the device set no longer does. That is what `intro` says.
 //
-// La liste des robots reste AFFICHÉE même quand aucun ne répond sur le réseau : le compte fait foi
-// pour l'existence, le réseau seulement pour la joignabilité. Chaque ligne garde donc une place
-// fixe, et c'est la pastille qui change — rien ne se déplace quand un robot s'allume ou s'éteint.
+// The list of robots stays DISPLAYED even when none answers on the network: the account is the
+// authority on existence, the network only on reachability. Each row therefore keeps a fixed
+// place, and it is the pill that changes — nothing moves when a robot turns on or off.
 
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()
@@ -45,7 +45,7 @@ async function link() {
   busy.value = true
   try {
     status.value = await getTransport().irobotLogin({ email: email.value.trim(), password: password.value })
-    // le mot de passe a servi, il n'a plus rien à faire en mémoire
+    // the password has been used, it has no business staying in memory
     password.value = ''
     notifications.success(t('settings.irobot.linked', { n: status.value.robots.length }, status.value.robots.length))
     await devices.refreshHealth()
@@ -114,7 +114,7 @@ async function unlink() {
 .irb__text { margin: 0; font-size: 13px; }
 .irb__done { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--accent); }
 .irb__robots { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; width: 100%; }
-/* rangée à gabarit FIXE : la pastille change, la ligne ne bouge pas quand un robot s'allume */
+/* FIXED-template row: the pill changes, the row does not move when a robot turns on or off */
 .irb__robot { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 8px; font-size: 13px; }
 .irb__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
 .irb__dot[data-on='1'] { background: var(--accent); }

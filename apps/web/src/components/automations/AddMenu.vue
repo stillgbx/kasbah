@@ -1,8 +1,8 @@
 <script setup lang="ts" generic="T extends string">
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Bouton « + Ajouter » qui ouvre une liste de choix — l'idiome du menu d'ajout des places
-// (`ParkingRows.vue`). Sert aux conditions, au groupe « l'un de » et aux actions de l'éditeur.
+// "+ Add" button that opens a list of choices — the idiom of the add menu of the spots
+// (`ParkingRows.vue`). Used for the conditions, the "Any of these" group and the editor's actions.
 defineProps<{ label: string; items: { value: T; title: string }[]; disabled?: boolean }>()
 const emit = defineEmits<{ pick: [value: T] }>()
 </script>

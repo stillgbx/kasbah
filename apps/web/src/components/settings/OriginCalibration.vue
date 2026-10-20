@@ -15,13 +15,14 @@ import { useSettingsStore } from '../../stores/settings'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Caler la maison sur la photo : l'origine GPS (`origin`) et le cap se règlent à l'œil, par-dessus
-// l'orthophoto : le contour du dernier étage (le toit que montre la photo), les pièces du rez-de-chaussée
-// (une annexe, une terrasse), et la pelouse relevée par une tondeuse, posée sur sa base — elle est AU
-// SOL, quand un toit photographié d'avion est un peu déporté par la perspective. Le contour d'un
-// rez-de-chaussée n'est pas tracé : c'est une enveloppe pour le toit, plus grande que la maison. Les flèches font glisser la maison en mètres du MONDE (le
-// nord est en haut de la photo), la rotation se fait autour du centre de la maison — tourner autour du
-// 0;0, un coin, la ferait partir de côté. Rien n'est écrit avant « Enregistrer ».
+// Aligning the house on the photo: the GPS origin (`origin`) and the heading are tuned by eye,
+// over the orthophoto: the outline of the top floor (the roof the photo shows), the ground-floor
+// rooms (an annex, a terrace), and the lawn surveyed by a mower, set on its base — it is ON THE
+// GROUND, whereas a roof photographed from a plane is slightly shifted by perspective. The outline
+// of a ground floor is not drawn: it is an envelope for the roof, larger than the house. The
+// arrows slide the house in WORLD meters (north is at the top of the photo), the rotation is done
+// around the center of the house — rotating around 0;0, a corner, would make it drift sideways.
+// Nothing is written before "Save".
 const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [open: boolean] }>()
 const house = useHouseStore()
@@ -31,8 +32,8 @@ const settings = useSettingsStore()
 const { t, locale } = useI18n()
 const phone = useMediaQuery('(max-width: 599px)')
 
-/** Les pas du calage : en mètres pour les flèches, en degrés pour la rotation (même chiffre). Le fin
- * sert au dernier ajustement, quand le contour est déjà sur le toit. */
+/** The calibration steps: in meters for the arrows, in degrees for the rotation (same number). The
+ * fine one is for the last adjustment, when the outline is already on the roof. */
 const STEPS = ['0.1', '0.5', '2'] as const
 type Step = typeof STEPS[number]
 const stepKey = ref<Step>('0.5')
@@ -43,7 +44,7 @@ const draft = ref<GeoOrigin | null>(null)
 const saving = ref(false)
 const mode = ref<MapMode>('satellite')
 
-/** Ce que la photo montre de la maison : le toit du dernier niveau qui a un contour, les pièces du plus bas. */
+/** What the photo shows of the house: the roof of the last level that has an outline, the rooms of the lowest. */
 const shape = computed(() => {
   const h = house.house
   if (!h?.levels.length) return null
@@ -51,9 +52,9 @@ const shape = computed(() => {
   const ground = levels[0]!
   return { roof: [...levels].reverse().find((l) => l.outline)?.outline ?? null, rooms: h.rooms.filter((r) => r.levelId === ground.id).map((r) => r.polygon) }
 })
-/** Les tondeuses qui ont une carte du terrain et une base posée : leur pelouse se pose sur la photo. */
+/** The mowers that have a map of the terrain and a placed base: their lawn is set on the photo. */
 const mowers = computed(() => devices.list.filter((e) => e.state.kind === 'mower' && e.descriptor.capabilities.includes('site_map') && house.dockFor(e.descriptor.id)))
-/** Le centre de la maison (repère local), pivot de la rotation. */
+/** The center of the house (local frame), pivot of the rotation. */
 const pivot = computed<Vec2>(() => {
   const pts = shape.value ? [...(shape.value.roof ?? []), ...shape.value.rooms.flat()] : []
   if (!pts.length) return [0, 0]
@@ -66,7 +67,7 @@ const changed = computed(() => {
   return !!o && !!d && (o.lat !== d.lat || o.lon !== d.lon || o.heading !== d.heading)
 })
 const fmt = (v: number, digits = 1) => v.toLocaleString(locale.value, { minimumFractionDigits: digits, maximumFractionDigits: digits })
-/** Ce que la maison a fait depuis l'origine enregistrée : le glissement de SON CENTRE, et la rotation. */
+/** What the house has done since the saved origin: the slide of ITS CENTER, and the rotation. */
 const delta = computed(() => {
   const o = house.house?.origin, d = draft.value
   if (!o || !d) return ''
@@ -97,13 +98,13 @@ async function save() {
   if (ok) emit('update:modelValue', false)
 }
 
-// ---- la carte ----------------------------------------------------------------------------------
+// ---- the map -----------------------------------------------------------------------------------
 const container = ref<HTMLDivElement | null>(null)
 let map: MlMap | null = null
 let observer: ResizeObserver | null = null
 
 type OverlayData = Parameters<GeoJSONSource['setData']>[0]
-/** La maison, le terrain, les places et la pelouse des tondeuses, posés par l'origine EN COURS. */
+/** The house, the terrain, the spots and the mowers' lawn, set by the CURRENT origin. */
 function overlay(): OverlayData {
   const o = draft.value, h = house.house, g = shape.value
   if (!o || !h || !g) return { type: 'FeatureCollection', features: [] }
@@ -135,7 +136,7 @@ function addOverlay(): void {
 function refresh(): void { (map?.getSource('calib') as GeoJSONSource | undefined)?.setData(overlay()) }
 
 const planStyles = new Map<string, Promise<StyleSpecification>>()
-// `diff: false` : un changement de style « en différence » retire nos calques sans émettre `style.load` (voir OriginPicker)
+// `diff: false`: a "diff" style change removes our layers without emitting `style.load` (see OriginPicker)
 const FULL = { diff: false } as const
 async function applyStyle(): Promise<void> {
   if (!map) return
@@ -164,7 +165,7 @@ function mountMap(): void {
 }
 function unmountMap(): void { observer?.disconnect(); observer = null; map?.remove(); map = null }
 
-// une boîte rouverte repart de l'origine enregistrée ; la carte se monte une fois la boîte affichée
+// a reopened dialog starts again from the saved origin; the map is mounted once the dialog is shown
 watch(() => props.modelValue, (open) => {
   if (open) {
     draft.value = house.house ? { ...house.house.origin } : null; mode.value = 'satellite'; stepKey.value = '0.5'
@@ -202,7 +203,7 @@ onBeforeUnmount(unmountMap)
             <span v-if="mowers.length"><i class="oc__swatch oc__swatch--lawn" />{{ $t('settings.calibration.lawn') }}</span>
           </div>
         </div>
-        <!-- commandes à place fixe : la valeur vit dans une boîte de largeur constante, rien ne bouge sous le doigt -->
+        <!-- fixed-place controls: the value lives in a constant-width box, nothing moves under the finger -->
         <div class="oc__controls">
           <div class="oc__step">
             <span class="section-label">{{ $t('settings.calibration.step') }}</span>
@@ -221,7 +222,7 @@ onBeforeUnmount(unmountMap)
             <button type="button" class="pill pill--sm" :aria-label="$t('settings.calibration.turnRight')" @click="turn(1)"><StrokeIcon name="rotateRight" :size="14" /></button>
           </div>
         </div>
-        <!-- sa propre ligne : sa longueur change à chaque clic, elle ne doit rien faire passer à la ligne -->
+        <!-- its own line: its length changes with every click, it must make nothing wrap -->
         <div class="mono muted oc__delta">{{ delta }}</div>
       </div>
 
@@ -259,7 +260,7 @@ onBeforeUnmount(unmountMap)
 .oc__swatch--lawn { background: #9be15d; }
 .oc__swatch--parking { background: #ffffff; outline: 1px solid var(--line); }
 .oc__controls { flex: none; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
-/* la croix des quatre directions : nord en haut, comme la photo */
+/* the cross of the four directions: north at the top, like the photo */
 .oc__pad { display: grid; grid-template-columns: repeat(3, auto); grid-template-areas: '. n .' 'w . e' '. s .'; gap: 2px; }
 .oc__n { grid-area: n; } .oc__w { grid-area: w; } .oc__e { grid-area: e; } .oc__s { grid-area: s; }
 .oc__turn, .oc__step { display: inline-flex; align-items: center; gap: 6px; }

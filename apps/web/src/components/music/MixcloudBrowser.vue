@@ -11,32 +11,32 @@ import GenrePills from './GenrePills.vue'
 import MusicItemRow from './MusicItemRow.vue'
 import MusicTile from './MusicTile.vue'
 
-// Source « Mixcloud » de la page Musique (plugin `mixcloud`). Le compte se relie par son NOM
-// d'utilisateur (l'API publique ne demande rien d'autre ; relier, changer, délier : dans la fiche du
-// plugin, Réglages → Plugins). L'accueil reprend celui du site, en rangées de tuiles recomposées par le
-// serveur à partir des écoutes publiques ; les autres listes sont celles du profil —
-// nouveautés des comptes suivis, favoris, écoutes, ses mix, ses playlists, ses suivis — et la
-// recherche. Jouer un mix passe par la page (`play`), qui sait l'envoyer à l'enceinte ou le lire
-// ici ; la liste d'où il vient devient la file. Un mix écouté en partie se reprend où on l'a laissé.
-// Même gabarit que les autres sources : rien ne bouge en changeant de source.
+// "Mixcloud" source of the Music page (`mixcloud` plugin). The account is linked by its user NAME
+// (the public API asks for nothing else; link, change, unlink: in the plugin sheet, Settings →
+// Plugins). The home reuses the site's, in rows of tiles recomposed by the server from public
+// listens; the other lists are those of the profile — new releases from followed accounts,
+// favorites, listens, its mixes, its playlists, its follows — and the search. Playing a mix goes
+// through the page (`play`), which knows how to send it to the speaker or play it here; the list
+// it comes from becomes the queue. A partly-listened mix resumes where it was left.
+// Same template as the other sources: nothing moves when changing source.
 //
-// Le genre est un critère de choix d'une émission : chaque mix montre les siens en pastilles, et une
-// rangée de filtres se compose des genres des mix reçus (les plus fréquents d'abord). Une pastille a
-// trois états — neutre, gardé, écarté : un mix reste s'il porte au moins un genre gardé (ou si aucun
-// ne l'est) et aucun genre écarté. Le choix est retenu d'une visite à l'autre.
+// The genre is a criterion for choosing a show: each mix shows its own as pills, and a row of
+// filters is made of the genres of the mixes received (most frequent first). A pill has three
+// states — neutral, kept, excluded: a mix stays if it carries at least one kept genre (or if none
+// is) and no excluded genre. The choice is remembered from one visit to the next.
 
 type Tab = 'home' | MixcloudList | 'playlists' | 'following'
-/** Ce qu'on regarde dans l'onglet : la liste elle-même, ou une playlist / un compte ouverts depuis lui. */
+/** What we are looking at in the tab: the list itself, or a playlist / an account opened from it. */
 type Drill = { kind: 'playlist'; key: string; name: string } | { kind: 'user'; username: string; name: string } | null
 
 const props = defineProps<{
-  /** La piste que joue le lecteur choisi, pour la signaler dans les listes. */
+  /** The track the chosen player is playing, to flag it in the lists. */
   nowPlaying: { source: string; id: string } | null
-  /** Elle joue (le point pulse) ; en pause, il reste immobile. */
+  /** It is playing (the dot pulses); when paused, it stays still. */
   pulsing: boolean
-  /** La piste en cours d'envoi (sablier sur sa ligne). */
+  /** The track being sent (hourglass on its row). */
   playingId: string | null
-  /** Un lecteur choisi peut recevoir une lecture. */
+  /** A chosen player can receive a playback. */
   canPlay: boolean
 }>()
 const emit = defineEmits<{ play: [tracks: MusicTrack[], index: number] }>()
@@ -62,9 +62,9 @@ const busy = ref(false)
 const more = ref(false)
 const failed = ref(false)
 
-// ---- filtre par genre ------------------------------------------------------------------------------
+// ---- genre filter ----------------------------------------------------------------------------------
 type GenreState = 'on' | 'off'
-/** Les genres choisis, avec leur nom : ils restent dans la rangée même absents des mix affichés. */
+/** The chosen genres, with their name: they stay in the row even when absent from the displayed mixes. */
 const genreChoice = useLocalStorage<Record<string, { name: string; state: GenreState }>>('kasbah.mixcloud.genres', {})
 const kept = computed(() => new Set(Object.entries(genreChoice.value).filter(([, g]) => g.state === 'on').map(([slug]) => slug)))
 const ruledOut = computed(() => new Set(Object.entries(genreChoice.value).filter(([, g]) => g.state === 'off').map(([slug]) => slug)))
@@ -82,7 +82,7 @@ function cycleGenre(g: { slug: string; name: string }) {
   else choice[g.slug] = { name: g.name, state: next }
   genreChoice.value = choice
 }
-/** Le fondu de la rangée : de chaque côté où il reste des genres à voir. */
+/** The row's fade: on each side where genres remain to be seen. */
 const genresList = ref<HTMLElement | null>(null)
 const genresFade = ref({ start: false, end: false })
 function measureGenres() {
@@ -96,7 +96,7 @@ onMounted(() => {
   watch(genresList, (el) => { genresObserver?.disconnect(); if (el) genresObserver?.observe(el) }, { immediate: true })
 })
 onBeforeUnmount(() => genresObserver?.disconnect())
-/** La rangée défile à l'horizontale : la molette d'une souris (verticale) la fait avancer. */
+/** The row scrolls horizontally: a mouse wheel (vertical) makes it advance. */
 function wheelGenres(e: WheelEvent) {
   const el = e.currentTarget as HTMLElement
   if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || el.scrollWidth <= el.clientWidth) return
@@ -109,7 +109,7 @@ function genreLabel(slug: string, name: string): string {
 }
 
 const linked = computed(() => !!status.value?.username)
-/** Un utilisateur connecté sans nom Mixcloud : recherche seule, rien de retenu ; la maison, elle, doit relier. */
+/** A signed-in user without a Mixcloud name: search only, nothing kept; the house, for its part, must link. */
 const anonymous = computed(() => !linked.value && !!status.value?.account)
 const tabOptions = computed(() => [
   { value: 'home' as const, label: t('mixcloud.tabHome') },
@@ -120,9 +120,9 @@ const tabOptions = computed(() => [
   { value: 'playlists' as const, label: t('mixcloud.tabPlaylists') },
   { value: 'following' as const, label: t('mixcloud.tabFollowing') },
 ])
-/** On montre des mix (et pas une liste de playlists ou de comptes). */
+/** We are showing mixes (and not a list of playlists or accounts). */
 const showsMixes = computed(() => searching.value || !!drill.value || (linked.value && tab.value !== 'playlists' && tab.value !== 'following' && tab.value !== 'home'))
-/** L'accueil (ses rangées), hors recherche et hors playlist / compte ouverts ; il n'y en a pas en anonyme. */
+/** The home (its rows), outside search and outside an opened playlist / account; none when anonymous. */
 const showsHome = computed(() => linked.value && tab.value === 'home' && !searching.value && !drill.value)
 
 function shelfTitle(s: MixcloudHomeSection): string {
@@ -134,20 +134,20 @@ function shelfTitle(s: MixcloudHomeSection): string {
     case 'popular': return t('mixcloud.homePopular', { genre: s.genre.name })
   }
 }
-/** Les mix que l'écran reçoit (avant filtre) : la rangée des genres se compose d'eux. */
+/** The mixes the screen receives (before filter): the genre row is composed from them. */
 const receivedMixes = computed<MixcloudMix[]>(() => (showsHome.value
   ? sections.value.flatMap((s) => (s.kind === 'users' ? [] : s.items))
   : showsMixes.value ? mixes.value : []))
 /**
- * Les genres des mix reçus (avant filtre), les plus fréquents en tête — un mix présent dans plusieurs
- * rangées ne compte qu'une fois ; puis les genres choisis absents de ce qu'on reçoit.
+ * The genres of the mixes received (before filter), most frequent first — a mix present in several
+ * rows counts only once; then the chosen genres absent from what we receive.
  */
 const genreChips = computed(() => {
   const count = new Map<string, { name: string; n: number }>()
   const seen = new Set<string>()
   for (const m of receivedMixes.value) {
     for (const g of m.genres ?? []) {
-      // un même mix revient dans plusieurs rangées de l'accueil : il ne compte qu'une fois
+      // the same mix comes back in several rows of the home: it counts only once
       if (seen.has(`${m.key}|${g.slug}`)) continue
       seen.add(`${m.key}|${g.slug}`)
       const c = count.get(g.slug)
@@ -155,15 +155,15 @@ const genreChips = computed(() => {
       else count.set(g.slug, { name: g.name, n: 1 })
     }
   }
-  // l'ordre ne dépend pas du choix : une pastille ne se déplace pas quand on la touche
+  // the order does not depend on the choice: a pill does not move when you touch it
   const state = (slug: string): GenreState | 'neutral' => genreChoice.value[slug]?.state ?? 'neutral'
   const received = [...count].sort((a, b) => b[1].n - a[1].n).map(([slug, c]) => ({ slug, name: c.name, state: state(slug) }))
   const absent = Object.entries(genreChoice.value).filter(([slug]) => !count.has(slug)).map(([slug, g]) => ({ slug, name: g.name, state: g.state }))
   return [...received, ...absent]
 })
-// les genres arrivent (ou changent d'onglet) : le fondu suit
+// the genres arrive (or change tab): the fade follows
 watch(genreChips, () => void nextTick(measureGenres))
-/** Le filtre ne vaut que là où il y a des mix (pas sur les playlists ni les suivis) : sa rangée y reste, grisée. */
+/** The filter only applies where there are mixes (not on playlists or follows): its row stays there, greyed out. */
 const filterable = computed(() => showsHome.value || showsMixes.value)
 const shownMixes = computed(() => mixes.value.filter(keep))
 const shownSections = computed(() => sections.value
@@ -187,13 +187,13 @@ function clock(s: number): string {
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`
 }
 function meta(m: MixcloudMix): string {
-  // les genres ont leurs pastilles, sous la méta
+  // the genres have their pills, under the meta
   const head = m.resumeS ? t('mixcloud.resumeAt', { time: clock(m.resumeS) }) : m.user.name
   return [head, m.resumeS ? m.user.name : ''].filter(Boolean).join(' · ')
 }
 const isPlaying = (m: MixcloudMix) => props.nowPlaying?.source === 'mixcloud' && props.nowPlaying.id === m.key
 
-/** Un mix comme piste du lecteur commun ; sa reprise part avec lui. */
+/** A mix as a track of the shared player; its resume goes with it. */
 function toTrack(m: MixcloudMix, withResume: boolean): MusicTrack {
   return {
     source: 'mixcloud',
@@ -205,14 +205,14 @@ function toTrack(m: MixcloudMix, withResume: boolean): MusicTrack {
     ...(withResume && m.resumeS ? { startS: m.resumeS } : {}),
   }
 }
-/** La file = la liste telle qu'on la voit, filtre compris. */
+/** The queue = the list as we see it, filter included. */
 function play(m: MixcloudMix, list: MixcloudMix[] = shownMixes.value) {
   const at = Math.max(0, list.findIndex((x) => x.key === m.key))
-  // seule la piste lancée reprend : les suivantes de la file partent du début
+  // only the launched track resumes: the following ones in the queue start from the beginning
   emit('play', list.map((x, i) => toTrack(x, i === at)), at)
 }
 async function restart(m: MixcloudMix) {
-  try { await getTransport().mixcloudForgetResume(m.key) } catch { /* rejouer du début quand même */ }
+  try { await getTransport().mixcloudForgetResume(m.key) } catch { /* play from the start anyway */ }
   mixes.value = mixes.value.map((x) => (x.key === m.key ? { ...x, resumeS: undefined } : x))
   play({ ...m, resumeS: undefined })
 }
@@ -310,7 +310,7 @@ onMounted(async () => {
   <div class="mc">
     <p v-if="!ready" class="muted empty">{{ $t('common.loading') }}</p>
 
-    <!-- relier : un nom d'utilisateur, rien d'autre -->
+    <!-- link: a user name, nothing else -->
     <form v-else-if="!linked && !anonymous" class="link" @submit.prevent="link">
       <h2 class="link__title">{{ $t('mixcloud.linkTitle') }}</h2>
       <p class="muted link__hint">{{ $t('mixcloud.linkHint') }}</p>
@@ -331,13 +331,13 @@ onMounted(async () => {
           </button>
         </div>
       </form>
-      <!-- onglets : leur place gardée pendant une recherche (grisés) ; en anonyme, rien de personnel à montrer -->
+      <!-- tabs: their place kept during a search (greyed out); anonymous, nothing personal to show -->
       <div v-if="linked" class="tabs">
         <div :class="{ 'is-dim': searching }">
           <Segmented v-model="tab" dense :options="tabOptions" :label="$t('mixcloud.source')" />
         </div>
       </div>
-      <!-- genres : toujours à sa place, grisée là où il n'y a pas de mix à filtrer -->
+      <!-- genres: always in place, greyed out where there are no mixes to filter -->
       <div class="genres" :class="{ 'is-dim': !filterable }">
         <span class="genres__label muted">{{ $t('mixcloud.genres') }}</span>
         <div ref="genresList" class="genres__list" :data-fade-start="genresFade.start ? '1' : '0'" :data-fade-end="genresFade.end ? '1' : '0'"
@@ -347,13 +347,13 @@ onMounted(async () => {
             <span>{{ g.name }}</span>
           </button>
         </div>
-        <!-- pas une pastille : un lien discret avec son icône, qu'on ne prend pas pour un genre de plus -->
+        <!-- not a pill: a discreet link with its icon, not to be mistaken for one more genre -->
         <button type="button" class="genres__reset" :class="{ 'is-hidden': !filtering }" :tabindex="filtering ? 0 : -1" @click="genreChoice = {}">
           <StrokeIcon name="undo" :size="14" />
           <span>{{ $t('mixcloud.genresReset') }}</span>
         </button>
       </div>
-      <!-- « Retour » d'une playlist ou d'un compte ouverts, place gardée hors recherche -->
+      <!-- "Back" from an opened playlist or account, place kept outside search -->
       <div v-if="drill && !searching" class="back-row">
         <button type="button" class="pill" @click="loadTab">
           <StrokeIcon name="back" :size="16" />
@@ -363,8 +363,8 @@ onMounted(async () => {
       </div>
 
       <div class="mc__scroll">
-        <!-- anonyme, hors recherche : de quoi relier son compte pour retrouver accueil, favoris et reprises ;
-             le champ avant l'explication, la zone étant basse sur un téléphone -->
+        <!-- anonymous, outside search: what you need to link your account to get back home, favorites
+             and resumes; the field before the explanation, the area being short on a phone -->
         <form v-if="anonymous && !searching && !drill" class="link" @submit.prevent="link">
           <h2 class="link__title">{{ $t('mixcloud.linkTitle') }}</h2>
           <div class="link__row">
@@ -414,7 +414,7 @@ onMounted(async () => {
                               :play-label="$t('mixcloud.play', { name: m.name })" @play="play(m)">
                   <template #extra><GenrePills :genres="m.genres ?? []" :kept="kept" /></template>
                 </MusicItemRow>
-                <!-- place toujours gardée : une ligne sans reprise ne se décale pas -->
+                <!-- place always kept: a row without a resume does not shift -->
                 <button type="button" class="restart" :class="{ 'is-hidden': !m.resumeS }" :tabindex="m.resumeS ? 0 : -1"
                         :disabled="!canPlay" :aria-label="$t('mixcloud.restart')" :title="$t('mixcloud.restart')" @click="restart(m)">
                   <StrokeIcon name="rotateLeft" :size="16" />
@@ -447,7 +447,7 @@ onMounted(async () => {
 
 <style scoped>
 .mc { display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1 1 auto; }
-/* même recherche que les autres sources : changer de source ne déplace rien */
+/* same search as the other sources: changing source moves nothing */
 .search { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
 .search__field {
   flex: 1 1 auto; min-width: 0; height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 16px;
@@ -463,8 +463,8 @@ onMounted(async () => {
 .tabs { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
 .tabs > div { min-width: 0; overflow-x: auto; }
 .is-dim { opacity: 0.45; pointer-events: none; }
-/* calé en haut : sous les pastilles, la liste réserve la place de sa barre de défilement ; libellé et
-   remise à zéro prennent la même marge haute (4 px) et la même hauteur (28 px) que les pastilles */
+/* pinned to the top: under the pills, the list reserves the space of its scrollbar; label and
+   reset take the same top margin (4 px) and the same height (28 px) as the pills */
 .genres { flex: 0 0 auto; display: flex; align-items: flex-start; gap: 8px; min-width: 0; height: 44px; }
 .genres__label { flex: 0 0 auto; font-size: 12px; margin-top: 4px; line-height: 28px; }
 .genres__reset {
@@ -472,10 +472,10 @@ onMounted(async () => {
   border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; white-space: nowrap;
 }
 .genres__reset:hover { color: var(--accent); }
-/* une seule ligne qui défile (molette, glisser, barre fine de l'appli) : la rangée a la hauteur des
-   pastilles ET de la barre, qu'elle soit là ou non — rien ne bouge quand les genres arrivent */
+/* a single line that scrolls (wheel, drag, the app's thin bar): the row has the height of the
+   pills AND of the bar, whether it is there or not — nothing moves when the genres arrive */
 .genres__list { flex: 1 1 auto; min-width: 0; display: flex; gap: 6px; overflow-x: auto; padding-top: 4px; }
-/* fondu du côté où la rangée continue */
+/* fade on the side where the row continues */
 .genres__list[data-fade-start='1'] { --fade-l: 24px; }
 .genres__list[data-fade-end='1'] { --fade-r: 24px; }
 .genres__list[data-fade-start='1'], .genres__list[data-fade-end='1'] {
@@ -487,7 +487,7 @@ onMounted(async () => {
   border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; font-size: 12.5px; white-space: nowrap;
 }
 .genre:hover { border-color: var(--muted); }
-/* l'état ne se lit qu'aux couleurs et au trait : une pastille garde sa largeur, rien ne bouge en la touchant */
+/* the state is only read through colors and the stroke: a pill keeps its width, nothing moves when touched */
 .genre[data-state='on'] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .genre[data-state='off'] { border-style: dashed; color: var(--muted); text-decoration: line-through; }
 .is-hidden { visibility: hidden; }
@@ -496,7 +496,7 @@ onMounted(async () => {
 .back-row__title { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mc__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; }
 .hint { margin: 0 4px 8px; }
-/* l'accueil : des rangées de tuiles, comme sur le site */
+/* the home: rows of tiles, like on the site */
 .shelf { margin: 4px 0 18px; }
 .shelf__head { margin: 0 4px 8px; }
 .shelf__row { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x proximity; padding: 2px 4px 8px; }
@@ -506,7 +506,7 @@ onMounted(async () => {
 .skel--tile { width: 128px; height: 128px; border-radius: 10px; }
 .skel--label { display: block; width: 160px; height: 13px; margin: 0 4px 10px; }
 .small { font-size: 12px; }
-/* en colonnes, comme les radios : une ligne de mix est courte */
+/* in columns, like the radios: a mix row is short */
 .list { display: grid; gap: 2px 18px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); align-content: start; }
 .mix { display: grid; grid-template-columns: minmax(0, 1fr) 36px; align-items: center; }
 .restart { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); }

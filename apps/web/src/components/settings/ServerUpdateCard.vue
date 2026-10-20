@@ -6,12 +6,12 @@ import { ApiRequestError, type SystemVersion, type UpdateStatus, type UpdateStep
 import { useNotificationsStore } from '../../stores/notifications'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Mise à jour du serveur, dans Réglages : le commit en service, ceux qui attendent sur `origin/main`,
-// et le bouton qui demande au superviseur (`scripts/supervisor.mjs`) de les appliquer. Pendant la
-// mise à jour, l'état est relu chaque seconde et demie ; au redémarrage le serveur se tait quelques
-// secondes, les échecs de lecture sont alors attendus et passés sous silence. Le rechargement de la
-// page suit par le bandeau « Nouvelle version » (`AppUpdateBanner.vue`). Sous l'adresse publique,
-// refusé (`LAN_ONLY`) : la carte le dit, sans rien demander.
+// Server update, in Settings: the commit in service, those waiting on `origin/main`, and the
+// button that asks the supervisor (`scripts/supervisor.mjs`) to apply them. During the update,
+// the state is re-read every second and a half; on restart the server goes quiet for a few
+// seconds, read failures are then expected and silently ignored. The page reload follows through
+// the "A new version of the app is available" banner (`AppUpdateBanner.vue`). Under the public
+// address, refused (`LAN_ONLY`): the card says so, without requesting anything.
 
 const POLL_MS = 1500
 const MAX_LOG = 60
@@ -33,7 +33,7 @@ const short = (sha: string | null | undefined) => (sha ?? '').slice(0, 7)
 const when = (d: string | number) => new Date(d).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
 const fail = (err: unknown) => notifications.error(t('errors.UNKNOWN', { name: t('serverUpdate.title'), message: (err as Error).message }))
 
-/** Les étapes à montrer : celles prévues, plus le retour en arrière s'il a eu lieu. */
+/** The steps to show: the planned ones, plus the rollback if it happened. */
 const steps = computed<UpdateStep[]>(() => {
   const s = status.value
   if (!s) return []
@@ -76,7 +76,7 @@ function follow() {
       const s = (await getTransport().systemUpdateStatus()).status
       if (s) status.value = s
       if (s?.state !== 'running') { stop(); await load() }
-    } catch { /* le serveur redémarre : on relira au tour suivant */ }
+    } catch { /* the server is restarting: we will re-read on the next turn */ }
   }, POLL_MS)
 }
 function stop() { if (poll) { clearInterval(poll); poll = null } }
@@ -92,9 +92,9 @@ async function start() {
 
 onMounted(async () => {
   try {
-    // une session, c'est l'adresse publique : refusé là-bas, inutile de demander
+    // a session means the public address: refused there, no point asking
     if ((await getTransport().session()).user) { lanOnly.value = true; return }
-  } catch { /* sans réponse, la suite le dira */ }
+  } catch { /* no answer, what follows will say */ }
   await load()
 })
 onUnmounted(stop)
@@ -125,7 +125,7 @@ const logText = computed(() => (status.value?.log ?? []).slice(-MAX_LOG).join('\
         <button type="button" class="pill su__btn" data-on="1" :disabled="!canUpdate" @click="start">{{ $t('serverUpdate.update') }}</button>
       </div>
 
-      <!-- une ligne toujours là : le texte change, la hauteur non -->
+      <!-- an always-present line: the text changes, the height does not -->
       <div class="small su__summary">
         <template v-if="version?.error">{{ $t('serverUpdate.gitError', { message: version.error }) }}</template>
         <template v-else-if="available.length">{{ $t('serverUpdate.available', { n: available.length }, available.length) }}</template>
@@ -166,7 +166,7 @@ const logText = computed(() => (status.value?.log ?? []).slice(-MAX_LOG).join('\
 </template>
 
 <style scoped>
-/* colonne bornée : un titre de commit sur une ligne ne doit pas élargir la carte au-delà de l'écran */
+/* bounded column: a commit title on one line must not widen the card beyond the screen */
 .su { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .su__row { display: flex; align-items: center; gap: 10px; min-height: 40px; }
 .su__btn { flex: 0 0 auto; height: 34px; font-size: 13px; }

@@ -18,13 +18,14 @@ import { tunableVehicle } from '../lib/vehicleTuning'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 
-// Vue Véhicules : une carte par véhicule. Charge, autonomie, câble, verrouillage, position, et ce
-// qu'un véhicule connecté sait aussi dire : sa VEILLE, son mouvement, la pression de ses pneus, ses
-// températures. Tout est optionnel dans le contrat (un véhicule endormi ou simulé n'a pas tout) :
-// chaque case existe toujours et affiche « — » à défaut, rien ne se décale quand une valeur arrive.
+// Vehicles view: one card per vehicle. Charge, range, cable, lock, position, and what a connected
+// vehicle can also say: its SLEEP state, its movement, its tire pressure, its temperatures.
+// Everything is optional in the contract (a sleeping or simulated vehicle does not have
+// everything): every cell always exists and shows "—" by default, nothing shifts when a value
+// arrives.
 //
-// Les boutons suivent les CAPACITÉS du descripteur : un plugin en lecture seule (Tesla, phase 1) ne
-// déclare ni `lock` ni `charging`, et ne se voit donc pas proposer ce qu'il refuserait.
+// The buttons follow the descriptor's CAPABILITIES: a read-only plugin (Tesla, phase 1) does not
+// declare `lock` or `charging`, and is therefore not offered what it would refuse.
 const devices = useDevicesStore()
 const house = useHouseStore()
 const router = useRouter()
@@ -33,17 +34,17 @@ const EMPTY = '—'
 const TIRES = ['fl', 'fr', 'rl', 'rr'] as const
 
 /**
- * Renommage d'un véhicule. Le nom choisi vit dans la MAISON (`house.devices[].name`), pas dans
- * l'état : l'état est la vérité du fabricant, réécrite à chaque lecture. Une voiture n'étant pas
- * placée dans la scène 3D, son entrée de maison n'a pas de position — d'où `position` facultative
- * dans le placement. Vider le champ efface le nom choisi et rend la main au fabricant.
+ * Renaming a vehicle. The chosen name lives in the HOUSE (`house.devices[].name`), not in the
+ * state: the state is the vendor's truth, rewritten on every read. A car not being
+ * placed in the 3D scene, its house entry has no position — hence an optional `position`
+ * in the placement. Emptying the field clears the chosen name and hands control back to the vendor.
  */
-/** Le nom choisi dans la maison l'emporte sur celui du fabricant ; à défaut, le fabricant fait foi. */
+/** The name chosen in the house wins over the vendor's; failing that, the vendor is authoritative. */
 const displayName = (v: VehicleEntry) => house.houseDeviceFor(v.descriptor.id)?.name ?? v.descriptor.name
 
 const renaming = ref<string | null>(null)
 const renameText = ref('')
-/** Le champ monté, s'il y en a un. Ref de FONCTION : un `ref` nommé dans un `v-for` rend un tableau. */
+/** The mounted field, if there is one. FUNCTION ref: a named `ref` in a `v-for` yields an array. */
 const renameInput = ref<HTMLInputElement | null>(null)
 
 function startRename(v: VehicleEntry) {
@@ -68,16 +69,17 @@ function location(s: StateFor<'vehicle'>): string {
   return d < HOME_RADIUS_M ? t('vehicle.atHome') : t('vehicle.away', { distance: formatDistance(d, locale.value) })
 }
 /**
- * Sur le TERRAIN, la voiture est dessinée dans la 3D : même test que la scène (`gpsPoint`), le
- * relevé corrigé de son décalage tombe dans le polygone du terrain. « À la maison » (rayon) ne suffit
- * pas : le rayon déborde le terrain, et on proposerait d'aller voir une voiture que la 3D ne montre pas.
+ * On the TERRAIN, the car is drawn in the 3D: same test as the scene (`gpsPoint`), the
+ * reading corrected for its offset falls inside the terrain polygon. "At home" (radius) is not
+ * enough: the radius spills over the terrain, and we would offer to go and see a car that the 3D
+ * does not show.
  */
 function onSite(v: VehicleEntry): boolean {
   const h = house.effective ?? house.house
   if (!h || !v.state.location) return false
   return sitePosition(h, v.state.location, house.houseDeviceFor(v.descriptor.id)?.gpsOffset) !== null
 }
-/** Ouvre la voiture dans la 3D, même ordre que la liste des appareils : naviguer, PUIS sélectionner. */
+/** Opens the car in the 3D, same order as the device list: navigate, THEN select. */
 async function showIn3d(v: VehicleEntry): Promise<void> {
   await router.push({ name: 'home' }).catch(() => {})
   house.selectDevice(house.houseDeviceFor(v.descriptor.id)?.id ?? v.descriptor.id)
@@ -85,7 +87,7 @@ async function showIn3d(v: VehicleEntry): Promise<void> {
 const has = (v: VehicleEntry, c: Capability) => v.descriptor.capabilities.includes(c)
 const asleep = (s: StateFor<'vehicle'>) => s.sleepState !== undefined && s.sleepState !== 'online'
 
-/** « En route · 83 km/h » quand ça roule, sinon le rapport ou « Garé » ; « — » si rien n'est connu. */
+/** "Driving · 83 km/h" when moving, otherwise the gear or "Parked"; "—" if nothing is known. */
 function movement(s: StateFor<'vehicle'>): string {
   if (s.speedKmh === undefined && s.gear === undefined) return EMPTY
   if ((s.speedKmh ?? 0) > 0 || (s.gear !== undefined && s.gear !== 'P')) {
@@ -93,25 +95,25 @@ function movement(s: StateFor<'vehicle'>): string {
   }
   return t('vehicle.parked')
 }
-/** Où en est le câble : « Débranché », « Branché », « En charge ». Le détail va sous la jauge. */
+/** Where the cable stands: "Unplugged", "Plugged in", "Charging". The detail goes under the gauge. */
 function charge(s: StateFor<'vehicle'>): string {
   if (s.charging) return t('vehicle.charging')
   return s.pluggedIn ? t('vehicle.pluggedIn') : t('vehicle.unplugged')
 }
 /**
- * Ce que la charge en cours donne de plus : puissance, fin estimée, cible. Chaque morceau est
- * facultatif — aucun fabricant ne les donne tous (la R5 ne dit pas la puissance, elle dit le temps ;
- * Tesla dit les deux). Vide hors charge : la ligne reste, sa place est réservée.
+ * What the charge in progress gives in addition: power, estimated end, target. Each piece is
+ * optional — no vendor gives them all (the R5 does not state the power, it states the time;
+ * Tesla states both). Empty off charge: the row stays, its place is reserved.
  *
- * Rien n'est calculé ici : un temps restant se déduirait mal d'une puissance instantanée, la courbe
- * de charge n'étant pas linéaire. C'est le véhicule qui estime, ou personne.
+ * Nothing is computed here: a remaining time would be poorly deduced from an instantaneous
+ * power, the charge curve not being linear. It is the vehicle that estimates, or no one.
  */
 function chargeDetail(v: VehicleEntry): string {
   const s = v.state
   if (!s.charging) return ''
   const parts: string[] = []
-  // la puissance MESURÉE si le véhicule la donne ; sinon celle qu'on déduit de sa propre estimation
-  // du temps restant — et qui ne se présente alors pas comme une mesure
+  // the MEASURED power if the vehicle gives it; otherwise the one deduced from its own estimate
+  // of the remaining time — which then does not present itself as a measurement
   const guess = estimateChargePowerW(s, capacityOf(v) || undefined)
   if (s.chargePowerW) parts.push(formatPower(s.chargePowerW, locale.value))
   else if (guess !== undefined) parts.push(t('vehicle.chargeEstimated', { power: formatPower(guess, locale.value) }))
@@ -120,7 +122,7 @@ function chargeDetail(v: VehicleEntry): string {
   return parts.join(' · ')
 }
 
-/** Verrouillage : « — » tant qu'on ne sait pas (tous les constructeurs ne le disent pas). */
+/** Lock: "—" as long as we do not know (not every manufacturer says it). */
 const locked = (s: StateFor<'vehicle'>) =>
   s.locked === undefined ? EMPTY : s.locked ? t('vehicle.locked') : t('vehicle.unlocked')
 const temps = (s: StateFor<'vehicle'>) =>
@@ -132,32 +134,32 @@ const tire = (s: StateFor<'vehicle'>, k: (typeof TIRES)[number]) => {
   return v === undefined ? EMPTY : `${new Intl.NumberFormat(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)} bar`
 }
 /**
- * Ce que seul l'utilisateur peut savoir, replié derrière « Régler » : le décalage 3D, la rotation et
- * la capacité de la batterie (cf. `VehicleTuning`). Un véhicule qui n'a rien à régler — placé à la
- * main ET bavard sur sa puissance de charge — ne se voit pas proposer le bouton.
+ * What only the user can know, folded behind "Adjust": the 3D offset, the rotation and
+ * the battery capacity (see `VehicleTuning`). A vehicle with nothing to adjust — placed by
+ * hand AND talkative about its charging power — is not offered the button.
  */
 const tunable = (v: VehicleEntry) => tunableVehicle(v.descriptor, house.houseDeviceFor(v.descriptor.id))
 const capacityOf = (v: VehicleEntry) => house.houseDeviceFor(v.descriptor.id)?.batteryKwh ?? 0
 
 /**
- * La LIMITE DE CHARGE, seul réglage de la voiture que la carte laisse changer (cf.
- * `ChargeLimitCard`, partagée avec le panneau de la vue Maison).
+ * The CHARGE LIMIT, the only setting of the car that the card lets you change (see
+ * `ChargeLimitCard`, shared with the House view panel).
  *
- * La valeur qu'on TIENT pendant qu'on glisse vit ici : sans elle, le curseur reviendrait à la valeur
- * du véhicule à chaque image : l'état ne bouge qu'au relâché, quand la commande part.
+ * The value we HOLD while dragging lives here: without it, the slider would go back to the
+ * vehicle's value on every frame: the state only moves on release, when the command goes out.
  */
 const dragged = ref<Record<string, number>>({})
 const limitOf = (v: VehicleEntry) => dragged.value[v.descriptor.id] ?? v.state.chargeLimit ?? 80
 const preview = (v: VehicleEntry, percent: number) => {
   dragged.value = { ...dragged.value, [v.descriptor.id]: percent }
 }
-/** Endormie, la voiture refuse ses commandes (408 chez Tesla) : mieux vaut ne pas les proposer. */
+/** Asleep, the car refuses its commands (408 on Tesla): better not to offer them. */
 const limitLocked = (v: VehicleEntry) => !v.state.available || asleep(v.state)
 async function setLimit(v: VehicleEntry, percent: number): Promise<void> {
   const id = v.descriptor.id
   preview(v, percent)
   await send(id, { type: 'vehicle.set_charge_limit', percent })
-  // la main rendue à l'état : accepté, il porte déjà la cible ; refusé, il a repris l'ancienne
+  // control handed back to the state: accepted, it already carries the target; refused, it went back to the old one
   const next = { ...dragged.value }
   delete next[id]
   dragged.value = next
@@ -165,16 +167,16 @@ async function setLimit(v: VehicleEntry, percent: number): Promise<void> {
 
 async function send(id: string, cmd: CommandInput): Promise<boolean> {
   const ok = await devices.sendCommand(id, cmd)
-  void devices.refreshHealth()                         // une lecture consommée : la jauge de quota suit
+  void devices.refreshHealth()                         // a read consumed: the quota gauge follows
   return ok
 }
 
 /**
- * Réveil DEMANDÉ, pas encore constaté. Tesla accuse la demande en une seconde, mais la voiture met
- * une dizaine de secondes à ouvrir les yeux (le plugin la relit 15 s plus tard) : `isPending`, qui ne
- * couvre que l'aller-retour avec le serveur, rendrait le bouton inerte alors que rien n'a encore
- * changé à l'écran. Levé dès que le véhicule se déclare éveillé — ou au bout de `WAKE_MAX_MS` s'il ne
- * répond pas, pour ne pas laisser un bouton bloqué sur une voiture hors de portée.
+ * Wake-up REQUESTED, not yet observed. Tesla acknowledges the request in a second, but the car takes
+ * about ten seconds to open its eyes (the plugin re-reads it 15 s later): `isPending`, which only
+ * covers the round trip to the server, would make the button inert while nothing has changed
+ * on screen yet. Lifted as soon as the vehicle declares itself awake — or after `WAKE_MAX_MS` if
+ * it does not answer, so as not to leave a button stuck on a car out of range.
  */
 const WAKE_MAX_MS = 90_000
 const waking = ref<Record<string, true>>({})
@@ -185,13 +187,14 @@ function stopWaking(id: string): void {
   waking.value = next
 }
 /**
- * Une commande est en vol pour ce véhicule, ou son effet est attendu (réveil, charge) : les gestes qui
- * s'y croiseraient sont grisés. Seul le bouton de la commande en cours TOURNE (`waking`, `refreshing`,
- * `devices.isChargeRequested`) : « Lancer la charge » faisait tourner Réveiller et Actualiser.
+ * A command is in flight for this vehicle, or its effect is awaited (wake-up, charge): the
+ * gestures that would cross it are greyed out. Only the button of the command in progress SPINS
+ * (`waking`, `refreshing`, `devices.isChargeRequested`): "Start charging" used to make Wake up
+ * and Refresh spin.
  */
 const busy = (v: VehicleEntry) => devices.isPending(v.descriptor.id) || v.descriptor.id in waking.value || devices.isChargeRequested(v.descriptor.id)
 const charging = (v: VehicleEntry) => devices.isChargeRequested(v.descriptor.id)
-/** Relecture en vol : le spinner d'Actualiser, et lui seul. */
+/** Re-read in flight: the spinner of Refresh, and only it. */
 const refreshing = ref<Record<string, true>>({})
 async function refresh(v: VehicleEntry): Promise<void> {
   const id = v.descriptor.id
@@ -208,14 +211,14 @@ async function wake(v: VehicleEntry): Promise<void> {
   const id = v.descriptor.id
   waking.value = { ...waking.value, [id]: true }
   if (await send(id, { type: 'vehicle.wake' })) setTimeout(() => stopWaking(id), WAKE_MAX_MS)
-  else stopWaking(id)                                  // demande refusée : le bouton revient tout de suite
+  else stopWaking(id)                                  // request refused: the button comes back right away
 }
-// le véhicule a ouvert les yeux : le bouton a fini son travail (et cède la place à « Actualiser »)
+// the vehicle has opened its eyes: the button has done its job (and gives way to "Refresh")
 watch(vehicles, (list) => { for (const v of list) if (v.state.sleepState === 'online') stopWaking(v.descriptor.id) })
 
 /**
- * Le panneau ouvert, UN à la fois : la climatisation (marche, consigne, sièges, cf. `VehicleClimate`)
- * ou les réglages (cf. `VehicleTuning`). Ils s'ouvrent au même endroit, par-dessus la carte.
+ * The open panel, ONE at a time: the climate control (on/off, setpoint, seats, see `VehicleClimate`)
+ * or the settings (see `VehicleTuning`). They open in the same place, over the card.
  */
 type Panel = 'climate' | 'tuning'
 const panel = ref<{ id: string; kind: Panel } | null>(null)
@@ -223,28 +226,28 @@ const panelOf = (v: VehicleEntry): Panel | null => (panel.value?.id === v.descri
 function togglePanel(v: VehicleEntry, kind: Panel): void {
   panel.value = panelOf(v) === kind ? null : { id: v.descriptor.id, kind }
 }
-/** Sous la carte : où est la voiture par rapport à la maison, et son kilométrage. */
+/** Under the card: where the car is relative to the house, and its mileage. */
 const caption = (s: StateFor<'vehicle'>) =>
   `${location(s)}${s.odometerKm ? ` · ${t('vehicle.odometer')} ${formatKm(s.odometerKm, locale.value)}` : ''}`
 
-// « lu il y a 12 min » vieillit tout seul : une horloge de la vue, rafraîchie chaque demi-minute
+// "read 12 min ago" ages by itself: a view clock, refreshed every half minute
 const now = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
 /**
- * Quota de l'API du fabricant (`PluginHealth.quota`), montré en jauge au bas de la carte. La santé
- * des plugins ne se pousse pas : on la redemande au serveur (requête locale) en arrivant, à chaque
- * battement d'horloge, et après une commande — un réveil ou une relecture consomme le budget.
+ * The vendor API's quota (`PluginHealth.quota`), shown as a gauge at the bottom of the card. Plugin
+ * health is not pushed: we ask the server again (local request) on arrival, on every
+ * clock tick, and after a command — a wake-up or a re-read consumes the budget.
  */
 const quotaOf = (v: VehicleEntry) => devices.health?.plugins[v.descriptor.pluginId]?.quota
 type Quota = NonNullable<ReturnType<typeof quotaOf>>
 /**
- * « 0,42 $/10,00 $ de crédit Tesla · depuis le 13 sept. » — le plugin dit CE qu'il compte (`labelKey`),
- * dans quelle unité (`unit`) et depuis quand (`since`) ; la vue ne fait que mettre en forme, dans la
- * langue et le format de l'interface.
+ * "$0.42/$10.00 of Tesla credit · since Sep 13" — the plugin says WHAT it counts (`labelKey`),
+ * in which unit (`unit`) and since when (`since`); the view only formats, in the
+ * language and format of the interface.
  */
 const quotaLabel = (q: Quota) => {
   const fmt = (n: number) => (q.unit === 'usd'
-    // `narrowSymbol` : « 3,42 $ » et non « 3,42 $US », qui alourdit une ligne déjà dense
+    // `narrowSymbol`: "$3.42" and not "US$3.42", which weighs down an already dense line
     ? new Intl.NumberFormat(locale.value, { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol' }).format(n)
     : new Intl.NumberFormat(locale.value).format(n))
   const line = t('vehicle.quota', { used: fmt(q.used), limit: fmt(q.limit), what: t(q.labelKey) })
@@ -253,11 +256,11 @@ const quotaLabel = (q: Quota) => {
   return `${line} · ${t('vehicle.quotaSince', { date })}`
 }
 /**
- * La LOA saisie au panneau « Modifier », contre le compteur lu : deux lignes et une jauge, à la place
- * du quota (la R5 n'en a pas). Rien sans LOA saisie ni compteur lu. La jauge parle la langue des
- * autres de la carte : les anniversaires du contrat la découpent en BLOCS, comme les paliers de la
- * limite de charge, et le maximum autorisé à ce jour est un repère de la jauge de batterie (cible,
- * plancher) ; le remplissage passe au rouge quand on roule plus vite que lui.
+ * The lease entered in the "Edit" panel, against the odometer read: two rows and a gauge, in
+ * place of the quota (the R5 has none). Nothing without an entered lease or a read odometer. The
+ * gauge speaks the language of the card's others: the contract anniversaries cut it into BLOCKS,
+ * like the steps of the charge limit, and the allowed maximum to date is a mark of the battery
+ * gauge (target, floor); the fill turns red when you drive faster than it.
  */
 type LeaseMark = { left: number; title: string }
 const leases = computed(() => {
@@ -301,15 +304,15 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
       <div v-if="vehicles.length === 0" class="card card--soft empty muted">{{ $t('vehicle.none') }}</div>
       <div class="cards">
         <article v-for="v in vehicles" :key="v.descriptor.id" class="card vcard">
-          <!-- Ordre du DOM = la pile du téléphone : énergie, état, boutons, carte, quota. Plus large, des
-               ZONES de grille (et non des colonnes) : un bloc qui couvre plusieurs rangées laisse ses voisins
-               se suivre sans trou. Voir `.vcard` et ses deux @container. -->
+          <!-- DOM order = the phone's stack: energy, status, buttons, map, quota. Wider, grid
+               AREAS (not columns): a block that spans several rows lets its neighbors
+               follow one another without a gap. See `.vcard` and its two @containers. -->
           <div class="vcard__energy">
             <div class="vcard__head">
-              <!-- en charge : l'éclair et un halo qui pulse (une ombre : rien ne bouge autour) -->
+              <!-- charging: the bolt and a pulsing halo (a shadow: nothing moves around) -->
               <span class="icon-square vcard__icon" :data-on="v.state.charging ? '1' : '0'"><StrokeIcon :name="v.state.charging ? 'bolt' : 'vehicle'" :size="18" /></span>
               <div class="min0">
-                <!-- nom, ou saisie : le champ occupe la MÊME boîte que le titre, rien ne se décale -->
+                <!-- name, or input: the field takes the SAME box as the title, nothing shifts -->
                 <div class="vcard__name-row">
                   <input v-if="renaming === v.descriptor.id" :ref="(el) => (renameInput = el as HTMLInputElement | null)"
                          v-model="renameText" class="vcard__name vcard__name-input"
@@ -322,8 +325,9 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
                     </button>
                   </template>
                 </div>
-                <!-- sur le terrain, l'épingle au bout du lieu mène (même pastille que les listes d'appareils) à la voiture dans la 3D. Il est au BOUT
-                     de la ligne : absent, il ne décale rien -->
+                <!-- on the terrain, the pin at the end of the place leads (same pill as the device
+                     lists) to the car in the 3D. It is at the END of the row: absent, it shifts
+                     nothing -->
                 <div class="muted vcard__sub">
                   <span class="vcard__sub-text" :title="`${v.descriptor.meta.manufacturer ?? v.descriptor.pluginId} · ${location(v.state)}`">{{ v.descriptor.meta.manufacturer ?? v.descriptor.pluginId }} · {{ location(v.state) }}</span>
                   <button v-if="onSite(v)" type="button" class="vcard__locate" :title="$t('common.showIn3d')" :aria-label="$t('common.showIn3d')" @click="showIn3d(v)">
@@ -331,29 +335,30 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
                   </button>
                 </div>
               </div>
-              <!-- à droite, deux lignes en face du nom et du sous-titre : la veille, puis l'âge des valeurs.
-                   L'âge est en HAUT de carte : il ne descend plus quand un panneau s'ouvre -->
+              <!-- on the right, two rows facing the name and the subtitle: the sleep state, then
+                   the age of the values. The age is at the TOP of the card: it no longer goes down
+                   when a panel opens -->
               <div class="vcard__side">
-                <!-- pas de pastille quand le fabricant n'a pas de veille (Renault) : un soleil suivi d'un
-                     tiret se lirait « éveillée : inconnu ». Rien ne bouge pour autant, l'absence est stable -->
+                <!-- no pill when the vendor has no sleep state (Renault): a sun followed by a
+                     dash would read "awake: unknown". Nothing moves either, the absence is stable -->
                 <span v-if="v.state.sleepState !== undefined" class="vcard__sleep muted" :data-asleep="asleep(v.state) ? '1' : '0'">
                   <StrokeIcon :name="asleep(v.state) ? 'moon' : 'sun'" :size="14" />{{ $t(`vehicle.sleep.${v.state.sleepState}`) }}
                 </span>
-                <!-- l'âge des valeurs, toujours affiché : sur une API facturée et une voiture qui dort, elles en ont un -->
+                <!-- the age of the values, always displayed: on a billed API and a sleeping car, they have one -->
                 <span class="muted vcard__age" :title="asleep(v.state) ? $t('vehicle.wakeHint') : undefined">{{ readAgo(v.state) }}</span>
               </div>
             </div>
-            <!-- l'autonomie : le composant partagé avec le panneau de la vue Maison ; le repère de cible suit le curseur -->
+            <!-- the range: the component shared with the House view panel; the target mark follows the slider -->
             <VehicleBattery :state="v.state" :limit="limitOf(v)" />
-            <!-- détail de la charge en cours : place TOUJOURS réservée, rien ne se décale quand elle démarre -->
+            <!-- detail of the charge in progress: space ALWAYS reserved, nothing shifts when it starts -->
             <p class="muted vcard__charge">{{ chargeDetail(v) }}</p>
-            <!-- la cible de charge, quand le véhicule la laisse écrire : paliers au doigt, curseur au pour cent -->
+            <!-- the charge target, when the vehicle lets it be written: steps by finger, slider by the percent -->
             <ChargeLimitCard v-if="has(v, 'charge_limit')" watermark :value="limitOf(v)" :disabled="limitLocked(v)"
                              :hint="asleep(v.state) ? $t('vehicle.wakeHint') : undefined"
                              @preview="preview(v, $event)" @change="setLimit(v, $event)" />
           </div>
           <div class="vcard__state">
-            <!-- chaque section porte en filigrane, en bas à droite, l'icône de ce qu'elle dit (essai 2026-10-01) -->
+            <!-- each section carries as a watermark, at the bottom right, the icon of what it says (trial 2026-10-01) -->
             <div class="vcard__stats">
               <div class="card card--soft stat"><StrokeIcon class="wm" :name="v.state.locked === false ? 'lockOpen' : 'lock'" :size="48" />
                 <div class="muted stat__k">{{ $t('common.status') }}</div><div class="stat__v">{{ locked(v.state) }}</div></div>
@@ -364,7 +369,7 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
               <div class="card card--soft stat"><StrokeIcon class="wm" name="hotCold" :size="48" />
                 <div class="muted stat__k">{{ $t('vehicle.temps') }}</div><div class="stat__v">{{ temps(v.state) }}</div></div>
             </div>
-            <!-- quatre roues, quatre cases fixes, dans l'ordre où on regarde une voiture de dessus -->
+            <!-- four wheels, four fixed cells, in the order you look at a car from above -->
             <div class="card card--soft tires">
               <StrokeIcon class="wm" name="tire" :size="56" />
               <div class="muted stat__k">{{ $t('vehicle.tires') }}</div>
@@ -372,29 +377,29 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
                 <div v-for="k in TIRES" :key="k" class="tire"><span class="muted tire__k">{{ $t(`vehicle.tire.${k}`) }}</span><span class="tire__v">{{ tire(v.state, k) }}</span></div>
               </div>
             </div>
-            <!-- logiciel : version installée et mise à jour en attente, toujours là ; ouvre les notes de version -->
+            <!-- software: installed version and pending update, always there; opens the release notes -->
             <VehicleSoftware :descriptor="v.descriptor" :state="v.state" />
           </div>
-          <!-- TOUS les boutons, toujours : ce qu'un véhicule ne sait pas faire est grisé, avec la raison
-               (règle de l'utilisateur, 2026-10-01). Une grille de six, rangée par `order` (`data-slot`) :
-               carte à droite, les boutons qui ouvrent un panneau sont dans la colonne qui la touche -->
+          <!-- ALL the buttons, always: what a vehicle cannot do is greyed out, with the reason
+               (user rule, 2026-10-01). A grid of six, ordered by `order` (`data-slot`):
+               map on the right, the buttons that open a panel are in the column that touches it -->
           <div class="vcard__actions">
-            <!-- réveiller est un geste explicite (Tesla le facture) : jamais automatique. TOUJOURS là pour un
-                 véhicule qui connaît la veille, grisé quand il est éveillé : s'il apparaissait et
-                 disparaissait, la rangée changerait de nombre de lignes et pousserait le panneau de la clim -->
+            <!-- waking is an explicit gesture (Tesla bills it): never automatic. ALWAYS there for a
+                 vehicle that has a sleep state, greyed out when awake: if it appeared and
+                 disappeared, the row would change its number of lines and push the climate panel -->
             <button type="button" class="pill" data-slot="wake" :disabled="v.state.sleepState === undefined || !v.state.available || !asleep(v.state) || busy(v)"
                     :aria-busy="v.descriptor.id in waking" :title="v.state.sleepState === undefined ? $t('vehicle.unsupported') : $t('vehicle.wakeHint')" @click="wake(v)">
-              <!-- le spinner prend la PLACE de l'icône, même taille : le bouton ne change pas de largeur -->
+              <!-- the spinner takes the PLACE of the icon, same size: the button does not change width -->
               <v-progress-circular v-if="v.descriptor.id in waking" indeterminate size="16" width="2" />
               <StrokeIcon v-else name="sun" :size="16" /><span class="vcard__label">{{ $t('vehicle.wake') }}</span>
             </button>
-            <!-- relire maintenant (lecture facturée, pas de réveil) ; le sondage repart de cette lecture.
-                 Proposé MÊME endormi : c'est ainsi qu'on constate qu'une voiture s'est réveillée seule,
-                 sans payer le réveil -->
+            <!-- re-read now (billed read, no wake-up); polling restarts from that read.
+                 Offered EVEN when asleep: that is how you notice a car woke up on its own,
+                 without paying for the wake-up -->
             <button type="button" class="pill" data-slot="refresh" :disabled="!has(v, 'soc') || !v.state.available || devices.isPending(v.descriptor.id)"
                     :aria-busy="v.descriptor.id in refreshing" :title="$t('vehicle.refreshHint')" @click="refresh(v)">
-              <!-- il reste cliquable PENDANT un réveil : c'est justement le moment où l'on veut
-                   demander « alors, tu es réveillée ? » sans repayer un réveil -->
+              <!-- it stays clickable DURING a wake-up: that is precisely when you want to
+                   ask "so, are you awake?" without paying for a wake-up again -->
               <v-progress-circular v-if="v.descriptor.id in refreshing" indeterminate size="16" width="2" />
               <StrokeIcon v-else name="rotateRight" :size="16" /><span class="vcard__label">{{ $t('vehicle.refresh') }}</span>
             </button>
@@ -402,7 +407,7 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
                     :title="has(v, 'lock') ? undefined : $t('vehicle.unsupported')" @click="send(v.descriptor.id, { type: v.state.locked ? 'vehicle.unlock' : 'vehicle.lock' })">
               <StrokeIcon :name="v.state.locked ? 'lockOpen' : 'lock'" :size="16" /><span class="vcard__label">{{ v.state.locked ? $t('common.unlock') : $t('common.lock') }}</span>
             </button>
-            <!-- demandée, la charge tourne jusqu'à ce que la voiture la DISE active (20 s à 1 min, cf. le store) -->
+            <!-- once requested, the charge runs until the car SAYS it is active (20 s to 1 min, see the store) -->
             <button type="button" class="pill" data-slot="charge" :data-on="v.state.charging ? '1' : '0'"
                     :disabled="!has(v, 'charging') || !v.state.pluggedIn || !v.state.available || busy(v)" :aria-busy="charging(v)"
                     :title="!has(v, 'charging') ? $t('vehicle.unsupported') : v.state.pluggedIn ? undefined : $t('vehicle.unplugged')"
@@ -411,22 +416,22 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
               <StrokeIcon v-else :name="v.state.charging ? 'boltOff' : 'bolt'" :size="16" />
               <span class="vcard__label">{{ v.state.charging ? $t('vehicle.stopCharge') : $t('vehicle.startCharge') }}</span>
             </button>
-            <!-- ouvre le panneau ; la teinte dit que la clim TOURNE (libellé fixe : la largeur ne bouge pas) -->
+            <!-- opens the panel; the tint says the climate control is RUNNING (fixed label: the width does not move) -->
             <button type="button" class="pill" data-slot="climate" :data-on="v.state.climateOn ? '1' : '0'" :disabled="!has(v, 'climate_precondition')"
                     :aria-expanded="panelOf(v) === 'climate'" :title="has(v, 'climate_precondition') ? $t('vehicle.climateHint') : $t('vehicle.unsupported')"
                     @click="togglePanel(v, 'climate')">
               <StrokeIcon name="thermostat" :size="16" /><span class="vcard__label">{{ $t('vehicle.climatePanel.title') }}</span>
             </button>
-            <!-- ce que la voiture ne dira jamais : replié, parce qu'on le règle une fois -->
-            <!-- grisé quand il n'y a RIEN à régler (placé à la main, et bavard sur sa puissance) -->
+            <!-- what the car will never say: folded, because it is set once -->
+            <!-- greyed out when there is NOTHING to adjust (placed by hand, and talkative about its power) -->
             <button type="button" class="pill" data-slot="tuning" :data-on="panelOf(v) === 'tuning' ? '1' : '0'" :disabled="!tunable(v)"
                     :aria-expanded="panelOf(v) === 'tuning'"
                     @click="togglePanel(v, 'tuning')">
               <StrokeIcon name="gear" :size="16" /><span class="vcard__label">{{ $t('vehicle.tune') }}</span>
             </button>
           </div>
-          <!-- la carte : voiture (avec son cap) et maison, plan ou satellite, plein écran. Un panneau s'ouvre
-               PAR-DESSUS, sans la redimensionner ; elle ne prend alors plus la main (`inert`) -->
+          <!-- the map: car (with its heading) and house, plan or satellite, fullscreen. A panel opens
+               OVER it, without resizing it; it then no longer takes control (`inert`) -->
           <div class="vcard__mapzone">
             <div class="vcard__mapbox" :inert="panelOf(v) !== null">
               <VehicleMap class="vcard__map" :location="v.state.location" :heading-deg="v.state.headingDeg" :home="house.house?.origin"
@@ -439,10 +444,10 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
               </div>
             </Transition>
           </div>
-          <!-- le pied de la colonne de gauche : quota du fabricant et LOA, l'un sous l'autre -->
+          <!-- the foot of the left column: vendor quota and lease, one under the other -->
           <div v-if="quotaOf(v) || leases.get(v.descriptor.id)" class="vcard__foot">
-            <!-- ce qu'il reste du quota que le plugin s'impose (API du fabricant facturée) : rien pour
-                 un plugin qui ne compte pas, la simulation par exemple -->
+            <!-- what remains of the quota the plugin imposes on itself (billed vendor API): nothing for
+                 a plugin that does not count, the simulation for example -->
             <div v-if="quotaOf(v)" class="vcard__quota">
               <span class="muted vcard__quota-text" :title="quotaLabel(quotaOf(v)!)">{{ quotaLabel(quotaOf(v)!) }}</span>
               <div class="vcard__quota-track">
@@ -476,37 +481,37 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .vehicles__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); container-type: inline-size; }
 .empty { padding: 24px; text-align: center; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
-/* `--vmap-min` : la hauteur minimale COMMUNE de la carte et des panneaux qui s'ouvrent par-dessus */
+/* `--vmap-min`: the COMMON minimum height of the map and of the panels that open over it */
 .vcard { padding: 18px 20px; display: grid; gap: 14px; align-content: start; --vmap-min: 245px; }
-/* Téléphone : la pile dans l'ordre du DOM — énergie, état, boutons, carte, quota. */
+/* Phone: the stack in DOM order — energy, status, buttons, map, quota. */
 .vcard__energy, .vcard__state { display: grid; gap: 14px; align-content: start; min-width: 0; }
-/* Boutons, ordre vertical : réveiller, actualiser / déverrouiller, charge / clim, modifier */
+/* Buttons, vertical order: wake, refresh / unlock, charge / climate, edit */
 .vcard__actions .pill[data-slot='wake'] { order: 1; }
 .vcard__actions .pill[data-slot='refresh'] { order: 2; }
 .vcard__actions .pill[data-slot='lock'] { order: 3; }
 .vcard__actions .pill[data-slot='charge'] { order: 4; }
 .vcard__actions .pill[data-slot='climate'] { order: 5; }
 .vcard__actions .pill[data-slot='tuning'] { order: 6; }
-/* la carte, et le panneau qui s'ouvre PAR-DESSUS : même boîte, aucune taille ne change */
-/* Téléphone : carte et panneau dans la MÊME cellule — la zone prend la hauteur du plus grand, et
-   grandit si le panneau en demande plus ; la carte, elle, garde la sienne */
+/* the map, and the panel that opens OVER it: same box, no size changes */
+/* Phone: map and panel in the SAME cell — the zone takes the height of the larger, and
+   grows if the panel needs more; the map keeps its own */
 .vcard__mapzone { position: relative; min-width: 0; display: grid; }
 .vcard__mapbox, .vcard__overlay { grid-area: 1 / 1; }
-/* contexte d'empilement : les calques de Leaflet (z-index jusqu'à 1000) restent sous le panneau */
+/* stacking context: Leaflet's layers (z-index up to 1000) stay under the panel */
 .vcard__mapbox { isolation: isolate; height: 100%; }
 .vcard__mapbox[inert] { opacity: .35; transition: opacity .2s; }
 .vcard__overlay {
   position: relative; z-index: 1; min-height: 100%;
   display: flex; flex-direction: column; padding: 0; border-radius: 14px;
 }
-/* le panneau occupe TOUTE la zone de la carte, pas seulement sa propre hauteur */
+/* the panel occupies the WHOLE map zone, not just its own height */
 .vcard__overlay > * { flex: 1 0 auto; align-content: start; }
 .vpanel-enter-active, .vpanel-leave-active { transition: opacity .2s ease, transform .22s ease; }
 .vpanel-enter-from, .vpanel-leave-to { opacity: 0; transform: translateY(14px); }
 @media (prefers-reduced-motion: reduce) { .vpanel-enter-from, .vpanel-leave-to { transform: none; } }
-/* Large : énergie puis état à gauche, quota en bas ; boutons au-dessus de la carte à droite.
-   Les boutons partagent la rangée de l'énergie et s'étirent jusqu'à son bas : la carte commence
-   à la même hauteur que les cases d'état. */
+/* Wide: energy then status on the left, quota at the bottom; buttons above the map on the right.
+   The buttons share the energy row and stretch down to its bottom: the map starts
+   at the same height as the status cells. */
 @container (min-width: 720px) {
   .cards { grid-template-columns: 1fr; }
   .vcard {
@@ -514,27 +519,27 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
     grid-template-areas: 'a act' 'st map' 'q map';
   }
   .vcard__actions { grid-auto-rows: minmax(56px, 1fr); }
-  /* `.vcard` en tête : la règle de base des tuiles (56 px), plus bas dans le fichier, l'emporterait */
+  /* `.vcard` first: the base rule of the tiles (56 px), further down in the file, would win */
   .vcard .vcard__actions .pill { height: auto; }
   .vcard__energy { grid-area: a; }
   .vcard__state { grid-area: st; }
   .vcard__actions { grid-area: act; }
   .vcard__mapzone { grid-area: map; display: flex; flex-direction: column; }
-  /* la zone est fixée par la grille : le panneau la recouvre exactement, et défile s'il le faut */
+  /* the zone is fixed by the grid: the panel covers it exactly, and scrolls if needed */
   .vcard__overlay { position: absolute; inset: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .vcard__mapbox { flex: 1 1 auto; display: flex; flex-direction: column; }
   .vcard__mapbox > .vcard__map { flex: 1 1 auto; height: auto; min-height: var(--vmap-min); }
   .vcard__foot { grid-area: q; align-self: end; }
 }
-/* Écran large : énergie | état puis boutons | carte sur toute la hauteur. Le quota ferme la colonne
-   de gauche. Carte à DROITE des boutons : ceux qui ouvrent un panneau passent dans la colonne qui la
-   touche — réveiller, actualiser / déverrouiller, clim / charge, modifier */
+/* Wide screen: energy | status then buttons | map over the full height. The quota closes the left
+   column. Map to the RIGHT of the buttons: those that open a panel go in the column that
+   touches it — wake, refresh / unlock, climate / charge, edit */
 @container (min-width: 1100px) {
   .vcard {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr);
     grid-template-areas: 'a st map' 'a act map' 'q act map';
   }
-  /* ici les boutons gardent leur hauteur : la rangée de l'énergie ne les concerne pas */
+  /* here the buttons keep their height: the energy row does not concern them */
   .vcard__actions { grid-auto-rows: auto; }
   .vcard .vcard__actions .pill { height: 56px; }
   .vcard__actions .pill[data-slot='climate'] { order: 4; }
@@ -542,7 +547,7 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 }
 .vcard__head { display: flex; align-items: center; gap: 12px; }
 .vcard__name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-/* le crayon ne prend pas de place tant qu'on ne le survole pas : il est là, discret, toujours au même point */
+/* the pencil takes no space until you hover it: it is there, discreet, always at the same point */
 .vcard__pencil {
   flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0;
   border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; opacity: 0.55;
@@ -554,19 +559,19 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
   font: inherit; font-size: inherit; font-weight: inherit;
 }
 .vcard__name { font-weight: 600; font-size: 16px; }
-/* une ligne, coupée : l'âge des valeurs en face lui prend de la largeur, et un lieu long qui passait
-   à la ligne faisait grandir l'en-tête de 18 px sur téléphone (mesuré le 2026-10-01) */
+/* a single row, cut: the age of the values opposite takes width from it, and a long place that
+   wrapped made the header grow by 18 px on a phone (measured on 2026-10-01) */
 .vcard__sub { font-size: 12px; display: flex; align-items: center; gap: 4px; min-width: 0; height: 18px; }
 .vcard__sub-text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* l'épingle « voir dans la vue 3D » : la pastille `.badge--show` des listes d'appareils (RoomBands),
-   dans la hauteur de la ligne */
+/* the "show in the 3D view" pin: the `.badge--show` pill of the device lists (RoomBands),
+   within the row height */
 .vcard__locate {
   flex: none; display: grid; place-items: center; width: 18px; height: 18px; padding: 0;
   border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; transition: background .15s, color .15s;
 }
 .vcard__locate:hover, .vcard__locate:focus-visible { background: var(--accent-soft); color: var(--accent); }
 .min0 { min-width: 0; flex: 1 1 auto; }
-/* deux rangées fixes : l'âge reste sur la seconde (celle du sous-titre) même sans pastille de veille */
+/* two fixed rows: the age stays on the second (the subtitle's) even without a sleep pill */
 .vcard__side { flex: 0 0 auto; align-self: stretch; display: grid; grid-template-rows: auto auto; align-content: space-between; justify-items: end; }
 .vcard__sleep { grid-row: 1; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
 .vcard__age { grid-row: 2; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -581,9 +586,10 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 }
 .vcard__stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .stat { padding: 10px 12px; }
-/* Filigrane de section : l'icône, monochrome et très pâle, en bas à droite, rognée d'un quart de sa surface.
-   SOUS le texte : `isolation` fait de la section un contexte d'empilement, le `z-index: -1` y
-   reste (au-dessus du fond de la section, sous son contenu). Absolu : il ne prend aucune place. */
+/* Section watermark: the icon, monochrome and very pale, at the bottom right, cropped by a
+   quarter of its area. UNDER the text: `isolation` makes the section a stacking context, the
+   `z-index: -1` stays in it (above the section's background, under its content). Absolute: it
+   takes no space. */
 .stat, .tires { position: relative; overflow: hidden; isolation: isolate; }
 .wm { position: absolute; right: -6px; bottom: -6px; z-index: -1; color: var(--text); opacity: .07; pointer-events: none; }
 .tires .wm { right: -8px; bottom: -8px; }
@@ -595,35 +601,35 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
 .tire__k { font-size: 11px; }
 .tire__v { font-weight: 500; font-size: 13px; white-space: nowrap; }
 .vcard__map { height: var(--vmap-min); }
-/* la ligne de charge tient sa hauteur même vide : la carte ne bouge pas quand la charge démarre.
-   Une HAUTEUR égale à la ligne, pas un minimum : `min-height: 16px` sous une ligne de 18 px laissait
-   tout le bas de la carte descendre de 2 px au démarrage de la charge (mesuré le 2026-10-01) */
+/* the charge row holds its height even when empty: the card does not move when the charge
+   starts. A HEIGHT equal to the row, not a minimum: `min-height: 16px` under an 18 px row let the
+   whole bottom of the card drop by 2 px when the charge started (measured on 2026-10-01) */
 .vcard__charge { margin: -8px 0 0; font-size: 12px; height: 1.5em; line-height: 1.5em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* deux colonnes de tuiles IDENTIQUES, toujours la même disposition : gestes (2 × 2), puis sections */
+/* two columns of IDENTICAL tiles, always the same layout: gestures (2 × 2), then sections */
 .vcard__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-/* icône AU-DESSUS du libellé : « Arrêter la charge » tient dans une demi-carte, sans être coupé */
+/* icon ABOVE the label: "Stop charging" fits in half a card, without being cut */
 .vcard__actions .pill { min-width: 0; height: 56px; padding: 0 8px; border-radius: 12px; flex-direction: column; justify-content: center; gap: 3px; font-size: 13px; }
 .vcard__label { max-width: 100%; }
 .vcard__actions .pill :deep(svg), .vcard__actions .pill .v-progress-circular { flex: 0 0 auto; }
 .vcard__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* un bouton qui ATTEND n'est pas un bouton indisponible : l'opacité des boutons désactivés (.45)
-   rendait le spinner à peine visible, or c'est lui qui porte l'information */
+/* a button that WAITS is not an unavailable button: the opacity of disabled buttons (.45)
+   made the spinner barely visible, yet it is what carries the information */
 .vcard__actions .pill[aria-busy='true']:disabled { opacity: .7; }
-/* quota et LOA empilés au pied de la colonne */
+/* quota and lease stacked at the foot of the column */
 .vcard__foot { display: grid; gap: 12px; min-width: 0; }
-/* quota du fabricant : même langage que la jauge de charge en haut de carte, en plus discret */
+/* vendor quota: same language as the charge gauge at the top of the card, more discreet */
 .vcard__quota { display: grid; gap: 6px; }
-/* une seule ligne : le texte tient dans la carte la plus étroite (320 px), la coupure n'est qu'un filet */
+/* a single line: the text fits in the narrowest card (320 px), the cut is only a hairline */
 .vcard__quota-text { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vcard__quota-track { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; }
 .vcard__quota-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width .4s; }
-/* le quota touche à sa fin : le même orangé que les avertissements des cartes de Réglages */
+/* the quota is running out: the same orange as the warnings of the Settings cards */
 .vcard__quota-fill[data-tense='1'] { background: #d38b22; }
-/* LOA : la jauge de la batterie (`VehicleBattery`, 8 px), découpée en blocs par les anniversaires
-   comme la piste de la limite de charge (`ChargeLimitCard`, `.limit__mark`) : des fentes de 2 px de
-   la couleur du fond de la carte, dans une piste rognée. Le repère du maximum autorisé à ce jour est
-   `.soc__tick` de la batterie (3 × 16 px, warning), posé PAR-DESSUS la piste, donc hors du rognage.
-   Le dépassement passe au rouge, comme la batterie basse : en orangé, le repère s'y serait fondu. */
+/* LEASE: the battery gauge (`VehicleBattery`, 8 px), cut into blocks by the anniversaries
+   like the charge limit track (`ChargeLimitCard`, `.limit__mark`): 2 px slits of
+   the card's background color, in a cropped track. The mark of the allowed maximum to date is
+   `.soc__tick` of the battery (3 × 16 px, warning), set OVER the track, hence outside the
+   cropping. The overrun turns red, like a low battery: in orange, the mark would have blended in. */
 .vcard__lease-bar { position: relative; height: 8px; }
 .vcard__lease-track { position: absolute; inset: 0; border-radius: 999px; background: var(--line); overflow: hidden; }
 .vcard__lease-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); transition: width .4s, background .2s; }
@@ -633,6 +639,6 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
   position: absolute; top: 50%; width: 3px; height: 16px; border-radius: 2px;
   transform: translate(-50%, -50%); background: rgb(var(--v-theme-warning));
 }
-/* la ligne du détail garde sa hauteur même vide (LOA terminée) : rien ne bouge sous la jauge */
+/* the detail row holds its height even when empty (lease over): nothing moves under the gauge */
 .vcard__lease-detail { height: 1.4em; line-height: 1.4em; }
 </style>

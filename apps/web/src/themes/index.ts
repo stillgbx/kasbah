@@ -1,10 +1,10 @@
-// Thèmes de l'interface : un thème porte TOUTE la palette (fond, surfaces, texte, accent, teintes
-// des catégories), contrairement aux quatre « accents » d'avant qui ne changeaient que la couleur
-// primaire. Un thème peut n'exister qu'en clair ou qu'en sombre (Synthwave '84).
+// Interface themes: a theme carries the WHOLE palette (background, surfaces, text, accent,
+// category tints), unlike the four "accents" of before that only changed the primary color. A
+// theme can exist only in light or only in dark (Synthwave '84).
 //
-// AJOUTER UN THÈME : créer `src/themes/<id>.ts` sur le modèle des autres (15 couleurs par variante),
-// puis l'importer et l'ajouter à REGISTRY ci-dessous. Rien d'autre à toucher : les thèmes Vuetify,
-// les variables CSS et le sélecteur des Réglages se dérivent de la liste.
+// ADDING A THEME: create `src/themes/<id>.ts` on the model of the others (15 colors per variant),
+// then import it and add it to REGISTRY below. Nothing else to touch: the Vuetify themes,
+// the CSS variables and the Settings selector are derived from the list.
 
 import { kasbah } from './kasbah'
 import { catppuccin } from './catppuccin'
@@ -13,39 +13,39 @@ import { nightOwl } from './night-owl'
 import { synthwave84 } from './synthwave84'
 import { tokyoNight } from './tokyo-night'
 
-/** Les 15 couleurs d'une variante. Le reste (contour, ombre, texte sur accent) en est dérivé. */
+/** The 15 colors of a variant. The rest (outline, shadow, text on accent) is derived from them. */
 export interface Palette {
-  /** Fond de page. */
+  /** Page background. */
   bg: string
-  /** Cartes et panneaux. */
+  /** Cards and panels. */
   surface: string
-  /** Surfaces secondaires : champs, lignes alternées, `surface-variant`. */
+  /** Secondary surfaces: fields, alternate rows, `surface-variant`. */
   surface2: string
-  /** Surface élevée : survol, sélection (`surface-bright`). */
+  /** Raised surface: hover, selection (`surface-bright`). */
   bright: string
   /** Texte principal. */
   text: string
-  /** Texte secondaire, icônes au repos. */
+  /** Secondary text, icons at rest. */
   muted: string
-  /** Accent : couleur primaire, sélection, interrupteurs. */
+  /** Accent: primary color, selection, switches. */
   accent: string
   error: string
   warning: string
   info: string
   success: string
-  /** Teintes des quatre catégories d'appareils (disque des marqueurs 3D, pastilles). */
+  /** Tints of the four device categories (disc of the 3D markers, pills). */
   catLight: string
   catCover: string
   catCamera: string
-  /** Sert aussi à l'onde du lecteur en diffusion (`sceneMedia`). */
+  /** Also used for the wave of the player while streaming (`sceneMedia`). */
   catMedia: string
 }
 
 export interface Theme {
   id: string
-  /** Nom du thème — un nom propre, jamais traduit. */
+  /** Name of the theme — a proper name, never translated. */
   label: string
-  /** Nom de la déclinaison claire chez son auteur (« Latte », « Alucard »…), affiché tel quel. */
+  /** Name of the light variant at its author ("Latte", "Alucard"…), displayed as is. */
   lightLabel?: string
   darkLabel?: string
   light?: Palette
@@ -54,7 +54,7 @@ export interface Theme {
 
 const REGISTRY = [kasbah, catppuccin, dracula, nightOwl, synthwave84, tokyoNight] as const satisfies readonly Theme[]
 
-/** `REGISTRY` garde les identifiants littéraux (pour `ThemeId`), la liste publique les élargit. */
+/** `REGISTRY` keeps the literal identifiers (for `ThemeId`), the public list widens them. */
 export const THEME_LIST: readonly Theme[] = REGISTRY
 
 export type ThemeId = (typeof REGISTRY)[number]['id']
@@ -66,17 +66,17 @@ export function themeById(id: string): Theme {
 }
 
 /**
- * Variante réellement appliquée : un thème qui n'existe que dans une apparence l'impose (l'interface
- * en clair passe en sombre sur Synthwave '84 plutôt que d'inventer une palette claire).
+ * Variant actually applied: a theme that only exists in one appearance imposes it (the light
+ * interface goes dark on Synthwave '84 rather than inventing a light palette).
  */
 export function resolveVariant(id: string, wantDark: boolean): { palette: Palette, isDark: boolean } {
   const t = themeById(id)
   const dark = wantDark ? (t.dark ?? t.light) : (t.light ?? t.dark)
-  // REGISTRY garantit au moins une variante par thème (test `themes.test.ts`).
+  // REGISTRY guarantees at least one variant per theme (test `themes.test.ts`).
   return { palette: dark!, isDark: dark === t.dark }
 }
 
-/** Luminance relative WCAG, pour choisir le texte posé SUR l'accent. */
+/** WCAG relative luminance, to choose the text set ON the accent. */
 function luminance(hex: string): number {
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex)
   if (!m) return 0.5
@@ -93,8 +93,8 @@ function contrast(a: string, b: string): number {
 }
 
 /**
- * Texte posé sur l'accent : le plus lisible entre le blanc et le fond du thème. Dérivé plutôt que
- * déclaré, pour qu'un thème ajouté demain ne puisse pas se tromper de sens.
+ * Text set on the accent: the more readable of white and the theme background. Derived rather than
+ * declared, so that a theme added tomorrow cannot get the direction wrong.
  */
 export function onAccent(p: Palette): string {
   return contrast(p.accent, '#ffffff') >= contrast(p.accent, p.bg) ? '#ffffff' : p.bg
@@ -106,7 +106,7 @@ function rgba(hex: string, alpha: number): string {
   return `rgba(${parseInt(m[1]!, 16)}, ${parseInt(m[2]!, 16)}, ${parseInt(m[3]!, 16)}, ${alpha})`
 }
 
-/** Les jetons CSS de `styles/tokens.css`, posés sur `<html>` par le store des réglages. */
+/** The CSS tokens of `styles/tokens.css`, set on `<html>` by the settings store. */
 export function cssVars(p: Palette, isDark: boolean): Record<string, string> {
   return {
     '--bg': p.bg,

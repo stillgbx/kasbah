@@ -8,18 +8,18 @@ import { useNotificationsStore } from '../stores/notifications'
 import { usePluginsStore } from '../stores/plugins'
 import StrokeIcon from './ui/StrokeIcon.vue'
 
-// Liaison du compte PetKit. Deux différences avec les cartes Renault et MELCloud, et toutes deux
-// se voient à l'écran :
+// Linking of the PetKit account. Two differences from the Renault and MELCloud cards, and both
+// show on screen:
 //
-//  1. **Aucun mot de passe.** Le fabricant connecte par code envoyé par courriel, valable dix
-//     minutes. D'où un formulaire en DEUX temps (demander, puis saisir) plutôt qu'un seul.
-//  2. **Il faut un compte DÉDIÉ.** Une nouvelle connexion invalide la précédente : sur le compte
-//     principal, ce serveur et le téléphone se déconnecteraient mutuellement en boucle. C'est un
-//     avertissement, pas une préférence, et il est affiché AVANT le formulaire — après, il serait
-//     lu une fois le mal fait.
+//  1. **No password.** The vendor logs in with a code sent by email, valid for ten minutes. Hence a
+//     TWO-step form (request, then enter) rather than a single one.
+//  2. **A DEDICATED account is needed.** A new login invalidates the previous one: on the main
+//     account, this server and the phone would keep logging each other out in a loop. It is a
+//     warning, not a preference, and it is displayed BEFORE the form — afterwards, it would be
+//     read once the damage is done.
 //
-// L'étape atteinte est un état local (`step`) et non une déduction de `status` : le serveur ne sait
-// pas qu'un code a été demandé, et il n'a pas à le savoir — rien n'est gardé entre les deux appels.
+// The step reached is local state (`step`) and not a deduction from `status`: the server does not
+// know a code was requested, and does not need to — nothing is kept between the two calls.
 
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()
@@ -59,7 +59,7 @@ async function link() {
   busy.value = true
   try {
     status.value = await getTransport().petkitLogin({ email: email.value.trim(), code: code.value.trim() })
-    // le code a servi ; il ne vaut de toute façon plus rien
+    // the code has been used; it is worthless now anyway
     code.value = ''
     step.value = 'email'
     notifications.success(t('settings.petkit.linked', { n: status.value.devices.length }, status.value.devices.length))
@@ -79,7 +79,7 @@ async function unlink() {
   } finally { busy.value = false }
 }
 
-/** Échéance de la session : ce qui décidera du jour où un nouveau code sera demandé. */
+/** Session expiry: what will decide the day a new code is requested. */
 const expires = computed(() => (status.value?.expiresAt ? d(new Date(status.value.expiresAt), 'long') : null))
 </script>
 
@@ -109,8 +109,8 @@ const expires = computed(() => (status.value?.expiresAt ? d(new Date(status.valu
           <span class="muted small">{{ $t('settings.petkit.email') }}</span>
           <input v-model="email" type="email" autocomplete="username" inputmode="email" :disabled="busy || step === 'code'" class="pk__input" />
         </label>
-        <!-- Le champ du code existe dès le départ, simplement désactivé : le faire APPARAÎTRE
-             déplacerait le bouton sous le doigt de l'utilisateur au moment où il va appuyer. -->
+        <!-- The code field exists from the start, simply disabled: making it APPEAR
+             would move the button under the user's finger just as they are about to press. -->
         <label class="pk__field">
           <span class="muted small">{{ $t('settings.petkit.code') }}</span>
           <input v-model="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12"

@@ -1,7 +1,7 @@
 import type { Theme } from './index'
 
-// SynthWave '84 de Robb Owen (github.com/robb0wen/synthwave-vscode) : néon sur violet, SANS
-// déclinaison claire — l'interface reste donc en sombre tant qu'il est choisi.
+// SynthWave '84 by Robb Owen (github.com/robb0wen/synthwave-vscode): neon on purple, WITHOUT a
+// light variant — the interface therefore stays dark as long as it is chosen.
 export const synthwave84 = {
   id: 'synthwave84',
   label: "Synthwave '84",

@@ -5,8 +5,8 @@ import { setTransport } from '../../api'
 import type { AssistantLogEntry, Transport } from '../../api/transport'
 import AssistantCard from './AssistantCard.vue'
 
-// Le journal des instructions ne se montre que sur le réseau local (pas de session) :
-// connecté par l'adresse publique, on ne le demande même pas.
+// The instruction log is only shown on the local network (no session):
+// connected through the public address, it is not even requested.
 
 const entry: AssistantLogEntry = {
   at: Date.UTC(2026, 9, 7, 9, 0), user: 'lou', text: 'Allume le salon', ms: 6800,
@@ -25,7 +25,7 @@ describe('AssistantCard — journal', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
   afterEach(() => { setTransport(null) })
 
-  it('montre les instructions de tous les comptes sur le réseau local', async () => {
+  it('shows the instructions of all accounts on the local network', async () => {
     fake(null)
     const w = mount(AssistantCard)
     await flushPromises()
@@ -37,7 +37,7 @@ describe('AssistantCard — journal', () => {
     expect(entries[2]!.find('.reply__error').text()).toBe('Pas de réponse en 60 secondes.')
   })
 
-  it('dit le coût de chaque instruction (jetons au survol) et le total des instructions chiffrées', async () => {
+  it('states the cost of each instruction (tokens on hover) and the total of the priced instructions', async () => {
     fake(null)
     const w = mount(AssistantCard)
     await flushPromises()
@@ -46,19 +46,19 @@ describe('AssistantCard — journal', () => {
     expect(cost.text()).toBe('· ≈ 0,0031 $')
     expect(cost.attributes('title')).toContain('9')
     expect(cost.attributes('title')).toContain('écrits en cache')
-    // une entrée sans coût (moteur muet, journal d'avant) n'en montre pas et ne compte pas
+    // an entry without a cost (silent engine, earlier log) shows none and does not count
     expect(entries[2]!.find('.ac__cost').exists()).toBe(false)
     expect(w.find('.ac__total').text()).toBe('Total ≈ 0,016 $ pour 2 instructions, au prix de l’API : le forfait ne facture rien à l’instruction.')
   })
 
-  it('sans aucune instruction chiffrée, pas de total', async () => {
+  it('with no priced instruction, no total', async () => {
     setTransport({ session: async () => ({ user: null }), assistantLog: async () => ({ entries: [{ ...entry, usage: undefined }] }) } as unknown as Transport)
     const w = mount(AssistantCard)
     await flushPromises()
     expect(w.find('.ac__total').exists()).toBe(false)
   })
 
-  it('ne le demande pas à un compte connecté par l’adresse publique', async () => {
+  it('does not request it for an account connected through the public address', async () => {
     const assistantLog = fake('lou')
     const w = mount(AssistantCard)
     await flushPromises()

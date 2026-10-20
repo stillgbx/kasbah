@@ -4,17 +4,18 @@ import type { IconName } from '../../lib/strokeIcons'
 import StrokeIcon from './StrokeIcon.vue'
 import { primeArtUrl } from './artThumbLoader'
 
-// Pochette YT Music : `<img referrerpolicy="no-referrer">` — un `background-image`
-// CSS envoie le Referer et Chrome bloque (net::ERR_BLOCKED_BY_ORB) sur ggpht / googleusercontent.
-// Chargement : IntersectionObserver + file partagée (dédup URL, max 4 en parallèle). Une image qui ne
-// vient pas (logo de radio disparu, lien direct refusé) laisse l'icône, pas l'image cassée du navigateur.
+// YT Music cover art: `<img referrerpolicy="no-referrer">` — a CSS `background-image`
+// sends the Referer and Chrome blocks (net::ERR_BLOCKED_BY_ORB) on ggpht / googleusercontent.
+// Loading: IntersectionObserver + shared queue (URL dedup, max 4 in parallel). An image that does
+// not come (a radio logo that disappeared, a direct link refused) leaves the icon, not the
+// browser's broken image.
 
 const props = withDefaults(defineProps<{
   src?: string | null
   round?: boolean
-  /** Icône pendant le chargement / sans URL (artiste / album / titre / playlist). */
+  /** Icon while loading / without a URL (artist / album / track / playlist). */
   icon?: IconName
-  /** Côté en px (carré) — 44 dans les listes, plus grand dans le lecteur et les tuiles. */
+  /** Side in px (square) — 44 in lists, larger in the player and the tiles. */
   size?: number
 }>(), {
   src: null,
@@ -95,12 +96,12 @@ watch(
   flex: 0 0 auto;
 }
 .art-wrap--round { border-radius: 999px; overflow: hidden; }
-/* Un voile qui assombrit le bas de chaque pochette (0 → 25 % de noir) : une page pleine d'images crie
-   moins, sans rien cacher. Seulement sur une vraie image (pas sur l'icône d'attente), à l'arrondi de
-   la pochette ; les touches de lecture posées dessus restent au-dessus. */
+/* A veil that darkens the bottom of each cover art (0 → 25% black): a page full of images screams
+   less, without hiding anything. Only on a real image (not on the waiting icon), at the corner
+   radius of the cover art; the play buttons set on top stay above. */
 .art-wrap--img { position: relative; border-radius: 6px; overflow: hidden; }
 .art-wrap--round.art-wrap--img { border-radius: 999px; }
-/* l'arrondi est celui de la pochette qui le porte (un parent peut le changer, le détail l'a à 10 px) */
+/* the corner radius is that of the cover art that carries it (a parent can change it, the detail has it at 10 px) */
 .art-wrap--img::after {
   content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
   background: linear-gradient(to bottom, rgb(0 0 0 / 0) 0, rgb(0 0 0 / .25) 100%);

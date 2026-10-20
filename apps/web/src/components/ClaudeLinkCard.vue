@@ -6,9 +6,10 @@ import type { ClaudeAccount } from '../api/transport'
 import { useNotificationsStore } from '../stores/notifications'
 import StrokeIcon from './ui/StrokeIcon.vue'
 
-// Carte du plugin Claude (Réglages → Plugins) : le forfait Claude du compte courant, le sien une fois
-// connecté (adresse publique), celui de la maison sur le réseau local. Le jeton vient de
-// `claude setup-token` ; le serveur le garde et ne le rend jamais, on ne sait ici que s'il y en a un.
+// Claude plugin card (Settings → Plugins): the Claude plan of the current account, its own once
+// connected (public address), the house's on the local network. The token comes from
+// `claude setup-token`; the server keeps it and never returns it, so here we only know whether
+// there is one.
 
 const TOKEN = /^sk-ant-[\w-]{20,500}$/
 
@@ -44,7 +45,7 @@ async function save() {
   } catch (err) { fail(err) } finally { busy.value = false }
 }
 
-// Retrait : premier appui arme, second confirme, on désarme tout seul (comme les comptes).
+// Removal: first press arms, second confirms, disarms by itself (like the accounts).
 const armed = ref(false)
 let armTimer: ReturnType<typeof setTimeout> | null = null
 async function remove() {
@@ -65,7 +66,7 @@ async function remove() {
 
 <template>
   <div class="cl">
-    <!-- place réservée : la ligne d'état garde sa hauteur pendant le chargement -->
+    <!-- reserved space: the status line keeps its height while loading -->
     <div class="cl__row">
       <StrokeIcon name="sparkle" :size="18" class="muted" />
       <div class="cl__status min0">{{ status || ' ' }}</div>
@@ -91,7 +92,7 @@ async function remove() {
 .cl { display: grid; gap: 8px; }
 .cl__row { display: flex; align-items: center; gap: 10px; min-height: 40px; }
 .cl__status { flex: 1 1 0; font-size: 14px; line-height: 1.4; }
-/* largeur fixe : « Retirer le jeton » et « Confirmer le retrait » occupent la même place */
+/* fixed width: "Remove token" and "Confirm removal" take the same space */
 .cl__remove { flex: 0 0 auto; width: 190px; height: 34px; font-size: 13px; justify-content: center; }
 .cl__remove[data-armed='1'] { color: #d24a43; border-color: #d24a43; }
 .cl__how { margin: 0; line-height: 1.5; }

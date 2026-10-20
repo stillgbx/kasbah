@@ -8,17 +8,17 @@ import { useNotificationsStore } from '../stores/notifications'
 import { usePluginsStore } from '../stores/plugins'
 import StrokeIcon from './ui/StrokeIcon.vue'
 
-// Mise en route du plugin Tesla, en trois pas que la Fleet API impose et que la carte déroule dans
-// l'ordre : poser la clé publique de l'application sur SON domaine (Kasbah est sur le LAN, Tesla
-// veut un domaine public en HTTPS), enregistrer ce domaine auprès de Tesla, lier le compte. Les
-// jetons sont gardés par le serveur : rien à recopier, comme pour Enphase.
+// Setup of the Tesla plugin, in three steps that the Fleet API imposes and that the card unfolds
+// in order: put the app's public key on ITS domain (Kasbah is on the LAN, Tesla wants a public
+// domain over HTTPS), register that domain with Tesla, link the account. The tokens are kept by
+// the server: nothing to copy, as for Enphase.
 //
-// Les trois pas sont TOUJOURS rendus, avec leur état : un pas fait n'est pas retiré, il est coché.
-// Un utilisateur qui revient sur la carte doit voir où il en est, pas deviner ce qui a disparu.
+// The three steps are ALWAYS rendered, with their state: a completed step is not removed, it is
+// checked. A user coming back to the card must see where they stand, not guess what disappeared.
 //
-// La carte ne décide plus de son apparition : elle vit DANS la section du plugin Tesla, que
-// l'utilisateur déplie — et qui s'ouvre seule tant que le serveur signale un pas à faire (domaine
-// non enregistré, compte non lié : il le dit par son statut).
+// The card no longer decides when it appears: it lives INSIDE the Tesla plugin section, which the
+// user expands — and which opens by itself as long as the server flags a step to do (domain not
+// registered, account not linked: it says so through its status).
 
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()
@@ -26,17 +26,17 @@ const plugins = usePluginsStore()
 const { t } = useI18n()
 
 /**
- * Santé lue dans l'INVENTAIRE des plugins, pas dans /api/health : l'interrupteur des Réglages
- * écrit l'inventaire et le serveur le rend à jour dans la même réponse, donc la carte apparaît dès
- * qu'on allume le plugin. `/api/health`, lui, n'est relu que de loin en loin — la carte n'arrivait
- * qu'après un rechargement de la page.
+ * Health read from the plugin INVENTORY, not from /api/health: the Settings switch writes the
+ * inventory and the server returns it up to date in the same response, so the card appears as
+ * soon as the plugin is turned on. `/api/health`, for its part, is only re-read every now and
+ * then — the card only showed up after a page reload.
  */
 const health = computed(() => plugins.byId.tesla?.health)
 const status = ref<TeslaStatus | null>(null)
 const busy = ref<'register' | 'link' | 'rotate' | null>(null)
 const opened = ref(false)
 const copied = ref(false)
-/** Rotation de la clé en deux temps : l'ancienne clé cesse de valoir, et le NAS est à refaire. */
+/** Two-step key rotation: the old key stops being valid, and the NAS has to be redone. */
 const rotateArmed = ref(false)
 
 async function refresh() {
@@ -46,7 +46,7 @@ async function refresh() {
   await devices.refreshHealth()
 }
 onMounted(refresh)
-// l'inventaire liste le plugin même éteint : c'est son STATUT qui change quand on l'allume
+// the inventory lists the plugin even when it is off: it is its STATUS that changes when it is turned on
 watch(() => health.value?.status, (s, prev) => { if (s && s !== prev && s !== 'disabled') void refresh() })
 
 const registration = computed(() => {
@@ -65,7 +65,8 @@ async function copyKey() {
     copied.value = true
     setTimeout(() => { copied.value = false }, 2500)
   } catch {
-    // pas de presse-papiers (page hors HTTPS) : le texte est sélectionnable d'un tap, l'utilisateur copie lui-même
+    // no clipboard (non-HTTPS page): the text is selectable with one tap, the user copies it
+    // themselves
     notifications.error(t('errors.UNKNOWN', { name: 'Tesla', message: 'clipboard unavailable' }))
   }
 }
@@ -111,7 +112,7 @@ async function link() {
     <p v-if="!status.configured" class="muted tsl__text">{{ $t('settings.tesla.notConfigured', { redirect: status.redirectUri }) }}</p>
 
     <template v-else>
-      <!-- 1. la clé publique à poser sur le domaine -->
+      <!-- 1. the public key to put on the domain -->
       <div class="tsl__step" :data-done="status.registered === true ? '1' : '0'">
         <div class="tsl__step-head"><StrokeIcon :name="status.registered === true ? 'checkCircle' : 'dots'" :size="16" /><span>{{ $t('settings.tesla.keyStep') }}</span></div>
         <code v-if="status.publicKeyUrl" class="tsl__url">{{ status.publicKeyUrl }}</code>
@@ -119,8 +120,8 @@ async function link() {
         <pre class="tsl__pem">{{ status.publicKeyPem ?? '' }}</pre>
         <div class="tsl__actions">
           <button type="button" class="pill" :disabled="!status.publicKeyPem" @click="copyKey">{{ copied ? $t('settings.tesla.copied') : $t('settings.tesla.copyKey') }}</button>
-          <!-- une clé prise par une autre application ne se libère pas : il en faut une neuve. Deux temps,
-               parce que l'ancienne cesse aussitôt de valoir et que le fichier du NAS est à refaire -->
+          <!-- a key taken by another application is not released: a new one is needed. Two steps,
+               because the old one immediately stops being valid and the NAS file has to be redone -->
           <button v-if="status.registered === false" type="button" class="pill" :data-on="rotateArmed ? '1' : '0'" :disabled="busy !== null" @click="rotate">
             {{ rotateArmed ? $t('settings.tesla.rotateConfirm') : $t('settings.tesla.rotate') }}
           </button>
@@ -128,7 +129,7 @@ async function link() {
         <p class="muted small tsl__hint">{{ $t('settings.tesla.keyHint') }}</p>
       </div>
 
-      <!-- 2. l'enregistrement du domaine -->
+      <!-- 2. registration of the domain -->
       <div class="tsl__step" :data-done="status.registered === true ? '1' : '0'">
         <div class="tsl__step-head"><StrokeIcon :name="status.registered === true ? 'checkCircle' : 'dots'" :size="16" /><span>{{ $t('settings.tesla.registerStep') }}</span></div>
         <div class="tsl__actions">
@@ -139,7 +140,7 @@ async function link() {
         </div>
       </div>
 
-      <!-- 3. la liaison du compte -->
+      <!-- 3. linking of the account -->
       <div class="tsl__step" :data-done="status.linked ? '1' : '0'">
         <div class="tsl__step-head"><StrokeIcon :name="status.linked ? 'checkCircle' : 'dots'" :size="16" /><span>{{ $t('settings.tesla.linkStep') }}</span></div>
         <div class="tsl__actions">
@@ -168,7 +169,7 @@ async function link() {
   background: var(--surface); color: var(--text); font: 400 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
   word-break: break-all; white-space: pre-wrap; user-select: all; box-sizing: border-box;
 }
-/* la clé fait toujours le même nombre de lignes : sa hauteur est fixe, rien ne bouge autour */
+/* the key always takes the same number of lines: its height is fixed, nothing moves around it */
 .tsl__pem { max-height: 9.5em; overflow: auto; }
 .tsl__actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .tsl__hint { margin: 0; }

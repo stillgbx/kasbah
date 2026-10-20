@@ -4,17 +4,17 @@ import type { PluginSceneEntry } from '@kasbah/shared'
 import { useScenesStore } from '../../stores/scenes'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Pastilles des scènes d'un fabricant : aperçu de la palette, scène en cours mise en avant,
-// bouton « animer » pour les scènes à palette (le pont fait défiler les couleurs lui-même).
+// Pills of a vendor's scenes: palette preview, current scene highlighted,
+// "animate" button for palette scenes (the bridge cycles the colors itself).
 const props = defineProps<{
   scenes: PluginSceneEntry[]
   label?: string
-  /** Groupe du fabricant auquel on peut AJOUTER une ambiance (nom de la pièce ou de la zone). */
+  /** Vendor group to which a light scene can be ADDED (name of the room or zone). */
   addTo?: string
 }>()
 const store = useScenesStore()
 
-/** Dégradé de l'aperçu : une seule couleur reste un aplat. */
+/** Preview gradient: a single color stays a flat fill. */
 function preview(swatches: string[]): string {
   if (swatches.length === 0) return 'var(--surface2)'
   if (swatches.length === 1) return swatches[0]!
@@ -27,18 +27,18 @@ const rows = computed(() => props.scenes.map((e) => ({
   dynamic: e.scene.dynamic,
   active: e.state.active,
   background: preview(e.scene.swatches),
-  /** Mode joué au tap : dépend du réglage du fabricant et de la préférence de ce navigateur. */
+  /** Mode played on tap: depends on the vendor setting and on this browser's preference. */
   tapMode: store.tapMode(e),
 })))
 
-// Les deux boutons sont des bascules. La pastille : éteindre le groupe si l'ambiance tourne, jouer
-// l'ambiance sinon (animée si le fabricant l'a réglée ainsi, cf. `tapMode`). Le bouton ✨ : arrêter
-// l'animation en revenant au fixe (la scène reste allumée), ou la lancer.
+// Both buttons are toggles. The pill: turn the group off if the light scene is running, play the
+// light scene otherwise (animated if the vendor set it so, see `tapMode`). The ✨ button: stop
+// the animation by going back to static (the scene stays on), or start it.
 type Row = { id: string; active: string; tapMode: 'static' | 'dynamic' }
 const toggle = (r: Row) => store.recall(r.id, r.active === 'inactive' ? r.tapMode : 'off')
 const toggleDynamic = (r: Row) => store.recall(r.id, r.active === 'dynamic' ? 'static' : 'dynamic')
 
-/** Ambiances présentes ailleurs chez le fabricant et absentes ici : on peut les recopier. */
+/** Light scenes present elsewhere at the vendor and missing here: they can be copied over. */
 const addable = computed(() => (props.addTo ? store.clonableFor(props.addTo) : []).map((e) => ({
   id: e.scene.id,
   name: e.scene.name,
@@ -112,9 +112,9 @@ const addable = computed(() => (props.addTo ? store.clonableFor(props.addTo) : [
 }
 .chip__dyn[data-on='1'] { background: var(--accent); color: var(--on-accent); border-left-color: transparent; }
 
-/* Le survol ne doit JAMAIS reprendre le fond ni la couleur d'un bouton allumé : ce fond EST le
-   signal « en cours ». Éteint → fond de survol ; allumé → on reste dans la famille d'accent
-   (le tint se superpose) ou on éclaircit, comme les lignes de pièce et d'appareil. */
+/* Hover must NEVER take over the background or the color of a lit button: that background IS the
+   "running" signal. Off → hover background; lit → we stay in the accent family
+   (the tint overlays) or lighten, like the room and device rows. */
 .chip[data-on='0'] .chip__main:hover:not(:disabled) { background: var(--surface2); }
 .chip[data-on='1'] .chip__main:hover:not(:disabled) { background: var(--accent-soft); }
 .chip__dyn[data-on='0']:hover:not(:disabled) { background: var(--surface2); color: var(--text); }

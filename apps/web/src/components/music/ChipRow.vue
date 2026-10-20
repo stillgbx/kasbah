@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Rangée de pastilles effaçables (recherches récentes) : libellé fixe à gauche, pastilles à droite.
-// La rangée garde sa hauteur minimale même vide, pour que ce qui suit ne remonte pas.
+// Row of dismissible pills (recent searches): fixed label on the left, pills on the right.
+// The row keeps its minimum height even when empty, so that what follows does not move up.
 defineProps<{ label: string; items: { key: string; label: string }[]; disabled?: boolean; removeLabel: string }>()
 defineEmits<{ pick: [key: string]; remove: [key: string] }>()
 </script>

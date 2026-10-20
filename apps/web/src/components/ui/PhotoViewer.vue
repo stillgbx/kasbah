@@ -4,12 +4,12 @@ import { useI18n } from 'vue-i18n'
 import { onKeyStroke } from '@vueuse/core'
 import StrokeIcon from './StrokeIcon.vue'
 
-// Visionneuse plein écran : une photo à la fois, flèches (boutons, clavier, glissé du doigt), zoom
-// (boutons, molette, pincement, double-clic) avec déplacement de la photo agrandie, et
-// téléchargement. Fond toujours noir, quel que soit le thème : c'est la photo qu'on regarde.
+// Fullscreen viewer: one photo at a time, arrows (buttons, keyboard, finger swipe), zoom
+// (buttons, wheel, pinch, double-click) with panning of the enlarged photo, and
+// download. Always black background, whatever the theme: it is the photo that you look at.
 //
-// `index` à null = fermée. Le téléchargement passe par fetch → blob : un <a download> vers une autre
-// origine est ignoré par le navigateur, qui ouvrirait la photo au lieu de l'enregistrer.
+// `index` at null = closed. The download goes through fetch → blob: an <a download> to another
+// origin is ignored by the browser, which would open the photo instead of saving it.
 
 export interface Photo { url: string }
 
@@ -36,7 +36,7 @@ const loaded = ref(false)
 function reset() { scale.value = 1; tx.value = 0; ty.value = 0 }
 watch(index, () => { reset(); loaded.value = false })
 
-// les voisines se chargent pendant qu'on regarde : la flèche ne fait pas attendre
+// the neighbors load while you look: the arrow makes no one wait
 watch(index, (i) => {
   if (i === null) return
   for (const j of [i - 1, i + 1]) { const p = props.photos[j]; if (p) new Image().src = p.url }
@@ -49,7 +49,7 @@ function go(step: number) {
 }
 function close() { index.value = null }
 
-/** Garde la photo agrandie dans le cadre : on ne la pousse pas hors de l'écran. */
+/** Keeps the enlarged photo within the frame: it is not pushed off the screen. */
 function clamp() {
   const el = img.value
   if (!el || scale.value <= 1) { tx.value = 0; ty.value = 0; return }
@@ -59,7 +59,7 @@ function clamp() {
   ty.value = Math.min(my, Math.max(-my, ty.value))
 }
 
-/** Zoome en gardant immobile le point de l'écran (px, py) : celui sous le curseur ou les doigts. */
+/** Zooms keeping the screen point (px, py) still: the one under the cursor or the fingers. */
 function zoomAt(next: number, px?: number, py?: number) {
   const s = Math.min(MAX, Math.max(1, next))
   const box = stage.value?.getBoundingClientRect()
@@ -83,7 +83,7 @@ function onDblClick(e: MouseEvent) {
   else zoomAt(2.5, e.clientX, e.clientY)
 }
 
-// ---- Gestes : un doigt déplace (agrandie) ou fait défiler (taille normale), deux doigts pincent ----
+// ---- Gestures: one finger pans (enlarged) or scrolls (normal size), two fingers pinch ----
 const pointers = new Map<number, { x: number; y: number }>()
 let start: { x: number; y: number; tx: number; ty: number; dist: number; scale: number } | null = null
 let moved = false
@@ -128,7 +128,7 @@ function onPointerUp(e: PointerEvent) {
   if (pointers.size) snapshot()
   else start = null
 }
-/** Un clic sur le fond noir ferme ; pas la fin d'un glissé, ni un clic sur la photo. */
+/** A click on the black background closes; not the end of a drag, nor a click on the photo. */
 function onStageClick(e: MouseEvent) {
   if (!moved && e.target === stage.value) close()
 }
@@ -143,7 +143,7 @@ onKeyStroke((e) => {
   if (run) { e.preventDefault(); run() }
 })
 
-// ---- Téléchargement ---------------------------------------------------------------------------
+// ---- Download ---------------------------------------------------------------------------------
 const downloading = ref(false)
 function fileName(p: Photo, i: number): string {
   const ext = /\.(\w{2,5})(?:\?|$)/.exec(new URL(p.url).pathname)?.[1] ?? 'jpg'
@@ -164,7 +164,7 @@ async function download() {
     a.click()
     setTimeout(() => URL.revokeObjectURL(href), 10_000)
   } catch {
-    // l'hébergeur refuse la lecture depuis l'app : on laisse le navigateur l'ouvrir
+    // the host refuses reading from the app: we let the browser open it
     window.open(p.url, '_blank', 'noopener,noreferrer')
   } finally {
     downloading.value = false
@@ -203,7 +203,7 @@ onBeforeUnmount(() => pointers.clear())
              referrerpolicy="no-referrer" draggable="false" @load="loaded = true" />
       </div>
 
-      <!-- les deux flèches gardent leur place aux extrémités : grisées, elles ne disparaissent pas -->
+      <!-- both arrows keep their place at the ends: greyed out, they do not disappear -->
       <button type="button" class="viewer__nav viewer__nav--prev" :disabled="!hasPrev" :aria-label="$t('photoViewer.prev')" @click="go(-1)">
         <StrokeIcon name="back" :size="28" />
       </button>
@@ -248,7 +248,7 @@ onBeforeUnmount(() => pointers.clear())
 .viewer__nav { position: absolute; top: 50%; width: 52px; height: 52px; margin-top: -26px; border-radius: 999px; }
 .viewer__nav--prev { left: calc(var(--safe-left, 0px) + 10px); }
 .viewer__nav--next { right: calc(var(--safe-right, 0px) + 10px); }
-/* téléphone : la photo prend toute la largeur, les flèches se posent dessus */
+/* phone: the photo takes the full width, the arrows sit on top of it */
 @media (max-width: 600px) {
   .viewer__stage { padding-left: 0; padding-right: 0; }
   .viewer__nav { background: rgba(0, 0, 0, .45); }

@@ -8,9 +8,10 @@ import { useNotificationsStore } from '../stores/notifications'
 import { usePluginsStore } from '../stores/plugins'
 import StrokeIcon from './ui/StrokeIcon.vue'
 
-// Liaison du compte Mixcloud, dans Réglages → Plugins. Un NOM d'utilisateur, rien d'autre : l'API
-// publique lit ce que le profil montre (favoris, écoutes, suivis, playlists) sans mot de passe. La
-// page Musique offre le même champ tant que rien n'est relié ; ici on peut aussi changer de compte.
+// Linking of the Mixcloud account, in Settings → Plugins. A user NAME, nothing else: the public
+// API reads what the profile shows (favorites, listens, follows, playlists) without a password.
+// The Music page offers the same field as long as nothing is linked; here you can also change
+// account.
 
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()

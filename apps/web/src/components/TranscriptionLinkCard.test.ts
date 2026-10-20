@@ -5,8 +5,8 @@ import { setTransport } from '../api'
 import type { Transport } from '../api/transport'
 import TranscriptionLinkCard from './TranscriptionLinkCard.vue'
 
-// La fiche du plugin Transcription : choisir la voix des réponses parmi celles du fournisseur, ou
-// revenir à la voix par défaut (`TTS_VOICE`) ; connecté, à la voix de la maison.
+// The Transcription plugin sheet: choose the voice of the replies among the provider's, or return
+// to the default voice (`TTS_VOICE`); when connected, to the house voice.
 
 function fake(voice: string | null, voices = [{ id: '0a1b2c3d', name: 'ma-voix', language: 'Auto' }], who: { user: string | null; houseVoice: string | null } = { user: null, houseVoice: voice }) {
   const setTranscriptionVoice = vi.fn(async (v: string | null) => ({ ...who, voice: v, defaultVoice: 'default' }))
@@ -22,7 +22,7 @@ describe('TranscriptionLinkCard', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
   afterEach(() => { setTransport(null) })
 
-  it('propose la voix par défaut et les voix du fournisseur, et enregistre le choix', async () => {
+  it('offers the default voice and the provider voices, and saves the choice', async () => {
     const set = fake(null)
     const w = mount(TranscriptionLinkCard)
     await flushPromises()
@@ -35,7 +35,7 @@ describe('TranscriptionLinkCard', () => {
     expect(set).toHaveBeenLastCalledWith(null)
   })
 
-  it('connecté : la première option est la voix de la maison, et le choix ne vaut que pour le compte', async () => {
+  it('connected: the first option is the house voice, and the choice only applies to the account', async () => {
     const set = fake(null, undefined, { user: 'alice', houseVoice: '0a1b2c3d' })
     const w = mount(TranscriptionLinkCard)
     await flushPromises()
@@ -46,7 +46,7 @@ describe('TranscriptionLinkCard', () => {
     expect(set).toHaveBeenCalledWith('0a1b2c3d')
   })
 
-  it('garde visible une voix retenue que le fournisseur ne propose plus', async () => {
+  it('keeps visible a selected voice that the provider no longer offers', async () => {
     fake('disparue', [])
     const w = mount(TranscriptionLinkCard)
     await flushPromises()

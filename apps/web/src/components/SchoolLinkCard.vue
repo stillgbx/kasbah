@@ -7,10 +7,10 @@ import { usePluginsStore } from '../stores/plugins'
 import { useSchoolStore } from '../stores/school'
 import StrokeIcon from './ui/StrokeIcon.vue'
 
-// Liaison du compte TouteMonAnnée. Le site n'offre aucune connexion déléguée : identifiant et mot
-// de passe, comme MELCloud, et la carte dit ce qu'il advient du mot de passe (`intro`). Il ne vit
-// que le temps de la requête : vidé ici après l'envoi, jamais écrit côté serveur — ce sont les
-// cookies de session obtenus qui durent.
+// Linking of the TouteMonAnnée account. The site offers no delegated login: identifier and
+// password, like MELCloud, and the card says what happens to the password (`intro`). It only lives
+// for the duration of the request: cleared here after sending, never written server-side — it is
+// the session cookies obtained that last.
 
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()
@@ -39,7 +39,7 @@ async function link() {
   busy.value = true
   try {
     await school.login(username.value.trim(), password.value)
-    // le mot de passe a servi, il n'a plus rien à faire en mémoire
+    // the password has been used, it has no business staying in memory
     password.value = ''
     notifications.success(t('settings.toutemonannee.linked'))
     await devices.refreshHealth()

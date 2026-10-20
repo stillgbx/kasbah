@@ -9,34 +9,34 @@ import { isDevicePulsing } from '../lib/deviceState'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 
-// Vue Médias : enceintes, réveils, Chromecast, TV — tout ce qui est du kind `media_player`. La
-// liste par pièce vient de `RoomBands` (partagé avec Lumières, Ouvrants, Caméras) ; le statut de la
-// ligne dit déjà « Lecture · titre » ou « Au repos » (`lib/deviceState.ts`). Il reste ici les
-// touches de transport et le volume.
+// Media view: speakers, alarm clocks, Chromecasts, TVs — everything of kind `media_player`. The
+// per-room list comes from `RoomBands` (shared with Lights, Covers, Cameras); the status of the
+// row already says "Playing · title" or "Idle" (`lib/deviceState.ts`). What remains here is the
+// transport buttons and the volume.
 //
-// Les touches suivent les capacités : un Chromecast branché sur une TV a un volume « fixe » (il se
-// règle sur la TV) et n'a donc ni curseur ni sourdine ; un lecteur sans file n'a pas de piste
-// suivante. Lire / pause n'a de sens que si quelque chose est chargé : sur un appareil au repos le
-// plugin refuserait la commande, la touche est donc grisée.
+// The buttons follow the capabilities: a Chromecast plugged into a TV has a "fixed" volume (it is
+// set on the TV) and so has neither slider nor mute; a player without a queue has no next
+// track. Play / pause only makes sense if something is loaded: on an idle device the
+// plugin would refuse the command, so the button is greyed out.
 const devices = useDevicesStore()
 const house = useHouseStore()
 
 const players = computed(() => devices.list.filter((e) => e.state.kind === 'media_player'))
-// Barre de son qui joue le son d'une TV (`lib/audioRouting.ts`) : le point pulse, la pochette de la TV est
-// son fond de ligne, et la touche lire / pause agit sur la TV — c'est elle qu'on entend. Précédent /
-// suivant restent grisés : ils s'adressent à la file de la barre, qui n'en a pas.
+// Soundbar that plays a TV's sound (`lib/audioRouting.ts`): the dot pulses, the TV's cover art
+// is its row background, and the play / pause button acts on the TV — it is the one you hear.
+// Previous / next stay greyed out: they address the bar's queue, which has none.
 const pulsing = (entry: DeviceEntry) => isDevicePulsing(entry.state) || !!house.relaySource(entry.descriptor.id)
-/** Ce qu'on entend sur cette ligne : la lecture de la TV relayée, sinon la sienne. */
+/** What you hear on this row: the relayed TV's playback, otherwise its own. */
 const heard = (entry: DeviceEntry): { id: string; state: StateFor<'media_player'> } => {
   const relay = house.relaySource(entry.descriptor.id)
   return relay && relay.state.kind === 'media_player' ? { id: relay.descriptor.id, state: relay.state } : { id: entry.descriptor.id, state: entry.state as StateFor<'media_player'> }
 }
-// comme l'en-tête : une lecture propre, ou le son d'une TV relayé par une barre — les deux diffusent
+// like the header: its own playback, or a TV's sound relayed by a bar — both are playing
 const playingCount = computed(() => players.value.filter((e) => e.state.available
   && ((e.state as StateFor<'media_player'>).playback === 'playing' || house.soundRoutes.relays.has(e.descriptor.id))).length)
 
-// Valeur locale pendant le glissement seulement ; ensuite c'est l'état publié qui s'affiche
-// (sinon la poignée reviendrait en arrière entre le geste et la réponse de l'appareil).
+// Local value during the drag only; afterwards the published state is displayed
+// (otherwise the handle would go back between the gesture and the device's response).
 const draft = ref<Record<string, number>>({})
 const shownVolume = (id: string, volume: number) => draft.value[id] ?? volume
 function drag(id: string, v: number) { draft.value = { ...draft.value, [id]: v } }
@@ -47,13 +47,13 @@ function commit(id: string, v: number) {
   draft.value = next
 }
 const has = (entry: { descriptor: { capabilities: string[] } }, c: string) => entry.descriptor.capabilities.includes(c)
-// pochette du morceau en fond de ligne (URL relayée par le serveur, voir le plugin Cast), fondue vers la droite
+// cover art of the track as the row background (URL relayed by the server, see the Cast plugin), faded toward the right
 const art = (entry: DeviceEntry) => {
   const s = heard(entry).state
   return entry.state.available && s.nowPlaying?.artUrl ? s.nowPlaying.artUrl : undefined
 }
 const loaded = (s: StateFor<'media_player'>) => s.playback === 'playing' || s.playback === 'paused'
-// un direct n'a ni piste précédente ni suivante : les deux touches sont grisées (voir MediaPlayerControl)
+// a live stream has neither previous nor next track: both buttons are greyed out (see MediaPlayerControl)
 const skippable = (s: StateFor<'media_player'>) => loaded(s) && s.nowPlaying?.live !== true
 </script>
 
@@ -127,8 +127,8 @@ const skippable = (s: StateFor<'media_player'>) => loaded(s) && s.nowPlaying?.li
 .controls__slider { flex: 1 1 auto; }
 .pct { font-size: 12px; width: 4ch; text-align: right; flex: 0 0 auto; }
 .dot { margin-right: 6px; color: var(--accent); }
-/* pochette derrière la ligne : sous l'icône et le nom, fondue avant les touches ; déborde de 4 px de
-   chaque côté pour couvrir la ligne jusqu'aux bords de la carte */
+/* cover art behind the row: under the icon and the name, faded before the buttons; overflows by
+   4 px on each side to cover the row up to the card's edges */
 .row-art {
   position: absolute; inset: 0 -4px; z-index: -1; pointer-events: none;
   background-size: auto; background-position: center; opacity: .2;

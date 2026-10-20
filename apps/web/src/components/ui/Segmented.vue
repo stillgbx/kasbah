@@ -2,16 +2,16 @@
 import type { IconName } from '../../lib/strokeIcons'
 import StrokeIcon from './StrokeIcon.vue'
 
-// Contrôle segmenté en pilule : conteneur surface + bordure, segment actif sur l'accent.
-// `label` nomme le groupe pour les lecteurs d'écran, quand rien à côté ne dit sur quoi il agit.
-// `disabled` par option : un segment peut n'avoir rien à commander alors que l'autre en a encore
-// (les commandes d'ensemble des ouvrants — voir `CoversMaster.vue`).
-// `fill` : occupe la largeur du parent et coupe les libellés plutôt que de déborder.
-// `icon` : à la place du texte (le `label` reste l'infobulle et le nom accessible).
-// `sublabel` : seconde ligne plus petite (ex. « 2700 K » sous « Chaud »).
-// `count` : pastille (ex. devoirs à faire). Après un libellé, sa place reste réservée à 0 pour que le
-// segment ne rétrécisse pas — et ne pousse pas ses voisins — quand le nombre tombe à zéro. Sur une
-// icône, elle est posée en exposant, hors du flux : aucune place à réserver.
+// Pill-shaped segmented control: surface + border container, active segment on the accent.
+// `label` names the group for screen readers, when nothing next to it says what it acts on.
+// `disabled` per option: a segment can have nothing to command while the other still has
+// (the covers' overall commands — see `CoversMaster.vue`).
+// `fill`: takes the parent's width and cuts labels rather than overflowing.
+// `icon`: in place of the text (the `label` remains the tooltip and the accessible name).
+// `sublabel`: smaller second line (e.g. "2700 K" under "Warm").
+// `count`: pill (e.g. homework to do). After a label, its place stays reserved at 0 so that the
+// segment does not shrink — and does not push its neighbors — when the number drops to zero. On an
+// icon, it is set as a superscript, out of the flow: no space to reserve.
 defineProps<{
   modelValue: T
   options: { value: T; label: string; sublabel?: string; icon?: IconName; disabled?: boolean; count?: number }[]
@@ -47,14 +47,14 @@ const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
   font: 500 14px/1 var(--font); transition: background .15s, color .15s; white-space: nowrap;
 }
 .segmented--dense .segmented__item { height: 32px; padding: 0 12px; font-size: 13px; }
-/* icône seule : padding plus serré — quatre silhouettes tiennent à côté d'un libellé court */
+/* icon only: tighter padding — four silhouettes fit next to a short label */
 .segmented--dense .segmented__item:has(svg):not(:has(.segmented__stack)) { padding: 0 8px; }
-/* pleine largeur du parent : les segments se partagent l'espace et se coupent plutôt que de déborder
-   (un `min-content` de libellés longs a déjà fait défiler le panneau — voir doc 4_1). */
+/* full parent width: the segments share the space and are cut rather than overflowing
+   (a `min-content` of long labels has already made the panel scroll — see doc 4_1). */
 .segmented--fill { display: flex; width: 100%; min-width: 0; box-sizing: border-box; overflow: hidden; }
 .segmented--fill .segmented__item { flex: 1 1 0; min-width: 0; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; }
 .segmented--fill.segmented--dense .segmented__item { padding: 0 6px; font-size: 12px; }
-/* Deux lignes (libellé + K) : un peu plus haut, texte centré, pas de nowrap qui écraserait le sous-libellé. */
+/* Two lines (label + K): a bit taller, centered text, no nowrap that would crush the sublabel. */
 .segmented--stack .segmented__item { height: auto; min-height: 40px; padding-block: 6px; white-space: normal; }
 .segmented--stack.segmented--dense .segmented__item { min-height: 36px; padding-block: 4px; }
 .segmented__stack {

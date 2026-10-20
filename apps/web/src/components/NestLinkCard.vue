@@ -6,12 +6,12 @@ import { useDevicesStore } from '../stores/devices'
 import { useNotificationsStore } from '../stores/notifications'
 import StrokeIcon from './ui/StrokeIcon.vue'
 
-// Liaison du compte Google (plugin Nest), dans la section du plugin. Le consentement se fait dans un
-// onglet Google ; au retour, la page du serveur donne le jeton à coller dans .env, et le plugin
-// fonctionne déjà en mémoire — d'où le bouton « Actualiser » pour voir les caméras arriver.
+// Linking of the Google account (Nest plugin), in the plugin section. Consent happens in a Google
+// tab; on return, the server page gives the token to paste into .env, and the plugin already works
+// in memory — hence the "Refresh" button to see the cameras arrive.
 //
-// Compte déjà lié, la carte le dit et propose de le relier à nouveau : c'est ce qu'il faut faire
-// pour changer les caméras partagées avec Kasbah, le choix se fait dans l'écran de consentement.
+// With the account already linked, the card says so and offers to link it again: that is what to
+// do to change the cameras shared with Kasbah, the choice is made on the consent screen.
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()
 const { t } = useI18n()

@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-// Les genres d'un mix, en pastilles sur une ligne de hauteur fixe : sur Mixcloud, le style d'une
-// émission est un critère de choix, il doit se lire d'un coup d'œil. Un genre gardé par le filtre
-// s'allume.
+// The genres of a mix, as pills on a fixed-height line: on Mixcloud, a show's style is a selection
+// criterion, it must read at a glance. A genre kept by the filter lights up.
 //
-// Ce qui ne tient pas s'estompe au bord droit (la suite existe) et défile, comme `MarqueeText` : au
-// survol de la tuile ou de la ligne sur un écran à souris, en continu sur un écran tactile, qui n'a
-// pas de survol. Vitesse constante, pause à chaque bout ; sous `prefers-reduced-motion`, rien ne défile.
+// What does not fit fades at the right edge (there is more) and scrolls, like `MarqueeText`: on
+// hover of the tile or row on a mouse screen, continuously on a touch screen, which has no hover.
+// Constant speed, pause at each end; under `prefers-reduced-motion`, nothing scrolls.
 const props = defineProps<{ genres: { slug: string; name: string }[]; kept?: ReadonlySet<string> }>()
 
 const wrap = ref<HTMLElement | null>(null)
@@ -46,21 +45,21 @@ const duration = () => `${Math.min(MAX_S, Math.max(MIN_S, (overflow.value / SPEE
 
 <style scoped>
 .gp { position: relative; height: 20px; min-width: 0; overflow: hidden; contain: inline-size; }
-/* `flex` + `max-content`, pas `inline-flex` : posé sur la ligne de base, il descendait de 4 px et le
-   bas des pastilles était rogné */
+/* `flex` + `max-content`, not `inline-flex`: set on the baseline, it dropped 4 px and the bottom
+   of the pills was clipped */
 .gp__inner { display: flex; width: max-content; gap: 4px; will-change: transform; }
 .gp__pill {
   flex: 0 0 auto; height: 20px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line);
   background: var(--surface2); color: var(--text); font-size: 11px; line-height: 18px; white-space: nowrap;
 }
-/* couleur seulement : un gras élargirait la pastille, et le défilement mesuré ne serait plus le bon */
+/* color only: bold would widen the pill, and the measured scroll would no longer be the right one */
 .gp__pill[data-on='1'] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-/* au repos : la suite s'estompe à droite */
+/* at rest: the rest fades out on the right */
 .gp[data-overflow='1'] {
   mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent 100%);
   -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent 100%);
 }
-/* en défilement : fondu aux deux bords, comme MarqueeText */
+/* while scrolling: fade at both edges, like MarqueeText */
 @media (hover: none) {
   .gp[data-overflow='1'] {
     mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
@@ -77,7 +76,7 @@ const duration = () => `${Math.min(MAX_S, Math.max(MIN_S, (overflow.value / SPEE
     animation: gp-slide var(--gp-duration) ease-in-out infinite;
   }
 }
-/* départ à 0 (le repos, sans à-coup au survol), traversée, pause à l'arrivée, retour */
+/* start at 0 (rest, no jolt on hover), traverse, pause at the end, return */
 @keyframes gp-slide {
   0%, 15% { transform: translateX(0); }
   50%, 65% { transform: translateX(calc(var(--gp-shift) - 12px)); }

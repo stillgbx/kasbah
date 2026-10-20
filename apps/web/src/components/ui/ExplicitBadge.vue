@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// Le « E » des catalogues : un morceau signalé explicit par le service qui l'a lancé. Même carré
-// partout (lecteur du bas, panneau Écoute, détail d'un appareil) — les lignes de recherche, elles,
-// portent depuis toujours leur propre copie de ce style.
+// The "E" of catalogs: a track flagged explicit by the service that launched it. Same square
+// everywhere (bottom player, Listening panel, device detail) — the search rows, for their part,
+// have always carried their own copy of this style.
 </script>
 
 <template>

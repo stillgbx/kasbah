@@ -13,11 +13,11 @@ import {
 } from '../lib/tens/programs'
 import { INTENSITY_STEP, type TensChannels } from '../lib/tens/protocol'
 
-// Vue TENS : l'électrostimulateur personnel, piloté en Bluetooth depuis CE poste. L'entrée du rail
-// n'existe que là où le plugin local est activé (Réglages → Sur cet appareil).
+// TENS view: the personal electrostimulator, driven over Bluetooth from THIS device. The rail entry
+// only exists where the local plugin is activated (Settings → On this device).
 //
-// Trois cartes à empreinte fixe — rien ne bouge quand une séance démarre ou s'arrête : la carte
-// Séance est toujours là, grisée au repos ; Pause et Reprendre partagent le même emplacement.
+// Three cards with a fixed footprint — nothing moves when a session starts or stops: the Session
+// card is always there, greyed out at rest; Pause and Resume share the same slot.
 const tens = useTensStore()
 const localPlugins = useLocalPluginsStore()
 const { t, locale } = useI18n()
@@ -25,9 +25,9 @@ const { t, locale } = useI18n()
 const enabled = computed(() => localPlugins.isEnabled('tens'))
 onMounted(() => { if (enabled.value) void tens.reconnect() })
 
-/** Le programme que Démarrer lancera : aucun tant qu'on n'en a pas choisi un. */
+/** The program that Start will launch: none until one has been chosen. */
 const selected = ref<string | null>(null)
-// le programme qui tourne devient le programme choisi — y compris retrouvé après un rechargement
+// the running program becomes the chosen program — including found again after a reload
 watch(() => tens.currentProgram, (p) => { if (p) selected.value = p }, { immediate: true })
 const minutes = ref(DURATION_DEFAULT)
 const channels = ref<'1' | '2' | '3'>('3')
@@ -37,16 +37,16 @@ const channelOptions = computed(() => [
   { value: '3' as const, label: t('tens.channelsBoth') },
 ])
 
-/** L'intensité que la séance ira chercher d'elle-même, par canal (dixièmes de mA) ; 0 = à la main. */
+/** The intensity the session will go and reach by itself, per channel (tenths of mA); 0 = by hand. */
 const targets = reactive<Record<1 | 2, number>>({ 1: 0, 2: 0 })
 const usesChannel = (ch: 1 | 2) => (Number(channels.value) & ch) !== 0
-/** Le lancement tel que réglé à droite : c'est lui que Démarrer envoie et que l'étoile enregistre. */
+/** The launch as set on the right: it is what Start sends and what the star records. */
 const draft = (program: string): TensFavorite => ({
   program, minutes: minutes.value, channels: Number(channels.value) as TensChannels,
   ch1: usesChannel(1) ? targets[1] : 0, ch2: usesChannel(2) ? targets[2] : 0,
 })
 
-/** '1' : ces réglages sont un favori ; 'other' : le programme l'est, mais avec d'autres ; '0' : jamais. */
+/** '1': these settings are a favorite; 'other': the program is, but with others; '0': never. */
 const starState = (program: string) =>
   tens.isFavorite(draft(program)) ? '1' : tens.favorites.some((f) => f.program === program) ? 'other' : '0'
 
@@ -56,8 +56,8 @@ const programLabel = (id: string) => `P${tensProgram(id)?.number ?? '?'} · ${pr
 const canLaunch = computed(() => tens.connected && !tens.active && !tens.busy)
 const canDrive = computed(() => tens.connected && tens.running)
 /**
- * Arrêter : seulement quand une séance tourne (en cours ou en pause)… et pendant son lancement, les
- * 2 s où le programme part : l'arrêt pressé à ce moment annule le démarrage.
+ * Stop: only when a session is running (in progress or paused)… and during its launch, the
+ * 2 s where the program starts: stop pressed at that moment cancels the start.
  */
 const canStop = computed(() => tens.connected && (tens.active || tens.busy))
 
@@ -67,7 +67,7 @@ const statusLabel = computed(() => t(`tens.status.${tens.status}`))
 const batteryLabel = computed(() => {
   const b = tens.battery
   if (!b) return t('tens.noBattery')
-  // sur le câble, le pourcentage suit la tension et affiche un faux plein : on dit « en charge »
+  // on the cable, the percentage follows the voltage and shows a false full: we say "Charging"
   return b.charging ? t('tens.charging') : `${b.percent} %`
 })
 
@@ -84,7 +84,8 @@ const countdown = computed(() => {
 })
 
 const ma = (tenths: number) => (tenths / 10).toLocaleString(locale.value, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-/** « 60 min · 12,0 / 15,0 mA », « 30 min · canal 1 : 12,0 mA » ; la durée seule quand le favori ne monte pas seul. */
+/** "60 min · 12.0 / 15.0 mA", "30 min · channel 1: 12.0 mA"; the duration alone when the favorite
+ * does not ramp up by itself. */
 function favoriteMeta(f: TensFavorite) {
   const ch = f.channels ?? 3, v1 = f.ch1 ?? 0, v2 = f.ch2 ?? 0
   const time = t('tens.minutes', { n: f.minutes })
@@ -93,14 +94,14 @@ function favoriteMeta(f: TensFavorite) {
   return v ? `${time} · ${t('tens.channelShort', { n: ch })} ${ma(v)} mA` : time
 }
 const capLabel = computed(() => t('tens.cap', { max: ma(INTENSITY_MAX) }))
-/** Où en est le TENS, et ce qui est demandé : deux valeurs, la file rapproche l'une de l'autre. */
+/** Where the TENS stands, and what is requested: two values, the queue brings one closer to the other. */
 const acquired = (ch: 1 | 2) => (tens.active ? tens.acquiredOf(ch) : 0)
 const requested = (ch: 1 | 2) => (tens.active ? tens.targetOf(ch) : 0)
 const pct = (v: number) => `${(v / INTENSITY_MAX) * 100}%`
-/** Repères du curseur tous les 5 mA (0, 5, 10… jusqu'au plafond), en dixièmes comme les valeurs. */
+/** Slider marks every 5 mA (0, 5, 10… up to the ceiling), in tenths like the values. */
 const TICKS = Array.from({ length: Math.floor(INTENSITY_MAX / 50) + 1 }, (_, i) => i * 50)
 
-// Aide à l'appairage : ouverte d'office tant que ce poste n'a jamais connecté le TENS, repliable ensuite.
+// Pairing help: open by default as long as this device has never connected the TENS, collapsible afterwards.
 const showPairing = ref(!tens.knownDeviceId)
 </script>
 
@@ -115,7 +116,7 @@ const showPairing = ref(!tens.knownDeviceId)
       <div v-else-if="!tens.supported" class="card card--soft empty muted">{{ $t('tens.unsupported') }}</div>
 
       <template v-else>
-        <!-- l'appareil : connexion et batterie, une ligne -->
+        <!-- the device: connection and battery, one row -->
         <section class="card device">
           <span class="icon-square" :data-on="tens.connected ? '1' : '0'"><StrokeIcon name="pulse" :size="18" /></span>
           <div class="device__main">
@@ -126,7 +127,7 @@ const showPairing = ref(!tens.knownDeviceId)
             <div class="device__value">{{ batteryLabel }}</div>
             <div class="muted device__status">{{ statusLabel }}</div>
           </div>
-          <!-- les deux emplacements restent là une fois connecté (le second masqué) : la ligne ne bouge pas -->
+          <!-- the two slots stay there once connected (the second hidden): the row does not move -->
           <div class="device__actions">
             <button v-if="tens.connected" type="button" class="pill pill--sm device__primary" @click="tens.disconnect()">{{ $t('tens.disconnect') }}</button>
             <button v-else type="button" class="pill pill--sm device__primary" data-on="1" :disabled="tens.status === 'connecting'" @click="tens.connect()">{{ $t('tens.connect') }}</button>
@@ -136,7 +137,7 @@ const showPairing = ref(!tens.knownDeviceId)
             </button>
           </div>
         </section>
-        <!-- l'appairage, tel que la notice le décrit : sans le mode appairage, le TENS refuse tout nouvel appareil -->
+        <!-- pairing, as the manual describes it: without pairing mode, the TENS refuses any new device -->
         <section v-if="showPairing" class="card card--soft pairing">
           <div class="pairing__title">{{ $t('tens.pairing.title') }}</div>
           <ol class="pairing__steps">
@@ -148,11 +149,11 @@ const showPairing = ref(!tens.knownDeviceId)
           <div class="muted small">{{ $t('tens.pairing.flag') }}</div>
           <div class="muted small">{{ $t('tens.pairing.note') }}</div>
         </section>
-        <!-- ligne réservée : une erreur apparaît sans rien pousser -->
+        <!-- reserved row: an error appears without pushing anything -->
         <div class="error" role="status">{{ tens.error ? $t(tens.error) : '' }}<span v-if="tens.errorDetail" class="error__detail"> ({{ tens.errorDetail }})</span></div>
 
         <div class="tens__grid">
-          <!-- la séance : toujours là, grisée au repos -->
+          <!-- the session: always there, greyed out at rest -->
           <section class="card session" :data-off="tens.active ? '0' : '1'">
             <div class="session__head">
               <div class="session__titles">
@@ -168,15 +169,15 @@ const showPairing = ref(!tens.knownDeviceId)
               <button type="button" class="channel__btn" :disabled="!canDrive || requested(ch) <= 0" :aria-label="$t('tens.decrease', { n: ch })" @click="tens.nudge(ch, -1)">
                 <StrokeIcon name="minus" :size="18" />
               </button>
-              <!-- le curseur porte la CONSIGNE (on le fait glisser pour aller vite), la barre dessous
-                   ce que le TENS a vraiment accepté : l'écart se voit tant que la file travaille -->
+              <!-- the slider carries the SETPOINT (you drag it to go fast), the bar underneath
+                   what the TENS has really accepted: the gap shows while the queue works -->
               <div class="channel__track">
                 <v-slider :model-value="requested(ch)" :min="0" :max="INTENSITY_MAX" :step="INTENSITY_STEP" :disabled="!canDrive"
                           :ticks="TICKS" show-ticks="always" class="channel__slider" hide-details density="compact" :aria-label="$t('tens.requested', { n: ch })"
                           @update:model-value="(v: number) => tens.setIntensity(ch, v)" />
                 <div class="channel__gauge"><div class="channel__fill" :style="{ width: pct(acquired(ch)) }" /></div>
               </div>
-              <!-- en haut ce qui est DEMANDÉ ; dessous, discret, où en est le TENS — effacé une fois rattrapé -->
+              <!-- on top what is REQUESTED; below, discreet, where the TENS stands — erased once caught up -->
               <div class="channel__values">
                 <span class="channel__value">{{ ma(requested(ch)) }} mA</span>
                 <span class="channel__actual">{{ requested(ch) !== acquired(ch) ? $t('tens.actual', { v: ma(acquired(ch)) }) : '' }}</span>
@@ -194,21 +195,21 @@ const showPairing = ref(!tens.knownDeviceId)
               <button v-else type="button" class="pill session__btn" :disabled="!canDrive || tens.busy" @click="tens.pause()">
                 <StrokeIcon name="pause" :size="16" />{{ $t('tens.pause') }}
               </button>
-              <!-- l'arrêt n'attend jamais : actif dès qu'une séance tourne, et déjà pendant son lancement -->
+              <!-- stop never waits: active as soon as a session runs, and already during its launch -->
               <button type="button" class="pill session__btn session__stop" :disabled="!canStop" @click="tens.stop()">
                 <StrokeIcon name="stop" :size="16" />{{ $t('tens.stop') }}
               </button>
             </div>
           </section>
 
-          <!-- lancer : les favoris en un clic, puis n'importe quel programme -->
+          <!-- launch: the favorites in one click, then any program -->
           <section class="card launch">
             <div class="section-label">{{ $t('tens.favorites') }}</div>
             <div class="favorites">
               <div v-for="f in tens.favorites" :key="favoriteKey(f)" class="favorite" :data-current="tens.currentKey === favoriteKey(f) ? '1' : '0'">
                 <button type="button" class="favorite__go" :disabled="!canLaunch" @click="launch(f)">
                   <StrokeIcon name="play" :size="14" />
-                  <!-- deux lignes pour tous : le nom garde la largeur, durée et intensités passent dessous -->
+                  <!-- two lines for all: the name keeps the width, duration and intensities go underneath -->
                   <span class="favorite__text">
                     <span class="favorite__name">{{ programLabel(f.program) }}</span>
                     <span class="muted favorite__time">{{ favoriteMeta(f) }}</span>
@@ -224,15 +225,15 @@ const showPairing = ref(!tens.knownDeviceId)
 
             <div class="section-label">{{ $t('tens.programs') }}</div>
             <div class="programs">
-              <!-- trois marques distinctes : sélectionné pour Démarrer (fond), en cours (point), favori (étoile) -->
+              <!-- three distinct marks: selected for Start (background), running (dot), favorite (star) -->
               <div v-for="p in TENS_PROGRAMS" :key="p.id" class="program" :data-on="selected === p.id ? '1' : '0'" :data-current="tens.currentProgram === p.id ? '1' : '0'">
                 <button type="button" class="program__pick" :title="tens.currentProgram === p.id ? $t('tens.running') : undefined" @click="selected = p.id">
                   <span class="program__num">P{{ p.number }}</span>
                   <span class="program__name">{{ programName(p.id) }}</span>
                   <PulseDot :on="tens.currentProgram === p.id && tens.running" :size="8" class="program__dot" />
                 </button>
-                <!-- l'étoile parle des réglages EN COURS : pleine s'ils sont déjà un favori, pâle si le programme
-                     n'est favori qu'avec d'autres réglages -->
+                <!-- the star speaks of the CURRENT settings: filled if they are already a favorite,
+                     pale if the program is a favorite only with other settings -->
                 <button type="button" class="program__star" :data-on="starState(p.id)"
                         :aria-label="$t(tens.isFavorite(draft(p.id)) ? 'tens.favoriteRemove' : 'tens.favoriteAdd', { name: programLabel(p.id), n: minutes })"
                         :title="$t(tens.isFavorite(draft(p.id)) ? 'tens.favoriteRemove' : 'tens.favoriteAdd', { name: programLabel(p.id), n: minutes })"
@@ -258,7 +259,7 @@ const showPairing = ref(!tens.knownDeviceId)
               <span class="muted small">{{ $t('tens.channels') }}</span>
               <Segmented v-model="channels" dense :options="channelOptions" :label="$t('tens.channels')" />
             </div>
-            <!-- l'intensité visée : la séance y monte seule, par paliers, une fois partie -->
+            <!-- the target intensity: the session climbs to it by itself, in steps, once started -->
             <div v-for="ch in ([1, 2] as const)" :key="ch" class="target" :data-off="usesChannel(ch) ? '0' : '1'">
               <span class="muted small">{{ $t('tens.target', { n: ch }) }}</span>
               <v-slider v-model="targets[ch]" :min="0" :max="INTENSITY_MAX" :step="INTENSITY_STEP" :disabled="!usesChannel(ch)"
@@ -288,12 +289,12 @@ const showPairing = ref(!tens.knownDeviceId)
 .device__main { flex: 1 1 220px; min-width: 0; }
 .device__name { font-size: 15px; font-weight: 600; }
 .device__sub { font-size: 12px; margin-top: 2px; }
-/* largeur réservée : « 92 % » devenant « En charge » ne pousse ni le nom ni les boutons */
+/* reserved width: "92%" becoming "Charging" pushes neither the name nor the buttons */
 .device__stat { flex: 0 0 120px; text-align: right; }
 .device__value { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .device__status { font-size: 12px; white-space: nowrap; }
 .device__actions { display: flex; gap: 8px; }
-/* « Connecter » et « Déconnecter » dans la même largeur */
+/* "Connect" and "Disconnect" in the same width */
 .device__primary { min-width: 118px; justify-content: center; }
 .device__help { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--muted); display: grid; place-items: center; padding: 0; }
 .device__help[data-on='1'] { color: var(--accent); border-color: var(--accent); }
@@ -304,45 +305,45 @@ const showPairing = ref(!tens.knownDeviceId)
 .error { min-height: 18px; font-size: 13px; color: rgb(var(--v-theme-error)); margin: -6px 4px 0; }
 
 .tens__grid { display: grid; gap: 14px; min-width: 0; }
-/* côte à côte, les deux cartes prennent la hauteur de la plus haute (étirement par défaut de la grille) */
+/* side by side, the two cards take the height of the taller (default grid stretch) */
 @media (min-width: 1040px) { .tens__grid { grid-template-columns: 1fr 1fr; } }
 
-/* en colonne flex : la hauteur gagnée par l'étirement va sous le contenu, et Pause / Arrêter
-   restent collés en bas de la carte au lieu d'écarter les lignes */
+/* in a flex column: the height gained by the stretch goes under the content, and Pause / Stop
+   stay stuck to the bottom of the card instead of spreading the rows apart */
 .session { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; transition: opacity .2s; }
 .session[data-off='1'] .session__time, .session[data-off='1'] .channel { opacity: .45; }
 .session__head { display: flex; align-items: flex-start; gap: 12px; }
 .session__titles { flex: 1 1 auto; min-width: 0; display: grid; gap: 4px; }
 .session__program { font-size: 15px; font-weight: 600; }
-/* réservé : « Vérification des électrodes » est le plus long des états */
+/* reserved: "Checking electrodes" is the longest of the states */
 .session__state { flex: 0 0 150px; text-align: right; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .session__time { font-size: 44px; }
 
 .channel { display: grid; grid-template-columns: 64px 36px 1fr 84px 36px; align-items: center; gap: 10px; }
 .channel__track { display: grid; gap: 2px; min-width: 0; }
-/* repères tous les 5 mA : la couleur du repère de position des ouvrants (`app.css`,
-   `.cover-slider`), en trait plus court — ils sont sept sur la piste, pas un seul */
+/* marks every 5 mA: the color of the covers' position mark (`app.css`,
+   `.cover-slider`), as a shorter stroke — there are seven on the track, not just one */
 .channel__slider :deep(.v-slider-track__tick) {
   width: 2px; height: 12px; margin: 0; border-radius: 1px; opacity: 1;
   top: 50%; transform: translate(-50%, -50%); background: rgb(var(--v-theme-warning));
 }
-/* les repères extrêmes sont placés par des marges que `margin: 0` annule : on les remet en bout de piste */
+/* the extreme marks are placed by margins that `margin: 0` cancels: we put them back at the ends of the track */
 .channel__slider :deep(.v-slider-track__tick--first) { inset-inline-start: 0; }
 .channel__slider :deep(.v-slider-track__tick--last) { inset-inline-start: 100%; }
-/* Vuetify étiquette un repère donné en tableau (la valeur sous la piste) : 24 px de plus, inutiles ici */
+/* Vuetify labels a mark given as an array (the value under the track): 24 px more, useless here */
 .channel__slider :deep(.v-slider-track__tick-label) { display: none; }
-/* la barre du TENS s'aligne sous la piste du curseur (Vuetify la borde de la moitié du pouce, 10 px) */
+/* the TENS bar aligns under the slider's track (Vuetify borders it with half the thumb, 10 px) */
 .channel__track .channel__gauge { margin: 0 10px; height: 4px; }
 .channel__values { display: grid; justify-items: end; line-height: 1.2; }
-/* ligne réservée : « TENS 7,0 mA » apparaît et disparaît sans faire bouger la valeur au-dessus */
+/* reserved row: "TENS 7.0 mA" appears and disappears without moving the value above */
 .channel__actual { min-height: 15px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .channel__label { font-size: 13px; color: var(--muted); }
 .channel__btn { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--text); display: grid; place-items: center; padding: 0; }
 .channel__btn:disabled { opacity: .35; cursor: default; }
 .channel__gauge { height: 8px; border-radius: 4px; background: var(--surface2); overflow: hidden; }
 .channel__fill { height: 100%; background: var(--accent); transition: width .25s; }
-/* la barre du TENS, sous le curseur : même rôle d'information, couleur discrète pour ne pas
-   concurrencer la consigne */
+/* the TENS bar, under the slider: same informational role, discreet color so as not to
+   compete with the setpoint */
 .channel__track .channel__fill { background: var(--muted); opacity: .6; }
 .channel__value { font-size: 15px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
@@ -361,30 +362,30 @@ const showPairing = ref(!tens.knownDeviceId)
 .favorite__text { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
 .favorite__name { min-width: 0; font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .favorite__time { min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* 200 px : la place du nom une fois le numéro, le point « en cours » et l'étoile posés — à 170 px
-   « Gate Control 100 Hz » tombait à « Gate Con… » */
+/* 200 px: the room for the name once the number, the "running" dot and the star are placed — at
+   170 px "Gate Control 100 Hz" dropped to "Gate Con…" */
 .programs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
 .program { display: flex; align-items: center; border-radius: var(--radius-sm); border: 1px solid var(--line); min-width: 0; }
 .program[data-on='1'] { border-color: var(--accent); background: var(--accent-soft); }
 .program__pick { flex: 1 1 auto; display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 6px 4px 6px 10px; border: 0; background: transparent; color: var(--text); text-align: left; min-width: 0; }
-/* le point pulsant « en cours » a toujours sa place (PulseDot la réserve) : il s'allume sans décaler le nom */
+/* the pulsing "running" dot always has its place (PulseDot reserves it): it lights up without shifting the name */
 .program__dot { margin-left: auto; color: var(--accent); }
 .program__star { width: 26px; height: 26px; margin-right: 4px; }
 .program__star[data-on='1'] { color: var(--accent); }
 .program__star[data-on='other'] { color: var(--accent); opacity: .45; }
 .program__num { flex: 0 0 30px; font-size: 12px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
-/* le nom passe sur deux lignes plutôt que d'être coupé ; la case a la hauteur de deux lignes pour
-   TOUTES, que la grille reste régulière quel que soit le nom */
+/* the name wraps onto two lines rather than being cut; the cell has the height of two lines for
+   ALL, so that the grid stays regular whatever the name */
 .program__name { min-width: 0; font-size: 13px; line-height: 1.25; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .launch__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .launch__go { justify-content: center; }
 .target { display: grid; grid-template-columns: 130px 1fr 72px; align-items: center; gap: 10px; }
 .target[data-off='1'] { opacity: .45; }
-/* largeur fixe : « 0,0 mA » -> « 30,0 mA » ne raccourcit pas la piste */
+/* fixed width: "0.0 mA" -> "30.0 mA" does not shorten the track */
 .target__value { font-size: 13px; font-weight: 600; text-align: right; white-space: nowrap; }
 .stepper { display: inline-flex; align-items: center; gap: 8px; }
 .stepper__btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--text); }
 .stepper__btn:disabled { opacity: .35; cursor: default; }
-/* largeur fixe : « 5 min » -> « 120 min » ne fait pas bouger les boutons */
+/* fixed width: "5 min" -> "120 min" does not make the buttons move */
 .stepper__val { min-width: 7ch; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
 </style>

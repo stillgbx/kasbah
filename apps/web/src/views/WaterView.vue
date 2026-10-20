@@ -13,17 +13,17 @@ import { headlineValue, statusLabel } from '../lib/deviceState'
 import { useDevicesStore } from '../stores/devices'
 import { HOUSEHOLD_SIZE_MAX, HOUSEHOLD_SIZE_MIN, useSettingsStore } from '../stores/settings'
 
-// Vue Traitement de l'eau : un appareil unique par installation, comme la météo — pas de liste à
-// parcourir pour le lire, la carte détaillée (WaterCard, déjà utilisée dans le panneau d'appareil
-// de la scène 3D) reprend donc toute la place en tête de page, précédée d'une grande valeur comme
-// la température de la vue Météo. RoomBands, en dessous, apporte le diagnostic de liaison et le
-// bouton « Placer » (même bande que Lumières/Ouvrants/Énergie) : la station doit pouvoir être posée
-// dans la maison 3D comme n'importe quel autre appareil.
+// Water treatment view: a single device per installation, like the weather — no list to
+// browse to read it, the detailed card (WaterCard, already used in the 3D scene's device
+// panel) therefore takes all the room at the top of the page, preceded by a large value like
+// the temperature of the Weather view. RoomBands, below, brings the link diagnostic and the
+// "Place" button (same band as Lights/Covers/Energy): the station must be placeable
+// in the 3D house like any other device.
 const devices = useDevicesStore()
 const settings = useSettingsStore()
 const { t, locale } = useI18n()
 
-/** Le premier appareil eau DISPONIBLE, sinon le premier tout court (grisé) — même règle que la météo. */
+/** The first AVAILABLE water device, otherwise the first one at all (greyed out) — same rule as the weather. */
 const entry = computed(() => {
   const list = devices.list.filter((e) => e.state.kind === 'water')
   return list.find((e) => e.state.available) ?? list[0]
@@ -43,9 +43,9 @@ const { consumption } = useConsumption(computed(() => entry.value?.descriptor.id
     <PageHeader />
     <div class="page__scroll">
       <div v-if="!entry" class="card card--soft empty muted">{{ $t('water.noDevice') }}</div>
-      <!-- Carte détail + graphique : à droite l'un de l'autre dès que la largeur le permet (voir
-           `.water__top` plus bas), l'un sous l'autre sinon. `--solo` (pas de capacité `water_usage`,
-           donc pas de graphique) garde une seule colonne : le détail seul n'a pas à se coller à gauche. -->
+      <!-- Detail card + chart: side by side whenever the width allows (see
+           `.water__top` below), one under the other otherwise. `--solo` (no `water_usage` capability,
+           hence no chart) keeps a single column: the detail alone has no need to hug the left. -->
       <div v-else class="water__top" :class="{ 'water__top--solo': !hasChart }">
         <section class="card hero">
           <div class="hero__head">
@@ -62,9 +62,9 @@ const { consumption } = useConsumption(computed(() => entry.value?.descriptor.id
             </div>
           </div>
           <WaterCard v-if="state" :descriptor="entry.descriptor" :state="state" />
-          <!-- Foyer déclaré : réglage d'AFFICHAGE (pas une commande de l'appareil), discret, au pied
-               de la carte détail — nourrit le repère de moyenne française du graphique voisin. Ne
-               s'affiche que si le graphique existe (`hasChart`) : sans historique, rien à comparer. -->
+          <!-- Declared household: DISPLAY setting (not a command of the device), discreet, at the foot
+               of the detail card — feeds the French-average mark of the neighboring chart. Only
+               shown if the chart exists (`hasChart`): without history, nothing to compare. -->
           <div v-if="hasChart" class="hero__household" :title="$t('water.referenceHint')">
             <span class="muted">{{ $t('water.household') }}</span>
             <div class="stepper">
@@ -92,32 +92,32 @@ const { consumption } = useConsumption(computed(() => entry.value?.descriptor.id
 .page { height: 100%; display: flex; flex-direction: column; }
 .page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); display: grid; gap: 20px; align-content: start; }
 .empty { padding: 24px; text-align: center; }
-/* Sous 1040px (seuil mesuré, voir rapport de tâche) : une colonne, comme avant. Au-delà : la carte
-   détail et le graphique côte à côte, `stretch` (défaut de `align-items`) leur donnant la même
-   hauteur — même patron que `.energy__top` (EnergyView.vue).
-   1040px et pas 900 (repris tel quel d'EnergyView) : l'en-tête de la carte détail réserve une
-   largeur FIXE au bloc de droite (valeur + statut, ex. « Avertissement » à 32px, `.hero__stat` en
-   `flex: 0 0 auto`) ; sous ~965px de fenêtre, ce qui reste à `.hero__main` (nom + marque) tombe sous
-   ~90px et la marque passe sur deux lignes (`.hero__sub` n'a pas d'ellipsis, contrairement à
-   `.hero__name` qui défile via `MarqueeText`) — mesuré au `getBoundingClientRect()` : 68px de large
-   à 950px de fenêtre (marque sur 2 lignes, 36px de haut) contre 98px à 980px (1 ligne, 18px). 1040px
-   donne de la marge au-delà de ce seuil plutôt que de coller au pixel près. */
-.water__top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; min-width: 0; }   /* colonne bornée : une valeur longue ne l'élargit pas au-delà du téléphone */
+/* Below 1040px (measured threshold, see task report): one column, as before. Beyond: the detail
+   card and the chart side by side, `stretch` (the default of `align-items`) giving them the same
+   height — same pattern as `.energy__top` (EnergyView.vue).
+   1040px and not 900 (taken as is from EnergyView): the detail card's header reserves a FIXED
+   width for the right block (value + status, e.g. "Avertissement" at 32px, `.hero__stat` in
+   `flex: 0 0 auto`); below ~965px of window, what remains for `.hero__main` (name + brand) falls
+   below ~90px and the brand wraps onto two lines (`.hero__sub` has no ellipsis, unlike
+   `.hero__name` which scrolls via `MarqueeText`) — measured with `getBoundingClientRect()`: 68px
+   wide at 950px of window (brand on 2 lines, 36px tall) versus 98px at 980px (1 line, 18px).
+   1040px gives margin beyond that threshold rather than hugging it to the pixel. */
+.water__top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; min-width: 0; }   /* bounded column: a long value does not widen it beyond the phone */
 @media (min-width: 1040px) { .water__top:not(.water__top--solo) { grid-template-columns: 1fr 1fr; } }
 .hero { padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .hero__head { display: flex; align-items: center; gap: 12px; }
 .hero__main { flex: 1 1 auto; min-width: 0; }
 .hero__name { font-size: 15px; font-weight: 600; }
 .hero__sub { font-size: 12px; margin-top: 2px; min-height: 1em; }
-/* valeur et mot d'alerte : empreinte fixe, alignés à droite comme les tuiles de la vue Météo */
+/* value and alert word: fixed footprint, right-aligned like the tiles of the Weather view */
 .hero__stat { flex: 0 0 auto; text-align: right; }
 .hero__value { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .hero__status { font-size: 12px; margin-top: 2px; }
-/* Réglage discret, distinct des données au-dessus (WaterCard) par une ligne de séparation. */
+/* Discreet setting, set apart from the data above (WaterCard) by a separator line. */
 .hero__household { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; }
 .stepper { display: inline-flex; align-items: center; gap: 8px; }
 .stepper__btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; }
 .stepper__btn:disabled { opacity: .35; cursor: default; }
-/* largeur fixe (2ch) : "9" -> "10" ne fait pas bouger les boutons de part et d'autre. */
+/* fixed width (2ch): "9" -> "10" does not make the buttons on either side move. */
 .stepper__val { min-width: 2ch; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
 </style>

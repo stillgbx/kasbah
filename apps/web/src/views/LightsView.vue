@@ -10,10 +10,10 @@ import { lightTintCss } from '../lib/lightTint'
 import { useDevicesStore } from '../stores/devices'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 
-// Vue Lumières : la liste par pièce et son diagnostic de liaison vivent dans `RoomBands`
-// (partagé avec la vue Ouvrants) ; il ne reste ici que le contrôle propre à une lampe —
-// interrupteur, et curseur de gradation quand elle est allumée et sait varier.
-// Un plafonnier lié à un ventilateur montre aussi l'interrupteur du ventilateur.
+// Lights view: the per-room list and its link diagnostic live in `RoomBands`
+// (shared with the Covers view); only the control specific to a lamp remains here —
+// switch, and dimming slider when it is on and can vary.
+// A ceiling light linked to a fan also shows the fan's switch.
 const devices = useDevicesStore()
 
 const lights = computed(() => devices.list.filter((e) => e.state.kind === 'light'))
@@ -33,7 +33,7 @@ const fanByLightId = computed(() => {
   return map
 })
 
-// Valeur locale pendant le glissement, effacée dès que la commande est partie (l'état reprend la main).
+// Local value during the drag, cleared as soon as the command has gone out (the state takes over again).
 const draft = ref<Record<string, number>>({})
 function drag(id: string, v: number) { draft.value = { ...draft.value, [id]: v } }
 function commit(id: string, v: number) {
@@ -51,8 +51,8 @@ function toggleFan(fan: DeviceEntry): void {
 <template>
   <div class="page">
     <PageHeader>
-      <!-- tout éteindre ou tout allumer sans parcourir les pièces : deux gestes nommés plutôt qu'un
-           interrupteur, parce que la maison est rarement toute allumée ou toute éteinte -->
+      <!-- turn everything off or on without going through the rooms: two named gestures rather than a
+           switch, because the house is rarely all on or all off -->
       <div class="head">
         <div class="muted count">{{ $t('lights.summary', { on: onCount, total: lights.length }) }}</div>
         <LightsMaster :device-ids="lights.map((e) => e.descriptor.id)" :label="$t('lights.all')" />
@@ -61,16 +61,16 @@ function toggleFan(fan: DeviceEntry): void {
     <div class="page__scroll">
       <div v-if="lights.length === 0 && unlinkedFans.length === 0" class="card card--soft empty muted">{{ $t('lights.none') }}</div>
       <RoomBands :kind="[...rowsKind]" hide-linked>
-        <!-- interrupteur maître de la pièce : tout allumer / tout éteindre sans parcourir les lignes -->
+        <!-- the room's master switch: turn everything on / off without going through the rows -->
         <template #room-action="{ entries }">
           <RoomLightsToggle :device-ids="entries.map((e: DeviceEntry) => e.descriptor.id)" />
         </template>
-        <!-- luminosité de toute la pièce, sous son en-tête : le même geste que l'interrupteur maître,
-             en nuances. Place réservée quand la pièce est éteinte. -->
+        <!-- brightness of the whole room, under its header: the same gesture as the master switch,
+             in shades. Space reserved when the room is off. -->
         <template #room-under="{ entries }">
           <RoomBrightness :device-ids="entries.map((e: DeviceEntry) => e.descriptor.id)" />
         </template>
-        <!-- la couleur de la lampe en fond de ligne, comme la pochette d'un lecteur dans la vue Médias -->
+        <!-- the lamp's color as the row's background, like a player's cover art in the Media view -->
         <template #backdrop="{ entry }">
           <Transition name="rowtint">
             <div v-if="entry.state.kind === 'light' && lightTintCss(entry.state as StateFor<'light'>)" class="row-tint"
@@ -82,8 +82,8 @@ function toggleFan(fan: DeviceEntry): void {
             <v-switch :model-value="on" :disabled="!entry.state.available" density="compact" hide-details class="row__switch"
                       :aria-label="$t('kinds.light')"
                       @update:model-value="devices.sendCommand(entry.descriptor.id, { type: 'light.set', on: !on })">
-              <!-- Ampoule dans le pouce quand un ventilateur est aussi là : sans ça les deux
-                   interrupteurs se ressemblent. Seul le cas dual — une lampe seule n'en a pas besoin. -->
+              <!-- Bulb in the thumb when a fan is also there: without it the two
+                   switches look alike. Only the dual case — a lone lamp does not need it. -->
               <template v-if="fanByLightId.has(entry.descriptor.id)" #thumb>
                 <StrokeIcon name="light" :size="12" />
               </template>
@@ -101,8 +101,8 @@ function toggleFan(fan: DeviceEntry): void {
           </div>
           <v-switch v-else-if="entry.state.kind === 'fan'" :model-value="on" :disabled="!entry.state.available" density="compact" hide-details class="row__switch"
                     @update:model-value="devices.sendCommand(entry.descriptor.id, { type: 'fan.set', on: !on })" />
-          <!-- le curseur garde sa place lampe éteinte (invisible, inactif) : allumer une lampe ne
-               fait plus descendre les lignes du dessous — règle « rien ne doit bouger » -->
+          <!-- the slider keeps its place when the lamp is off (invisible, inactive): turning on a lamp
+               no longer pushes down the rows below — "nothing must move" rule -->
           <v-slider v-if="entry.state.kind === 'light' && entry.descriptor.capabilities.includes('brightness')"
                     :model-value="draft[entry.descriptor.id] ?? (entry.state as StateFor<'light'>).brightness ?? 100"
                     :min="1" :max="100" :step="1" density="compact" hide-details class="row__slider"
@@ -124,13 +124,14 @@ function toggleFan(fan: DeviceEntry): void {
 .row__switches { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 0 auto; }
 .row__switches[data-dual='1'] { margin: -2px 0; }
 .row__switch { flex: 0 0 auto; }
-/* Glyphe dans le pouce : même logique que `RoomLightsToggle` — couleur du pouce qui le porte. */
+/* Glyph in the thumb: same logic as `RoomLightsToggle` — color of the thumb that carries it. */
 .row__switches[data-dual='1'] :deep(.v-switch__thumb) { color: var(--muted); }
 .row__switches[data-dual='1'] :deep(.v-selection-control--dirty .v-switch__thumb) { color: var(--accent); }
 .row__slider { grid-column: 1 / -1; margin: 0 4px; transition: opacity .2s ease; }
-/* place réservée : invisible mais présent, la ligne a la même hauteur allumée ou éteinte */
+/* reserved space: invisible but present, the row has the same height on or off */
 .row__slider--off { visibility: hidden; }
-/* teinte de la lampe derriere la ligne : sous l'icone et le nom, fondue avant les touches ; deborde de 4 px pour couvrir jusqu'aux bords */
+/* tint of the lamp behind the row: under the icon and the name, faded before the buttons;
+   overflows by 4 px to cover up to the edges */
 .row-tint { position: absolute; inset: 0 -4px; z-index: -1; pointer-events: none; }
 .rowtint-enter-active, .rowtint-leave-active { transition: opacity .4s ease; }
 .rowtint-enter-from, .rowtint-leave-to { opacity: 0; }

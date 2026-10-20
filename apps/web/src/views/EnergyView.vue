@@ -13,14 +13,14 @@ import { findEnergySite } from '../lib/energy'
 import { formatEnergy, formatPower } from '../lib/format'
 import { useDevicesStore } from '../stores/devices'
 
-// Vue Énergie : quatre tuiles (solaire, réseau, batterie, borne) autour de l'anneau « maison »,
-// puis le graphique horaire de production du jour (historique serveur).
+// Energy view: four tiles (solar, grid, battery, charger) around the "house" ring,
+// then the hourly chart of today's production (server history).
 const devices = useDevicesStore()
 const summary = useHomeSummary()
 const { locale } = useI18n()
 
-// le SITE, et non le premier `energy` venu : une installation publie aussi une batterie par unité,
-// dont l'état ne porte ni production ni réseau (voir `lib/energy.ts`)
+// the SITE, and not the first `energy` that comes along: an installation also publishes a
+// battery per unit, whose state carries neither production nor grid (see `lib/energy.ts`)
 const energyEntry = computed(() => findEnergySite(devices.list))
 const e = computed(() => energyEntry.value?.state as StateFor<'energy'> | undefined)
 const charger = computed(() => summary.chargers.value[0]?.state as StateFor<'ev_charger'> | undefined)
@@ -38,7 +38,7 @@ onMounted(() => { timer = setInterval(loadHistory, 60_000) })
 import { onBeforeUnmount } from 'vue'
 onBeforeUnmount(() => { if (timer) clearInterval(timer) })
 
-// barres 6 h → 20 h (heures locales) ; les heures futures sont grisées, les passées sur l'accent
+// bars 6 h → 20 h (local hours); future hours are greyed out, past ones on the accent
 const HOURS = Array.from({ length: 15 }, (_, i) => 6 + i)
 const bars = computed(() => {
   const byHour = new Map<number, EnergyHistoryPoint>()
@@ -61,17 +61,18 @@ const todayWh = computed(() => e.value?.todayProductionWh ?? points.value.reduce
     <div class="energy__scroll">
       <div v-if="!e" class="card card--soft empty muted">{{ $t('energy.noData') }}</div>
       <template v-else>
-        <!-- Schéma et graphique côte à côte : chacun la moitié de la largeur sur tablette et
-             ordinateur, l'un sous l'autre en deçà. -->
+        <!-- Diagram and chart side by side: each half the width on tablet and
+             desktop, one under the other below that. -->
         <div class="energy__top">
-        <!-- Où va le courant, et dans quel sens : un chiffre seul ne dit pas si 2,4 kW entrent ou
-             sortent. Les mots restent dans les nœuds, ils expliquent ce que la flèche montre. -->
+        <!-- Where the current goes, and in which direction: a number alone does not say whether
+             2.4 kW is coming in or going out. The words stay in the nodes, they explain what the
+             arrow shows. -->
         <EnergyFlow :energy="e" :charger="charger" />
 
         <section class="chart card">
           <div class="chart__head">
-            <!-- L'échelle de temps suit le titre, comme dans le bloc de flux à côté : ici la
-                 journée, reconstituée par le serveur, et non l'instant. -->
+            <!-- The time scale follows the title, as in the flow block next to it: here the
+                 day, reconstructed by the server, and not the instant. -->
             <div class="chart__heading">
               <div class="chart__title">{{ $t('energy.productionToday') }}</div>
               <div class="muted chart__scale">{{ $t('energy.localHistory') }}</div>
@@ -89,20 +90,20 @@ const todayWh = computed(() => e.value?.todayProductionWh ?? points.value.reduce
         </div>
       </template>
 
-      <!-- Ce que produit chaque onduleur, champ par champ : la vue disait la production de la
-           maison, pas celle d'un module. -->
+      <!-- What each inverter produces, array by array: the view told the house's production, not
+           that of a module. -->
       <InverterFields v-if="energyEntry" :site="energyEntry" />
 
-      <!-- Les appareils, comme dans les vues Lumières et Ouvrants : c'est ici qu'on place le site,
-           les batteries et la borne. Les panneaux en sont absents volontairement — un module ne se
-           place pas seul, il suit son champ (`arrays` de house.json). -->
+      <!-- The devices, as in the Lights and Covers views: this is where the site,
+           the batteries and the charger are placed. The panels are deliberately absent — a module
+           is not placed on its own, it follows its array (`arrays` of house.json). -->
       <RoomBands :kind="['energy', 'ev_charger']">
-        <!-- l'annulation manuelle de la borne en mots, au bout de sa ligne d'état (le statut défile à gauche) -->
+        <!-- the charger's manual cancellation in words, at the end of its status line (the status scrolls on the left) -->
         <template #status-after="{ entry }">
           <span v-if="((entry as DeviceEntry).state as StateFor<'ev_charger'>).manualOverride" class="override">{{ $t('charger.manualOverrideShort') }}</span>
         </template>
-        <!-- les commandes de la borne sur leur propre rangée, sous son statut, comme le chauffage :
-             les mêmes que dans son panneau (mode, démarrer / arrêter, annulation), en touches de ligne -->
+        <!-- the charger's controls on their own row, under its status, like the heating:
+             the same as in its panel (mode, start / stop, cancellation), as row buttons -->
         <template #control="{ entry }">
           <EvChargerCommands v-if="(entry as DeviceEntry).state.kind === 'ev_charger'" variant="row"
                              :descriptor="(entry as DeviceEntry).descriptor" :state="(entry as DeviceEntry).state as StateFor<'ev_charger'>"
@@ -118,16 +119,16 @@ const todayWh = computed(() => e.value?.todayProductionWh ?? points.value.reduce
 .energy { height: 100%; display: flex; flex-direction: column; }
 .energy__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); display: grid; gap: 20px; align-content: start; }
 .empty { padding: 24px; text-align: center; }
-/* `stretch` : les deux blocs de la ligne font la MÊME hauteur, celle du plus haut. */
+/* `stretch`: the two blocks of the row have the SAME height, that of the taller one. */
 .energy__top { display: grid; gap: 20px; align-items: stretch; min-width: 0; }
 @media (min-width: 900px) { .energy__top { grid-template-columns: 1fr 1fr; } }
-/* colonne flexible : les barres prennent la hauteur que le schéma impose à la ligne */
+/* flexible column: the bars take the height the diagram imposes on the row */
 .chart { padding: 18px 20px; display: flex; flex-direction: column; }
 .chart__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-/* Échelle SOUS le titre : sur la même ligne, elle poussait le total à la ligne dès que la carte
-   descendait sous ~400 px de large, et la hauteur de l'en-tête suivait alors la longueur du total.
-   Le titre n'a PAS de `min-width: 0` : ce réglage autorise un élément flexible à passer sous la
-   largeur de son plus long mot, et « Production » se faisait couper à 320 px. */
+/* Scale UNDER the title: on the same line, it pushed the total onto the next line as soon as the
+   card went below ~400 px wide, and the header height then followed the length of the total.
+   The title has NO `min-width: 0`: that setting lets a flexible element shrink below the width
+   of its longest word, and "Production" got cut at 320 px. */
 .chart__title { font-weight: 600; font-size: 14px; }
 .chart__scale { font-size: 12px; }
 .chart__total { font-size: 12px; }
@@ -138,9 +139,9 @@ const todayWh = computed(() => e.value?.todayProductionWh ?? points.value.reduce
 .chart__axis { display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; }
 .chart__hint { font-size: 12px; margin-top: 8px; }
 .override { flex: 0 0 auto; color: rgb(var(--v-theme-warning)); }
-/* Sous ~432 px de fenêtre, titre et total ne tiennent plus sur la même ligne : le total se repliait
-   en deux lignes ou une SELON la production du jour, et l'en-tête grandissait donc tout seul au fil
-   des heures. Ici il prend sa propre ligne, et la hauteur ne dépend plus de la valeur. */
+/* Below ~432 px of window, title and total no longer fit on the same line: the total folded
+   onto two lines or one DEPENDING on the day's production, so the header grew by itself over
+   the hours. Here it takes its own line, and the height no longer depends on the value. */
 @media (max-width: 460px) {
   .chart__head { display: block; }
   .chart__total { margin-top: 2px; }

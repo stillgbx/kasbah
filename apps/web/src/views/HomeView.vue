@@ -34,10 +34,10 @@ import type { ScenePrepareStage } from '../three/HouseScene'
 
 defineOptions({ name: 'HomeView' })
 
-// Vue Maison : la scène 3D prend TOUT l'espace (jusque sous le rail), et le reste flotte dessus :
-// en-tête (nom, résumé, onglets de niveau) en haut, boutons de vue (rotation, zoom, vue d'ensemble)
-// en bas à droite, panneau contextuel (maison → pièce → appareil) en carte à droite. La sélection
-// vit dans le store ; l'URL la reflète.
+// House view: the 3D scene takes ALL the space (even under the rail), and the rest floats over it:
+// header (name, summary, level tabs) at the top, view buttons (rotation, zoom, overview)
+// at the bottom right, contextual panel (house → room → device) as a card on the right. The
+// selection lives in the store; the URL reflects it.
 const house = useHouseStore()
 const devices = useDevicesStore()
 const settings = useSettingsStore()
@@ -45,7 +45,7 @@ const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const wide = useMediaQuery('(min-width: 1000px)')
-/** Téléphone en portrait : les onglets de niveau passent sur leur propre ligne et se partagent sa largeur. */
+/** Phone in portrait: the level tabs go on their own row and share its width. */
 const phone = useMediaQuery('(max-width: 599px)')
 
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -58,26 +58,26 @@ const scene = useHouseScene({
   states: computed(() => devices.states),
 })
 
-// Le voile de chargement : la maison arrive du serveur, puis la scène la prépare (matières,
-// shaders, première image — `HouseScene.prepare`). Au PREMIER chargement, la 3D et ce qui ne sert
-// qu'à elle (niveaux, recherche, caméra) partent MASQUÉS et le voile est là d'emblée : rien ne
-// s'affiche pour s'effacer aussitôt. Ensuite (une maison rechargée en mode édition), le voile ne
-// revient qu'au-delà d'un court délai, pour qu'une reconstruction rapide ne fasse pas clignoter la vue.
+// The loading veil: the house arrives from the server, then the scene prepares it (materials,
+// shaders, first frame — `HouseScene.prepare`). On the FIRST load, the 3D and what only serves
+// it (levels, search, camera) start HIDDEN and the veil is there from the start: nothing
+// shows up only to fade right away. Afterwards (a house reloaded in edit mode), the veil
+// only comes back past a short delay, so that a quick rebuild does not make the view flicker.
 const LOADER_DELAY_MS = 250
 const houseLoading = computed(() => house.loading || scene.preparing.value !== null)
 const loaderShown = ref(false)
-/** Le premier chargement n'est pas fini (et pas en échec : une erreur ne doit pas laisser le voile). */
+/** The first load is not finished (and not failed: an error must not leave the veil up). */
 const firstLoad = computed(() => !scene.shown.value && !house.error)
 const loaderNeeded = computed(() => firstLoad.value || loaderShown.value)
-// Une fois affiché, le voile reste un cycle et demi de dessin (`settled`) : sinon, un chargement
-// rapide l'escamotait avant qu'on ait vu la maison se dessiner. La 3D, prête, attend dessous.
+// Once shown, the veil stays for a cycle and a half of drawing (`settled`): otherwise, a quick
+// load removed it before anyone had seen the house draw itself. The 3D, ready, waits underneath.
 const loaderDrawn = ref(false)
 const sceneHidden = ref(loaderNeeded.value)
 watch([loaderNeeded, loaderDrawn], ([needed, drawn]) => {
   if (needed && !sceneHidden.value) { sceneHidden.value = true; loaderDrawn.value = false }
   else if (!needed && drawn) sceneHidden.value = false
 })
-// la dernière étape connue : pendant le fondu de sortie, le sous-titre ne retombe pas sur la première
+// the last known step: during the fade-out, the subtitle does not fall back to the first one
 const loaderStage = ref<'house' | ScenePrepareStage>('house')
 const loaderProgress = ref<{ done: number; total: number } | null>(null)
 let loaderTimer: ReturnType<typeof setTimeout> | undefined
@@ -91,9 +91,9 @@ watch([() => house.loading, scene.preparing], ([fetching, prep]) => {
   else if (prep) { loaderStage.value = prep.stage; loaderProgress.value = prep.progress }
 }, { immediate: true })
 onUnmounted(() => clearTimeout(loaderTimer))
-// Onglets à contre-courant des listes de l'app (qui vont du haut vers le bas, cf. `levelsSorted`) :
-// ici on monte, Jardin → RDC → étages → Tout. La rangée se lit comme une coupe du bâtiment, terrain
-// à gauche, et l'onglet ne bouge pas quand un niveau s'ajoute au-dessus.
+// Tabs against the grain of the app's lists (which go top to bottom, see `levelsSorted`): here we
+// go up, Garden → ground floor → upper floors → All. The row reads like a cross-section of the
+// building, terrain on the left, and the tab does not move when a level is added above.
 const floorTabs = computed(() => [
   { value: 'garden' as FloorTab, label: t('floors.garden') },
   ...[...house.levels].reverse().map((l) => ({ value: l.id as FloorTab, label: l.shortName ?? l.name })),
@@ -107,34 +107,35 @@ function onTab(tab: FloorTab) {
   else scene.focusLevelView(tab)
 }
 
-// scène → store
+// scene → store
 //
-// Pendant le réglage d'un CHAMP de panneaux, la scène ne change plus de sujet : un tap sur l'un de
-// ses modules, sur le toit qui le porte ou sur le fond refermait le réglage (la sélection changeait,
-// et avec elle le panneau qui l'ouvrait). On est venu déplacer le champ, pas sélectionner autre chose.
+// While a panel ARRAY is being adjusted, the scene no longer changes subject: a tap on one of
+// its modules, on the roof that carries it or on the background used to close the adjustment
+// (the selection changed, and with it the panel that opened it). We came to move the array, not
+// to select something else.
 const editingModule = (key: string) => {
   const hd = house.index?.devicesById.get(key)
   return !!house.editingArrayId && !!hd && panelOf(hd)?.arrayId === house.editingArrayId
 }
 scene.onDeviceTap((key) => {
   if (editingModule(key)) return
-  // même garde-fou que le fond et les pièces : un appareil tapé pendant le réglage d'une ouverture
-  // (un volet, un capteur posé juste à côté) ne doit pas fermer le panneau par surprise
+  // same safeguard as the background and the rooms: a device tapped while an opening is being
+  // adjusted (a shutter, a sensor placed right next to it) must not close the panel by surprise
   if (house.selectedOpeningId) return
   house.selectDevice(key); panelOpen.value = true
 })
-// mode édition : une ouverture touchée s'ouvre comme un appareil ; le glissement pose le brouillon
-// (aperçu 3D immédiat, cf. `withOpeningDraft`), le dépôt l'écrit dans house.json.
+// edit mode: a touched opening opens like a device; the drag sets the draft
+// (immediate 3D preview, see `withOpeningDraft`), the drop writes it to house.json.
 scene.onOpeningTap((openingId) => { house.selectOpening(openingId); panelOpen.value = true })
 scene.onOpeningDrag((_openingId, xy) => house.previewOpeningAt(xy))
 scene.onOpeningDrop(() => { void house.dropOpening() })
-// mode édition : une place de stationnement se touche, se glisse et s'écrit exactement comme une
-// ouverture — le geste est le même, au sol.
+// edit mode: a parking spot is touched, dragged and written exactly like an
+// opening — the gesture is the same, on the ground.
 scene.onParkingTap((parkingId) => { house.selectParking(parkingId); panelOpen.value = true })
 scene.onParkingDrag((_parkingId, xy) => house.previewParkingAt(xy))
 scene.onParkingDrop(() => { void house.dropParking() })
-// mode édition : un arbre, un buisson, une pierre se touchent et se glissent comme une place ; une
-// famille armée plante un élément à chaque tap sur le terrain
+// edit mode: a tree, a bush, a stone are touched and dragged like a spot; an
+// armed family plants one element at each tap on the terrain
 scene.onGardenTap((id) => { house.selectGardenItem(id); panelOpen.value = true })
 scene.onGardenDrag((_id, xy) => house.previewGardenAt(xy))
 scene.onGardenDrop(() => { void house.dropGardenItem() })
@@ -144,21 +145,22 @@ watch(() => house.selectedGardenId, (id) => {
   scene.setSelectedGarden(id)
   if (id) scene.focusGarden(id)
 })
-// mode « poser » : une nature armée dans le panneau de la pièce attend le mur. Le tap rapporte le
-// point touché ; c'est le store qui en déduit le mur et la place, comme pour un glissement.
+// "place" mode: a kind armed in the room panel waits for the wall. The tap reports the
+// touched point; it is the store that deduces the wall and the position, as for a drag.
 scene.onPlaceTap((xy) => { void house.placeOpeningAt(xy) })
 watch(() => house.placingOpening, (armed) => scene.setPlacingOpening(armed))
-// mode « poser une place » : le tap au sol donne le centre ; le reste (cotes de catalogue, sens du
-// garage) est décidé par le magasin, comme pour une ouverture posée sur un mur.
+// "place a spot" mode: the tap on the ground gives the center; the rest (catalog dimensions,
+// direction of the garage) is decided by the store, as for an opening placed on a wall.
 scene.onGroundTap((xy, levelId) => { void house.placeParkingAt(xy, levelId) })
 watch(() => house.placingParking, (armed) => scene.setPlacingParking(!!armed))
-// mode « poser une pièce » : le tap au sol donne le centre d'un carré de 4 m, sur le niveau armé
+// "place a room" mode: the tap on the ground gives the center of a 4 m square, on the armed level
 scene.onRoomPlaceTap((xy) => house.placeRoomAt(xy))
 watch(() => house.placingRoom, (armed) => scene.setPlacingRoom(!!armed))
 scene.onRoomTap((roomId) => {
-  // pendant le réglage d'une ouverture, d'une place ou d'un arbre, un tap sur le sol d'une pièce
-  // OUVRE cette pièce : on quitte le réglage (chaque geste y est déjà écrit) sans repasser par le fil
-  // d'Ariane. Le garde-fou d'avant ignorait le tap, et on restait coincé sur l'ouverture.
+  // while an opening, a spot or a tree is being adjusted, a tap on a room's floor
+  // OPENS that room: we leave the adjustment (each gesture is already written there) without
+  // going back through the breadcrumb. The earlier safeguard ignored the tap, and you stayed
+  // stuck on the opening.
   if (house.selectedOpeningId || house.selectedParkingId || house.selectedGardenId) {
     if (house.selectedOpeningId) house.selectOpening(null)
     if (house.selectedParkingId) house.selectParking(null)
@@ -171,62 +173,64 @@ scene.onRoomTap((roomId) => {
   else { house.selectRoom(roomId); panelOpen.value = true }
 })
 scene.onZoneTap((zoneId) => { house.selectRoom(zoneId); panelOpen.value = true })
-// Tap sur le toit : il porte un niveau (caméra, panneaux) mais aucune pièce. On SÉLECTIONNE ce
-// niveau — onglet, panneau de ses appareils et cadrage sur la dalle — au lieu de laisser le rayon
-// traverser jusqu'à la pièce cachée dessous, ce qui faisait disparaître le toit au profit de
-// l'étage. Déjà dessus, le tap ressort, comme un second tap sur une pièce.
+// Tap on the roof: it carries a level (camera, panels) but no room. We SELECT that
+// level — tab, panel of its devices and framing on the slab — instead of letting the ray
+// pass through to the room hidden underneath, which made the roof disappear in favor of the
+// floor. Already on it, the tap steps back out, like a second tap on a room.
 scene.onLevelTap((levelId) => {
   if (house.editingArrayId) return
   if (house.selectedLevelId === levelId) house.backToHome()
   else { house.selectLevel(levelId); panelOpen.value = true }
 })
 scene.onBackgroundTap(() => {
-  // armé pour poser une ouverture, taper à côté du bâti est un renoncement : on désarme, sans toucher
-  // à la sélection — la pièce reste ouverte, prête pour un autre essai
+  // armed to place an opening, tapping beside the frame is a renunciation: we disarm, without
+  // touching the selection — the room stays open, ready for another try
   if (house.placingOpening) { house.cancelPlacingOpening(); return }
   if (house.placingParking) { house.cancelPlacingParking(); return }
   if (house.placingGarden) { house.cancelPlacingGarden(); return }
   if (house.placingRoom) { house.cancelPlacingRoom(); return }
-  // un élément du jardin réglé se quitte par un tap à côté : rien d'autre à fermer derrière lui
+  // an adjusted garden element is left with a tap beside it: nothing else to close behind it
   if (house.selectedGardenId) { house.selectGardenItem(null); return }
   if (!house.editingArrayId && !house.selectedOpeningId && !house.selectedParkingId) house.clearSelection()
 })
-// une épingle du journal touchée : elle devient l'incident actif (étiquette dans la scène, ligne surlignée dans le panneau)
+// a touched log pin: it becomes the active incident (label in the scene, highlighted row in the panel)
 scene.onJournalTap((at) => house.markJournalPoint(at))
 
-// Le fil d'Ariane remonte d'un cran (appareil → pièce → niveau → maison) ; arrivé à « Maison », il
-// fait ce que fait l'onglet « Tout » : le mot promet la maison entière, pas le niveau qu'on
-// regardait encore. Sans cela, revenir à « Maison » depuis le 1er laissait la vue sur le 1er.
+// The breadcrumb goes up one notch (device → room → level → house); on reaching "House", it
+// does what the "All" tab does: the word promises the whole house, not the level you
+// were still looking at. Without this, going back to "House" from the first floor left the view
+// on the first floor.
 function backToAll() { if (!house.selectedRoomId && !house.selectedLevelId) onTab('all') }
-// Le retour d'un module de champ atterrit sur son INSTALLATION : il y a donc encore un appareil
-// sélectionné, et « Tout » ne doit pas l'effacer — c'est ce qui renvoyait à « Maison » d'un coup.
+// The return from an array module lands on its INSTALLATION: there is therefore still a device
+// selected, and "All" must not clear it — that is what sent you back to "House" all at once.
 function onDeviceBack() { house.backFromDevice(); if (!house.selectedKey) backToAll() }
 function onRoomBack() { house.backFromRoom(); backToAll() }
-/** Retour depuis une ouverture : sa PIÈCE, jamais la maison — c'est elle qui la porte. */
+/** Return from an opening: its ROOM, never the house — it is the room that carries it. */
 function onOpeningBack() { house.selectOpening(null) }
 
-// store → scène. Le cadrage suit la sélection la PLUS FINE : un appareil se cadre sur lui-même, pas
-// sur sa pièce — sinon un plafonnier de grand séjour restait un point dans un coin de l'écran.
-// Un appareil sélectionné n'allume PAS sa pièce : le trait et le voile couvraient justement ce
-// qu'on vient régler (la flaque d'une lampe, la nuit). La pièce ne s'allume que quand c'est elle
-// qu'on a choisie — tap sur son sol, recherche, retour depuis l'appareil.
+// store → scene. Framing follows the FINEST selection: a device frames itself, not its room —
+// otherwise a ceiling light in a large living room stayed a dot in a corner of the screen.
+// A selected device does NOT light up its room: the outline and the veil covered precisely what
+// we have come to adjust (a lamp's pool of light, at night). The room only lights up when it is
+// the one chosen — tap on its floor, search, return from the device.
 function frameSelection(roomId: string | null, key: string | null) {
   const zone = !!roomId && !!house.index?.zonesById.has(roomId)
   if (key) { scene.highlightRoom(null); scene.focusDevice(key); return }
   if (!roomId) { scene.highlightRoom(null); return }
   if (zone) scene.focusZone(roomId)
   else scene.focusRoom(roomId)
-  // Le réglage d'une ouverture cadre sa PIÈCE (fil d'Ariane, `house.selectOpening`) mais ne doit pas
-  // mettre son sol en évidence : à côté du voile d'accent et du trait sur tout le contour, la
-  // poignée de l'ouverture ne pèse rien. `focusRoom`, ci-dessus, allume la surbrillance en interne
-  // (`HouseScene.focusRoom`) — on l'éteint tout de suite après, sans repasser par la caméra.
+  // Adjusting an opening frames its ROOM (breadcrumb, `house.selectOpening`) but must not
+  // highlight its floor: next to the accent veil and the outline around the whole contour, the
+  // opening's handle weighs nothing. `focusRoom`, above, turns the highlight on internally
+  // (`HouseScene.focusRoom`) — we turn it off right after, without going through the camera again.
   if (house.selectedOpeningId) scene.highlightRoom(null)
 }
-// mode édition des ouvertures : armé depuis Réglages (jamais un bouton flottant dans la scène), suivi
-// par la sélection d'ouverture — sélectionner l'ouvre dans la scène, revenir à la pièce la referme.
-// PAS `immediate` ici : au premier rendu la scène n'existe pas encore (elle se construit dans le
-// `onMounted` de `useHouseScene`), et l'appel serait un no-op — c'est le watcher de `scene.ready`,
-// plus bas, qui rejoue l'état au bon moment (mode armé au chargement, page qui se recharge).
+// opening edit mode: armed from Settings (never a floating button in the scene), followed
+// by the opening selection — selecting opens it in the scene, going back to the room closes it.
+// NOT `immediate` here: at first render the scene does not exist yet (it is built in the
+// `onMounted` of `useHouseScene`), and the call would be a no-op — it is the `scene.ready`
+// watcher, further down, that replays the state at the right moment (mode armed at load, page
+// that reloads).
 watch(() => settings.houseEditing, (on) => {
   scene.setEditingOpenings(on)
   scene.setEditingParkings(on)
@@ -234,20 +238,21 @@ watch(() => settings.houseEditing, (on) => {
   if (!on) { house.cancelPlacingOpening(); house.cancelPlacingParking(); house.cancelPlacingGarden() }
   if (!on && house.selectedParkingId) house.selectParking(null)
   if (!on && house.selectedGardenId) house.selectGardenItem(null)
-  // désarmer ferme aussi le réglage en cours : sinon le panneau reste ouvert et ACTIF (« + » écrit
-  // encore dans house.json) alors que la scène, elle, n'a plus rien de sélectionné — l'interrupteur
-  // ne fermerait pas la porte qu'il prétend fermer
+  // disarming also closes the adjustment in progress: otherwise the panel stays open and ACTIVE
+  // ("+" still writes to house.json) while the scene has nothing selected anymore — the switch
+  // would not close the door it claims to close
   if (!on && house.selectedOpeningId) house.selectOpening(null)
-  // quitter le mode édition abandonne les finitions non validées : la scène revient au fichier
+  // leaving edit mode abandons the unvalidated finishes: the scene goes back to the file
   if (!on) house.discardEdit()
 })
-// modeler le terrain : armé depuis les Réglages, comme le banc de lumière — même règle que ci-dessus,
-// c'est le watcher de `scene.ready` qui rejoue l'état au chargement
+// shaping the terrain: armed from Settings, like the light bench — same rule as above,
+// it is the `scene.ready` watcher that replays the state at load
 watch(() => settings.reliefEditing, (on) => scene.setEditingRelief(on))
 watch(() => settings.terrainTab, (tab) => scene.setTerrainTab(tab))
-// forme d'une pièce : l'onglet Dimensions du panneau allume ses poignées dans la 3D. Les gestes
-// reviennent en intentions (mur poussé, sommet déplacé) que le store traduit en cotes — voisine
-// comprise — et la forme recalculée repart vers la scène. Un glissement n'est qu'un pas d'historique.
+// room shape: the Dimensions tab of the panel turns on its handles in the 3D. The gestures come
+// back as intentions (wall pushed, vertex moved) that the store translates into measurements —
+// neighbor included — and the recomputed shape goes back to the scene. A drag is only one history
+// step.
 const shapeRoom = computed(() => (settings.houseEditing && house.shapeEditing && house.selectedRoom ? house.selectedRoom.id : null))
 watch([shapeRoom, scene.ready], ([id, ready]) => { if (ready) scene.setShapeEditing(id) }, { immediate: true })
 watch([() => (shapeRoom.value ? house.shapeOf(shapeRoom.value) : null), scene.ready], ([pts, ready]) => {
@@ -269,14 +274,14 @@ watch(() => house.selectedOpeningId, (id) => {
   scene.setSelectedOpening(id)
   if (id) {
     scene.focusOpening(id)
-    // pas de surbrillance de pièce pendant le réglage — voir `frameSelection`. Nécessaire même ici,
-    // en plus du garde-fou de `frameSelection` : si la pièce était DÉJÀ sélectionnée (on touche une
-    // ouverture de la pièce qu'on regarde déjà), `selectedRoomId` ne change pas et le watcher
-    // roomId/key ne se redéclenche pas — sans cette ligne le sol resterait allumé.
+    // no room highlight while adjusting — see `frameSelection`. Necessary even here,
+    // on top of the `frameSelection` safeguard: if the room was ALREADY selected (we touch an
+    // opening of the room we are already looking at), `selectedRoomId` does not change and the
+    // roomId/key watcher does not fire again — without this line the floor would stay lit.
     scene.highlightRoom(null)
   } else if (house.selectedRoomId && !house.selectedKey && !house.index?.zonesById.has(house.selectedRoomId)) {
-    // sortie : la piège symétrique — revenir à la pièce (même id, donc même silence du watcher
-    // roomId/key) doit RALLUMER la surbrillance qu'on vient d'éteindre.
+    // exit: the symmetric trap — going back to the room (same id, hence the same silence from the
+    // roomId/key watcher) must RELIGHT the highlight we just turned off.
     scene.highlightRoom(house.selectedRoomId)
   }
 })
@@ -285,7 +290,7 @@ watch(() => house.selectedParkingId, (id) => {
   if (id) scene.focusParking(id)
 })
 watch(() => house.focusedLevelId, (id) => scene.focusLevel(id))
-// un niveau sélectionné se cadre comme une pièce sélectionnée : c'est lui qu'on est venu voir
+// a selected level is framed like a selected room: it is what we came to see
 watch(() => house.selectedLevelId, (id) => { if (id) scene.focusLevelView(id) })
 watch([() => house.selectedRoomId, () => house.selectedKey], ([roomId, key]) => {
   scene.setSelected(key)
@@ -303,9 +308,9 @@ watch(scene.ready, (ready) => {
   frameSelection(house.selectedRoomId, house.selectedKey)
 }, { immediate: true })
 
-// mode « déplacer » : glissement 3D → brouillon (store) → aperçu 3D ; dépôt → écriture house.json.
-// Un champ de panneaux se règle de la même façon, sauf qu'on attrape n'importe lequel de ses modules
-// et que c'est le champ entier qui suit (`previewArrayOrigin`).
+// "move" mode: 3D drag → draft (store) → 3D preview; drop → write to house.json.
+// A panel array is adjusted the same way, except that you grab any one of its modules
+// and the whole array follows (`previewArrayOrigin`).
 scene.onDeviceDrag((key, xy, roomId) => {
   if (house.editingArrayId) house.previewArrayOrigin(key, xy)
   else house.previewPosition(xy, roomId)
@@ -317,29 +322,29 @@ watch([() => house.placing, () => house.selectedKey, () => house.editingArrayId,
 }, { immediate: true })
 watch(() => house.draft, (d) => {
   const hd = house.selectedDevice
-  // un appareil non placé n'a pas de marqueur à déplacer
+  // an unplaced device has no marker to move
   const to = d?.position ?? (hd && isPlaced(hd) ? hd.position : undefined)
   if (house.placing && hd && to) scene.moveMarker(hd.id, to)
 })
-// régler un champ, c'est venir voir le niveau qui le porte : on le cadre comme le ferait son onglet,
-// sinon la caméra restait sur la pièce qu'on regardait et le toit s'affichait hors champ
+// adjusting an array means coming to see the level that carries it: we frame it as its tab would,
+// otherwise the camera stayed on the room being looked at and the roof showed up out of frame
 watch(() => house.editingArray?.levelId, (id) => { if (id) scene.focusLevelView(id) })
-// case de la grille survolée : son module s'allume dans la scène, et rend la main à la sélection
+// grid cell hovered: its module lights up in the scene, and hands control back to the selection
 watch(() => house.hoveredKey, (key) => scene.setSelected(key ?? house.selectedKey))
-// aperçu de la teinte choisie : la carrosserie suit le sélecteur, sans rien écrire (cf. `VehicleTuning`)
+// preview of the chosen tint: the bodywork follows the selector, without writing anything (see `VehicleTuning`)
 watch(() => house.bodyColorPreview, (p) => { if (p) scene.previewBodyColor(p.key, p.color) })
-// le journal déplié dans le panneau pose ses incidents sur le terrain ; une ligne choisie cadre la caméra dessus
+// the log expanded in the panel places its incidents on the terrain; a chosen row frames the camera on it
 watch(() => house.journalOverlay, (j) => scene.setJournalPoints(j?.key ?? null, j?.points ?? []))
 watch(() => house.journalFocus, (f) => { if (f) scene.focusJournalPoint(f.at) })
 watch(() => house.journalActive, (at) => scene.setActiveJournalPoint(at))
-// la carte du terrain des tondeuses, peinte sur le terrain quand on l'a demandé (panneau de la tondeuse)
+// the mowers' terrain map, painted on the terrain when requested (mower panel)
 useSceneGroundOverlay(scene)
-// aperçu du champ glissé : tous ses modules suivent l'origine du brouillon
+// preview of the dragged array: all its modules follow the draft's origin
 watch(() => house.arrayDraft, () => {
   for (const m of house.editingArrayModules) if (isPlaced(m)) scene.moveMarker(m.id, m.position)
 })
 
-// URL ↔ sélection
+// URL ↔ selection
 watch([() => house.floorTab, () => house.selectedRoomId, () => house.selectedKey], ([tab, room, device]) => {
   const q: Record<string, string> = {}
   if (tab !== 'all') q.level = tab
@@ -357,59 +362,60 @@ watch(() => house.index, (idx) => {
   if (device) house.selectDevice(device)
 }, { immediate: true })
 
-// Sonnette : à un coup de sonnette (événement `deviceEvent` du plugin Nest), on ramène sur la maison,
-// on sélectionne la sonnette et on ouvre le panneau — son direct s'affiche alors dans la carte détail,
-// et les watchers ci-dessus cadrent sa pièce (« Sas d'entrée »). La vue est gardée en vie, donc
-// l'abonnement tient à travers les changements d'onglet ; on réagit même en venant d'une autre vue.
+// Doorbell: on a doorbell ring (`deviceEvent` event from the Nest plugin), we go back to the
+// house, select the doorbell and open the panel — its live view then shows in the detail card,
+// and the watchers above frame its room ("Entrance lobby"). The view is kept alive, so the
+// subscription holds across tab changes; we react even when coming from another view.
 let offDeviceEvent: (() => void) | null = null
 onMounted(() => {
   offDeviceEvent = devices.onDeviceEvent(async (deviceId, event) => {
     if (event !== 'chime') return
     const hd = house.houseDeviceFor(deviceId)
-    // ramener sur la maison AVANT de sélectionner : sinon le watcher qui reflète la sélection dans
-    // l'URL la réécrit sur la vue courante et annule la navigation (course constatée depuis /cameras).
-    await router.push({ name: 'home' }).catch(() => { /* navigation redondante */ })
-    house.selectDevice(hd?.id ?? deviceId)   // placée → cadrage de sa pièce ; sinon au moins le direct
+    // go back to the house BEFORE selecting: otherwise the watcher that mirrors the selection in
+    // the URL rewrites it onto the current view and cancels the navigation (race seen from /cameras).
+    await router.push({ name: 'home' }).catch(() => { /* redundant navigation */ })
+    house.selectDevice(hd?.id ?? deviceId)   // placed → framing of its room; otherwise at least the live view
     panelOpen.value = true
   })
 })
 onUnmounted(() => { offDeviceEvent?.() })
 
-// En mode édition, une PIÈCE (pas une zone du jardin, qui n'a pas de mur) montre ce qu'on peut
-// modifier d'elle à la place de ses appareils : on relève la maison, on ne l'allume pas.
+// In edit mode, a ROOM (not a garden zone, which has no wall) shows what can be
+// modified about it in place of its devices: we survey the house, we do not light it.
 const panelMode = computed<'opening' | 'parking' | 'garden' | 'device' | 'roomEdit' | 'room' | 'level' | 'houseEdit' | 'home'>(() => {
   if (house.selectedOpeningId) return 'opening'
-  // une place se règle depuis la maison : elle n'appartient ni à une pièce ni à un appareil
+  // a spot is adjusted from the house: it belongs to neither a room nor a device
   if (house.selectedParkingId) return 'parking'
   if (house.selectedGardenId) return 'garden'
   if (house.selectedKey) return 'device'
   if (house.selectedRoomId) return settings.houseEditing && house.selectedRoom ? 'roomEdit' : 'room'
   if (house.selectedLevelId) return 'level'
-  // la maison en mode édition montre ce qu'on y RÈGLE (les places), pas ce qu'on y pilote : la
-  // section n'était plus atteignable sous les tuiles, les scènes et la liste des pièces
+  // the house in edit mode shows what is ADJUSTED there (the spots), not what is driven there: the
+  // section was no longer reachable under the tiles, the scenes and the room list
   return settings.houseEditing ? 'houseEdit' : 'home'
 })
 
-// Le panneau ancré couvre le bord droit de la scène : le cadrage vise la partie libre (largeur du
-// panneau et ses deux marges, lues dans les jetons).
+// The anchored panel covers the right edge of the scene: the framing aims at the free part (panel
+// width and its two margins, read from the tokens).
 const cssPx = (name: string) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0
 const asideInset = () => cssPx('--aside-w') + 2 * cssPx('--panel-gap')
 watch([wide, scene.ready], ([w, ready]) => { if (ready) scene.setViewInset(w ? asideInset() : 0) }, { immediate: true })
 
-// Un résultat de recherche a déjà déplacé la sélection ; reste à montrer le panneau qui la porte,
-// que le tiroir cache tant qu'on n'est pas en fenêtre large. Une PAGE, elle, quitte la vue : lui
-// ouvrir le tiroir le ferait trouver ouvert au retour, sans qu'on l'ait demandé.
+// A search result has already moved the selection; what remains is to show the panel that
+// carries it, which the drawer hides until we are in a wide window. A PAGE, for its part, leaves
+// the view: opening the drawer for it would make it found open on return, without anyone having
+// asked for it.
 function onSearchPicked(hit: SearchHit) { if (hit.family !== 'page') panelOpen.value = true }
 watch(homePanelRequest, () => { panelOpen.value = true })
 
-/** Un cran de rotation des boutons de vue : un huitième de tour. */
+/** One notch of rotation of the view buttons: an eighth of a turn. */
 const ORBIT_STEP = Math.PI / 4
-/** Un cran de zoom des boutons de vue. */
+/** One notch of zoom of the view buttons. */
 const DOLLY_STEP = 1.35
 
-// Apparence : sortie du rail, elle se règle ici, dans la rangée de l'en-tête, juste après les
-// onglets de niveau — un réglage d'app reste avec la chrome du haut, la colonne en bas à droite
-// garde les seules commandes de caméra. Le bouton a une taille fixe : seule l'icône change.
+// Appearance: moved out of the rail, it is set here, in the header row, right after the
+// level tabs — an app setting stays with the top chrome, the column at the bottom right
+// keeps only the camera controls. The button has a fixed size: only the icon changes.
 const APPEARANCE_ICON: Record<string, IconName> = { light: 'sun', dark: 'moon', system: 'auto', auto: 'sunHorizon' }
 const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] ?? 'auto')
 </script>
@@ -423,7 +429,7 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
       <SceneDebug v-if="settings.sceneDebug" :scene="scene.controller" />
       <SceneTuningPanel v-if="settings.sceneTuningOpen" :scene="scene.controller" />
       <ReliefPanel v-if="settings.reliefEditing" :scene="scene.controller" :state="scene.relief.value" />
-      <!-- le guide qui suit la création d'une propriété (terrain, puis première pièce) -->
+      <!-- the guide that follows the creation of a property (terrain, then first room) -->
       <OnboardingCoach :wide="wide" @room="panelOpen = true" />
     </div>
     <div class="home__header">
@@ -436,7 +442,7 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
           <StrokeIcon name="list" :size="18" />
         </button>
       </PageHeader>
-      <!-- téléphone en portrait : météo et vue d'ensemble sous les niveaux, le bas reste à la recherche -->
+      <!-- phone in portrait: weather and overview under the levels, the bottom stays for the search -->
       <div v-if="phone" class="home__toprow">
         <WeatherWidget />
         <button type="button" class="home__ctl home__ctl--solo" :title="$t('home.resetView')" :aria-label="$t('home.resetView')" @click="onTab('all')"><StrokeIcon name="home" :size="18" /></button>
@@ -477,33 +483,34 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
 </template>
 
 <style scoped>
-/* La vue déborde sous le rail (marge négative de sa largeur, que `.app-main` réserve en padding) :
-   la scène couvre toute la fenêtre, et ce qui flotte dessus se décale du rail à gauche. */
-/* …et sous la barre du bas d'un téléphone en portrait (que `.app-main` réserve aussi) : ce qui flotte
-   en bas s'en écarte de `--dock-h`, nul ailleurs. */
+/* The view overflows under the rail (negative margin of its width, which `.app-main` reserves as
+   padding): the scene covers the whole window, and what floats over it is offset from the rail on
+   the left. */
+/* …and under the bottom bar of a phone in portrait (which `.app-main` also reserves): what floats
+   at the bottom moves away from it by `--dock-h`, zero elsewhere. */
 .home {
   position: relative; flex: none; height: calc(100% + var(--dock-h)); margin-left: calc(-1 * var(--rail-w)); min-height: 0;
   --float-bottom: calc(var(--safe-bottom) + var(--dock-h) + var(--panel-gap));
 }
 .home__stage { position: absolute; inset: 0; }
-/* assombrit les bords la nuit, comme une vignette : le regard va au centre, où la maison est */
+/* darkens the edges at night, like a vignette: the eye goes to the center, where the house is */
 .home__vignette { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
 :global(html[data-theme='dark']) .home__vignette { background: radial-gradient(ellipse 70% 65% at 50% 45%, transparent 55%, rgba(0, 0, 0, .45) 100%); }
 .home__header { position: absolute; top: 0; left: var(--rail-w); right: 0; z-index: 2; pointer-events: none; }
 .home__header > * { pointer-events: auto; }
 .home[data-wide='1'] .home__header { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap)); }
 .home__fallback { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 16px 20px; z-index: 2; }
-/* au-dessus du widget météo, qui tient le coin bas gauche */
-/* Le voile de chargement, centré dans la partie LIBRE de la scène (hors rail, hors panneau large). */
-/* il couvre toute la scène : transparent aux clics, sinon l'en-tête (apparence) n'est plus touchable */
+/* above the weather widget, which holds the bottom-left corner */
+/* The loading veil, centered in the FREE part of the scene (outside the rail, outside the wide panel). */
+/* it covers the whole scene: transparent to clicks, otherwise the header (appearance) is no longer touchable */
 .home__loader { position: absolute; top: 0; bottom: 0; left: var(--rail-w); right: var(--safe-right); z-index: 2; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .home[data-wide='1'] .home__loader { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap)); }
 .home-loader-enter-active, .home-loader-leave-active { transition: opacity .45s ease; }
 .home-loader-enter-from, .home-loader-leave-to { opacity: 0; }
-/* sous le voile, la 3D se prépare sans se montrer ; elle apparaît en fondu quand il part */
+/* under the veil, the 3D prepares without showing; it fades in when the veil leaves */
 .home__stage > .scene-canvas, .home__stage > .scene-labels { transition: opacity .6s ease; }
 .home[data-loading='1'] .home__stage > .scene-canvas, .home[data-loading='1'] .home__stage > .scene-labels { opacity: 0; }
-/* ce qui ne sert qu'à la 3D s'efface avec elle, à sa PLACE (rien ne bouge) et hors d'atteinte */
+/* what only serves the 3D fades out with it, in its PLACE (nothing moves) and out of reach */
 .home__floors, .home__search, .home__controls, .home__toprow > .home__ctl { transition: opacity .45s ease, visibility .45s; }
 .home[data-loading='1'] .home__floors, .home[data-loading='1'] .home__search, .home[data-loading='1'] .home__controls,
 .home[data-loading='1'] .home__toprow > .home__ctl { opacity: 0; visibility: hidden; }
@@ -512,8 +519,8 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
   .home__floors, .home__search, .home__controls, .home__toprow > .home__ctl { transition: none; }
 }
 .home__weather { position: absolute; left: calc(var(--rail-w) + var(--panel-gap)); bottom: var(--float-bottom); z-index: 2; }
-/* Recherche : en bas, dans la bande laissée libre ENTRE la carte météo et les boutons de vue, et
-   centrée dedans. Ses résultats s'ouvrent vers le haut (voir SearchBar), donc rien ici ne bouge. */
+/* Search: at the bottom, in the strip left free BETWEEN the weather card and the view buttons, and
+   centered within it. Its results open upward (see SearchBar), so nothing here moves. */
 .home__search {
   position: absolute; z-index: 3; bottom: var(--float-bottom);
   left: calc(var(--rail-w) + var(--panel-gap) + var(--wx-w) + var(--panel-gap));
@@ -522,16 +529,16 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
 }
 .home__search > * { pointer-events: auto; }
 .home[data-wide='1'] .home__search { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap) + 26px + var(--ctl-span) + var(--panel-gap)); }
-/* boutons de vue : rotation, zoom, vue d'ensemble — en bas à droite, avant le panneau quand il est ancré */
+/* view buttons: rotation, zoom, overview — bottom right, before the panel when it is anchored */
 .home__controls { position: absolute; right: calc(var(--safe-right) + var(--panel-gap)); bottom: var(--float-bottom); z-index: 2; display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
 .home[data-wide='1'] .home__controls { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap) + 26px); }
 .home__cluster { display: flex; flex-direction: column; border-radius: 999px; border: 1px solid var(--line); overflow: hidden; background: color-mix(in srgb, var(--surface) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow); }
 .home__ctl { width: var(--ctl-w); height: var(--ctl-w); border: 0; background: transparent; color: var(--muted); display: grid; place-items: center; transition: background .15s, color .15s; }
 .home__ctl:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
 .home__cluster .home__ctl + .home__ctl { border-top: 1px solid var(--line); }
-/* Téléphone : au doigt, glisser tourne et pincer zoome — seule la « vue d'ensemble » reste. À la
-   souris dans une fenêtre basse, les deux grappes passent en rangée, sinon leur colonne monte
-   jusqu'à l'en-tête. `--ctl-span` : la largeur qu'elles occupent, que la recherche laisse libre. */
+/* Phone: with a finger, dragging rotates and pinching zooms — only the "overview" remains. With a
+   mouse in a short window, the two clusters go into a row, otherwise their column rises
+   up to the header. `--ctl-span`: the width they occupy, which the search leaves free. */
 .home { --ctl-span: var(--ctl-w); }
 @media (max-height: 500px) {
   .home { --ctl-span: calc(5 * var(--ctl-w) + 2 * 10px + 6px); }
@@ -542,20 +549,21 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
   .home { --ctl-span: var(--ctl-w); }
   .home__cluster { display: none; }
 }
-/* portrait : les onglets de niveau prennent la ligne, à côté des deux pastilles */
+/* portrait: the level tabs take the row, next to the two pills */
 @media (max-width: 599px) {
   .home__floors { flex: 1 1 0; min-width: 0; }
 }
-/* Téléphone en portrait : entre la météo et la vue d'ensemble, la recherche n'avait que 160 px. Elle
-   prend toute la largeur au ras de la barre du bas, et sa liste comme la réponse s'ouvrent juste
-   au-dessus d'elle ; la météo (en pastille) et la vue d'ensemble montent sous les niveaux
-   (`.home__toprow`). À la souris, les grappes rotation/zoom restent en bas, au-dessus du champ. */
+/* Phone in portrait: between the weather and the overview, the search only had 160 px. It
+   takes the full width flush with the bottom bar, and its list as well as the answer open just
+   above it; the weather (as a pill) and the overview go up under the levels
+   (`.home__toprow`). With a mouse, the rotation/zoom clusters stay at the bottom, above the
+   field. */
 @media (max-width: 599px) {
   .home__search { left: calc(var(--rail-w) + var(--panel-gap)); right: calc(var(--safe-right) + var(--panel-gap)); }
   .home__search > * { width: 100%; }
   .home__controls { bottom: calc(var(--float-bottom) + var(--ctl-w) + 10px); }
 }
-/* la rangée laisse passer les gestes vers la scène entre ses deux éléments */
+/* the row lets gestures through to the scene between its two elements */
 .home__header > .home__toprow { display: flex; justify-content: space-between; align-items: center; padding: 0 var(--page-x); pointer-events: none; }
 .home__toprow > * { pointer-events: auto; }
 .home__ctl--solo { border-radius: 999px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow); color: var(--text); }

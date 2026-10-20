@@ -32,21 +32,21 @@ import type { RenderQuality } from '../three/core/post'
 import type { SceneProjection } from '../three/core/cameraFit'
 import { styleById, type GradeLook, type RenderStyle } from '../three/styles'
 
-// Réglages, en deux temps : D'ABORD les réglages, ENSUITE la liste des plugins, pleine largeur
-// en fin de page. Les réglages tiennent en trois zones — une pile d'une unité (apparence, langue,
-// thème), le Rendu 3D sur deux unités parce que lui seul porte assez pour les remplir, une pile
-// d'une unité (plein écran, origine GPS). Les plugins actifs et leurs sous-items vivent dans
-// house.json : ce sont des choix de LA MAISON, pas de l'écran, et ils prennent effet sans
-// redémarrer le serveur.
+// Settings, in two parts: FIRST the settings, THEN the plugin list, full width
+// at the end of the page. The settings fit in three zones — a one-unit stack (appearance, language,
+// theme), the 3D rendering on two units because it alone carries enough to fill them, a one-unit
+// stack (fullscreen, GPS origin). The active plugins and their sub-items live in
+// house.json: they are choices of THE HOUSE, not of the screen, and they take effect without
+// restarting the server.
 const settings = useSettingsStore()
 const plugins = usePluginsStore()
-// mode démo : la bascule entre propriétés, aussi ici parce que le rail du téléphone n'a pas de pavé d'initiales
+// demo mode: the switch between properties, also here because the phone's rail has no initials pad
 const properties = usePropertiesStore()
-// Les plugins LOCAUX, eux, sont des choix de CE poste (localStorage) : le TENS ne doit exister que
-// sur le navigateur qui lui parle en Bluetooth, jamais sur la tablette du palier.
+// LOCAL plugins, for their part, are choices of THIS device (localStorage): the TENS must only exist
+// on the browser that talks to it over Bluetooth, never on the landing tablet.
 const localPlugins = useLocalPluginsStore()
 const bluetooth = browserBluetooth() !== null
-/** Les plugins par ordre alphabétique de leur nom affiché (l'id, `_` en espace), pas dans l'ordre du serveur. */
+/** Plugins in alphabetical order of their displayed name (the id, `_` as a space), not in the server's order. */
 const pluginsByName = computed(() => [...plugins.list].sort((a, b) => a.id.replace('_', ' ').localeCompare(b.id.replace('_', ' '))))
 const devices = useDevicesStore()
 const house = useHouseStore()
@@ -54,7 +54,7 @@ const { t } = useI18n()
 onMounted(() => { void devices.refreshHealth(); void plugins.load() })
 const router = useRouter()
 
-/** Actifs / implémentés dans l'inventaire, plus le parc d'appareils vu à l'instant T. */
+/** Active / implemented in the inventory, plus the device set seen at time T. */
 const pluginsStats = computed(() => {
   if (!plugins.loaded) return ''
   const available = plugins.list.filter((p) => p.implemented).length
@@ -62,25 +62,25 @@ const pluginsStats = computed(() => {
   return t('settings.pluginsStats', { active, available, n: devices.count }, devices.count)
 })
 
-// Le banc de réglage de la lumière ne s'ouvre pas ICI : une lumière ne se juge que devant la maison,
-// à l'heure qu'elle a. Le bouton arme le panneau et emmène sur la vue Maison, où les curseurs
-// changent l'image sous les doigts.
+// The light tuning bench does not open HERE: a light can only be judged in front of the house,
+// at the time of day it has. The button arms the panel and takes you to the House view, where the
+// sliders change the picture under your fingers.
 function openTuning() { settings.setReliefEditing(false); settings.setSceneTuningOpen(true); void router.push({ name: 'home' }) }
-/** Armer l'édition mène à la vue Maison : c'est là qu'on règle, comme pour le relief. */
+/** Arming the edit leads to the House view: that is where you adjust, as for the relief. */
 function setHouseEditing(on: boolean) { settings.setHouseEditing(on); if (on) void router.push({ name: 'home' }) }
 function openRelief() { settings.setSceneTuningOpen(false); settings.setReliefEditing(true); void router.push({ name: 'home' }) }
 
-// `auto` a sa propre clé : « Automatique » (le libellé de la langue) allongeait la colonne de 73 px
-// — une piste `fr` ne descend jamais sous le min-content de ce qu'elle porte (voir le style plus bas).
+// `auto` has its own key: "Automatic" (the language's label) lengthened the column by 73 px
+// — an `fr` track never goes below the min-content of what it carries (see the style below).
 const appearanceOptions = computed(() => settings.appearances.map((a) => ({ value: a, label: t(a === 'auto' ? 'settings.appearanceAuto' : `settings.${a}`) })))
 const localeOptions = computed(() => [{ value: '', label: t('settings.auto') }, ...settings.locales.map((l) => ({ value: l as string, label: LOCALE_LABELS[l] }))])
-// Aperçu d'un thème : la variante que l'apparence DEMANDE (un thème sombre-uniquement montre donc
-// sa palette sombre même en apparence claire, ce que dit aussi son badge).
+// Preview of a theme: the variant that the appearance ASKS FOR (a dark-only theme therefore shows
+// its dark palette even in light appearance, which its badge also says).
 function preview(theme: Theme) { return resolveVariant(theme.id, settings.wantDark).palette }
 function variantLabel(theme: Theme) { return settings.wantDark ? (theme.darkLabel ?? '') : (theme.lightLabel ?? theme.darkLabel ?? '') }
 
-// Aperçu d'un style : ses couleurs À L'HEURE CHOISIE, pour que le jeu de tuiles montre bien ce que
-// la scène va rendre — un style de nuit ne se juge pas sur sa palette de midi.
+// Preview of a style: its colors AT THE CHOSEN TIME, so that the tile set shows what
+// the scene will render — a night style is not judged on its midday palette.
 const renderAmbience = computed(() => resolveAmbience({
   mode: settings.sceneAmbience,
   geo: house.house ? { lat: house.house.origin.lat, lon: house.house.origin.lon } : null,
@@ -95,7 +95,7 @@ function stylePreview(style: RenderStyle) {
     glass: graded(look.palette.glass, g),
   }
 }
-/** L'étalonnage de la passe de sortie (`core/post.ts`), en espace d'affichage : la tuile voit ce que voit l'écran. */
+/** The calibration of the output pass (`core/post.ts`), in display space: the tile sees what the screen sees. */
 function graded(c: Color, g: GradeLook | null | undefined): string {
   if (!g) return c.getStyle()
   const rgb = c.getRGB(new Color(), SRGBColorSpace)
@@ -104,19 +104,19 @@ function graded(c: Color, g: GradeLook | null | undefined): string {
   const [r, gg, b] = v.map((x) => Math.min(1, Math.max(0, luma + (x - luma) * g.saturation)))
   return new Color().setRGB(r!, gg!, b!, SRGBColorSpace).getStyle()
 }
-/** Le switch des matières en images n'a de sens que pour un style qui porte un pack. */
+/** The materials-as-images switch only makes sense for a style that carries a pack. */
 const styleHasAssets = computed(() => !!styleById(settings.sceneStyle).assets)
 const seasonOptions = computed(() => settings.seasons.map((s) => ({ value: s, label: t(`render.seasons.${s}`) })))
 const ambienceOptions = computed(() => settings.ambiences.map((a) => ({ value: a, label: t(`render.ambiences.${a}`) })))
 const qualityOptions = computed(() => settings.qualities.map((q) => ({ value: q, label: t(`render.qualities.${q}`) })))
 const projectionOptions = computed(() => settings.projections.map((p) => ({ value: p, label: t(`render.projections.${p}`) })))
-// Météo forcée (débogage) : « Réelle » puis les neuf conditions du contrat, avec l'icône du widget.
+// Forced weather (debugging): "Real" then the nine conditions of the contract, with the widget's icon.
 const weatherChoices = computed<{ value: SceneWeatherChoice; label: string; icon: IconName | null }[]>(() => [
   { value: 'real', label: t('render.weatherReal'), icon: null },
   ...WEATHER_CONDITIONS.map((c) => ({ value: c, label: t(`weather.conditions.${c}`), icon: conditionIcon(c) })),
 ])
-// La visibilité se règle par paliers qui veulent dire quelque chose (du brouillard épais au grand
-// beau), pas au mètre : un curseur linéaire de 50 à 50 000 mettrait tout le brouillard sur un pixel.
+// Visibility is set in steps that mean something (from thick fog to crystal clear), not by the
+// meter: a linear slider from 50 to 50,000 would put all the fog on one pixel.
 const VISIBILITY_STEPS = [100, 200, 400, 800, 1500, 3000, 6000, 12_000, 25_000, 50_000] as const
 const visibilityStep = computed(() => {
   const v = settings.sceneVisibilityM
@@ -130,7 +130,7 @@ const gps = computed(() => {
   const o = house.house?.origin
   return o ? `${o.lat.toFixed(5)}, ${o.lon.toFixed(5)} · alt ${o.alt} m · ${t('settings.gpsHeading')} ${o.heading}°` : ''
 })
-/** La boîte de calage de l'origine sur la photo (bloc « Origine GPS »). */
+/** The dialog for aligning the origin on the photo ("GPS origin" block). */
 const calibrating = ref(false)
 const houseStats = computed(() => {
   const h = house.house
@@ -143,13 +143,13 @@ const houseStats = computed(() => {
     <PageHeader />
     <div class="settings__scroll">
       <div class="settings__blocks">
-        <!-- colonne de gauche : les réglages de ce navigateur, chacun sur une unité de large -->
+        <!-- left column: this browser's settings, each one unit wide -->
         <div class="stack">
           <section class="card block">
             <div class="block__title">{{ $t('settings.appearance') }}</div>
             <Segmented :model-value="settings.appearance" :options="appearanceOptions" class="w-100" @update:model-value="(v: Appearance) => settings.setAppearance(v)" />
-            <!-- Deux modes automatiques côte à côte (« Système » et « Auto ») : la ligne dit lequel suit
-                 quoi. Toujours affichée (elle ne dépend pas du mode choisi), donc rien ne bouge. -->
+            <!-- Two automatic modes side by side ("System" and "Auto"): the line says which follows
+                 what. Always displayed (it does not depend on the chosen mode), so nothing moves. -->
             <div class="muted small">{{ $t('settings.appearanceHint') }}</div>
           </section>
           <section class="card block">
@@ -174,7 +174,7 @@ const houseStats = computed(() => {
             </div>
           </section>
         </div>
-        <!-- le bloc dense : deux unités de large, et son contenu lui-même sur deux colonnes -->
+        <!-- the dense block: two units wide, and its content itself on two columns -->
         <section class="card block block--wide">
           <div class="block__title">{{ $t('render.title') }}</div>
           <div class="render">
@@ -189,12 +189,12 @@ const houseStats = computed(() => {
                 <span class="theme__name">{{ $t(st.labelKey) }}</span>
               </button>
             </div>
-            <!-- seconde colonne : les deux bascules, qui se contentent de la place qu'on leur laisse -->
+            <!-- second column: the two toggles, which make do with the space they are left -->
             <div class="render__side">
               <div class="auto-row auto-row--default">
                 <div class="min0">
                   <div class="auto-row__name">{{ $t('render.assets') }}</div>
-                  <!-- les deux textes dans la même cellule : la hauteur est celle du plus long, rien ne bouge -->
+                  <!-- the two texts in the same cell: the height is that of the longer one, nothing moves -->
                   <div class="muted small swap">
                     <span :data-on="styleHasAssets ? '1' : '0'" :aria-hidden="!styleHasAssets">{{ $t('render.assetsHint') }}</span>
                     <span :data-on="styleHasAssets ? '0' : '1'" :aria-hidden="styleHasAssets">{{ $t('render.assetsNone') }}</span>
@@ -219,8 +219,8 @@ const houseStats = computed(() => {
                 <button type="button" class="pill pill--sm" @click="openTuning()">{{ $t('render.tuning.open') }}</button>
               </div>
             </div>
-            <!-- les deux segmentés reprennent TOUTE la largeur du bloc : leurs quatre libellés ne
-                 se coupent pas et ne s'abrègent pas, ils demandent plus qu'une demi-colonne -->
+            <!-- the two segmented controls take the block's FULL width: their four labels
+                 do not get cut and do not get abbreviated, they ask for more than half a column -->
             <div class="render__full">
               <div class="block__sub">{{ $t('render.ambience') }}</div>
               <Segmented dense :model-value="settings.sceneAmbience" :options="ambienceOptions" class="w-100" @update:model-value="(v: AmbienceMode) => settings.setSceneAmbience(v)" />
@@ -234,7 +234,7 @@ const houseStats = computed(() => {
               <div class="block__sub">{{ $t('render.quality') }}</div>
               <Segmented dense :model-value="settings.sceneQuality" :options="qualityOptions" class="w-100" @update:model-value="(v: RenderQuality) => settings.setSceneQuality(v)" />
               <div class="muted small">{{ $t('render.qualityHint') }}</div>
-              <!-- météo forcée : débogage seulement, et scène seulement (le widget dit toujours le vrai temps) -->
+              <!-- forced weather: debugging only, and scene only (the widget always says the real weather) -->
               <template v-if="settings.sceneDebug">
                 <div class="block__sub">{{ $t('render.weather') }}</div>
                 <div class="chips">
@@ -260,18 +260,18 @@ const houseStats = computed(() => {
             </div>
           </div>
         </section>
-        <!-- colonne de droite : ce qui tient en une ligne -->
+        <!-- right column: what fits on one line -->
         <div class="stack">
           <section v-if="settings.fullscreen.isSupported" class="card block block--row">
             <div class="block__title">{{ $t('settings.fullscreen') }}</div>
             <v-switch :model-value="settings.fullscreen.isFullscreen" @update:model-value="settings.fullscreen.toggle()" />
           </section>
-          <!-- relevé approximatif : les ouvertures se règlent depuis la vue Maison une fois armé ici,
-               jamais par un bouton flottant sur une tablette murale où un doigt qui glisse ne doit
-               rien déplacer par mégarde -->
+          <!-- approximate survey: openings are adjusted from the House view once armed here,
+               never through a floating button on a wall-mounted tablet where a sliding finger must
+               not move anything by accident -->
           <section class="card block">
             <div class="block__title">{{ $t('settings.editMode') }}</div>
-            <!-- une démo se regarde : on la duplique pour la modifier (le serveur refuse toute écriture) -->
+            <!-- a demo is for looking at: we duplicate it to modify it (the server refuses any write) -->
             <div v-if="properties.isDemo" class="auto-row">
               <div class="min0">
                 <div class="auto-row__name">{{ $t('properties.demoReadOnly') }}</div>
@@ -287,7 +287,7 @@ const houseStats = computed(() => {
               <v-switch :model-value="settings.houseEditing" hide-details density="compact"
                         @update:model-value="(v: boolean | null) => setHouseEditing(v === true)" />
             </div>
-            <!-- le relief et le contour s'écrivent dans le fichier de la maison, comme le reste du mode -->
+            <!-- the relief and the outline are written to the house file, like the rest of the mode -->
             <div v-if="!properties.isDemo" class="auto-row">
               <div class="min0">
                 <div class="auto-row__name">{{ $t('relief.title') }}</div>
@@ -306,7 +306,7 @@ const houseStats = computed(() => {
             <div class="block__title">{{ $t('settings.gps') }}</div>
             <div class="mono">{{ gps }}</div>
             <div class="muted small">{{ houseStats }}</div>
-            <!-- comme le relief : une propriété de démonstration ne réécrit pas son fichier versionné -->
+            <!-- like the relief: a demo property does not rewrite its versioned file -->
             <template v-if="!properties.isDemo">
               <button type="button" class="pill pill--sm gps__calibrate" :disabled="!house.house" @click="calibrating = true">{{ $t('settings.calibrate') }}</button>
               <OriginCalibration v-model="calibrating" />
@@ -314,7 +314,7 @@ const houseStats = computed(() => {
           </section>
         </div>
       </div>
-      <!-- les appareils personnels de CE poste, avant les fabricants de la maison -->
+      <!-- THIS device's personal devices, before the house's vendors -->
       <section class="card block settings__plugins">
         <div class="block__title">{{ $t('settings.localPlugins') }}</div>
         <p class="muted small plugins__hint">{{ $t('settings.localPluginsHint') }}</p>
@@ -327,26 +327,26 @@ const houseStats = computed(() => {
                     @update:model-value="(v: boolean | null) => localPlugins.setEnabled('tens', v === true)" />
         </div>
       </section>
-      <!-- qui ouvre Kasbah par l'adresse publique, et connecte un assistant (Claude…) au serveur MCP -->
+      <!-- who opens Kasbah through the public address, and connects an assistant (Claude…) to the MCP server -->
       <section class="card block settings__plugins">
         <div class="block__title">{{ $t('mcpUsers.title') }}</div>
         <p class="muted small plugins__hint">{{ $t('mcpUsers.hint') }}</p>
         <McpUsersCard />
       </section>
-      <!-- le forfait Claude de l'assistant (« Demander à Kasbah »), pour le compte courant -->
+      <!-- the assistant's Claude plan ("Ask Kasbah"), for the current account -->
       <section class="card block settings__plugins">
         <div class="block__title">{{ $t('assistant.title') }}</div>
         <p class="muted small plugins__hint">{{ $t('assistant.hint') }}</p>
         <AssistantCard />
       </section>
-      <!-- la version du serveur, et sa mise à jour par le superviseur (réseau local seulement) -->
+      <!-- the server version, and its update by the supervisor (local network only) -->
       <section class="card block settings__plugins">
         <div class="block__title">{{ $t('serverUpdate.title') }}</div>
         <p class="muted small plugins__hint">{{ $t('serverUpdate.hint') }}</p>
         <ServerUpdateCard />
       </section>
-      <!-- les fabricants ferment la page : une liste pleine largeur, où chaque ligne a la place de
-           dire nom, statut et interrupteur sans se serrer -->
+      <!-- the vendors close the page: a full-width list, where each row has room to
+           say name, status and switch without squeezing -->
       <section class="card block settings__plugins">
         <div class="plugins__head">
           <div class="block__title">{{ $t('settings.plugins') }}</div>
@@ -374,41 +374,41 @@ const houseStats = computed(() => {
 
 .settings { height: 100%; display: flex; flex-direction: column; }
 .settings__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); }
-/* Les réglages d'abord, en quatre unités : une pile d'une unité, le Rendu 3D sur deux, une pile
-   d'une unité. Des PILES et non des cellules de grille : une rangée de grille s'aligne sur son
-   plus grand, et le Rendu 3D aurait creusé sa hauteur à côté de chaque petit bloc. Ici chaque pile
-   coule à son rythme, et la page ne fait que la hauteur de la plus haute des trois. */
+/* The settings first, in four units: a one-unit stack, the 3D rendering on two, a one-unit
+   stack. STACKS and not grid cells: a grid row aligns on its tallest, and the 3D rendering would
+   have dug its height next to each small block. Here each stack flows at its own pace, and the
+   page is only as tall as the tallest of the three. */
 .settings__blocks { display: grid; grid-template-columns: 1fr; gap: 14px; }
 .stack { display: grid; gap: 14px; align-content: start; }
-/* 1500 px : le seuil n'est pas choisi au doigt mouillé, c'est celui où les proportions 1-2-1
-   tiennent vraiment. Une piste `fr` ne descend jamais sous le min-content de ce qu'elle porte
-   (`../../../doc/6_faq/6_0_pieges-outillage.md`) : la pile de gauche en réclame 344 (le segmenté
-   Automatique / Français / English), donc un quart de la largeur doit valoir au moins ça. En
-   dessous, les pistes se seraient déformées en 344/492/246 — plus rien de 1-2-1 — et la colonne
-   de droite aurait été à l'étroit. On empile alors, ce qui suffit largement à ces blocs. */
+/* 1500 px: the threshold is not a rule of thumb, it is where the 1-2-1 proportions really hold.
+   An `fr` track never goes below the min-content of what it carries
+   (`../../../doc/6_faq/6_0_pieges-outillage.md`): the left stack asks for 344 (the Automatic /
+   Français / English segmented control), so a quarter of the width must be worth at least that.
+   Below, the tracks would have warped to 344/492/246 — nothing 1-2-1 anymore — and the right
+   column would have been cramped. We stack then, which is more than enough for these blocks. */
 @media (min-width: 1500px) {
   .settings__blocks { grid-template-columns: 1fr 2fr 1fr; align-items: start; }
 }
-/* Les plugins ensuite, pleine largeur, sous la grille. */
+/* The plugins next, full width, under the grid. */
 .settings__plugins { margin-top: 14px; }
 .plugins__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.block { padding: 18px 20px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }   /* colonne bornée : rien ne l'élargit au-delà d'un téléphone */
+.block { padding: 18px 20px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }   /* bounded column: nothing widens it beyond a phone */
 .block--row { grid-template-columns: 1fr auto; align-items: center; }
 .block__title { font-weight: 600; font-size: 15px; }
 .gps__calibrate { justify-self: start; }
 .w-100 { width: 100%; min-width: 0; display: flex; }
-.w-100 :deep(.segmented__item) { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }   /* un téléphone coupe le libellé plutôt que de déborder */
+.w-100 :deep(.segmented__item) { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }   /* a phone cuts the label rather than overflowing */
 @media (max-width: 599px) {
   .block { padding: 16px 14px; }
-  .w-100 :deep(.segmented__item) { flex: 1 1 auto; padding: 0 4px; font-size: 12px; }   /* largeur à la mesure du libellé */
+  .w-100 :deep(.segmented__item) { flex: 1 1 auto; padding: 0 4px; font-size: 12px; }   /* width fitted to the label */
 }
-/* Sélecteur de thème : chaque tuile montre la palette qu'elle appliquerait (fond, carte, texte,
-   accent). Empreinte fixe — la ligne de variante est toujours là, même vide. */
-/* Le contenu du Rendu 3D sur deux colonnes : les tuiles d'un côté, les bascules de l'autre.
-   Les deux segmentés, eux, gardent TOUTE la largeur du bloc — mesuré : leurs quatre libellés
-   demandent ~370 px, une demi-colonne n'en offre que ~280 et les coupait.
-   Requête de CONTENEUR et non d'écran : ce qui décide, c'est la largeur du bloc, qu'il soit sur
-   deux unités en grande largeur ou pleine page sur un écran étroit. */
+/* Theme selector: each tile shows the palette it would apply (background, card, text,
+   accent). Fixed footprint — the variant row is always there, even empty. */
+/* The 3D rendering content on two columns: the tiles on one side, the toggles on the other.
+   The two segmented controls, for their part, keep the block's FULL width — measured: their
+   four labels ask for ~370 px, half a column only offers ~280 and cut them.
+   CONTAINER query and not screen: what decides is the block's width, whether it is on
+   two units on a large width or full page on a narrow screen. */
 .block--wide { container-type: inline-size; }
 .render { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .render__side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; }
@@ -417,11 +417,11 @@ const houseStats = computed(() => {
   .render { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 18px; align-items: start; }
   .render__full { grid-column: 1 / -1; }
 }
-/* Autant de tuiles par rangée que la colonne en porte, au lieu de deux tuiles qui grossissent :
-   sur un large écran les blocs Thème et Rendu 3D raccourcissent au lieu de s'étaler. Jamais plus
-   de TROIS : la piste ne descend pas sous le tiers de la largeur. Il y a six thèmes comme six
-   styles — 3 + 3 se ferme, 5 + 1 laisse une orpheline. En dessous, le plancher de 130 px reprend
-   la main et on retombe à deux, y compris dans une colonne d'une seule unité. */
+/* As many tiles per row as the column holds, instead of two tiles that grow: on a wide screen
+   the Theme and 3D rendering blocks get shorter instead of sprawling. Never more
+   than THREE: the track does not go below a third of the width. There are six themes as there
+   are six styles — 3 + 3 closes, 5 + 1 leaves an orphan. Below, the 130 px floor takes over and
+   we fall back to two, including in a one-unit column. */
 .themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(max(130px, (100% - 20px) / 3), 1fr)); gap: 10px; }
 .theme { display: grid; gap: 4px; padding: 8px; border-radius: var(--radius-sm); text-align: left; cursor: pointer;
          border: 1px solid var(--line); background: transparent; transition: border-color .15s, background .15s; }
@@ -433,13 +433,13 @@ const houseStats = computed(() => {
 .preview__bar { height: 4px; width: 66%; border-radius: 2px; }
 .preview__bar--short { width: 38%; }
 .preview__dot { position: absolute; right: 6px; bottom: 6px; width: 13px; height: 13px; border-radius: 50%; }
-/* Aperçu d'un style de rendu : le ciel en fond, le sol en bas, un pan de mur posé dessus. */
+/* Preview of a rendering style: the sky as background, the ground at the bottom, a wall section set on it. */
 .preview__ground { position: absolute; inset: auto 0 0 0; height: 40%; }
 .preview__wall { position: absolute; left: 22%; right: 34%; bottom: 22%; height: 55%; border-radius: 2px; }
 .block__sub { margin-top: 4px; font-size: 12px; color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .pill--sm { height: 32px; padding: 0 12px; font-size: 13px; gap: 6px; }
-/* libellé et valeur à largeur fixe : le curseur ne bouge pas quand le chiffre change */
+/* label and value at fixed width: the slider does not move when the figure changes */
 .slider-row { display: grid; grid-template-columns: 88px 1fr 56px; align-items: center; gap: 10px; }
 .slider-row__label { font-size: 12px; color: var(--muted); }
 .slider-row__value { font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }

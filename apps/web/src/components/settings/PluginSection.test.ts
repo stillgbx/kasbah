@@ -12,33 +12,33 @@ const plugin = (over: Partial<PluginInfo> = {}, health: Partial<PluginHealth> = 
   ...over,
 })
 
-/** Déplié ou non : `v-show` laisse le panneau dans le DOM et le masque par son style. */
+/** Expanded or not: `v-show` leaves the panel in the DOM and hides it with its style. */
 const body = (w: ReturnType<typeof mount>) => !(w.find('.plugin__body').attributes('style') ?? '').includes('display: none')
 
-describe('PluginSection — ce qui s’ouvre tout seul', () => {
+describe('PluginSection — what opens by itself', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
 
-  it('reste replié quand le fabricant va bien', () => {
+  it('stays collapsed when the vendor is fine', () => {
     expect(body(mount(PluginSection, { props: { plugin: plugin() } }))).toBe(false)
   })
 
-  it('s’ouvre de lui-même quand le serveur RÉCLAME quelque chose', () => {
+  it('opens by itself when the server DEMANDS something', () => {
     for (const status of ['needs_pairing', 'error'] as const) {
       expect(body(mount(PluginSection, { props: { plugin: plugin({}, { status }) } }))).toBe(true)
     }
   })
 
-  /** Un fabricant dégradé se plaint sans rien demander : sa ligne le dit, son panneau reste fermé. */
-  it('ne s’ouvre pas pour un simple dégradé', () => {
+  /** A degraded vendor complains without asking for anything: its row says so, its panel stays closed. */
+  it('does not open for a mere degraded state', () => {
     expect(body(mount(PluginSection, { props: { plugin: plugin({}, { status: 'degraded' }) } }))).toBe(false)
   })
 
-  /** Un plugin éteint ne réclame rien : son statut ne vaut plus qu'on lui ouvre son panneau. */
-  it('ne s’ouvre pas tout seul pour un plugin éteint', () => {
+  /** A turned-off plugin demands nothing: its status is no longer worth opening its panel. */
+  it('does not open by itself for a turned-off plugin', () => {
     expect(body(mount(PluginSection, { props: { plugin: plugin({ enabled: false }, { status: 'needs_pairing' }) } }))).toBe(false)
   })
 
-  it('laisse le dernier mot à l’utilisateur, dans les deux sens', async () => {
+  it('leaves the last word to the user, both ways', async () => {
     const opened = mount(PluginSection, { props: { plugin: plugin({}, { status: 'needs_pairing' }) } })
     await opened.find('.plugin__toggle').trigger('click')
     expect(body(opened)).toBe(false)
@@ -49,23 +49,23 @@ describe('PluginSection — ce qui s’ouvre tout seul', () => {
   })
 
   /**
-   * Un fabricant qu'on relie par mot de passe apporte SA carte de mise en route : l'oublier dans
-   * `SETUP_CARDS` laisserait un panneau qui s'ouvre sur rien, sans que rien ne le signale.
+   * A vendor linked by password brings ITS setup card: forgetting it in
+   * `SETUP_CARDS` would leave a panel that opens onto nothing, with nothing to flag it.
    */
-  it('monte la carte de liaison du fabricant qui en a une', () => {
+  it('mounts the linking card of the vendor that has one', () => {
     const w = mount(PluginSection, { props: { plugin: plugin({ id: 'melcloud' }, { status: 'needs_pairing', detail: 'no MELCloud account linked' }) } })
     expect(body(w)).toBe(true)
     expect(w.findComponent(MelcloudLinkCard).exists()).toBe(true)
   })
 
-  it('monte la carte YouTube Music quand un cookie est demandé', () => {
+  it('mounts the YouTube Music card when a cookie is requested', () => {
     const w = mount(PluginSection, { props: { plugin: plugin({ id: 'ytmusic' }, { status: 'needs_pairing', detail: 'paste cookie' }) } })
     expect(body(w)).toBe(true)
     expect(w.findComponent(YtmusicLinkCard).exists()).toBe(true)
   })
 
-  /** Un squelette n'a ni détail, ni clé, ni carte : le chevron reste là pour l'alignement, inerte. */
-  it('ne se déplie pas quand il n’y a rien dessous', () => {
+  /** A skeleton has no detail, no key, no card: the chevron stays for alignment, inert. */
+  it('does not expand when there is nothing under it', () => {
     const w = mount(PluginSection, { props: { plugin: plugin({ id: 'unobtanium', implemented: false, enabled: false }, { status: 'not_implemented', detail: undefined, keys: [] }) } })
     expect(w.find('.plugin__toggle').attributes('disabled')).toBeDefined()
     expect(w.find('.plugin__chev').attributes('data-on')).toBe('0')

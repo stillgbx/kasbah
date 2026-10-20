@@ -7,29 +7,29 @@ import RoomBands from '../components/devices/RoomBands.vue'
 import CameraVideo from '../components/controls/CameraVideo.vue'
 import { useDevicesStore } from '../stores/devices'
 
-// Vue Caméras : tout ce qui est du kind `camera` (caméras, sonnettes, écrans à caméra), par pièce,
-// avec le diagnostic de liaison de `RoomBands` — partagé avec Lumières et Ouvrants. Une caméra n'a
-// pas de commande (l'API Nest ne sait pas l'éteindre), donc pas d'interrupteur : chaque ligne porte
-// une tuile vidéo. Tant qu'on ne demande pas le direct, la tuile montre la VIGNETTE que le serveur
-// rafraîchit pour toutes les caméras dont il tient une session (voir `NEST_LIVE_BUDGET`) ; un appui
-// lance le direct, avec les mêmes boutons arrêter / son que la carte détail.
+// Cameras view: everything of kind `camera` (cameras, doorbells, screens with a camera), by room,
+// with the link diagnostic of `RoomBands` — shared with Lights and Covers. A camera has no
+// command (the Nest API cannot turn it off), so no switch: each row carries a video tile. As
+// long as live is not requested, the tile shows the THUMBNAIL that the server refreshes for all
+// the cameras it holds a session for (see `NEST_LIVE_BUDGET`); a press starts the live stream,
+// with the same stop / sound buttons as the detail card.
 //
-// Tant que la vue est ouverte, elle se signale au serveur toutes les 5 s : c'est ce qui tient les
-// sessions de vignettes ouvertes — et ce qui les ferme, 15 s après le départ du dernier écran.
+// As long as the view is open, it reports itself to the server every 5 s: that is what keeps the
+// thumbnail sessions open — and what closes them, 15 s after the last screen leaves.
 const devices = useDevicesStore()
 
 const cameras = computed(() => devices.list.filter((e) => e.state.kind === 'camera'))
 const streamable = (e: DeviceEntry) => e.descriptor.capabilities.includes('live_stream') && (e.descriptor.meta.camera?.protocols ?? []).includes('rtsp')
 
-/** Par `deviceId` : date de la dernière vignette, et « inactive » si le flux de la caméra échoue. */
+/** By `deviceId`: date of the last thumbnail, and "inactive" if the camera's stream fails. */
 const snapshots = ref<Record<string, { at?: number; inactive?: boolean; paused?: boolean }>>({})
-// « Active » = caméra dont le flux marche au dernier essai. Google n'expose pas la connectivité des
-// caméras (aucun trait Connectivity, contrairement au thermostat) : seul l'essai du flux le dit, donc
-// une caméra éteinte n'est connue telle (`inactive`) qu'après un passage de la rotation.
+// "Active" = a camera whose stream worked on the last try. Google does not expose the connectivity
+// of cameras (no Connectivity trait, unlike the thermostat): only the stream attempt says it, so
+// a camera that is off is only known as such (`inactive`) after a pass of the rotation.
 const activeCount = computed(() => cameras.value.filter((e) => !snapshots.value[e.descriptor.id]?.inactive).length)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
-/** Trois directs simultanés au plus : au-delà, le bouton Direct des autres tuiles se désactive. */
+/** At most three simultaneous live streams: beyond that, the Live button of the other tiles is disabled. */
 const LIVE_MAX = 3
 const liveIds = ref<Set<string>>(new Set())
 const liveAllowed = (deviceId: string) => liveIds.value.size < LIVE_MAX || liveIds.value.has(deviceId)
@@ -46,15 +46,15 @@ async function poll() {
     try {
       const list = await getTransport().cameraSnapshots(pluginId, true)
       for (const [externalId, s] of Object.entries(list)) next[`${pluginId}:${externalId}`] = { ...(s.at !== undefined ? { at: s.at } : {}), ...(s.inactive ? { inactive: true } : {}), ...(s.paused ? { paused: true } : {}) }
-    } catch { /* serveur injoignable : on garde les dates connues, la bannière de connexion prévient */ }
+    } catch { /* server unreachable: we keep the known dates, the connection banner warns */ }
   }))
   snapshots.value = next
 }
 
-/** Bouton stop / reprise d'une tuile : le serveur retient l'arrêt, on relit tout de suite l'état. */
+/** Stop / resume button of a tile: the server remembers the stop, we re-read the state right away. */
 async function setSnapshots(deviceId: string, enabled: boolean) {
   snapshots.value = { ...snapshots.value, [deviceId]: { ...snapshots.value[deviceId], ...(enabled ? { paused: false } : { paused: true }) } }
-  try { await getTransport().setCameraSnapshots(deviceId, enabled) } catch { /* le sondage suivant remettra l'état vrai */ }
+  try { await getTransport().setCameraSnapshots(deviceId, enabled) } catch { /* the next poll will set the true state back */ }
   await poll()
 }
 
@@ -70,12 +70,12 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
     <div class="page__scroll">
       <div v-if="cameras.length === 0" class="card card--soft empty muted">{{ $t('cameras.none') }}</div>
       <RoomBands kind="camera">
-        <!-- le protocole au bout de la ligne d'état plutôt qu'un badge en tête : moins de largeur volée au nom -->
+        <!-- the protocol at the end of the status line rather than a badge in front: less width stolen from the name -->
         <template #status-after="{ entry }">
           <span v-if="streamable(entry)" class="proto">RTSP</span>
         </template>
         <template #control="{ entry }">
-          <!-- la tuile prend sa propre ligne : en 4e colonne elle serait un timbre-poste -->
+          <!-- the tile takes its own line: in the 4th column it would be a postage stamp -->
           <CameraVideo v-if="streamable(entry) && entry.state.available" :device-id="entry.descriptor.id" :autoplay="false"
                        :snapshot-at="snapshots[entry.descriptor.id]?.at ?? null" :inactive="snapshots[entry.descriptor.id]?.inactive ?? false"
                        :paused="snapshots[entry.descriptor.id]?.paused ?? false" :live-allowed="liveAllowed(entry.descriptor.id)" class="tile"

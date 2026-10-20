@@ -7,20 +7,21 @@ import { useDevicesStore } from '../stores/devices'
 import { useNotificationsStore } from '../stores/notifications'
 import Segmented from './ui/Segmented.vue'
 
-// Appairage de la passerelle IQ (plugin Enphase). Deux voies pour la même route : coller un jeton
-// obtenu sur le site du fabricant, ou taper les identifiants du compte, qui servent UNE fois à
-// frapper un jeton et ne sont pas conservés.
+// Pairing of the IQ gateway (Enphase plugin). Two routes to the same endpoint: paste a token
+// obtained on the vendor's site, or type the account credentials, which are used ONCE to mint a
+// token and are not kept.
 //
-// Le jeton, lui, est gardé par le SERVEUR : contrairement à Hue et Nest, il n'y a rien à recopier
-// dans `.env`, donc appairer depuis n'importe quel écran suffit et tient un an. La carte le dit, et prévient
-// dans le cas contraire (cache désactivé).
+// The token, for its part, is kept by the SERVER: unlike Hue and Nest, there is nothing to copy
+// into `.env`, so pairing from any screen is enough and lasts a year. The card says so, and warns
+// otherwise (cache disabled).
 //
-// La carte ne décide plus de son apparition : elle vit DANS la section du plugin Enphase, que
-// l'utilisateur déplie — et qui s'ouvre seule quand le serveur dit que le jeton expire ou a expiré.
+// The card no longer decides when it appears: it lives INSIDE the Enphase plugin section, which
+// the user expands — and which opens by itself when the server says the token is expiring or has
+// expired.
 //
-// En mode compte le bouton dit « Valider » : ça lie (ou rafraîchit) Enlighten pour la borne, et
-// ne frappe un JWT local que s'il manque ou expire. Un 409 `TOKEN_STILL_VALID` d'un serveur plus
-// ancien est lu comme un succès, pas comme une demande de remplacement.
+// In account mode the button says "Validate": that links (or refreshes) Enlighten for the charger,
+// and only mints a local JWT if it is missing or expiring. A 409 `TOKEN_STILL_VALID` from an older
+// server is read as a success, not as a request for replacement.
 
 type Mode = 'account' | 'token'
 
@@ -28,7 +29,7 @@ const devices = useDevicesStore()
 const notifications = useNotificationsStore()
 const { t, locale } = useI18n()
 
-/** Plugin absent de /api/health = non activé : la carte ne s'affiche pas du tout. */
+/** Plugin absent from /api/health = not enabled: the card is not displayed at all. */
 const health = computed(() => devices.health?.plugins.enphase)
 const status = ref<EnphaseTokenStatus | null>(null)
 const mode = ref<Mode>('account')
@@ -36,7 +37,7 @@ const user = ref('')
 const password = ref('')
 const pasted = ref('')
 const busy = ref(false)
-/** Avertissement à confirmer (jeton encore valable) : le prochain envoi portera `force`. */
+/** Warning to confirm (token still valid): the next submit will carry `force`. */
 const confirming = ref(false)
 const done = ref<string | null>(null)
 
@@ -49,9 +50,9 @@ onMounted(refresh)
 watch(health, (h, prev) => { if (h && !prev) void refresh() })
 
 /**
- * Temps restant, en JOURS ou en HEURES. Un jeton d'installateur ne vaut que douze heures : « expire
- * dans 0 jours » ne veut rien dire, alors que « dans 11 heures » dit quoi faire. Le serveur, lui,
- * ne compte qu'en jours pleins, donc l'heure se recalcule ici depuis l'échéance.
+ * Time remaining, in DAYS or HOURS. An installer token is only valid for twelve hours: "expires
+ * in 0 days" means nothing, whereas "in 11 hours" says what to do. The server, for its part, only
+ * counts whole days, so the hour is recomputed here from the expiry.
  */
 function remaining(expiresAt: number | undefined, daysLeft: number | undefined): string {
   if (daysLeft !== undefined && daysLeft >= 1) return t('settings.enphase.leftDays', { n: daysLeft }, daysLeft)
@@ -70,7 +71,7 @@ const headline = computed(() => {
   return t('settings.enphase.intro')
 })
 
-/** Compte : Valider. Jeton collé : Appairer / Renouveler. Confirmation seulement si `force`. */
+/** Account: Validate. Pasted token: Pair the gateway / Renew the token. Confirmation only if `force`. */
 const action = computed(() => {
   if (confirming.value) return t('settings.enphase.replaceAnyway')
   if (busy.value) return mode.value === 'account' ? t('settings.enphase.validating') : t('settings.enphase.pairing')
@@ -80,9 +81,9 @@ const action = computed(() => {
 const canSubmit = computed(() => (mode.value === 'token' ? pasted.value.trim().length > 0 : user.value.trim().length > 0 && password.value.length > 0))
 
 /**
- * Rôle et date d'échéance du jeton en place. C'est ce qui EXPLIQUE une échéance courte : un jeton
- * d'installateur ne vaut que douze heures, et le formulaire web du fabricant n'en donne pas d'autre
- * à un compte qui est aussi installateur. Sans cette ligne, l'utilisateur ne peut que constater.
+ * Role and expiry date of the token in place. This is what EXPLAINS a short expiry: an installer
+ * token is only valid for twelve hours, and the vendor's web form gives no other kind to an
+ * account that is also an installer. Without this line, the user can only observe it.
  */
 const tokenInfo = computed(() => {
   const s = status.value
@@ -121,7 +122,7 @@ async function submit() {
     await finishOk(r)
   } catch (err) {
     if (err instanceof ApiRequestError && err.code === 'TOKEN_STILL_VALID' && mode.value === 'account') {
-      // serveur antérieur : 409 alors que le cloud est déjà lié. Ce n'est pas un remplacement.
+      // earlier server: 409 while the cloud is already linked. That is not a replacement.
       await refresh()
       if (status.value) await finishOk(status.value)
     } else if (err instanceof ApiRequestError && err.code === 'TOKEN_STILL_VALID') {
@@ -141,10 +142,10 @@ async function submit() {
 
     <template v-if="!done">
       <Segmented v-model="mode" :options="modes" dense />
-      <!-- Les DEUX voies sont rendues, superposees dans la meme cellule de grille et masquees par
-           `visibility` : le conteneur prend donc la hauteur de la PLUS HAUTE des deux, et changer de
-           voie ne deplace plus le bouton. Une hauteur fixe en pixels, elle, dependrait de la
-           traduction et de la largeur. -->
+      <!-- BOTH routes are rendered, stacked in the same grid cell and hidden with
+           `visibility`: the container therefore takes the height of the TALLER of the two, and
+           switching route no longer moves the button. A fixed height in pixels would depend on
+           the translation and the width. -->
       <div class="enp__body">
         <div class="enp__stack" :data-on="mode === 'account' ? '1' : '0'">
           <label class="enp__field">
@@ -166,9 +167,9 @@ async function submit() {
         </div>
       </div>
 
-      <!-- L'avertissement est TOUJOURS dans le DOM, avec son texte : seule sa `visibility` bascule.
-           Sa place est donc reservee a la hauteur reelle du texte, quelle que soit la largeur --
-           une hauteur fixe en em debordait de trois lignes a 375 px et poussait le bouton. -->
+      <!-- The warning is ALWAYS in the DOM, with its text: only its `visibility` toggles.
+           Its space is therefore reserved at the real height of the text, whatever the width --
+           a fixed height in em overflowed by three lines at 375 px and pushed the button. -->
       <p class="enp__warn small" :data-on="confirming ? '1' : '0'">
         {{ $t('settings.enphase.replaceWarn', { left: remaining(status?.expiresAt, status?.daysLeft) }) }}
       </p>
@@ -176,8 +177,8 @@ async function submit() {
       <button type="button" class="pill" data-on="1" :disabled="busy || !canSubmit" @click="submit">{{ action }}</button>
     </template>
 
-    <!-- pied de carte : ce qu'il faut savoir du jeton en place, sous les contrôles pour que son
-         apparition ne decale rien au-dessus -->
+    <!-- card footer: what you need to know about the token in place, under the controls so that
+         its appearance shifts nothing above -->
     <p v-if="tokenInfo" class="muted small enp__hint">{{ tokenInfo }}</p>
     <p v-if="isInstaller" class="enp__warn small">{{ $t('settings.enphase.installerNote') }}</p>
     <p class="muted small enp__hint">
@@ -194,7 +195,7 @@ async function submit() {
 <style scoped>
 .enp { padding: 14px 16px; display: grid; gap: 10px; justify-items: start; }
 .enp__text { margin: 0; font-size: 13px; }
-/* les deux voies occupent la MEME cellule : la hauteur est celle de la plus haute */
+/* the two routes occupy the SAME cell: the height is that of the taller one */
 .enp__body { width: 100%; display: grid; }
 .enp__stack { grid-area: 1 / 1; display: grid; gap: 8px; align-content: start; }
 .enp__stack[data-on='0'] { visibility: hidden; pointer-events: none; }
@@ -206,7 +207,7 @@ async function submit() {
 .enp__input--area { resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
 .enp__input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .enp__hint { margin: 0; }
-/* place tenue meme invisible : l'avertissement ne pousse pas le bouton en apparaissant */
+/* space held even when invisible: the warning does not push the button when it appears */
 .enp__warn { margin: 0; color: #d38b22; }
 .enp__warn[data-on='0'] { visibility: hidden; }
 .small { font-size: 12px; }

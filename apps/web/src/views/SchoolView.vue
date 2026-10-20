@@ -11,14 +11,14 @@ import { badges, daysBetween, homeworkDays, isVisible, levelOptions, localDay, n
 import { useNotificationsStore } from '../stores/notifications'
 import { useSchoolStore } from '../stores/school'
 
-// Vue École : le cahier de texte, le cahier de liaison et les publications de la classe
-// (plugin `toutemonannee`). Ce que le site fait mal et qu'on fait ici : TOUT ce qui est à faire
-// d'un coup d'œil, par jour, sans calendrier à cliquer jour après jour. Pour les parents comme pour
-// l'élève : même taille de texte que le reste de Kasbah, le prochain jour mis en avant par le style.
+// School view: the homework book, the correspondence book and the class's posts
+// (`toutemonannee` plugin). What the site does poorly and what is done here: EVERYTHING to be done
+// at a glance, by day, without a calendar to click day after day. For parents and for
+// the pupil alike: same text size as the rest of Kasbah, the next day highlighted by style.
 //
-// La case « fait » est celle du site quand l'enseignante l'a ouverte (elle voit qui a coché) ;
-// sinon elle reste dans Kasbah. Les filtres (classes, niveaux) sont gardés par le serveur : tous
-// les écrans de la maison voient la même chose.
+// The "done" box is the site's when the teacher has opened it (she sees who ticked); otherwise it
+// stays in Kasbah. The filters (classes, levels) are kept by the server: all
+// the screens of the house see the same thing.
 
 type Tab = 'homework' | 'messages' | 'posts'
 
@@ -34,7 +34,7 @@ useIntervalFn(() => { now.value = Date.now() }, 60_000)
 const today = computed(() => localDay(new Date(now.value)))
 
 onMounted(() => { void school.load() })
-// la vue reste ouverte sur une tablette : on relit ce que le serveur a lu entre-temps
+// the view stays open on a tablet: we re-read what the server has read in the meantime
 useIntervalFn(() => { if (school.linked) void school.load() }, 5 * 60_000)
 
 const data = computed(() => school.data)
@@ -44,14 +44,14 @@ const visible = <T extends { journalId: string; levels: string[] }>(list: T[]) =
 const homework = computed(() => visible(data.value?.homework ?? []))
 const days = computed(() => homeworkDays(homework.value, today.value))
 const nextDue = computed(() => nextDueDate(homework.value, today.value))
-/** Des DEVOIRS, pas des jours : « 4 jours passés » se lisait comme 4 jours de calendrier, alors qu'ils
- * s'étalaient sur la semaine relue. */
+/** HOMEWORK items, not days: "4 days past" read as 4 calendar days, whereas they
+ * spread over the re-read week. */
 const pastCount = computed(() => days.value.past.reduce((n, d) => n + d.items.length, 0))
 const messages = computed(() => visible(data.value?.messages ?? []))
 const posts = computed(() => visible(data.value?.posts ?? []))
 const counts = computed(() => (data.value ? badges(data.value, today.value) : { homework: 0, messages: 0, posts: 0 }))
 
-// Les publications vues : « nouveau » reste affiché pendant la visite, la pastille tombe tout de suite.
+// The posts seen: "new" stays displayed during the visit, the pill drops right away.
 const postsSeenAtOpen = ref<number | null>(null)
 watch([tab, () => data.value?.posts], () => {
   if (tab.value !== 'posts' || !data.value) return
@@ -113,7 +113,7 @@ async function refresh() {
 const images = (files: SchoolFile[]) => files.filter((f) => f.type === 'image')
 const documents = (files: SchoolFile[]) => files.filter((f) => f.type !== 'image')
 
-// Les photos d'une publication s'ouvrent dans la visionneuse de l'app, plus dans un onglet du navigateur.
+// A post's photos open in the app's viewer, no longer in a browser tab.
 const viewer = ref<{ title: string | null; photos: SchoolFile[] } | null>(null)
 const viewerIndex = ref<number | null>(null)
 function openPhoto(title: string | null, files: SchoolFile[], i: number) {
@@ -136,8 +136,8 @@ function openPhoto(title: string | null, files: SchoolFile[], i: number) {
     </div>
 
     <div v-else class="page__body school">
-      <!-- une seule barre : filtres à gauche ; fraîcheur de la lecture et onglets (icônes, nom en
-           infobulle) à droite -->
+      <!-- a single bar: filters on the left; freshness of the reading and tabs (icons, name in a
+           tooltip) on the right -->
       <div class="school__bar">
         <div v-if="hasFilters" class="school__filters" :aria-label="$t('school.filtersLabel')">
           <template v-if="journals.length > 1">
@@ -154,7 +154,7 @@ function openPhoto(title: string | null, files: SchoolFile[], i: number) {
         <div class="school__status muted">
           <StrokeIcon v-if="data?.sessionLost || data?.error" name="alert" :size="16" class="school__warn"
                       :title="data?.sessionLost ? $t('school.sessionLost') : data?.error ?? ''" />
-          <!-- la relecture se fait seule (toutes les 30 min) : le geste manuel reste discret, porté par l'heure -->
+          <!-- the re-read happens by itself (every 30 min): the manual gesture stays discreet, carried by the time -->
           <button type="button" class="school__stamp" :disabled="refreshing" :title="$t('school.refresh')" :aria-label="$t('school.refresh')" @click="refresh">
             <StrokeIcon name="rotateRight" :size="13" />
             <span v-if="readAt" class="school__readat">{{ $t('school.updatedAt', { time: readAt }) }}</span>
@@ -223,7 +223,7 @@ function openPhoto(title: string | null, files: SchoolFile[], i: number) {
           </div>
         </template>
 
-        <!-- Cahier de liaison ------------------------------------------------------------------ -->
+        <!-- Correspondence book ---------------------------------------------------------------- -->
         <template v-else-if="tab === 'messages'">
           <p v-if="!messages.length" class="card card--soft school__none muted">{{ $t('school.noMessage') }}</p>
           <article v-for="m in messages" :key="m.id" class="card school__entry">
@@ -289,7 +289,7 @@ function openPhoto(title: string | null, files: SchoolFile[], i: number) {
 }
 .school__stamp:hover:not(:disabled) { color: var(--text); }
 .school__stamp:disabled { cursor: progress; opacity: .6; }
-/* téléphone : l'heure passait sur deux lignes — l'icône seule reste, l'infobulle dit le geste */
+/* phone: the time wrapped onto two lines — the icon alone remains, the tooltip says the gesture */
 @media (max-width: 520px) { .school__readat { display: none; } }
 .school__warn { color: #d38b22; flex: 0 0 auto; }
 .school__notice { padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13px; }
@@ -305,14 +305,14 @@ function openPhoto(title: string | null, files: SchoolFile[], i: number) {
 .school__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-bottom: calc(var(--safe-bottom) + 24px); display: flex; flex-direction: column; gap: 10px; }
 .school__scroll > * { width: 100%; max-width: 820px; box-sizing: border-box; }
 
-/* un jour par case, dans l'ordre de lecture ; auto-fill garde la largeur d'une colonne quel que soit
-   le nombre de jours */
+/* one day per cell, in reading order; auto-fill keeps a column's width whatever the
+   number of days */
 .school__scroll > .school__days { max-width: none; }
 .school__days { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 12px 16px; align-items: start; }
 .school__day { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; min-width: 0; }
 .school__dayhead { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: baseline; gap: 10px; }
 .school__dayhint { font-size: 12px; font-weight: 500; color: var(--muted); }
-/* le prochain jour à rendre : celui qu'on regarde en rentrant de l'école */
+/* the next day to hand in: the one you look at when coming home from school */
 .school__day[data-next='1'] .school__dayhead { color: var(--accent); }
 .school__day[data-next='1'] .school__dayhint {
   color: var(--on-accent); background: var(--accent); padding: 2px 9px; border-radius: 999px; font-weight: 600;

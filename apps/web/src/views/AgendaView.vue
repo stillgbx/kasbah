@@ -14,9 +14,9 @@ import { addDays, AGENDA_MODES, byDay, dayKey, shift, startOfDay, visibleDays, t
 import { useAgendaStore } from '../stores/agenda'
 import { usePluginsStore } from '../stores/plugins'
 
-// Vue Agenda : les agendas Google de la famille (plugin `agenda`), en lecture seule. Le mois en
-// cours à l'arrivée ; semaine et jour à côté. Ce qu'on choisit ici (mode, agendas masqués) est un
-// goût de CE poste, gardé dans le navigateur.
+// Calendar view: the family's Google calendars (`agenda` plugin), read-only. The current month on
+// arrival; week and day alongside. What is chosen here (mode, hidden calendars) is a
+// preference of THIS device, kept in the browser.
 
 const { t, locale } = useI18n()
 const plugins = usePluginsStore()
@@ -47,7 +47,7 @@ async function fetchEvents() {
     events.value = res.events
     failed.value = false
   } catch {
-    // on garde ce qui est affiché : la grille ne se vide pas pour un aller-retour raté
+    // we keep what is displayed: the grid does not empty out for a failed round trip
     if (mine === ticket) failed.value = true
   }
 }
@@ -58,7 +58,7 @@ onMounted(async () => {
   await fetchEvents()
 })
 watch([from, to, () => agenda.calendars], fetchEvents)
-// le serveur relit les flux toutes les dix minutes ; on repasse plus souvent pour suivre ses lectures
+// the server re-reads the feeds every ten minutes; we come back more often to follow its reads
 useIntervalFn(() => {
   void agenda.load().catch(() => {})
   void fetchEvents()
@@ -147,10 +147,10 @@ const selectedCalendar = computed(() => agenda.calendars.find((c) => c.id === se
 .agenda__arrow { width: 40px; padding: 0; justify-content: center; flex: 0 0 auto; }
 .agenda__bar { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-width: 0; height: 46px; }
 .agenda__bar > .pill, .agenda__bar > .segmented { flex: 0 0 auto; }
-/* le titre prend la place qui reste et se coupe : un mois long ne pousse pas les agendas */
+/* the title takes the remaining space and is cut: a long month does not push the calendars */
 .agenda__title { flex: 1 1 auto; min-width: 0; margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .agenda__warn { flex: 0 0 auto; color: #d38b22; }
-/* une ligne de hauteur fixe : dix agendas défilent de côté plutôt que d'ajouter une ligne */
+/* a fixed-height line: ten calendars scroll sideways rather than adding a row */
 .agenda__cals { flex: 0 0 32px; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
 .agenda__cal {
   flex: 0 0 auto; height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text);

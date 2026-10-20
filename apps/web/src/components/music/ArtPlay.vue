@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Lecture posée AU MILIEU d'une pochette (tuile ou ligne) : un cercle au trait sur un voile sombre,
-// lisible sur n'importe quelle image, sans aplat de couleur qui crie. Il n'apparaît qu'au survol de
-// son parent (le parent le révèle par `:deep(.art-play)`), et reste visible pendant l'envoi. Sur un
-// écran tactile, sans survol, il est toujours là — c'est lui qui rend la pochette discrète.
+// Play button set IN THE MIDDLE of a cover art (tile or row): a stroked circle on a dark veil,
+// readable on any image, without a flat color fill that screams. It only appears on hover of its
+// parent (the parent reveals it via `:deep(.art-play)`), and stays visible while sending. On a
+// touch screen, with no hover, it is always there — it is what makes the cover art discreet.
 withDefaults(defineProps<{
   size?: number
   disabled?: boolean
@@ -31,10 +31,11 @@ defineEmits<{ click: [] }>()
   -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
   transition: opacity .15s, background .15s, border-color .15s;
 }
-/* le triangle a son poids à gauche : le recentrer à l'œil */
+/* the triangle has its weight on the left: re-center it by eye */
 .art-play__icon { margin-left: calc(var(--size) * .06); }
 .art-play:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-/* grisé par le trait, pas par l'opacité : l'opacité est au parent, qui révèle la touche au survol */
+/* greyed by the stroke, not by opacity: the opacity is on the parent, which reveals the button
+   on hover */
 .art-play:disabled { cursor: default; }
 .art-play:disabled:not([aria-busy='true']) { border-color: rgb(255 255 255 / .45); color: rgb(255 255 255 / .5); }
 </style>

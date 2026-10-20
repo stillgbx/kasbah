@@ -7,9 +7,9 @@ import { FakeTens, fakeBluetooth } from '../lib/tens/fakeTens'
 import { CMD } from '../lib/tens/protocol'
 import TensView from './TensView.vue'
 
-// Ce que la page doit tenir : n'exister que sur le poste qui a activé le plugin, ne rien laisser
-// lancer tant que le TENS n'est pas connecté, lancer un favori en un clic, et garder l'arrêt
-// pressable dès la connexion.
+// What the page must hold: only exist on the device that has activated the plugin, let nothing
+// be started as long as the TENS is not connected, start a favorite in one click, and keep stop
+// pressable as soon as it is connected.
 
 let dev: FakeTens
 const tens = () => useTensStore()
@@ -61,7 +61,7 @@ describe('TensView', () => {
     await button('Connecter')!.trigger('click')
     await flushPromises()
     expect(w.text()).toContain('89 %')
-    expect(button('Arrêter')!.attributes('disabled')).toBeDefined()   // connecté, mais rien ne tourne
+    expect(button('Arrêter')!.attributes('disabled')).toBeDefined()   // connected, but nothing is running
     await w.findAll('.favorite__go')[0]!.trigger('click')        // P6 · Stimulation HAN · 60 min
     await vi.advanceTimersByTimeAsync(CHECK_SETTLE_MS + 100)
     await flushPromises()
@@ -71,11 +71,11 @@ describe('TensView', () => {
     expect(w.find('.session__program').text()).toContain('Stimulation HAN')
     expect(w.find('.session__time').text()).toBe('1:00:00')
     expect(button('Arrêter')!.attributes('disabled')).toBeUndefined()
-    // le programme en cours est marqué dans la liste
+    // the running program is marked in the list
     const p6 = w.findAll('.program').find((p) => p.text().includes('P6'))!
     expect(p6.attributes('data-current')).toBe('1')
-    expect(p6.attributes('data-on')).toBe('1')                        // choisi d'office : c'est lui qui tourne
-    expect(p6.find('.pulse').attributes('data-on')).toBe('1')          // et son point pulse
+    expect(p6.attributes('data-on')).toBe('1')                        // chosen by default: it is the one running
+    expect(p6.find('.pulse').attributes('data-on')).toBe('1')          // and its dot pulses
   })
 
   it('selects nothing by default: Start waits for a program to be picked', async () => {
@@ -113,18 +113,18 @@ describe('TensView', () => {
     useLocalPluginsStore().setEnabled('tens', true)
     const { w, button } = setup()
     const p6 = () => w.findAll('.program').find((p) => p.text().includes('P6'))!
-    expect(p6().find('.program__star').attributes('data-on')).toBe('other')   // P6 favori à 60 min, pas à 30
-    await p6().find('.program__star').trigger('click')                         // P6 à 30 min en plus
+    expect(p6().find('.program__star').attributes('data-on')).toBe('other')   // P6 favorite at 60 min, not at 30
+    await p6().find('.program__star').trigger('click')                         // P6 at 30 min as well
     expect(w.findAll('.favorite').map((f) => f.text()).filter((t) => t.includes('P6'))).toHaveLength(2)
     expect(p6().find('.program__star').attributes('data-on')).toBe('1')
-    // lancer le second : seule sa tuile est marquée en cours
+    // start the second: only its tile is marked as running
     await button('Connecter')!.trigger('click')
     await flushPromises()
     await w.findAll('.favorite__go')[2]!.trigger('click')
     await vi.advanceTimersByTimeAsync(CHECK_SETTLE_MS + 100)
     await flushPromises()
     expect(w.findAll('.favorite').map((f) => f.attributes('data-current'))).toEqual(['0', '0', '1'])
-    // l'étoile ne retire que le favori aux réglages en cours : celui à 60 min reste
+    // the star only removes the favorite for the current settings: the 60 min one stays
     await p6().find('.program__star').trigger('click')
     expect(tens().favorites.filter((f) => f.program === 'p6').map((f) => f.minutes)).toEqual([60])
   })
@@ -132,11 +132,11 @@ describe('TensView', () => {
   it('adds and removes favorites with the star, kept on this device', async () => {
     useLocalPluginsStore().setEnabled('tens', true)
     const { w } = setup()
-    expect(w.findAll('.favorite')).toHaveLength(2)                 // P6 et P3 au départ
+    expect(w.findAll('.favorite')).toHaveLength(2)                 // P6 and P3 at the start
     const p1 = () => w.findAll('.program').find((p) => p.text().includes('P1'))!
     await p1().find('.program__star').trigger('click')
     expect(w.findAll('.favorite')).toHaveLength(3)
-    expect(w.findAll('.favorite')[2]!.text()).toContain('30 min')  // durée réglée au moment de l'ajout
+    expect(w.findAll('.favorite')[2]!.text()).toContain('30 min')  // duration set at the time of adding
     expect(JSON.parse(localStorage.getItem('kasbah.tens.favorites')!)).toHaveLength(3)
     await w.findAll('.favorite__remove')[0]!.trigger('click')     // retire P6
     expect(w.findAll('.favorite').map((f) => f.text()).join()).not.toContain('P6')

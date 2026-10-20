@@ -3,8 +3,9 @@ import { mount } from '@vue/test-utils'
 import type { DeviceEntry } from '@kasbah/shared'
 import MusicPlayerBar from './MusicPlayerBar.vue'
 
-// La barre dit ce que NOTRE serveur sert à l'enceinte : un MP3 à débit constant, et en info-bulle ce
-// que YouTube a donné pour le produire. La ligne garde sa place quand rien ne joue (« rien ne bouge »).
+// The bar says what OUR server serves to the speaker: a constant-bitrate MP3, and in the tooltip
+// what YouTube gave to produce it. The row keeps its place when nothing is playing ("nothing
+// moves").
 
 const entry = (playback: 'playing' | 'idle'): DeviceEntry => ({
   descriptor: {
@@ -27,9 +28,9 @@ const props = (over: Record<string, unknown> = {}) => ({
 })
 
 /**
- * Entre le clic et le premier octet servi, il se passe quelques secondes (résolution yt-dlp) : la
- * barre montre déjà le titre et la pochette du CATALOGUE. Le badge doit suivre la même source, sinon
- * il arrive en retard sur un titre explicit et reste sur le suivant, qui ne l'est pas.
+ * Between the click and the first byte served, a few seconds pass (yt-dlp resolution): the bar
+ * already shows the title and cover art from the CATALOG. The badge must follow the same source,
+ * otherwise it arrives late on an explicit track and stays on the next one, which is not.
  */
 describe("MusicPlayerBar — badge explicit pendant l'envoi", () => {
   const playing = (over: Record<string, unknown> = {}) => ({
@@ -41,7 +42,7 @@ describe("MusicPlayerBar — badge explicit pendant l'envoi", () => {
     ...over,
   })
 
-  it("marque tout de suite un titre explicit en cours d'envoi", () => {
+  it("immediately flags an explicit track being sent", () => {
     const w = mount(MusicPlayerBar, { props: playing({
       entry: entry('idle'),
       pending: { title: 'Nouveau', artists: ['A'], artUrl: null, explicit: true },
@@ -49,8 +50,8 @@ describe("MusicPlayerBar — badge explicit pendant l'envoi", () => {
     expect(w.find('.explicit').exists()).toBe(true)
   })
 
-  it("l'efface dès le titre suivant, sans attendre que le flux démarre", () => {
-    // le lecteur joue ENCORE le morceau explicit d'avant : c'est le titre envoyé qui fait foi
+  it("clears it as of the next track, without waiting for the stream to start", () => {
+    // the player is STILL playing the previous explicit track: the track being sent is what counts
     const w = mount(MusicPlayerBar, { props: playing({
       pending: { title: 'Sans marquage', artists: ['A'], artUrl: null },
     }) })
@@ -58,36 +59,36 @@ describe("MusicPlayerBar — badge explicit pendant l'envoi", () => {
     expect(w.find('.explicit').exists()).toBe(false)
   })
 
-  it("reprend le marquage du lecteur une fois l'envoi terminé", () => {
+  it("takes the player's flag back once the send is over", () => {
     const w = mount(MusicPlayerBar, { props: playing() })
     expect(w.find('.explicit').exists()).toBe(true)
   })
 })
 
 /**
- * Lecture d'un titre en pause (la dernière écoute, après un rechargement ou un redémarrage du
- * serveur) : la relance répond avant que l'enceinte publie « lecture ». La touche tourne du clic
- * jusque-là, sans retomber entre-temps sur un « lire » grisé.
+ * Playback of a paused track (the last listen, after a reload or a server restart): the restart
+ * answers before the speaker publishes "playing". The button spins from the click until then,
+ * without falling back in the meantime to a greyed-out "play".
  */
-describe('MusicPlayerBar — attente de la lecture', () => {
+describe('MusicPlayerBar — waiting for playback', () => {
   const resume = { title: 'Mix', artist: 'DJ', artUrl: null, durationS: 3600, positionS: 1200, explicit: false }
   const main = (w: ReturnType<typeof mount>) => w.find('.key--main')
   const spinning = (w: ReturnType<typeof mount>) => main(w).find('.v-progress-circular').exists()
 
-  it("tourne du clic jusqu'à ce que l'enceinte joue, même après la fin de l'envoi", async () => {
+  it("spins from the click until the speaker plays, even after the send is over", async () => {
     const w = mount(MusicPlayerBar, { props: props({ entry: entry('idle'), session: null, resume }) })
     expect(spinning(w)).toBe(false)
     await main(w).trigger('click')
     expect(w.emitted('command')).toEqual([[{ type: 'media_player.play' }]])
     expect(spinning(w)).toBe(true)
-    // la relance a répondu : la dernière écoute est oubliée, l'enceinte n'a encore rien dit
+    // the restart answered: the last listen is forgotten, the speaker has not said anything yet
     await w.setProps({ resume: null })
     expect(spinning(w)).toBe(true)
     await w.setProps({ entry: entry('playing') })
     expect(spinning(w)).toBe(false)
   })
 
-  it("rend la touche si l'enceinte ne suit jamais", async () => {
+  it("gives the button back if the speaker never follows", async () => {
     vi.useFakeTimers()
     try {
       const w = mount(MusicPlayerBar, { props: props({ entry: entry('idle'), session: null, resume }) })
@@ -101,11 +102,11 @@ describe('MusicPlayerBar — attente de la lecture', () => {
 })
 
 /**
- * Sauter de 10 s passe par le MÊME chemin qu'un déplacement au curseur (`seek` vers le parent), et
- * part de la position AFFICHÉE : deux appuis rapides s'additionnent au lieu de retomber sur un
- * relevé qui n'a pas encore bougé.
+ * Skipping 10 s goes through the SAME path as a cursor drag (`seek` to the parent), and starts
+ * from the DISPLAYED position: two quick presses add up instead of falling back onto a reading
+ * that has not moved yet.
  */
-describe('MusicPlayerBar — reculer / avancer de 10 s', () => {
+describe('MusicPlayerBar — back / forward 10 s', () => {
   const at = (positionS: number, over: Record<string, unknown> = {}) => {
     const e = entry('playing')
     return {
@@ -115,17 +116,17 @@ describe('MusicPlayerBar — reculer / avancer de 10 s', () => {
   }
   const keys = (w: ReturnType<typeof mount>) => w.findAll('.key--jump')
 
-  it("avance et recule de 10 s, et deux appuis rapides s'additionnent", async () => {
+  it("moves forward and back 10 s, and two quick presses add up", async () => {
     const w = mount(MusicPlayerBar, { props: at(100) })
     expect(keys(w)).toHaveLength(2)
-    // deux appuis avant que le lecteur ait bougé : 100 → 110 → 120, et non deux fois 110
+    // two presses before the player has moved: 100 → 110 → 120, not 110 twice
     await keys(w)[1]!.trigger('click')
     await keys(w)[1]!.trigger('click')
     await keys(w)[0]!.trigger('click')
     expect(w.emitted('seek')).toEqual([[110], [120], [110]])
   })
 
-  it('ne sort jamais du morceau : ni avant le début, ni après la fin', async () => {
+  it('never leaves the track: neither before the start, nor after the end', async () => {
     const debut = mount(MusicPlayerBar, { props: at(4) })
     await keys(debut)[0]!.trigger('click')
     expect(debut.emitted('seek')).toEqual([[0]])
@@ -135,14 +136,14 @@ describe('MusicPlayerBar — reculer / avancer de 10 s', () => {
     expect(fin.emitted('seek')).toEqual([[248]])
   })
 
-  it('grise les deux touches sur un direct, qui n\'a ni début ni fin', () => {
+  it('greys out both buttons on a live stream, which has neither a start nor an end', () => {
     const w = mount(MusicPlayerBar, { props: at(100, { nowPlaying: { title: 'radio', positionS: 100, live: true } }) })
     expect(keys(w).map((k) => k.attributes('disabled'))).toEqual(['', ''])
   })
 })
 
-describe('MusicPlayerBar — qualité du flux', () => {
-  it('dit le format et le débit servis, et détaille la source en info-bulle', () => {
+describe('MusicPlayerBar — stream quality', () => {
+  it('states the served format and bitrate, and details the source in a tooltip', () => {
     const w = mount(MusicPlayerBar, { props: props() })
     const q = w.find('.bar__quality')
     expect(q.text().replace(/\u00a0/g, ' ')).toBe('MP3 192 kb/s')
@@ -153,7 +154,7 @@ describe('MusicPlayerBar — qualité du flux', () => {
     expect(hint).toContain('source M4A 129 kb/s')
   })
 
-  it('garde la place de la ligne quand le lecteur ne joue rien de nous', () => {
+  it('keeps the row in place when the player plays nothing from us', () => {
     const w = mount(MusicPlayerBar, { props: props({ entry: entry('idle'), session: null }) })
     const q = w.find('.bar__quality')
     expect(q.exists()).toBe(true)
@@ -162,14 +163,14 @@ describe('MusicPlayerBar — qualité du flux', () => {
 })
 
 /**
- * La file vit sur le serveur : c'est elle, pas l'enceinte (qui n'a qu'un « fichier »), qui rend
- * précédent / suivant possibles. La répétition prend la place qui répond à stop.
+ * The queue lives on the server: it is the queue, not the speaker (which only has a "file"), that
+ * makes previous / next possible. Repeat takes the place that answers to stop.
  */
-describe('MusicPlayerBar — file et répétition', () => {
+describe('MusicPlayerBar — queue and repeat', () => {
   const keys = (w: ReturnType<typeof mount>) => w.findAll('.bar__keys .key')
   const withQueue = (index: number, length: number, repeat = 'off') => props({ session: { ...session, queue: { length, index, repeat } } })
 
-  it('ouvre suivant tant que la file a une suite, précédent toujours', () => {
+  it('enables next while the queue has a continuation, previous always', () => {
     const middle = mount(MusicPlayerBar, { props: withQueue(0, 3) })
     const [, prev, , , , next] = keys(middle)
     expect(prev!.attributes('disabled')).toBeUndefined()
@@ -179,7 +180,7 @@ describe('MusicPlayerBar — file et répétition', () => {
     expect(keys(last)[1]!.attributes('disabled')).toBeUndefined()
   })
 
-  it('fait tourner la répétition : une fois, en boucle, arrêt', async () => {
+  it('cycles repeat: once, loop, stop', async () => {
     const w = mount(MusicPlayerBar, { props: withQueue(0, 1, 'once') })
     const repeat = keys(w)[0]!
     expect(repeat.attributes('data-on')).toBe('1')
@@ -190,14 +191,14 @@ describe('MusicPlayerBar — file et répétition', () => {
     expect(keys(off)[0]!.find('.key__step').classes()).toContain('bar--hidden')
   })
 
-  it('compte les titres en attente sur la touche File, sans rien déplacer', () => {
+  it('counts the pending tracks on the Queue button, without moving anything', () => {
     const w = mount(MusicPlayerBar, { props: withQueue(1, 5) })
     expect(w.find('.key__badge').text()).toBe('3')
     const none = mount(MusicPlayerBar, { props: withQueue(0, 1) })
     expect(none.find('.key__badge').classes()).toContain('bar--hidden')
   })
 
-  it("sans file ni saut déclaré par l'enceinte, précédent et suivant restent grisés", () => {
+  it("with no queue or skip declared by the speaker, previous and next stay greyed out", () => {
     const w = mount(MusicPlayerBar, { props: props() })
     expect(keys(w)[1]!.attributes('disabled')).toBeDefined()
     expect(keys(w)[5]!.attributes('disabled')).toBeDefined()

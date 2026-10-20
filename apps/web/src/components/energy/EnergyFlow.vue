@@ -8,31 +8,32 @@ import { formatPercent, formatPower } from '../../lib/format'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import type { IconName } from '../../lib/strokeIcons'
 
-// Schéma des flux d'énergie. La MAISON est au centre, dans un anneau qui montre d'où vient sa
-// consommation — soleil, batterie, réseau — et les sources autour, reliées en angles droits. Un
-// point parcourt chaque trait dans le sens réel du courant : un chiffre seul ne dit pas si 2,4 kW
-// entrent ou sortent. Les MOTS restent — « injection », « décharge » — pour expliquer la flèche.
+// Energy flow diagram. The HOUSE is at the center, in a ring that shows where its consumption
+// comes from — solar, battery, grid — and the sources around it, linked at right angles. A dot
+// runs along each line in the real direction of the current: a number alone does not say whether
+// 2.4 kW is coming in or going out. The WORDS remain — "export", "discharge" — to explain the
+// arrow.
 //
-// Le repère SVG est la scène MESURÉE, en pixels : une unité SVG par pixel, donc rien n'est étiré,
-// les angles restent droits et le point reste un disque. Mesurer plutôt que figer un rapport
-// d'aspect, parce que ni `aspect-ratio` ni un `padding` en pourcentage ne dimensionnent une rangée
-// de grille — la carte restait haute de 79 px pendant que le schéma s'étalait sur 467 px.
+// The SVG reference frame is the MEASURED scene, in pixels: one SVG unit per pixel, so nothing is
+// stretched, the angles stay square and the dot stays a disc. Measuring rather than fixing an
+// aspect ratio, because neither `aspect-ratio` nor a percentage `padding` sizes a grid row — the
+// card stayed 79 px tall while the diagram spread over 467 px.
 //
-// Rien ne bouge quand une valeur change : les nœuds sont à demeure, les trois parts de l'anneau
-// sont toujours listées (même à zéro), et un flux au repos garde son trait, en gris.
+// Nothing moves when a value changes: the nodes are permanent, the three ring shares are always
+// listed (even at zero), and an idle flow keeps its line, in grey.
 
 const props = defineProps<{ energy: StateFor<'energy'>; charger?: StateFor<'ev_charger'> | undefined }>()
 const { t, locale } = useI18n()
-/** Identifiants uniques : deux schémas sur une page ne doivent pas partager leurs trajets. */
+/** Unique ids: two diagrams on a page must not share their paths. */
 const uid = useId()
 const reduced = usePreferredReducedMotion()
 
 const stage = ref<HTMLElement | null>(null)
 const { width, height } = useElementSize(stage)
-/** Tant que la scène n'est pas mesurée, il n'y a pas de repère où tracer. */
+/** As long as the scene is not measured, there is no frame to draw in. */
 const measured = computed(() => width.value > 0 && height.value > 0)
 
-/** Ancre de chaque source, en fraction de la scène. La maison occupe le centre. */
+/** Anchor of each source, as a fraction of the scene. The house takes the center. */
 const POS = {
   solar: { x: 0.16, y: 0.22 },
   battery: { x: 0.84, y: 0.22 },
@@ -41,13 +42,13 @@ const POS = {
 } as const
 type NodeKey = keyof typeof POS
 
-/** Rayon de l'anneau : une part de la plus petite dimension, pour qu'il tienne dans tous les cadres. */
+/** Ring radius: a share of the smallest dimension, so that it fits in every frame. */
 const radius = computed(() => Math.max(44, Math.min(width.value, height.value) * 0.22))
 const centre = computed(() => ({ x: width.value / 2, y: height.value / 2 }))
 
-/** Puissance à laquelle le point file le plus vite. */
+/** Power at which the dot moves fastest. */
 const FULL_W = 6000
-/** Rayons du point, en pixels puisque le repère l'est aussi. */
+/** Dot radii, in pixels since the frame is too. */
 const DOT = { halo: 9, core: 4 }
 
 const e = computed(() => props.energy)
@@ -55,8 +56,8 @@ const e = computed(() => props.energy)
 interface Flow { key: NodeKey; direction: 'in' | 'out' | 'idle'; watts: number }
 
 /**
- * `in` : le courant va de la source VERS la maison. `out` : il en sort. Le trajet est toujours écrit
- * de la source vers la maison, et `out` fait revenir le point en arrière.
+ * `in`: the current goes from the source TO the house. `out`: it leaves it. The path is always
+ * written from the source to the house, and `out` makes the dot go backwards.
  */
 const flows = computed<Flow[]>(() => {
   const s = e.value
@@ -65,27 +66,30 @@ const flows = computed<Flow[]>(() => {
       ? { key, direction: 'idle', watts: 0 }
       : { key, direction: towardsHouse > 0 ? 'in' : 'out', watts: Math.abs(towardsHouse) }
   return [
-    flow('solar', s.productionW),                     // le solaire alimente, jamais l'inverse
-    flow('grid', s.gridW),                            // `gridW` > 0 = soutirage, donc vers la maison
-    flow('battery', -(s.batteryW ?? 0)),              // `batteryW` > 0 = charge, donc depuis la maison
-    flow('charger', -(props.charger?.powerW ?? 0)),   // la borne consomme
+    flow('solar', s.productionW),                     // solar feeds, never the other way round
+    flow('grid', s.gridW),                            // `gridW` > 0 = draw from the grid, so toward the house
+    flow('battery', -(s.batteryW ?? 0)),              // `batteryW` > 0 = charging, so from the house
+    flow('charger', -(props.charger?.powerW ?? 0)),   // the charger consumes
   ]
 })
 
 const flowOf = (key: NodeKey) => flows.value.find((f) => f.key === key)!
-/** Un flux sous le seuil ne va nulle part : aucun mot ne doit lui donner un sens. */
+/** A flow under the threshold goes nowhere: no word must give it a direction. */
 const idle = (key: NodeKey) => flowOf(key).direction === 'idle'
 
-/** Rayon du coude. Un angle vif se lit mal à cette épaisseur de trait. */
+/** Elbow radius. A sharp angle reads badly at this stroke width. */
 const CORNER = 14
-/** Écart du segment vertical au centre, en part du rayon : d'où l'arrivée tombe sur l'anneau. */
+/**
+ * Offset of the vertical segment from the center, as a share of the radius: where the arrival
+ * lands on the ring.
+ */
 const APPROACH = 0.45
 
 /**
- * Trajet en L : on quitte la source par le CÔTÉ, à l'horizontale, puis on descend ou on monte pour
- * arriver sur le HAUT ou le BAS de l'anneau. Le point d'arrivée est calculé par Pythagore, pour
- * toucher le cercle exactement — une distance approchée mordrait dessus ou s'arrêterait dans le vide.
- * Le départ est pris au centre de la source : sa boîte, opaque, cache le bout qui la traverse.
+ * L-shaped path: we leave the source by the SIDE, horizontally, then go down or up to arrive at
+ * the TOP or BOTTOM of the ring. The arrival point is computed with Pythagoras, to touch the circle
+ * exactly — an approximate distance would bite into it or stop in the void. The start is taken
+ * at the center of the source: its opaque box hides the end that passes through it.
  */
 function path(key: NodeKey): string {
   const p = POS[key]
@@ -101,27 +105,27 @@ function path(key: NodeKey): string {
 }
 
 /**
- * Un tour complet du point. Volontairement LENT : le schéma se regarde, il ne court pas. Neuf
- * secondes quand il ne passe presque rien, cinq à pleine puissance.
+ * One full turn of the dot. Deliberately SLOW: the diagram is watched, it does not race. Nine
+ * seconds when almost nothing flows, five at full power.
  */
 const duration = (watts: number) => `${(9 - 4 * Math.min(1, watts / FULL_W)).toFixed(1)}s`
 const pathId = (key: NodeKey) => `flow-${uid}-${key}`
 
 /**
- * D'où vient ce que la maison consomme. Le bilan du contrat se lit
- * `consommation = production + réseau − batterie`, donc ce qui l'alimente est le soutirage, la
- * décharge, et le solaire pour le reste. Une charge ou une injection ne sont PAS des parts de la
- * consommation : elles en sortent.
+ * Where what the house consumes comes from. The contract's balance reads
+ * `consumption = production + grid − battery`, so what feeds it is the draw from the grid, the
+ * discharge, and solar for the rest. A charge or an export are NOT shares of the consumption:
+ * they leave it.
  */
 const mix = computed(() => {
   const s = e.value
-  // même seuil que les traits : une source sous `IDLE_W` ne fait pas bouger de point, elle ne doit
-  // donc pas revendiquer une part de l'anneau — « 1 % batterie » sans électron était déroutant
+  // same threshold as the lines: a source under `IDLE_W` makes no dot move, so it must not
+  // claim a share of the ring — "1% battery" without an electron was confusing
   const over = (w: number) => (w >= IDLE_W ? w : 0)
   const fromGrid = over(Math.max(0, s.gridW))
   const fromBattery = over(Math.max(0, -(s.batteryW ?? 0)))
-  // borné par la PRODUCTION : le solaire ne peut pas donner à la maison plus qu'il ne produit. En
-  // reste seul, il ramassait tout l'écart des compteurs — « 1 % Solaire » la nuit, panneaux éteints.
+  // bounded by PRODUCTION: solar cannot give the house more than it produces. Left alone, it picked
+  // up the whole gap between the meters — "1% Solar" at night, panels off.
   const fromSolar = over(Math.min(Math.max(0, s.productionW), Math.max(0, s.consumptionW - fromGrid - fromBattery)))
   const total = fromSolar + fromGrid + fromBattery
   const share = (w: number) => (total > 0 ? w / total : 0)
@@ -132,10 +136,10 @@ const mix = computed(() => {
   ]
 })
 
-/** Anneau dans son propre repère CARRÉ : aucune déformation à corriger. */
+/** Ring in its own SQUARE frame: no distortion to correct. */
 const RING = { r: 44, w: 9 }
 const CIRC = 2 * Math.PI * RING.r
-/** Chaque part démarre où la précédente s'arrête ; la rotation CSS place le départ en haut. */
+/** Each share starts where the previous one stops; the CSS rotation puts the start at the top. */
 const arcs = computed(() => {
   let start = 0
   return mix.value.map((m) => {
@@ -157,8 +161,8 @@ const nodes = computed<NodeView[]>(() => {
       key: 'battery', icon: 'battery',
       value: s.batterySoc !== undefined ? formatPercent(s.batterySoc, locale.value) : '—',
       label: t('energy.battery'),
-      // « Charge » / « Décharge » n'a de sens que si un point circule : sinon le signe du bruit
-      // faisait basculer le mot d'une lecture à l'autre, batterie au repos.
+      // "Charging" / "Discharging" only makes sense if a dot is moving: otherwise the sign of
+      // the noise flipped the word from one reading to the next, battery at rest.
       hint: s.batteryW === undefined ? ''
         : idle('battery') ? t('energy.idle')
         : `${t(battW >= 0 ? 'energy.charging' : 'energy.discharging')} ${formatPower(Math.abs(battW), locale.value)}`,
@@ -180,21 +184,21 @@ const shown = (key: NodeKey) => nodes.value.find((n) => n.key === key)!.shown
 
 <template>
   <section class="flow card" :aria-label="$t('energy.flowTitle')">
-    <!-- Ce que le bloc montre, dit en toutes lettres : ici l'instant, à côté la journée. Les deux
-         blocs de la ligne ne parlent pas de la même échelle de temps, et rien ne le disait. -->
+    <!-- What the block shows, spelled out: here the instant, next to it the day. The two blocks of
+         the row do not speak of the same time scale, and nothing said so. -->
     <div class="flow__head">
       <div class="flow__title">{{ $t('energy.flowTitle') }}</div>
       <div class="muted flow__scale">{{ $t('energy.instant') }}</div>
     </div>
-    <!-- Le cadre découpe, la scène garde sa largeur minimale : en dessous, les quatre nœuds et
-         l'anneau ne peuvent PAS tenir côte à côte, et se chevauchaient au lieu de se lire. -->
+    <!-- The frame clips, the scene keeps its minimum width: below it, the four nodes and the
+         ring CANNOT fit side by side, and overlapped instead of being readable. -->
     <div class="flow__viewport">
       <div ref="stage" class="flow__stage">
         <svg v-if="measured" class="flow__links" :viewBox="`0 0 ${Math.round(width)} ${Math.round(height)}`" aria-hidden="true">
           <template v-for="f in flows" :key="f.key">
             <path v-if="shown(f.key)" :id="pathId(f.key)" class="flow__wire" :d="path(f.key)" />
           </template>
-          <!-- un seul point par trajet actif, lent : il part de la source vers la maison, ou l'inverse -->
+          <!-- a single dot per active path, slow: it goes from the source to the house, or the reverse -->
           <template v-for="f in flows" :key="`dot-${f.key}`">
             <g v-if="shown(f.key) && f.direction !== 'idle'" class="flow__dot">
               <circle class="flow__halo" :r="DOT.halo" />
@@ -207,7 +211,7 @@ const shown = (key: NodeKey) => nodes.value.find((n) => n.key === key)!.shown
           </template>
         </svg>
 
-        <!-- La maison, au centre, dans l'anneau de l'origine de sa consommation. -->
+        <!-- The house, at the center, in the ring of the origin of its consumption. -->
         <div class="hub" :style="{ width: `${radius * 2}px`, height: `${radius * 2}px` }">
           <svg class="hub__ring" viewBox="0 0 100 100" :aria-label="$t('energy.mix')">
             <circle class="hub__track" cx="50" cy="50" :r="RING.r" :stroke-width="RING.w" />
@@ -223,8 +227,8 @@ const shown = (key: NodeKey) => nodes.value.find((n) => n.key === key)!.shown
           </div>
         </div>
 
-        <!-- Les trois parts, TOUJOURS listées, même à zéro : une part qui apparaît ne doit pas
-             décaler ses voisines. -->
+        <!-- The three shares, ALWAYS listed, even at zero: a share that appears must not
+             shift its neighbors. -->
         <div class="legend">
           <span v-for="m in mix" :key="m.key" class="legend__item" :data-part="m.key" :data-on="m.part > 0 ? '1' : '0'">
             <span class="legend__dot" />{{ formatPercent(Math.round(m.part * 100), locale) }}
@@ -238,7 +242,7 @@ const shown = (key: NodeKey) => nodes.value.find((n) => n.key === key)!.shown
           <span class="node__icon"><StrokeIcon :name="n.icon" :size="16" /></span>
           <span class="node__value">{{ n.value }}</span>
           <span class="muted node__label">{{ n.label }}</span>
-          <!-- place tenue même vide : un flux qui s'inverse ne doit pas redimensionner son nœud -->
+          <!-- space held even when empty: a flow that reverses must not resize its node -->
           <span class="muted node__hint">{{ n.hint || ' ' }}</span>
         </div>
       </div>
@@ -247,23 +251,23 @@ const shown = (key: NodeKey) => nodes.value.find((n) => n.key === key)!.shown
 </template>
 
 <style scoped>
-/* PAS d'`overflow` sur la carte : une cellule de grille qui découpe son contenu ne contribue plus à
-   la hauteur de sa rangée, et la carte restait haute de 79 px par-dessus le graphique du dessous. La
-   découpe vit sur la scène, qui n'est pas une cellule de grille.
-   La largeur vient de la colonne qui l'accueille (`energy__top`), pas de la carte. */
-/* `min-width: 0` : sans lui, une cellule de grille prend la largeur MINIMALE de son contenu, et la
-   largeur plancher de la scène remontait jusqu'à faire déborder la page entière. */
+/* NO `overflow` on the card: a grid cell that clips its content no longer contributes to the
+   height of its row, and the card stayed 79 px tall on top of the chart below. The clipping
+   lives on the scene, which is not a grid cell.
+   The width comes from the column that hosts it (`energy__top`), not from the card. */
+/* `min-width: 0`: without it, a grid cell takes the MINIMUM width of its content, and the floor
+   width of the scene bubbled up until it made the whole page overflow. */
 .flow { padding: 0; min-width: 0; }
-/* Le titre est en retrait, le schéma touche les bords : c'est déjà le parti pris de la carte.
-   L'échelle est SOUS le titre, et non à côté : à côté, elle entrait en concurrence avec le total du
-   bloc voisin, dont la longueur varie avec la valeur — l'en-tête changeait alors de hauteur. */
+/* The title is inset, the diagram touches the edges: that is already the card's stance. The scale
+   is UNDER the title, not beside it: beside it, it competed with the total of the neighboring
+   block, whose length varies with the value — the header then changed height. */
 .flow__head { padding: 18px 20px 0; }
 .flow__title { font-weight: 600; font-size: 14px; }
 .flow__scale { font-size: 12px; }
-/* Le cadre découpe et défile à l'horizontale ; la hauteur DÉFINIE vit sur la scène, seule à
-   dimensionner vraiment la rangée de grille. */
+/* The frame clips and scrolls horizontally; the DEFINED height lives on the scene, the only one
+   that truly sizes the grid row. */
 .flow__viewport { overflow-x: auto; overflow-y: hidden; border-radius: var(--radius); }
-/* 380 px : en dessous, le nœud de gauche mord sur l'anneau (mesuré, pas estimé). */
+/* 380 px: below it, the left node bites into the ring (measured, not estimated). */
 .flow__stage { position: relative; width: 100%; min-width: 380px; height: clamp(320px, 40vh, 420px); }
 .flow__links { position: absolute; inset: 0; width: 100%; height: 100%; }
 .flow__wire { fill: none; stroke: var(--line); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
@@ -278,8 +282,8 @@ const shown = (key: NodeKey) => nodes.value.find((n) => n.key === key)!.shown
 .hub__track, .hub__arc { fill: none; }
 .hub__track { stroke: var(--line); }
 .hub__arc { stroke-linecap: butt; transition: stroke-dasharray .4s ease, stroke-dashoffset .4s ease; }
-/* Trois parts tirées du SEUL accent : pleine pour le soleil, à demi pour la batterie, gris neutre
-   pour le réseau. Aucune couleur nouvelle, donc les quatre accents du réglage restent respectés. */
+/* Three shares drawn from the SINGLE accent: full for solar, half for the battery, neutral grey
+   for the grid. No new color, so the four accents of the setting are respected. */
 .hub__arc[data-part='solar'] { stroke: var(--accent); }
 .hub__arc[data-part='battery'] { stroke: var(--accent); opacity: 0.45; }
 .hub__arc[data-part='grid'] { stroke: var(--muted); }
@@ -291,7 +295,7 @@ const shown = (key: NodeKey) => nodes.value.find((n) => n.key === key)!.shown
 .hub__value { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .hub__label { font-size: 12px; }
 
-/* Au BAS de la scène, et non juste sous l'anneau : centrée là, elle mordait sur le nœud Réseau. */
+/* At the BOTTOM of the scene, not just under the ring: centered there, it bit into the Grid node. */
 .legend { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 12px; white-space: nowrap; font-size: 11px; }
 .legend__item { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
 .legend__item[data-on='0'] { opacity: 0.4; }

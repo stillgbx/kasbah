@@ -7,17 +7,17 @@ import { useNotificationsStore } from '../../stores/notifications'
 import AssistantReply from '../layout/AssistantReply.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Le journal des instructions de l'assistant, de TOUS les comptes : sur le réseau local seulement (le
-// serveur le refuse sous l'adresse publique, et on ne l'y demande pas). Le moteur et son compte se
-// règlent dans la section de son plugin (Claude), plus bas.
+// The assistant's instruction log, of ALL accounts: on the local network only (the server
+// refuses it under the public address, and it is not requested there). The engine and its account
+// are set in its plugin's section (Claude), further down.
 //
-// Coût de chaque instruction et leur total, quand le moteur le dit : au prix catalogue de l'API. Avec
-// un forfait, rien n'est facturé à l'instruction ; c'est ce que coûterait une clé d'API.
+// Cost of each instruction and their total, when the engine reports it: at the API's list price.
+// With a plan, nothing is billed per instruction; it is what an API key would cost.
 
 const notifications = useNotificationsStore()
 const { t, d, n } = useI18n()
 
-/** `null` : pas (encore) lu, ou adresse publique. */
+/** `null`: not (yet) read, or public address. */
 const log = ref<AssistantLogEntry[] | null>(null)
 const loading = ref(false)
 
@@ -32,11 +32,11 @@ async function load() {
 
 const when = (at: number) => `${d(new Date(at), 'date')} ${d(new Date(at), 'time')}`
 const seconds = (ms: number) => n(ms / 1000, { maximumFractionDigits: 1 })
-/** Deux chiffres significatifs sous le dollar (0,0031), deux décimales au-dessus (1,24). */
+/** Two significant digits under the dollar (0.0031), two decimals above (1.24). */
 const usd = (v: number) => n(v, v >= 1 ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumSignificantDigits: 2 })
 const tokens = (u: AssistantUsage) => t('assistant.logTokens', { input: n(u.inputTokens), output: n(u.outputTokens), read: n(u.cacheReadTokens), write: n(u.cacheWriteTokens) })
 
-/** Les instructions chiffrées du journal affiché, et leur coût cumulé. */
+/** The priced instructions of the displayed log, and their cumulative cost. */
 const total = computed(() => {
   const priced = (log.value ?? []).filter((e) => e.usage)
   return priced.length ? { count: priced.length, cost: priced.reduce((sum, e) => sum + e.usage!.costUsd, 0) } : null
@@ -78,7 +78,7 @@ onMounted(async () => {
 .ac__total { margin-top: 2px; }
 .ac__cost { cursor: help; }
 .ac__refresh { flex: none; height: 34px; font-size: 13px; }
-/* deux cents entrées au plus : la liste défile dans la carte au lieu d'allonger la page */
+/* at most two hundred entries: the list scrolls inside the card instead of lengthening the page */
 .ac__entries { max-height: 480px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: var(--radius); }
 .ac__entry + .ac__entry { border-top: 1px solid var(--line); }
 .ac__meta { padding: 10px 16px 0; }

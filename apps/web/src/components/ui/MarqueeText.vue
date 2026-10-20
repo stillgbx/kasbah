@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-// Texte sur une ligne qui, s'il ne tient pas dans la place qu'on lui donne, défile lentement d'un
-// bout à l'autre et revient, avec un fondu aux deux bords pour dire qu'il continue. S'il tient, rien
-// ne bouge et rien ne s'affiche de plus : ni fondu, ni animation. Règle « rien ne doit bouger » : le
-// composant occupe toujours une ligne de la même hauteur, quel que soit le texte.
+// Single-line text that, if it does not fit in the space it is given, slowly scrolls from one
+// end to the other and back, with a fade at both edges to say it continues. If it fits, nothing
+// moves and nothing more is shown: no fade, no animation. "Nothing must move" rule: the
+// component always takes a line of the same height, whatever the text.
 //
-// La distance et la durée sont calculées à partir du débordement mesuré (vitesse constante d'environ
-// 24 px/s, bornée), avec une pause à chaque extrémité pour laisser lire le début et la fin. Sous
-// `prefers-reduced-motion`, on revient à des points de suspension.
+// The distance and the duration are computed from the measured overflow (constant speed of about
+// 24 px/s, bounded), with a pause at each end to let the start and the end be read. Under
+// `prefers-reduced-motion`, we fall back to an ellipsis.
 const props = defineProps<{ text: string }>()
 
 const wrap = ref<HTMLElement | null>(null)
@@ -45,12 +45,12 @@ const duration = () => `${Math.min(MAX_S, Math.max(MIN_S, overflow.value / SPEED
 </template>
 
 <style scoped>
-/* `contain: inline-size` : la largeur du texte ne compte pas dans la largeur minimale du parent.
-   Sans lui, un titre long (inline-block, sans retour à la ligne) élargissait tout le panneau et
-   poussait le bouton « Déplacer » hors de l'écran, au lieu de déborder ici. */
+/* `contain: inline-size`: the text width does not count in the parent's minimum width.
+   Without it, a long title (inline-block, no line wrapping) widened the whole panel and
+   pushed the "Move" button off the screen, instead of overflowing here. */
 .marquee { position: relative; overflow: hidden; white-space: nowrap; min-width: 0; contain: inline-size; }
 .marquee__inner { display: inline-block; will-change: transform; }
-/* le fondu n'existe que quand ça défile : sinon un texte court se retrouverait délavé aux bords */
+/* the fade only exists while it scrolls: otherwise a short text would end up washed out at the edges */
 .marquee[data-scrolling="1"] {
   mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
@@ -58,9 +58,9 @@ const duration = () => `${Math.min(MAX_S, Math.max(MIN_S, overflow.value / SPEED
 .marquee[data-scrolling="1"] .marquee__inner {
   animation: marquee-slide var(--marquee-duration) ease-in-out infinite;
 }
-/* pause au départ (20 %), traversée, pause à l'arrivée (20 %), retour. Les 12 px aux deux bouts
-   sortent le début et la fin du texte de la zone de fondu pendant les pauses ; la mesure du
-   débordement, elle, se fait sans décalage, donc ne dépend pas de l'animation. */
+/* pause at the start (20%), traverse, pause at the end (20%), return. The 12 px at both ends
+   take the start and end of the text out of the fade zone during the pauses; the overflow
+   measurement, for its part, is done without offset, so it does not depend on the animation. */
 @keyframes marquee-slide {
   0%, 20% { transform: translateX(12px); }
   50%, 70% { transform: translateX(calc(var(--marquee-shift) - 12px)); }

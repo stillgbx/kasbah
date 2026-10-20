@@ -12,9 +12,9 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 import AddMenu from './AddMenu.vue'
 import DayPills from './DayPills.vue'
 
-// Une condition, dans une petite carte : sa nature en tête (avec NON et la corbeille), ses champs
-// empilés dessous — le panneau n'a que ~300 px de large, rien ne tient côte à côte. Un groupe
-// « l'un de » contient des conditions simples (un seul niveau de OU, comme le schéma).
+// A condition, in a small card: its nature at the top (with NOT and the trash can), its fields
+// stacked below — the panel is only ~300 px wide, nothing fits side by side. An "Any of these"
+// group contains simple conditions (a single level of OR, like the schema).
 const props = defineProps<{ modelValue: Predicate; negatable?: boolean; removable?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: Predicate]; remove: [] }>()
 const devices = useDevicesStore()
@@ -29,7 +29,7 @@ const ACTIVE_KINDS: DeviceKind[] = ['light', 'cover', 'media_player', 'climate',
 const LOCATED_KINDS: DeviceKind[] = ['vehicle', 'mower']
 const ROOM_KINDS: DeviceKind[] = ['light', 'media_player', 'fan', 'cover', 'climate']
 
-// ── comparaison d'un champ ────────────────────────────────────────────────────────────────────
+// ── comparison of a field ─────────────────────────────────────────────────────────────────────
 const deviceKind = computed<DeviceKind | undefined>(() => ('deviceId' in p.value ? devices.descriptors[p.value.deviceId]?.kind : undefined))
 const fields = computed<readonly TriggerField[]>(() => (deviceKind.value ? TRIGGER_FIELDS[deviceKind.value] ?? [] : []))
 const field = computed(() => (p.value.type === 'device' ? fields.value.find((f) => f.field === (p.value as { field: string }).field) : undefined))
@@ -58,7 +58,7 @@ function setNumber(raw: string) {
   if (Number.isFinite(n)) set({ value: n } as Partial<Predicate>)
 }
 
-// ── pièce ────────────────────────────────────────────────────────────────────────────────────
+// ── room ─────────────────────────────────────────────────────────────────────────────────────
 const roomKindItems = computed(() => ROOM_KINDS.map((k) => ({ value: k, title: t(`kinds.${k}`) })))
 const classItems = computed(() => {
   if (p.value.type !== 'anyInRoom') return []
@@ -76,7 +76,7 @@ function setClass(v: string) {
   emit('update:modelValue', v ? { ...rest, deviceClass: v as never } : rest)
 }
 
-// ── groupe « l'un de » ──────────────────────────────────────────────────────────────────────
+// ── "Any of these" group ────────────────────────────────────────────────────────────────────
 const leafTypes = computed(() => PREDICATE_TYPES.filter((x) => x !== 'any').map((x) => ({ value: x, title: t(`automations.predicate.${x}`) })))
 function setChild(i: number, child: Predicate) {
   if (p.value.type !== 'any') return
@@ -175,7 +175,7 @@ function removeChild(i: number) {
 .pred { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
 .pred__head { display: flex; align-items: center; gap: 8px; min-height: 30px; }
 .pred__type { flex: 1 1 0; min-width: 0; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* NON : même boîte cochée ou pas, lisible d'un coup d'œil */
+/* NOT: same box checked or not, readable at a glance */
 .pred__not {
   flex: 0 0 auto; width: 44px; height: 26px; border-radius: 999px; border: 1px solid var(--line);
   background: transparent; color: var(--muted); font: 700 11px/1 var(--font); letter-spacing: .04em;

@@ -8,11 +8,11 @@ import { useDevicesStore } from '../../stores/devices'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Une action, dans une petite carte. Une commande vise des appareils NOMMÉS, ou une SÉLECTION
-// résolue au moment d'agir (« tous les volets du rez-de-chaussée ») — une lampe ajoutée demain y
-// entre sans rien réécrire. Les commandes proposées sont celles que les appareils visés déclarent.
-// « Pendant N min » : au bout, le serveur envoie la commande inverse — offert seulement quand elle
-// en a une (ouvrir ↔ fermer, allumer ↔ éteindre…).
+// An action, in a small card. A command targets NAMED devices, or a SELECTION resolved at the time
+// of acting ("all the shutters on the ground floor") — a light added tomorrow joins it without
+// rewriting anything. The commands offered are those the targeted devices declare.
+// "For N min": at the end, the server sends the inverse command — offered only when it has one
+// (open ↔ close, turn on ↔ turn off…).
 const props = defineProps<{ modelValue: ActionDraft }>()
 const emit = defineEmits<{ 'update:modelValue': [value: ActionDraft]; remove: [] }>()
 const devices = useDevicesStore()
@@ -21,18 +21,18 @@ const { t } = useI18n()
 
 const a = computed(() => props.modelValue)
 
-// Texte en cours de frappe d'un champ numérique, montré à la place du modèle jusqu'à la validation :
-// l'état d'un appareil qui change redessine la carte (la liste des appareils dit « indisponible »),
-// et Vue réécrivait alors le champ avec l'ancienne valeur — 60 tapé repartait à 20 sans un mot.
+// Text being typed into a numeric field, shown in place of the model until validation: a device
+// state change redraws the card (the device list says "unavailable"), and Vue then rewrote the
+// field with the old value — 60 typed went back to 20 without a word.
 const typing = ref<{ field: string; text: string } | null>(null)
 const shown = (field: string, value: unknown) => (typing.value?.field === field ? typing.value.text : String(value ?? ''))
 const onType = (field: string, e: Event) => { typing.value = { field, text: (e.target as HTMLInputElement).value } }
-/** Validation : le modèle reçoit le texte, et le champ montre ce qui a été retenu (borné). */
+/** Validation: the model receives the text, and the field shows what was kept (clamped). */
 function commit(e: Event, set: (raw: string) => void, kept: () => unknown) {
   typing.value = null
   const input = e.target as HTMLInputElement
   set(input.value)
-  void nextTick(() => { input.value = String(kept() ?? '') })   // le modèle redescend au rendu suivant
+  void nextTick(() => { input.value = String(kept() ?? '') })   // the model comes back down on the next render
 }
 
 // ── commande ─────────────────────────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ const kind = computed<DeviceKind>(() => {
 const target = computed<Target | null>(() => (a.value.type === 'command' ? a.value.target : null))
 const selected = computed(() => (target.value?.type === 'devices' ? target.value.deviceIds : []))
 
-/** Commandes que TOUS les appareils nommés déclarent (une sélection se contente du kind). */
+/** Commands that ALL the named devices declare (a selection settles for the kind). */
 const choices = computed<CommandChoice[]>(() => choicesFor(kind.value).filter((c) =>
   selected.value.every((id) => devices.descriptors[id]?.capabilities.includes(c.requires) ?? true)))
 const choice = computed(() => (a.value.type === 'command' ? choiceOf(a.value.command) : undefined))
@@ -53,9 +53,9 @@ const choice = computed(() => (a.value.type === 'command' ? choiceOf(a.value.com
 function setCommand(x: Partial<Extract<ActionDraft, { type: 'command' }>>) {
   if (a.value.type !== 'command') return
   const next = { ...a.value, ...x }
-  // passer d'« allumer » à « luminosité » garde le fondu choisi
+  // switching from "turn on" to "brightness" keeps the chosen fade
   if (next.command.type === 'light.set' && next.command.transitionMs === undefined && fadeMs.value) next.command = { ...next.command, transitionMs: fadeMs.value }
-  if (next.forMin && !inverseCommand(next.command)) delete next.forMin   // la nouvelle commande n'a pas d'inverse
+  if (next.forMin && !inverseCommand(next.command)) delete next.forMin   // the new command has no inverse
   emit('update:modelValue', next)
 }
 const hasInverse = computed(() => a.value.type === 'command' && !!inverseCommand(a.value.command))
@@ -65,15 +65,15 @@ function setForMin(n: number | undefined) {
   const { forMin: _, ...rest } = a.value
   emit('update:modelValue', n ? { ...rest, forMin: n } : rest)
 }
-/** Bornes de « pendant », celles du schéma : hors plage, la valeur se ramène à la borne. */
+/** Bounds of "for", those of the schema: out of range, the value is brought back to the bound. */
 const FOR_MIN = 1
 const FOR_MAX = 1440
 function setForMinText(raw: string) {
   const n = Number(raw.replace(',', '.'))
   if (Number.isFinite(n)) setForMin(Math.min(FOR_MAX, Math.max(FOR_MIN, Math.round(n))))
 }
-// Fondu d'une lumière. L'unité vit ici, comme le sens du décalage au soleil : « min » choisi avant de
-// taper le nombre ne doit pas se perdre.
+// Fade of a light. The unit lives here, like the direction of the sun offset: "min" chosen before
+// typing the number must not be lost.
 const isLight = computed(() => a.value.type === 'command' && a.value.command.type === 'light.set')
 const fadeMs = computed(() => (a.value.type === 'command' && a.value.command.type === 'light.set' ? a.value.command.transitionMs : undefined))
 const fadeUnit = ref<'s' | 'min'>(fadeMs.value && fadeMs.value % 60_000 !== 0 ? 's' : 'min')
@@ -183,7 +183,7 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
             </button>
           </span>
         </div>
-        <!-- choix multiple filtrable, qui reste ouvert ; les choisis sont les pastilles au-dessus, le champ garde une ligne -->
+        <!-- filterable multi-select, which stays open; the chosen ones are the pills above, the field keeps one line -->
         <v-autocomplete class="act__pick" :model-value="selected" :items="deviceItems" multiple :label="$t('automations.editor.addDevice')" :no-data-text="$t('automations.editor.noDevice')"
                         density="compact" variant="outlined" hide-details @update:model-value="setDevices">
           <template #selection />
@@ -199,14 +199,14 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
         <div class="act__except">
           <button type="button" class="act__toggle" :data-on="exceptOn ? '1' : '0'" :aria-pressed="exceptOn"
                   @click="setExcept(exceptOn ? null : exceptValue)">{{ $t('automations.target.except') }}</button>
-          <!-- place réservée : la liste n'apparaît pas en poussant ce qui suit -->
+          <!-- reserved space: the list does not appear by pushing what follows -->
           <v-select class="act__except-kind" :style="{ visibility: exceptOn ? 'visible' : 'hidden' }" :model-value="exceptValue" :items="EXCEPT_ITEMS"
                     density="compact" variant="outlined" hide-details :aria-label="$t('automations.target.except')" @update:model-value="setExcept" />
         </div>
       </template>
 
       <v-select :model-value="choice?.key ?? null" :items="choiceItems" :label="$t('automations.editor.command')" density="compact" variant="outlined" hide-details @update:model-value="pickChoice" />
-      <!-- paramètre : place toujours là, vide pour une commande qui n'en a pas -->
+      <!-- parameter: space always there, empty for a command that has none -->
       <div class="act__param">
         <template v-if="choice?.param?.type === 'pct' || choice?.param?.type === 'number'">
           <input class="act__input act__input--num" type="text" inputmode="decimal" enterkeyhint="done" :value="shown('param', param)"
@@ -218,7 +218,7 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
         <v-select v-else-if="choice?.param?.type === 'enum'" class="act__grow" :model-value="paramOf(a.command)" :items="climateItems"
                   density="compact" variant="outlined" hide-details :aria-label="$t('automations.editor.param')" @update:model-value="(v: string | number) => setParam(String(v))" />
       </div>
-      <!-- fondu : place toujours là, éteinte pour ce qui n'est pas une lumière -->
+      <!-- fade: space always there, off for anything that is not a light -->
       <div class="act__for" :title="isLight ? $t('automations.editor.fadeHint') : $t('automations.editor.noFade')">
         <button type="button" class="act__toggle" :disabled="!isLight" :data-on="fadeMs ? '1' : '0'" :aria-pressed="!!fadeMs"
                 @click="setFade(fadeMs ? undefined : 1)">{{ $t('automations.editor.fade') }}</button>
@@ -229,7 +229,7 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
                   density="compact" variant="outlined" hide-details :aria-label="$t('automations.editor.fade')"
                   @update:model-value="(u: 's' | 'min') => setFade(fadeValue, u)" />
       </div>
-      <!-- « pendant N min » : place toujours là, éteinte pour une commande sans inverse -->
+      <!-- "for N min": space always there, off for a command without an inverse -->
       <div class="act__for" :title="hasInverse ? $t('automations.editor.forMinHint') : $t('automations.editor.noInverse')">
         <button type="button" class="act__toggle" :disabled="!hasInverse" :data-on="forMin ? '1' : '0'" :aria-pressed="!!forMin"
                 @click="setForMin(forMin ? undefined : 20)">{{ $t('automations.editor.forMin') }}</button>

@@ -1,9 +1,9 @@
 import type { Theme } from './index'
 
-// Dracula et son pendant clair officiel Alucard (draculatheme.com/spec). Les deux palettes ne
-// publient que le fond de l'éditeur : les paliers de surface en sont des nuances voisines. Le texte
-// secondaire sombre est le bleu « comment » (#6272a4) éclairci à teinte égale : l'original tombait
-// à 3:1 sur la surface, sous le 4,5:1 exigé d'un texte qui porte de l'information.
+// Dracula and its official light counterpart Alucard (draculatheme.com/spec). Both palettes only
+// publish the editor background: the surface steps are neighboring shades. The dark secondary
+// text is the "comment" blue (#6272a4) lightened at equal hue: the original fell to 3:1 on the
+// surface, below the 4.5:1 required of text that carries information.
 export const dracula = {
   id: 'dracula',
   label: 'Dracula',

@@ -3,17 +3,18 @@ import type { MusicQueue } from '../../api/transport'
 import { formatClock } from '../../composables/useMediaPosition'
 import MusicItemRow from './MusicItemRow.vue'
 
-// La file du lecteur choisi : ce qui joue, ce qui suit. Affichée à la place de la zone centrale, quelle
-// que soit la source (YouTube Music, Mixcloud, Radios) : la touche File de la barre l'ouvre partout.
+// The queue of the chosen player: what is playing, what follows. Displayed in place of the
+// central area, whatever the source (YouTube Music, Mixcloud, Radios): the bar's Queue button
+// opens it everywhere.
 defineProps<{
   queue: MusicQueue | null
-  /** Titres qui attendent après le courant. */
+  /** Tracks waiting after the current one. */
   waiting: number
-  /** Le titre courant joue (son point pulse) ; en pause, il reste immobile. */
+  /** The current track is playing (its dot pulses); when paused, it stays still. */
   pulsing: boolean
-  /** Le lecteur choisi peut recevoir une lecture. */
+  /** The chosen player can receive a playback. */
   canPlay: boolean
-  /** Rang du titre en cours d'envoi (sablier sur sa ligne). */
+  /** Rank of the track being sent (hourglass on its row). */
   busyIndex: number | null
 }>()
 defineEmits<{ play: [index: number]; remove: [index: number] }>()

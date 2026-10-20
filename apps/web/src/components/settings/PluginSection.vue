@@ -19,27 +19,27 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 import { usePluginsStore } from '../../stores/plugins'
 import { useScenesStore } from '../../stores/scenes'
 
-// Un plugin dans les Réglages : une ligne toujours lisible (nom, santé, interrupteur) et, sous
-// elle, TOUT ce qui le concerne — ce que le serveur en dit, sa carte de mise en route (lier,
-// délier, appairer), ses ambiances, ses sous-items, ses clés .env. Avant, les cartes vivaient
-// au-dessus de la liste et décidaient seules de s'afficher : celle de Renault restait donc là, à
-// annoncer un compte lié dont personne n'avait rien à faire.
+// A plugin in Settings: an always-readable row (name, health, switch) and, under it, EVERYTHING
+// that concerns it — what the server says about it, its setup card (link, unlink, pair), its
+// light scenes, its sub-items, its .env keys. Before, the cards lived above the list and decided
+// on their own whether to show: Renault's stayed there, announcing a linked account that nobody
+// had anything to do with.
 //
-// Le panneau s'ouvre TOUT SEUL quand le serveur RÉCLAME quelque chose : `needs_pairing` (à
-// appairer, à lier) et `error`. Pas `degraded` : un fabricant qui répond mal se plaint souvent sans
-// rien demander — Cast attend un appareil éteint — et ouvrir la section n'y changerait rien. Le
-// statut et son détail restent lisibles dans la ligne repliée.
+// The panel opens BY ITSELF when the server DEMANDS something: `needs_pairing` (to pair, to link)
+// and `error`. Not `degraded`: a vendor that answers badly often complains without asking
+// for anything — Cast is waiting for a device that is off — and opening the section would change
+// nothing. The status and its detail stay readable in the collapsed row.
 
 const props = defineProps<{ plugin: PluginInfo }>()
 const plugins = usePluginsStore()
 const scenes = useScenesStore()
 
-// Les ambiances d'un fabricant sont un réglage DE CE FABRICANT : le concept est commun, les
-// réglages non. Elles vivaient dans une carte à part des Réglages, une par plugin ; elles sont
-// maintenant dans le panneau du plugin, avec le reste de ce qui le concerne.
+// A vendor's light scenes are a setting OF THAT VENDOR: the concept is shared, the settings are
+// not. They used to live in a separate Settings card, one per plugin; they are now in the plugin's
+// panel, with the rest of what concerns it.
 const pluginScenes = computed(() => scenes.scenesByPlugin.find((g) => g.pluginId === props.plugin.id)?.scenes ?? [])
 
-// Suppression d'une ambiance : premier appui arme, second confirme, et on désarme tout seul.
+// Deletion of a light scene: first press arms, second confirms, and it disarms by itself.
 const armed = ref<string | null>(null)
 let armTimer: ReturnType<typeof setTimeout> | null = null
 function arm(sceneId: string) {
@@ -53,7 +53,7 @@ function confirmDelete(sceneId: string) {
   void scenes.deleteScene(sceneId)
 }
 
-/** La carte de mise en route du fabricant, pour ceux qui en ont une. */
+/** The vendor's setup card, for those that have one. */
 const SETUP_CARDS = {
   hue: HuePairingCard,
   nest: NestLinkCard,
@@ -76,12 +76,12 @@ const DOT: Record<PluginHealth['status'], string> = { ok: 'var(--accent)', degra
 
 const ATTENTION: PluginHealth['status'][] = ['needs_pairing', 'error']
 const needsAction = computed(() => props.plugin.enabled && ATTENTION.includes(props.plugin.health.status))
-/** `null` : on suit le serveur. Un booléen : l'utilisateur a tranché et garde la main. */
+/** `null`: follow the server. A boolean: the user has decided and keeps control. */
 const manual = ref<boolean | null>(null)
 const open = computed(() => manual.value ?? needsAction.value)
-/** Noms des variables d'environnement lues par le plugin (jamais leurs valeurs). */
+/** Names of the environment variables read by the plugin (never their values). */
 const envKeys = computed(() => props.plugin.health.keys ?? [])
-/** Un squelette non implémenté n'a ni clé, ni détail, ni carte : rien à déplier. */
+/** An unimplemented skeleton has no key, no detail, no card: nothing to expand. */
 const expandable = computed(() => !!setupCard.value || props.plugin.parts.length > 0
   || !!props.plugin.health.detail || envKeys.value.length > 0 || pluginScenes.value.length > 0)
 </script>
@@ -89,7 +89,7 @@ const expandable = computed(() => !!setupCard.value || props.plugin.parts.length
 <template>
   <div class="plugin">
     <div class="plugin__row">
-      <!-- le chevron garde sa place même quand il n'y a rien à déplier : les noms restent alignés -->
+      <!-- the chevron keeps its place even when there is nothing to expand: the names stay aligned -->
       <button type="button" class="plugin__toggle min0" :disabled="!expandable" :aria-expanded="open"
               :title="$t('settings.pluginDetails')" @click="manual = !open">
         <StrokeIcon :name="open ? 'chevronUp' : 'chevronDown'" :size="16" class="plugin__chev" :data-on="expandable ? '1' : '0'" />
@@ -98,22 +98,22 @@ const expandable = computed(() => !!setupCard.value || props.plugin.parts.length
       <div class="plugin__status muted">
         <span class="dot" :style="{ background: DOT[plugin.health.status] }" />{{ $t(`settings.pluginStatus.${plugin.health.status}`) }}<span v-if="plugin.health.deviceCount"> · {{ $t('settings.devicesCount', { n: plugin.health.deviceCount }, plugin.health.deviceCount) }}</span>
       </div>
-      <!-- un squelette n'a rien à démarrer : interrupteur grisé, pas caché -->
+      <!-- a skeleton has nothing to start: switch greyed out, not hidden -->
       <v-switch :model-value="plugin.enabled" :disabled="!plugin.implemented || plugins.isBusy(plugin.id)" hide-details density="compact" class="plugin__switch"
                 :title="plugin.implemented ? $t('settings.pluginEnable') : $t('settings.pluginStatus.not_implemented')"
                 :aria-label="$t('settings.pluginEnable')"
                 @update:model-value="(v: boolean | null) => plugins.setEnabled(plugin.id, v === true)" />
     </div>
 
-    <!-- `v-show` et non `v-if` : les cartes interrogent leur fabricant au montage et gardent où en
-         est la mise en route ; replier la section ne doit pas tout redemander -->
+    <!-- `v-show` and not `v-if`: the cards query their vendor on mount and keep where the
+         setup stands; collapsing the section must not re-ask everything -->
     <div v-show="open" class="plugin__body">
       <p v-if="plugin.health.detail" class="muted small plugin__detail">{{ plugin.health.detail }}</p>
 
       <component :is="setupCard" v-if="setupCard && plugin.enabled" />
 
-      <!-- ambiances du fabricant : l'écran de GESTION (le geste courant reste la pastille du
-           panneau pièce). Comme les sous-items, seulement quand le plugin est allumé. -->
+      <!-- the vendor's light scenes: the MANAGEMENT screen (the usual gesture remains the pill of the
+           room panel). Like the sub-items, only when the plugin is on. -->
       <div v-if="plugin.enabled && pluginScenes.length" class="scenes">
         <div class="scenes__title muted small">{{ $t('settings.scenes') }}</div>
         <div class="auto-row auto-row--default">
@@ -134,7 +134,7 @@ const expandable = computed(() => !!setupCard.value || props.plugin.parts.length
             <v-switch :model-value="e.scene.autoDynamic" :disabled="!e.scene.dynamic" hide-details density="compact"
                       :title="e.scene.dynamic ? $t('settings.sceneAutoDynamic') : $t('settings.sceneNoPalette')"
                       @update:model-value="(v: boolean | null) => scenes.setAutoDynamic(e.scene.id, v === true)" />
-            <!-- destructif et visible depuis l'app du fabricant : deux temps, jamais un seul appui -->
+            <!-- destructive and visible from the vendor's app: two steps, never a single press -->
             <v-btn v-if="armed === e.scene.id" color="error" variant="flat" size="small" class="del-confirm"
                    @click="confirmDelete(e.scene.id)">
               {{ $t('scenes.deleteConfirm') }}
@@ -147,11 +147,11 @@ const expandable = computed(() => !!setupCard.value || props.plugin.parts.length
         </div>
       </div>
 
-      <!-- sous-items : visibles seulement quand le plugin est allumé, sinon ils ne veulent rien dire -->
+      <!-- sub-items: visible only when the plugin is on, otherwise they mean nothing -->
       <div v-if="plugin.enabled && plugin.parts.length" class="parts">
         <div class="parts__title muted small">{{ $t('settings.pluginParts') }}</div>
-        <!-- pastille à bascule plutôt qu'une case : le jeu d'icônes maison n'a pas
-             d'alias $checkboxOn, et une pastille garde la même empreinte allumée ou non -->
+        <!-- toggle pill rather than a checkbox: the house icon set has no
+             $checkboxOn alias, and a pill keeps the same footprint lit or not -->
         <button v-for="part in plugin.parts" :key="part.id" type="button" class="part" :data-on="part.enabled ? '1' : '0'"
                 :disabled="plugins.isBusy(plugin.id)" :aria-pressed="part.enabled"
                 @click="plugins.setPart(plugin.id, part.id, !part.enabled)">
@@ -179,7 +179,7 @@ const expandable = computed(() => !!setupCard.value || props.plugin.parts.length
 .plugin__body { display: grid; gap: 10px; justify-items: start; padding: 8px 0 4px 24px; }
 .plugin__detail { margin: 0; }
 .plugin__body > :deep(.card) { width: 100%; }
-/* la liste des ambiances prend toute la largeur du panneau (qui aligne ses enfants à gauche) */
+/* the list of light scenes takes the full width of the panel (which aligns its children to the left) */
 .scenes { width: 100%; display: grid; gap: 4px; }
 .scenes__title { margin-bottom: 2px; }
 .auto-rows { display: grid; gap: 2px; margin-top: 4px; }

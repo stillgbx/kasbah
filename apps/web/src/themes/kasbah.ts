@@ -1,7 +1,7 @@
 import type { Theme } from './index'
 
-// Palette d'origine du projet (maquette de référence, cf. doc/4_ui/4_0_langage-visuel.md), avec
-// l'accent « Lagon » des quatre accents d'avant. C'est le thème par défaut.
+// Original palette of the project (reference mockup, see doc/4_ui/4_0_langage-visuel.md), with
+// the "Lagoon" accent of the four accents of before. It is the default theme.
 export const kasbah = {
   id: 'kasbah',
   label: 'Kasbah',

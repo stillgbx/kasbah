@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { cssVars, DEFAULT_THEME_ID, onAccent, resolveVariant, THEME_LIST, themeById, type Palette } from './index'
 
-// Garde-fous du registre : ce qu'un thème ajouté demain doit respecter.
+// Registry guardrails: what a theme added tomorrow must respect.
 
 const ROLES: (keyof Palette)[] = [
   'bg', 'surface', 'surface2', 'bright', 'text', 'muted', 'accent',
@@ -21,14 +21,14 @@ function contrast(a: string, b: string): number {
   return (hi! + 0.05) / (lo! + 0.05)
 }
 
-describe('registre des thèmes', () => {
-  it('a des identifiants uniques et un défaut qui existe', () => {
+describe('theme registry', () => {
+  it('has unique identifiers and a default that exists', () => {
     const ids = THEME_LIST.map((t) => t.id)
     expect(new Set(ids).size).toBe(ids.length)
     expect(ids).toContain(DEFAULT_THEME_ID)
   })
 
-  it('donne à chaque thème au moins une variante complète', () => {
+  it('gives every theme at least one complete variant', () => {
     for (const t of THEME_LIST) {
       expect(t.light ?? t.dark, t.id).toBeTruthy()
       for (const p of [t.light, t.dark].filter((x): x is Palette => !!x)) {
@@ -37,19 +37,19 @@ describe('registre des thèmes', () => {
     }
   })
 
-  it('rend toujours une variante, même quand le thème n’a pas celle demandée', () => {
+  it('always returns a variant, even when the theme lacks the requested one', () => {
     for (const t of THEME_LIST) {
       for (const wantDark of [false, true]) {
         const v = resolveVariant(t.id, wantDark)
         expect(v.palette, t.id).toBeTruthy()
-        // La variante demandée l'emporte si elle existe ; sinon le thème impose la sienne.
+        // The requested variant wins if it exists; otherwise the theme imposes its own.
         expect(v.isDark, `${t.id} ${wantDark}`).toBe(t.dark && (wantDark || !t.light) ? true : false)
       }
     }
     expect(themeById('inconnu').id).toBe(THEME_LIST[0]!.id)
   })
 
-  it('pose un texte lisible sur l’accent', () => {
+  it('puts readable text on the accent', () => {
     for (const t of THEME_LIST) {
       for (const p of [t.light, t.dark].filter((x): x is Palette => !!x)) {
         expect(contrast(p.accent, onAccent(p)), `${t.id} on-accent`).toBeGreaterThanOrEqual(3)
@@ -57,9 +57,9 @@ describe('registre des thèmes', () => {
     }
   })
 
-  // `muted` porte de l'information réelle (sous-titres d'appareils, lignes de la recherche) : il doit
-  // tenir l'AA 4,5:1 comme le texte principal, sur la surface comme sur le fond de page.
-  it('tient l’AA 4,5:1 pour le texte et le texte secondaire, sur la surface et le fond', () => {
+  // `muted` carries real information (device subtitles, search rows): it must
+  // hold AA 4.5:1 like the main text, on the surface as on the page background.
+  it('holds AA 4.5:1 for text and secondary text, on the surface and the background', () => {
     for (const t of THEME_LIST) {
       for (const [mode, p] of [['clair', t.light], ['sombre', t.dark]] as const) {
         if (!p) continue
@@ -72,7 +72,7 @@ describe('registre des thèmes', () => {
     }
   })
 
-  it('produit tous les jetons CSS que styles/tokens.css déclare', () => {
+  it('produces all the CSS tokens that styles/tokens.css declares', () => {
     const declared = ['--bg', '--surface', '--surface2', '--text', '--muted', '--line', '--accent', '--accent-soft',
       '--on-accent', '--shadow', '--cat-light', '--cat-cover', '--cat-camera', '--cat-media', '--cat-other']
     expect(Object.keys(cssVars(resolveVariant(DEFAULT_THEME_ID, false).palette, false)).sort()).toEqual([...declared].sort())

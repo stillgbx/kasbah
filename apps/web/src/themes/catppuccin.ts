@@ -1,8 +1,8 @@
 import type { Theme } from './index'
 
-// Catppuccin (github.com/catppuccin) : Latte en clair, Mocha en sombre — les deux déclinaisons
-// officielles aux extrémités des quatre parfums. Accent « mauve », la couleur emblématique. Le
-// texte secondaire de Latte est `subtext1` (`subtext0` tombait à 3,7:1 sur le fond).
+// Catppuccin (github.com/catppuccin): Latte for light, Mocha for dark — the two official variants
+// at the ends of the four flavors. Accent "mauve", the emblematic color. Latte's secondary
+// text is `subtext1` (`subtext0` fell to 3.7:1 on the background).
 export const catppuccin = {
   id: 'catppuccin',
   label: 'Catppuccin',

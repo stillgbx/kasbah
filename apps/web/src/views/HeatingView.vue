@@ -11,19 +11,19 @@ import HeatingUnitCard from '../components/heating/HeatingUnitCard.vue'
 import type { HeatingPoint, MelcloudUnit } from '../api/transport'
 import { useDevicesStore } from '../stores/devices'
 
-// Vue Chauffage. Deux étages seulement :
+// Heating view. Only two tiers:
 //
-//  1. la MACHINE et son HISTORIQUE, côte à côte en tête — ce qui n'appartient à aucune pièce et
-//     qu'on ne lit qu'ici ;
-//  2. les APPAREILS, dans leurs pièces, avec leurs commandes sur leur propre ligne (`RoomBands`,
-//     comme les vues Lumières et Ouvrants).
+//  1. the MACHINE and its HISTORY, side by side at the top — what belongs to no room and
+//     is only read here;
+//  2. the DEVICES, in their rooms, with their controls on their own row (`RoomBands`,
+//     like the Lights and Covers views).
 //
-// Il n'y a PAS de liste de zones en plus. La première version en avait une, et elle redisait les
-// mêmes appareils que les bandes de pièces trente centimètres plus bas, dans un autre ordre : on
-// cherchait deux fois, et on réglait à un endroit ce qu'on lisait à l'autre. Un appareil de
-// chauffage se règle désormais là où il est dans la maison, point.
+// There is NO extra zone list. The first version had one, and it repeated the
+// same devices as the room bands thirty centimeters lower, in a different order: you
+// looked twice, and set in one place what you read in the other. A heating device is now
+// set where it is in the house, period.
 //
-// La machine et l'historique ne sont pas des appareils : ils viennent du plugin, pas du registre.
+// The machine and the history are not devices: they come from the plugin, not from the registry.
 
 const devices = useDevicesStore()
 
@@ -32,9 +32,9 @@ const history = ref<HeatingPoint[]>([])
 const pollMs = ref(120_000)
 
 /**
- * L'état machine et l'historique ne sont pas poussés par le WebSocket (ce ne sont pas des états
- * d'appareils) : cette page les redemande elle-même, au rythme du sondage serveur. Inutile d'aller
- * plus vite que lui — il relirait la même chose.
+ * The machine state and the history are not pushed by the WebSocket (they are not device
+ * states): this page asks for them again itself, at the rate of the server poll. No point going
+ * faster than that — it would re-read the same thing.
  */
 async function refresh() {
   try {
@@ -43,7 +43,7 @@ async function refresh() {
     history.value = hist.hourly
     pollMs.value = sys.pollMs || hist.pollMs || pollMs.value
   } catch {
-    // plugin éteint ou compte non lié : la page garde ses appareils et tait la partie machine
+    // plugin off or account not linked: the page keeps its devices and drops the machine part
     units.value = []
   }
 }
@@ -58,8 +58,9 @@ const send = (deviceId: string, cmd: CommandInput) => devices.sendCommand(device
   <div class="page">
     <PageHeader />
     <div class="page__scroll">
-      <!-- Première ligne : la machine à gauche, ce qu'elle a fait à droite. Deux colonnes dès que la
-           largeur le permet (même seuil que les vues Eau et Énergie), l'une sous l'autre sinon. -->
+      <!-- First row: the machine on the left, what it has done on the right. Two columns as soon
+           as the width allows (same threshold as the Water and Energy views), one under the other
+           otherwise. -->
       <div v-if="units.length" class="heat__top">
         <div class="heat__units">
           <HeatingUnitCard v-for="u in units" :key="u.deviceId" :unit="u" />
@@ -68,14 +69,14 @@ const send = (deviceId: string, cmd: CommandInput) => devices.sendCommand(device
       </div>
 
       <RoomBands kind="climate">
-        <!-- « en train de chauffer » ou « au repos », à la suite des deux températures que le statut
-             affiche déjà : du texte, comme la vue Médias met l'état de lecture devant le titre. Pas
-             une pastille — cette application n'en emploie nulle part ailleurs dans une liste. -->
+        <!-- "currently heating" or "idle", following the two temperatures that the status
+             already shows: text, as the Media view puts the playback state before the title. Not
+             a pill — this application uses none anywhere else in a list. -->
         <template #status-after="{ entry }">
           <span class="act">· {{ $t(`climate.actions.${(entry as DeviceEntry).state.kind === 'climate' ? ((entry as DeviceEntry).state as StateFor<'climate'>).action ?? 'idle' : 'idle'}`) }}</span>
         </template>
-        <!-- les commandes sur leur propre rangée, comme les touches d'un ouvrant ou le curseur
-             d'une lampe : rien ne peut chevaucher le nom ni la pastille de liaison -->
+        <!-- the controls on their own row, like a cover's buttons or a light's slider:
+             nothing can overlap the name or the link pill -->
         <template #control="{ entry }">
           <HeatingControl :entry="entry as DeviceEntry" @command="send" />
         </template>
@@ -87,14 +88,14 @@ const send = (deviceId: string, cmd: CommandInput) => devices.sendCommand(device
 <style scoped>
 .page { height: 100%; display: flex; flex-direction: column; }
 .page__scroll { flex: 1 1 auto; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px); display: grid; gap: 16px; align-content: start; }
-/* Même seuil que les vues Eau et Énergie, pour que les trois pages se comportent pareil à la même
-   largeur de fenêtre. Et comme elles, on laisse le `stretch` par défaut du grid : côte à côte, les
-   deux cartes font la MÊME hauteur. `align-items: start` donnait une machine plus courte de 68 px
-   que l'historique, et deux bords bas décalés qui cassaient la ligne. */
+/* Same threshold as the Water and Energy views, so that the three pages behave the same at the
+   same window width. And like them, we leave the grid's default `stretch`: side by side, the two
+   cards have the SAME height. `align-items: start` gave a machine 68 px shorter than the
+   history, and two misaligned bottom edges that broke the row. */
 .heat__top { display: grid; gap: 16px; min-width: 0; }
-/* la colonne de gauche transmet l'étirement à sa carte, au lieu de le garder pour elle */
+/* the left column passes the stretch on to its card, instead of keeping it for itself */
 .heat__units { display: grid; gap: 16px; min-width: 0; grid-auto-rows: 1fr; }
-/* l'état à la suite des températures, dans la même encre que le reste du statut */
+/* the state following the temperatures, in the same ink as the rest of the status */
 .act { flex: 0 0 auto; white-space: nowrap; }
 @media (min-width: 1040px) { .heat__top { grid-template-columns: 1fr 1fr; } }
 </style>

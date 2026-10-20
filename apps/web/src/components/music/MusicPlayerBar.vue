@@ -12,25 +12,24 @@ import ExplicitBadge from '../ui/ExplicitBadge.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Lecteur en bas de la page Musique : ce que joue la SESSION choisie (un lecteur Cast / Sonos), et
-// ses touches. Trois colonnes : le morceau à gauche, le transport et la position au CENTRE de
-// l'écran, le volume et le lecteur à droite. Règle « rien ne bouge » : mêmes zones et même hauteur
-// que quelque chose joue ou non ; sans durée, curseur et temps sont invisibles mais gardent leur
-// place ; une touche sans capacité reste à sa place, grisée.
+// Player at the bottom of the Music page: what the chosen SESSION plays (a Cast / Sonos player),
+// and its buttons. Three columns: the track on the left, the transport and position at the CENTER
+// of the screen, the volume and the player on the right. "Nothing moves" rule: same zones and same
+// height whether something is playing or not; without a duration, slider and time are invisible
+// but keep their place; a button without the capability stays in place, greyed out.
 //
-// `session` : le flux que NOUS servons à ce lecteur — un « fichier » de taille connue pour lui, donc
-// la position est la sienne. Titre, artiste, pochette et durée viennent de la session quand il y en a
-// une : l'enceinte, elle, publie parfois l'URL du flux ou le nom de l'appli le temps que les
-// métadonnées arrivent, et pas toujours la durée. `pending` : titre
-// en cours d'envoi (résolution yt-dlp : quelques secondes) — il s'affiche tout de suite, la touche
-// centrale tourne, l'enceinte rattrape ensuite.
+// `session`: the stream WE serve to this player — a "file" of known size for it, so the position
+// is its own. Title, artist, cover art and duration come from the session when there is one: the
+// speaker, for its part, sometimes publishes the stream URL or the app name while the metadata
+// arrives, and not always the duration. `pending`: title being sent (yt-dlp resolution: a few
+// seconds) — it shows right away, the central button spins, the speaker catches up afterwards.
 //
-// `resume` : la dernière écoute de ce lecteur, quand il ne joue plus rien de nous (le serveur a
-// redémarré, la lecture a été arrêtée). Elle s'affiche EN PAUSE à sa position ; lecture la relance de
-// là, et le curseur choisit où elle repartira.
+// `resume`: the last listen of this player, when it no longer plays anything of ours (the server
+// restarted, playback was stopped). It shows PAUSED at its position; play restarts it from
+// there, and the slider chooses where it will resume.
 //
-// La FILE du lecteur (`session.queue`) pilote précédent / suivant — l'enceinte n'a qu'un « fichier »
-// et n'aurait rien à sauter — et la répétition du titre, dans l'emplacement qui répond à stop.
+// The player's QUEUE (`session.queue`) drives previous / next — the speaker only has a "file" and
+// would have nothing to skip — and the track repeat, in the slot that answers to stop.
 const props = defineProps<{
   entry: DeviceEntry | null
   name: string
@@ -42,14 +41,14 @@ const props = defineProps<{
     quality?: MusicStreamQuality | null
     queue?: { length: number; index: number; repeat: MusicRepeat } | null
   } | null
-  /** La dernière radio lancée sur ce lecteur (plugin radio) : sa qualité, tant qu'il en joue le direct. */
+  /** The last radio launched on this player (radio plugin): its quality, as long as it plays the live stream. */
   station?: RadioStation | null
   pending: { title: string; artists: string[]; artUrl: string | null; explicit?: boolean } | null
   resume?: { title: string | null; artist: string | null; artUrl: string | null; durationS: number | null; positionS: number; explicit: boolean } | null
   transferMode: boolean
   canTransfer: boolean
   transferBusy: boolean
-  /** La file s'affiche dans la zone centrale de la page. */
+  /** The queue is displayed in the central area of the page. */
   queueOpen: boolean
 }>()
 const emit = defineEmits<{
@@ -65,19 +64,19 @@ const available = computed(() => !!state.value?.available)
 const loaded = computed(() => state.value?.playback === 'playing' || state.value?.playback === 'paused')
 const live = computed(() => state.value?.nowPlaying?.live === true)
 const skippable = computed(() => loaded.value && !live.value)
-// La session proxy survit au morceau (TTL serveur) : après un arrêt ou un rechargement de la page,
-// elle ne dit plus rien de vrai tant que le lecteur n'a rien de chargé — sinon la barre montrait une
-// pochette et une durée pour « Rien ne joue ».
+// The proxy session outlives the track (server TTL): after a stop or a page reload, it no longer
+// says anything true as long as the player has nothing loaded — otherwise the bar showed a cover
+// art and a duration for "Nothing playing".
 const ours = computed(() => (loaded.value ? props.session : null))
 
-// ---- file et répétition ----------------------------------------------------------------------------
+// ---- queue and repeat ------------------------------------------------------------------------------
 const queue = computed(() => ours.value?.queue ?? null)
-// Précédent reste possible au premier titre : il ramène au début du morceau.
-// la dernière écoute n'est pas encore relancée : rien à sauter ni à arrêter (l'enceinte peut encore
-// être « en pause » sur notre flux mort, et `loaded` dirait le contraire)
+// Previous remains possible on the first track: it takes you back to the start of the track.
+// the last listen has not been restarted yet: nothing to skip or stop (the speaker may still be
+// "paused" on our dead stream, and `loaded` would say otherwise)
 const canPrevious = computed(() => available.value && !resume.value && (queue.value ? loaded.value : has('track_skip') && skippable.value))
 const canNext = computed(() => available.value && !resume.value && (queue.value ? loaded.value && queue.value.index < queue.value.length - 1 : has('track_skip') && skippable.value))
-/** Titres qui attendent après le courant : pastille sur la touche File (le retour d'un « ajouter » sans toast). */
+/** Tracks waiting after the current one: pill on the Queue button (the "add" feedback without a toast). */
 const waiting = computed(() => (queue.value ? Math.max(0, queue.value.length - queue.value.index - 1) : 0))
 const repeat = computed<MusicRepeat>(() => queue.value?.repeat ?? 'off')
 const NEXT_REPEAT: Record<MusicRepeat, MusicRepeat> = { off: 'once', once: 'loop', loop: 'off' }
@@ -85,9 +84,9 @@ const repeatLabel = computed(() => t(repeat.value === 'once' ? 'music.repeatOnce
 
 const NBSP = '\u00a0'
 /**
- * Une URL n'est pas un titre, ni l'identifiant hexadécimal d'une session du proxy : l'enceinte les
- * affiche le temps que les métadonnées arrivent — ou pour de bon quand le serveur a redémarré et ne
- * sait plus ce qu'elle joue.
+ * A URL is not a title, nor is the hexadecimal id of a proxy session: the speaker displays them
+ * while the metadata arrives — or for good when the server has restarted and no longer knows
+ * what it is playing.
  */
 const looksLikeUrl = (v: string | undefined) => !!v && (/^(https?:\/\/|[a-z0-9.-]+\/api\/)/i.test(v) || /^[0-9a-f]{24}(\.[a-z0-9]{2,4})?$/i.test(v.trim()))
 const resume = computed(() => (props.pending ? null : props.resume ?? null))
@@ -113,18 +112,19 @@ const subtitle = computed(() => {
   const n = s?.nowPlaying
   if (!s) return NBSP
   if (!n) return s.available ? t(`media.${s.playback}`) : t('common.unavailable')
-  // notre flux : l'artiste du catalogue, sans le nom de l'appli réceptrice
+  // our stream: the catalog's artist, without the name of the receiving app
   if (ours.value?.title) return ours.value.artist || NBSP
   const parts = [n.artist, n.album && n.album !== n.title ? n.album : undefined, n.source]
   return parts.filter((p, i, all): p is string => !!p && !looksLikeUrl(p) && all.indexOf(p) === i).join(' · ') || NBSP
 })
 
-// ---- qualité du flux ----------------------------------------------------------------------------
-// Ce que l'enceinte reçoit de NOUS (toujours du MP3 à débit constant : c'est ce qui donne au flux
-// une taille, donc une durée et un déplacement), et en info-bulle ce que YouTube nous a donné pour
-// le produire. Une ligne, sous le nom du lecteur : on veut pouvoir juger la chaîne d'un coup d'œil,
-// pas ouvrir le journal du serveur.
-// Une radio, elle, va de la station à l'enceinte : sa qualité est celle que l'annuaire annonce.
+// ---- stream quality -----------------------------------------------------------------------------
+// What the speaker receives from US (always constant-bitrate MP3: that is what gives the stream a
+// size, hence a duration and seeking), and in the tooltip what YouTube gave us to produce it. One
+// line, under the player name: we want to be able to judge the chain at a glance, not open the
+// server log.
+// A radio, for its part, goes from the station to the speaker: its quality is the one the
+// directory announces.
 const quality = computed(() => streamQuality(t, ours.value?.quality, state.value, loaded.value ? props.station : null))
 const qualityLine = computed(() => quality.value?.label ?? NBSP)
 const qualityHint = computed(() => quality.value?.hint)
@@ -138,22 +138,22 @@ const position = computed<number | undefined>(() => {
   if (rawPosition.value === undefined) return undefined
   return duration.value ? Math.min(rawPosition.value, duration.value) : rawPosition.value
 })
-// Curseur : valeur locale pendant le glissement, puis tenu jusqu'à un relevé proche de la cible —
-// sinon un vieux sondage faisait rebondir le pouce (clic → ancienne position → cible).
+// Slider: local value during the drag, then held until a reading close to the target — otherwise
+// an old poll made the thumb bounce (click → old position → target).
 const { seekDraft, beginSeek } = useSeekHold(
   toRef(() => state.value?.nowPlaying?.positionS),
   toRef(() => props.entry?.descriptor.id),
 )
-// la dernière écoute : le curseur choisit seulement d'où elle repartira
+// the last listen: the slider only chooses where it will resume
 const canSeek = computed(() => hasDuration.value && (resume.value ? true : !live.value && loaded.value && has('seek')))
 const shownPosition = computed(() => seekDraft.value ?? position.value ?? 0)
 function seekEnd(v: number) {
   emit('seek', beginSeek(v))
 }
 /**
- * Sauter de quelques secondes : même chemin qu'un déplacement au curseur (le pouce est « tenu » sur
- * la cible tant qu'un vieux relevé la contredit), en partant de la position AFFICHÉE — deux appuis
- * rapides doivent s'additionner, pas se répéter sur un relevé qui n'a pas encore bougé.
+ * Skip a few seconds: same path as a cursor drag (the thumb is "held" on the target as long as
+ * an old reading contradicts it), starting from the DISPLAYED position — two quick presses must
+ * add up, not repeat on a reading that has not moved yet.
  */
 const SEEK_STEP_S = 10
 function jump(deltaS: number) {
@@ -161,12 +161,12 @@ function jump(deltaS: number) {
   emit('seek', beginSeek(Math.min(max, Math.max(0, shownPosition.value + deltaS))))
 }
 
-// ---- volume : sourdine, −, curseur, +, valeur — comme la carte du panneau appareil ------------------
+// ---- volume: mute, −, slider, +, value — like the device panel's card -------------------------------
 const VOLUME_STEP = 5
-// Le réglage part à l'enceinte AU FIL du glissement : on entend ce qu'on règle sans relâcher.
-// Pas à chaque pixel pour autant — un envoi au plus toutes les VOLUME_THROTTLE_MS, puis la valeur
-// finale au relâché. Le relevé de l'appareil est ignoré tant que le pouce est tenu, sinon un
-// sondage en retard ferait sauter le curseur sous le doigt.
+// The setting goes to the speaker WHILE dragging: you hear what you adjust without releasing.
+// Not at every pixel though — at most one send every VOLUME_THROTTLE_MS, then the final value on
+// release. The device reading is ignored while the thumb is held, otherwise a late poll would make
+// the slider jump under the finger.
 const VOLUME_THROTTLE_MS = 200
 const volume = ref(state.value?.volume ?? 0)
 const sliding = ref(false)
@@ -187,7 +187,7 @@ function setVolume(v: number) {
 function slideVolume(v: number) {
   sliding.value = true
   volume.value = Math.min(100, Math.max(0, Math.round(v)))
-  if (volumeTimer) return // un envoi est déjà programmé : il prendra la dernière valeur
+  if (volumeTimer) return // a send is already scheduled: it will take the latest value
   const wait = VOLUME_THROTTLE_MS - (Date.now() - volumeSentAt)
   if (wait <= 0) { sendVolume(volume.value); return }
   volumeTimer = setTimeout(() => { volumeTimer = undefined; sendVolume(volume.value) }, wait)
@@ -200,15 +200,15 @@ onBeforeUnmount(() => clearTimeout(volumeTimer))
 const volumeOk = computed(() => available.value && has('volume') && !state.value?.muted)
 
 /**
- * Marqué par le service qui a lancé le titre (l'enceinte ne le dit jamais). Il suit la MÊME source
- * que le titre et la pochette : pendant l'envoi c'est le catalogue qui parle, sinon l'état du
- * lecteur. Sans ça, le badge arrivait en retard sur un titre explicit, et RESTAIT sur le suivant
- * jusqu'à ce que le flux démarre vraiment — alors que titre et pochette avaient déjà changé.
+ * Flagged by the service that launched the track (the speaker never says it). It follows the SAME
+ * source as the title and cover art: during the send the catalog speaks, otherwise the player's
+ * state. Without that, the badge arrived late on an explicit track, and STAYED on the next one
+ * until the stream really started — while title and cover art had already changed.
  */
 /**
- * Lecture sur un titre en pause (arrivée sur la page, dernière écoute relancée) : l'enceinte reste
- * « en pause » le temps de remplir son tampon, et la touche ne bougeait pas. Elle tourne du clic
- * jusqu'à ce que le lecteur joue — au plus STARTING_MAX_MS, si l'enceinte ne suit jamais.
+ * Playback on a paused track (arriving on the page, last listen restarted): the speaker stays
+ * "paused" while it fills its buffer, and the button did not move. It spins from the click
+ * until the player plays — at most STARTING_MAX_MS, if the speaker never follows.
  */
 const STARTING_MAX_MS = 15_000
 const starting = ref(false)
@@ -239,7 +239,7 @@ const explicit = computed(() => (props.pending
 
 <template>
   <div class="bar" :data-empty="entry ? '0' : '1'">
-    <!-- le morceau -->
+    <!-- the track -->
     <div class="bar__track">
       <ArtThumb :key="art ?? 'none'" :src="art" :size="56" icon="music" class="bar__art" />
       <div class="bar__titles">
@@ -249,21 +249,21 @@ const explicit = computed(() => (props.pending
         </div>
         <MarqueeText class="bar__sub muted" :text="subtitle" />
       </div>
-      <!-- au bout du morceau, pas à droite : volume, lecteur et transfert remplissent déjà cette colonne à 1280 px -->
+      <!-- at the end of the track, not on the right: volume, player and transfer already fill that column at 1280 px -->
       <button type="button" class="key key--small key--queue" :data-on="queueOpen ? '1' : '0'" :disabled="!entry"
               :title="queueOpen ? $t('music.queueHide') : $t('music.queueShow')" :aria-label="queueOpen ? $t('music.queueHide') : $t('music.queueShow')"
               :aria-pressed="queueOpen" @click="emit('toggleQueue')">
         <StrokeIcon name="list" :size="16" />
-        <!-- posée sur le coin : elle n'élargit rien quand elle apparaît -->
+        <!-- set on the corner: it widens nothing when it appears -->
         <span class="key__badge" :class="{ 'bar--hidden': !waiting }" :title="$t('music.queueWaiting', { n: waiting }, waiting)">{{ waiting > 99 ? '99+' : waiting }}</span>
       </button>
     </div>
 
-    <!-- transport + position, au centre de l'écran -->
+    <!-- transport + position, at the center of the screen -->
     <div class="bar__center">
       <div class="bar__keys">
-        <!-- répéter répond à la touche stop : la rangée est symétrique, lecture est pile au centre.
-             Le pas (« 1 » une fois, « ∞ » en boucle) vit au centre des flèches, comme les sauts de 10 s. -->
+        <!-- repeat answers to the stop button: the row is symmetric, play is dead center.
+             The step ("1" once, "∞" looping) lives at the center of the arrows, like the 10 s skips. -->
         <button type="button" class="key key--repeat" :data-on="repeat !== 'off' ? '1' : '0'" :disabled="!available || !queue"
                 :title="repeatLabel" :aria-label="repeatLabel" :aria-pressed="repeat !== 'off'"
                 @click="emit('repeat', NEXT_REPEAT[repeat])">
@@ -305,7 +305,7 @@ const explicit = computed(() => (props.pending
           <StrokeIcon name="stop" :size="16" />
         </button>
       </div>
-      <!-- invisible sans durée ni position (rien en cours), mais l'espace reste -->
+      <!-- invisible without duration or position (nothing playing), but the space stays -->
       <div class="bar__seek" :class="{ 'bar--hidden': !hasDuration && !hasPosition && !resume }">
         <span class="time">{{ formatClock(shownPosition) || '0:00' }}</span>
         <v-slider :class="{ 'bar--hidden': !hasDuration }" :model-value="shownPosition" :min="0" :max="duration ?? 1" :step="1"
@@ -338,16 +338,16 @@ const explicit = computed(() => (props.pending
       </div>
       <div class="bar__device">
         <span class="icon-square" :data-on="loaded ? '1' : '0'">
-          <!-- ce navigateur : un écran, pas une enceinte -->
+          <!-- this browser: a screen, not a speaker -->
           <StrokeIcon :name="!entry ? 'speaker' : isLocalPlayer(entry.descriptor.id) ? 'tablet' : deviceIcon(entry.descriptor, entry.state)" :size="18" />
         </span>
         <div class="bar__device-text">
           <MarqueeText class="bar__device-name" :text="name || NBSP" />
-          <!-- emplacement gardé même sans flux à nous : la colonne ne bouge pas quand la lecture part -->
+          <!-- slot kept even without a stream of ours: the column does not move when playback starts -->
           <span class="bar__quality muted" :title="qualityHint">{{ qualityLine }}</span>
         </div>
       </div>
-      <!-- Transférer devient Annuler le temps de choisir la cible : une seule touche, une seule place -->
+      <!-- Transfer becomes Cancel while choosing the target: a single button, a single place -->
       <button v-if="transferMode" type="button" class="pill pill--transfer" data-on="1" :disabled="transferBusy" @click="emit('cancelTransfer')">
         <StrokeIcon name="close" :size="16" />
         <span>{{ transferBusy ? $t('music.transferring') : $t('common.cancel') }}</span>
@@ -367,11 +367,11 @@ const explicit = computed(() => (props.pending
   flex: 0 0 auto;
   height: 92px;
   display: grid;
-  /* La colonne centrale est au milieu de l'ÉCRAN, pas de la barre : la barre commence après le rail,
-     l'aile gauche est donc plus courte que la droite d'une demi-largeur de rail. Un « 1fr 1fr » aurait
-     centré sur la page et le bouton lecture aurait paru décalé à droite. */
-  /* La colonne centrale s'élargit avec l'écran (curseur de temps plus facile et plus précis) : à
-     1280 px elle vaut 340, ce que l'aile droite tolère encore ; à 1920 px, 640. */
+  /* The central column is at the middle of the SCREEN, not of the bar: the bar starts after the
+     rail, so the left wing is shorter than the right by half a rail width. A "1fr 1fr" would have
+     centered on the page and the play button would have looked shifted to the right. */
+  /* The central column widens with the screen (time slider easier and more precise): at
+     1280 px it is 340, which the right wing still tolerates; at 1920 px, 640. */
   --center-w: clamp(320px, calc(100vw - 940px), 640px);
   --bar-gap: 18px;
   grid-template-columns: calc(50% - var(--rail-w) / 2 - var(--center-w) / 2 - var(--bar-gap)) var(--center-w) minmax(0, 1fr);
@@ -387,25 +387,27 @@ const explicit = computed(() => (props.pending
 .bar__art { border-radius: 8px; overflow: hidden; }
 .bar__titles { min-width: 0; flex: 1 1 auto; display: grid; gap: 2px; }
 .bar__line1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
-/* le titre défile (MarqueeText, `contain: inline-size`) : il lui FAUT la place restante — ne lui laisser
-   que « sa » place le réduit à zéro. Le « E » se met donc devant lui, collé, et non rejeté au bout. */
+/* the title scrolls (MarqueeText, `contain: inline-size`): it NEEDS the remaining space —
+   leaving it only "its" space shrinks it to zero. The "E" therefore goes in front of it, stuck
+   to it, not pushed to the end. */
 .bar__title { min-width: 0; flex: 1 1 auto; font-size: 15px; font-weight: 600; line-height: 1.25; }
 .bar__sub { font-size: 12.5px; line-height: 1.25; }
 
 .bar__center { display: grid; gap: 2px; justify-items: center; min-width: 0; width: var(--center-w); }
-/* Les touches de transport GRANDISSENT avec l'écran : à 1280 la rangée frôle déjà la zone du volume,
-   à 1920 elle a de la place. Plafonné par la hauteur de la barre (92 px) : touche + curseur de
-   position doivent y tenir. Le double (76 px) ne rentre ni dans l'une ni dans l'autre. */
+/* The transport buttons GROW with the screen: at 1280 the row already grazes the volume zone,
+   at 1920 it has room. Capped by the bar height (92 px): button + position slider must fit in it.
+   Double (76 px) fits in neither. */
 .bar__keys {
-  /* Largeur = celle de la colonne centrale, touches CENTRÉES dedans : quand la rangée déborde (écran
-     étroit), elle déborde des DEUX côtés à égalité et la touche lecture reste au centre exact de
-     l'écran. Sans ça la rangée partait du bord gauche de la colonne et lecture glissait à droite. */
+  /* Width = that of the central column, buttons CENTERED inside it: when the row overflows
+     (narrow screen), it overflows on BOTH sides equally and the play button stays at the exact
+     center of the screen. Without this the row started from the left edge of the column and play
+     slid to the right. */
   display: flex; align-items: center; justify-content: center; gap: 8px; width: var(--center-w);
-  /* La HAUTEUR de la barre (92 px) borne la hauteur des touches : la colonne centrale empile la
-     rangée et le curseur de position, et 42 px (lecture 50) est ce qui tient dans 88. On agit donc
-     sur la LARGEUR — des touches oblongues, plus faciles à viser au doigt sans grandir la barre.
-     Cette largeur suit l'écran, car l'espace libre entre le morceau (à gauche) et le volume (à
-     droite) est ce qui la borne : ~376 px à 1280, ~682 px à 1920. */
+  /* The bar HEIGHT (92 px) bounds the button height: the central column stacks the row and the
+     position slider, and 42 px (play 50) is what fits in 88. So we act on the WIDTH — oblong
+     buttons, easier to hit with a finger without growing the bar. This width follows the screen,
+     because the free space between the track (left) and the volume (right) is what bounds it:
+     ~376 px at 1280, ~682 px at 1920. */
   --key: 42px;
   --key-w: clamp(42px, calc(5.2vw - 24px), 84px);
   --key-main: calc(var(--key) * 1.1);
@@ -414,9 +416,9 @@ const explicit = computed(() => (props.pending
   display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px;
   border: 1px solid var(--line); background: transparent; color: var(--text); transition: background .15s, color .15s;
 }
-/* taille pilotée par la rangée, icône comprise : un seul réglage à changer */
+/* size driven by the row, icon included: a single setting to change */
 .bar__keys .key { flex: 0 0 auto; width: var(--key-w); height: var(--key); border-radius: calc(var(--key) * .3); }
-/* l'icône se règle sur la HAUTEUR : en pourcentage des deux côtés, elle s'étirerait avec la touche */
+/* the icon is set on the HEIGHT: as a percentage on both sides, it would stretch with the button */
 .bar__keys .key svg { height: 46%; width: auto; }
 .bar__keys .key--jump svg, .bar__keys .key--repeat svg { height: 62%; }
 .key:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
@@ -433,18 +435,18 @@ const explicit = computed(() => (props.pending
   font-variant-numeric: tabular-nums; pointer-events: none;
 }
 .key--queue[data-on='1'] .key__badge { background: var(--on-accent); color: var(--accent); }
-/* le pas vit AU CENTRE de la flèche (même case de grille), comme sur les lecteurs de podcast */
+/* the step lives AT THE CENTER of the arrow (same grid cell), like on podcast players */
 .key--jump > *, .key--repeat > * { grid-area: 1 / 1; }
 .key__step {
-  /* assez petit pour NE PAS toucher la flèche : à 10 px sur une flèche de 22 les deux chiffres
-     remplissaient le cercle bord à bord et l'ensemble devenait une tache */
+  /* small enough NOT to touch the arrow: at 10 px on a 22 px arrow the two digits
+     filled the circle edge to edge and the whole thing became a blob */
   font-size: calc(var(--key) * .2); font-weight: 600; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums;
 }
 .key--small { width: 32px; height: 32px; border-radius: 10px; border-color: transparent; }
 .key--tiny { width: 28px; height: 28px; border-radius: 8px; border-color: transparent; }
 .key[data-on='1'] { background: var(--accent); color: var(--on-accent); }
 .bar__seek { width: var(--center-w); display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; min-width: 0; }
-/* largeur fixe dans la police des temps : 5,5ch tiennent h:mm:ss (deux-points étroits) */
+/* fixed width in the time font: 5.5ch fits h:mm:ss (narrow colons) */
 .time { min-width: 5.5ch; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .time--end { text-align: right; }
 .bar--hidden { visibility: hidden; }
@@ -456,15 +458,16 @@ const explicit = computed(() => (props.pending
 .bar__device { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .bar__device-text { display: grid; gap: 1px; min-width: 0; }
 .bar__device-name { min-width: 0; width: 96px; font-size: 13px; font-weight: 500; }
-/* discret : ce que sert le proxy, en dessous du nom, sur une ligne qui ne déborde jamais */
+/* discreet: what the proxy serves, under the name, on a line that never overflows */
 .bar__quality { width: 96px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-/* largeur FIXE : « Transférer », « Annuler » et « Transfert… » se relaient dans la même touche sans
-   décaler le volume ni le lecteur ; un libellé trop long est coupé */
+/* FIXED width: "Transfer", "Cancel" and "Transferring…" take turns in the same button without
+   shifting the volume or the player; a label that is too long is cut */
 .pill--transfer { height: 36px; width: 124px; padding: 0 12px; font-size: 13px; flex: 0 0 auto; justify-content: center; }
 .pill--transfer span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar[data-empty='1'] .bar__title { color: var(--muted); }
-/* Téléphone en portrait : les trois colonnes s'empilent — le morceau, les touches, la position, puis
-   le volume avec le lecteur et « Transférer ». Hauteurs fixes : rien ne bouge d'un titre à l'autre. */
+/* Phone in portrait: the three columns stack — the track, the buttons, the position, then the
+   volume with the player and "Transfer". Fixed heights: nothing moves from one track to the
+   next. */
 @media (max-width: 599px) {
   .bar {
     --center-w: 100%; --bar-gap: 6px;
@@ -476,7 +479,7 @@ const explicit = computed(() => (props.pending
   .bar__volume { min-width: 0; max-width: none; }
   .bar__volume-slider { min-width: 0; }
   .bar__device-name, .bar__quality { width: 72px; }
-  /* « Transférer » en icône seule ; le libellé reste lu par les lecteurs d'écran */
+  /* "Transfer" as an icon only; the label is still read by screen readers */
   .pill--transfer { width: 44px; padding: 0; }
   .pill--transfer span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 }

@@ -6,14 +6,14 @@ import MarqueeText from '../components/ui/MarqueeText.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { useShoppingStore } from '../stores/shopping'
 
-// Liste de courses partagée de la maison. Une seule page, trois zones :
-// - un champ qui sert À LA FOIS à chercher et à ajouter : on tape, les produits connus se proposent
-//   par-dessus la page (rien ne se décale dessous), Entrée ajoute ce qui est tapé ;
-// - la liste, dans l'ordre d'ajout. Cocher BARRE la ligne sur place : rien ne bouge sous le doigt au
-//   magasin, et « Terminer les courses » retire les cochées d'un coup ;
-// - les habituels (produits étoilés), en ordre fixe : un toucher les remet dans la liste.
-// Coupée dans Réglages → Plugins, la page le dit et renvoie aux Réglages (le rail ne la montre plus).
-// Le compteur d'une ligne garde sa place : à 1, son « − » devient une corbeille au même endroit.
+// The house's shared shopping list. A single page, three zones:
+// - a field that serves BOTH to search and to add: you type, the known products offer themselves
+//   over the page (nothing shifts underneath), Enter adds what is typed;
+// - the list, in order of addition. Ticking STRIKES the row in place: nothing moves under the
+//   finger at the store, and "Finish shopping" removes the ticked ones at once;
+// - the usuals (starred products), in fixed order: one touch puts them back in the list.
+// Cut in Settings → Plugins, the page says so and points to Settings (the rail no longer shows it).
+// A row's counter keeps its place: at 1, its "−" becomes a trash can in the same spot.
 const store = useShoppingStore()
 onMounted(() => { if (store.enabled && !store.list.products.length && !store.items.length) void store.load() })
 
@@ -21,7 +21,7 @@ const query = ref('')
 const field = ref<HTMLInputElement | null>(null)
 const focused = ref(false)
 const suggestions = computed(() => store.suggest(query.value))
-/** La saisie ne correspond à aucun produit connu : la première proposition est de l'ajouter telle quelle. */
+/** The input matches no known product: the first suggestion is to add it as typed. */
 const isNew = computed(() => {
   const key = shoppingKey(query.value)
   return key !== '' && !suggestions.value.some((p) => p.id === key)
@@ -36,7 +36,7 @@ function addName(name: string) {
 function submit() {
   const key = shoppingKey(query.value)
   if (!key) return
-  // un produit connu garde son nom (sa casse, ses accents), pas celui qu'on vient de taper
+  // a known product keeps its name (its case, its accents), not the one just typed
   addName(suggestions.value.find((p) => p.id === key)?.name ?? query.value)
 }
 
@@ -56,14 +56,14 @@ const toBuy = computed(() => store.items.length - store.checkedCount)
     <PageHeader>
       <div v-if="store.enabled" class="head">
         <span class="muted head__count">{{ $t('shopping.count', { left: toBuy, checked: store.checkedCount }) }}</span>
-        <!-- toujours là, éteint sans ligne cochée : le bouton ne surgit pas au premier coché -->
+        <!-- always there, off with no ticked row: the button does not pop up at the first tick -->
         <button type="button" class="pill" data-on="1" :disabled="store.checkedCount === 0" @click="store.finish()">
           <StrokeIcon name="checkCircle" :size="16" /><span>{{ $t('shopping.finish') }}</span>
         </button>
       </div>
     </PageHeader>
 
-    <!-- coupée dans les Réglages pendant qu'on la regarde (ou adresse tapée) : le rail ne la propose plus -->
+    <!-- turned off in Settings while looking at it (or address typed): the rail no longer offers it -->
     <div v-if="!store.enabled" class="body body--off">
       <div class="card card--soft off">
         <StrokeIcon name="cart" :size="28" class="muted" />
@@ -81,8 +81,8 @@ const toBuy = computed(() => store.items.length - store.checkedCount)
           <button type="button" class="search__clear" :class="{ 'is-hidden': !query }" :aria-label="$t('shopping.clear')" @mousedown.prevent @click="query = ''">
             <StrokeIcon name="close" :size="14" />
           </button>
-          <!-- par-dessus la page : la liste dessous ne se décale pas pendant la frappe.
-               `mousedown.prevent` garde le focus au champ, on enchaîne les ajouts au clavier. -->
+          <!-- over the page: the list underneath does not shift while typing.
+               `mousedown.prevent` keeps focus in the field, we chain additions from the keyboard. -->
           <div v-if="open" class="card suggest" role="listbox">
             <button v-if="isNew" type="button" class="suggest__row" @mousedown.prevent @click="addName(query)">
               <StrokeIcon name="plus" :size="16" class="suggest__lead" />
@@ -119,7 +119,7 @@ const toBuy = computed(() => store.items.length - store.checkedCount)
                     @click="star(item.name)">
               <StrokeIcon name="star" :size="16" />
             </button>
-            <!-- rangé (pas retiré) quand la ligne est cochée : la ligne garde sa largeur -->
+            <!-- put away (not removed) when the row is ticked: the row keeps its width -->
             <div class="step" :class="{ 'is-hidden': item.checked }">
               <button type="button" class="step__btn" :aria-label="item.quantity <= 1 ? $t('shopping.remove', { name: item.name }) : $t('shopping.less', { name: item.name })"
                       :title="item.quantity <= 1 ? $t('shopping.remove', { name: item.name }) : $t('shopping.less', { name: item.name })" @click="less(item)">
@@ -136,7 +136,7 @@ const toBuy = computed(() => store.items.length - store.checkedCount)
 
         <section class="favs" :aria-label="$t('shopping.favorites')">
           <div class="section-label favs__title">{{ $t('shopping.favorites') }}</div>
-          <!-- l'aide tient dans la bande des tuiles, à la même hauteur : la première étoile ne décale pas la liste -->
+          <!-- the help fits in the tile strip, at the same height: the first star does not shift the list -->
           <div class="favs__chips">
             <p v-if="!store.favorites.length" class="muted favs__hint">{{ $t('shopping.noFavorites') }}</p>
             <button v-for="p in store.favorites" :key="p.id" type="button" class="chip" :data-on="store.isToBuy(p.name) ? '1' : '0'"
@@ -185,7 +185,7 @@ const toBuy = computed(() => store.items.length - store.checkedCount)
 .suggest__name { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .suggest__tag { flex: 0 0 auto; font-size: 12px; }
 
-/* Liste et habituels côte à côte : un habituel touché ajoute une ligne SANS déplacer les tuiles. */
+/* List and usuals side by side: a touched usual adds a row WITHOUT moving the tiles. */
 .body {
   flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 var(--page-x) calc(var(--safe-bottom) + 24px);
   display: grid; grid-template-columns: minmax(0, 720px) minmax(220px, 320px); gap: 24px; align-content: start; align-items: start;
@@ -231,11 +231,11 @@ const toBuy = computed(() => store.items.length - store.checkedCount)
 .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip:hover:not(:disabled) { background: var(--surface2); }
 .chip svg { color: var(--accent); flex: 0 0 auto; }
-/* déjà à acheter : estompée, même taille (seule l'icône change) */
+/* already to buy: dimmed, same size (only the icon changes) */
 .chip[data-on='1'] { opacity: .45; cursor: default; }
 
-/* Écran étroit : les habituels passent AU-DESSUS de la liste, sur une bande qui défile de côté et
-   garde sa hauteur — une ligne ajoutée allonge la liste vers le bas, les tuiles ne bougent pas. */
+/* Narrow screen: the usuals go ABOVE the list, on a strip that scrolls sideways and
+   keeps its height — an added row lengthens the list downward, the tiles do not move. */
 @media (max-width: 899px) {
   .body { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .favs { order: -1; gap: 6px; }
