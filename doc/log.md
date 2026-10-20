@@ -12,7 +12,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 **Trigger** : demande de l'utilisateur, ouvrir / arrêter / fermer tous les volets d'une pièce en un seul appui depuis la vue Ouvrants.
 
 **Pages modified** :
-- 4_ui/4_3_vues-lumieres-ouvrants-cameras.md - section 2026-10-20 : `RoomShutterKeys.vue` dans le slot `room-action`, volets seulement (portée choisie par l'utilisateur), lot sur la position visée, Stop aux volets qui le déclarent (effet RTS non vérifié), marge négative pour que l'en-tête ne grandisse pas
+- 4_ui/4_3_vues-lumieres-ouvrants-cameras.md - section 2026-10-20 : `RoomShutterKeys.vue` dans le slot `room-action`, volets seulement (portée choisie par l'utilisateur), lot sur la position visée, Stop aux volets qui le déclarent (effet RTS non vérifié), marge négative pour que l'en-tête ne grandisse pas ; complément du même jour : Stop limité aux volets en mouvement (`motion`), grisé au repos, version précédente citée (`02c279d`), conséquence pour un RTS sans retour
 
 **Index** : catalogue 4_ui (1 ligne, date), index.md régénéré.
 

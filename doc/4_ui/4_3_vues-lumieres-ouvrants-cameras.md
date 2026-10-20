@@ -877,10 +877,15 @@ Comme les autres commandes d'ensemble, c'est un **lot** (`devices.runScene`) :
 - Ouvrir et Fermer lisent la position **visée** (`targetPosition ?? position`, comme `CoversMaster`,
   section 2026-09-18 (4)) et n'écrivent qu'aux volets qui doivent bouger : on peut se raviser en pleine
   course. Une position inconnue reçoit la commande quand même ;
-- Stop n'existe que si un volet de la pièce déclare `stop`, et part à tous les volets joignables qui
-  la déclarent, immobiles compris — le même effet que la touche Stop d'une ligne. Sur une radio sans
-  retour, cela efface la position déduite (`../3_plugins/3_4_somfy-tahoma.md`) ; ce que fait un moteur
-  RTS immobile qui reçoit `stop` n'a pas été vérifié ;
+- Stop n'existe que si un volet de la pièce déclare `stop`, et ne part qu'aux volets joignables qui
+  la déclarent **et sont en mouvement** (`state.motion !== 'stopped'` : publié par le moteur, ou posé
+  dès le geste par le patch optimiste, `lib/optimistic.ts`). Rien ne bouge : la touche est grisée, à
+  sa place. Livré d'abord pour TOUS les volets qui déclarent `stop`, immobiles compris (commit
+  `02c279d`), puis limité le même jour à la demande de l'utilisateur : sur une radio sans retour, un
+  arrêt efface la position déduite (`../3_plugins/3_4_somfy-tahoma.md`), et un moteur RTS immobile
+  peut le prendre pour « my » (non vérifié). **Conséquence** : un RTS n'annonce jamais de mouvement —
+  le plugin le déclare arrêté dès la commande envoyée — donc le Stop de la pièce ne l'atteint pas en
+  pleine course ; la touche Stop de sa ligne, elle, part toujours ;
 - plus aucun volet joignable : les touches restent, grisées (règle « rien ne doit bouger »).
 
 **Rien ne bouge** : les touches débordent de 5 px sur la marge de l'en-tête (`margin: -5px 0`) au lieu

@@ -22,6 +22,11 @@ const shutters = computed(() => props.entries.filter((e) => e.state.kind === 'co
 const reachable = computed(() => shutters.value.filter((e) => e.state.available))
 const hasStop = computed(() => shutters.value.some((e) => e.descriptor.capabilities.includes('stop')))
 const position = (e: DeviceEntry) => devices.targetPosition(e.descriptor.id) ?? (e.state as StateFor<'cover'>).position
+// Stop : les volets EN MOUVEMENT seulement. Un arrêt sur un moteur immobile n'est pas anodin : sur
+// une radio sans retour il efface la position déduite, et un moteur RTS peut le prendre pour « my ».
+// Le mouvement est celui que publie le moteur, ou que le store pose dès le geste (`optimistic.ts`).
+const moving = computed(() => reachable.value.filter((e) => e.descriptor.capabilities.includes('stop')
+  && (e.state as StateFor<'cover'>).motion !== 'stopped'))
 
 function send(targets: DeviceEntry[], command: CommandInput) {
   void devices.runScene(targets.map((e) => ({ deviceId: e.descriptor.id, command })))
@@ -29,7 +34,7 @@ function send(targets: DeviceEntry[], command: CommandInput) {
 // position inconnue : on envoie quand même, on ne sait pas où en est le volet
 const open = () => send(reachable.value.filter((e) => (position(e) ?? 0) < 100), { type: 'cover.open' })
 const close = () => send(reachable.value.filter((e) => (position(e) ?? 100) > 0), { type: 'cover.close' })
-const stop = () => send(reachable.value.filter((e) => e.descriptor.capabilities.includes('stop')), { type: 'cover.stop' })
+const stop = () => send(moving.value, { type: 'cover.stop' })
 </script>
 
 <template>
@@ -38,7 +43,8 @@ const stop = () => send(reachable.value.filter((e) => e.descriptor.capabilities.
             :title="$t('rooms.shuttersOpen')" :aria-label="$t('rooms.shuttersOpen')" @click="open">
       <StrokeIcon name="collapseUp" :size="16" />
     </button>
-    <button v-if="hasStop" type="button" class="key" :disabled="!reachable.length"
+    <!-- grisé quand rien ne bouge : la touche reste à sa place, rien ne se décale -->
+    <button v-if="hasStop" type="button" class="key" :disabled="!moving.length"
             :title="$t('rooms.shuttersStop')" :aria-label="$t('rooms.shuttersStop')" @click="stop">
       <StrokeIcon name="stop" :size="16" />
     </button>

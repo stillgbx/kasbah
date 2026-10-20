@@ -2,17 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import type { DeviceDescriptor, DeviceEntry, StateFor } from '@kasbah/shared'
-import { setTransport } from '../../api'
+import { setTransport, type Transport } from '../../api'
 import { useDevicesStore } from '../../stores/devices'
 import RoomShutterKeys from './RoomShutterKeys.vue'
 
-const cover = (id: string, position: number | undefined, deviceClass: string | undefined = 'shutter', opts: { available?: boolean; stop?: boolean } = {}): DeviceEntry => ({
+const cover = (id: string, position: number | undefined, deviceClass: string | undefined = 'shutter', opts: { available?: boolean; stop?: boolean; motion?: 'opening' | 'closing' } = {}): DeviceEntry => ({
   descriptor: {
     id, pluginId: 'mock', externalId: id, kind: 'cover', name: id,
     capabilities: ['open_close', ...(opts.stop === false ? [] : ['stop'])],
     meta: deviceClass === undefined ? {} : { cover: { deviceClass } },
   } as DeviceDescriptor,
-  state: { kind: 'cover', updatedAt: 0, available: opts.available ?? true, motion: 'stopped', ...(position === undefined ? {} : { position }) } as StateFor<'cover'>,
+  state: { kind: 'cover', updatedAt: 0, available: opts.available ?? true, motion: opts.motion ?? 'stopped', ...(position === undefined ? {} : { position }) } as StateFor<'cover'>,
 })
 
 const key = (w: VueWrapper, label: string) => w.find(`button[aria-label="${label}"]`)
@@ -50,10 +50,31 @@ describe('RoomShutterKeys', () => {
     ])
   })
 
-  it('stop : seulement aux volets joignables qui savent s’arrêter', async () => {
-    const { w, runScene } = setup([cover('a', 50), cover('rts', 50, 'shutter', { stop: false }), cover('loin', 50, 'shutter', { available: false })])
+  // un arrêt sur un moteur immobile efface la position d'une radio sans retour : on ne l'envoie pas
+  it('stop : seulement aux volets EN MOUVEMENT, joignables et qui savent s’arrêter', async () => {
+    const { w, runScene } = setup([
+      cover('monte', 50, 'shutter', { motion: 'opening' }), cover('descend', 50, 'shutter', { motion: 'closing' }),
+      cover('immobile', 50), cover('sansStop', 50, 'shutter', { stop: false, motion: 'closing' }),
+      cover('loin', 50, 'shutter', { available: false, motion: 'closing' }),
+    ])
     await key(w, 'Arrêter les volets de la pièce').trigger('click')
-    expect(runScene).toHaveBeenCalledWith([{ deviceId: 'a', command: { type: 'cover.stop' } }])
+    expect(runScene).toHaveBeenCalledWith([
+      { deviceId: 'monte', command: { type: 'cover.stop' } },
+      { deviceId: 'descend', command: { type: 'cover.stop' } },
+    ])
+  })
+
+  it('stop grisé quand rien ne bouge, actif dès le geste qui lance un volet', async () => {
+    setTransport({ sendCommand: vi.fn(async () => {}) } as unknown as Transport)
+    const devices = useDevicesStore()
+    const entries = [cover('a', 100)]
+    devices.setEntries(entries)
+    const w = mount(RoomShutterKeys, { props: { entries: devices.list } })
+    const stopKey = () => key(w, 'Arrêter les volets de la pièce').element as HTMLButtonElement
+    expect(stopKey().disabled).toBe(true)
+    await key(w, 'Fermer les volets de la pièce').trigger('click')
+    await w.setProps({ entries: devices.list })
+    expect(stopKey().disabled).toBe(false)
   })
 
   it('sans volet, pas de touches ; aucun volet ne sait s’arrêter, pas de stop', () => {
