@@ -1,17 +1,17 @@
 import type { YtmusicExplore, YtmusicExploreCategory } from './types'
 
-// « Humeurs et genres » de YouTube Music. youtubei.js n'a pas de méthode pour cette page, et son
-// analyseur jette la couleur des boutons : on lit donc le JSON InnerTube BRUT de
-// `browse FEmusic_moods_and_genres` (des grilles de `musicNavigationButtonRenderer`). La page d'une
-// catégorie, elle, est analysée par youtubei.js (`parse: true`) : ses rangées sont faites des mêmes
-// nœuds que la recherche, que le catalogue sait déjà convertir.
+// YouTube Music's "Moods & genres". youtubei.js has no method for this page, and its parser throws
+// away the buttons' color: so we read the RAW InnerTube JSON of `browse FEmusic_moods_and_genres`
+// (grids of `musicNavigationButtonRenderer`). A category's page, on the other hand, is parsed by
+// youtubei.js (`parse: true`): its rows are made of the same nodes as search, which the catalog
+// already knows how to convert.
 
 type Json = Record<string, unknown>
 const rec = (v: unknown): Json | null => (v && typeof v === 'object' ? v as Json : null)
 const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
 const runsText = (v: unknown): string => list(rec(v)?.runs).map((r) => rec(r)?.text).filter((t): t is string => typeof t === 'string').join('')
 
-/** `leftStripeColor` est un entier ARGB (ex. 4293020416) : on garde le RVB. */
+/** `leftStripeColor` is an ARGB integer (e.g. 4293020416): we keep the RGB. */
 export function argbToHex(n: unknown): string | null {
   if (typeof n !== 'number' || !Number.isFinite(n)) return null
   return `#${((n >>> 0) & 0xffffff).toString(16).padStart(6, '0')}`
@@ -27,10 +27,10 @@ function categoryOf(item: unknown): YtmusicExploreCategory | null {
 }
 
 /**
- * Les grilles de la page, dans l'ordre : la personnalisée (« Pour vous », parfois absente), les
- * ambiances, les genres. Leurs titres sont localisés, on ne peut pas s'y fier : c'est la POSITION qui
- * décide — la dernière grille est celle des genres, l'avant-dernière celle des ambiances, tout ce
- * qui précède est à l'utilisateur.
+ * The page's grids, in order: the personalized one ("For you", sometimes absent), the moods, the
+ * genres. Their titles are localized, they cannot be relied on: it is the POSITION that decides —
+ * the last grid is the genres', the one before last the moods', everything before belongs to the
+ * user.
  */
 export function parseMoodsPage(raw: unknown): YtmusicExplore {
   const tabs = list(rec(rec(rec(raw)?.contents)?.singleColumnBrowseResultsRenderer)?.tabs)
@@ -55,20 +55,20 @@ export function parseMoodsPage(raw: unknown): YtmusicExplore {
 }
 
 /**
- * Les rangées (`MusicCarouselShelf`, et les grilles `Grid`) d'une page analysée par youtubei.js, dans l'ordre, où qu'elles
- * soient dans l'arbre : on ne dépend pas de l'emballage (onglets, liste de sections) qui varie.
+ * The rows (`MusicCarouselShelf`, and the `Grid` grids) of a page parsed by youtubei.js, in order, wherever they
+ * are in the tree: we do not depend on the wrapping (tabs, section list), which varies.
  */
 export function carouselsOf(parsed: unknown): Array<{ title: string; items: unknown[] }> {
   const shelf = (o: Json) => {
     const title = rec(rec(o.header)?.title)?.text
-    // une rangée range ses éléments dans `contents`, une grille dans `items`
+    // a row keeps its items in `contents`, a grid in `items`
     return { title: typeof title === 'string' ? title : '', items: [...list(o.contents), ...list(o.items)] }
   }
-  // Une vraie réponse analysée enveloppe `contents` dans un objet aux clés non parcourables, mais
-  // youtubei.js indexe chaque type de nœud dans `contents_memo`, dans l'ordre de la page : c'est là
-  // qu'on les prend. Le parcours de l'arbre ne sert qu'en repli (réponses simplifiées, tests).
-  // Les GRILLES (`Grid`) aussi : la page des nouveautés met en tête, en grille, ses playlists phares
-  // (« RELEASED »…) — placées d'abord, comme sur la page de YouTube.
+  // A real parsed response wraps `contents` in an object whose keys cannot be walked, but
+  // youtubei.js indexes each node type in `contents_memo`, in page order: that is where we take
+  // them. Walking the tree is only a fallback (simplified responses, tests).
+  // The GRIDS (`Grid`) too: the new releases page puts its flagship playlists first, in a grid
+  // ("RELEASED"…) — placed first, as on YouTube's page.
   const memo = rec(parsed)?.contents_memo
   if (memo instanceof Map && (memo.has('MusicCarouselShelf') || memo.has('Grid'))) {
     const of = (type: string) => list(memo.get(type)).map(rec).filter((o): o is Json => !!o).map(shelf)

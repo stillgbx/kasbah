@@ -7,10 +7,10 @@ import { TokenBucket } from '../../core/rate-limit'
 import type { FetchLike } from '../../core/sse'
 import { huePairResponseSchema, hueResponseSchema, type HueWriteBody } from './types'
 
-// Client HTTP CLIP v2. Le bridge présente un certificat signé par l'AC Signify (CN = id du bridge) :
-// on désactive la vérification TLS via un Agent undici dédié (jamais globalement).
-// Limites documentées : ~10 PUT/s sur `light`, ~1/s sur `grouped_light` et sur `scene` → seau à jetons ; une
-// commande en attente pour la même lampe est SUPPLANTÉE par la suivante (glissement de slider).
+// CLIP v2 HTTP client. The bridge presents a certificate signed by the Signify CA (CN = bridge id):
+// TLS verification is disabled through a dedicated undici Agent (never globally).
+// Documented limits: ~10 PUT/s on `light`, ~1/s on `grouped_light` and on `scene` → token bucket; a
+// pending command for the same light is SUPERSEDED by the next one (slider drag).
 
 export interface HueClientOptions {
   host: string
@@ -96,15 +96,15 @@ export class HueClient {
   }
 
   /**
-   * PUT limité en débit : la dernière écriture pour une même ressource remplace la précédente.
-   * `intent` sépare deux écritures de NATURE différente sur la même ressource — un rappel de scène
-   * ne doit pas supplanter un changement de réglage : elles ont alors deux files distinctes.
+   * Rate-limited PUT: the last write for a given resource replaces the previous one.
+   * `intent` separates two writes of a different NATURE on the same resource — a scene recall must
+   * not supersede a setting change: they then get two separate queues.
    */
   putLimited(type: HueWriteType, id: string, body: HueWriteBody, intent = 'set'): Promise<void> {
     const key = `${type}/${id}#${intent}`
     return new Promise<void>((resolve, reject) => {
       const prev = this.pending.get(key)
-      if (prev) prev.resolve()                         // supplanté : l'intention finale part quand même
+      if (prev) prev.resolve()                         // superseded: the final intent is sent anyway
       this.pending.set(key, { type, id, body, resolve, reject })
       void this.drain()
     })
@@ -119,7 +119,7 @@ export class HueClient {
         const bucket = this.buckets[p.type]
         const wait = bucket.waitMs()
         if (wait > 0) await new Promise<void>((r) => { this.clock.setTimeout(r, wait) })
-        // la commande a pu être remplacée pendant l'attente → on relit la dernière
+        // the command may have been replaced during the wait → read the latest one again
         const latest = this.pending.get(key)
         if (!latest) continue
         this.pending.delete(key)
@@ -131,8 +131,8 @@ export class HueClient {
     } finally { this.draining = false }
   }
 
-  /** Création d'une ressource (scène) : réponse `{ data: [{ rid }] }`. Non limité en débit : c'est
-   *  un geste unique, jamais une rafale. */
+  /** Creates a resource (scene): response `{ data: [{ rid }] }`. Not rate-limited: it is a single
+   *  gesture, never a burst. */
   async createResource(type: 'scene', body: unknown): Promise<string | undefined> {
     const raw = hueResponseSchema.parse(await this.request('POST', `/clip/v2/resource/${type}`, body))
     if (raw.errors.length) throw new PluginError('UPSTREAM_ERROR', raw.errors[0]?.description ?? `Hue rejected the new ${type}`)
@@ -144,7 +144,7 @@ export class HueClient {
     if (raw.errors.length) throw new PluginError('UPSTREAM_ERROR', raw.errors[0]?.description ?? `Hue rejected deleting the ${type}`)
   }
 
-  /** Appairage (API v1) : nécessite un appui sur le bouton du bridge dans les 30 s. */
+  /** Pairing (API v1): requires a press on the bridge's button within 30 s. */
   async pair(deviceType = 'kasbah#server'): Promise<{ appKey: string; clientKey?: string }> {
     let res: Awaited<ReturnType<FetchLike>>
     try {

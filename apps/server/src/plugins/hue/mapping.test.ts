@@ -55,7 +55,7 @@ describe('hue mapping', () => {
     const both = toPutBody({ type: 'light.set', effect: 'candle', colorTempMirek: 300 }, plain)
     expect(both.body).toEqual({ effects: { effect: 'candle' } })
     expect(both.warnings).toEqual(['effect and color both given: effect wins'])
-    // `no_effect` arrête l'effet : la couleur du même appel reste légitime
+    // `no_effect` stops the effect: the color in the same call stays legitimate
     const color = toDescriptor(lights[0]!, idx.devices.get('d-color'))
     expect(toPutBody({ type: 'light.set', effect: 'no_effect', color: { x: 0.3, y: 0.3 } }, color).warnings)
       .toEqual(['effect ignored: capability not supported by this light'])
@@ -64,11 +64,11 @@ describe('hue mapping', () => {
   it('scene: swatches from the animated palette, else from the fixed actions', () => {
     const roomScene = toSceneDescriptor(scenes[0]!, { name: 'Salon', kind: 'room' })
     expect(roomScene).toMatchObject({ id: 'hue:s-relax', externalId: 's-relax', name: 'Détente', dynamic: false, autoDynamic: false, group: { name: 'Salon', kind: 'room' } })
-    // deux lampes au même blanc → UNE pastille
+    // two lights at the same white → ONE swatch
     expect(roomScene.swatches).toHaveLength(1)
     expect(roomScene.swatches[0]).toMatch(/^#[0-9a-f]{6}$/)
     const zoneScene = toSceneDescriptor(scenes[1]!, { name: zones[0]!.metadata!.name!, kind: 'zone' })
-    // `auto_dynamic` du pont = préférence de l'utilisateur, remontée telle quelle
+    // the bridge's `auto_dynamic` = the user's preference, passed up as is
     expect(zoneScene).toMatchObject({ id: 'hue:s-tropical', dynamic: true, autoDynamic: true, group: { name: 'Soirée', kind: 'zone' } })
     expect(toSceneDescriptor({ ...scenes[1]!, auto_dynamic: undefined }).autoDynamic).toBe(false)
     expect(zoneScene.swatches).toHaveLength(2)
@@ -78,7 +78,7 @@ describe('hue mapping', () => {
     expect(sceneStatusToActive(scenes[0]!)).toBe('inactive')
     expect(sceneStatusToActive(scenes[1]!)).toBe('dynamic')
     expect(sceneStatusToActive({ status: undefined })).toBe('inactive')
-    // `static` et NON `active` : `active` démarrerait l'animation des scènes `auto_dynamic`
+    // `static` and NOT `active`: `active` would start the animation of `auto_dynamic` scenes
     expect(toSceneRecallBody({ mode: 'static' })).toEqual({ recall: { action: 'static' } })
     expect(toSceneRecallBody({ mode: 'dynamic', brightness: 60, transitionMs: 800 }))
       .toEqual({ recall: { action: 'dynamic_palette', dimming: { brightness: 60 }, duration: 800 } })
@@ -87,24 +87,24 @@ describe('hue mapping', () => {
   })
   it('create body: palette copied as-is, actions distributed over the room lights', () => {
     const group = { rid: 'r-living', rtype: 'room' }
-    // la source n'a qu'une action, la pièce a trois lampes : on boucle
+    // the source has only one action, the room has three lights: loop
     const body = toCreateSceneBody(scenes[1]!, group, [lights[0]!, lights[1]!, lights[2]!])
     expect(body.metadata).toEqual({ name: 'Crépuscule tropical' })
-    // le pont refuse `effects` ET `effects_v2` ensemble, même vides : on n'en garde aucune
+    // the bridge refuses `effects` AND `effects_v2` together, even empty: keep neither
     expect(body.palette).toEqual({
       color: scenes[1]!.palette!.color, dimming: [], color_temperature: [],
     })
     expect(body.palette).not.toHaveProperty('effects_v2')
-    // une liste d'effets non vide est conservée, seule
+    // a non-empty effects list is kept, alone
     const withEffects = { ...scenes[1]!, palette: { ...scenes[1]!.palette!, effects_v2: [{ effect: 'candle' }] } }
     expect(toCreatePalette(withEffects.palette)).toMatchObject({ effects_v2: [{ effect: 'candle' }] })
     expect(toCreatePalette(withEffects.palette)).not.toHaveProperty('effects')
     expect(body.actions.map((a) => a.target.rid)).toEqual(['l-color', 'l-white', 'l-plain'])
-    // couleur pour la lampe couleur, rien de coloré pour les autres
+    // color for the color light, nothing colored for the others
     expect(body.actions[0]!.action).toMatchObject({ color: { xy: { x: 0.4731, y: 0.3723 } } })
     expect(body.actions[1]!.action).not.toHaveProperty('color')
-    expect(body.actions[2]!.action).toEqual({ on: { on: true } })   // ni intensité ni couleur
-    // source en température : la lampe sans couleur la reçoit, bornée à sa plage
+    expect(body.actions[2]!.action).toEqual({ on: { on: true } })   // neither brightness nor color
+    // source in temperature: the light without color gets it, clamped to its range
     const ct = toCreateSceneBody(scenes[0]!, group, [lights[1]!])
     expect(ct.actions[0]!.action).toMatchObject({ color_temperature: { mirek: 400 } })
     expect(toCreateSceneBody(scenes[0]!, group, []).actions).toEqual([])

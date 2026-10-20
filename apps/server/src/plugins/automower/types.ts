@@ -1,16 +1,16 @@
 import { z } from 'zod'
 
-// Formes des réponses de l'Automower Connect API (Husqvarna). On ne déclare que ce qu'on lit, en
-// `z.looseObject`, avec des types LARGES sur le reste (leçon TaHoma : contraindre un champ inutile
-// suffit à faire échouer toute la réponse). Les fixtures de `__fixtures__/automower.ts` sont
-// écrites d'après la documentation et la bibliothèque de référence (aioautomower) ; elles sont à
-// REMPLACER par une capture réelle (`GET /api/plugins/automower/raw`) dès les clés posées.
+// Response shapes of the Automower Connect API (Husqvarna). We only declare what we read, as
+// `z.looseObject`, with BROAD types on the rest (TaHoma lesson: constraining a useless field is
+// enough to make the whole response fail). The fixtures in `__fixtures__/automower.ts` are written
+// from the documentation and the reference library (aioautomower); they are to be REPLACED by a
+// real capture (`GET /api/plugins/automower/raw`) as soon as the keys are set.
 
 const num = z.number().nullable().optional()
 const str = z.string().nullable().optional()
 const bool = z.boolean().nullable().optional()
 
-/** `POST /v1/oauth2/token` (Authentication API). `expires_in` en secondes. */
+/** `POST /v1/oauth2/token` (Authentication API). `expires_in` in seconds. */
 export const tokenResponseSchema = z.looseObject({
   access_token: z.string().min(1),
   expires_in: z.number(),
@@ -21,13 +21,13 @@ export const tokenResponseSchema = z.looseObject({
 })
 export type TokenResponse = z.infer<typeof tokenResponseSchema>
 
-/** Un point du relevé GPS : la liste `positions` en porte une cinquantaine, le plus récent en tête. */
+/** One point of the GPS trail: the `positions` list carries about fifty, the most recent first. */
 export const positionSchema = z.looseObject({ latitude: z.number(), longitude: z.number() })
 
 /**
- * Ce que le fabricant dit du robot lui-même. Les énumérations sont en MAJUSCULES chez lui
- * (`MOWING`, `PARKED_IN_CS`, `RESTRICTED`…) ; le mappage les lit en minuscules pour ne pas dépendre
- * de la casse, que la documentation et la bibliothèque de référence n'écrivent pas pareil.
+ * What the vendor says about the robot itself. Its enums are in CAPITALS (`MOWING`,
+ * `PARKED_IN_CS`, `RESTRICTED`…); the mapping reads them lowercased so as not to depend on the
+ * case, which the documentation and the reference library do not write the same way.
  */
 export const mowerSectionSchema = z.looseObject({
   mode: str,
@@ -35,13 +35,13 @@ export const mowerSectionSchema = z.looseObject({
   state: str,
   inactiveReason: str,
   errorCode: num,
-  /** Horodatage LOCAL du robot, écrit comme s'il était UTC (voir `mapping.ts`). 0 = pas d'erreur. */
+  /** The robot's LOCAL timestamp, written as if it were UTC (see `mapping.ts`). 0 = no error. */
   errorCodeTimestamp: num,
   isErrorConfirmable: bool,
   workAreaId: num,
 })
 export const plannerSchema = z.looseObject({
-  /** Même convention locale ; 0 = « maintenant » (le robot devrait partir). */
+  /** Same local convention; 0 = "now" (the robot should leave). */
   nextStartTimestamp: num,
   override: z.looseObject({ action: str }).nullable().optional(),
   restrictedReason: str,
@@ -60,7 +60,7 @@ export const statisticsSchema = z.looseObject({
   upTime: num,
 })
 
-/** Une entrée de `GET /v1/mowers` (`data[]`), enveloppe JSON:API. */
+/** One entry of `GET /v1/mowers` (`data[]`), JSON:API envelope. */
 export const mowerDataSchema = z.looseObject({
   type: str,
   id: z.string().min(1),
@@ -70,30 +70,30 @@ export const mowerDataSchema = z.looseObject({
     capabilities: z.looseObject({ position: bool, headlights: bool, workAreas: bool, stayOutZones: bool, canConfirmError: bool }).nullable().optional(),
     mower: mowerSectionSchema.nullable().optional(),
     planner: plannerSchema.nullable().optional(),
-    /** `connected` : le robot parle au cloud ; `statusTimestamp` : dernier statut reçu, en UTC (ms). */
+    /** `connected`: the robot talks to the cloud; `statusTimestamp`: last status received, in UTC (ms). */
     metadata: z.looseObject({ connected: bool, statusTimestamp: num }).nullable().optional(),
     positions: z.array(z.unknown()).nullable().optional(),
     settings: z.looseObject({ cuttingHeight: num, headlight: z.unknown().optional() }).nullable().optional(),
     statistics: statisticsSchema.nullable().optional(),
-    /** Toujours au moins la zone `0` (tout le terrain, sans nom) chez un robot qui gère les zones. */
+    /** Always at least area `0` (the whole grounds, unnamed) on a robot that handles areas. */
     workAreas: z.array(z.unknown()).nullable().optional(),
-    /** ABSENT tant qu'aucune zone n'est tracée (relevé du 2026-10-12) ; `dirty` = carte en cours de synchronisation. */
+    /** ABSENT as long as no zone is drawn (survey of 2026-10-12); `dirty` = map being synchronized. */
     stayOutZones: z.looseObject({ dirty: bool, zones: z.array(z.unknown()).nullable().optional() }).nullable().optional(),
   }),
 })
 
-/** Une zone de travail de `workAreas[]` ; `cuttingHeight` en POUR CENT, pas sur l'échelle 1-9 des réglages. */
+/** A work area of `workAreas[]`; `cuttingHeight` in PERCENT, not on the settings' 1-9 scale. */
 export const workAreaSchema = z.looseObject({ workAreaId: z.number(), name: str, enabled: bool, cuttingHeight: num })
-/** Une zone d'exclusion de `stayOutZones.zones[]`, identifiée par un UUID. */
+/** A stay-out zone of `stayOutZones.zones[]`, identified by a UUID. */
 export const stayOutZoneSchema = z.looseObject({ id: z.string().min(1), name: str, enabled: bool })
 export type MowerData = z.infer<typeof mowerDataSchema>
 
 export const mowerListSchema = z.looseObject({ data: z.array(z.unknown()) })
 
 /**
- * Une ligne du journal (`GET /mowers/{id}/messages`, `data.attributes.messages[]`, et la même forme
- * dans `message-event-v2`). `time` en SECONDES, heure locale écrite comme UTC ; `severity` en
- * majuscules (`ERROR`, `FATAL`, `WARNING` vus) ; une position quasi nulle = pas de fix GPS.
+ * One log line (`GET /mowers/{id}/messages`, `data.attributes.messages[]`, and the same shape in
+ * `message-event-v2`). `time` in SECONDS, local time written as UTC; `severity` in capitals
+ * (`ERROR`, `FATAL`, `WARNING` seen); a near-zero position = no GPS fix.
  */
 export const messageSchema = z.looseObject({
   time: num,
@@ -107,10 +107,10 @@ export const messagesResponseSchema = z.looseObject({
 })
 
 /**
- * Un événement du WebSocket (format V2, le seul servi depuis mars 2025) : `{ id, type, attributes }`,
- * le `type` nommant la section qui a changé (`battery-event-v2`, `mower-event-v2`,
+ * A WebSocket event (V2 format, the only one served since March 2025): `{ id, type, attributes }`,
+ * the `type` naming the section that changed (`battery-event-v2`, `mower-event-v2`,
  * `planner-event-v2`, `position-event-v2`, `cuttingHeight-event-v2`, `headlights-event-v2`,
- * `calendar-event-v2`, `message-event-v2`). Le premier message de la connexion est à part :
+ * `calendar-event-v2`, `message-event-v2`). The connection's first message stands apart:
  * `{ ready: true, connectionId }`.
  */
 export const wsEventSchema = z.looseObject({

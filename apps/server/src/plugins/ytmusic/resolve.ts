@@ -7,27 +7,27 @@ import type { ResolvedStream, SpawnFn } from '../../music/proxy'
 import { runCapture } from '../../music/ytdlp'
 import { toNetscape } from './cookie'
 
-// Où est le flux d'un titre YouTube Music : yt-dlp (client `web_music`) + cookie du compte + PO Token.
-// Sans cookie (utilisateur connecté qui n'a rien relié) : anonyme, ce que YouTube sert sans compte.
-// Le proxy commun (`music/proxy.ts`) le sert ensuite aux enceintes.
+// Where a YouTube Music track's stream is: yt-dlp (`web_music` client) + the account's cookie + PO Token.
+// Without a cookie (signed-in user who linked nothing): anonymous, what YouTube serves without an account.
+// The shared proxy (`music/proxy.ts`) then serves it to the speakers.
 
 export interface StreamResolveOpts {
   videoId: string
   /**
-   * Conteneurs à PRÉFÉRER quel que soit le débit (ex. `['m4a']`) : pour un relais sans réencodage,
-   * c'est ce que l'enceinte sait lire qui décide, pas le meilleur débit — un Sonos ne lit pas WebM.
+   * Containers to PREFER whatever the bitrate (e.g. `['m4a']`): for a relay without re-encoding,
+   * what the speaker can play decides, not the best bitrate — a Sonos does not play WebM.
    */
   preferExts?: string[]
-  /** Vide = sans compte. */
+  /** Empty = no account. */
   cookieRaw: string
   ytdlpPath: string
   poTokenUrl: string
-  /** Fichier Netscape déjà écrit ; sinon on en crée un temporaire. */
+  /** Netscape file already written; otherwise a temporary one is created. */
   netscapePath?: string
   spawnImpl?: SpawnFn
 }
 
-/** Ping du générateur PO Token (Music Assistant : `GET {base}/ping`). */
+/** Ping of the PO Token generator (Music Assistant: `GET {base}/ping`). */
 export async function pingPoToken(baseUrl: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
   const url = `${baseUrl.replace(/\/$/, '')}/ping`
   try {
@@ -39,9 +39,9 @@ export async function pingPoToken(baseUrl: string, fetchImpl: typeof fetch = fet
 }
 
 /**
- * Résout la meilleure URL audio via yt-dlp (client `web_music` + PO Token + runtime JS node).
- * Même idée que Music Assistant `_get_stream_format` ; sans `--js-runtimes` yt-dlp ≥2026
- * ne livre plus que des storyboards.
+ * Resolves the best audio URL through yt-dlp (`web_music` client + PO Token + node JS runtime).
+ * Same idea as Music Assistant's `_get_stream_format`; without `--js-runtimes` yt-dlp ≥2026
+ * only delivers storyboards.
  */
 export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<ResolvedStream> {
   const spawnImpl = opts.spawnImpl ?? (spawn as unknown as SpawnFn)
@@ -52,10 +52,10 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
   }
   const poBase = opts.poTokenUrl.replace(/\/$/, '')
   const pageUrl = `https://music.youtube.com/watch?v=${opts.videoId}`
-  // yt-dlp ≥2026.08 : `android_music` n'existe plus (« Skipping unsupported client »).
-  // Sans runtime JS, seuls les storyboards restent (challenge n/sig) → « Requested format
-  // is not available ». `web_music` + `--js-runtimes node` + PO Token livre m4a/opus.
-  // Pas de `-f` : on dump `-J` puis on trie en JS. `--ignore-config` évite un `-f` user.
+  // yt-dlp ≥2026.08: `android_music` no longer exists ("Skipping unsupported client").
+  // Without a JS runtime, only storyboards remain (n/sig challenge) → "Requested format
+  // is not available". `web_music` + `--js-runtimes node` + PO Token delivers m4a/opus.
+  // No `-f`: we dump `-J` then sort in JS. `--ignore-config` avoids a user `-f`.
   const args = [
     '--ignore-config',
     '-J', '--no-download', '--no-warnings',
@@ -74,7 +74,7 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
   let info: { formats?: Array<{ url?: string; format_id?: string; ext?: string; acodec?: string; vcodec?: string; abr?: number; tbr?: number; filesize?: number; filesize_approx?: number }> ; url?: string; format_id?: string; ext?: string; duration?: number; is_live?: boolean }
   try { info = JSON.parse(stdout) as typeof info }
   catch { throw new Error('yt-dlp returned non-JSON') }
-  // Préférer m4a / 140 / 141, sinon opus/webm, sinon premier format avec audio.
+  // Prefer m4a / 140 / 141, otherwise opus/webm, otherwise the first format with audio.
   const formats = info.formats ?? []
   const audio = formats
     .filter((f) => f.url && f.acodec && f.acodec !== 'none' && (f.vcodec === 'none' || !f.vcodec))
@@ -91,7 +91,7 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
       }
       return rank(b) - rank(a)
     })
-  // Fallback : flux muxé (audio+vidéo) s'il n'y a pas d'audio-only — ffmpeg -vn suffit.
+  // Fallback: muxed stream (audio+video) if there is no audio-only one — ffmpeg -vn is enough.
   const muxed = formats
     .filter((f) => f.url && f.acodec && f.acodec !== 'none')
     .sort((a, b) => (b.abr ?? b.tbr ?? 0) - (a.abr ?? a.tbr ?? 0))

@@ -161,8 +161,8 @@ describe('sonos mapping', () => {
   })
 
   /**
-   * Le marquage explicit vient du catalogue, JAMAIS du Sonos : sans report, le badge s'allumait au
-   * lancement puis s'éteignait au premier sondage, quelques secondes plus tard.
+   * The explicit mark comes from the catalog, NEVER from the Sonos: without carrying it over, the
+   * badge lit up at start then went off on the first poll, a few seconds later.
    */
   it('announces a radio as a broadcast when the service says live, whatever the extension', () => {
     const { didl } = streamLoad('http://icecast.radiofrance.fr/franceinfo-hifi.aac', { title: 'franceinfo', live: true })

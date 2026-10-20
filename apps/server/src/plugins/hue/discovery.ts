@@ -5,8 +5,8 @@ import { hueDiscoverySchema } from './types'
 export const HUE_DISCOVERY_URL = 'https://discovery.meethue.com/'
 
 /**
- * Découverte du bridge via le service cloud Signify (limité à ~1 appel / 15 min par IP) :
- * on recommande ensuite d'épingler HUE_BRIDGE_HOST. mDNS (_hue._tcp) viendra plus tard.
+ * Bridge discovery through the Signify cloud service (limited to ~1 call / 15 min per IP):
+ * pinning HUE_BRIDGE_HOST is then recommended. mDNS (_hue._tcp) will come later.
  */
 export async function findBridge(fetchImpl: FetchLike): Promise<{ host: string; bridgeId: string }> {
   let res: Awaited<ReturnType<FetchLike>>

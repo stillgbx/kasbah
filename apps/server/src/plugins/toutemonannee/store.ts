@@ -3,9 +3,9 @@ import { z } from 'zod'
 import type { Logger } from 'pino'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// L'état du plugin TouteMonAnnée, dans `.state/` (hors dépôt, droits 0600) : les cookies de session
-// — ils valent accès au compte —, les filtres choisis dans la vue École, les cases « fait » que le site
-// ne porte pas, et la dernière publication vue. Jamais le mot de passe.
+// The TouteMonAnnée plugin's state, in `.state/` (outside the repo, mode 0600): the session cookies
+// — they are as good as access to the account —, the filters chosen in the School view, the "done"
+// checkboxes the site does not carry, and the last post seen. Never the password.
 
 export const tmaStateSchema = z.object({
   account: z.object({ username: z.string() }).nullable().default(null),
@@ -14,9 +14,9 @@ export const tmaStateSchema = z.object({
     hiddenJournals: z.array(z.string()).default([]),
     hiddenLevels: z.array(z.string()).default([]),
   }).default({ hiddenJournals: [], hiddenLevels: [] }),
-  /** Devoirs cochés « fait » dans Kasbah, quand l'enseignante n'a pas ouvert la case du site. */
+  /** Homework checked "done" in Kasbah, when the teacher has not opened the site's checkbox. */
   done: z.array(z.number()).default([]),
-  /** Identifiant de la plus récente publication vue : au-delà, elles sont « nouvelles ». */
+  /** Id of the most recent post seen: beyond it, posts are "new". */
   postsSeen: z.number().default(0),
 })
 export type TmaState = z.infer<typeof tmaStateSchema>

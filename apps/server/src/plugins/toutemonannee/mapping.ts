@@ -1,10 +1,10 @@
 import { z } from 'zod'
 
-// Ce que les réponses de TouteMonAnnée deviennent pour Kasbah. API PRIVÉE (celle de l'appli web du
-// site, relevée le 2026-10-04) : chaque schéma est lâche — un champ en plus ne casse rien, un champ
-// qui manque est absorbé là où c'est sans conséquence.
+// What TouteMonAnnée's responses become for Kasbah. PRIVATE API (the one of the site's web app,
+// surveyed on 2026-10-04): every schema is loose — an extra field breaks nothing, a missing field
+// is absorbed wherever that is harmless.
 
-// ---- Réponses du site -------------------------------------------------------------------------
+// ---- Site responses ---------------------------------------------------------------------------
 
 const fileSchema = z.object({
   id: z.number(),
@@ -17,7 +17,7 @@ const fileSchema = z.object({
 
 const authorSchema = z.object({ name: z.string() }).passthrough()
 
-/** `{ day: "08", month: "Sept.", year: 2026, hours: "17", minutes: "09" }` : mois abrégé en français. */
+/** `{ day: "08", month: "Sept.", year: 2026, hours: "17", minutes: "09" }`: month abbreviated in French. */
 const detailedDateSchema = z.object({
   day: z.union([z.string(), z.number()]),
   month: z.string(),
@@ -31,7 +31,7 @@ export const spacesSchema = z.object({
     uuid: z.string(),
     display_name: z.string(),
     display_years: z.string().nullish(),
-    /** 1 = cahier de texte d'une classe ; 2 = espace d'association, etc. */
+    /** 1 = a class's homework diary; 2 = an association space, etc. */
     type: z.number(),
     in_scope: z.boolean().optional(),
     deleted_at: z.string().nullish(),
@@ -46,11 +46,11 @@ export const eventSchema = z.object({
   content: z.object({ raw: z.string().nullish(), html: z.string().nullish() }).passthrough().nullish(),
   subject: z.object({ title: z.string() }).passthrough().nullish(),
   files: z.array(fileSchema).optional(),
-  /** Le jour où c'est à rendre. */
+  /** The day it is due. */
   date: z.string(),
   acks_count: z.number().optional(),
   acks_validated_count: z.number().optional(),
-  /** L'enseignante a demandé que l'élève coche « fait » : elle voit qui l'a fait. */
+  /** The teacher asked for the pupil to tick "done": she sees who did. */
   ack_needed: z.boolean().optional(),
   can_ack: z.boolean().optional(),
   has_acknowledged: z.boolean().optional(),
@@ -61,7 +61,7 @@ export const eventsPageSchema = z.object({
   events: z.object({ current_page: z.number(), last_page: z.number(), data: z.array(eventSchema) }).passthrough(),
 }).passthrough()
 
-/** `acknowledge` rend l'entrée à jour : c'est elle qui dit l'état obtenu (la requête BASCULE). */
+/** `acknowledge` returns the updated entry: it is what tells the resulting state (the request TOGGLES). */
 export const ackResponseSchema = z.object({ event: eventSchema }).passthrough()
 
 export const transmissionSchema = z.object({
@@ -83,7 +83,7 @@ export const transmissionsPageSchema = z.object({
   data: z.array(transmissionSchema),
 }).passthrough()
 
-/** Les publications mêlent les annonces (`post`) et des rappels générés (`reminder`) qu'on écarte. */
+/** The posts mix announcements (`post`) and generated reminders (`reminder`), which we discard. */
 export const postsPageSchema = z.object({
   next_page: z.number().nullish(),
   data: z.array(z.object({ model: z.string(), id: z.number() }).passthrough()),
@@ -95,13 +95,13 @@ export const postSchema = z.object({
   title: z.string().nullish(),
   activity_date_detailed: detailedDateSchema,
   author: authorSchema.nullish(),
-  /** Du HTML léger. */
+  /** Light HTML. */
   content: z.string().nullish(),
   files: z.array(fileSchema).optional(),
   comments_count: z.number().optional(),
 }).passthrough()
 
-// ---- Ce que sert Kasbah -----------------------------------------------------------------------
+// ---- What Kasbah serves -----------------------------------------------------------------------
 
 export interface SchoolFile { type: string; url: string; thumb: string | null; name: string }
 
@@ -110,24 +110,24 @@ export interface SchoolJournal { id: string; name: string; years: string | null;
 export interface SchoolHomework {
   id: number
   journalId: string
-  /** Jour où c'est à rendre, `YYYY-MM-DD`. */
+  /** Day it is due, `YYYY-MM-DD`. */
   date: string
   title: string | null
   subject: string | null
   author: string | null
   text: string
-  /** Niveaux nommés dans le titre ou le texte (« pour les CE2 ») ; vide = toute la classe. */
+  /** Grade levels named in the title or the text ("pour les CE2"); empty = the whole class. */
   levels: string[]
   files: SchoolFile[]
   done: boolean
-  /** La case est celle du SITE : l'enseignante voit qui a coché (`validated` sur `total`). */
+  /** The checkbox is the SITE's: the teacher sees who ticked it (`validated` out of `total`). */
   siteAck: { validated: number; total: number } | null
 }
 
 export interface SchoolMessage {
   id: number
   journalId: string
-  /** Heure locale de publication, `YYYY-MM-DDTHH:mm`. */
+  /** Local publication time, `YYYY-MM-DDTHH:mm`. */
   at: string
   title: string | null
   author: string | null
@@ -150,7 +150,7 @@ export interface SchoolPost {
   comments: number
 }
 
-// ---- Traductions ------------------------------------------------------------------------------
+// ---- Translations -----------------------------------------------------------------------------
 
 const MONTHS: Record<string, number> = {
   janv: 1, janvier: 1, fevr: 2, fev: 2, fevrier: 2, mars: 3, avr: 4, avril: 4, mai: 5, juin: 6,
@@ -169,7 +169,7 @@ export function detailedToLocal(d: z.infer<typeof detailedDateSchema>): string {
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
 
-/** Le HTML léger du site ramené à du texte : jamais injecté tel quel dans l'interface. */
+/** The site's light HTML brought back to text: never injected as is into the interface. */
 export function htmlToText(html: string): string {
   return html
     .replace(/\r/g, '')
@@ -189,7 +189,7 @@ export function htmlToText(html: string): string {
 
 const plain = (raw: string | null | undefined) => (raw ?? '').replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').trim()
 
-/** Les niveaux de l'école élémentaire, tels que les enseignantes les écrivent (« ce1 », « CE2 : »). */
+/** The primary school grade levels, as teachers write them ("ce1", "CE2 :"). */
 const LEVEL_RE = /\b(CP|CE1|CE2|CM1|CM2)\b/gi
 export function levelsIn(...texts: (string | null | undefined)[]): string[] {
   const found = new Set<string>()

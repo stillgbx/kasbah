@@ -1,159 +1,161 @@
 import { z } from 'zod'
 
-// Schémas des réponses MELCloud. Volontairement LARGES : rien de ce qu'on ne lit pas n'est
-// contraint (`z.unknown()`), parce qu'un champ inutile mal typé suffit à faire échouer une réponse
-// entière — la leçon coûteuse du plugin TaHoma (`doc/3_plugins/3_2_ecrire-un-plugin.md`).
+// MELCloud response schemas. Deliberately BROAD: nothing we do not read is constrained
+// (`z.unknown()`), because one useless, badly typed field is enough to make a whole response fail
+// — the costly lesson of the TaHoma plugin (`doc/3_plugins/3_2_ecrire-un-plugin.md`).
 //
-// Piège vérifié ici (zod 4.5) : `z.unknown()` ne rend PAS la clé facultative. Un champ qu'on ne lit
-// pas mais que le fabricant n'envoie pas toujours (`Expiry`, `Device`) fait alors échouer la réponse
-// entière — le symptôme exact que la page « Écrire un plugin » attribue aux schémas trop serrés, et
-// qui s'obtient ici en croyant justement les avoir relâchés. D'où `.optional()` partout.
+// Trap checked here (zod 4.5): `z.unknown()` does NOT make the key optional. A field we do not read
+// but that the vendor does not always send (`Expiry`, `Device`) then makes the whole response fail
+// — the exact symptom that the "Écrire un plugin" wiki page attributes to schemas that are too
+// tight, and that you get here precisely while believing you loosened them. Hence `.optional()`
+// everywhere.
 //
-// Ces schémas ont été écrits AVANT la capture, d'après la documentation communautaire, et c'est
-// pourquoi ils ne valident presque rien : ils n'ont à reconnaître qu'une chose, de quoi ADRESSER un
-// appareil. La capture est arrivée depuis (`__fixtures__/melcloud.ts`) et c'est elle qui porte le
-// mappage (`mapping.ts`) ; ces schémas-ci n'ont pas eu à se resserrer pour autant — un schéma large
-// sur ce qu'on ne lit pas reste la bonne réponse, une autre installation ne répondra pas pareil.
+// These schemas were written BEFORE the capture, from the community documentation, and that is
+// why they validate almost nothing: they only have to recognize one thing, what is needed to
+// ADDRESS a device. The capture has arrived since (`__fixtures__/melcloud.ts`) and it is what
+// carries the mapping (`mapping.ts`); these schemas did not have to tighten for all that — a broad
+// schema on what we do not read stays the right answer, another installation will not answer the
+// same way.
 
 /**
- * Réponse de `Login/ClientLogin`. Piège central, le même que Gigya chez Renault : **MELCloud
- * répond toujours en HTTP 200**. Un mot de passe faux arrive en 200 avec un `ErrorId` non nul, et
- * un client qui ne regarde que le statut croit avoir réussi à chaque fois.
+ * Response of `Login/ClientLogin`. Central trap, the same as Gigya at Renault: **MELCloud always
+ * answers HTTP 200**. A wrong password arrives as a 200 with a non-zero `ErrorId`, and a client
+ * that only looks at the status believes it succeeded every time.
  */
 export const melcloudLoginSchema = z.looseObject({
-  /** `null` = succès. Un nombre = refus (1 : identifiants invalides). */
+  /** `null` = success. A number = refusal (1: invalid credentials). */
   ErrorId: z.unknown().optional(),
   LoginData: z.looseObject({
-    /** La clé de session, à passer en en-tête `X-MitsContextKey` sur tous les appels suivants. */
+    /** The session key, to pass in the `X-MitsContextKey` header on every following call. */
     ContextKey: z.string().min(1),
-    /** Nom du compte, seulement pour l'afficher dans les Réglages. */
+    /** Account name, only to display it in Settings. */
     Name: z.unknown().optional(),
     Expiry: z.unknown().optional(),
   }).nullish(),
 })
 
 /**
- * Un appareil, tel qu'il apparaît dans la structure d'un bâtiment de `User/ListDevices`.
+ * A device, as it appears in a building's structure in `User/ListDevices`.
  *
- * Seuls trois champs sont contraints, ceux dont on a besoin pour ADRESSER l'appareil : MELCloud
- * range les appareils à quatre profondeurs différentes selon l'installation (`Structure.Devices`,
+ * Only three fields are constrained, the ones needed to ADDRESS the device: MELCloud files devices
+ * at four different depths depending on the installation (`Structure.Devices`,
  * `Structure.Areas[].Devices`, `Structure.Floors[].Devices`, `Structure.Floors[].Areas[].Devices`),
- * et on ne sait pas encore laquelle vos machines empruntent. `mapping.ts` les cherche donc par leur
- * forme plutôt que par leur chemin.
+ * and we do not know yet which one your machines take. `mapping.ts` therefore looks them up by
+ * their shape rather than by their path.
  */
 export const listedDeviceSchema = z.looseObject({
   DeviceID: z.union([z.number(), z.string()]),
   BuildingID: z.union([z.number(), z.string()]).optional(),
   DeviceName: z.unknown().optional(),
   /**
-   * `Device` porte TOUT l'état : 210 champs sur la machine capturée, contre 42 pour `Device/Get`.
-   * C'est la raison pour laquelle le sondage lit `ListDevices` et jamais `Device/Get` — la lecture
-   * détaillée est la PLUS PAUVRE des deux, à l'inverse de ce que son nom laisse croire, et elle
-   * coûte un appel par machine là où celle-ci les rend toutes d'un coup.
+   * `Device` carries the WHOLE state: 210 fields on the captured machine, against 42 for
+   * `Device/Get`. That is why polling reads `ListDevices` and never `Device/Get` — the detailed
+   * read is the POORER of the two, contrary to what its name suggests, and it costs one call per
+   * machine where this one returns them all at once.
    */
   Device: z.unknown().optional(),
 })
 export type ListedDevice = z.infer<typeof listedDeviceSchema>
 
 /**
- * Familles d'appareils MELCloud. Une Ecodan Zubadan est un **ATW** (air-eau) : zones de chauffage,
- * ballon, températures de départ et de retour — et non un split, qui serait un ATA.
+ * MELCloud device families. An Ecodan Zubadan is an **ATW** (air-to-water): heating zones, tank,
+ * flow and return temperatures — and not a split, which would be an ATA.
  */
 export const DEVICE_TYPES: Record<number, 'ata' | 'atw' | 'erv'> = { 0: 'ata', 1: 'atw', 3: 'erv' }
 
-/** Ce qu'on retient d'un appareil pour l'adresser et le nommer. Le reste attend la capture. */
+/** What we keep of a device to address and name it. The rest waits for the capture. */
 export interface DeviceLink {
-  /** `DeviceID` en chaîne : c'est l'`externalId`, stable, sans `:` ni espace. */
+  /** `DeviceID` as a string: it is the `externalId`, stable, no `:` and no space. */
   deviceId: string
-  /** Exigé en paramètre par `Device/Get` : sans lui, pas de lecture. */
+  /** Required as a parameter by `Device/Get`: without it, no read. */
   buildingId: string
-  /** Nom du bâtiment qui le porte, pour s'y retrouver quand il y a plusieurs machines. */
+  /** Name of the building that holds it, to find one's way when there are several machines. */
   buildingName: string | null
   name: string
-  /** `'atw'` pour une Ecodan. `null` = MELCloud ne l'a pas dit. */
+  /** `'atw'` for an Ecodan. `null` = MELCloud did not say. */
   family: 'ata' | 'atw' | 'erv' | null
   deviceType: number | null
   /**
-   * Tout ce que `ListDevices` dit de cette machine, MIS À PLAT : l'enveloppe puis le sous-objet
-   * `Device`, qui gagne en cas de conflit. Les deux niveaux portent des champs utiles et aucun ne
-   * se suffit — les bornes de consigne (`MinTemperature`, `MaxTemperature`) sont dans l'enveloppe,
-   * l'état de la machine dans `Device` —, et les joindre ici évite à tout le reste du plugin de
-   * savoir lequel des deux consulter.
+   * Everything `ListDevices` says about this machine, FLATTENED: the envelope then the `Device`
+   * sub-object, which wins in case of conflict. Both levels carry useful fields and neither is
+   * enough alone — the setpoint bounds (`MinTemperature`, `MaxTemperature`) are in the envelope,
+   * the machine's state in `Device` —, and joining them here spares the rest of the plugin from
+   * knowing which of the two to consult.
    */
   fields: Record<string, unknown>
 }
 
 /**
- * L'état d'une ZONE de chauffage, une fois décidé sur quoi elle se règle. Une Ecodan air-eau pilote
- * chaque zone soit sur l'air de la pièce, soit sur la température de l'eau de départ — et les deux
- * couples de champs MELCloud n'ont rien à voir.
+ * The state of a heating ZONE, once it is decided what it regulates on. An air-to-water Ecodan
+ * controls each zone either on the room's air or on the flow water temperature — and the two
+ * pairs of MELCloud fields have nothing to do with each other.
  */
 export interface ZoneReading {
   zone: 1 | 2
-  /** `room` : consigne et mesure d'ambiance. `flow` : consigne et mesure d'eau de départ. */
+  /** `room`: room setpoint and measurement. `flow`: flow water setpoint and measurement. */
   control: 'room' | 'flow'
   currentTempC: number | null
   targetTempC: number | null
-  /** La zone chauffe-t-elle en ce moment, ou attend-elle ? */
+  /** Is the zone heating right now, or waiting? */
   idle: boolean
   heating: boolean
   cooling: boolean
-  /** Bornes de la consigne, qui ne sont PAS les mêmes selon `control` (ambiante vs départ). */
+  /** Setpoint bounds, which are NOT the same depending on `control` (room vs flow). */
   bounds: [number, number] | null
   name: string | null
 }
 
 /**
- * L'état de la MACHINE, par opposition à celui des zones : ce qu'on regarde pour savoir si elle
- * tourne, ce qu'elle fait, et si elle va mal. Servi à la vue Chauffage, pas publié comme appareil —
- * une douzaine de capteurs pour des valeurs qu'on ne consulte qu'à un seul endroit encombrerait
- * l'inventaire, la recherche et la scène 3D pour rien.
+ * The MACHINE's state, as opposed to the zones': what we look at to know whether it is running,
+ * what it is doing, and whether it is unwell. Served to the Heating view, not published as a device
+ * — a dozen sensors for values only looked at in one place would clutter the inventory, the search
+ * and the 3D scene for nothing.
  */
 export interface SystemReading {
   deviceId: string
   name: string
   power: boolean
   /**
-   * Ce que le FABRICANT prétend. À ne pas confondre avec joignable : relevé sur la vraie machine,
-   * `Offline` passe à vrai alors que l'horodatage avance chaque minute, que `WifiAdapterStatus` dit
-   * `NORMAL` et qu'aucune erreur n'est signalée. Gardé pour le diagnostic, jamais pour décider.
+   * What the VENDOR claims. Not to be confused with reachable: observed on the real machine,
+   * `Offline` turns true while the timestamp moves forward every minute, `WifiAdapterStatus` says
+   * `NORMAL` and no error is reported. Kept for diagnosis, never for deciding.
    */
   offline: boolean
-  /** La vraie question : la dernière remontée est-elle encore fraîche ? C'est `stale` qui décide. */
+  /** The real question: is the last report still fresh? `stale` is what decides. */
   stale: boolean
   outdoorTempC: number | null
   flowTempC: number | null
   returnTempC: number | null
   condensingTempC: number | null
-  /** Ce que le régulateur demande à la machine, en pourcentage. */
+  /** What the controller asks of the machine, in percent. */
   demandPercent: number | null
   defrosting: boolean
-  /** Appoints électriques : ils coûtent cher, les voir tourner est le genre de chose qu'on veut savoir. */
+  /** Electric backup heaters: they cost a lot, seeing them run is the kind of thing one wants to know. */
   boosterHeater: boolean
   immersionHeater: boolean
-  /** Les quatre circulateurs, dans l'ordre où MELCloud les numérote. */
+  /** The four circulators, in the order MELCloud numbers them. */
   pumps: boolean[]
   valve3Way: boolean
-  /** `ErrorCode` VAUT 8000 QUAND TOUT VA BIEN : `hasError` est la seule lecture fiable. */
+  /** `ErrorCode` IS 8000 WHEN ALL IS WELL: `hasError` is the only reliable reading. */
   error: { hasError: boolean; code: number | null; message: string | null }
   /**
-   * Quand la machine a parlé au cloud pour la dernière fois, en MILLISECONDES EPOCH et non en
-   * chaîne. Deux raisons, toutes deux mesurées sur la vraie machine :
+   * When the machine last talked to the cloud, in EPOCH MILLISECONDS and not as a string. Two
+   * reasons, both measured on the real machine:
    *
-   *  - le champ n'est pas le même selon la lecture : `LastTimeStamp` dans `ListDevices` (celle
-   *    qu'on sonde), `LastCommunication` dans `Device/Get` ;
-   *  - et ils n'ont PAS la même base de temps. `LastTimeStamp` est en heure LOCALE, écrite sans
-   *    fuseau ; `LastCommunication` est en UTC, écrite sans fuseau elle aussi. Les rendre tels
-   *    quels laisserait l'affichage se tromper de deux heures selon la route utilisée — le piège
-   *    déjà rencontré chez Husqvarna. Résolu ici, une fois, plutôt que chez chaque lecteur.
+   *  - the field is not the same depending on the read: `LastTimeStamp` in `ListDevices` (the one
+   *    we poll), `LastCommunication` in `Device/Get`;
+   *  - and they do NOT have the same time base. `LastTimeStamp` is in LOCAL time, written without
+   *    a time zone; `LastCommunication` is in UTC, also written without a time zone. Returning them
+   *    as is would let the display be two hours off depending on the route used — the trap already
+   *    met at Husqvarna. Resolved here, once, rather than in each reader.
    */
   lastSeen: number | null
-  /** `NORMAL` quand le module Wi-Fi va bien : c'est ce qui distingue une machine muette d'un réseau muet. */
+  /** `NORMAL` when the Wi-Fi module is fine: that is what tells a silent machine from a silent network. */
   wifi: string | null
   /**
-   * La machine a-t-elle un compteur d'énergie ? `false` sur l'installation de référence, et c'est
-   * ce qui autorise la vue à ne pas afficher une section de consommation vide plutôt qu'une pleine
-   * de zéros (les relevés d'un hiver entier sont revenus à zéro).
+   * Does the machine have an energy meter? `false` on the reference installation, and that is what
+   * allows the view not to display an empty consumption section rather than one full of zeros (the
+   * reports of a whole winter came back at zero).
    */
   energyMeter: boolean
 }

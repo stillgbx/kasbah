@@ -7,8 +7,8 @@ import { expandEvents, localMs, parseIcs } from './ics'
 import { createAgendaPlugin, normalizeUrl, type FetchIcs } from './index'
 import { memoryCalendars } from './store'
 
-// Flux écrit sur le modèle de l'adresse secrète iCal de Google (VTIMEZONE jointe, UTC en « Z »,
-// occurrences déplacées et annulées par RECURRENCE-ID, description en HTML léger).
+// Feed written on the model of Google's secret iCal address (VTIMEZONE attached, UTC as "Z",
+// occurrences moved and cancelled through RECURRENCE-ID, description in light HTML).
 const ICS = [
   'BEGIN:VCALENDAR',
   'PRODID:-//Google Inc//Google Calendar 70.9054//EN',
@@ -31,7 +31,7 @@ const ICS = [
   'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU',
   'END:STANDARD',
   'END:VTIMEZONE',
-  // un rendez-vous simple, heure de Paris
+  // a simple appointment, Paris time
   'BEGIN:VEVENT',
   'UID:dentiste@google.com',
   'DTSTART;TZID=Europe/Paris:20260929T143000',
@@ -40,14 +40,14 @@ const ICS = [
   'LOCATION:12 rue du Port',
   'DESCRIPTION:Apporter la <b>carte</b><br>Vitale',
   'END:VEVENT',
-  // trois jours de vacances (fin exclue)
+  // three days of holiday (end excluded)
   'BEGIN:VEVENT',
   'UID:vacances@google.com',
   'DTSTART;VALUE=DATE:20261003',
   'DTEND;VALUE=DATE:20261006',
   'SUMMARY:Week-end à la mer',
   'END:VEVENT',
-  // l'exception avant son maître, comme Google le fait parfois : le mardi 13 passe à 18 h
+  // the exception before its master, as Google sometimes does: Tuesday the 13th moves to 6 pm
   'BEGIN:VEVENT',
   'UID:judo@google.com',
   'RECURRENCE-ID;TZID=Europe/Paris:20261013T170000',
@@ -55,7 +55,7 @@ const ICS = [
   'DTEND;TZID=Europe/Paris:20261013T190000',
   'SUMMARY:Judo (décalé)',
   'END:VEVENT',
-  // le judo chaque mardi, sauf le 6 (EXDATE) et le 20 (annulé)
+  // judo every Tuesday, except the 6th (EXDATE) and the 20th (cancelled)
   'BEGIN:VEVENT',
   'UID:judo@google.com',
   'DTSTART;TZID=Europe/Paris:20260908T170000',
@@ -72,7 +72,7 @@ const ICS = [
   'STATUS:CANCELLED',
   'SUMMARY:Judo',
   'END:VEVENT',
-  // un anniversaire chaque année, sans DTEND
+  // a birthday every year, without DTEND
   'BEGIN:VEVENT',
   'UID:anniv@google.com',
   'DTSTART;VALUE=DATE:20100930',
@@ -82,7 +82,7 @@ const ICS = [
   'END:VCALENDAR',
 ].join('\r\n')
 
-/** Paris est à UTC+2 en octobre 2026 (heure d'été jusqu'au 25). */
+/** Paris is at UTC+2 in October 2026 (summer time until the 25th). */
 const paris = (y: number, mo: number, d: number, h: number, mi = 0) => Date.UTC(y, mo - 1, d, h - 2, mi)
 const OCT_FROM = localMs('2026-10-01')
 const OCT_TO = localMs('2026-11-01')
@@ -110,9 +110,9 @@ describe('agenda ics', () => {
     const judo = expandEvents(cal, 'c1', OCT_FROM, OCT_TO).filter((e) => e.title.startsWith('Judo'))
     expect(judo.map((e) => [e.title, e.start])).toEqual([
       ['Judo (décalé)', paris(2026, 10, 13, 18)],
-      ['Judo', paris(2026, 10, 27, 17) + 3_600_000], // heure d'hiver depuis le 25 : UTC+1
+      ['Judo', paris(2026, 10, 27, 17) + 3_600_000], // winter time since the 25th: UTC+1
     ])
-    // occurrences distinctes, ids stables d'un appel à l'autre
+    // distinct occurrences, ids stable from one call to the next
     expect(new Set(judo.map((e) => e.id)).size).toBe(2)
     expect(expandEvents(cal, 'c1', OCT_FROM, OCT_TO).filter((e) => e.title.startsWith('Judo')).map((e) => e.id)).toEqual(judo.map((e) => e.id))
   })

@@ -3,9 +3,9 @@ import type { Logger } from 'pino'
 import { knownFileSchema, type SonosPlayer } from './types'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// Mémoire des enceintes déjà vues. Une Sonos éteinte ne répond plus au SSDP : sans ça elle
-// quitte l'inventaire, et son entrée dans house.json perd son nom. Fichier absent ou illisible
-// = mémoire vide, jamais une erreur fatale.
+// Memory of the speakers already seen. A switched-off Sonos no longer answers SSDP: without this
+// it leaves the inventory, and its entry in house.json loses its name. Missing or unreadable file
+// = empty memory, never a fatal error.
 
 export interface KnownPlayers {
   load(): Promise<SonosPlayer[]>

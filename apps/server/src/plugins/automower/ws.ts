@@ -3,26 +3,26 @@ import { WebSocket } from 'ws'
 import { createBackoff } from '../../core/backoff'
 import type { Clock } from '../../core/clock'
 
-// Flux d'événements de l'Automower Connect API : un WebSocket authentifié par le jeton du compte
-// (`Authorization: Bearer` sur la poignée de main — d'où le paquet `ws` : le `WebSocket` natif de
-// Node ne laisse pas poser d'en-tête). Le fabricant y pousse batterie, activité, planning, position,
-// hauteur de coupe dès qu'ils changent : c'est ce qui rend le robot VIVANT à l'écran sans dépenser
-// le quota REST (21 000 requêtes par fenêtre de 7 jours), qui ne sert plus qu'à resynchroniser.
+// Event stream of the Automower Connect API: a WebSocket authenticated by the account's token
+// (`Authorization: Bearer` on the handshake — hence the `ws` package: Node's native `WebSocket`
+// does not allow setting a header). The vendor pushes battery, activity, schedule, position,
+// cutting height there as soon as they change: that is what makes the robot LIVE on screen without
+// spending the REST quota (21 000 requests per 7-day window), which now only serves to resync.
 //
-// Ce que la connexion demande pour tenir :
-//  - un PING toutes les minutes (le serveur coupe une connexion muette) ;
-//  - se RECONNECTER : le fabricant ferme la connexion au bout de deux heures environ, et le réseau
-//    d'un foyer coupe quand il veut. Reprise avec backoff (5 s → 5 min) ; chaque reconnexion
-//    redemande un jeton frais, l'ancien ayant pu expirer entre-temps ;
-//  - un premier message `{ ready: true, connectionId }` qui ne dit rien du robot — puis les
-//    événements `{ id, type, attributes }` (format V2).
-// Les événements manqués pendant une coupure ne sont PAS rejoués : c'est au plugin de relire l'état
-// complet à la reconnexion (`onOpen`).
+// What the connection needs to hold:
+//  - a PING every minute (the server cuts a silent connection);
+//  - RECONNECTING: the vendor closes the connection after about two hours, and a household's
+//    network drops whenever it likes. Retry with backoff (5 s → 5 min); each reconnection
+//    requests a fresh token, the old one may have expired in the meantime;
+//  - a first message `{ ready: true, connectionId }` that says nothing about the robot — then the
+//    `{ id, type, attributes }` events (V2 format).
+// Events missed during a cut are NOT replayed: it is up to the plugin to re-read the full state on
+// reconnection (`onOpen`).
 
 export const WS_URL = 'wss://ws.openapi.husqvarna.dev/v1'
 export const PING_MS = 60_000
 
-/** Le sous-ensemble de `ws.WebSocket` dont on se sert ; injectable par les tests. */
+/** The subset of `ws.WebSocket` we use; injectable by the tests. */
 export interface WsLike {
   on(event: 'open', fn: () => void): unknown
   on(event: 'message', fn: (data: unknown) => void): unknown
@@ -42,7 +42,7 @@ export interface AutomowerSocketOptions {
   signal: AbortSignal
   logger: Logger
   onEvent: (message: unknown) => void
-  /** Connexion (ré)établie ; `reconnected` dit si des événements ont pu être manqués avant. */
+  /** Connection (re)established; `reconnected` says whether events may have been missed before. */
   onOpen?: (reconnected: boolean) => void
   onClose?: () => void
   url?: string
@@ -75,7 +75,7 @@ export class AutomowerSocket {
     const ws = this.ws
     this.ws = null
     this._connected = false
-    try { ws?.terminate() } catch { /* déjà fermée */ }
+    try { ws?.terminate() } catch { /* already closed */ }
   }
 
   private clearTimers(): void {
@@ -102,7 +102,7 @@ export class AutomowerSocket {
       const reconnected = this.everOpened
       this.everOpened = true
       this.backoff.reset()
-      this.pingTimer = this.opts.clock.setInterval(() => { try { ws.ping() } catch { /* fermée entre-temps */ } }, this.opts.pingMs ?? PING_MS)
+      this.pingTimer = this.opts.clock.setInterval(() => { try { ws.ping() } catch { /* closed in the meantime */ } }, this.opts.pingMs ?? PING_MS)
       this.opts.logger.info({ reconnected }, 'Automower websocket connected')
       this.opts.onOpen?.(reconnected)
     })

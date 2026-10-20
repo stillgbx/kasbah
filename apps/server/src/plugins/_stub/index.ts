@@ -2,8 +2,8 @@ import { z } from 'zod'
 import { PluginError, type DevicePlugin } from '../../core/plugin'
 
 /**
- * Squelette d'un plugin non encore implémenté : déclaré (visible dans /api/health en
- * `not_implemented`), aucun appareil, toute commande refusée en 501.
+ * Skeleton of a plugin not implemented yet: declared (visible in /api/health as
+ * `not_implemented`), no device, every command refused with a 501.
  */
 export function makeStubPlugin(id: string, vendor: string): () => DevicePlugin {
   return () => ({

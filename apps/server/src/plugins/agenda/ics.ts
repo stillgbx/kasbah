@@ -1,13 +1,13 @@
 import ICAL from 'ical.js'
 
-// Lecture d'un flux iCalendar (l'« adresse secrète au format iCal » d'un agenda Google) et
-// déroulé de ses événements sur une période. Les récurrences (RRULE, EXDATE, occurrences
-// déplacées ou annulées par RECURRENCE-ID) sont confiées à ical.js : c'est tout le piège du format.
+// Reads an iCalendar feed (a Google calendar's "secret address in iCal format") and expands its
+// events over a period. Recurrences (RRULE, EXDATE, occurrences moved or cancelled through
+// RECURRENCE-ID) are left to ical.js: that is the whole trap of the format.
 
 /**
- * Une occurrence d'événement. Journée entière : des dates locales `YYYY-MM-DD`, fin EXCLUE (comme
- * dans le flux) — jamais d'instant, sinon un anniversaire glisse d'un jour selon le fuseau. Sinon :
- * des instants en ms.
+ * One event occurrence. All-day: local `YYYY-MM-DD` dates, end EXCLUDED (as in the feed) — never
+ * an instant, otherwise a birthday slips by a day depending on the time zone. Otherwise: instants
+ * in ms.
  */
 export type AgendaEvent = {
   id: string
@@ -18,17 +18,17 @@ export type AgendaEvent = {
 } & ({ allDay: true; start: string; end: string } | { allDay: false; start: number; end: number })
 
 export interface ParsedCalendar {
-  /** `X-WR-CALNAME` : le nom que Google donne à l'agenda, proposé à l'ajout. */
+  /** `X-WR-CALNAME`: the name Google gives the calendar, suggested when adding it. */
   name: string | null
-  /** Événements maîtres, occurrences déplacées rattachées ; plus les occurrences orphelines. */
+  /** Master events, with their moved occurrences attached; plus the orphan occurrences. */
   events: ICAL.Event[]
 }
 
 export function parseIcs(text: string): ParsedCalendar {
   const root = new ICAL.Component(ICAL.parse(text))
   if (root.name !== 'vcalendar') throw new Error('not an iCalendar feed')
-  // Google joint les VTIMEZONE qu'il cite ; sans elles une heure « TZID=Europe/Paris » serait
-  // lue comme flottante. Le registre est global, mais une zone a la même définition partout.
+  // Google attaches the VTIMEZONEs it cites; without them a "TZID=Europe/Paris" time would be
+  // read as floating. The registry is global, but a zone has the same definition everywhere.
   for (const tz of root.getAllSubcomponents('vtimezone')) ICAL.TimezoneService.register(tz)
   const masters = new Map<string, ICAL.Event>()
   const exceptions: ICAL.Event[] = []
@@ -38,7 +38,7 @@ export function parseIcs(text: string): ParsedCalendar {
     else masters.set(e.uid, e)
   }
   const orphans: ICAL.Event[] = []
-  // l'occurrence déplacée peut précéder son maître dans le fichier : rattachée après coup
+  // the moved occurrence may come before its master in the file: attached afterwards
   for (const e of exceptions) {
     const master = masters.get(e.uid)
     if (master) master.relateException(e)
@@ -48,12 +48,12 @@ export function parseIcs(text: string): ParsedCalendar {
   return { name: typeof name === 'string' && name.trim() ? name.trim() : null, events: [...masters.values(), ...orphans] }
 }
 
-/** Garde-fou : une règle quotidienne ouverte depuis des années ne doit pas tourner sans fin. */
+/** Safeguard: a daily rule open for years must not loop forever. */
 const MAX_OCCURRENCES = 20_000
-/** Une occurrence déplacée peut tomber dans la période alors que sa date d'origine en sort. */
+/** A moved occurrence can fall inside the period while its original date lies outside it. */
 const MOVED_SLACK_MS = 31 * 86_400_000
 
-/** Toutes les occurrences qui touchent `[from, to[`, triées par début. */
+/** Every occurrence touching `[from, to[`, sorted by start. */
 export function expandEvents(cal: ParsedCalendar, calendarId: string, from: number, to: number): AgendaEvent[] {
   const out: AgendaEvent[] = []
   for (const e of cal.events) {
@@ -72,7 +72,7 @@ export function expandEvents(cal: ParsedCalendar, calendarId: string, from: numb
 }
 
 function push(out: AgendaEvent[], calendarId: string, item: ICAL.Event, start: ICAL.Time, end: ICAL.Time | null, recurrence: ICAL.Time, from: number, to: number) {
-  // une occurrence annulée arrive comme une exception en STATUS:CANCELLED
+  // a cancelled occurrence arrives as an exception with STATUS:CANCELLED
   if (String(item.component.getFirstPropertyValue('status') ?? '').toUpperCase() === 'CANCELLED') return
   const base = {
     id: `${calendarId}:${item.uid}:${recurrence.toString()}`,
@@ -83,7 +83,7 @@ function push(out: AgendaEvent[], calendarId: string, item: ICAL.Event, start: I
   }
   if (start.isDate) {
     const startDay = start.toString()
-    // RFC 5545 : une journée sans DTEND dure un jour
+    // RFC 5545: an all-day event without DTEND lasts one day
     const endDay = end && end.compare(start) > 0 ? end.toString() : nextDay(startDay)
     if (localMs(endDay) <= from || localMs(startDay) >= to) return
     out.push({ ...base, allDay: true, start: startDay, end: endDay })
@@ -91,13 +91,13 @@ function push(out: AgendaEvent[], calendarId: string, item: ICAL.Event, start: I
   }
   const s = start.toJSDate().getTime()
   const f = end ? Math.max(s, end.toJSDate().getTime()) : s
-  // un rendez-vous sans durée reste visible à son heure
+  // an appointment without duration stays visible at its time
   if (f <= from && !(f === s && s >= from)) return
   if (s >= to) return
   out.push({ ...base, allDay: false, start: s, end: f })
 }
 
-/** Minuit local d'un jour `YYYY-MM-DD` (le fuseau du serveur est celui de la maison). */
+/** Local midnight of a `YYYY-MM-DD` day (the server's time zone is the house's). */
 export function localMs(day: string): number {
   const [y, m, d] = day.split('-').map(Number)
   return new Date(y!, m! - 1, d!).getTime()
@@ -111,7 +111,7 @@ function nextDay(day: string): string {
 
 const sortKey = (e: AgendaEvent) => (e.allDay ? localMs(e.start) - 1 : e.start)
 
-/** Google écrit les descriptions en HTML léger : on garde le texte et les retours à la ligne. */
+/** Google writes descriptions in light HTML: we keep the text and the line breaks. */
 function plainText(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, '\n')

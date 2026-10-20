@@ -3,23 +3,23 @@ import { MOWER_RESTRICTIONS } from '@kasbah/shared'
 import type { PluginSiteMap } from '../../core/plugin'
 import { messageSchema, messagesResponseSchema, mowerDataSchema, mowerSectionSchema, plannerSchema, positionSchema, stayOutZoneSchema, workAreaSchema, type MowerData, type WsEvent } from './types'
 
-// Automower Connect API → contrat Kasbah. Fonctions PURES, testées sur les fixtures.
+// Automower Connect API → Kasbah contract. PURE functions, tested on the fixtures.
 //
-// Un robot = un appareil `mower`, identifié par l'UUID que le fabricant lui donne (stable, sans `:`
-// ni espace : c'est ce que house.json liera). Deux sources qui disent la même chose sous deux formes :
-//   - `toStatePatch` : la LISTE (`GET /mowers`) rend l'état complet de chaque robot ;
-//   - `applyEvent` : le WebSocket pousse un DELTA — capturé le 2026-09-16 : `{ mower: { state:
-//     "STOPPED" } }` seul, `{ mower: { inactiveReason: "PLANNING" } }` seul, un `planner` SANS
-//     `nextStartTimestamp`. Un delta ne se mappe pas seul (le piège Overkiz du wiki) : il se FOND
-//     dans la dernière lecture complète du robot, et c'est l'état fondu qui se mappe. D'où la
-//     signature : l'événement ET le robot tel qu'on le connaît, en sortie le robot mis à jour ET le patch.
+// One robot = one `mower` device, identified by the UUID the vendor gives it (stable, no `:` and
+// no space: that is what house.json will link). Two sources saying the same thing in two shapes:
+//   - `toStatePatch`: the LIST (`GET /mowers`) returns each robot's full state;
+//   - `applyEvent`: the WebSocket pushes a DELTA — captured on 2026-09-16: `{ mower: { state:
+//     "STOPPED" } }` alone, `{ mower: { inactiveReason: "PLANNING" } }` alone, a `planner` WITHOUT
+//     `nextStartTimestamp`. A delta is not mapped on its own (the wiki's Overkiz trap): it is MERGED
+//     into the robot's last full read, and it is the merged state that gets mapped. Hence the
+//     signature: the event AND the robot as we know it, out come the updated robot AND the patch.
 
 export const PLUGIN_ID = 'automower'
 
-/** Ce que le robot sait faire : partir, se garer, dire sa batterie, suivre un planning, tenir son journal. */
+/** What the robot can do: leave, park, report its battery, follow a schedule, keep its log. */
 export const CAPABILITIES = ['mow', 'park', 'battery', 'schedule', 'journal'] as const
 
-/** Valide ressource par ressource : un robot à la forme inattendue ne prive pas la maison des autres. */
+/** Validates resource by resource: a robot with an unexpected shape does not deprive the house of the others. */
 export function parseMowers(list: unknown, onReject?: (issue: string) => void): MowerData[] {
   const data = (list as { data?: unknown })?.data
   if (!Array.isArray(data)) return []
@@ -33,9 +33,9 @@ export function parseMowers(list: unknown, onReject?: (issue: string) => void): 
 }
 
 /**
- * Ce que le robot déclare EN PLUS, d'après ses `capabilities` : des zones de travail, des zones
- * d'exclusion, et une carte pour un robot qui se positionne (GPS ou EPOS) — un robot sans position
- * n'a pas de terrain relevé à montrer.
+ * What the robot declares IN ADDITION, from its `capabilities`: work areas, stay-out zones, and a
+ * map for a robot that positions itself (GPS or EPOS) — a robot without a position has no
+ * surveyed grounds to show.
  */
 function optionalCapabilities(m: MowerData): Capability[] {
   const c = m.attributes.capabilities
@@ -58,7 +58,7 @@ export function toDescriptor(m: MowerData): DeviceDescriptor {
   }
 }
 
-/** Le robot parle au cloud du fabricant. Absent = on le suppose joignable, la lecture le dira. */
+/** The robot talks to the vendor's cloud. Absent = assumed reachable, the read will tell. */
 export function connectedOf(m: MowerData): boolean { return m.attributes.metadata?.connected !== false }
 
 export type MowerActivity = StateFor<'mower'>['activity']
@@ -66,12 +66,11 @@ export type MowerActivity = StateFor<'mower'>['activity']
 const lower = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
 
 /**
- * Deux champs du fabricant pour une activité Kasbah. `state` prime quand il dit une ERREUR, une
- * PAUSE ou un ARRÊT — le robot peut être « garé » de son point de vue et arrêté (capturé : un
- * `ParkUntilFurtherNotice` fait passer `state: STOPPED` avant que `activity` ne suive) ; puis
- * `activity` dit ce qu'il fait. `stopped` couvre le bouton STOP, l'arrêt dans le jardin, le robot
- * éteint et celui qui attend de se rallumer sans activité connue : ni garé, ni en pause, arrêté là
- * où il est.
+ * Two vendor fields for one Kasbah activity. `state` wins when it says ERROR, PAUSE or STOP — the
+ * robot can be "parked" from its point of view and stopped (captured: a `ParkUntilFurtherNotice`
+ * switches to `state: STOPPED` before `activity` follows); then `activity` says what it is doing.
+ * `stopped` covers the STOP button, a stop in the garden, the robot switched off and the one
+ * waiting to power up with no known activity: neither parked nor paused, stopped where it is.
  */
 export function toActivity(mower: { activity?: string | null; state?: string | null } | null | undefined): MowerActivity {
   const state = lower(mower?.state), activity = lower(mower?.activity)
@@ -96,20 +95,20 @@ export function toRestriction(raw: string | null | undefined): MowerRestriction 
 }
 
 /**
- * Horodatages du fabricant. `nextStartTimestamp` et `errorCodeTimestamp` sont l'heure LOCALE du
- * robot écrite comme si elle était UTC (la bibliothèque de référence le documente ainsi) ; on la
- * ramène à un vrai instant avec le fuseau de la maison. La valeur est en millisecondes, parfois en
- * secondes sur d'anciens firmwares (même seuil que la référence : au-delà de l'an 3000 en secondes,
- * c'est des millisecondes). `statusTimestamp`, lui, est en UTC : il ne passe pas par ici.
+ * Vendor timestamps. `nextStartTimestamp` and `errorCodeTimestamp` are the robot's LOCAL time
+ * written as if it were UTC (the reference library documents it that way); we turn it back into a
+ * real instant with the house's time zone. The value is in milliseconds, sometimes in seconds on
+ * older firmwares (same threshold as the reference: beyond year 3000 in seconds, it is
+ * milliseconds). `statusTimestamp`, for its part, is in UTC: it does not go through here.
  */
 export function localTimestamp(raw: number, tz: string): number {
   const ms = raw > 32_503_680_000 ? raw : raw * 1000
-  // deux passes : le décalage en vigueur à l'instant VRAI, pas à l'instant décalé (heure d'été)
+  // two passes: the offset in force at the TRUE instant, not at the shifted instant (summer time)
   const guess = ms - tzOffsetMs(tz, ms)
   return ms - tzOffsetMs(tz, guess)
 }
 
-/** Décalage (ms) entre l'heure murale de `tz` et UTC à l'instant `at`. Fuseau inconnu = UTC. */
+/** Offset (ms) between `tz` wall-clock time and UTC at instant `at`. Unknown time zone = UTC. */
 function tzOffsetMs(tz: string, at: number): number {
   let parts: Intl.DateTimeFormatPart[]
   try {
@@ -122,25 +121,25 @@ function tzOffsetMs(tz: string, at: number): number {
   return wall - Math.floor(at / 1000) * 1000
 }
 
-/** Le fuseau est valide pour `Intl` (la configuration le vérifie avant de l'accepter). */
+/** The time zone is valid for `Intl` (the configuration checks it before accepting it). */
 export function isTimeZone(tz: string): boolean {
   try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true } catch { return false }
 }
 
 export interface MapOptions {
-  /** Fuseau de la maison : celui dans lequel le robot écrit ses horodatages « locaux ». */
+  /** The house's time zone: the one in which the robot writes its "local" timestamps. */
   tz: string
-  /** Maintenant (ms) : date une position reçue sans horodatage. */
+  /** Now (ms): dates a position received without a timestamp. */
   now: number
 }
 
 const clampPct = (v: number | null | undefined) => Math.max(0, Math.min(100, Math.round(v ?? 0)))
 const pos = (n: number | null | undefined) => (typeof n === 'number' && n > 0 ? n : undefined)
 
-/** Texte du fabricant pour un code d'erreur ; un code hors table garde son numéro. */
+/** The vendor's text for an error code; a code outside the table keeps its number. */
 export function errorText(code: number): string { return ERROR_TEXT[code] ?? `Error ${code}` }
 
-/** Ce qu'une section `mower` dit de l'erreur : code, texte, date, levée à distance — ou leur effacement (`null`). */
+/** What a `mower` section says about the error: code, text, date, remote clearing — or their removal (`null`). */
 function errorFields(
   mower: { errorCode?: number | null; errorCodeTimestamp?: number | null; isErrorConfirmable?: boolean | null } | null | undefined,
   tz: string,
@@ -155,10 +154,10 @@ function errorFields(
 }
 
 /**
- * Pourquoi le robot reste à la station. Le `restrictedReason` du planificateur, SAUF quand le robot
- * est en mode `HOME` : c'est ainsi que le fabricant encode « garé jusqu'à nouvel ordre » (capturé
- * le 2026-09-16 après un `ParkUntilFurtherNotice` : `mode: HOME`, et le planificateur disait
- * toujours `WEEK_SCHEDULE`). Le mode prime : il dit que le robot ne partira pas tout seul.
+ * Why the robot stays at the station. The planner's `restrictedReason`, EXCEPT when the robot is
+ * in `HOME` mode: that is how the vendor encodes "parked until further notice" (captured on
+ * 2026-09-16 after a `ParkUntilFurtherNotice`: `mode: HOME`, and the planner still said
+ * `WEEK_SCHEDULE`). The mode wins: it says the robot will not leave on its own.
  */
 function plannerFields(
   planner: { nextStartTimestamp?: number | null; restrictedReason?: string | null } | null | undefined,
@@ -183,17 +182,17 @@ function statisticsOf(s: MowerData['attributes']['statistics']): StateFor<'mower
 }
 
 /**
- * Ce que le robot est en train de faire, au-delà de l'activité : la zone où il tond (ou qu'il rejoint)
- * et s'il est encore EN ROUTE (`LEAVING`, que l'activité Kasbah range sous `mowing`). La zone n'arrive
- * que par la lecture complète — les événements captés ne la portent jamais — : un delta la garde donc
- * telle que le robot fondu la connaît. Absente = effacée (`null`).
+ * What the robot is doing, beyond the activity: the area where it mows (or is heading to) and
+ * whether it is still ON ITS WAY (`LEAVING`, which the Kasbah activity files under `mowing`). The
+ * area only arrives through the full read — the captured events never carry it —: a delta
+ * therefore keeps it as the merged robot knows it. Absent = cleared (`null`).
  */
 function taskFields(mower: { activity?: string | null; workAreaId?: number | null } | null | undefined): Pick<StatePatch<'mower'>, 'workAreaId' | 'leaving'> {
   const id = mower?.workAreaId
   return { workAreaId: typeof id === 'number' && id >= 0 ? id : null, leaving: lower(mower?.activity) === 'leaving' }
 }
 
-/** Zones de travail lisibles ; une entrée à la forme inattendue est sautée. Absent = le robot n'en dit rien. */
+/** Readable work areas; an entry with an unexpected shape is skipped. Absent = the robot says nothing about them. */
 function workAreasOf(a: MowerData['attributes']): StateFor<'mower'>['workAreas'] {
   if (!a.workAreas) return undefined
   return a.workAreas.flatMap((raw) => {
@@ -202,7 +201,7 @@ function workAreasOf(a: MowerData['attributes']): StateFor<'mower'>['workAreas']
   })
 }
 
-/** Zones d'exclusion : la section est ABSENTE tant qu'aucune n'est tracée — c'est une liste vide, pas une inconnue. */
+/** Stay-out zones: the section is ABSENT as long as none is drawn — that is an empty list, not an unknown. */
 function stayOutZonesOf(a: MowerData['attributes']): StateFor<'mower'>['stayOutZones'] {
   if (!a.capabilities?.stayOutZones) return undefined
   return (a.stayOutZones?.zones ?? []).flatMap((raw) => {
@@ -211,7 +210,7 @@ function stayOutZonesOf(a: MowerData['attributes']): StateFor<'mower'>['stayOutZ
   })
 }
 
-/** L'état complet d'un robot tel que la LISTE le rend. */
+/** A robot's full state as the LIST returns it. */
 export function toStatePatch(m: MowerData, o: MapOptions): StatePatch<'mower'> {
   const a = m.attributes
   const statusAt = pos(a.metadata?.statusTimestamp)
@@ -230,36 +229,36 @@ export function toStatePatch(m: MowerData, o: MapOptions): StatePatch<'mower'> {
     ...plannerFields(a.planner, a.mower, o.tz),
     ...(typeof height === 'number' && height >= 1 && height <= 9 ? { cuttingHeight: Math.round(height) } : {}),
     ...(statusAt === undefined ? {} : { statusAt }),
-    // la liste ne date pas ses positions : le dernier statut reçu est ce qui s'en approche le plus
+    // the list does not date its positions: the last status received is the closest thing to it
     ...(first.success ? { location: { lat: first.data.latitude, lon: first.data.longitude, at: statusAt ?? o.now } } : {}),
     ...(stats ? { statistics: stats } : {}),
   }
 }
 
-/** Les clés PRÉSENTES d'un delta, sans celles qu'il ne nomme pas : c'est ce qu'on fond dans l'état connu. */
+/** The PRESENT keys of a delta, without those it does not name: that is what gets merged into the known state. */
 function defined<T extends object>(o: T): Partial<T> {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>
 }
 
-/** Le relevé garde au plus autant de positions que le fabricant en rend dans la liste. */
+/** The trail keeps at most as many positions as the vendor returns in the list. */
 const POSITIONS_MAX = 50
 
 export interface AppliedEvent {
-  /** Le robot tel qu'on le connaît APRÈS l'événement : c'est lui qu'on garde pour le suivant. */
+  /** The robot as we know it AFTER the event: that is what we keep for the next one. */
   next: MowerData
-  /** Ce que l'événement change dans l'état publié. */
+  /** What the event changes in the published state. */
   patch: StatePatch<'mower'>
 }
 
 /**
- * Un événement du WebSocket, fondu dans le robot tel qu'on le connaît → le robot mis à jour et le
- * patch à publier. `null` = rien pour nous (calendrier, phares, messages, forme inattendue).
+ * A WebSocket event, merged into the robot as we know it → the updated robot and the patch to
+ * publish. `null` = nothing for us (calendar, headlights, messages, unexpected shape).
  *
- * Les événements sont des DELTAS (capture du 2026-09-16) : `{ mower: { state: "STOPPED" } }` ne dit
- * rien de l'activité ni de l'erreur, `{ planner: { override, restrictedReason } }` ne redit pas le
- * prochain départ. Mapper le fragment seul effaçait l'erreur (`errorCode` absent lu comme « plus
- * d'erreur ») et le prochain départ (`nextStartTimestamp` absent lu comme « aucun »). On fond donc le
- * fragment dans la section connue, puis on mappe la section entière — comme si la liste l'avait rendue.
+ * Events are DELTAS (capture of 2026-09-16): `{ mower: { state: "STOPPED" } }` says nothing about
+ * the activity or the error, `{ planner: { override, restrictedReason } }` does not repeat the next
+ * start. Mapping the fragment alone wiped the error (absent `errorCode` read as "no more error")
+ * and the next start (absent `nextStartTimestamp` read as "none"). So the fragment is merged into
+ * the known section, then the whole section is mapped — as if the list had returned it.
  */
 export function applyEvent(ev: WsEvent, current: MowerData, o: MapOptions): AppliedEvent | null {
   const at = ev.attributes ?? {}
@@ -302,9 +301,9 @@ export function applyEvent(ev: WsEvent, current: MowerData, o: MapOptions): Appl
   }
 }
 
-// ---- Journal ------------------------------------------------------------------------------------
+// ---- Log ----------------------------------------------------------------------------------------
 
-/** Gravités du fabricant (majuscules) → contrat. Inconnue = information. */
+/** Vendor severities (capitals) → contract. Unknown = info. */
 function toSeverity(raw: string | null | undefined): JournalSeverity {
   switch (lower(raw)) {
     case 'fatal': case 'fatal_error': return 'fatal'
@@ -315,9 +314,9 @@ function toSeverity(raw: string | null | undefined): JournalSeverity {
 }
 
 /**
- * Une ligne du journal, ou `null` si elle n'a ni date ni code. Position gardée seulement si elle en
- * est une : le journal capturé porte des `(2e-7 ; 6.2e-6)` — un GPS sans fix écrit presque zéro,
- * et ce n'est pas un point du jardin.
+ * One log line, or `null` if it has neither date nor code. Position kept only if it really is one:
+ * the captured log carries `(2e-7 ; 6.2e-6)` — a GPS without a fix writes almost zero, and that is
+ * not a point in the garden.
  */
 export function toJournalEntry(raw: unknown, tz: string): JournalEntry | null {
   const m = messageSchema.safeParse(raw)
@@ -332,7 +331,7 @@ export function toJournalEntry(raw: unknown, tz: string): JournalEntry | null {
   }
 }
 
-/** `GET /mowers/{id}/messages` → entrées du plus récent au plus ancien ; une ligne illisible est sautée. */
+/** `GET /mowers/{id}/messages` → entries from most recent to oldest; an unreadable line is skipped. */
 export function toJournal(raw: unknown, tz: string): JournalEntry[] {
   const parsed = messagesResponseSchema.safeParse(raw)
   const list = parsed.success ? parsed.data.data.attributes?.messages ?? [] : []
@@ -340,9 +339,9 @@ export function toJournal(raw: unknown, tz: string): JournalEntry[] {
 }
 
 /**
- * Corps JSON:API d'une commande. « Tondre » sans durée = REPRENDRE LE PLANNING (le robot décide),
- * avec durée = partir pour ce temps ; se garer jusqu'au prochain créneau ou jusqu'à nouvel ordre.
- * `null` = commande que ce plugin ne sait pas traduire.
+ * JSON:API body of a command. "Mow" without duration = RESUME THE SCHEDULE (the robot decides),
+ * with a duration = leave for that time; park until the next slot or until further notice.
+ * `null` = a command this plugin cannot translate.
  */
 export function actionBody(cmd: Command): { data: { type: string; attributes?: { duration: number; workAreaId?: number } } } | null {
   switch (cmd.type) {
@@ -359,14 +358,14 @@ export function actionBody(cmd: Command): { data: { type: string; attributes?: {
   }
 }
 
-// ---- Carte du terrain ---------------------------------------------------------------------------
+// ---- Site map -----------------------------------------------------------------------------------
 
-/** Les attributs d'une balise SVG (`name="valeur"`), sans dépendre d'un DOM côté serveur. */
+/** The attributes of an SVG tag (`name="value"`), without depending on a server-side DOM. */
 function svgAttributes(raw: string): Record<string, string> {
   return Object.fromEntries([...raw.matchAll(/([\w:-]+)\s*=\s*"([^"]*)"/g)].map((m) => [m[1]!, m[2]!]))
 }
 
-/** `"x,y x,y …"` en millimètres → points en mètres ; un nombre impair ou illisible ferme la liste. */
+/** `"x,y x,y …"` in millimeters → points in meters; an odd or unreadable number ends the list. */
 function svgPoints(raw: string | undefined): [number, number][] {
   const n = (raw ?? '').trim().split(/[\s,]+/).filter(Boolean).map(Number)
   const out: [number, number][] = []
@@ -378,16 +377,15 @@ function svgPoints(raw: string | undefined): [number, number][] {
 }
 
 /**
- * Une carte SVG du fabricant → les formes du contrat. Husqvarna code la nature par la COULEUR (sa
- * documentation : vert = zone de travail, rouge = zone d'exclusion, bleu = chemin, jaune = station).
- * Relevé sur un vrai 435X AWD le 2026-10-12 : coordonnées en MILLIMÈTRES, `x` vers l'est et `y`
- * vers le nord (même forme que la carte de l'appli) ; dans la carte GÉNÉRÉE, le vert est le terrain
- * entier (`main_area_0`), le rouge un obstacle relevé par le robot (`island_*`, la maison, un arbre)
- * et le bleu un câble guide (`guide_*`) ; c'est dans la carte de ZONES que le vert est une zone de
- * travail tracée à la main (id UUID, `title` = son nom, avec ses espaces) et le rouge une zone
- * d'exclusion (même UUID que dans `stayOutZones`) — ou de RÉENSAUVAGEMENT quand il porte
- * `rewildingzone="true"`, zone que la liste ne connaît pas. Désactivée, une zone y reste avec
- * `display="none"` (relevé du 2026-10-12).
+ * A vendor SVG map → the contract's shapes. Husqvarna encodes the kind by COLOR (its
+ * documentation: green = work area, red = stay-out zone, blue = path, yellow = station).
+ * Surveyed on a real 435X AWD on 2026-10-12: coordinates in MILLIMETERS, `x` towards the east and
+ * `y` towards the north (same shape as the app's map); in the GENERATED map, green is the whole
+ * grounds (`main_area_0`), red an obstacle surveyed by the robot (`island_*`, the house, a tree)
+ * and blue a guide wire (`guide_*`); it is in the ZONES map that green is a hand-drawn work area
+ * (UUID id, `title` = its name, with its spaces) and red a stay-out zone (same UUID as in
+ * `stayOutZones`) — or a REWILDING zone when it carries `rewildingzone="true"`, a zone the list
+ * does not know. When disabled, a zone stays there with `display="none"` (survey of 2026-10-12).
  */
 export function parseSvgMap(svg: string, source: 'generated' | 'zone' | 'site'): SiteMapShape[] {
   const shapes: SiteMapShape[] = []
@@ -404,7 +402,7 @@ export function parseSvgMap(svg: string, source: 'generated' | 'zone' | 'site'):
     } else if (color === 'yellow') kind = 'station'
     else if (color === 'blue') kind = id.startsWith('guide') ? 'guide' : 'transport'
     if (!kind) continue
-    // une zone désactivée reste sur la carte, masquée (`display="none"`)
+    // a disabled zone stays on the map, hidden (`display="none"`)
     const toggled = kind === 'stay_out' || kind === 'rewilding'
     shapes.push({ kind, id, ...(a.title?.trim() ? { name: a.title.trim() } : {}), ...(toggled ? { enabled: lower(a.display) !== 'none' } : {}), points })
   }
@@ -412,9 +410,9 @@ export function parseSvgMap(svg: string, source: 'generated' | 'zone' | 'site'):
 }
 
 /**
- * Les cartes d'un robot fondues en une. La station est le PREMIER point de la ligne jaune : sur le
- * relevé, les câbles guides en partent tous, c'est la plaque de charge. Sans ligne jaune, pas de
- * station, et la carte ne pourra pas se poser sur le monde.
+ * A robot's maps merged into one. The station is the FIRST point of the yellow line: on the
+ * survey, the guide wires all start there, it is the charging plate. Without a yellow line, no
+ * station, and the map cannot be placed in the world.
  */
 export function toSiteMap(maps: { svg: string; source: 'generated' | 'zone' | 'site' }[]): PluginSiteMap {
   const shapes = maps.flatMap((m) => parseSvgMap(m.svg, m.source))
@@ -423,10 +421,10 @@ export function toSiteMap(maps: { svg: string; source: 'generated' | 'zone' | 's
 }
 
 /**
- * Les codes d'erreur du fabricant et leur texte (anglais, tels qu'il les publie). La table vient de
- * la bibliothèque de référence (aioautomower), qui la tient à jour d'après la documentation. Le
- * texte est publié tel quel dans `errorMessage` : traduire 160 libellés techniques n'apporterait
- * rien, et c'est ce texte que le support et les forums connaissent.
+ * The vendor's error codes and their text (English, as it publishes them). The table comes from
+ * the reference library (aioautomower), which keeps it up to date from the documentation. The
+ * text is published as is in `errorMessage`: translating 160 technical labels would bring
+ * nothing, and it is this text that support and the forums know.
  */
 export const ERROR_TEXT: Record<number, string> = {
   0: 'Unexpected error', 1: 'Outside working area', 2: 'No loop signal', 3: 'Wrong loop signal',

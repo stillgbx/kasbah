@@ -1,22 +1,22 @@
-// Capturé sur le VRAI compte MELCloud le 2026-09-17, puis anonymisé (identifiants, adresse MAC,
-// numéro de série, coordonnées, propriétaire). Les valeurs PHYSIQUES sont intactes, bizarreries
-// comprises — c'est pour elles que ce fichier existe.
+// Captured on the REAL MELCloud account on 2026-09-17, then anonymized (ids, MAC address, serial
+// number, coordinates, owner). The PHYSICAL values are intact, oddities included — they are what
+// this file exists for.
 //
-// L'installation : UNE machine côté MELCloud (Ecodan Zubadan, FTC), deux zones, pas de ballon vu,
-// aucun compteur d'énergie. Quatre surprises que la documentation ne laissait pas prévoir :
+// The installation: ONE machine on the MELCloud side (Ecodan Zubadan, FTC), two zones, no tank
+// seen, no energy meter. Four surprises the documentation gave no hint of:
 //
-//  1. `RoomTemperatureZone2` vaut **-39** : la zone 2 n'a PAS de sonde d'ambiance, et MELCloud rend
-//     une sentinelle plutôt qu'un null. Publier cela comme une température de pièce serait absurde.
-//     `Zone2InRoomMode: false` est le champ qui le DIT ; c'est lui qu'il faut lire, pas la valeur.
-//  2. `HasThermostatZone2: true` alors qu'il n'y a pas de sonde : le champ décrit ce que le FTC
-//     PERMET, pas ce qui est branché.
-//  3. `ErrorCode: 8000` est la valeur NORMALE (pas d'erreur), confirmée par `HasError: false`.
-//     Un client qui traite « code non nul = panne » déclarerait la maison en panne en permanence.
-//  4. `HasEnergyConsumedMeter: false` : les relevés d'énergie sont vides même en plein hiver
-//     (voir `ENERGY_REPORT_WINTER`, 31 jours de janvier-février à zéro). `MissingMinutes` y vaut
-//     1380 comme sur une semaine de septembre — une constante, donc pas une mesure.
+//  1. `RoomTemperatureZone2` is **-39**: zone 2 has NO room sensor, and MELCloud returns a
+//     sentinel rather than a null. Publishing that as a room temperature would be absurd.
+//     `Zone2InRoomMode: false` is the field that SAYS so; that is the one to read, not the value.
+//  2. `HasThermostatZone2: true` although there is no sensor: the field describes what the FTC
+//     ALLOWS, not what is wired.
+//  3. `ErrorCode: 8000` is the NORMAL value (no error), confirmed by `HasError: false`.
+//     A client treating "non-zero code = failure" would declare the house failed permanently.
+//  4. `HasEnergyConsumedMeter: false`: the energy reports are empty even in the depths of winter
+//     (see `ENERGY_REPORT_WINTER`, 31 days of January-February at zero). `MissingMinutes` there is
+//     1380 as on a September week — a constant, hence not a measurement.
 
-/** `GET /User/ListDevices` : un bâtiment, l'appareil sous `Structure.Devices`. */
+/** `GET /User/ListDevices`: one building, the device under `Structure.Devices`. */
 export const LIST_DEVICES = [
   {
     "ID": 222222,
@@ -350,7 +350,7 @@ export const LIST_DEVICES = [
   }
 ] as const
 
-/** `GET /Device/Get` : 42 champs, sous-ensemble de ceux de `ListDevices`. */
+/** `GET /Device/Get`: 42 fields, a subset of those of `ListDevices`. */
 export const DEVICE_GET = {
   "EffectiveFlags": 0,
   "LocalIPAddress": null,
@@ -445,7 +445,7 @@ export const DEVICE_GET = {
   "SceneOwner": null
 } as const
 
-/** `POST /EnergyCost/Report` sur 7 jours de septembre : tout à zéro. */
+/** `POST /EnergyCost/Report` over 7 days of September: all zero. */
 export const ENERGY_REPORT_SEPTEMBER = {
   "HotWater": [
     0,
@@ -567,7 +567,7 @@ export const ENERGY_REPORT_SEPTEMBER = {
   "MissingMinutes": 1380
 } as const
 
-/** Le même sur 31 jours de PLEIN HIVER : toujours zéro. C'est ce relevé qui prouve l'absence de compteur. */
+/** The same over 31 days of DEEP WINTER: still zero. This report is what proves there is no meter. */
 export const ENERGY_REPORT_WINTER = {
   "HotWater": [
     0,

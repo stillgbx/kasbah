@@ -1,13 +1,13 @@
 import { z } from 'zod'
 
-// Formes SOUPLES de ce qu'on lit chez Sonos. Le reste passe en `unknown().optional()` : un champ
-// qu'on ne lit pas, trop contraint, ferait échouer toute la réponse (leçon MELCloud, zod 4).
+// LOOSE shapes of what we read from Sonos. The rest goes as `unknown().optional()`: a field we do
+// not read, too constrained, would make the whole response fail (MELCloud lesson, zod 4).
 
 export const PLUGIN_ID = 'sonos'
 
-/** Ce qu'une enceinte a annoncé en SSDP, plus ce que `/status/zp` et la description ont confirmé. */
+/** What a speaker announced over SSDP, plus what `/status/zp` and the description confirmed. */
 export interface SonosPlayer {
-  /** Identifiant stable (`RINCON_…01400`), sans `:` — notre `externalId`. */
+  /** Stable id (`RINCON_…01400`), without `:` — our `externalId`. */
   uuid: string
   host: string
   name: string

@@ -1,7 +1,7 @@
 import type { YtmusicAlbum, YtmusicAlbumReleaseType, YtmusicArtist, YtmusicPlaylist, YtmusicTrack } from './types'
 
-// Mappage PUR : formes déjà aplaties (fixtures ou extrait de youtubei.js) → DTO UI.
-// Pas d'appel réseau ici — leçon MELCloud / Tahoma : schémas souples sur le mappé, pas sur le brut.
+// PURE mapping: already flattened shapes (fixtures or excerpt from youtubei.js) → UI DTO.
+// No network call here — MELCloud / Tahoma lesson: loose schemas on the mapped data, not on the raw.
 
 export interface RawTrack {
   videoId?: string | null
@@ -46,13 +46,13 @@ export interface RawAlbum {
   artists?: Array<string | { name?: string | null } | null> | null
   author?: { name?: string | null } | null
   year?: string | null
-  /** Libellés bruts du sous-titre (ex. « Album », « Single ») pour en déduire le type. */
+  /** Raw subtitle labels (e.g. "Album", "Single") to deduce the type from. */
   subtitleParts?: string[] | null
   releaseType?: YtmusicAlbumReleaseType | null
   explicit?: boolean | null
 }
 
-/** ≥ N artistes distincts sur une sortie → compilation (hors Single pur). */
+/** ≥ N distinct artists on a release → compilation (except a pure Single). */
 export const MULTI_ARTIST_COMPILATION_MIN = 3
 
 function uniqueArtistKeyCount(artists: string[]): number {
@@ -65,10 +65,10 @@ function uniqueArtistKeyCount(artists: string[]): number {
 }
 
 /**
- * InnerTube n'a pas de champ `releaseType` : le type est dans le sous-titre
- * (« Album · Artiste · 1997 », « Single · … », « EP · … », « Compilation · … »).
- * Repli : titres du genre « Best of », « Greatest Hits », etc.
- * Puis multi-artistes (≥ {@link MULTI_ARTIST_COMPILATION_MIN}) → compil.
+ * InnerTube has no `releaseType` field: the type is in the subtitle
+ * ("Album · Artist · 1997", "Single · …", "EP · …", "Compilation · …").
+ * Fallback: titles such as "Best of", "Greatest Hits", etc.
+ * Then multi-artist (≥ {@link MULTI_ARTIST_COMPILATION_MIN}) → compilation.
  */
 export function parseReleaseType(parts: Iterable<string> | null | undefined): YtmusicAlbumReleaseType | null {
   if (!parts) return null
@@ -83,7 +83,7 @@ export function parseReleaseType(parts: Iterable<string> | null | undefined): Yt
   return null
 }
 
-/** Titres typiques de compil même si InnerTube dit « Album ». */
+/** Typical compilation titles even if InnerTube says "Album". */
 export function inferCompilationFromTitle(title: string | null | undefined): 'compilation' | null {
   if (!title) return null
   const n = title.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '')
@@ -103,8 +103,8 @@ export function inferCompilationFromTitle(title: string | null | undefined): 'co
 }
 
 /**
- * youtubei.js expose souvent un `Text` ({ text, runs }) et non une string.
- * Sans ça, le titre d'une playlist tombe sur l'id (VLLM, VLPL…).
+ * youtubei.js often exposes a `Text` ({ text, runs }) and not a string.
+ * Without this, a playlist's title falls back to the id (VLLM, VLPL…).
  */
 export function textOf(v: unknown): string | null {
   if (typeof v === 'string') {
@@ -134,7 +134,7 @@ export function textOf(v: unknown): string | null {
   return null
 }
 
-/** Absolue HTTPS : youtubei renvoie parfois `//i.ytimg.com/…`. */
+/** Absolute HTTPS: youtubei sometimes returns `//i.ytimg.com/…`. */
 export function absHttpUrl(url: string | null | undefined): string | null {
   const u = url?.trim()
   if (!u) return null
@@ -143,15 +143,15 @@ export function absHttpUrl(url: string | null | undefined): string | null {
   return null
 }
 
-/** Taille CDN pour vignettes catalogue UI (~44 px × retina). */
+/** CDN size for UI catalog thumbnails (~44 px × retina). */
 export const ART_CDN_SIZE = 120
-/** Taille CDN pour stickyPlay / Nest / TV. */
+/** CDN size for stickyPlay / Nest / TV. */
 export const ART_PLAY_SIZE = 544
 
 /**
- * Passe d'une vignette catalogue à une taille adaptée.
- * Les URL `googleusercontent` / `ggpht` acceptent `=wN-hN` ; `i.ytimg.com` via default/mq/hq.
- * Indépendant du client yt-dlp (`android_music` vs `web_music`).
+ * Moves from a catalog thumbnail to a suitable size.
+ * `googleusercontent` / `ggpht` URLs accept `=wN-hN`; `i.ytimg.com` through default/mq/hq.
+ * Independent of the yt-dlp client (`android_music` vs `web_music`).
  */
 export function upgradeArtUrl(
   url: string | null | undefined,
@@ -270,12 +270,12 @@ export function mapAlbum(raw: RawAlbum): YtmusicAlbum | null {
   const fromSub = parseReleaseType(raw.subtitleParts)
   const fromTitle = inferCompilationFromTitle(title)
   let releaseType = raw.releaseType ?? fromSub ?? null
-  // « Best of » / « Greatest Hits » → compil même si InnerTube / getAlbum dit Album.
-  // (les mots-clés titre sont déjà normalisés en minuscules → casse ignorée)
+  // "Best of" / "Greatest Hits" → compilation even if InnerTube / getAlbum says Album.
+  // (the title keywords are already lowercased → case ignored)
   if (fromTitle && releaseType !== 'single' && releaseType !== 'ep') {
     releaseType = 'compilation'
   }
-  // Plusieurs artistes distincts → compil (ex. « whose radio? »), sauf Single.
+  // Several distinct artists → compilation (e.g. "whose radio?"), except Single.
   if (
     releaseType !== 'single'
     && uniqueArtistKeyCount(artists) >= MULTI_ARTIST_COMPILATION_MIN
@@ -305,7 +305,7 @@ export function mapAlbums(raws: RawAlbum[]): YtmusicAlbum[] {
     if (!prev.artUrl && a.artUrl) prev.artUrl = a.artUrl
     if (a.artists.length > prev.artists.length) prev.artists = a.artists
     if (!prev.explicit && a.explicit) prev.explicit = a.explicit
-    // Re-évaluer multi-artistes après fusion des crédits.
+    // Re-evaluate multi-artist after merging the credits.
     if (
       prev.releaseType !== 'single'
       && uniqueArtistKeyCount(prev.artists) >= MULTI_ARTIST_COMPILATION_MIN
@@ -321,8 +321,8 @@ export function mapAlbums(raws: RawAlbum[]): YtmusicAlbum[] {
       mergeInto(prevId, a)
       continue
     }
-    // Même sortie, browseId InnerTube différent (ex. Drive Home ×2).
-    // Clé = titre + artiste + famille de type (EP ≠ Album du même nom, cas Jäde).
+    // Same release, different InnerTube browseId (e.g. Drive Home ×2).
+    // Key = title + artist + type family (EP ≠ Album of the same name, the Jäde case).
     if (a.artists.length) {
       const family = a.releaseType === 'ep' || a.releaseType === 'single' ? a.releaseType
         : a.releaseType === 'compilation' ? 'compilation'
@@ -343,8 +343,8 @@ export function mapAlbums(raws: RawAlbum[]): YtmusicAlbum[] {
 }
 
 /**
- * InnerTube omet parfois `MUSIC_EXPLICIT_BADGE` sur l'EP alors que l'Album
- * du même titre / artiste le porte — propager le flag.
+ * InnerTube sometimes omits `MUSIC_EXPLICIT_BADGE` on the EP while the Album
+ * of the same title / artist carries it — propagate the flag.
  */
 export function propagateExplicitByTitle(albums: YtmusicAlbum[]): void {
   const marked = new Set<string>()
@@ -365,12 +365,12 @@ function albumTitleKey(s: string): string {
   return s.trim().toLowerCase().normalize('NFD').replace(/\p{M}/gu, '')
 }
 
-/** Plafond par section de recherche (UI en colonnes). */
+/** Cap per search section (UI in columns). */
 export const SEARCH_SECTION_LIMIT = 20
 
 /**
- * Répartit LP/album → albums, Single+EP → singles (colonne EP), Compilation → compilations.
- * Inconnu → albums. Chaque liste est bornée à {@link SEARCH_SECTION_LIMIT}.
+ * Splits LP/album → albums, Single+EP → singles (EP column), Compilation → compilations.
+ * Unknown → albums. Each list is capped at {@link SEARCH_SECTION_LIMIT}.
  */
 export function partitionAlbums(albums: YtmusicAlbum[]): {
   albums: YtmusicAlbum[]
@@ -394,7 +394,7 @@ export function partitionAlbums(albums: YtmusicAlbum[]): {
   }
 }
 
-/** Meilleure vignette d'une liste youtubei (largeur max). */
+/** Best thumbnail of a youtubei list (max width). */
 export function bestThumb(thumbs: Array<{ url?: string; width?: number } | null> | undefined): string | null {
   if (!thumbs?.length) return null
   let best: { url: string; width: number } | null = null

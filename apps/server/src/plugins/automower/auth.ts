@@ -2,16 +2,16 @@ import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { tokenResponseSchema } from './types'
 
-// Jeton de l'Authentication API Husqvarna, en `client_credentials` : la CLÉ et le SECRET de
-// l'application créée sur developer.husqvarnagroup.cloud suffisent, sans consentement dans un
-// navigateur. Le fabricant le dit lui-même : « this grant type is intended only for you » — le
-// jeton représente le compte qui a créé l'application, donc le propriétaire du robot. C'est le cas
-// d'un foyer, et c'est pourquoi il n'y a ni page de retour ni fichier de jetons ici : un jeton se
-// redemande à volonté, il vaut une journée, et rien ne se perd au redémarrage.
+// Husqvarna Authentication API token, via `client_credentials`: the KEY and SECRET of the
+// application created on developer.husqvarnagroup.cloud are enough, with no consent in a
+// browser. The vendor says so itself: "this grant type is intended only for you" — the token
+// represents the account that created the application, hence the robot's owner. That is the case
+// for a household, and that is why there is neither a callback page nor a token file here: a token
+// can be requested again at will, it lasts a day, and nothing is lost on restart.
 
 export const TOKEN_URL = 'https://api.authentication.husqvarnagroup.dev/v1/oauth2/token'
 
-/** Marge avant l'échéance au-delà de laquelle on redemande un jeton d'avance. */
+/** Margin before expiry beyond which a token is requested ahead of time. */
 const REFRESH_MARGIN_MS = 5 * 60_000
 const REQUEST_TIMEOUT_MS = 20_000
 
@@ -28,7 +28,7 @@ export class AutomowerAuth {
 
   constructor(private readonly opts: AutomowerAuthOptions) {}
 
-  /** Jeton d'accès valide, redemandé s'il manque ou s'il expire bientôt. Un seul appel en vol à la fois. */
+  /** A valid access token, requested again if missing or expiring soon. Only one call in flight at a time. */
   accessToken(signal?: AbortSignal): Promise<string> {
     const t = this.token
     if (t && t.expiresAt - this.opts.now() > REFRESH_MARGIN_MS) return Promise.resolve(t.value)
@@ -36,7 +36,7 @@ export class AutomowerAuth {
     return this.pending
   }
 
-  /** L'API a refusé le jeton (401) : on l'oublie, le prochain appel en redemande un. */
+  /** The API refused the token (401): forget it, the next call requests a new one. */
   invalidate(): void { this.token = null }
 
   private async fetchToken(signal?: AbortSignal): Promise<string> {
@@ -54,10 +54,10 @@ export class AutomowerAuth {
       const aborted = (err as Error)?.name === 'TimeoutError' || (err as Error)?.name === 'AbortError'
       throw new PluginError(aborted ? 'TIMEOUT' : 'UPSTREAM_ERROR', 'Husqvarna authentication API unreachable', { cause: err })
     }
-    // pas compté au quota : le portail développeur ne compte que les appels à l'API Automower Connect
+    // not counted in the quota: the developer portal only counts calls to the Automower Connect API
     const text = await res.text()
-    // 400 `invalid_client` ou 401 : la clé ou le secret sont faux. Ce n'est pas une panne réseau,
-    // c'est la configuration à revoir — `NEEDS_PAIRING`, comme un compte à relier ailleurs
+    // 400 `invalid_client` or 401: the key or the secret is wrong. It is not a network failure,
+    // it is the configuration to review — `NEEDS_PAIRING`, like an account to link elsewhere
     if (res.status === 400 || res.status === 401) {
       throw new PluginError('NEEDS_PAIRING', `Husqvarna refused the application key or secret (HTTP ${res.status})${detail(text)}`)
     }
@@ -71,7 +71,7 @@ export class AutomowerAuth {
   }
 }
 
-/** L'erreur du corps, quand le fabricant en met une (`{ error, error_description }` ou `{ message }`). */
+/** The error from the body, when the vendor puts one there (`{ error, error_description }` or `{ message }`). */
 export function detail(text: string): string {
   try {
     const j = JSON.parse(text) as { error?: unknown; error_description?: unknown; message?: unknown; errors?: unknown }

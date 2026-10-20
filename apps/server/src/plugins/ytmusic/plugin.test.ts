@@ -99,7 +99,7 @@ function fakeMusic(tracks = [{ id: 'vid1', title: 'Song', artists: [{ name: 'A' 
   }
 }
 
-/** Cas Jäde : browseId uniquement sur title.runs (pas on_tap), + homonyme faible en étagère. */
+/** The Jäde case: browseId only on title.runs (not on_tap), + a weak namesake in the shelf. */
 function fakeMusicJade(): InnertubeLike {
   return {
     music: {
@@ -183,7 +183,7 @@ async function boot(extra: {
   await plugin.start()
   const app = Fastify()
   app.addContentTypeParser('text/plain', { parseAs: 'string' }, (_req, body, done) => { done(null, body) })
-  // ce que fait la porte à session sous l'adresse publique : le compte de la requête
+  // what the session gate does under the public address: the request's account
   app.decorateRequest('sessionUser', null)
   app.addHook('onRequest', async (req) => {
     const u = req.headers['x-test-user']
@@ -192,7 +192,7 @@ async function boot(extra: {
   const routes = plugin.registerRoutes
   expect(routes).toBeTypeOf('function')
   await app.register(async (sub) => routes!.call(plugin, sub), { prefix: '/api/plugins/ytmusic' })
-  // la lecture est celle du lecteur COMMUN, auquel le plugin s'est inscrit comme source à `init`
+  // playback is the SHARED player's, with which the plugin registered as a source at `init`
   const music = createMusicPlayer({
     config: { YTM_PUBLISH_BASE: 'http://192.168.1.10:8787' },
     logger: pino({ level: 'silent' }),
@@ -212,7 +212,7 @@ async function boot(extra: {
 function fakeSpawn(format: { filesize?: number } = {}) {
   const procs: Array<EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: ReturnType<typeof vi.fn> }> = []
   const spawnImpl = vi.fn((_cmd: string, args: readonly string[]) => {
-    // yt-dlp -J : rendre un JSON audio
+    // yt-dlp -J: return an audio JSON
     if (args.includes('-J')) {
       const proc = new EventEmitter() as EventEmitter & { stdout: PassThrough; stderr: PassThrough; kill: ReturnType<typeof vi.fn>; stdin: null }
       proc.stdout = new PassThrough()
@@ -489,7 +489,7 @@ describe('ytmusic plugin', () => {
     const detour = body.albums.find((a: { title: string }) => a.title === 'Detour')
     expect(detour?.explicit).toBe(true)
     expect(body.tracks.find((t: { videoId: string }) => t.videoId === 'vidX')?.explicit).toBe(true)
-    // Année reprise de l'album (absente sur les titres de recherche).
+    // Year taken from the album (missing on search tracks).
     expect(body.tracks.find((t: { videoId: string }) => t.videoId === 'vidFree')?.year).toBe('2026')
     expect(body.tracks.find((t: { videoId: string }) => t.videoId === 'vidFree')?.explicit).toBe(false)
     expect(body.singles.map((a: { title: string; releaseType: string }) => [a.title, a.releaseType])).toEqual(
@@ -499,17 +499,17 @@ describe('ytmusic plugin', () => {
         ['Chrome', 'single'],
       ]),
     )
-    // FREE sans badge titre → pas explicit (même si Detour l'est).
+    // FREE without a track badge → not explicit (even though Detour is).
     expect(body.tracks.find((t: { videoId: string }) => t.videoId === 'vidFree')?.explicit).toBe(false)
     await app.close()
     await plugin.stop()
   })
 
   /**
-   * Une recherche YouTube Music remonte aussi ce que des PARTICULIERS ont mis en ligne : reprises
-   * ralenties, concerts filmes au telephone, « type beats », pages de fans. Le catalogue officiel
-   * credite ses artistes (page ARTIST), une chaine perso se credite elle-meme (page USER_CHANNEL) :
-   * ces items-la ne doivent entrer ni dans les titres, ni dans la rangee Artistes.
+   * A YouTube Music search also brings up what INDIVIDUALS uploaded: slowed-down covers, concerts
+   * filmed on a phone, "type beats", fan pages. The official catalog credits its artists (ARTIST
+   * page), a personal channel credits itself (USER_CHANNEL page): those items must enter neither the
+   * tracks nor the Artists row.
    */
   it('keeps official videos and drops what personal channels posted', async () => {
     const credit = (text: string, browseId: string, pageType: string) => ({
@@ -553,15 +553,15 @@ describe('ytmusic plugin', () => {
     await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
     const body = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=samara%20cyn' })).json()
     expect((body.tracks as Array<{ videoId: string }>).map((t) => t.videoId)).toEqual(['vidClip'])
-    // la page de fans porte le nom de la requete : sans le type de page, elle passait pour l'artiste
+    // the fan page carries the query's name: without the page type, it passed for the artist
     expect((body.artists as Array<{ id: string }>).map((a) => a.id)).not.toContain('UCfanpage')
     await app.close()
     await plugin.stop()
   })
 
   /**
-   * RELAIS (le cas normal) : quand yt-dlp annonce un conteneur lisible par les enceintes ET sa
-   * taille, la source EST déjà le « fichier » — on repasse ses octets, ffmpeg n'entre pas en jeu.
+   * RELAY (the normal case): when yt-dlp announces a container the speakers can play AND its size,
+   * the source already IS the "file" — we pass its bytes through, ffmpeg does not come into play.
    */
   it('relays the source untouched when it announces a size, and passes byte ranges through', async () => {
     const SIZE = 4_373_288
@@ -591,10 +591,10 @@ describe('ytmusic plugin', () => {
       method: 'POST', url: '/api/music/play',
       payload: { source: 'ytmusic', id: 'vid1', deviceId: player.id, title: 'Song', durationS: 265 },
     })
-    // l'extension de l'URL n'est pas décorative : elle décide du type annoncé dans le DIDL Sonos
+    // the URL's extension is not decorative: it decides the type announced in the Sonos DIDL
     const url = (commands[0]!.cmd as { url: string }).url
     expect(url).toMatch(/\/raw\/[0-9a-f]+\.m4a$/)
-    // ffmpeg n'a pas été lancé : seul yt-dlp a tourné
+    // ffmpeg was not launched: only yt-dlp ran
     const spawned = (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls as Array<[string, string[]]>
     expect(spawned.every(([, args]) => args.includes('-J'))).toBe(true)
 
@@ -609,13 +609,13 @@ describe('ytmusic plugin', () => {
     expect(whole.statusCode).toBe(200)
     expect(whole.headers['content-length']).toBe(String(SIZE))
 
-    // la plage demandée par l'enceinte est repassée telle quelle à la source
+    // the range requested by the speaker is passed as is to the source
     const part = await app.inject({ method: 'GET', url: `/api/music/raw/${file}`, headers: { range: 'bytes=1000-1006' } })
     expect(part.statusCode).toBe(206)
     expect(part.headers['content-range']).toBe(`bytes 1000-1006/${SIZE}`)
     expect(asked).toContain('bytes=1000-1006')
 
-    // la session dit ce qu'elle sert : le format de la SOURCE, pas une sortie à nous
+    // the session says what it serves: the SOURCE's format, not an output of ours
     const sess = (await app.inject({ method: 'GET', url: '/api/music/sessions' })).json().sessions
     expect(sess[0].quality).toMatchObject({ mime: 'audio/mp4', sampleRateHz: null, source: { ext: 'm4a', formatId: '140' } })
 
@@ -718,8 +718,8 @@ describe('ytmusic plugin', () => {
   })
 
   /**
-   * REPLI : la source de ce faux yt-dlp n'annonce AUCUNE taille, elle n'est donc pas relayable —
-   * c'est le MP3 à trames fixes qui fabrique le « fichier » à partir de la durée.
+   * FALLBACK: this fake yt-dlp's source announces NO size, so it cannot be relayed — it is the
+   * fixed-frame MP3 that builds the "file" from the duration.
    */
   it('serves the track as a sized MP3 file (HEAD, ranges), transfers with a native seek, and drops a session the player left', async () => {
     const office: DeviceDescriptor = { ...player, id: 'sonos:office', pluginId: 'sonos', externalId: 'office', name: 'Bureau' }
@@ -729,7 +729,7 @@ describe('ytmusic plugin', () => {
     type Dev = { descriptor: DeviceDescriptor; state?: unknown } | undefined
     const deviceOf = (id: string): Dev => {
       if (id === player.id) return { descriptor: player, state: { kind: 'media_player', playback: 'playing', nowPlaying: { title: 'Song' } } }
-      // le Sonos publie sa position dans le morceau ; relevé il y a 1,5 s
+      // the Sonos publishes its position in the track; read 1.5 s ago
       if (id === office.id) return { descriptor: office, state: { kind: 'media_player', playback: 'playing', updatedAt: ctxRef.clock.now() - 1_500, nowPlaying: { title: 'Song', positionS: 42.7 } } }
       return undefined
     }
@@ -742,10 +742,10 @@ describe('ytmusic plugin', () => {
     ctxRef.clock = ctx.clock
     await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
 
-    // rien ne joue encore : pas de transfert possible
+    // nothing playing yet: no transfer possible
     expect((await app.inject({ method: 'POST', url: '/api/music/transfer', payload: { fromDeviceId: office.id, toDeviceId: player.id } })).statusCode).toBe(404)
 
-    // la durée vient de yt-dlp (20 s), pas du catalogue (265 s)
+    // the duration comes from yt-dlp (20 s), not from the catalog (265 s)
     await app.inject({
       method: 'POST', url: '/api/music/play',
       payload: { source: 'ytmusic', id: 'vid1', deviceId: office.id, title: 'Song', artist: 'A', artUrl: 'https://i.ytimg.com/a.jpg', durationS: 265 },
@@ -755,7 +755,7 @@ describe('ytmusic plugin', () => {
     expect(sessions).toEqual([expect.objectContaining({ deviceId: office.id, durationS: 20, title: 'Song', artist: 'A' })])
     expect(sessions[0]).not.toHaveProperty('startS')
 
-    // un « fichier » : 20 s = 834 trames de 960 octets (320 kb/s à 48 kHz)
+    // a "file": 20 s = 834 frames of 960 bytes (320 kb/s at 48 kHz)
     const LENGTH = Math.ceil(20 / (1152 / 48000)) * 960
     const sid = (commands[0]!.cmd as { url: string }).url.split('/').pop()!
     const head = await app.inject({ method: 'HEAD', url: `/api/music/stream/${sid}` })
@@ -763,14 +763,14 @@ describe('ytmusic plugin', () => {
     expect(head.headers['content-length']).toBe(String(LENGTH))
     expect(head.headers['accept-ranges']).toBe('bytes')
     const ffArgs = () => (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((c) => !(c[1] as string[]).includes('-J') && !(c[1] as string[]).includes('lavfi')).at(-1)![1] as string[]
-    // tout le fichier : ffmpeg depuis le début, taille promise tenue (la fausse sortie ne fait que 3 octets : on complète)
+    // the whole file: ffmpeg from the start, promised size kept (the fake output is only 3 bytes: we pad)
     const whole = await app.inject({ method: 'GET', url: `/api/music/stream/${sid}` })
     expect(whole.statusCode).toBe(200)
     expect(whole.headers['content-length']).toBe(String(LENGTH))
     expect(whole.rawPayload.length).toBe(LENGTH)
     expect(ffArgs()).not.toContain('-ss')
     expect(ffArgs()).toContain('libmp3lame')
-    // une plage : ffmpeg lancé à la trame (96 000 octets = 100 trames = 2,4 s), 206 avec la bonne étendue
+    // a range: ffmpeg started at the frame (96 000 bytes = 100 frames = 2.4 s), 206 with the right extent
     const part = await app.inject({ method: 'GET', url: `/api/music/stream/${sid}`, headers: { range: `bytes=96000-` } })
     expect(part.statusCode).toBe(206)
     expect(part.headers['content-range']).toBe(`bytes 96000-${LENGTH - 1}/${LENGTH}`)
@@ -778,11 +778,11 @@ describe('ytmusic plugin', () => {
     const args = ffArgs()
     expect(Number(args[args.indexOf('-ss') + 1])).toBeCloseTo(2.4, 3)
     expect(args.indexOf('-ss')).toBeLessThan(args.indexOf('-i'))
-    // plage hors du fichier : on sert tout (200), l'enceinte s'y retrouve
+    // range outside the file: serve everything (200), the speaker copes
     expect((await app.inject({ method: 'GET', url: `/api/music/stream/${sid}`, headers: { range: `bytes=${LENGTH + 10}-` } })).statusCode).toBe(200)
 
-    // transfert : même fichier sur la cible, déplacement natif à la position de la source
-    // (42,7 + 1,5 s depuis le relevé), puis la source s'arrête
+    // transfer: same file on the target, native seek to the source's position
+    // (42.7 + 1.5 s since the reading), then the source stops
     commands.length = 0
     const r = await app.inject({ method: 'POST', url: '/api/music/transfer', payload: { fromDeviceId: office.id, toDeviceId: player.id } })
     expect(r.statusCode).toBe(200)
@@ -792,13 +792,13 @@ describe('ytmusic plugin', () => {
       [player.id, 'media_player.seek'],
       [office.id, 'media_player.stop'],
     ])
-    // la cible se place une seconde plus loin : le temps qu'elle démarre
+    // the target seeks one second further: the time it takes to start
     expect((commands[1]!.cmd as { positionS: number }).positionS).toBeCloseTo(45.2, 3)
     expect(commands[0]!.cmd).toMatchObject({ title: 'Song', artist: 'A', artUrl: 'https://i.ytimg.com/a.jpg' })
     const after = (await app.inject({ method: 'GET', url: '/api/music/sessions' })).json().sessions
     expect(after).toEqual([expect.objectContaining({ deviceId: player.id, source: 'ytmusic', id: 'vid1', durationS: 20 })])
 
-    // l'enceinte joue autre chose (une radio lancée ailleurs) : la session ne compte plus, ni pour l'UI ni pour un transfert
+    // the speaker plays something else (a radio started elsewhere): the session no longer counts, neither for the UI nor for a transfer
     ;(ctx.clock as ManualClock).advance(6_000)
     const radio: Dev = { descriptor: player, state: { kind: 'media_player', playback: 'playing', nowPlaying: { title: 'franceinfo' } } }
     devices.get = (id) => (id === player.id ? radio : deviceOf(id))
@@ -806,7 +806,7 @@ describe('ytmusic plugin', () => {
     expect((await app.inject({ method: 'POST', url: '/api/music/transfer', payload: { fromDeviceId: player.id, toDeviceId: office.id } })).statusCode).toBe(404)
     devices.get = deviceOf
 
-    // relancer un autre titre là où l'un des nôtres joue : pause immédiate, puis le nouveau flux
+    // start another track where one of ours is playing: immediate pause, then the new stream
     commands.length = 0
     await app.inject({ method: 'POST', url: '/api/music/play', payload: { source: 'ytmusic', id: 'vid2', deviceId: player.id, title: 'Next' } })
     expect(commands.map((c) => c.cmd.type)).toEqual(['media_player.pause', 'media_player.play_url'])
@@ -845,22 +845,22 @@ describe('ytmusic plugin', () => {
     expect(r.statusCode).toBe(200)
     expect(r.json().queue).toMatchObject({ index: 0, repeat: 'off' })
     expect(played()).toEqual(['A'])
-    // le suivant est résolu d'avance, pendant que le premier joue
+    // the next one is resolved ahead, while the first one plays
     await vi.waitFor(() => expect(ytdlpRuns()).toBe(2))
     expect((await app.inject({ method: 'GET', url: '/api/music/sessions' })).json().sessions[0].queue).toEqual({ length: 3, index: 0, repeat: 'off' })
 
-    // un arrêt en milieu de morceau (20 s au total) n'enchaîne pas
+    // a stop mid-track (20 s in total) does not chain
     clock.advance(4_000); say(office.id, 'playing', 5)
     clock.advance(2_000); say(office.id, 'idle')
     expect(played()).toEqual(['A'])
 
-    // fin de piste : entendu à 17 s, à l'arrêt 2 s plus tard → B, sans nouvel aller yt-dlp
+    // end of track: heard at 17 s, stopped 2 s later → B, without a new yt-dlp round trip
     say(office.id, 'playing', 17)
     clock.advance(2_000); say(office.id, 'idle')
     await vi.waitFor(() => expect(played()).toEqual(['A', 'B']))
-    expect(ytdlpRuns()).toBe(3) // C, préparé à son tour
+    expect(ytdlpRuns()).toBe(3) // C, prepared in turn
 
-    // répéter une fois : B rejoue sur le même flux, puis la file reprend
+    // repeat once: B plays again on the same stream, then the queue resumes
     expect((await post('/queue/repeat', { deviceId: office.id, mode: 'once' })).json().repeat).toBe('once')
     clock.advance(4_000); say(office.id, 'playing', 18)
     clock.advance(1_000); say(office.id, 'idle')
@@ -868,17 +868,17 @@ describe('ytmusic plugin', () => {
     expect(ytdlpRuns()).toBe(3)
     expect((await app.inject({ method: 'GET', url: `/api/music/queue?deviceId=${office.id}` })).json()).toMatchObject({ index: 1, repeat: 'off' })
 
-    // ajouter juste après le courant, retirer, sauter
+    // add right after the current one, remove, skip
     clock.advance(4_000); say(office.id, 'playing', 1)
     const added = await post('/queue/add', { deviceId: office.id, tracks: [{ source: 'ytmusic', id: 'vX', title: 'X' }], where: 'next' })
     expect(added.json()).toMatchObject({ started: false, queue: { index: 1 } })
     expect(added.json().queue.items.map((t: { title: string }) => t.title)).toEqual(['A', 'B', 'X', 'C'])
-    expect((await post('/queue/remove', { deviceId: office.id, index: 1 })).statusCode).toBe(400) // celui qui joue
+    expect((await post('/queue/remove', { deviceId: office.id, index: 1 })).statusCode).toBe(400) // the one playing
     expect((await post('/queue/remove', { deviceId: office.id, index: 0 })).json()).toMatchObject({ index: 0 })
     expect((await post('/queue/next', { deviceId: office.id })).json()).toMatchObject({ index: 1 })
     expect(played().at(-1)).toBe('X')
 
-    // précédent : au début du titre s'il joue depuis un moment, sinon le titre d'avant
+    // previous: to the start of the track if it has been playing a while, otherwise the track before
     clock.advance(4_000); say(office.id, 'playing', 30)
     commands.length = 0
     await post('/queue/previous', { deviceId: office.id })
@@ -887,24 +887,24 @@ describe('ytmusic plugin', () => {
     await post('/queue/previous', { deviceId: office.id })
     expect(played()).toEqual(['B'])
 
-    // transfert : la file suit le titre sur la cible
+    // transfer: the queue follows the track to the target
     clock.advance(4_000); say(office.id, 'playing', 2)
     expect((await post('/transfer', { fromDeviceId: office.id, toDeviceId: player.id })).statusCode).toBe(200)
     say(office.id, 'idle')
     states.set(player.id, { kind: 'media_player', playback: 'playing', nowPlaying: { positionS: 3 } })
     expect((await app.inject({ method: 'GET', url: `/api/music/queue?deviceId=${player.id}` })).json()).toMatchObject({ index: 0 })
     expect((await app.inject({ method: 'GET', url: `/api/music/queue?deviceId=${office.id}` })).statusCode).toBe(404)
-    // … et y enchaîne en bout de titre
+    // … and chains there at the end of the track
     clock.advance(4_000); say(player.id, 'playing', 18)
     clock.advance(2_000); say(player.id, 'idle')
     await vi.waitFor(() => expect(played().at(-1)).toBe('X'))
 
-    // un autre titre lancé sur ce lecteur remplace la file
+    // another track started on this player replaces the queue
     await post('/play', { source: 'ytmusic', id: 'vZ', deviceId: player.id, title: 'Z' })
     expect((await app.inject({ method: 'GET', url: '/api/music/sessions' })).json().sessions[0].queue).toEqual({ length: 1, index: 0, repeat: 'off' })
     await app.close()
     await plugin.stop()
-    music.stop()                           // c'est le lecteur commun qui suivait les enceintes
+    music.stop()                           // it is the shared player that followed the speakers
     expect(feed).toBeNull()
   })
 
@@ -924,19 +924,19 @@ describe('ytmusic plugin', () => {
     await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
     const local = 'local:tablette-1234'
 
-    // le navigateur reçoit un chemin RELATIF vers le relais ; aucune commande n'est partie, aucune enceinte
+    // the browser gets a RELATIVE path to the relay; no command was sent, no speaker
     const opened = await post('/local', { source: 'ytmusic', id: 'vA', title: 'A', clientId: 'tablette-1234', next: { source: 'ytmusic', id: 'vB' } })
     expect(opened.statusCode).toBe(200)
     expect(opened.json().streamUrl).toMatch(/^\/api\/music\/raw\/[0-9a-f]+\.m4a$/)
     expect(opened.json().session).toMatchObject({ deviceId: local, source: 'ytmusic', id: 'vA', durationS: 20, title: 'A' })
     expect(commands).toEqual([])
-    // le suivant est résolu d'avance
+    // the next one is resolved ahead
     await vi.waitFor(() => expect(ytdlpRuns()).toBe(2))
-    // une lecture locale n'est la session d'aucune enceinte
+    // local playback is no speaker's session
     expect((await app.inject({ method: 'GET', url: '/api/music/sessions' })).json().sessions).toEqual([])
     expect((await post('/local', { source: 'ytmusic', id: 'vA', clientId: 'x' })).statusCode).toBe(400)
 
-    // navigateur → enceinte : la position vient du navigateur, sa file passe au serveur
+    // browser → speaker: the position comes from the browser, its queue moves to the server
     expect((await post('/transfer', { fromDeviceId: local, toDeviceId: office.id })).statusCode).toBe(400)
     const tracks = ['A', 'B', 'C'].map((title) => ({ source: 'ytmusic', id: `v${title}`, title }))
     const out = await post('/transfer', { fromDeviceId: local, toDeviceId: office.id, positionS: 7, queue: { tracks, index: 0, repeat: 'once' } })
@@ -944,10 +944,10 @@ describe('ytmusic plugin', () => {
     expect(out.json().queue).toMatchObject({ index: 0, repeat: 'once' })
     expect(commands.map((c) => c.cmd.type)).toEqual(['media_player.play_url', 'media_player.seek'])
     expect(commands[1]!.cmd).toEqual({ type: 'media_player.seek', positionS: 8 })
-    // pas de nouvelle résolution : l'URL de la session du navigateur a resservi
+    // no new resolution: the URL of the browser's session was reused
     expect(ytdlpRuns()).toBe(2)
 
-    // enceinte → navigateur : l'enceinte s'arrête, la file revient au navigateur
+    // speaker → browser: the speaker stops, the queue goes back to the browser
     states.set(office.id, { kind: 'media_player', playback: 'playing', nowPlaying: { positionS: 42, title: 'A' }, updatedAt: (ctx.clock as ManualClock).now() })
     commands.length = 0
     const back = await post('/transfer', { fromDeviceId: office.id, toDeviceId: local })
@@ -968,7 +968,7 @@ describe('ytmusic plugin', () => {
     const { plugin, app, ctx } = await boot({
       spawnImpl: ff.spawnImpl,
       getDevice: (id) => (id === office.id ? { descriptor: office, state: { kind: 'media_player', playback: 'playing', nowPlaying: { positionS: 5 } } } : undefined),
-      // un Sonos met quelques dizaines de ms à répondre à Pause : le titre suivant ne doit pas le doubler
+      // a Sonos takes a few tens of ms to answer Pause: the next track must not overtake it
       execute: async (_id, cmd) => {
         steps.push(cmd.type)
         if (cmd.type === 'media_player.pause') { await new Promise((r) => setTimeout(r, 30)); steps.push('paused') }
@@ -998,7 +998,7 @@ describe('ytmusic plugin', () => {
         thumbnail: { type: 'MusicThumbnail', contents: [{ url: 'https://yt3.googleusercontent.com/ok=w544-h544', width: 544, height: 544 }] },
         description: { type: 'MusicDescriptionShelf', description: { text: ' OK Computer est le troisième album de Radiohead. ' } },
       },
-      // telle que YouTube Music la rend : ni artistes, ni vignette, un compteur d'écoutes en sous-titre
+      // as YouTube Music returns it: no artists, no thumbnail, a play counter as subtitle
       contents: [{ id: 'vAirbag', item_type: 'song', title: 'Airbag', duration: { seconds: 284 }, subtitle: { text: '19M plays' } }],
     })
     const { plugin, app } = await boot({ createSession: async () => music })
@@ -1007,21 +1007,21 @@ describe('ytmusic plugin', () => {
     const [track] = r.json().tracks
     expect(track).toMatchObject({ videoId: 'vAirbag', artists: ['Radiohead'], album: 'OK Computer', year: '1997' })
     expect(track.artUrl).toMatch(/^https:\/\/yt3\.googleusercontent\.com\/ok=/)
-    // le texte de présentation de l'en-tête, nettoyé
+    // the header's description text, cleaned up
     expect(r.json().description).toBe('OK Computer est le troisième album de Radiohead.')
 
-    // même chose pour un artiste : la présentation de son en-tête (`MusicImmersiveHeader`)
-    // … et seuls ses TITRES : la page range aussi albums, playlists et artistes proches dans ses rangées
+    // same thing for an artist: the description in their header (`MusicImmersiveHeader`)
+    // … and only their TRACKS: the page also files albums, playlists and related artists in its rows
     music.music.getArtist = async () => ({
       header: { type: 'MusicImmersiveHeader', description: { text: 'Radiohead est un groupe de rock britannique.' } },
       sections: [{ contents: [
         { id: 'vCreep00001', item_type: 'song', title: 'Creep', artists: [{ name: 'Radiohead' }] },
-        // le clip de la même chanson, dans la rangée « Clips » : une seule fois dans la liste
+        // the video of the same song, in the "Videos" row: only once in the list
         { id: 'vCreepClip1', item_type: 'video', title: 'Creep', artists: [{ name: 'Radiohead' }] },
         { id: 'MPREb_kidA', item_type: 'album', title: 'Kid A' },
         { id: 'VLRDCLAK5uy_radiohead', item_type: 'playlist', title: 'This Is Radiohead' },
         { id: 'UCthomyorke', item_type: 'artist', title: 'Thom Yorke' },
-        // sans type : un id de chaîne (24 caractères) n'est pas un titre
+        // without a type: a channel id (24 characters) is not a track
         { id: 'UCr_iyUANcn9OX_yy9piYoLw', title: 'Radiohead' },
       ] }],
     })
@@ -1052,7 +1052,7 @@ describe('ytmusic plugin', () => {
       async browseParsed(id: string, params?: string) {
         browsedIds.push(id)
         if (id === 'FEmusic_moods_and_genres_category') parsedFor.push(params)
-        // la page « Voir tout » des nouveautés : une grille de 120 albums, en une réponse
+        // the new releases "See all" page: a grid of 120 albums, in one response
         if (id === 'FEmusic_new_releases_albums') {
           return { contents: { contents: [{ type: 'Grid', items: Array.from({ length: 120 }, (_, i) => ({ type: 'MusicTwoRowItem', item_type: 'album', id: `MPREb_new${i}`, title: { text: `Nouveau ${i}` } })) }] } }
         }
@@ -1064,7 +1064,7 @@ describe('ytmusic plugin', () => {
             { type: 'MusicCarouselShelf', header: { title: { text: 'Playlists' } }, contents: [
               { type: 'MusicTwoRowItem', item_type: 'playlist', id: 'VLRDCLAK5uy_jazz', title: { text: 'Jazz essentiel' }, thumbnail: [{ url: 'https://lh3.googleusercontent.com/jazz=w226-h226', width: 226 }] },
               { type: 'MusicTwoRowItem', item_type: 'playlist', id: 'VLPLcommunity', title: { text: 'Mon jazz à moi' } },
-              // la même playlist une seconde fois, même id (vu dans la grille des nouveautés)
+              // the same playlist a second time, same id (seen in the new releases grid)
               { type: 'MusicTwoRowItem', item_type: 'playlist', id: 'VLRDCLAK5uy_jazz', title: { text: 'Jazz essentiel' } },
             ] },
             { type: 'MusicCarouselShelf', header: { title: { text: 'Clips musicaux' } }, contents: [
@@ -1072,7 +1072,7 @@ describe('ytmusic plugin', () => {
             ] },
             { type: 'MusicCarouselShelf', header: { title: { text: 'Albums' } }, contents: [
               { type: 'MusicTwoRowItem', item_type: 'album', id: 'MPREb_kind', title: { text: 'Kind of Blue' }, artists: [{ name: 'Miles Davis' }] },
-              // badges dans l'enveloppe `SuperParsedResult` de youtubei.js (vraie réponse `browse`) : sans clés, lue par ses méthodes
+              // badges in youtubei.js's `SuperParsedResult` envelope (real `browse` response): no keys, read through its methods
               { type: 'MusicTwoRowItem', item_type: 'album', id: 'MPREb_wrapped', title: { text: 'Explicite' },
                 badges: { is_null: false, is_array: true, is_node: false, array: () => [{ icon_type: 'MUSIC_EXPLICIT_BADGE' }], item: () => null } },
             ] },
@@ -1087,12 +1087,12 @@ describe('ytmusic plugin', () => {
     expect(fr.moods).toEqual({ title: 'Humeurs et moments', categories: [{ title: 'Calme', params: 'p-calm', color: '#a4c5ff' }] })
     expect(fr.genres.categories[0].title).toBe('Jazz')
     expect(langs).toContain('fr')
-    // en cache : la même langue ne repart pas chez YouTube ; une autre si
+    // cached: the same language does not go back to YouTube; another one does
     await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore?hl=fr' })
     expect(browses).toBe(1)
     const en = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore?hl=en' })).json()
     expect(en.moods.categories[0].title).toBe('Chill')
-    // une langue mal formée est ignorée, pas transmise
+    // a malformed language is ignored, not passed on
     await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore?hl=../x' })
     expect(langs).not.toContain('../x')
 
@@ -1105,25 +1105,25 @@ describe('ytmusic plugin', () => {
     expect(body.shelves[2].albums[0]).toMatchObject({ id: 'MPREb_kind', title: 'Kind of Blue' })
     expect(body.shelves[2].albums[1]).toMatchObject({ id: 'MPREb_wrapped', explicit: true })
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore/category' })).statusCode).toBe(400)
-    // les nouveautés : même lecture en rangées, sur `FEmusic_new_releases`
+    // new releases: same reading in rows, on `FEmusic_new_releases`
     const fresh = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore/new?hl=fr' })).json()
     expect(fresh.shelves.map((sh: { title: string }) => sh.title)).toEqual(['Titres', 'Playlists', 'Albums'])
     expect(browsedIds).toEqual(expect.arrayContaining(['FEmusic_new_releases', 'FEmusic_new_releases_albums']))
-    // la rangée d'albums prend la liste complète de « Voir tout », en entier
+    // the albums row takes the full "See all" list, in full
     expect(fresh.shelves[2].albums).toHaveLength(120)
     expect(fresh.shelves[2].albums[0].title).toBe('Nouveau 0')
 
-    // pochettes : la page des catégories n'en a pas, on les prend dans chaque page de catégorie
+    // covers: the categories page has none, we take them from each category page
     parsedFor.length = 0
     const covers = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore/covers?hl=fr' })).json().covers
     expect(Object.keys(covers).sort()).toEqual(['p-calm', 'p-jazz'])
     expect(covers['p-jazz']).toHaveLength(1)
     expect(covers['p-jazz'][0]).toMatch(/googleusercontent\.com\/jazz=/)
-    // Jazz était déjà lu (cache des catégories) : seule Calme repart chez YouTube, et plus rien ensuite
+    // Jazz was already read (categories cache): only Calme goes back to YouTube, and nothing afterwards
     expect(parsedFor).toEqual(['p-calm'])
     await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore/covers?hl=fr' })
     expect(parsedFor).toEqual(['p-calm'])
-    // « Pour vous » tourne : une catégorie apparaît à la relecture de la page, SEULE elle est lue
+    // "For you" rotates: a category appears when the page is re-read, ONLY it is read
     withNew = true
     ;(ctx.clock as ManualClock).advance(11 * 60_000)
     const later = (await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/explore/covers?hl=fr' })).json().covers
@@ -1145,7 +1145,7 @@ describe('ytmusic plugin', () => {
     })
     await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
     await app.inject({ method: 'POST', url: '/api/music/play', payload: { source: 'ytmusic', id: 'v1', deviceId: office.id, title: 'Madwoman' } })
-    // le relais s'appelle `<sid>.m4a`, et c'est ce que le Sonos affiche faute d'avoir lu le DIDL
+    // the relay is called `<sid>.m4a`, and that is what the Sonos shows for lack of having read the DIDL
     title = (commands[0] as { url: string }).url.split('/').pop()!
     expect(title).toMatch(/^[0-9a-f]{24}\.m4a$/)
     ;(ctx.clock as ManualClock).advance(6_000)
@@ -1176,10 +1176,10 @@ describe('ytmusic accounts', () => {
     })
     const ytdlpArgs = () => (yt.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1] as string[]).filter((args) => args.includes('-J'))
 
-    // rien de relié : anonyme — catalogue public, rien de personnel, pas d'import du navigateur du serveur
+    // nothing linked: anonymous — public catalog, nothing personal, no import from the server's browser
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/status', headers: alice })).json())
       .toMatchObject({ user: 'alice', linked: false, anonymous: true, browsers: [] })
-    // son badge : anonyme, ça marche — pas « à relier » comme celui de la maison
+    // their badge: anonymous, it works — not "to link" like the house's
     expect(await plugin.healthFor!('alice')).toMatchObject({ status: 'ok', detail: expect.stringContaining('anonymous') })
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=jade', headers: alice })).statusCode).toBe(200)
     expect(cookies).toEqual([''])
@@ -1188,10 +1188,10 @@ describe('ytmusic accounts', () => {
     const anon = await app.inject({ method: 'POST', url: '/api/music/play', headers: alice, payload: { source: 'ytmusic', id: 'vid1', deviceId: player.id } })
     expect(anon.statusCode).toBe(200)
     expect(ytdlpArgs()[0]).not.toContain('--cookies')
-    // la maison sans cookie, elle, reste à relier
+    // the house without a cookie, for its part, remains to be linked
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=jade' })).statusCode).toBeGreaterThanOrEqual(400)
 
-    // Alice relie SON compte : la maison n'en sait rien
+    // Alice links HER account: the house knows nothing of it
     const linked = await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', headers: alice, payload: { cookie: COOKIE } })
     expect(linked.json()).toMatchObject({ user: 'alice', linked: true, anonymous: false })
     expect(await store.read()).toBeNull()
@@ -1206,7 +1206,7 @@ describe('ytmusic accounts', () => {
   })
 
   it('keeps the house account for the house, whatever a user links', async () => {
-    // chaque recherche dit avec quel cookie elle part
+    // each search tells which cookie it goes out with
     const searchedWith: string[] = []
     const { plugin, app } = await boot({
       createSession: async (c) => {
@@ -1223,7 +1223,7 @@ describe('ytmusic accounts', () => {
     searchedWith.length = 0
     await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=jade', headers: alice })
     expect(new Set(searchedWith)).toEqual(new Set(['__Secure-3PAPISID=alice']))
-    // Alice oublie le sien : celui de la maison reste
+    // Alice forgets hers: the house's stays
     await app.inject({ method: 'DELETE', url: '/api/plugins/ytmusic/cookie', headers: alice })
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/status' })).json()).toMatchObject({ linked: true })
     expect(plugin.health!().status).not.toBe('needs_pairing')

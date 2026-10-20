@@ -6,36 +6,36 @@ import type { FetchLike } from '../../core/sse'
 import { melcloudLoginSchema } from './types'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// Authentification MELCloud — le portail cloud de Mitsubishi Electric.
+// MELCloud authentication — Mitsubishi Electric's cloud portal.
 //
-// Comme Renault, et pour la même raison (aucune voie officielle pour un particulier), il n'y a PAS
-// d'OAuth : le seul moyen d'entrer est l'identifiant et le mot de passe du compte. La décision
-// prise avec l'utilisateur borne le dégât, exactement comme pour Renault :
+// Like Renault, and for the same reason (no official route for an individual), there is NO
+// OAuth: the only way in is the account's login and password. The decision made with the user
+// limits the damage, exactly as for Renault:
 //
-//   le mot de passe traverse le serveur UNE fois (POST /api/plugins/melcloud/login), il n'est
-//   jamais écrit sur disque, jamais journalisé, jamais rangé dans une variable d'environnement.
-//   Seule survit la `ContextKey` que MELCloud rend en échange — révocable en changeant le mot de
-//   passe du compte, et qui ne permet pas de le changer.
+//   the password crosses the server ONCE (POST /api/plugins/melcloud/login), it is never written
+//   to disk, never logged, never stored in an environment variable. Only the `ContextKey` that
+//   MELCloud returns in exchange survives — revocable by changing the account's password, and it
+//   does not allow changing it.
 //
-// Piège central, le même que Gigya : **MELCloud RÉPOND TOUJOURS EN HTTP 200**. Un mot de passe
-// faux, une clé périmée — tout arrive en 200 avec un `ErrorId` dans le corps.
+// Central trap, the same as Gigya: **MELCloud ALWAYS ANSWERS HTTP 200**. A wrong password, a
+// stale key — everything arrives as a 200 with an `ErrorId` in the body.
 
 export const DEFAULT_BASE_URL = 'https://app.melcloud.com/Mitsubishi.Wifi.Client'
 /**
- * Version d'application annoncée à la connexion. MELCloud l'exige ; sa valeur exacte n'a jamais
- * bloqué personne, mais elle est en configuration parce que le fabricant peut se mettre à la
- * vérifier — une valeur neuve se poserait dans `.env` sans toucher au code.
+ * Application version announced at sign-in. MELCloud requires it; its exact value has never
+ * blocked anyone, but it is in the configuration because the vendor may start checking it — a new
+ * value would go into `.env` without touching the code.
  */
 export const DEFAULT_APP_VERSION = '1.34.12.0'
 const REQUEST_TIMEOUT_MS = 20_000
 
-/** `ErrorId` que MELCloud rend pour un identifiant ou un mot de passe refusé. */
+/** `ErrorId` that MELCloud returns for a refused login or password. */
 const MELCLOUD_INVALID_CREDENTIALS = 1
 
 export interface StoredSession {
-  /** `LoginData.ContextKey` : la clé de session. Le mot de passe, lui, n'est jamais gardé. */
+  /** `LoginData.ContextKey`: the session key. The password, for its part, is never kept. */
   contextKey: string
-  /** Nom du compte, seulement pour l'afficher dans les Réglages. */
+  /** Account name, only to display it in Settings. */
   name: string | null
 }
 
@@ -51,8 +51,8 @@ export interface SessionStore {
 }
 
 /**
- * Fichier JSON atomique (`.tmp` puis `rename`), en 0600. Fichier absent ou illisible = pas de
- * session, jamais une erreur fatale : le plugin doit démarrer même si le disque refuse.
+ * Atomic JSON file (`.tmp` then `rename`), mode 0600. Missing or unreadable file = no session,
+ * never a fatal error: the plugin must start even if the disk refuses.
  */
 export function createSessionFile(path: string, logger?: Logger): SessionStore {
   return {
@@ -85,12 +85,12 @@ export interface MelcloudAuthOptions {
 }
 
 /**
- * Session MELCloud : connexion par mot de passe (une fois), puis une `ContextKey` durable.
+ * MELCloud session: sign-in by password (once), then a durable `ContextKey`.
  *
- * Plus simple que Renault : il n'y a qu'UN jeton, pas deux. Rien à renouveler tant que MELCloud ne
- * le refuse pas — et quand il le refuse, il n'y a rien à rafraîchir, il faut le mot de passe. D'où
- * `invalidate()` : la clé est jetée pour que `health()` dise `needs_pairing` tout de suite, au lieu
- * de laisser le plugin réessayer indéfiniment une clé morte.
+ * Simpler than Renault: there is only ONE token, not two. Nothing to renew as long as MELCloud
+ * does not refuse it — and when it does, there is nothing to refresh, the password is needed. Hence
+ * `invalidate()`: the key is thrown away so that `health()` says `needs_pairing` right away, instead
+ * of letting the plugin retry a dead key forever.
  */
 export class MelcloudAuth {
   private session: StoredSession | null = null
@@ -101,15 +101,15 @@ export class MelcloudAuth {
   get contextKey(): string | null { return this.session?.contextKey ?? null }
   get accountName(): string | null { return this.session?.name ?? null }
 
-  /** Au démarrage : reprend la session du cache s'il y en a une. */
+  /** At startup: resumes the cached session if there is one. */
   async restore(): Promise<boolean> {
     this.session = (await this.opts.store?.load()) ?? null
     return this.linked
   }
 
   /**
-   * Relie le compte. Le mot de passe ne sert QUE dans cet appel : il n'est ni gardé en mémoire
-   * au-delà, ni écrit, ni journalisé. Ce qui survit est la `ContextKey`.
+   * Links the account. The password is used ONLY in this call: it is neither kept in memory
+   * beyond it, nor written, nor logged. What survives is the `ContextKey`.
    */
   async login(email: string, password: string, signal?: AbortSignal): Promise<StoredSession> {
     const body = {
@@ -117,7 +117,7 @@ export class MelcloudAuth {
       Password: password,
       Language: 0,
       AppVersion: this.opts.appVersion,
-      // la clé est durable : c'est ce qui évite de redemander le mot de passe à chaque démarrage
+      // the key is durable: that is what avoids asking for the password again on every start
       Persist: true,
       CaptchaResponse: null,
     }
@@ -140,15 +140,15 @@ export class MelcloudAuth {
     return this.session
   }
 
-  /** Oublie le compte (l'utilisateur délie, ou MELCloud a rejeté la clé). */
+  /** Forgets the account (the user unlinks, or MELCloud rejected the key). */
   async forget(): Promise<void> {
     this.session = null
     await this.opts.store?.clear()
   }
 
   /**
-   * La clé de session à poser en en-tête. Une clé absente n'est pas une panne : c'est un compte
-   * pas encore relié, et l'UI a une carte pour ça.
+   * The session key to put in the header. A missing key is not a failure: it is an account not
+   * linked yet, and the UI has a card for that.
    */
   key(): string {
     const key = this.session?.contextKey
@@ -157,15 +157,15 @@ export class MelcloudAuth {
   }
 
   /**
-   * MELCloud a rejeté la clé. Il n'y a rien à rafraîchir — seul le mot de passe peut en refaire
-   * une — donc on la jette, et la carte des Réglages redemande la liaison au lieu de laisser le
-   * plugin marteler une clé morte.
+   * MELCloud rejected the key. There is nothing to refresh — only the password can make a new
+   * one — so it is thrown away, and the Settings card asks for linking again instead of letting the
+   * plugin hammer a dead key.
    */
   async invalidate(): Promise<void> {
     await this.forget()
   }
 
-  /** Un appel JSON non authentifié (la connexion). Le mot de passe n'apparaît dans aucun message. */
+  /** An unauthenticated JSON call (the sign-in). The password appears in no message. */
   private async post(path: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
     const timeout = AbortSignal.timeout(this.opts.requestTimeoutMs ?? REQUEST_TIMEOUT_MS)
     let res: Awaited<ReturnType<FetchLike>>
@@ -181,7 +181,7 @@ export class MelcloudAuth {
       throw new PluginError(aborted ? 'TIMEOUT' : 'UPSTREAM_ERROR', `MELCloud unreachable on ${path}`, { cause: err })
     }
     const text = await res.text()
-    // le statut ne dit presque rien (tout arrive en 200), mais un 5xx reste un 5xx
+    // the status says almost nothing (everything arrives as 200), but a 5xx is still a 5xx
     if (res.status >= 400) throw new PluginError('UPSTREAM_ERROR', `MELCloud returned HTTP ${res.status} on ${path}`)
     const parsed = ((): unknown => { try { return JSON.parse(text) } catch { return null } })()
     if (parsed === null) throw new PluginError('UPSTREAM_ERROR', `MELCloud sent invalid JSON on ${path}`)

@@ -3,24 +3,24 @@ import type { Logger } from 'pino'
 import { z } from 'zod'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// Ce que le plugin garde entre deux démarrages : le nombre de requêtes de la FENÊTRE en cours. Le
-// portail développeur du fabricant (relevé du 2026-09-16) borne chaque clé d'application à **21 000
-// requêtes par fenêtre de sept jours**, calée sur la création de l'application (« Resets at
-// 2026-09-23 17:00 » pour une application créée le 16 à 17 h) — et non 10 000 par mois comme la
-// documentation tierce le disait. Il ne compte que les appels à l'API Automower Connect : les
-// jetons demandés au serveur d'authentification n'y figurent pas (33 chez lui, 35 chez nous avant
-// cette correction). Sans mémoire, la jauge repartirait de zéro à chaque redémarrage.
+// What the plugin keeps between two starts: the request count of the current WINDOW. The vendor's
+// developer portal (read on 2026-09-16) caps each application key at **21 000 requests per
+// seven-day window**, aligned on the application's creation ("Resets at 2026-09-23 17:00" for an
+// application created on the 16th at 5 pm) — and not 10 000 per month as the third-party
+// documentation said. It only counts calls to the Automower Connect API: tokens requested from the
+// authentication server are not in it (33 on their side, 35 on ours before this fix). Without
+// memory, the gauge would start from zero on every restart.
 
-/** Quota d'une clé d'application par fenêtre, tel que le portail développeur l'affiche. */
+/** An application key's quota per window, as the developer portal displays it. */
 export const WINDOW_REQUESTS = 21_000
-/** La fenêtre du fabricant : sept jours, glissants par pas entiers depuis son ancrage. */
+/** The vendor's window: seven days, sliding in whole steps from its anchor. */
 export const WINDOW_MS = 7 * 86_400_000
 
 export const usageSchema = z.object({
-  /** Début de la fenêtre courante (ms epoch). */
+  /** Start of the current window (ms epoch). */
   windowStart: z.number().int(),
   requests: z.number().int().min(0),
-  /** L'instant de remise à zéro recalé sur le portail (`POST /usage`), gardé pour caler les fenêtres suivantes. */
+  /** The reset instant realigned on the portal (`POST /usage`), kept to align the following windows. */
   anchor: z.number().int().optional(),
 })
 export type AutomowerUsage = z.infer<typeof usageSchema>
@@ -31,17 +31,18 @@ export interface UsageStore {
 }
 
 /**
- * Le début de la fenêtre qui contient `now`, sur la grille de sept jours ancrée sur `anchor` — un
- * instant de remise à zéro connu (passé ou futur, peu importe : la grille est périodique).
+ * The start of the window containing `now`, on the seven-day grid anchored on `anchor` — a known
+ * reset instant (past or future, no matter: the grid is periodic).
  */
 export function windowStartOf(anchor: number, now: number): number {
   return anchor + Math.floor((now - anchor) / WINDOW_MS) * WINDOW_MS
 }
 
 /**
- * Le compte de la fenêtre COURANTE. Ancrage : l'instant configuré (`AUTOMOWER_QUOTA_RESET_AT`) s'il
- * y en a un, sinon le début de la fenêtre déjà connue, sinon maintenant — la première requête, qui
- * suit de peu la création de l'application. Une fenêtre écoulée repart de zéro sur la même grille.
+ * The count of the CURRENT window. Anchor: the configured instant (`AUTOMOWER_QUOTA_RESET_AT`) if
+ * there is one, otherwise the start of the already known window, otherwise now — the first
+ * request, which comes shortly after the application's creation. An elapsed window restarts from
+ * zero on the same grid.
  */
 export function currentUsage(saved: AutomowerUsage | null, now: number, anchor?: number): AutomowerUsage {
   const kept = anchor ?? saved?.anchor
@@ -50,7 +51,7 @@ export function currentUsage(saved: AutomowerUsage | null, now: number, anchor?:
   return { windowStart: start, requests: 0, ...(kept === undefined ? {} : { anchor: kept }) }
 }
 
-/** Écriture atomique (fichier temporaire puis renommage) ; une lecture illisible vaut « rien ». */
+/** Atomic write (temporary file then rename); an unreadable read counts as "nothing". */
 export function createUsageFile(path: string, logger?: Logger): UsageStore {
   return {
     async load() {

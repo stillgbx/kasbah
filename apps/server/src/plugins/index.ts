@@ -24,8 +24,8 @@ import { createTranscriptionPlugin } from './transcription'
 import { createTuyaPlugin } from './tuya'
 import { createYtmusicPlugin } from './ytmusic'
 
-// Table statique des plugins : typée, grep-able, sans import dynamique. Tous sont instanciés ;
-// ceux qui tournent sont cochés dans Réglages → Plugins (`plugins` du fichier de la maison).
+// Static plugin table: typed, grep-able, no dynamic import. All of them are instantiated; the ones
+// that run are checked in Settings → Plugins (`plugins` in the house file).
 
 export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   mock: createMockPlugin,

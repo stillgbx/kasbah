@@ -1,13 +1,13 @@
 import { PluginError } from '../../core/plugin'
 
-// Client de TouteMonAnnée : l'API PRIVÉE de son appli web (Laravel), relevée le 2026-10-04 dans le
-// navigateur. Une session = des cookies ; rien d'autre n'est demandé aux lectures. Les écritures
-// (POST, PUT) portent en plus un jeton CSRF.
+// TouteMonAnnée client: the PRIVATE API of its web app (Laravel), surveyed on 2026-10-04 in the
+// browser. A session = cookies; nothing else is asked for reads. Writes (POST, PUT) also carry a
+// CSRF token.
 //
-// Connexion en deux temps, comme la page `/connect` : `check-email-username` (JSON) puis `signin`
-// (formulaire multipart, `remember=1`). `remember` pose un cookie `remember_web_…` de longue durée
-// avec lequel Laravel rouvre seul une session expirée : c'est lui qui rend le mot de passe inutile
-// après la liaison. Une session vraiment perdue se voit à la redirection vers `/connect`.
+// Sign-in in two steps, like the `/connect` page: `check-email-username` (JSON) then `signin`
+// (multipart form, `remember=1`). `remember` sets a long-lived `remember_web_…` cookie with which
+// Laravel reopens an expired session by itself: it is what makes the password unnecessary after
+// linking. A session that is really lost shows as a redirect to `/connect`.
 
 export const TMA_BASE = 'https://www.toutemonannee.com'
 const TIMEOUT_MS = 20_000
@@ -15,7 +15,7 @@ const TIMEOUT_MS = 20_000
 export type Cookies = Record<string, string>
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>
 
-/** Session perdue : il faut relier le compte à nouveau. */
+/** Session lost: the account has to be linked again. */
 export class SessionLostError extends PluginError {
   constructor(message = 'TouteMonAnnée session lost — link the account again') {
     super('NEEDS_PAIRING', message)
@@ -27,11 +27,11 @@ export interface TmaClientOptions {
   fetch?: FetchLike
   base?: string
   signal?: AbortSignal
-  /** Appelé dès que le site change un cookie (la session tourne) : à garder sur disque. */
+  /** Called as soon as the site changes a cookie (the session rotates): to keep on disk. */
   onCookies?: (cookies: Cookies) => void
 }
 
-/** Le jeton CSRF que Laravel glisse dans ses pages (`<meta name="csrf-token" content="…">` ou équivalent). */
+/** The CSRF token Laravel slips into its pages (`<meta name="csrf-token" content="…">` or equivalent). */
 export function csrfFromHtml(html: string): string | null {
   const m = /csrf[-_]?token["']?\s*(?:content\s*=\s*|:\s*|=\s*)["']([A-Za-z0-9]{20,})["']/i.exec(html)
     ?? /content\s*=\s*["']([A-Za-z0-9]{20,})["'][^>]*name\s*=\s*["']csrf-token["']/i.exec(html)
@@ -77,7 +77,7 @@ export function createTmaClient(opts: TmaClientOptions = {}) {
     }
     if (Object.keys(cookies).length) headers.cookie = cookieHeader()
     if (method !== 'GET') {
-      // Laravel lit `X-CSRF-TOKEN` s'il est là, sinon `X-XSRF-TOKEN` = le cookie XSRF-TOKEN (chiffré)
+      // Laravel reads `X-CSRF-TOKEN` if present, otherwise `X-XSRF-TOKEN` = the XSRF-TOKEN cookie (encrypted)
       if (csrf) headers['x-csrf-token'] = csrf
       if (cookies['XSRF-TOKEN']) headers['x-xsrf-token'] = decodeURIComponent(cookies['XSRF-TOKEN'])
     }
@@ -92,7 +92,7 @@ export function createTmaClient(opts: TmaClientOptions = {}) {
     return res
   }
 
-  /** Une page HTML, d'où l'on tire le jeton CSRF. */
+  /** An HTML page, from which the CSRF token is taken. */
   async function refreshCsrf(path: string) {
     const res = await send(path, { html: true })
     if (res.status >= 300 && res.status < 400) {
@@ -109,18 +109,18 @@ export function createTmaClient(opts: TmaClientOptions = {}) {
     return false
   }
 
-  /** JSON d'une route de l'appli ; une session perdue lève `SessionLostError`. */
+  /** JSON of an app route; a lost session throws `SessionLostError`. */
   async function json(path: string, init: { method?: string; json?: unknown; body?: BodyInit } = {}, retried = false): Promise<unknown> {
     const res = await send(path, init)
     if (lostSession(res)) throw new SessionLostError()
-    // 419 = jeton CSRF refusé : on en relit un, une seule fois
+    // 419 = CSRF token refused: read a new one, only once
     if (res.status === 419 && !retried) {
       await refreshCsrf('/dashboard')
       return json(path, init, true)
     }
     if (!res.ok) throw new PluginError('UPSTREAM_ERROR', `TouteMonAnnée ${init.method ?? 'GET'} ${path.split('?')[0]} → HTTP ${res.status}`)
     const type = res.headers.get('content-type') ?? ''
-    // une page HTML à la place du JSON : c'est la page de connexion servie sans redirection
+    // an HTML page instead of JSON: it is the sign-in page served without a redirect
     if (!type.includes('json')) throw new SessionLostError()
     return res.json()
   }
@@ -129,8 +129,8 @@ export function createTmaClient(opts: TmaClientOptions = {}) {
     get cookies() { return { ...cookies } },
 
     /**
-     * Relie le compte. Le mot de passe ne vit que le temps de cet appel : seul ce qu'il obtient
-     * (les cookies) est gardé.
+     * Links the account. The password only lives for the duration of this call: only what it
+     * obtains (the cookies) is kept.
      */
     async login(username: string, password: string): Promise<void> {
       cookies = {}
@@ -149,7 +149,7 @@ export function createTmaClient(opts: TmaClientOptions = {}) {
       if (res.status === 419) throw new PluginError('UPSTREAM_ERROR', 'TouteMonAnnée refused the login request (CSRF)')
       if (res.status === 401 || res.status === 422) throw new PluginError('NEEDS_PAIRING', 'TouteMonAnnée refused these credentials')
       if (!res.ok && !(res.status >= 300 && res.status < 400)) throw new PluginError('UPSTREAM_ERROR', `TouteMonAnnée sign-in → HTTP ${res.status}`)
-      // la preuve : une route qui exige la session répond
+      // the proof: a route that requires the session answers
       try { await json('/spaces/list') } catch (err) {
         if (err instanceof SessionLostError) throw new PluginError('NEEDS_PAIRING', 'TouteMonAnnée refused these credentials')
         throw err

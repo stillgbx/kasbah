@@ -1,16 +1,16 @@
-// Fixtures de l'Automower Connect API — CAPTURE du vrai compte (`GET /api/plugins/automower/raw`,
-// 2026-09-16 vers 17 h, heure de Paris), ANONYMISÉE : identifiant, numéro de série et positions
-// changés (les positions sont décalées d'un vecteur constant vers la maison de démo : la forme du
-// relevé — un couloir de 70 m le long de la parcelle — est gardée). Tout le reste est tel que le
-// fabricant l'a rendu, y compris ce qu'on ne lit pas (`calendar`, `workAreas`, `remainingChargingTime`,
-// `downTime`, `upTime`) : c'est ainsi qu'une forme inattendue se remarque dans les tests.
+// Automower Connect API fixtures — CAPTURED from the real account (`GET /api/plugins/automower/raw`,
+// 2026-09-16 around 5 pm, Paris time), ANONYMIZED: id, serial number and positions changed (the
+// positions are shifted by a constant vector towards the demo house: the shape of the survey — a
+// 70 m corridor along the plot — is kept). Everything else is as the vendor returned it,
+// including what we do not read (`calendar`, `workAreas`, `remainingChargingTime`, `downTime`,
+// `upTime`): that is how an unexpected shape gets noticed in the tests.
 //
-// Ce que la capture a CONFIRMÉ : énumérations en MAJUSCULES, `serialNumber` en nombre, `positions`
-// du plus récent au plus ancien (le premier point est à la station), `nextStartTimestamp` en heure
-// LOCALE écrite comme UTC (10:00 « UTC » pour un créneau à 600 min = 10 h locales) et
-// `statusTimestamp` en vrai UTC (six minutes avant la capture). Le robot n'était plus en erreur : son
-// signal de boucle était revenu, il attendait son créneau (`RESTRICTED` / `WEEK_SCHEDULE`). La
-// variante EN ERREUR (« No loop signal », le cas du matin) est donc DÉRIVÉE, pas capturée.
+// What the capture CONFIRMED: enums in CAPITALS, `serialNumber` as a number, `positions` from most
+// recent to oldest (the first point is at the station), `nextStartTimestamp` in LOCAL time written
+// as UTC (10:00 "UTC" for a slot at 600 min = 10 am local) and `statusTimestamp` in real UTC (six
+// minutes before the capture). The robot was no longer in error: its loop signal had come back,
+// it was waiting for its slot (`RESTRICTED` / `WEEK_SCHEDULE`). The IN ERROR variant ("No loop
+// signal", the morning's case) is therefore DERIVED, not captured.
 
 export const MOWER_ID = 'c7233734-b219-4287-a173-08e3643f89f0'
 
@@ -25,10 +25,10 @@ export const TOKEN_RESPONSE = {
 
 export const TOKEN_RESPONSE_2 = { ...TOKEN_RESPONSE, access_token: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.test-token-2' }
 
-/** Ce que le fabricant répond quand la clé ou le secret sont faux. */
+/** What the vendor answers when the key or the secret is wrong. */
 export const TOKEN_INVALID_CLIENT = { error: 'invalid_client', error_description: 'Invalid client credentials' }
 
-/** `GET /v1/mowers`, CAPTURÉ : garé sur sa base, connecté, retenu par son planning jusqu'à demain 10 h. */
+/** `GET /v1/mowers`, CAPTURED: parked on its base, connected, held by its schedule until 10 am tomorrow. */
 export const MOWERS_PARKED = {
   data: [
     {
@@ -40,11 +40,11 @@ export const MOWERS_PARKED = {
         capabilities: { headlights: true, workAreas: true, position: true, canConfirmError: true, stayOutZones: true },
         mower: { mode: 'MAIN_AREA', activity: 'PARKED_IN_CS', inactiveReason: 'NONE', state: 'RESTRICTED', workAreaId: 0, errorCode: 0, errorCodeTimestamp: 0, isErrorConfirmable: false },
         calendar: { tasks: [{ start: 600, duration: 360, monday: true, tuesday: true, wednesday: true, thursday: true, friday: true, saturday: true, sunday: true, workAreaId: 0 }] },
-        // 2026-09-17 10:00 en heure LOCALE, écrit comme si c'était de l'UTC
+        // 2026-09-17 10:00 in LOCAL time, written as if it were UTC
         planner: { nextStartTimestamp: 1789639200000, override: { action: 'NOT_ACTIVE' }, restrictedReason: 'WEEK_SCHEDULE' },
-        // vrai UTC : 2026-09-16 14:56:33
+        // real UTC: 2026-09-16 14:56:33
         metadata: { connected: true, statusTimestamp: 1789570593758 },
-        // la hauteur de coupe d'une ZONE est en pour cent ; celle de `settings` sur l'échelle 1-9
+        // a ZONE's cutting height is in percent; the one in `settings` is on the 1-9 scale
         workAreas: [{ workAreaId: 0, name: '', type: 'RANDOM', cuttingHeight: 100, enabled: true, schedulable: true, lastTimeAbandoned: 0, useGlobalCuttingHeight: true }],
         positions: [
           {"latitude": 47.3092765, "longitude": 5.0458869},
@@ -118,14 +118,14 @@ export const MOWERS_PARKED = {
 
 const CAPTURED = MOWERS_PARKED.data[0]!
 
-/** DÉRIVÉ : le même robot arrêté sur « No loop signal » (code 2), garé, connecté — le cas du matin du 2026-09-16. */
+/** DERIVED: the same robot stopped on "No loop signal" (code 2), parked, connected — the morning of 2026-09-16. */
 export const MOWERS_ERROR = {
   data: [
     {
       ...CAPTURED,
       attributes: {
         ...CAPTURED.attributes,
-        // heure LOCALE du robot écrite comme si elle était UTC : 2026-09-15 18:42:10 à Paris
+        // the robot's LOCAL time written as if it were UTC: 2026-09-15 18:42:10 in Paris
         mower: { mode: 'MAIN_AREA', activity: 'PARKED_IN_CS', inactiveReason: 'NONE', state: 'ERROR', workAreaId: 0, errorCode: 2, errorCodeTimestamp: 1789497730000, isErrorConfirmable: true },
         planner: { nextStartTimestamp: 0, override: { action: 'NOT_ACTIVE' }, restrictedReason: 'NOT_APPLICABLE' },
         metadata: { connected: true, statusTimestamp: 1789452130000 },
@@ -134,7 +134,7 @@ export const MOWERS_ERROR = {
   ],
 }
 
-/** DÉRIVÉ : le même robot en tonte, sans erreur. */
+/** DERIVED: the same robot mowing, without error. */
 export const MOWERS_MOWING = {
   data: [
     {
@@ -149,7 +149,7 @@ export const MOWERS_MOWING = {
   ],
 }
 
-/** DÉRIVÉ : garé sur planning, hors ligne (module Connect éteint) : la liste le rend quand même. */
+/** DERIVED: parked by schedule, offline (Connect module off): the list returns it anyway. */
 export const MOWERS_OFFLINE = {
   data: [
     {
@@ -159,53 +159,53 @@ export const MOWERS_OFFLINE = {
   ],
 }
 
-// ---- WebSocket (format V2) — CAPTURÉS le 2026-09-16 (`GET /api/plugins/automower/raw/events`) ------
+// ---- WebSocket (V2 format) — CAPTURED on 2026-09-16 (`GET /api/plugins/automower/raw/events`) ------
 //
-// Provoqués sans faire bouger le robot : un `ParkUntilFurtherNotice` puis un `ResumeSchedule`, robot à
-// la station. Ce que la capture a appris, et que la documentation ne disait pas :
-//  - les événements sont des DELTAS : `mower` peut ne porter QU'un champ (`state`, `activity`,
-//    `inactiveReason`), et `planner` ne redit jamais `nextStartTimestamp` ;
-//  - « garé jusqu'à nouvel ordre » = `mode: HOME` (le planificateur reste sur `WEEK_SCHEDULE`) ;
-//  - `WAIT_POWER_UP` / `NOT_APPLICABLE` passent quelques secondes au changement de mode ;
-//  - `ready.connectionId` est un base64, pas un UUID ; aucun événement ne porte d'horodatage.
-// Position et batterie n'ont PAS été capturés (robot immobile, plein) : formes d'après la référence.
+// Triggered without moving the robot: a `ParkUntilFurtherNotice` then a `ResumeSchedule`, robot at
+// the station. What the capture taught, and the documentation did not say:
+//  - events are DELTAS: `mower` may carry ONLY one field (`state`, `activity`,
+//    `inactiveReason`), and `planner` never repeats `nextStartTimestamp`;
+//  - "parked until further notice" = `mode: HOME` (the planner stays on `WEEK_SCHEDULE`);
+//  - `WAIT_POWER_UP` / `NOT_APPLICABLE` show up for a few seconds on a mode change;
+//  - `ready.connectionId` is base64, not a UUID; no event carries a timestamp.
+// Position and battery were NOT captured (robot still, full): shapes taken from the reference.
 
 export const WS_READY = { ready: true, connectionId: 'gapGVu7XmHQIKEhUIA==' }
 
-/** Le premier événement après `ParkUntilFurtherNotice` : UN champ, rien d'autre. */
+/** The first event after `ParkUntilFurtherNotice`: ONE field, nothing else. */
 export const WS_MOWER_INACTIVE = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { inactiveReason: 'PLANNING' } } }
 export const WS_MOWER_STOPPED = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { state: 'STOPPED' } } }
 export const WS_MOWER_NOT_APPLICABLE = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { activity: 'NOT_APPLICABLE' } } }
-/** La forme la plus complète vue : ni `errorCodeTimestamp`, ni `workAreaId`, ni `inactiveReason`. */
+/** The most complete shape seen: no `errorCodeTimestamp`, no `workAreaId`, no `inactiveReason`. */
 export const WS_MOWER_STOPPED_FULL = {
   id: MOWER_ID, type: 'mower-event-v2',
   attributes: { mower: { mode: 'MAIN_AREA', activity: 'NOT_APPLICABLE', state: 'STOPPED', errorCode: 0, isErrorConfirmable: false } },
 }
-/** Garé jusqu'à nouvel ordre : c'est le MODE qui le dit. */
+/** Parked until further notice: it is the MODE that says so. */
 export const WS_MOWER_HOME = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { mode: 'HOME', state: 'WAIT_POWER_UP' } } }
 export const WS_MOWER_HOME_PARKED = {
   id: MOWER_ID, type: 'mower-event-v2',
   attributes: { mower: { mode: 'HOME', activity: 'PARKED_IN_CS', state: 'RESTRICTED', errorCode: 0, isErrorConfirmable: false } },
 }
-/** Retour au planning (`ResumeSchedule`). */
+/** Back to the schedule (`ResumeSchedule`). */
 export const WS_MOWER_MAIN_PARKED = {
   id: MOWER_ID, type: 'mower-event-v2',
   attributes: { mower: { mode: 'MAIN_AREA', activity: 'PARKED_IN_CS', state: 'RESTRICTED', errorCode: 0, isErrorConfirmable: false } },
 }
-/** Le planificateur, tel qu'il arrive TOUJOURS : sans `nextStartTimestamp`. */
+/** The planner, as it ALWAYS arrives: without `nextStartTimestamp`. */
 export const WS_PLANNER = { id: MOWER_ID, type: 'planner-event-v2', attributes: { planner: { override: { action: 'NOT_ACTIVE' }, restrictedReason: 'WEEK_SCHEDULE' } } }
 export const WS_CUTTING_HEIGHT = { id: MOWER_ID, type: 'cuttingHeight-event-v2', attributes: { cuttingHeight: { height: 7 } } }
 
-// ---- Un `Start` de 60 min sur un robot dont le signal de boucle est en panne (CAPTURÉ, même soir) ----
+// ---- A 60 min `Start` on a robot whose loop signal is broken (CAPTURED, same evening) ----
 //
-// Le robot annonce « en route » (`LEAVING`) sans bouger — le GPS dérive d'un mètre ou deux, une
-// position toutes les 30 s — puis déclare l'erreur au bout de trois minutes. Appris :
-//  - en tonte forcée le planificateur porte `nextStartTimestamp: 0` et `override: FORCE_MOW` ;
-//  - l'erreur arrive en TROIS deltas : le code seul, puis `state: ERROR`, puis `errorCodeTimestamp`
-//    à part — en SECONDES par le flux (millisecondes dans la liste) ;
-//  - un `message-event-v2` l'accompagne : code, gravité, position, `time` en secondes.
+// The robot announces "on its way" (`LEAVING`) without moving — the GPS drifts by a meter or two,
+// one position every 30 s — then declares the error after three minutes. Learned:
+//  - in forced mowing the planner carries `nextStartTimestamp: 0` and `override: FORCE_MOW`;
+//  - the error arrives in THREE deltas: the code alone, then `state: ERROR`, then
+//    `errorCodeTimestamp` separately — in SECONDS from the stream (milliseconds in the list);
+//  - a `message-event-v2` comes with it: code, severity, position, `time` in seconds.
 
-/** Tonte forcée : le prochain départ du planning n'a plus cours. */
+/** Forced mowing: the schedule's next start no longer applies. */
 export const WS_PLANNER_FORCE_MOW = { id: MOWER_ID, type: 'planner-event-v2', attributes: { planner: { nextStartTimestamp: 0, override: { action: 'FORCE_MOW' }, restrictedReason: 'NONE' } } }
 export const WS_MOWER_IN_OPERATION = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { state: 'IN_OPERATION' } } }
 export const WS_MOWER_LEAVING = {
@@ -214,27 +214,27 @@ export const WS_MOWER_LEAVING = {
 }
 export const WS_POSITION = { id: MOWER_ID, type: 'position-event-v2', attributes: { position: { latitude: 47.3092845, longitude: 5.0459418 } } }
 export const WS_POSITION_2 = { id: MOWER_ID, type: 'position-event-v2', attributes: { position: { latitude: 47.3092954, longitude: 5.0459351 } } }
-/** L'erreur, premier delta : le code seul, l'état dit encore `IN_OPERATION`. */
+/** The error, first delta: the code alone, the state still says `IN_OPERATION`. */
 export const WS_MOWER_ERROR_CODE = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { errorCode: 2, isErrorConfirmable: false } } }
 export const WS_MOWER_ERROR_STATE = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { activity: 'NOT_APPLICABLE', state: 'ERROR' } } }
 export const WS_MOWER_ERROR_FULL = {
   id: MOWER_ID, type: 'mower-event-v2',
   attributes: { mower: { mode: 'MAIN_AREA', activity: 'NOT_APPLICABLE', state: 'ERROR', errorCode: 2, isErrorConfirmable: false } },
 }
-/** `time` en SECONDES, heure locale écrite comme UTC : 2026-09-16 18:22:15 à Paris. */
+/** `time` in SECONDS, local time written as UTC: 2026-09-16 18:22:15 in Paris. */
 export const WS_MESSAGE_ERROR = { id: MOWER_ID, type: 'message-event-v2', attributes: { message: { time: 1789582935, code: 2, severity: 'ERROR', latitude: 47.309301, longitude: 5.0459219 } } }
-/** La date de l'erreur, seule, trois secondes après le code — en secondes. */
+/** The error's date, alone, three seconds after the code — in seconds. */
 export const WS_MOWER_ERROR_AT = { id: MOWER_ID, type: 'mower-event-v2', attributes: { mower: { errorCodeTimestamp: 1789582935 } } }
 
-// d'après la bibliothèque de référence, pas encore capturé (le robot était plein)
+// taken from the reference library, not captured yet (the robot was full)
 export const WS_BATTERY = { id: MOWER_ID, type: 'battery-event-v2', attributes: { battery: { batteryPercent: 77 } } }
 export const WS_UNKNOWN_MOWER = { id: '00000000-0000-0000-0000-000000000000', type: 'battery-event-v2', attributes: { battery: { batteryPercent: 10 } } }
 
-// ---- `GET /mowers/{id}/messages` — CAPTURÉ le 2026-09-16 (22 lignes, positions décalées comme la liste) ----
+// ---- `GET /mowers/{id}/messages` — CAPTURED on 2026-09-16 (22 rows, positions shifted like the list) ----
 //
-// Du plus récent au plus ancien. `time` en secondes (heure locale écrite comme UTC), `severity` en
-// majuscules — `ERROR`, `FATAL` (code 1, hors zone) et `WARNING` vus —, et des positions QUASI NULLES
-// (`2e-7 ; 6.2e-6`) sur plusieurs lignes : le robot a consigné sans fix GPS. Gardées telles quelles.
+// From most recent to oldest. `time` in seconds (local time written as UTC), `severity` in
+// capitals — `ERROR`, `FATAL` (code 1, outside area) and `WARNING` seen —, and NEAR-ZERO positions
+// (`2e-7 ; 6.2e-6`) on several rows: the robot logged without a GPS fix. Kept as they are.
 export const MESSAGES = {
   data: {
     type: 'messages',
@@ -268,16 +268,16 @@ export const MESSAGES = {
   },
 }
 
-// ---- Zones et cartes — INVENTÉES d'après le relevé du 2026-10-12 ------------------------------------
+// ---- Zones and maps — INVENTED from the survey of 2026-10-12 ------------------------------------
 //
-// La vraie carte n'est PAS reprise ici (le dépôt est public, et c'est le plan du terrain) : seule sa
-// FORME l'est. Ce que le relevé a appris : `GET /maps/generated` rend un SVG (`image/svg+xml`) en
-// millimètres, `x` vers l'est, `y` vers le nord ; le terrain relevé est un polygone vert
-// (`main_area_0`), les obstacles des polygones rouges (`island_*`), les câbles guides des lignes
-// bleues (`guide_*`) qui partent du premier point de la ligne jaune (`lona_cs`, la station) ;
-// `GET /maps/zone` répond 404 (`map.zone.not_found`) tant qu'aucune zone n'est tracée, et la liste
-// n'a alors PAS de section `stayOutZones`. Une zone de travail tracée y apparaît ensuite en VERT, avec
-// un UUID pour id et son nom pour `title` ; la liste porte alors `stayOutZones: { zones: [], dirty }`.
+// The real map is NOT reproduced here (the repo is public, and it is the plan of the grounds): only
+// its SHAPE is. What the survey taught: `GET /maps/generated` returns an SVG (`image/svg+xml`) in
+// millimeters, `x` towards the east, `y` towards the north; the surveyed grounds are a green polygon
+// (`main_area_0`), obstacles are red polygons (`island_*`), guide wires are blue lines
+// (`guide_*`) starting from the first point of the yellow line (`lona_cs`, the station);
+// `GET /maps/zone` answers 404 (`map.zone.not_found`) as long as no zone is drawn, and the list then
+// has NO `stayOutZones` section. A drawn work area then shows up there in GREEN, with a UUID as id
+// and its name as `title`; the list then carries `stayOutZones: { zones: [], dirty }`.
 
 export const MAP_GENERATED_SVG = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" map-version="2.1">'
   + '<polyline stroke="yellow" id="lona_cs" points="2000,-500 4000,-900"/>'
@@ -288,15 +288,15 @@ export const MAP_GENERATED_SVG = '<svg xmlns="http://www.w3.org/2000/svg" versio
 
 export const STAY_OUT_ID = '81c6eea2-d139-4fea-b134-f22a6b3ea403'
 export const MAP_ZONE_SVG = '<svg>'
-  // une zone de travail tracée : id UUID (pas son workAreaId), `title` = son nom, espaces compris
+  // a drawn work area: UUID id (not its workAreaId), `title` = its name, spaces included
   + '<polygon stroke="green" fill="green" id="6f1c2a90-3b8e-4d57-9a41-0c2e7b5d8f13" title="Fond du jardin " points="-15000,15000 -5000,15000 -5000,25000 -15000,25000"/>'
   + `<polygon fill="red" stroke="red" id="${STAY_OUT_ID}" points="0,10000 3000,10000 3000,13000" title="Massif"/>`
-  // une zone de réensauvagement, DÉSACTIVÉE : rouge marqué `rewildingzone`, masquée ; la liste ne la connaît pas
+  // a rewilding zone, DISABLED: red marked `rewildingzone`, hidden; the list does not know it
   + '<polygon stroke="red" fill="red" id="0b9e4c2d-6a71-4f38-8d5e-2c7f1a9b3e60" title="Prairie" points="5000,5000 8000,5000 8000,8000" display="none" rewildingzone="true"/>'
   + '<polyline stroke="blue" stroke-width="2500" id="d319f479-1d8d-4659-b2ef-56fb44099909" points="-2000,0 -2000,20000" title="Transport 1"/>'
   + '</svg>'
 
-/** DÉRIVÉ : le robot capturé, avec deux zones de travail tracées et une zone d'exclusion. */
+/** DERIVED: the captured robot, with two drawn work areas and a stay-out zone. */
 export const MOWERS_ZONES = {
   data: [
     {

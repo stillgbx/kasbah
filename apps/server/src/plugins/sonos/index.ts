@@ -13,18 +13,18 @@ import { AV_PATH, AV_URN, RC_PATH, RC_URN, ZG_PATH, ZG_URN, httpGet, soapAction 
 import type { PositionInfo, SonosPlayer, TransportInfo, ZoneMember } from './types'
 import { PLUGIN_ID } from './types'
 
-// Plugin Sonos — LOCAL, UPnP/SOAP port 1400. Découverte SSDP, pas de compte, pas de quota.
-// Capturé le 2026-09-19 : Port (Bureau) + Play:3 (Cuisine) répondent GetVolume / GetMute /
-// GetTransportInfo / GetPositionInfo / GetZoneGroupState en HTTP 200. `/status/info` est vide ;
-// l'identité est dans `/status/zp`. wss://:1443 refuse sans clé d'API (HTTP 400) : hors phase 1.
+// Sonos plugin — LOCAL, UPnP/SOAP port 1400. SSDP discovery, no account, no quota.
+// Captured on 2026-09-19: Port (Bureau) + Play:3 (Cuisine) answer GetVolume / GetMute /
+// GetTransportInfo / GetPositionInfo / GetZoneGroupState with HTTP 200. `/status/info` is empty;
+// the identity is in `/status/zp`. wss://:1443 refuses without an API key (HTTP 400): out of phase 1.
 //
-// PHASE 1 : contrat `media_player` (état, télécommande) + `play_url` (SetAVTransportURI d'un flux
-// HTTP). Pas de lancement Spotify / file Sonos.
+// PHASE 1: `media_player` contract (state, remote control) + `play_url` (SetAVTransportURI of an
+// HTTP stream). No Spotify launch / Sonos queue.
 
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
 
 export const sonosConfigSchema = z.object({
-  /** IPv4 de la carte LAN (machine multi-cartes : VPN, APIPA). Sans ça le SSDP reste muet. */
+  /** IPv4 of the LAN adapter (multi-homed machine: VPN, APIPA). Without it SSDP stays silent. */
   SONOS_SSDP_INTERFACE: optionalKey,
   SONOS_SSDP_REFRESH_MS: z.coerce.number().int().min(10_000).max(600_000).default(60_000),
   SONOS_POLL_MS: z.coerce.number().int().min(500).max(30_000).default(2_000),
@@ -56,7 +56,7 @@ interface Entry {
   muted?: boolean
   transport?: TransportInfo
   position?: PositionInfo
-  /** Métadonnées du dernier `play_url` tant que l'URI joue encore (Sonos oublie souvent le DIDL). */
+  /** Metadata of the last `play_url` while the URI is still playing (Sonos often forgets the DIDL). */
   stickyPlay?: StreamMeta & { uri: string }
 }
 
@@ -126,7 +126,7 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
         const desc = parseDeviceDescription(await httpGet({ host, path: '/xml/device_description.xml', fetchImpl, signal: signal(), timeoutMs: timeoutMs() }))
         model = desc.model
         modelNumber = desc.modelNumber
-      } catch { /* la description n'est pas obligatoire pour publier */ }
+      } catch { /* the description is not required to publish */ }
       return { uuid: zp.uuid, host, name: zp.name, softwareVersion: zp.softwareVersion, model, modelNumber }
     } catch (err) {
       log().debug({ host, err }, 'Sonos identify failed')
@@ -184,10 +184,10 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
     entry.reachable = true
     let patch = toStatePatch(entry.volume, entry.muted, entry.transport, entry.position, host)
     if (entry.stickyPlay) {
-      // Un autre URI a pris la place : le flux est parti, le titre collé avec lui. Le repos ne suffit
-      // pas à oublier : le Sonos passe une seconde à l'arrêt juste après avoir reçu l'URI, et le
-      // titre collé disparaissait avant même le premier son. Au repos l'overlay ne s'applique pas
-      // (rien ne joue) ; il revient si le même URI repart.
+      // Another URI took its place: the stream is gone, and the sticky title with it. Being idle is
+      // not enough to forget: the Sonos spends a second stopped right after receiving the URI, and
+      // the sticky title disappeared before the first sound. When idle the overlay does not apply
+      // (nothing is playing); it comes back if the same URI starts again.
       if (entry.position?.trackUri && entry.position.trackUri !== entry.stickyPlay.uri) {
         entry.stickyPlay = undefined
       } else {
@@ -206,7 +206,7 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
       try {
         const xml = await soap(first.player.host, ZG_PATH, ZG_URN, 'GetZoneGroupState', {})
         applyTopology(parseZoneMembers(xml))
-      } catch { /* un échec de topologie ne prive pas du volume */ }
+      } catch { /* a topology failure does not deprive us of the volume */ }
     }
     await Promise.all([...entries.values()].map(async (entry) => {
       try {
@@ -266,14 +266,14 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
         try {
           await av('Pause')
         } catch (err) {
-          // un flux HTTP refuse Pause (transition indisponible) : l'arrêter revient au même, l'URI reste
+          // an HTTP stream refuses Pause (transition not available): stopping it amounts to the same, the URI stays
           if (!entry.stickyPlay) throw err
           await av('Stop')
         }
         return
       case 'media_player.stop':
         await av('Stop')
-        // arrêt voulu : on n'a plus à faire passer le flux pour « en pause »
+        // deliberate stop: no need any more to pass the stream off as "paused"
         entry.stickyPlay = undefined
         return
       case 'media_player.next':
@@ -307,7 +307,7 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
         const load = streamLoad(command.url, meta)
         await av('SetAVTransportURI', { InstanceID: '0', CurrentURI: load.uri, CurrentURIMetaData: load.didl })
         await av('Play', { InstanceID: '0', Speed: '1' })
-        // Sonos oublie souvent le DIDL d'un flux HTTP : on retient titre / pochette jusqu'au prochain URI.
+        // Sonos often forgets an HTTP stream's DIDL: we keep title / artwork until the next URI.
         if (meta.title || meta.artist || meta.artUrl) {
           entry.stickyPlay = { uri: command.url, ...meta }
           const art = meta.artUrl ? artProxyUrl(meta.artUrl) : undefined

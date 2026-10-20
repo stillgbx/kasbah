@@ -8,7 +8,7 @@ import { createToutemonanneePlugin } from './index'
 import { detailedToLocal, htmlToText, levelsIn } from './mapping'
 import { memoryTmaStore } from './store'
 
-// Réponses relevées sur le site le 2026-10-04, noms remplacés.
+// Responses surveyed on the site on 2026-10-04, names replaced.
 const J = 'journal-ce1-ce2'
 const SPACES = {
   spaces: [
@@ -51,7 +51,7 @@ const POSTS = {
 
 interface Call { method: string; path: string; headers: Record<string, string>; body?: unknown }
 
-/** Un faux site : routes de l'appli, cookies posés à la connexion, session exigée ailleurs. */
+/** A fake site: the app's routes, cookies set at sign-in, session required elsewhere. */
 function fakeSite(opts: { password?: string } = {}) {
   const calls: Call[] = []
   let acked = false
@@ -99,7 +99,7 @@ function fakeCtx(config: Record<string, unknown>): PluginContext {
     pluginId: 'toutemonannee',
     config,
     logger: pino({ level: 'silent' }),
-    // dimanche 4 octobre 2026, midi (heure locale)
+    // Sunday October 4, 2026, noon (local time)
     clock: new ManualClock(new Date(2026, 9, 4, 12).getTime()),
     signal: new AbortController().signal,
     emitState: vi.fn(),
@@ -162,7 +162,7 @@ describe('toutemonannee plugin', () => {
     expect(saved.account).toEqual({ username: 'parent@example.org' })
     expect(saved.cookies).toMatchObject({ remember_web_abc: 'r1', diedm_session: 's1' })
     expect(JSON.stringify(saved)).not.toContain('"bon"')
-    // la connexion suit la page : jeton CSRF de la page, puis l'en-tête Laravel tiré du cookie
+    // the sign-in follows the page: the page's CSRF token, then the Laravel header taken from the cookie
     const signin = site.calls.find((c) => c.path === '/connect/signin')!
     expect(signin.headers).toMatchObject({ 'x-csrf-token': 'CSRFtoken0123456789abcdefghij', 'x-xsrf-token': 'xsrf=1', 'x-requested-with': 'XMLHttpRequest' })
     expect((signin.body as FormData).get('remember')).toBe('1')
@@ -201,7 +201,7 @@ describe('toutemonannee plugin', () => {
     expect(on.statusCode).toBe(200)
     expect(on.json().homework.find((h: { id: number }) => h.id === 103).done).toBe(true)
     expect(site.acked).toBe(true)
-    // déjà cochée : rien n'est renvoyé au site, sinon il décocherait
+    // already ticked: nothing is sent to the site again, otherwise it would untick
     await put(true)
     expect(site.acked).toBe(true)
     expect(site.calls.filter((c) => c.method === 'PUT')).toHaveLength(1)

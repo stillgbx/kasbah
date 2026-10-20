@@ -1,8 +1,8 @@
 import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 
-// Client SOAP UPnP : un POST XML à la main, pas de bibliothèque. Capturé le 2026-09-19 sur un
-// Port (firmware 97.1) et un Play:3 (83.1) : HTTP 200, pas d'authentification, port 1400.
+// UPnP SOAP client: an XML POST by hand, no library. Captured on 2026-09-19 on a Port
+// (firmware 97.1) and a Play:3 (83.1): HTTP 200, no authentication, port 1400.
 
 export const RC_URN = 'urn:schemas-upnp-org:service:RenderingControl:1'
 export const AV_URN = 'urn:schemas-upnp-org:service:AVTransport:1'
@@ -26,7 +26,7 @@ export function encodeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-/** Décoder les entités : `&amp;` d'abord, sinon `&amp;lt;` resterait `&lt;` en clair. */
+/** Decode the entities: `&amp;` first, otherwise `&amp;lt;` would stay `&lt;` in plain text. */
 export function decodeXml(s: string): string {
   return s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
 }

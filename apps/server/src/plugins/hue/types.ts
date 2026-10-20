@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-// Formes CLIP v2 (https://<bridge>/clip/v2). Schémas VOLONTAIREMENT souples (`looseObject`) :
-// le bridge ajoute des champs à chaque firmware, on ne lit que ce dont on a besoin.
+// CLIP v2 shapes (https://<bridge>/clip/v2). DELIBERATELY loose schemas (`looseObject`):
+// the bridge adds fields with every firmware, we only read what we need.
 
 export const hueRefSchema = z.object({ rid: z.string(), rtype: z.string() })
 export type HueRef = z.infer<typeof hueRefSchema>
@@ -19,13 +19,13 @@ export const hueLightSchema = z.looseObject({
     mirek_schema: z.object({ mirek_minimum: z.number(), mirek_maximum: z.number() }).optional(),
   }).optional(),
   color: z.looseObject({ xy: z.object({ x: z.number(), y: z.number() }).optional(), gamut_type: z.string().optional() }).optional(),
-  /** Effets « lampe » (candle, fire, cosmos…). `effect_values` liste ce que le modèle sait faire. */
+  /** "Light" effects (candle, fire, cosmos…). `effect_values` lists what the model can do. */
   effects: z.looseObject({
     status: z.string().optional(),
     effect_values: z.array(z.string()).optional(),
     status_values: z.array(z.string()).optional(),
   }).optional(),
-  /** Même information dans le format récent du pont (firmware ≥ 1.72). */
+  /** Same information in the bridge's recent format (firmware ≥ 1.72). */
   effects_v2: z.looseObject({
     status: z.looseObject({ effect: z.string().optional(), effect_values: z.array(z.string()).optional() }).optional(),
   }).optional(),
@@ -54,9 +54,9 @@ const hueXySchema = z.object({ x: z.number(), y: z.number() })
 const hueMirekSchema = z.looseObject({ mirek: z.number().nullable().optional() })
 
 /**
- * Scène : `actions` porte les valeurs fixes par lampe, `palette` les couleurs que le pont fait
- * défiler en mode dynamique, `status.active` dit laquelle tourne (`static` | `dynamic_palette`).
- * `group` pointe une `room` OU une `zone` (une zone traverse plusieurs pièces).
+ * Scene: `actions` carries the fixed values per light, `palette` the colors the bridge cycles in
+ * dynamic mode, `status.active` says which one is running (`static` | `dynamic_palette`).
+ * `group` points to a `room` OR a `zone` (a zone spans several rooms).
  */
 export const hueSceneSchema = z.looseObject({
   id: z.string(),
@@ -75,12 +75,12 @@ export const hueSceneSchema = z.looseObject({
     color: z.array(z.looseObject({ color: z.looseObject({ xy: hueXySchema.optional() }).optional() })).default([]),
     color_temperature: z.array(z.looseObject({ color_temperature: hueMirekSchema.optional() })).default([]),
     dimming: z.array(z.looseObject({})).default([]),
-    /** `effects` et `effects_v2` sont MUTUELLEMENT EXCLUSIFS, même vides (le pont refuse les deux). */
+    /** `effects` and `effects_v2` are MUTUALLY EXCLUSIVE, even empty (the bridge refuses both). */
     effects: z.array(z.looseObject({})).default([]),
     effects_v2: z.array(z.looseObject({})).default([]),
   }).optional(),
   status: z.looseObject({ active: z.string().optional() }).optional(),
-  /** Réglé dans l'app Hue : la scène démarre-t-elle animée ? */
+  /** Set in the Hue app: does the scene start animated? */
   auto_dynamic: z.boolean().optional(),
 })
 export type HueScene = z.infer<typeof hueSceneSchema>
@@ -105,7 +105,7 @@ export const hueResponseSchema = z.object({
   data: z.array(z.looseObject({ id: z.string().optional() })).default([]),
 })
 
-/** Trame du flux /eventstream/clip/v2 : un tableau d'événements portant chacun des ressources partielles. */
+/** Frame of the /eventstream/clip/v2 stream: an array of events, each carrying partial resources. */
 export const hueEventItemSchema = z.looseObject({ id: z.string(), type: z.string() })
 export const hueEventSchema = z.looseObject({
   creationtime: z.string().optional(),
@@ -116,13 +116,13 @@ export const hueEventSchema = z.looseObject({
 export const hueEventFrameSchema = z.array(hueEventSchema)
 export type HueEvent = z.infer<typeof hueEventSchema>
 
-/** Réponse de POST /api (appairage, API v1). */
+/** Response of POST /api (pairing, API v1). */
 export const huePairResponseSchema = z.array(z.looseObject({
   success: z.looseObject({ username: z.string(), clientkey: z.string().optional() }).optional(),
   error: z.looseObject({ type: z.number(), description: z.string().optional() }).optional(),
 }))
 
-/** Réponse de https://discovery.meethue.com/ */
+/** Response of https://discovery.meethue.com/ */
 export const hueDiscoverySchema = z.array(z.looseObject({ id: z.string(), internalipaddress: z.string(), port: z.number().optional() }))
 
 export interface HuePutBody {
@@ -135,9 +135,9 @@ export interface HuePutBody {
 }
 
 /**
- * Corps du PUT sur une scène. `static` applique les valeurs fixes SANS animer, `dynamic_palette`
- * anime. On n'utilise PAS `active` : il démarre l'animation quand la scène porte `auto_dynamic`,
- * donc les deux modes de Kasbah seraient indistinguables sur ces scènes-là.
+ * PUT body on a scene. `static` applies the fixed values WITHOUT animating, `dynamic_palette`
+ * animates. We do NOT use `active`: it starts the animation when the scene carries `auto_dynamic`,
+ * so Kasbah's two modes would be indistinguishable on those scenes.
  */
 export interface HueSceneRecallBody {
   recall: {
@@ -147,12 +147,12 @@ export interface HueSceneRecallBody {
   }
 }
 
-/** Écriture d'un réglage de scène (pas un rappel) : la case « démarrer animée » de l'app Hue. */
+/** Write of a scene setting (not a recall): the Hue app's "start animated" checkbox. */
 export interface HueSceneSettingsBody {
   auto_dynamic: boolean
 }
 
-/** Corps du POST de création d'une scène (métadonnées + groupe + valeurs par lampe + palette). */
+/** Body of the scene creation POST (metadata + group + values per light + palette). */
 export interface HueSceneCreateBody {
   metadata: { name: string }
   group: HueRef

@@ -12,24 +12,24 @@ import {
 } from './mapping'
 import { createTmaFile, emptyTmaState, type TmaState, type TmaStore } from './store'
 
-// Plugin TouteMonAnnée : le cahier de texte (devoirs), le cahier de liaison (messages de
-// l'enseignante) et les publications de la classe, lus par l'API PRIVÉE de l'appli web du site.
-// Aucun appareil : la vue École interroge `/school`. Le compte se relie une fois par identifiant et
-// mot de passe — jamais gardé — ; ce sont les cookies obtenus (dont `remember_web_…`) qui durent.
+// TouteMonAnnée plugin: the homework diary, the home-school notebook (the teacher's messages) and
+// the class posts, read through the PRIVATE API of the site's web app. No device: the School view
+// queries `/school`. The account is linked once by login and password — never kept —; it is the
+// cookies obtained (including `remember_web_…`) that last.
 //
-// Écriture : la case « fait » d'un devoir. Quand l'enseignante l'a ouverte sur le site (`ack_needed`),
-// c'est celle du site, qu'elle voit ; sinon elle reste dans Kasbah.
+// Write: a homework's "done" checkbox. When the teacher has opened it on the site (`ack_needed`),
+// it is the site's one, which she sees; otherwise it stays in Kasbah.
 
 export const tmaConfigSchema = z.object({
   TMA_FILE: z.string().trim().default(stateFile('toutemonannee.json')),
-  /** Les devoirs bougent quelques fois par jour : une demi-heure suffit. */
+  /** Homework changes a few times a day: half an hour is enough. */
   TMA_REFRESH_MS: z.coerce.number().int().min(300_000).default(1_800_000),
-  /** Jours passés relus, pour revoir ce qui était à faire. */
+  /** Past days re-read, to look back at what was due. */
   TMA_PAST_DAYS: z.coerce.number().int().min(0).max(31).default(7),
 })
 export type TmaConfig = z.infer<typeof tmaConfigSchema>
 
-/** Bornes de pagination : de quoi couvrir une classe, pas de quoi aspirer le site. */
+/** Pagination bounds: enough to cover a class, not enough to scrape the site. */
 const MAX_EVENT_PAGES = 5
 const MAX_MESSAGE_PAGES = 3
 const MAX_POST_PAGES = 2
@@ -39,8 +39,8 @@ export interface TmaPluginDeps {
   fetch?: FetchLike
 }
 
-/** Ce qu'on garde de la dernière lecture réussie (les devoirs restent sous forme brute : la case
- * « fait » locale se fusionne à chaque lecture de la route). */
+/** What we keep of the last successful read (homework stays in raw form: the local "done"
+ * checkbox is merged on each read of the route). */
 interface Snapshot {
   journals: SchoolJournal[]
   events: { journalId: string; raw: RawEvent }[]
@@ -118,7 +118,7 @@ export function createToutemonanneePlugin(deps: TmaPluginDeps = {}): DevicePlugi
         const r = await fetchJournal(client, j, today)
         for (const e of r.events) events.set(e.id, { journalId: j.id, raw: e })
         messages.push(...r.messages)
-        // une annonce d'école arrive dans chaque classe : une seule fois ici
+        // a school announcement arrives in every class: only once here
         for (const p of r.posts) if (!posts.has(p.id)) posts.set(p.id, p)
       }
       snapshot = {
@@ -130,7 +130,7 @@ export function createToutemonanneePlugin(deps: TmaPluginDeps = {}): DevicePlugi
       }
       lastError = null
     } catch (err) {
-      // on garde la dernière lecture réussie : un site qui ne répond pas n'efface pas les devoirs
+      // keep the last successful read: a site that does not answer does not wipe the homework
       lastError = (err as Error).message
       if (err instanceof SessionLostError) { sessionLost = true; ctx?.logger.warn('toutemonannee session lost'); return }
       throw err
@@ -169,8 +169,8 @@ export function createToutemonanneePlugin(deps: TmaPluginDeps = {}): DevicePlugi
       await persist()
       return
     }
-    // La case du site BASCULE à chaque appel : on relit l'état avant, et on ne bascule que s'il diffère
-    // — deux écrans ou deux clics rapprochés ne s'annulent pas.
+    // The site's checkbox TOGGLES on each call: we re-read the state first, and only toggle if it
+    // differs — two screens or two quick clicks do not cancel each other out.
     if (!client) throw new SessionLostError()
     const day = eventsPageSchema.parse(await client.events(journalId, { date: entry.raw.date, page: 1 })).events.data
     const current = day.find((e) => e.id === id) ?? entry.raw
@@ -212,8 +212,8 @@ export function createToutemonanneePlugin(deps: TmaPluginDeps = {}): DevicePlugi
       app.get('/school', async () => school())
 
       /**
-       * Relier le compte. Le mot de passe ne vit que le temps de cette requête : ni gardé, ni
-       * journalisé, ni renvoyé. Ce qui en sort, ce sont les cookies du fichier d'état.
+       * Link the account. The password only lives for the duration of this request: neither kept,
+       * nor logged, nor returned. What comes out are the cookies in the state file.
        */
       app.post<{ Body: unknown }>('/login', async (req, reply) => {
         const body = z.object({ username: z.string().trim().min(1).max(200), password: z.string().min(1).max(200) }).safeParse(req.body)
@@ -232,7 +232,7 @@ export function createToutemonanneePlugin(deps: TmaPluginDeps = {}): DevicePlugi
         return school()
       })
 
-      /** Délier : les cookies sont effacés ; les filtres et les cases « fait » restent. */
+      /** Unlink: the cookies are erased; the filters and the "done" checkboxes stay. */
       app.post('/logout', async () => {
         client?.forget()
         state = { ...state, account: null, cookies: {} }

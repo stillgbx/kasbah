@@ -5,8 +5,8 @@ import { PluginError } from '../../core/plugin'
 import { fromNetscape, hasRequiredCookie } from './cookie'
 import type { SpawnFn } from '../../music/proxy'
 
-// Import des cookies YouTube depuis le navigateur **de la machine qui héberge Kasbah**
-// (`yt-dlp --cookies-from-browser`). Pas celui de l'écran : yt-dlp ne voit que le disque local.
+// Import of the YouTube cookies from the browser **of the machine hosting Kasbah**
+// (`yt-dlp --cookies-from-browser`). Not the screen's: yt-dlp only sees the local disk.
 
 export const YTM_BROWSERS = ['chrome', 'edge', 'firefox', 'chromium', 'brave'] as const
 export type YtmBrowser = (typeof YTM_BROWSERS)[number]
@@ -25,13 +25,13 @@ function runCapture(command: string, args: string[], spawnImpl: SpawnFn): Promis
   })
 }
 
-/** Erreur d'auth InnerTube / yt-dlp typique d'un cookie mort. */
+/** InnerTube / yt-dlp auth error typical of a dead cookie. */
 export function isAuthError(err: unknown): boolean {
   const msg = ((err as Error)?.message ?? String(err)).toLowerCase()
   return /401|403|unauthoriz|login[_ ]?required|sign[_ ]?in|sapisid|cookie.*(expir|invalid|dead)|not logged|authentication/i.test(msg)
 }
 
-/** Message d'échec lisible (DB verrouillée yt-dlp#7271 ; DPAPI Chrome Win yt-dlp#10927). */
+/** Readable failure message (locked DB yt-dlp#7271; Chrome Win DPAPI yt-dlp#10927). */
 export function browserImportFailureMessage(browser: string, stderr: string): string {
   const lines = [...new Set(stderr.trim().split(/\r?\n/).map((l) => l.trim()).filter(Boolean))]
   const joined = lines.join(' ').toLowerCase()
@@ -42,7 +42,7 @@ export function browserImportFailureMessage(browser: string, stderr: string): st
       `or paste the cookie manually`
     )
   }
-  // Chrome/Edge Windows : chiffrement lié à l'appli — --cookies-from-browser casse souvent.
+  // Chrome/Edge Windows: app-bound encryption — --cookies-from-browser often breaks.
   if (/failed to decrypt with dpapi|decrypt.*dpapi|application.?bound.?encryption/i.test(joined)) {
     return (
       `${browser} cookie decryption failed on Windows (Chrome/Edge App-Bound Encryption) — ` +
@@ -54,10 +54,10 @@ export function browserImportFailureMessage(browser: string, stderr: string): st
 }
 
 /**
- * Lit les cookies YouTube du profil navigateur local via yt-dlp, les écrit en Netscape, puis
- * renvoie la chaîne `Cookie:` pour InnerTube. Le navigateur doit être connecté à
- * music.youtube.com **sur cette machine** (fermer la fenêtre privée sans se déconnecter).
- * Chrome/Edge : quitter le navigateur entièrement avant l'import (sinon DB verrouillée).
+ * Reads the YouTube cookies of the local browser profile through yt-dlp, writes them as Netscape,
+ * then returns the `Cookie:` string for InnerTube. The browser must be signed in to
+ * music.youtube.com **on this machine** (close the private window without signing out).
+ * Chrome/Edge: quit the browser entirely before the import (otherwise locked DB).
  */
 export async function importCookiesFromBrowser(opts: {
   ytdlpPath: string
@@ -71,9 +71,9 @@ export async function importCookiesFromBrowser(opts: {
   const spawnImpl = opts.spawnImpl ?? (spawn as unknown as SpawnFn)
   await mkdir(dirname(opts.netscapePath), { recursive: true })
   try { await unlink(opts.netscapePath) } catch { /* absent */ }
-  // yt-dlp dump le jar navigateur dans `--cookies` en fin de course. L'URL doit être
-  // extractible (music.youtube.com/ home → "Unsupported URL") ; les cookies .youtube.com
-  // couvrent aussi Music.
+  // yt-dlp dumps the browser jar into `--cookies` at the end of the run. The URL must be
+  // extractable (music.youtube.com/ home → "Unsupported URL"); the .youtube.com cookies
+  // cover Music too.
   const args = [
     '--ignore-config',
     '--cookies-from-browser', opts.browser,
@@ -84,7 +84,7 @@ export async function importCookiesFromBrowser(opts: {
     'https://www.youtube.com/watch?v=jNQXAC9IVRw',
   ]
   const { code, stderr } = await runCapture(opts.ytdlpPath, args, spawnImpl)
-  // Parfois le Netscape est déjà écrit même si l'extract échoue ensuite — on le tente.
+  // Sometimes the Netscape file is already written even if the extract fails afterwards — try it.
   let netscape: string | null = null
   try { netscape = await readFile(opts.netscapePath, 'utf8') } catch { /* absent */ }
   if (code !== 0) {

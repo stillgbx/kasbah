@@ -4,33 +4,32 @@ import { z } from 'zod'
 import type { SystemReading, ZoneReading } from './types'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// L'historique de FONCTIONNEMENT de la pompe à chaleur — quand elle a chauffé, combien de temps, à
-// quelle température de départ, face à quel dehors.
+// The heat pump's OPERATING history — when it heated, for how long, at what flow temperature,
+// against what outdoor temperature.
 //
-// Il est construit ICI, au fil des sondages, et pas lu chez le fabricant : MELCloud sert bien un
-// relevé d'énergie, mais cette installation n'a aucun compteur et le rend vide même sur un hiver
-// entier (voir `__fixtures__/melcloud.ts`). Ce qu'on peut savoir, en revanche, c'est ce que chaque
-// lecture montre — et une lecture toutes les deux minutes suffit à dire l'essentiel d'une grandeur
-// aussi lente que du chauffage.
+// It is built HERE, poll after poll, and not read from the vendor: MELCloud does serve an energy
+// report, but this installation has no meter and returns it empty even over a whole winter (see
+// `__fixtures__/melcloud.ts`). What we can know, on the other hand, is what each read shows — and
+// one read every two minutes is enough to tell the essentials of a quantity as slow as heating.
 //
-// Chaque point porte des COMPTES D'ÉCHANTILLONS, pas des minutes : c'est `n` qui donne l'échelle,
-// et une heure mal sondée (serveur redémarré, cloud muet) se lit alors pour ce qu'elle est — une
-// heure à trois échantillons — au lieu de se faire passer pour une heure creuse.
+// Each point carries SAMPLE COUNTS, not minutes: `n` gives the scale, and a poorly polled hour
+// (server restarted, silent cloud) then reads as what it is — an hour with three samples — instead
+// of passing for an idle hour.
 
-/** Une semaine d'heures. Au-delà, le fichier grossirait pour un usage que personne n'a demandé. */
+/** One week of hours. Beyond that, the file would grow for a use nobody asked for. */
 export const HOURLY_POINTS_MAX = 168
 const HOUR_MS = 3_600_000
 
 export const heatingPointSchema = z.object({
-  /** Début de l'heure (ms epoch). */
+  /** Start of the hour (ms epoch). */
   t: z.number().int(),
-  /** Échantillons pris dans cette heure : l'échelle de tous les compteurs qui suivent. */
+  /** Samples taken in this hour: the scale of all the counters that follow. */
   n: z.number().int().min(1),
-  /** Échantillons où AU MOINS UNE zone chauffait (ni au repos, ni éteinte). */
+  /** Samples where AT LEAST ONE zone was heating (neither idle nor off). */
   heating: z.number().int().min(0),
-  /** Échantillons en dégivrage : la machine tourne et ne chauffe pas la maison. */
+  /** Samples in defrost: the machine runs and does not heat the house. */
   defrost: z.number().int().min(0),
-  /** Échantillons avec un appoint ÉLECTRIQUE en marche — ce qui coûte cher se voit là. */
+  /** Samples with an ELECTRIC backup heater on — what costs a lot shows up here. */
   booster: z.number().int().min(0),
   outdoorC: z.number().nullable(),
   flowC: z.number().nullable(),
@@ -39,7 +38,7 @@ export const heatingPointSchema = z.object({
 export type HeatingPoint = z.infer<typeof heatingPointSchema>
 
 export const melcloudHistorySchema = z.object({
-  /** Du plus ancien au plus récent, un point par heure sondée. Une heure sans lecture est ABSENTE. */
+  /** From oldest to most recent, one point per polled hour. An hour without a read is ABSENT. */
   hourly: z.array(heatingPointSchema),
 })
 export type MelcloudHistoryState = z.infer<typeof melcloudHistorySchema>
@@ -58,9 +57,9 @@ interface Bucket {
 const mean = (a: { sum: number; n: number }): number | null => (a.n ? Math.round((a.sum / a.n) * 10) / 10 : null)
 
 /**
- * Accumulateur horaire. Sans état caché : `record` range l'échantillon dans son heure, `points`
- * rend ce qu'on a. La bascule d'heure est observable (`rolled`) pour que l'appelant sache quand il
- * vaut la peine d'écrire sur le disque — une fois par heure plutôt qu'à chaque sondage.
+ * Hourly accumulator. No hidden state: `record` files the sample into its hour, `points` returns
+ * what we have. The hour rollover is observable (`rolled`) so that the caller knows when it is
+ * worth writing to disk — once an hour rather than on every poll.
  */
 export class HeatingHistory {
   private buckets: Bucket[] = []
@@ -69,13 +68,13 @@ export class HeatingHistory {
     if (initial) this.buckets = initial.hourly.map(fromPoint)
   }
 
-  /** @returns `true` quand cet échantillon a ouvert une nouvelle heure. */
+  /** @returns `true` when this sample opened a new hour. */
   record(system: SystemReading, zones: ZoneReading[], at: number): boolean {
     const hour = Math.floor(at / HOUR_MS) * HOUR_MS
     let b = this.buckets[this.buckets.length - 1]
     let rolled = false
     if (!b || b.t !== hour) {
-      // une machine qu'on ne suit plus n'apprend rien : ne pas ouvrir une heure pour elle
+      // a machine we no longer follow teaches nothing: do not open an hour for it
       if (system.stale) return false
       b = { t: hour, n: 0, heating: 0, defrost: 0, booster: 0, outdoor: { sum: 0, n: 0 }, flow: { sum: 0, n: 0 }, ret: { sum: 0, n: 0 } }
       this.buckets.push(b)
@@ -85,8 +84,8 @@ export class HeatingHistory {
     if (system.stale) return rolled
 
     b.n++
-    // `idle` est la clé : la machine est ALLUMÉE presque toute l'année, elle ne chauffe que par
-    // moments. Compter `power` reviendrait à tracer une ligne plate de janvier à décembre.
+    // `idle` is the key: the machine is ON almost all year round, it only heats at times.
+    // Counting `power` would amount to drawing a flat line from January to December.
     if (system.power && zones.some((z) => !z.idle)) b.heating++
     if (system.defrosting) b.defrost++
     if (system.boosterHeater || system.immersionHeater) b.booster++
@@ -119,10 +118,10 @@ function add(acc: { sum: number; n: number }, v: number | null): void {
 }
 
 /**
- * Un point relu du disque redevient un seau. Les moyennes ont perdu leurs sommes : on les repose
- * comme UN échantillon de la valeur moyenne, ce qui garde la valeur juste et laisse la suite de
- * l'heure la corriger. Sans importance en pratique — on ne relit qu'au démarrage, donc au plus une
- * heure partielle.
+ * A point read back from disk becomes a bucket again. The means have lost their sums: they are put
+ * back as ONE sample of the mean value, which keeps the value right and lets the rest of the hour
+ * correct it. Of no consequence in practice — we only read back at startup, so at most one
+ * partial hour.
  */
 function fromPoint(p: HeatingPoint): Bucket {
   const one = (v: number | null) => (v === null ? { sum: 0, n: 0 } : { sum: v, n: 1 })
@@ -137,7 +136,7 @@ export interface HistoryStore {
   save(h: MelcloudHistoryState): Promise<void>
 }
 
-/** Écriture atomique (fichier temporaire puis renommage) ; une lecture illisible vaut « rien ». */
+/** Atomic write (temporary file then rename); an unreadable read counts as "nothing". */
 export function createHistoryFile(path: string, logger?: Logger): HistoryStore {
   return {
     async load() {

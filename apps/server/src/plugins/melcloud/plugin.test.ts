@@ -8,28 +8,28 @@ import { DEVICE_GET, ENERGY_REPORT_SEPTEMBER, LIST_DEVICES } from './__fixtures_
 import type { SessionStore, StoredSession } from './auth'
 import { createMelcloudPlugin, melcloudConfigSchema } from './index'
 
-// Ce que le plugin doit tenir face à MELCloud, et que seule une API privée impose :
+// What the plugin must hold up against MELCloud, and that only a private API imposes:
 //
-//  - MELCLOUD RÉPOND EN HTTP 200 MÊME QUAND IL REFUSE. Un mot de passe faux arrive en 200 avec un
-//    `ErrorId` dans le corps — le même piège que Gigya chez Renault, et la raison d'être de la
-//    moitié des cas ci-dessous.
-//  - Le MOT DE PASSE ne doit rien laisser derrière lui : ni dans le cache de session, ni ailleurs.
-//  - Une clé de session REFUSÉE (401) ne se rafraîchit pas : il n'y a pas de jeton de
-//    renouvellement. Elle doit être jetée, pour que la carte des Réglages redemande le mot de passe
-//    au lieu de laisser le plugin marteler une clé morte.
-//  - Le plugin publie UNE ZONE, pas une machine : l'installation de référence a trois Zubadan en
-//    cascade derrière un seul régulateur, que MELCloud montre comme un appareil à deux zones.
+//  - MELCLOUD ANSWERS HTTP 200 EVEN WHEN IT REFUSES. A wrong password arrives as a 200 with an
+//    `ErrorId` in the body — the same trap as Gigya at Renault, and the reason for half of the
+//    cases below.
+//  - The PASSWORD must leave nothing behind: neither in the session cache, nor anywhere else.
+//  - A REFUSED session key (401) is not refreshed: there is no refresh token. It must be thrown
+//    away, so that the Settings card asks for the password again instead of letting the plugin
+//    hammer a dead key.
+//  - The plugin publishes ONE ZONE, not one machine: the reference installation has three Zubadan
+//    in cascade behind a single controller, which MELCloud shows as one device with two zones.
 //
-// Le faux fabricant rejoue la CAPTURE (`__fixtures__/melcloud.ts`), pas une réponse reconstruite :
-// un test qui valide une hypothèse déguisée en preuve ne prouve rien (leçon COMAP).
-// Aucun compte ni machine réelle n'est touché.
+// The fake vendor replays the CAPTURE (`__fixtures__/melcloud.ts`), not a reconstructed response:
+// a test that validates an assumption disguised as proof proves nothing (COMAP lesson).
+// No real account or machine is touched.
 
 const NOW = Date.UTC(2026, 8, 17, 10)
 const BASE = 'https://app.melcloud.com/Mitsubishi.Wifi.Client'
 const CONTEXT_KEY = 'context-key-abc'
 const PASSWORD = 'un-mot-de-passe-qui-ne-doit-pas-fuir'
 const EMAIL = 'moi@exemple.fr'
-/** L'identifiant de la machine dans la capture anonymisée, et les deux zones qu'elle publie. */
+/** The machine's id in the anonymized capture, and the two zones it publishes. */
 const UNIT = '111111'
 const Z1 = `${UNIT}-z1`
 const Z2 = `${UNIT}-z2`
@@ -40,10 +40,10 @@ const response = (body: unknown, status = 200) => ({
   text: async () => JSON.stringify(body),
 })
 
-/** Le poller lance sa première lecture sans l'attendre : il faut laisser tourner la boucle. */
+/** The poller fires its first read without awaiting it: the loop has to be let run. */
 const flush = async () => { for (let i = 0; i < 12; i++) await new Promise((r) => setTimeout(r, 0)) }
 
-/** Faux MELCloud, piloté par un état mutable. Tout sort en 200, y compris les refus. */
+/** Fake MELCloud, driven by a mutable state. Everything comes out as 200, refusals included. */
 function fakeMelcloud(over: { loginError?: number; rejectKey?: boolean; deviceFails?: string; listFails?: boolean } = {}) {
   const calls: { method: string; path: string }[] = []
   const world = { list: LIST_DEVICES as unknown }
@@ -56,7 +56,7 @@ function fakeMelcloud(over: { loginError?: number; rejectKey?: boolean; deviceFa
 
     if (path === '/Login/ClientLogin') {
       const body = JSON.parse(String(init?.body ?? '{}')) as { Password?: string }
-      // le refus arrive en HTTP 200 : c'est `ErrorId` qui tranche, jamais le statut
+      // the refusal arrives as HTTP 200: `ErrorId` decides, never the status
       if (over.loginError !== undefined) return response({ ErrorId: over.loginError, LoginData: null })
       if (body.Password !== PASSWORD) return response({ ErrorId: 1, LoginData: null })
       return response({ ErrorId: null, LoginData: { ContextKey: CONTEXT_KEY, Name: 'Compte de démonstration' } })
@@ -117,8 +117,8 @@ const login = (app: Awaited<ReturnType<typeof setup>>['app'], password = PASSWOR
 
 const linked: StoredSession = { contextKey: CONTEXT_KEY, name: 'Compte de démonstration' }
 
-describe('MELCloud — liaison du compte', () => {
-  it('relie le compte et ne garde que la clé de session, jamais le mot de passe', async () => {
+describe('MELCloud — account linking', () => {
+  it('links the account and keeps only the session key, never the password', async () => {
     const { app, sessionStore } = await setup()
     const r = await login(app)
     expect(r.statusCode).toBe(200)
@@ -127,19 +127,19 @@ describe('MELCloud — liaison du compte', () => {
     expect(r.json().devices).toEqual([{ deviceId: UNIT, name: 'Chauffage', family: 'atw', buildingName: 'Maison' }])
   })
 
-  it('refuse un mot de passe faux, que MELCloud rend pourtant en HTTP 200', async () => {
+  it('refuses a wrong password, which MELCloud nonetheless returns as HTTP 200', async () => {
     const { app, sessionStore } = await setup()
     const r = await login(app, 'pas-le-bon')
     expect(r.statusCode).toBe(401)
     expect(sessionStore.value).toBeNull()
   })
 
-  it('distingue un refus d’identifiants d’une panne du fabricant', async () => {
+  it('tells a credentials refusal from a vendor failure', async () => {
     const { app } = await setup({ loginError: 42 })
     expect((await login(app)).statusCode).toBe(502)
   })
 
-  it('délier efface la clé de session et retire les zones de la maison', async () => {
+  it('unlinking erases the session key and removes the zones from the house', async () => {
     const { app, sessionStore, ctx } = await setup()
     await login(app)
     const r = await app.inject({ method: 'POST', url: '/api/plugins/melcloud/logout' })
@@ -149,18 +149,18 @@ describe('MELCloud — liaison du compte', () => {
     expect(ctx.emitDevices).toHaveBeenLastCalledWith([])
   })
 
-  it('jette une clé de session que MELCloud refuse, plutôt que de la marteler', async () => {
+  it('throws away a session key MELCloud refuses, rather than hammering it', async () => {
     const { plugin, sessionStore } = await setup({ session: linked, rejectKey: true })
     await plugin.start()
     await flush()
-    // la clé est morte et rien ne peut la renouveler : le compte redevient « à relier »
+    // the key is dead and nothing can renew it: the account goes back to "to link"
     expect(sessionStore.value).toBeNull()
     expect(plugin.health!().status).toBe('needs_pairing')
   })
 })
 
-describe('MELCloud — ce que le plugin publie', () => {
-  it('publie DEUX zones pour UNE machine (trois Zubadan en cascade)', async () => {
+describe('MELCloud — what the plugin publishes', () => {
+  it('publishes TWO zones for ONE machine (three Zubadan in cascade)', async () => {
     const { plugin, ctx } = await setup({ session: linked })
     await plugin.start()
     await flush()
@@ -169,17 +169,17 @@ describe('MELCloud — ce que le plugin publie', () => {
     expect(plugin.health!().detail).toContain('2 zone(s) on 1 unit(s)')
   })
 
-  it('publie l’état de chaque zone avec ses vraies valeurs', async () => {
+  it('publishes each zone’s state with its real values', async () => {
     const { plugin, ctx } = await setup({ session: linked })
     await plugin.start()
     await flush()
     expect(ctx.emitState).toHaveBeenCalledWith(Z1, expect.objectContaining({ currentTempC: 23, targetTempC: 19.5, action: 'idle' }))
-    // la zone sans sonde d'ambiance publie son eau de départ, jamais la sentinelle -39
+    // the zone without a room sensor publishes its flow water, never the -39 sentinel
     expect(ctx.emitState).toHaveBeenCalledWith(Z2, expect.objectContaining({ currentTempC: 20, targetTempC: 45 }))
   })
 
-  /** Le registre ne doit pas battre : redire les mêmes descripteurs toutes les deux minutes serait gratuit. */
-  it('ne republie les appareils que lorsqu’ils changent', async () => {
+  /** The registry must not churn: repeating the same descriptors every two minutes would be pointless. */
+  it('republishes the devices only when they change', async () => {
     const { plugin, ctx, clock, melcloud } = await setup({ session: linked })
     await plugin.start()
     await flush()
@@ -187,9 +187,9 @@ describe('MELCloud — ce que le plugin publie', () => {
 
     clock.advance(120_000)
     await flush()
-    expect(ctx.emitDevices).toHaveBeenCalledTimes(1)   // même machine, même zones
+    expect(ctx.emitDevices).toHaveBeenCalledTimes(1)   // same machine, same zones
 
-    // la zone 2 repasse en ambiante : `meta.climate.control` change, l'UI doit le savoir
+    // zone 2 switches back to room temperature: `meta.climate.control` changes, the UI must know
     const flipped = JSON.parse(JSON.stringify(melcloud.world.list)) as { Structure: { Devices: { Device: Record<string, unknown> }[] } }[]
     Object.assign(flipped[0]!.Structure.Devices[0]!.Device, { Zone2InRoomMode: true, RoomTemperatureZone2: 21 })
     melcloud.world.list = flipped
@@ -198,15 +198,15 @@ describe('MELCloud — ce que le plugin publie', () => {
     expect(ctx.emitDevices).toHaveBeenCalledTimes(2)
   })
 
-  it('ne connaît aucun appareil avant sa première lecture, et les redit ensuite', async () => {
+  it('knows no device before its first read, and repeats them afterwards', async () => {
     const { plugin } = await setup({ session: linked })
-    expect(await plugin.discover()).toEqual([])   // aucun appel réseau dans discover
+    expect(await plugin.discover()).toEqual([])   // no network call in discover
     await plugin.start()
     await flush()
     expect(await plugin.discover()).toHaveLength(2)
   })
 
-  it('oublie ce qu’il a publié quand l’hôte le redémarre sans le réinstancier', async () => {
+  it('forgets what it published when the host restarts it without re-instantiating it', async () => {
     const { plugin, ctx } = await setup({ session: linked })
     await plugin.start()
     await flush()
@@ -216,12 +216,12 @@ describe('MELCloud — ce que le plugin publie', () => {
     expect(plugin.health!().detail).toContain('0 zone(s)')
   })
 
-  it('refuse toute commande : le plugin est en lecture seule', async () => {
+  it('refuses every command: the plugin is read-only', async () => {
     const { plugin } = await setup({ session: linked })
     await expect(plugin.execute(Z1, { type: 'climate.set_mode', mode: 'heat' })).rejects.toThrow(/read-only/i)
   })
 
-  it('reste démarrable quand MELCloud ne répond pas', async () => {
+  it('can still start when MELCloud does not answer', async () => {
     const { plugin } = await setup({ session: linked, listFails: true })
     await expect(plugin.start()).resolves.toBeUndefined()
     await flush()
@@ -229,27 +229,27 @@ describe('MELCloud — ce que le plugin publie', () => {
   })
 })
 
-describe('MELCloud — l’état machine servi à la vue Chauffage', () => {
-  it('rend la dernière lecture du sondage, sans rappeler le fabricant', async () => {
+describe('MELCloud — the machine state served to the Heating view', () => {
+  it('returns the poll’s last read, without calling the vendor again', async () => {
     const { plugin, app, melcloud } = await setup({ session: linked })
     await plugin.start()
     await flush()
     const before = melcloud.calls.length
     const r = await app.inject({ method: 'GET', url: '/api/plugins/melcloud/system' })
     expect(r.statusCode).toBe(200)
-    expect(melcloud.calls.length).toBe(before)   // aucun appel de plus
+    expect(melcloud.calls.length).toBe(before)   // no extra call
     expect(r.json().units[0]).toMatchObject({ name: 'Chauffage', power: true, outdoorTempC: 22, energyMeter: false })
     expect(r.json().units[0].error).toMatchObject({ hasError: false, code: 8000 })
   })
 
-  it('refuse tant qu’aucun compte n’est relié', async () => {
+  it('refuses as long as no account is linked', async () => {
     const { app } = await setup()
     expect((await app.inject({ method: 'GET', url: '/api/plugins/melcloud/system' })).statusCode).toBe(409)
   })
 })
 
-describe('MELCloud — relevé brut', () => {
-  it('rend la liste, le détail et le relevé d’énergie de chaque machine', async () => {
+describe('MELCloud — raw readout', () => {
+  it('returns the list, the detail and the energy report of each machine', async () => {
     const { app } = await setup({ session: linked })
     const body = (await app.inject({ method: 'GET', url: '/api/plugins/melcloud/raw' })).json()
     expect(body.devices).toHaveLength(1)
@@ -257,20 +257,20 @@ describe('MELCloud — relevé brut', () => {
     expect(body.reports[0]).toMatchObject({ deviceId: UNIT, ok: true })
   })
 
-  it('accepte une fenêtre de relevé, seule façon de trancher l’absence de compteur', async () => {
+  it('accepts a report window, the only way to settle the absence of a meter', async () => {
     const { app } = await setup({ session: linked })
     const body = (await app.inject({ method: 'GET', url: '/api/plugins/melcloud/raw?from=2026-01-15&to=2026-02-15' })).json()
     expect(body.reports[0]).toMatchObject({ from: '2026-01-15T00:00:00', to: '2026-02-15T00:00:00' })
   })
 
-  it('rend l’échec d’une machine au lieu de perdre la capture', async () => {
+  it('returns a machine’s failure instead of losing the capture', async () => {
     const { app } = await setup({ session: linked, deviceFails: UNIT })
     const body = (await app.inject({ method: 'GET', url: '/api/plugins/melcloud/raw' })).json()
     expect(body.details[0]).toMatchObject({ deviceId: UNIT, ok: false })
-    expect(body.reports[0]).toMatchObject({ ok: true })   // le relevé d'énergie, lui, a répondu
+    expect(body.reports[0]).toMatchObject({ ok: true })   // the energy report, for its part, answered
   })
 
-  it('refuse la capture tant qu’aucun compte n’est relié', async () => {
+  it('refuses the capture as long as no account is linked', async () => {
     const { app } = await setup()
     expect((await app.inject({ method: 'GET', url: '/api/plugins/melcloud/raw' })).statusCode).toBe(409)
   })

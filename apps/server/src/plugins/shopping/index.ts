@@ -1,13 +1,13 @@
 import { z } from 'zod'
 import { PluginError, type DevicePlugin } from '../../core/plugin'
 
-// L'INTERRUPTEUR de la liste de courses, et rien d'autre. La liste elle-même est une fonction du
-// serveur (`core/shopping.ts`, `/api/shopping/*`, outils MCP) : elle a besoin du chemin de la maison
-// et de la diffusion WebSocket, que le contrat des plugins ne donne pas, et il n'était pas question de
-// l'élargir pour elle. Ce plugin sans appareil la fait figurer dans Réglages → Plugins, avec le même
-// interrupteur que les autres ; c'est `plugins.shopping.enabled` de la maison que les routes, le MCP et
-// l'écran lisent (`pluginSettingsOf`). Allumée par défaut (`PLUGINS_ON_BY_DEFAULT`) : ni compte ni
-// matériel à relier. Coupée, la liste n'est pas effacée — rallumée, elle revient telle quelle.
+// The shopping list's SWITCH, and nothing else. The list itself is a server feature
+// (`core/shopping.ts`, `/api/shopping/*`, MCP tools): it needs the house path and the WebSocket
+// broadcast, which the plugin contract does not provide, and widening the contract for it was out of
+// the question. This device-less plugin makes it show up in Settings → Plugins, with the same switch
+// as the others; it is the house's `plugins.shopping.enabled` that the routes, the MCP and the
+// screen read (`pluginSettingsOf`). On by default (`PLUGINS_ON_BY_DEFAULT`): no account and no
+// hardware to link. Switched off, the list is not erased — switched back on, it returns as it was.
 
 export function createShoppingPlugin(): DevicePlugin {
   return {

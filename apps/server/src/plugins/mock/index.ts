@@ -3,8 +3,8 @@ import { SCENARIO_NAMES, SimError, Simulation, type SimErrorCode } from '@kasbah
 import { z } from 'zod'
 import { PluginError, type DevicePlugin, type PluginContext, type PluginErrorCode } from '../../core/plugin'
 
-// Adaptateur mince autour de @kasbah/mock-sim : le moteur est pur, ce plugin ne fait que brancher
-// ses patchs sur le contexte et traduire ses erreurs.
+// Thin adapter around @kasbah/mock-sim: the engine is pure, this plugin only plugs its patches
+// into the context and translates its errors.
 
 export const mockConfigSchema = z.object({
   MOCK_SCENARIO: z.enum(SCENARIO_NAMES).default('default'),
@@ -15,12 +15,12 @@ export const mockConfigSchema = z.object({
 export type MockConfig = z.infer<typeof mockConfigSchema>
 
 /**
- * Sous-items de la simulation : un par type d'appareil. Décocher sert à la faire COMPLÉTER un parc
- * réel au lieu de le doubler — dès qu'un vrai plugin couvre un kind (les lampes par Hue, les
- * ouvrants par TaHoma, le solaire par Enphase), ses équivalents simulés n'ont plus de raison
- * d'encombrer les listes en « hors plan ». Décocher emporte ce qui appartient à l'installation du
- * kind : sortir `energy` retire le site solaire ET ses panneaux, qui sont des capteurs
- * (`Simulation.hiddenFor`). Tous les kinds sont simulés, caméras et sonnettes comprises (sans flux).
+ * The simulation's sub-items: one per device type. Unchecking one makes it COMPLEMENT a real
+ * device set instead of duplicating it — as soon as a real plugin covers a kind (lights through
+ * Hue, covers through TaHoma, solar through Enphase), its simulated equivalents have no reason to
+ * clutter the lists as "off plan". Unchecking takes along what belongs to the kind's installation:
+ * dropping `energy` removes the solar site AND its panels, which are sensors
+ * (`Simulation.hiddenFor`). Every kind is simulated, cameras and doorbells included (no stream).
  */
 const SIMULATED_KINDS = [...DEVICE_KINDS]
 const MOCK_PARTS = SIMULATED_KINDS.map((kind) => ({ id: kind, labelKey: `kinds.${kind}`, enabledByDefault: true }))
@@ -37,9 +37,9 @@ export function createMockPlugin(): DevicePlugin {
   let sim: Simulation | null = null
   let ctx: PluginContext | null = null
   let config: MockConfig | null = null
-  /** externalId des appareils exclus : le registre ne les connaît pas, ne rien leur émettre. */
+  /** externalIds of the excluded devices: the registry does not know them, emit nothing for them. */
   let hidden = new Set<string>()
-  /** Kinds décochés dans les Réglages (le reste de `ctx.parts` vaut `true`). */
+  /** Kinds unchecked in Settings (the rest of `ctx.parts` is `true`). */
   let excluded: DeviceKind[] = []
   return {
     id: 'mock',
@@ -47,7 +47,7 @@ export function createMockPlugin(): DevicePlugin {
     parts: MOCK_PARTS,
     async init(c) {
       ctx = c
-      config = c.config as MockConfig   // déjà validé/transformé par l'hôte via configSchema
+      config = c.config as MockConfig   // already validated/transformed by the host via configSchema
       excluded = SIMULATED_KINDS.filter((k) => c.parts[k] === false)
       sim = new Simulation({
         scenario: config.MOCK_SCENARIO,
@@ -58,21 +58,21 @@ export function createMockPlugin(): DevicePlugin {
       })
     },
     async discover(): Promise<DeviceDescriptor[]> {
-      // la simulation décide elle-même ce que masquer : un appareil qui appartient à l'installation
-      // d'un kind exclu tombe avec elle (les panneaux simulés avec `energy`, voir `hiddenFor`)
+      // the simulation decides by itself what to hide: a device that belongs to an excluded kind's
+      // installation goes with it (the simulated panels with `energy`, see `hiddenFor`)
       hidden = sim!.hiddenFor(excluded)
       return sim!.devices().filter((d) => !hidden.has(d.externalId))
     },
     async start() {
-      // états initiaux complets, puis patchs différentiels au fil des ticks
+      // full initial states, then differential patches tick after tick
       for (const [id, state] of sim!.states()) {
         if (hidden.has(id)) continue
         const { kind: _k, updatedAt: _u, ...rest } = state
         ctx!.emitState(id, rest as StatePatch)
       }
-      // la simulation continue de faire vivre les appareils exclus ; on filtre à la sortie, sinon
-      // le registre journalise un « patch pour un appareil inconnu » à chaque tick
-      // ambiances : elles posent des lampes, donc elles tombent avec les lampes simulées
+      // the simulation keeps the excluded devices alive; we filter on the way out, otherwise the
+      // registry logs a "patch for an unknown device" on every tick
+      // light scenes: they set lights, so they go away with the simulated lights
       const withScenes = !excluded.includes('light')
       if (withScenes) {
         ctx!.emitScenes(sim!.scenes().map((s) => ({ ...s, id: `mock:${s.externalId}`, pluginId: 'mock', autoDynamic: false })))

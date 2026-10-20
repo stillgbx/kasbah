@@ -3,19 +3,19 @@ import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import type { MelcloudAuth } from './auth'
 
-// Client HTTP de MELCloud. Ce qu'il traduit :
-//  - 401 → la `ContextKey` est morte. Rien à rafraîchir (il n'y a pas de jeton de renouvellement),
-//    donc on la JETTE et on remonte `NEEDS_PAIRING` : la carte des Réglages redemandera le mot de
-//    passe, plutôt que de laisser le plugin marteler une clé que MELCloud refuse ;
-//  - 429 → `RATE_LIMITED` ;
-//  - le reste en `UPSTREAM_ERROR`.
+// MELCloud HTTP client. What it translates:
+//  - 401 → the `ContextKey` is dead. Nothing to refresh (there is no refresh token), so it is
+//    THROWN AWAY and `NEEDS_PAIRING` goes up: the Settings card will ask for the password again,
+//    rather than letting the plugin hammer a key that MELCloud refuses;
+//  - 429 → `RATE_LIMITED`;
+//  - the rest as `UPSTREAM_ERROR`.
 //
-// Pas de seau à jetons ici, contrairement à Renault : MELCloud ne publie aucun quota, et la seule
-// borne connue est physique — une Ecodan ne parle au cloud que toutes les quelques minutes
-// (`NextCommunication` le dit), donc sonder plus vite relit la même chose. C'est la CADENCE qui
-// protège, pas un compteur. À revoir si le fabricant se met à répondre 429.
+// No token bucket here, unlike Renault: MELCloud publishes no quota, and the only known bound is
+// physical — an Ecodan only talks to the cloud every few minutes (`NextCommunication` says so),
+// so polling faster re-reads the same thing. It is the PACE that protects, not a counter. To be
+// revisited if the vendor starts answering 429.
 
-/** MELCloud interroge la machine par son module Wi-Fi : plusieurs secondes sont normales. */
+/** MELCloud queries the machine through its Wi-Fi module: several seconds are normal. */
 export const REQUEST_TIMEOUT_MS = 30_000
 
 export interface MelcloudClientOptions {
@@ -29,14 +29,14 @@ export interface MelcloudClientOptions {
 export class MelcloudClient {
   constructor(private readonly opts: MelcloudClientOptions) {}
 
-  /** L'inventaire du compte : bâtiments, étages, zones et appareils, en un seul appel. */
+  /** The account's inventory: buildings, floors, zones and devices, in a single call. */
   listDevices(signal?: AbortSignal): Promise<unknown> {
     return this.request('GET', '/User/ListDevices', { signal })
   }
 
   /**
-   * L'état complet d'une machine. `buildingID` est exigé en plus de l'identifiant : MELCloud
-   * répond en erreur si on l'omet, même quand l'appareil est sans ambiguïté.
+   * A machine's full state. `buildingID` is required on top of the id: MELCloud answers with an
+   * error if it is omitted, even when the device is unambiguous.
    */
   device(o: { deviceId: string; buildingId: string; signal?: AbortSignal }): Promise<unknown> {
     return this.request('GET', '/Device/Get', {
@@ -46,10 +46,9 @@ export class MelcloudClient {
   }
 
   /**
-   * Le relevé d'énergie d'une machine sur une période (kWh consommés et produits, par jour et par
-   * usage : chauffage, eau chaude, froid). Beaucoup d'installations SANS compteur d'énergie
-   * répondent des zéros — c'est une réponse, pas une panne, et seule la capture dira ce que vos
-   * machines rendent vraiment.
+   * A machine's energy report over a period (kWh consumed and produced, per day and per use:
+   * heating, hot water, cooling). Many installations WITHOUT an energy meter answer zeros — that
+   * is an answer, not a failure, and only the capture will tell what your machines really return.
    */
   energyReport(o: { deviceId: string; from: string; to: string; signal?: AbortSignal }): Promise<unknown> {
     return this.request('POST', '/EnergyCost/Report', {
@@ -63,7 +62,7 @@ export class MelcloudClient {
     return signal ? AbortSignal.any([signal, timeout]) : timeout
   }
 
-  /** Une requête authentifiée. La clé de session ne figure dans aucun message d'erreur. */
+  /** An authenticated request. The session key appears in no error message. */
   async request(method: 'GET' | 'POST', path: string, o: { query?: Record<string, string>; body?: unknown; signal?: AbortSignal } = {}): Promise<unknown> {
     const key = this.opts.auth.key()
     const url = new URL(`${this.opts.baseUrl}${path}`)

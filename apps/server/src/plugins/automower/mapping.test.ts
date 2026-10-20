@@ -7,33 +7,33 @@ import {
 import { actionBody, applyEvent, connectedOf, localTimestamp, parseMowers, parseSvgMap, toActivity, toDescriptor, toJournal, toJournalEntry, toSiteMap, toStatePatch } from './mapping'
 import { wsEventSchema } from './types'
 
-// Le mappage est pur : les fixtures (provisoires, d'après la documentation) suffisent à le tenir.
+// The mapping is pure: the fixtures (provisional, from the documentation) are enough to pin it down.
 
 const TZ = 'Europe/Paris'
 const NOW = Date.UTC(2026, 8, 16, 12)
 const first = (list: unknown) => parseMowers(list)[0]!
 
-describe('automower mapping — descripteur', () => {
-  it('un robot = un appareil mower, nommé par le fabricant, identifié par son UUID', () => {
+describe('automower mapping — descriptor', () => {
+  it('one robot = one mower device, named by the vendor, identified by its UUID', () => {
     const d = toDescriptor(first(MOWERS_ERROR))
     expect(d).toMatchObject({ id: `automower:${MOWER_ID}`, pluginId: 'automower', externalId: MOWER_ID, kind: 'mower', name: 'Tondeuse' })
-    // la capture déclare zones de travail, zones d'exclusion, position et erreur confirmable : les capacités suivent
+    // the capture declares work areas, stay-out zones, position and confirmable error: the capabilities follow
     expect(d.capabilities).toEqual(['mow', 'park', 'battery', 'schedule', 'journal', 'work_areas', 'stay_out_zones', 'site_map', 'confirm_error'])
     expect(d.meta).toEqual({ manufacturer: 'Husqvarna', model: 'Husqvarna Automower® 435X AWD' })
   })
 
-  it('une entrée à la forme inattendue est écartée, les autres survivent', () => {
+  it('an entry with an unexpected shape is dropped, the others survive', () => {
     const list = { data: [{ id: 42 }, MOWERS_ERROR.data[0]] }
     expect(parseMowers(list)).toHaveLength(1)
   })
 })
 
-describe('automower mapping — activité', () => {
-  it('l’erreur prime sur l’activité déclarée', () => {
+describe('automower mapping — activity', () => {
+  it('the error wins over the declared activity', () => {
     expect(toActivity({ activity: 'PARKED_IN_CS', state: 'ERROR' })).toBe('error')
     expect(toActivity({ activity: 'MOWING', state: 'FATAL_ERROR' })).toBe('error')
   })
-  it('les activités du fabricant, en toute casse', () => {
+  it('the vendor activities, in any case', () => {
     expect(toActivity({ activity: 'MOWING', state: 'IN_OPERATION' })).toBe('mowing')
     expect(toActivity({ activity: 'leaving', state: 'in_operation' })).toBe('mowing')
     expect(toActivity({ activity: 'GOING_HOME', state: 'IN_OPERATION' })).toBe('returning')
@@ -47,28 +47,28 @@ describe('automower mapping — activité', () => {
   })
 })
 
-describe('automower mapping — horodatages locaux', () => {
-  it('ramène l’heure murale du robot à l’instant vrai, heure d’été comprise', () => {
-    // 2026-09-15 18:42:10 mur, à Paris en septembre (UTC+2) → 16:42:10 UTC
+describe('automower mapping — local timestamps', () => {
+  it('turns the robot’s wall-clock time back into the true instant, summer time included', () => {
+    // 2026-09-15 18:42:10 wall clock, in Paris in September (UTC+2) → 16:42:10 UTC
     expect(localTimestamp(Date.UTC(2026, 8, 15, 18, 42, 10), TZ)).toBe(Date.UTC(2026, 8, 15, 16, 42, 10))
-    // en janvier (UTC+1)
+    // in January (UTC+1)
     expect(localTimestamp(Date.UTC(2026, 0, 10, 9), TZ)).toBe(Date.UTC(2026, 0, 10, 8))
   })
-  it('accepte des secondes sur un vieux firmware, et un fuseau inconnu vaut UTC', () => {
+  it('accepts seconds on an old firmware, and an unknown time zone counts as UTC', () => {
     expect(localTimestamp(1789497730, TZ)).toBe(Date.UTC(2026, 8, 15, 16, 42, 10))
     expect(localTimestamp(Date.UTC(2026, 8, 15, 18), 'Mars/Olympus')).toBe(Date.UTC(2026, 8, 15, 18))
   })
 })
 
-describe('automower mapping — état complet', () => {
-  it('la CAPTURE : garé, retenu par son planning jusqu’à demain 10 h locales, statut en vrai UTC, position à la station', () => {
+describe('automower mapping — full state', () => {
+  it('the CAPTURE: parked, held by its schedule until 10 am local tomorrow, status in real UTC, position at the station', () => {
     const m = first(MOWERS_PARKED)
     const p = toStatePatch(m, { tz: TZ, now: NOW })
     expect(p.activity).toBe('parked')
     expect(p.battery).toBe(100)
     expect(p.errorCode).toBeNull()
     expect(p.restrictedReason).toBe('week_schedule')
-    // 1789639200000 se lit 10:00 « UTC » : c'est 10 h LOCALES (le créneau du calendrier commence à 600 min), soit 08:00 UTC
+    // 1789639200000 reads 10:00 "UTC": it is 10 am LOCAL (the calendar slot starts at 600 min), i.e. 08:00 UTC
     expect(p.nextStartAt).toBe(Date.UTC(2026, 8, 17, 8))
     expect(p.statusAt).toBe(1789570593758)
     const [head] = m.attributes.positions as { latitude: number; longitude: number }[]
@@ -77,19 +77,19 @@ describe('automower mapping — état complet', () => {
     expect(p.statistics).toMatchObject({ cuttingTimeS: 14000000, chargingCycles: 45, collisions: 9500, driveDistanceM: 9000000 })
   })
 
-  it('robot en erreur de boucle : code, texte du fabricant, date locale ramenée en UTC, pas de prochain départ', () => {
+  it('robot in loop error: code, vendor text, local date brought back to UTC, no next start', () => {
     const p = toStatePatch(first(MOWERS_ERROR), { tz: TZ, now: NOW })
     expect(p.activity).toBe('error')
     expect(p.battery).toBe(100)
     expect(p.errorCode).toBe(2)
     expect(p.errorMessage).toBe('No loop signal')
     expect(p.errorAt).toBe(Date.UTC(2026, 8, 15, 16, 42, 10))
-    expect(p.errorConfirmable).toBe(true)                 // tel que la liste le dit (fixture : confirmable)
+    expect(p.errorConfirmable).toBe(true)                 // as the list says it (fixture: confirmable)
     expect(p.nextStartAt).toBeNull()
     expect(p.restrictedReason).toBe('not_applicable')
     expect(p.cuttingHeight).toBe(7)
     expect(p.statusAt).toBe(1789452130000)
-    // la position la plus récente est en tête, datée du dernier statut reçu
+    // the most recent position comes first, dated by the last status received
     expect(p.location).toMatchObject({ at: 1789452130000 })
     expect(p.statistics).toEqual({
       cuttingTimeS: 14000000, chargingTimeS: 3000000, runningTimeS: 15500000, searchingTimeS: 900000,
@@ -98,32 +98,32 @@ describe('automower mapping — état complet', () => {
     expect(connectedOf(first(MOWERS_ERROR))).toBe(true)
   })
 
-  it('robot en tonte : l’erreur est EFFACÉE (null), le prochain départ est un vrai instant', () => {
+  it('robot mowing: the error is CLEARED (null), the next start is a real instant', () => {
     const p = toStatePatch(first(MOWERS_MOWING), { tz: TZ, now: NOW })
     expect(p.activity).toBe('mowing')
     expect(p.battery).toBe(83)
     expect(p.errorCode).toBeNull()
     expect(p.errorMessage).toBeNull()
     expect(p.errorAt).toBeNull()
-    // 2026-09-17 10:00 mur à Paris → 08:00 UTC
+    // 2026-09-17 10:00 wall clock in Paris → 08:00 UTC
     expect(p.nextStartAt).toBe(Date.UTC(2026, 8, 17, 8))
     expect(p.restrictedReason).toBe('none')
   })
 
-  it('robot hors ligne : l’état se lit quand même, et `connected` dit qu’il ne parle plus', () => {
+  it('robot offline: the state is read anyway, and `connected` says it no longer talks', () => {
     const m = first(MOWERS_OFFLINE)
     expect(toStatePatch(m, { tz: TZ, now: NOW })).toMatchObject({ activity: 'parked', restrictedReason: 'week_schedule' })
     expect(connectedOf(m)).toBe(false)
   })
 })
 
-describe('automower mapping — événements du flux (des DELTAS, fondus dans le robot connu)', () => {
+describe('automower mapping — stream events (DELTAS, merged into the known robot)', () => {
   const ev = (raw: unknown) => wsEventSchema.parse(raw)
   const o = { tz: TZ, now: NOW }
   const parked = first(MOWERS_PARKED)
   const NEXT = Date.UTC(2026, 8, 17, 8)
 
-  it('position → location datée de maintenant, et le relevé gagne le point en tête', () => {
+  it('position → location dated now, and the trail gains the point at its head', () => {
     const r = applyEvent(ev(WS_POSITION), parked, o)!
     const { latitude, longitude } = WS_POSITION.attributes.position
     expect(r.patch).toEqual({ location: { lat: latitude, lon: longitude, at: NOW } })
@@ -131,82 +131,82 @@ describe('automower mapping — événements du flux (des DELTAS, fondus dans le
     expect(r.next.attributes.positions).toHaveLength(50)
   })
 
-  it('batterie et hauteur de coupe : le fragment suffit', () => {
+  it('battery and cutting height: the fragment is enough', () => {
     expect(applyEvent(ev(WS_BATTERY), parked, o)!.patch).toEqual({ battery: 77 })
     expect(applyEvent(ev(WS_CUTTING_HEIGHT), parked, o)!.patch).toEqual({ cuttingHeight: 7 })
   })
 
-  it('un planificateur SANS prochain départ garde celui qu’on connaît (il était effacé)', () => {
+  it('a planner WITHOUT next start keeps the known one (it used to be wiped)', () => {
     const r = applyEvent(ev(WS_PLANNER), parked, o)!
     expect(r.patch).toEqual({ nextStartAt: NEXT, restrictedReason: 'week_schedule' })
   })
 
-  it('la séquence capturée après ParkUntilFurtherNotice : un champ à la fois, l’activité se déduit du robot fondu', () => {
+  it('the sequence captured after ParkUntilFurtherNotice: one field at a time, the activity is deduced from the merged robot', () => {
     let m = parked
     const step = (raw: unknown) => { const r = applyEvent(ev(raw), m, o)!; m = r.next; return r.patch }
-    // `inactiveReason` seul : rien ne change à l'écran, le robot est toujours garé, sans erreur
+    // `inactiveReason` alone: nothing changes on screen, the robot is still parked, without error
     expect(step(WS_MOWER_INACTIVE)).toMatchObject({ activity: 'parked', errorCode: null, restrictedReason: 'week_schedule' })
     expect(step(WS_MOWER_STOPPED).activity).toBe('stopped')
     expect(step(WS_MOWER_NOT_APPLICABLE).activity).toBe('stopped')
     expect(step(WS_MOWER_STOPPED_FULL).activity).toBe('stopped')
-    // mode HOME = garé jusqu'à nouvel ordre : c'est la restriction qui le dit, le planificateur ne le sait pas
+    // HOME mode = parked until further notice: the restriction says so, the planner does not know it
     expect(step(WS_MOWER_HOME)).toMatchObject({ activity: 'stopped', restrictedReason: 'park_override' })
     expect(step(WS_MOWER_HOME_PARKED)).toMatchObject({ activity: 'parked', restrictedReason: 'park_override', nextStartAt: NEXT })
-    // ResumeSchedule : retour au planning
+    // ResumeSchedule: back to the schedule
     expect(step(WS_MOWER_MAIN_PARKED)).toMatchObject({ activity: 'parked', restrictedReason: 'week_schedule' })
     expect(step(WS_PLANNER)).toEqual({ nextStartAt: NEXT, restrictedReason: 'week_schedule' })
   })
 
-  it('la séquence capturée d’un Start qui échoue : tonte forcée, « en route » sans bouger, puis l’erreur en trois deltas', () => {
+  it('the captured sequence of a failing Start: forced mowing, "on its way" without moving, then the error in three deltas', () => {
     let m = parked
     const step = (raw: unknown) => { const r = applyEvent(ev(raw), m, o); if (r) m = r.next; return r?.patch ?? null }
-    // tonte forcée : le prochain départ n'a plus cours (0 → effacé), plus rien ne retient le robot
+    // forced mowing: the next start no longer applies (0 → cleared), nothing holds the robot back anymore
     expect(step(WS_PLANNER_FORCE_MOW)).toEqual({ nextStartAt: null, restrictedReason: 'none' })
-    // `state: IN_OPERATION` seul, l'activité dit encore PARKED_IN_CS : garé (deux secondes) — puis en route
+    // `state: IN_OPERATION` alone, the activity still says PARKED_IN_CS: parked (two seconds) — then on its way
     expect(step(WS_MOWER_IN_OPERATION)!.activity).toBe('parked')
     expect(step(WS_MOWER_LEAVING)).toMatchObject({ activity: 'mowing', errorCode: null, errorConfirmable: null })
     expect(step(WS_POSITION)).toEqual({ location: { lat: WS_POSITION.attributes.position.latitude, lon: WS_POSITION.attributes.position.longitude, at: NOW } })
     expect(step(WS_POSITION_2)!.location).toMatchObject({ lat: WS_POSITION_2.attributes.position.latitude })
-    // l'erreur : le code d'abord (l'état dit encore en route), puis l'état, puis la date — en SECONDES
+    // the error: the code first (the state still says on its way), then the state, then the date — in SECONDS
     expect(step(WS_MOWER_ERROR_CODE)).toMatchObject({ activity: 'mowing', errorCode: 2, errorMessage: 'No loop signal', errorAt: null, errorConfirmable: false })
     expect(step(WS_MOWER_ERROR_STATE)).toMatchObject({ activity: 'error', errorCode: 2 })
     expect(step(WS_MOWER_ERROR_FULL)).toMatchObject({ activity: 'error', errorCode: 2 })
-    expect(step(WS_MESSAGE_ERROR)).toBeNull()             // le journal des messages : pas encore lu
-    // 1789582935 s se lit 2026-09-16 18:22:15 « UTC » = 18:22:15 à Paris = 16:22:15 UTC
+    expect(step(WS_MESSAGE_ERROR)).toBeNull()             // the message log: not read yet
+    // 1789582935 s reads 2026-09-16 18:22:15 "UTC" = 18:22:15 in Paris = 16:22:15 UTC
     expect(step(WS_MOWER_ERROR_AT)).toMatchObject({ activity: 'error', errorCode: 2, errorAt: Date.UTC(2026, 8, 16, 16, 22, 15) })
   })
 
-  it('un fragment `mower` sans code d’erreur ne lève PAS l’erreur connue', () => {
+  it('a `mower` fragment without error code does NOT clear the known error', () => {
     const r = applyEvent(ev(WS_MOWER_INACTIVE), first(MOWERS_ERROR), o)!
     expect(r.patch).toMatchObject({ activity: 'error', errorCode: 2, errorMessage: 'No loop signal' })
   })
 
-  it('un événement qui ne nous concerne pas ne produit rien', () => {
+  it('an event that does not concern us produces nothing', () => {
     expect(applyEvent(ev({ id: MOWER_ID, type: 'headlights-event-v2', attributes: { headlight: { mode: 'ALWAYS_ON' } } }), parked, o)).toBeNull()
     expect(applyEvent(ev({ id: MOWER_ID, type: 'battery-event-v2', attributes: {} }), parked, o)).toBeNull()
   })
 })
 
-describe('automower mapping — journal', () => {
-  it('la capture : 22 lignes du plus récent au plus ancien, gravités traduites, dates locales ramenées en UTC', () => {
+describe('automower mapping — log', () => {
+  it('the capture: 22 lines from most recent to oldest, severities translated, local dates brought back to UTC', () => {
     const j = toJournal(MESSAGES, TZ)
     expect(j).toHaveLength(22)
     expect(j.map((e) => e.at)).toEqual([...j.map((e) => e.at)].sort((a, b) => b - a))
-    // 1789582935 s = 2026-09-16 18:22:15 mur à Paris → 16:22:15 UTC
+    // 1789582935 s = 2026-09-16 18:22:15 wall clock in Paris → 16:22:15 UTC
     expect(j[0]).toMatchObject({ at: Date.UTC(2026, 8, 16, 16, 22, 15), severity: 'error', code: 2, message: 'No loop signal' })
     expect(j[0]!.location).toBeDefined()
     expect(j.find((e) => e.code === 1)).toMatchObject({ severity: 'fatal', message: 'Outside working area' })
     expect(new Set(j.map((e) => e.severity))).toEqual(new Set(['error', 'fatal', 'warning']))
   })
 
-  it('une position quasi nulle (pas de fix GPS) ne fait pas une position', () => {
+  it('a near-zero position (no GPS fix) does not make a position', () => {
     const j = toJournal(MESSAGES, TZ)
     const blind = j.filter((e) => e.location === undefined)
     expect(blind.length).toBeGreaterThan(0)
     for (const e of blind) expect(e.code).toBe(62)
   })
 
-  it('une ligne du flux (message-event-v2) devient une entrée ; une ligne sans date ni code est sautée', () => {
+  it('a stream line (message-event-v2) becomes an entry; a line without date or code is skipped', () => {
     expect(toJournalEntry(WS_MESSAGE_ERROR.attributes.message, TZ)).toMatchObject({ at: Date.UTC(2026, 8, 16, 16, 22, 15), severity: 'error', code: 2, message: 'No loop signal' })
     expect(toJournalEntry({ severity: 'INFO' }, TZ)).toBeNull()
     expect(toJournalEntry({ time: 1789582935, code: 999, severity: 'WHATEVER' }, TZ)).toMatchObject({ severity: 'info', message: 'Error 999' })
@@ -214,8 +214,8 @@ describe('automower mapping — journal', () => {
   })
 })
 
-describe('automower mapping — commandes', () => {
-  it('tondre une heure, reprendre le planning, pause, se garer', () => {
+describe('automower mapping — commands', () => {
+  it('mow for an hour, resume the schedule, pause, park', () => {
     expect(actionBody({ type: 'mower.start', durationMin: 60 })).toEqual({ data: { type: 'Start', attributes: { duration: 60 } } })
     expect(actionBody({ type: 'mower.start' })).toEqual({ data: { type: 'ResumeSchedule' } })
     expect(actionBody({ type: 'mower.pause' })).toEqual({ data: { type: 'Pause' } })
@@ -226,19 +226,19 @@ describe('automower mapping — commandes', () => {
 })
 
 describe('automower mapping — zones', () => {
-  it('la capture : la zone 0 sans nom (tout le terrain), et AUCUNE zone d’exclusion — liste vide, pas inconnue', () => {
+  it('the capture: area 0 unnamed (the whole grounds), and NO stay-out zone — empty list, not unknown', () => {
     const p = toStatePatch(first(MOWERS_PARKED), { tz: TZ, now: NOW })
     expect(p.workAreas).toEqual([{ id: 0, name: '', enabled: true }])
     expect(p.stayOutZones).toEqual([])
   })
 
-  it('des zones tracées : leur nom, leur état ; une zone d’exclusion activée', () => {
+  it('drawn areas: their name, their state; an enabled stay-out zone', () => {
     const p = toStatePatch(first(MOWERS_ZONES), { tz: TZ, now: NOW })
     expect(p.workAreas).toEqual([{ id: 0, name: '', enabled: true }, { id: 123456, name: 'Fond du jardin', enabled: false }])
     expect(p.stayOutZones).toEqual([{ id: STAY_OUT_ID, name: 'Massif', enabled: true }])
   })
 
-  it('un robot qui ne gère pas les zones n’en dit rien, et ne déclare ni zones ni carte', () => {
+  it('a robot that does not handle zones says nothing about them, and declares neither zones nor map', () => {
     const m = first(MOWERS_PARKED)
     const bare = { ...m, attributes: { ...m.attributes, capabilities: { position: false, workAreas: false, stayOutZones: false }, workAreas: null } }
     const p = toStatePatch(bare, { tz: TZ, now: NOW })
@@ -247,14 +247,14 @@ describe('automower mapping — zones', () => {
     expect(toDescriptor(bare).capabilities).toEqual(['mow', 'park', 'battery', 'schedule', 'journal'])
   })
 
-  it('tondre une zone : StartInWorkArea, avec sa durée', () => {
+  it('mow an area: StartInWorkArea, with its duration', () => {
     expect(actionBody({ type: 'mower.start_in_area', workAreaId: 123456, durationMin: 60 }))
       .toEqual({ data: { type: 'StartInWorkArea', attributes: { workAreaId: 123456, duration: 60 } } })
   })
 })
 
-describe('automower mapping — carte', () => {
-  it('la carte générée : millimètres en mètres, terrain vert, obstacle rouge, câble guide bleu, station jaune', () => {
+describe('automower mapping — map', () => {
+  it('the generated map: millimeters to meters, green grounds, red obstacle, blue guide wire, yellow station', () => {
     const shapes = parseSvgMap(MAP_GENERATED_SVG, 'generated')
     expect(shapes.map((s) => [s.kind, s.id, s.name])).toEqual([
       ['station', 'lona_cs', undefined],
@@ -266,7 +266,7 @@ describe('automower mapping — carte', () => {
     expect(shapes[1]!.points[2]).toEqual([10, 30])
   })
 
-  it('la carte de zones : le vert y est une zone de travail tracée (nom sans ses espaces), le rouge une zone d’exclusion, le bleu un chemin', () => {
+  it('the zones map: green there is a drawn work area (name without its spaces), red a stay-out zone, blue a path', () => {
     const shapes = parseSvgMap(MAP_ZONE_SVG, 'zone')
     expect(shapes.map((s) => [s.kind, s.id, s.name])).toEqual([
       ['work_area', '6f1c2a90-3b8e-4d57-9a41-0c2e7b5d8f13', 'Fond du jardin'],
@@ -276,29 +276,29 @@ describe('automower mapping — carte', () => {
     ])
   })
 
-  it('une zone d’exclusion ou de réensauvagement dit son état : masquée (display=none) = désactivée', () => {
+  it('a stay-out or rewilding zone tells its state: hidden (display=none) = disabled', () => {
     const shapes = parseSvgMap(MAP_ZONE_SVG, 'zone')
     expect(shapes.filter((s) => s.kind === 'stay_out' || s.kind === 'rewilding').map((s) => [s.kind, s.enabled])).toEqual([['stay_out', true], ['rewilding', false]])
     expect(shapes.find((s) => s.kind === 'work_area')).not.toHaveProperty('enabled')
   })
 
-  it('les deux cartes fondues ; la station est le premier point de la ligne jaune', () => {
+  it('the two maps merged; the station is the first point of the yellow line', () => {
     const map = toSiteMap([{ svg: MAP_GENERATED_SVG, source: 'generated' }, { svg: MAP_ZONE_SVG, source: 'zone' }])
     expect(map.station).toEqual([2, -0.5])
     expect(map.shapes).toHaveLength(8)
   })
 
-  it('sans ligne jaune, pas de station ; une forme d’un seul point ou d’une couleur inconnue est sautée', () => {
+  it('without a yellow line, no station; a shape with a single point or an unknown color is skipped', () => {
     const map = toSiteMap([{ svg: '<svg><polygon fill="green" points="0,0"/><polygon fill="purple" points="0,0 1000,0 0,1000"/></svg>', source: 'generated' }])
     expect(map).toEqual({ station: null, shapes: [] })
   })
 })
 
-describe('automower mapping — tâche en cours', () => {
-  it('la liste dit la zone en cours ; garé, il n’est pas « en route »', () => {
+describe('automower mapping — current task', () => {
+  it('the list tells the current area; parked, it is not "on its way"', () => {
     expect(toStatePatch(first(MOWERS_PARKED), { tz: TZ, now: NOW })).toMatchObject({ workAreaId: 0, leaving: false })
   })
-  it('un départ capté (LEAVING) : « en route », et la zone connue survit au delta qui ne la porte pas', () => {
+  it('a captured departure (LEAVING): "on its way", and the known area survives the delta that does not carry it', () => {
     const m = first(MOWERS_ZONES)
     const current = { ...m, attributes: { ...m.attributes, mower: { ...m.attributes.mower!, workAreaId: 123456 } } }
     const applied = applyEvent(wsEventSchema.parse(WS_MOWER_LEAVING), current, { tz: TZ, now: NOW })!

@@ -2,19 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { DEVICE_GET, LIST_DEVICES } from './__fixtures__/melcloud'
 import { lastSeenAt, toDescriptors, toDeviceLinks, toStatePatch, toSystem, toZones, unitAvailable } from './mapping'
 
-// Deux familles de cas, et la différence compte.
+// Two families of cases, and the difference matters.
 //
-// `__fixtures__/melcloud.ts` est la CAPTURE du vrai compte : c'est elle qui fait foi, et le dernier
-// bloc de ce fichier la rejoue telle quelle.
+// `__fixtures__/melcloud.ts` is the CAPTURE of the real account: it is authoritative, and the last
+// block of this file replays it as is.
 //
-// Les charges utiles ci-dessous, elles, sont FABRIQUÉES, et restent volontairement hors de
-// `__fixtures__/` pour qu'on ne les confonde jamais avec du capturé. Elles ne servent qu'à une
-// chose que la capture ne peut pas prouver à elle seule : que le parcours trouve les appareils SANS
-// rien supposer de leur chemin. La vraie maison range le sien sous `Structure.Devices`, mais une
-// installation à étages ou à zones le range deux niveaux plus bas, et personne ici n'a une telle
-// installation sous la main pour le vérifier.
+// The payloads below, on the other hand, are MADE UP, and deliberately stay out of `__fixtures__/`
+// so they are never mistaken for captured data. They serve only one thing the capture cannot prove
+// on its own: that the walk finds the devices WITHOUT assuming anything about their path. The real
+// house files its own under `Structure.Devices`, but an installation with floors or areas files it
+// two levels lower, and nobody here has such an installation at hand to check it.
 
-/** Une machine posée directement sous la structure du bâtiment. */
+/** A machine placed directly under the building's structure. */
 const AT_ROOT = {
   ID: 1, Name: 'Maison', Structure: {
     Devices: [{ DeviceID: 111, BuildingID: 1, DeviceName: 'Ecodan Nord', Device: { DeviceType: 1 } }],
@@ -22,7 +21,7 @@ const AT_ROOT = {
   },
 }
 
-/** La même, rangée sous une zone d'un étage — deux niveaux plus bas. */
+/** The same, filed under an area of a floor — two levels lower. */
 const IN_FLOOR_AREA = {
   ID: 2, Name: 'Annexe', Structure: {
     Devices: [], Areas: [],
@@ -30,19 +29,19 @@ const IN_FLOOR_AREA = {
   },
 }
 
-describe('MELCloud — inventaire', () => {
-  it('trouve les appareils quel que soit leur rangement dans la structure', () => {
+describe('MELCloud — inventory', () => {
+  it('finds the devices wherever they are filed in the structure', () => {
     const links = toDeviceLinks([AT_ROOT, IN_FLOOR_AREA])
     expect(links.map((l) => l.deviceId)).toEqual(['111', '222'])
     expect(links.map((l) => l.buildingName)).toEqual(['Maison', 'Annexe'])
   })
 
-  it('reconnaît une Ecodan comme une machine air-eau', () => {
+  it('recognizes an Ecodan as an air-to-water machine', () => {
     const [link] = toDeviceLinks([AT_ROOT])
     expect(link).toMatchObject({ deviceId: '111', buildingId: '1', name: 'Ecodan Nord', family: 'atw', deviceType: 1 })
   })
 
-  it('ne compte pas deux fois une machine dont le sous-objet répète son identifiant', () => {
+  it('does not count twice a machine whose sub-object repeats its id', () => {
     const repeated = {
       ID: 3, Name: 'Maison', Structure: {
         Devices: [{ DeviceID: 333, BuildingID: 3, DeviceName: 'Ecodan', Device: { DeviceID: 333, DeviceType: 1 } }],
@@ -51,7 +50,7 @@ describe('MELCloud — inventaire', () => {
     expect(toDeviceLinks([repeated]).map((l) => l.deviceId)).toEqual(['333'])
   })
 
-  it('garde les autres machines quand l’une d’elles a une forme inattendue', () => {
+  it('keeps the other machines when one of them has an unexpected shape', () => {
     const mixed = {
       ID: 4, Name: 'Maison', Structure: {
         Devices: [
@@ -63,92 +62,92 @@ describe('MELCloud — inventaire', () => {
     expect(toDeviceLinks([mixed]).map((l) => l.deviceId)).toEqual(['444'])
   })
 
-  it('accepte un type d’appareil posé à la racine plutôt que dans le sous-objet', () => {
+  it('accepts a device type placed at the root rather than in the sub-object', () => {
     const flat = { ID: 5, Name: 'Maison', Structure: { Devices: [{ DeviceID: 555, BuildingID: 5, DeviceType: 1 }] } }
     expect(toDeviceLinks([flat])[0]).toMatchObject({ family: 'atw', name: 'MELCloud 555' })
   })
 
-  it('rend une liste vide sur une réponse vide ou inattendue, sans lever', () => {
+  it('returns an empty list on an empty or unexpected response, without throwing', () => {
     expect(toDeviceLinks([])).toEqual([])
     expect(toDeviceLinks(null)).toEqual([])
     expect(toDeviceLinks({ unexpected: 'shape' })).toEqual([])
   })
 })
 
-describe('MELCloud — la capture du vrai compte', () => {
-  it('trouve l’unique machine de l’installation réelle', () => {
+describe('MELCloud — the capture of the real account', () => {
+  it('finds the single machine of the real installation', () => {
     const links = toDeviceLinks(LIST_DEVICES)
     expect(links).toHaveLength(1)
     expect(links[0]).toMatchObject({ name: 'Chauffage', family: 'atw', deviceType: 1, buildingName: 'Maison' })
   })
 
   /**
-   * Trois machines physiques (une cascade de Zubadan derrière un seul FTC) n'apparaissent PAS comme
-   * trois appareils : MELCloud n'en montre qu'un. Le mappage ne doit donc jamais supposer qu'un
-   * appareil vaut une machine — ce test est là pour que la supposition ne revienne pas par la
-   * fenêtre le jour où quelqu'un lira « 3 PAC » quelque part.
+   * Three physical machines (a cascade of Zubadan behind a single FTC) do NOT show up as three
+   * devices: MELCloud only shows one. The mapping must therefore never assume that one device is
+   * one machine — this test is here so the assumption does not creep back in the day someone reads
+   * "3 heat pumps" somewhere.
    */
-  it('ne voit qu’un appareil là où il y a trois machines', () => {
+  it('sees only one device where there are three machines', () => {
     expect(toDeviceLinks(LIST_DEVICES)).toHaveLength(1)
   })
 })
 
-/** Instant de référence : deux minutes après la dernière remontée de la capture (18:55 locale). */
+/** Reference instant: two minutes after the capture's last report (18:55 local). */
 const NOW = new Date('2026-09-17T18:57:00').getTime()
 
-describe('MELCloud — les deux zones, lues sur la capture', () => {
+describe('MELCloud — the two zones, read on the capture', () => {
   const link = toDeviceLinks(LIST_DEVICES)[0]!
 
-  it('lit la zone 1 sur l’ambiante et la zone 2 sur l’eau de départ', () => {
+  it('reads zone 1 on room temperature and zone 2 on flow water', () => {
     const [z1, z2] = toZones(link.fields)
     expect(z1).toMatchObject({ zone: 1, control: 'room', currentTempC: 23, targetTempC: 19.5, bounds: [0, 40] })
     expect(z2).toMatchObject({ zone: 2, control: 'flow', currentTempC: 20, targetTempC: 45, bounds: [30, 60] })
   })
 
   /**
-   * LE piège de cette installation : la zone 2 n'a pas de sonde d'ambiance et MELCloud rend -39,
-   * pas un `null`. Une lecture naïve publierait une pièce à -39 °C toute l'année.
+   * THE trap of this installation: zone 2 has no room sensor and MELCloud returns -39, not a
+   * `null`. A naive read would publish a room at -39 °C all year round.
    */
-  it('ne publie jamais la sentinelle -39 de la sonde absente', () => {
+  it('never publishes the -39 sentinel of the missing sensor', () => {
     const z2 = toZones(link.fields)[1]!
-    expect(link.fields.RoomTemperatureZone2).toBe(-39)   // ce que le fabricant envoie
-    expect(z2.currentTempC).toBe(20)                      // ce qu'on en publie
+    expect(link.fields.RoomTemperatureZone2).toBe(-39)   // what the vendor sends
+    expect(z2.currentTempC).toBe(20)                      // what we publish of it
   })
 
-  it('retombe sur le départ si la sonde d’une zone en ambiante déraille', () => {
+  it('falls back on the flow if a room-temperature zone’s sensor goes haywire', () => {
     const broken = { ...link.fields, RoomTemperatureZone1: -39 }
     expect(toZones(broken)[0]).toMatchObject({ control: 'flow', currentTempC: 20.5, targetTempC: 60 })
   })
 
-  it('publie un climate par zone, en lecture seule et sans proposer le froid', () => {
+  it('publishes one climate per zone, read-only and without offering cooling', () => {
     const [d1, d2] = toDescriptors(link)
     expect(d1).toMatchObject({ id: 'melcloud:111111-z1', kind: 'climate', name: 'Chauffage', capabilities: ['current_temp'] })
     expect(d2!.id).toBe('melcloud:111111-z2')
-    // `CanCool: false` : « Refroidir » ne doit pas figurer dans les modes annoncés
+    // `CanCool: false`: "Cool" must not appear among the announced modes
     expect(d1!.meta.climate?.modes).not.toContain('cool')
     expect(d1!.meta.climate?.control).toBe('room')
     expect(d2!.meta.climate?.control).toBe('flow')
     expect(d2!.meta.targetTempC).toEqual([30, 60])
   })
 
-  /** Allumée mais au repos : c'est l'état de septembre, et `mode` seul ne saurait pas le dire. */
-  it('distingue « allumée » de « en train de chauffer »', () => {
+  /** On but idle: that is the September state, and `mode` alone could not tell. */
+  it('tells "on" from "heating"', () => {
     const zones = toZones(link.fields)
     for (const z of zones) {
       expect(toStatePatch(link.fields, z, NOW)).toMatchObject({ available: true, mode: 'heat', action: 'idle' })
     }
   })
 
-  it('éteint les zones quand la machine est éteinte', () => {
+  it('turns the zones off when the machine is off', () => {
     const off = { ...link.fields, Power: false }
     expect(toStatePatch(off, toZones(off)[0]!, NOW)).toMatchObject({ mode: 'off', action: 'off' })
   })
 })
 
-describe('MELCloud — l’état de la machine', () => {
+describe('MELCloud — the machine’s state', () => {
   const link = toDeviceLinks(LIST_DEVICES)[0]!
 
-  it('résume ce que la vue Chauffage a besoin de montrer', () => {
+  it('sums up what the Heating view needs to show', () => {
     expect(toSystem(link, NOW)).toMatchObject({
       name: 'Chauffage', power: true, offline: false,
       outdoorTempC: 22, flowTempC: 20.5, returnTempC: 20.5, condensingTempC: 40.57, demandPercent: 100,
@@ -157,70 +156,70 @@ describe('MELCloud — l’état de la machine', () => {
     })
   })
 
-  /** `ErrorCode` VAUT 8000 au repos : le lire comme un booléen mettrait la maison en panne à vie. */
-  it('ne prend pas le code d’erreur 8000 pour une panne', () => {
+  /** `ErrorCode` IS 8000 at rest: reading it as a boolean would put the house in failure for life. */
+  it('does not take error code 8000 for a failure', () => {
     const s = toSystem(link, NOW)
     expect(s.error.code).toBe(8000)
     expect(s.error.hasError).toBe(false)
   })
 
-  /** Sans compteur, la vue doit pouvoir OMETTRE la consommation plutôt qu'afficher des zéros. */
-  it('dit que cette machine n’a pas de compteur d’énergie', () => {
+  /** Without a meter, the view must be able to OMIT the consumption rather than show zeros. */
+  it('says this machine has no energy meter', () => {
     expect(toSystem(link, NOW).energyMeter).toBe(false)
   })
 })
 
-describe('MELCloud — les champs qui ne sont pas là où on les croit', () => {
+describe('MELCloud — the fields that are not where you think', () => {
   /**
-   * `LastCommunication` n'existe QUE dans `Device/Get`. Le sondage lit `ListDevices`, qui porte
-   * `LastTimeStamp` : lire le premier sur le second donnait un champ nul en permanence, sans la
-   * moindre erreur pour le signaler. Exactement le genre de piège que seule une capture révèle.
+   * `LastCommunication` ONLY exists in `Device/Get`. Polling reads `ListDevices`, which carries
+   * `LastTimeStamp`: reading the former on the latter gave a permanently null field, without the
+   * slightest error to signal it. Exactly the kind of trap only a capture reveals.
    */
-  it('date la dernière remontée avec le champ que ListDevices porte VRAIMENT', () => {
+  it('dates the last report with the field ListDevices REALLY carries', () => {
     const link = toDeviceLinks(LIST_DEVICES)[0]!
     expect(link.fields.LastCommunication).toBeUndefined()
     expect(toSystem(link, NOW).lastSeen).toBe(new Date('2026-09-17T18:55:00').getTime())
     expect(toSystem(link, NOW).wifi).toBe('NORMAL')
   })
 
-  it('sait quand même lire une machine venue de la lecture détaillée', () => {
+  it('can still read a machine coming from the detailed read', () => {
     const link = toDeviceLinks(LIST_DEVICES)[0]!
     const fromDetail = { ...link, fields: { ...DEVICE_GET } }
-    // et l'UTC de cette route-là est ramené au même instant, pas décalé du fuseau
+    // and that route's UTC is brought back to the same instant, not shifted by the time zone
     expect(toSystem(fromDetail, NOW).lastSeen).toBe(Date.parse('2026-09-17T16:55:49.844Z'))
   })
 })
 
-describe('MELCloud — joignable ou pas : le drapeau du fabricant ment', () => {
+describe('MELCloud — reachable or not: the vendor’s flag lies', () => {
   const link = toDeviceLinks(LIST_DEVICES)[0]!
   const seen = new Date('2026-09-17T18:55:00').getTime()
 
   /**
-   * Relevé sur la VRAIE machine : `Offline: true` pendant que l'horodatage avançait chaque minute,
-   * que la remontée suivante était annoncée dans soixante secondes, que le module Wi-Fi disait
-   * `NORMAL` et qu'aucune erreur n'était signalée. S'y fier grisait les deux zones de la maison,
-   * données fraîches à l'appui. C'est le bug que ce test empêche de revenir.
+   * Observed on the REAL machine: `Offline: true` while the timestamp moved forward every minute,
+   * the next report was announced in sixty seconds, the Wi-Fi module said `NORMAL` and no error was
+   * reported. Trusting it greyed out the house's two zones, fresh data notwithstanding. This is the
+   * bug this test keeps from coming back.
    */
-  it('reste joignable quand MELCloud se dit hors ligne mais parle encore', () => {
+  it('stays reachable when MELCloud says it is offline but still talks', () => {
     const lying = { ...link.fields, Offline: true }
     expect(unitAvailable(lying, seen + 60_000)).toBe(true)
     expect(toStatePatch(lying, toZones(lying)[0]!, seen + 60_000).available).toBe(true)
   })
 
-  it('devient injoignable quand la machine se tait vraiment', () => {
+  it('becomes unreachable when the machine really goes silent', () => {
     expect(unitAvailable(link.fields, seen + 60 * 60_000)).toBe(false)
     expect(toSystem(link, seen + 60 * 60_000).stale).toBe(true)
   })
 
-  /** Sans le moindre horodatage, il ne reste que la parole du fabricant : on la prend faute de mieux. */
-  it('retombe sur le drapeau du fabricant quand aucune date n’est donnée', () => {
+  /** Without any timestamp, only the vendor's word remains: we take it for want of anything better. */
+  it('falls back on the vendor’s flag when no date is given', () => {
     const { LastTimeStamp: _a, LastCommunication: _b, ...mute } = link.fields
     expect(unitAvailable({ ...mute, Offline: false }, seen)).toBe(true)
     expect(unitAvailable({ ...mute, Offline: true }, seen)).toBe(false)
   })
 
-  /** Les deux routes n'écrivent pas leur heure dans la même base : 17:58 UTC EST 19:58 local. */
-  it('ramène les deux horodatages du fabricant au même instant', () => {
+  /** The two routes do not write their time in the same base: 17:58 UTC IS 19:58 local. */
+  it('brings the vendor’s two timestamps back to the same instant', () => {
     expect(lastSeenAt({ LastTimeStamp: '2026-09-17T19:58:00' }))
       .toBe(new Date('2026-09-17T19:58:00').getTime())
     expect(lastSeenAt({ LastCommunication: '2026-09-17T17:58:00.522' }))

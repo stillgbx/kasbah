@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-// Schémas souples pour ce que l'UI consomme. Les réponses InnerTube varient ; on mappe d'abord en
-// formes stables, puis on valide ici — jamais le JSON brut du fabricant.
+// Loose schemas for what the UI consumes. InnerTube responses vary; we first map into stable
+// shapes, then validate here — never the vendor's raw JSON.
 
 export const trackSchema = z.object({
   videoId: z.string().min(1),
@@ -11,7 +11,7 @@ export const trackSchema = z.object({
   durationS: z.number().int().nonnegative().nullable(),
   album: z.string().nullable().optional(),
   year: z.string().nullable().optional(),
-  /** Badge InnerTube `MUSIC_EXPLICIT_BADGE`. */
+  /** InnerTube badge `MUSIC_EXPLICIT_BADGE`. */
   explicit: z.boolean().optional(),
 })
 export type YtmusicTrack = z.infer<typeof trackSchema>
@@ -42,11 +42,11 @@ export const albumSchema = z.object({
   artists: z.array(z.string()),
   year: z.string().nullable().optional(),
   /**
-   * Déduit du sous-titre InnerTube (« Album · … », « Single · … ») — pas un champ API dédié.
-   * Absent / null = non reconnu → traité comme album.
+   * Deduced from the InnerTube subtitle ("Album · …", "Single · …") — not a dedicated API field.
+   * Absent / null = not recognized → treated as an album.
    */
   releaseType: albumReleaseTypeSchema.nullable().optional(),
-  /** Badge InnerTube `MUSIC_EXPLICIT_BADGE`. */
+  /** InnerTube badge `MUSIC_EXPLICIT_BADGE`. */
   explicit: z.boolean().optional(),
 })
 export type YtmusicAlbum = z.infer<typeof albumSchema>
@@ -60,18 +60,18 @@ export const searchResultSchema = z.object({
 })
 export type YtmusicSearchResult = z.infer<typeof searchResultSchema>
 
-/** Un genre ou une ambiance de « Humeurs et genres » : de quoi l'afficher, et le `params` qui ouvre sa page. */
+/** A genre or a mood from "Moods & genres": what is needed to display it, and the `params` that opens its page. */
 export const exploreCategorySchema = z.object({
   title: z.string().min(1),
   params: z.string().min(1),
-  /** Couleur de la pastille chez YouTube Music (`#rrggbb`), si elle est donnée. */
+  /** The chip's color at YouTube Music (`#rrggbb`), if given. */
   color: z.string().regex(/^#[0-9a-f]{6}$/).nullable(),
 })
 export type YtmusicExploreCategory = z.infer<typeof exploreCategorySchema>
 
 const exploreGroupSchema = z.object({ title: z.string(), categories: z.array(exploreCategorySchema) })
 
-/** « Pour vous » (personnalisé, parfois absent), « Humeurs et moments », « Genres » — titres tels que YouTube les localise. */
+/** "For you" (personalized, sometimes absent), "Moods & moments", "Genres" — titles as YouTube localizes them. */
 export const exploreSchema = z.object({
   forYou: exploreGroupSchema,
   moods: exploreGroupSchema,
@@ -79,7 +79,7 @@ export const exploreSchema = z.object({
 })
 export type YtmusicExplore = z.infer<typeof exploreSchema>
 
-/** Une rangée de la page d'une catégorie : titres, playlists OFFICIELLES, albums (ni clips ni playlists d'utilisateurs). */
+/** A row of a category's page: tracks, OFFICIAL playlists, albums (neither videos nor user playlists). */
 export const exploreShelfSchema = z.object({
   title: z.string(),
   tracks: z.array(trackSchema),
@@ -92,22 +92,22 @@ export const exploreCategoryPageSchema = z.object({
 export type YtmusicExploreCategoryPage = z.infer<typeof exploreCategoryPageSchema>
 
 export const statusSchema = z.object({
-  /** Compte relié (fichier cookie présent et contient `__Secure-3PAPISID`). */
+  /** Account linked (cookie file present and containing `__Secure-3PAPISID`). */
   linked: z.boolean(),
-  /** Cookie présent mais refusé par InnerTube (401 / login) — il faut se reconnecter. */
+  /** Cookie present but refused by InnerTube (401 / login) — signing in again is needed. */
   cookieExpired: z.boolean(),
-  /** Générateur PO Token joignable (`GET …/ping`). */
+  /** PO Token generator reachable (`GET …/ping`). */
   poTokenOk: z.boolean(),
-  /** Avertissement non officiel — toujours vrai en phase 1. */
+  /** Unofficial warning — always true in phase 1. */
   unofficial: z.literal(true),
   cookieFile: z.string().nullable(),
   poTokenUrl: z.string(),
   lastError: z.string().nullable(),
-  /** Navigateurs acceptés pour `POST /cookie/from-browser` (aucun pour un utilisateur connecté). */
+  /** Browsers accepted for `POST /cookie/from-browser` (none for a signed-in user). */
   browsers: z.array(z.string()),
-  /** Le compte en jeu : l'utilisateur connecté, ou `null` pour celui de la maison. */
+  /** The account at stake: the signed-in user, or `null` for the house's. */
   user: z.string().nullable(),
-  /** Utilisateur connecté sans cookie : catalogue public seulement, rien de personnel. */
+  /** Signed-in user without a cookie: public catalog only, nothing personal. */
   anonymous: z.boolean(),
 })
 export type YtmusicStatus = z.infer<typeof statusSchema>

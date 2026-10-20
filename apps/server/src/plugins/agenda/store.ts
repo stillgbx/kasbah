@@ -3,8 +3,8 @@ import { z } from 'zod'
 import type { Logger } from 'pino'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// Les agendas de la maison. L'adresse iCal secrète donne à elle seule accès à l'agenda : elle vit
-// ici, dans `.state/` (hors dépôt, hors `.env`), et ne ressort jamais par l'API.
+// The house's calendars. The secret iCal address alone grants access to the calendar: it lives
+// here, in `.state/` (outside the repo, outside `.env`), and never comes back out through the API.
 
 export const calendarSchema = z.object({
   id: z.string().min(1),

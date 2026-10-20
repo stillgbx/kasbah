@@ -3,10 +3,10 @@ import os from 'node:os'
 import type { Logger } from 'pino'
 import { parseSsdpHeaders } from './mapping'
 
-// Découverte SSDP des ZonePlayer Sonos (UDP 1900, multicast 239.255.255.250). Capturé le
-// 2026-09-19 : une socket liée à 0.0.0.0 envoie sur la carte APIPA et reste muette. On ouvre
-// donc UNE socket par IPv4 (ou celle de SONOS_SSDP_INTERFACE), comme le probe qui a trouvé
-// les deux enceintes.
+// SSDP discovery of Sonos ZonePlayers (UDP 1900, multicast 239.255.255.250). Captured on
+// 2026-09-19: a socket bound to 0.0.0.0 sends on the APIPA adapter and stays silent. So we open
+// ONE socket per IPv4 (or the one of SONOS_SSDP_INTERFACE), like the probe that found the two
+// speakers.
 
 const MULTICAST = '239.255.255.250'
 const SSDP_PORT = 1900
@@ -49,9 +49,9 @@ function openSocket(bindAddr: string, onUp: (player: DiscoveredSonos) => void, l
     if (found) onUp(found)
   })
   socket.bind(0, bindAddr, () => {
-    try { socket.setBroadcast(true) } catch { /* pile Windows */ }
-    try { socket.setMulticastTTL(2) } catch { /* idem */ }
-    try { socket.addMembership(MULTICAST, bindAddr) } catch { /* déjà membre */ }
+    try { socket.setBroadcast(true) } catch { /* Windows stack */ }
+    try { socket.setMulticastTTL(2) } catch { /* same */ }
+    try { socket.addMembership(MULTICAST, bindAddr) } catch { /* already a member */ }
     try { socket.send(Buffer.from(MSEARCH), SSDP_PORT, MULTICAST) } catch (err) { logger.warn({ err, bindAddr }, 'SSDP send failed') }
   })
   return socket
@@ -78,7 +78,7 @@ export function createSsdpDiscovery(opts: { iface?: string; logger: Logger }): S
     refresh() { sendAll() },
     stop() {
       for (const socket of sockets) {
-        try { socket.close() } catch { /* déjà fermé */ }
+        try { socket.close() } catch { /* already closed */ }
       }
       sockets.length = 0
       onUp = null

@@ -3,12 +3,12 @@ import { decodeXml, encodeXml, xmlAttr, xmlTag } from './soap'
 import type { PositionInfo, SonosPlayer, TrackMeta, TransportInfo, ZoneMember } from './types'
 import { PLUGIN_ID } from './types'
 
-// Mappage PUR : XML Sonos (SSDP, /status/zp, SOAP) ↔ descripteur / patch `media_player`.
-// Fixtures = captures du 2026-09-19 (Port Bureau + Play:3 Cuisine), anonymisées.
+// PURE mapping: Sonos XML (SSDP, /status/zp, SOAP) ↔ `media_player` descriptor / patch.
+// Fixtures = captures of 2026-09-19 (Port Bureau + Play:3 Cuisine), anonymized.
 
 export { PLUGIN_ID }
 
-/** Route des pochettes, montée sous `/api/plugins/sonos`. */
+/** Artwork route, mounted under `/api/plugins/sonos`. */
 export const ART_ROUTE = '/api/plugins/sonos/art'
 
 export function artProxyUrl(url: string): string {
@@ -34,7 +34,7 @@ export function toDescriptor(player: SonosPlayer): DeviceDescriptor {
   }
 }
 
-/** USN SSDP capturé : `uuid:RINCON_…01400::urn:schemas-upnp-org:device:ZonePlayer:1`. */
+/** Captured SSDP USN: `uuid:RINCON_…01400::urn:schemas-upnp-org:device:ZonePlayer:1`. */
 export function uuidFromUsn(usn: string | undefined): string | undefined {
   const m = usn?.match(/uuid:([^:\s]+)/i)
   const uuid = m?.[1]
@@ -61,7 +61,7 @@ export function parseSsdpHeaders(text: string): { uuid: string; host: string } |
   return { uuid, host }
 }
 
-/** `/status/zp` : XML, pas le JSON que la doc tierce annonçait pour `/status/info` (vide ici). */
+/** `/status/zp`: XML, not the JSON that third-party docs announced for `/status/info` (empty here). */
 export function parseZpInfo(xml: string): { uuid: string; name: string; softwareVersion?: string } | undefined {
   const uuid = xmlTag(xml, 'LocalUID')?.trim()
   const name = xmlTag(xml, 'ZoneName')?.trim()
@@ -126,8 +126,8 @@ export function parseMute(soapBody: string): boolean | undefined {
 }
 
 /**
- * Temps Sonos `H:MM:SS` (parfois `.mmm`). `NOT_IMPLEMENTED` et `0:00:00` à l'arrêt ne sont pas
- * une durée : capturé vide, TrackDuration vaut `0:00:00` au repos.
+ * Sonos time `H:MM:SS` (sometimes `.mmm`). `NOT_IMPLEMENTED` and `0:00:00` when stopped are not
+ * a duration: captured empty, TrackDuration is `0:00:00` when idle.
  */
 export function parseSonosTime(raw: string | undefined): number | undefined {
   if (!raw || raw === 'NOT_IMPLEMENTED') return undefined
@@ -226,13 +226,13 @@ export function toStatePatch(
   return patch
 }
 
-/** Métadonnées optionnelles pour `play_url` (titre / artiste / pochette). */
+/** Optional metadata for `play_url` (title / artist / artwork). */
 export type StreamMeta = { title?: string; artist?: string; artUrl?: string; explicit?: boolean; live?: boolean }
 
 /**
- * DIDL-Lite pour `SetAVTransportURI` : un flux HTTP que l'enceinte va chercher. HLS / m3u = direct
- * (`audioBroadcast`) ; le reste est un morceau. L'URL et le titre sont échappés : le SOAP ré-échappe
- * tout le bloc ensuite. Sans `meta.title`, le hostname de l'URL (comportement historique).
+ * DIDL-Lite for `SetAVTransportURI`: an HTTP stream the speaker fetches. HLS / m3u = live
+ * (`audioBroadcast`); the rest is a track. The URL and the title are escaped: SOAP re-escapes the
+ * whole block afterwards. Without `meta.title`, the URL's hostname (historical behavior).
  */
 export function streamDidl(url: string, contentType: string, live: boolean, meta?: StreamMeta): string {
   const fallback = (() => { try { return new URL(url).hostname } catch { return 'Stream' } })()
@@ -255,9 +255,9 @@ export function streamLoad(url: string, meta?: StreamMeta): { uri: string; didl:
 }
 
 /**
- * Sonos n'écho pas toujours le DIDL d'un `play_url` HTTP : GetPositionInfo renvoie souvent un titre
- * vide ou le dernier segment de l'URL (ex. le sid du proxy ytmusic). Tant que l'URI collée correspond,
- * on impose titre / artiste / pochette fournis à la commande.
+ * Sonos does not always echo the DIDL of an HTTP `play_url`: GetPositionInfo often returns an empty
+ * title or the URL's last segment (e.g. the ytmusic proxy's sid). As long as the sticky URI
+ * matches, we impose the title / artist / artwork given with the command.
  */
 export function overlayStreamMeta(
   patch: StatePatch<'media_player'>,
@@ -276,8 +276,8 @@ export function overlayStreamMeta(
       ...(sticky.title?.trim() ? { title: sticky.title.trim() } : {}),
       ...(sticky.artist?.trim() ? { artist: sticky.artist.trim() } : {}),
       ...(art ? { artUrl: art } : {}),
-      // le relevé du Sonos ne dit rien de l'explicit : sans ce report, le badge s'éteignait au
-      // premier sondage, quelques secondes après le lancement
+      // the Sonos readout says nothing about explicit: without carrying it over, the badge went
+      // off on the first poll, a few seconds after the start
       ...(sticky.explicit ? { explicit: true } : {}),
       ...(sticky.live ? { live: true } : {}),
     },

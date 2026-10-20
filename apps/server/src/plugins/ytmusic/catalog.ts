@@ -17,8 +17,8 @@ import {
 import { carouselsOf, parseMoodsPage } from './explore'
 import { exploreCategoryPageSchema, exploreSchema, type YtmusicExplore, type YtmusicExploreCategoryPage, type YtmusicPlaylist, type YtmusicSearchResult, type YtmusicTrack } from './types'
 
-// Catalogue via youtubei.js `yt.music` (client InnerTube Music / WEB_REMIX).
-// Pas de flux audio ici — c'est le rôle de yt-dlp + PO Token (`stream.ts`).
+// Catalog through youtubei.js `yt.music` (InnerTube Music client / WEB_REMIX).
+// No audio stream here — that is the job of yt-dlp + PO Token (`stream.ts`).
 
 export type InnertubeLike = {
   music: {
@@ -46,22 +46,22 @@ export type InnertubeLike = {
       applyFilter?(filter: string): Promise<{ contents?: unknown[] }>
     }>
   }
-  /** `browse` InnerTube, JSON BRUT (la page « Humeurs et genres » : youtubei.js n'en garde pas les couleurs). */
+  /** InnerTube `browse`, RAW JSON (the "Moods & genres" page: youtubei.js does not keep its colors). */
   browseRaw?(browseId: string, params?: string): Promise<unknown>
-  /** `browse` InnerTube analysé par youtubei.js (nœuds `MusicCarouselShelf`, comme la recherche). */
+  /** InnerTube `browse` parsed by youtubei.js (`MusicCarouselShelf` nodes, like search). */
   browseParsed?(browseId: string, params?: string): Promise<unknown>
 }
 
-/** `lang` : langue des textes rendus par InnerTube (noms des genres…). Absente = celle d'aujourd'hui. */
+/** `lang`: language of the texts rendered by InnerTube (genre names…). Absent = today's one. */
 export type CreateSession = (cookie: string, lang?: string) => Promise<InnertubeLike>
 
 /**
- * youtubei.js envoie TOUTES ses requêtes InnerTube à www.youtube.com, même pour le client YouTube
- * Music. Or www.youtube.com RETIENT les titres explicit : la page de l'album « Paradise » y a 5 titres
- * (Ride, Cola, Gods & Monsters absents, en-tête « 8 songs » quand même), music.youtube.com en rend 8 —
- * avec ou sans compte, quelle que soit la version du client (sondé le 2026-09-23). On les redirige donc
- * vers music.youtube.com, comme le fait le site ; les cookies valent pour tout `.youtube.com` et la
- * signature SAPISIDHASH reste acceptée (bibliothèque, likes et compte répondent).
+ * youtubei.js sends ALL its InnerTube requests to www.youtube.com, even for the YouTube Music
+ * client. Yet www.youtube.com HOLDS BACK explicit tracks: the page of the album "Paradise" has 5
+ * tracks there (Ride, Cola, Gods & Monsters missing, "8 songs" header nonetheless), music.youtube.com
+ * returns 8 — with or without an account, whatever the client version (probed on 2026-09-23). So we
+ * redirect them to music.youtube.com, as the site does; the cookies are valid for all of
+ * `.youtube.com` and the SAPISIDHASH signature stays accepted (library, likes and account answer).
  */
 export const musicHostFetch: typeof fetch = (input, init) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
@@ -70,7 +70,7 @@ export const musicHostFetch: typeof fetch = (input, init) => {
   return fetch(input instanceof Request ? new Request(next, input) : next, init)
 }
 
-/** WEB_REMIX : même client que music.youtube.com (pas le client WEB générique). Sans cookie : anonyme. */
+/** WEB_REMIX: same client as music.youtube.com (not the generic WEB client). Without a cookie: anonymous. */
 const defaultCreate: CreateSession = async (cookie, lang) => {
   const yt = await Innertube.create({ ...(cookie ? { cookie } : {}), client_type: ClientType.MUSIC, fetch: musicHostFetch, ...(lang ? { lang } : {}) })
   const browse = (browseId: string, params: string | undefined, parse: boolean) =>
@@ -81,7 +81,7 @@ const defaultCreate: CreateSession = async (cookie, lang) => {
   }) as unknown as InnertubeLike
 }
 
-/** Session InnerTube morte (HMR / body déjà consommé) — typiquement `null.read`. */
+/** Dead InnerTube session (HMR / body already consumed) — typically `null.read`. */
 function isDeadSession(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err)
   return /reading ['"]read['"]|body.*used|ECONNRESET|fetch failed/i.test(msg)
@@ -100,7 +100,7 @@ function thumbsOf(o: Record<string, unknown>): Array<{ url?: string; width?: num
       out.push({ url: r.url.trim(), width: typeof r.width === 'number' ? r.width : undefined })
       return
     }
-    // ThumbnailDetails / MusicThumbnail imbriqués
+    // nested ThumbnailDetails / MusicThumbnail
     for (const n of asList(r.contents)) pushEntry(n)
     for (const n of asList(r.thumbnails)) pushEntry(n)
     for (const n of asList(r.sources)) pushEntry(n)
@@ -111,7 +111,7 @@ function thumbsOf(o: Record<string, unknown>): Array<{ url?: string; width?: num
   if (!out.length) {
     const th = o.thumbnail
     const nested = asRecord(th)
-    // MusicResponsiveListItem : MusicThumbnail ; MusicTwoRowItem : Thumbnail[]
+    // MusicResponsiveListItem: MusicThumbnail; MusicTwoRowItem: Thumbnail[]
     if (nested && !Array.isArray(th) && typeof (th as { [Symbol.iterator]?: unknown })?.[Symbol.iterator] !== 'function') {
       pushAll(nested.contents)
       pushAll(nested.thumbnails)
@@ -127,7 +127,7 @@ function thumbsOf(o: Record<string, unknown>): Array<{ url?: string; width?: num
   return out.length ? out : undefined
 }
 
-/** Année YYYY dans le sous-titre / flex_columns (ex. « … · 2021 »). */
+/** YYYY year in the subtitle / flex_columns (e.g. "… · 2021"). */
 function yearOf(o: Record<string, unknown>): string | null {
   if (typeof o.year === 'string') {
     const y = o.year.trim()
@@ -152,10 +152,10 @@ function itemToRawTrack(item: unknown): RawTrack | null {
       return typeof a === 'string' ? a : (typeof ar?.name === 'string' ? ar.name : null)
     }).filter((a): a is string => !!a)
     : []
-  // Music Video (TwoRow) : souvent pas de `artists[]`, crédit dans le sous-titre.
+  // Music Video (TwoRow): often no `artists[]`, credit in the subtitle.
   if (!artists.length) {
     const parts = subtitlePartsOf(o).map((p) => p.trim()).filter(Boolean)
-    // un compteur (vues, écoutes) n'est pas un artiste : la ligne d'un titre d'ALBUM n'a que lui
+    // a counter (views, plays) is not an artist: an ALBUM track's line has only that
     const skip = /^(views?|view|vues?|\d[\d.,]*\s*[kmb]?\s*(views?|vues|plays?|lectures|(d['’]\s*)?écoutes))$/i
     for (const p of parts) {
       if (skip.test(p) || /^[12]\d{3}$/.test(p)) continue
@@ -181,7 +181,7 @@ function itemToRawTrack(item: unknown): RawTrack | null {
 function itemToRawPlaylist(item: unknown): RawPlaylist | null {
   const o = asRecord(item)
   if (!o) return null
-  // Bibliothèque : albums / artistes mélangés si le filtre échoue — ne garder que les playlists.
+  // Library: albums / artists mixed in if the filter fails — keep only the playlists.
   if (typeof o.item_type === 'string' && o.item_type !== 'playlist') return null
   const id = typeof o.id === 'string' ? o.id
     : (typeof o.playlistId === 'string' ? o.playlistId : null)
@@ -195,13 +195,13 @@ function itemToRawPlaylist(item: unknown): RawPlaylist | null {
   }
 }
 
-/** Liste utilisable : Array ou ObservedArray (Proxy youtubei.js). */
+/** Usable list: Array or ObservedArray (youtubei.js Proxy). */
 function asList(v: unknown): unknown[] {
   if (!v) return []
   if (Array.isArray(v)) return v
-  // `SuperParsedResult` de youtubei.js (réponses `browse` analysées : badges d'une tuile d'album…) :
-  // une enveloppe sans clés, qui ne se lit que par ses méthodes — sans ça, les badges explicit des
-  // nouveautés et des catégories passaient inaperçus.
+  // youtubei.js `SuperParsedResult` (parsed `browse` responses: an album tile's badges…): an
+  // envelope without keys, readable only through its methods — without this, the explicit badges of
+  // new releases and categories went unnoticed.
   const spr = v as { is_null?: unknown; is_array?: unknown; array?: unknown; item?: unknown }
   if (typeof spr.array === 'function' && typeof spr.item === 'function' && typeof spr.is_array === 'boolean') {
     if (spr.is_null === true) return []
@@ -213,7 +213,7 @@ function asList(v: unknown): unknown[] {
   return []
 }
 
-/** Badges : tableau, ObservedArray, ou objet unique (`subtitle_badge`). */
+/** Badges: array, ObservedArray, or single object (`subtitle_badge`). */
 function badgeList(v: unknown): unknown[] {
   const list = asList(v)
   if (list.length) return list
@@ -221,7 +221,7 @@ function badgeList(v: unknown): unknown[] {
   return []
 }
 
-/** Badge InnerTube `MUSIC_EXPLICIT_BADGE` / `EXPLICIT`, ou booléen exposé par youtubei. */
+/** InnerTube badge `MUSIC_EXPLICIT_BADGE` / `EXPLICIT`, or boolean exposed by youtubei. */
 function isExplicit(o: Record<string, unknown>): boolean {
   if (o.is_explicit === true || o.isExplicit === true || o.explicit === true) return true
   const lists = [o.badges, o.subtitle_badges, o.subtitle_badge]
@@ -250,8 +250,8 @@ function pageTypeFromEndpoint(ep: unknown): string | null {
 }
 
 /**
- * browseId : on_tap, endpoint racine, ou title.runs (souvent le seul chemin
- * pour la carte top résultat — cf. musicCardShelfRenderer.title.runs[].navigationEndpoint).
+ * browseId: on_tap, root endpoint, or title.runs (often the only path
+ * for the top result card — cf. musicCardShelfRenderer.title.runs[].navigationEndpoint).
  */
 function browseIdOf(o: Record<string, unknown>): string | null {
   const fromTap = browseIdFromEndpoint(o.on_tap) ?? browseIdFromEndpoint(o.endpoint)
@@ -291,8 +291,8 @@ function albumDedupeKey(a: { title?: unknown; name?: unknown; artists?: RawAlbum
 }
 
 /**
- * Channel IDs d'artistes portés par un item album/titre (author / artists / runs UC).
- * Sert de repli quand la carte top résultat / filtre Artistes rate (ex. Jäde).
+ * Artist channel IDs carried by an album/track item (author / artists / UC runs).
+ * Serves as a fallback when the top result card / Artists filter misses (e.g. Jäde).
  */
 function artistRefsFromItem(item: unknown): RawArtist[] {
   const o = asRecord(item)
@@ -324,8 +324,8 @@ function artistRefsFromItem(item: unknown): RawArtist[] {
       typeof ar.name === 'string' ? ar.name : textOf(ar.name),
     )
   }
-  // Un crédit qui mène à une chaîne perso n'est pas un artiste : « … Fan Page » n'a rien à faire
-  // dans la rangée Artistes.
+  // A credit leading to a personal channel is not an artist: "… Fan Page" has no business in the
+  // Artists row.
   const pushRun = (run: unknown) => {
     const rr = asRecord(run)
     if (pageTypeFromEndpoint(rr?.endpoint) === USER_CHANNEL_PAGE) return
@@ -339,7 +339,7 @@ function artistRefsFromItem(item: unknown): RawArtist[] {
   return out
 }
 
-/** Artistes dont le nom colle à la requête (accents ignorés). */
+/** Artists whose name matches the query (accents ignored). */
 function artistsMatchingQuery(artists: RawArtist[], query: string): RawArtist[] {
   const q = nameKey(query)
   if (!q) return []
@@ -362,7 +362,7 @@ function pageTypeOf(o: Record<string, unknown>): string | null {
     })()
 }
 
-/** Sous-titre « Artiste · 12,3 k abonnés » / « 12.3K subscribers ». */
+/** Subtitle "Artiste · 12,3 k abonnés" / "12.3K subscribers". */
 function subscribersOf(o: Record<string, unknown>): string | null {
   if (typeof o.subscribers === 'string' && o.subscribers.trim()) return o.subscribers.trim()
   for (const p of subtitlePartsOf(o)) {
@@ -390,11 +390,11 @@ function runTexts(v: unknown): string[] {
     if (typeof v !== 'string') return []
     const t = v.trim()
     if (!t) return []
-    // MusicTwoRowItem : subtitle souvent une string « EP · 2025 », pas un Text.
+    // MusicTwoRowItem: subtitle often a string "EP · 2025", not a Text.
     return t.split(/\s*[·•|]\s*/).map((s) => s.trim()).filter(Boolean)
   }
   if (typeof o.text === 'string' && o.text.trim()) {
-    // Text entier : aussi découper sur · / • pour « Album · Artiste · 1997 »
+    // whole Text: also split on · / • for "Album · Artist · 1997"
     return o.text.split(/\s*[·•|]\s*/).map((s) => s.trim()).filter(Boolean)
   }
   if (Array.isArray(o.runs)) {
@@ -408,11 +408,11 @@ function runTexts(v: unknown): string[] {
   return []
 }
 
-/** Morceaux de sous-titre où InnerTube écrit Album / Single / EP / Compilation. */
+/** Subtitle pieces where InnerTube writes Album / Single / EP / Compilation. */
 function subtitlePartsOf(o: Record<string, unknown>): string[] {
   const parts: string[] = []
   parts.push(...runTexts(o.subtitle))
-  // MusicResponsiveListItem : type de release dans flex_columns[1] (« Album · Jäde · 2021 »).
+  // MusicResponsiveListItem: release type in flex_columns[1] ("Album · Jäde · 2021").
   for (const col of asList(o.flex_columns).slice(1)) {
     const c = asRecord(col)
     parts.push(...runTexts(c?.title))
@@ -425,7 +425,7 @@ function itemToRawAlbum(item: unknown): RawAlbum | null {
   if (!o) return null
   const id = (typeof o.id === 'string' ? o.id : null) ?? browseIdOf(o)
   if (!id) return null
-  // Page artiste : MusicTwoRowItem album ; ignorer vidéos / playlists mélangées.
+  // Artist page: MusicTwoRowItem album; ignore mixed-in videos / playlists.
   const itemType = typeof o.item_type === 'string' ? o.item_type : null
   if (itemType && itemType !== 'album') return null
   if (!itemType && !id.startsWith('MPRE')) return null
@@ -451,7 +451,7 @@ function itemToRawAlbum(item: unknown): RawAlbum | null {
   }
 }
 
-/** Ref album portée par un titre (`track.album.id`). */
+/** Album ref carried by a track (`track.album.id`). */
 function albumRefFromTrackItem(item: unknown): RawAlbum | null {
   const o = asRecord(item)
   if (!o) return null
@@ -490,7 +490,7 @@ function trackArtistNames(item: unknown): string[] {
   return out
 }
 
-/** Titre dont l'artiste colle à la requête (évite karaoke / feat. parasites). */
+/** Track whose artist matches the query (avoids karaoke / stray feats). */
 function trackMatchesPrimary(item: unknown, primaryName: string): boolean {
   const q = nameKey(primaryName)
   if (!q) return false
@@ -501,10 +501,10 @@ function trackMatchesPrimary(item: unknown, primaryName: string): boolean {
 }
 
 /**
- * Albums déduits des titres quand le filtre InnerTube `album` est vide.
- * Type provisoire selon le nb d'occurrences dans la page de résultats :
- * 1× + titre = nom du morceau → single ; ≤5 → ep ; sinon album.
- * Affiné ensuite via `getAlbum` (sous-titre Album/EP/Single réel).
+ * Albums deduced from the tracks when the InnerTube `album` filter is empty.
+ * Provisional type based on the number of occurrences in the results page:
+ * 1× + title = track name → single; ≤5 → ep; otherwise album.
+ * Refined afterwards through `getAlbum` (real Album/EP/Single subtitle).
  */
 function albumsInferredFromTracks(items: unknown[], primaryName: string | null): RawAlbum[] {
   const byId = new Map<string, { raw: RawAlbum; count: number; titleHits: number }>()
@@ -520,7 +520,7 @@ function albumsInferredFromTracks(items: unknown[], primaryName: string | null):
     } else {
       cur.count += 1
       cur.titleHits += titleHit
-      // Union des artistes cités sur les titres (compil multi-artistes).
+      // Union of the artists credited on the tracks (multi-artist compilation).
       if (ref.artists?.length) {
         const seen = new Set((cur.raw.artists ?? []).map(artistNameKey).filter(Boolean))
         for (const a of ref.artists) {
@@ -534,7 +534,7 @@ function albumsInferredFromTracks(items: unknown[], primaryName: string | null):
   }
   const out: RawAlbum[] = []
   for (const { raw, count, titleHits } of byId.values()) {
-    // 1× avec titre = nom de la sortie → simple morceau (ex. Chrome), pas une colonne.
+    // 1× with title = release name → a plain track (e.g. Chrome), not a column.
     if (count === 1 && titleHits > 0) continue
     const releaseType: RawAlbum['releaseType'] = count <= 5 ? 'ep' : 'album'
     raw.releaseType = releaseType
@@ -545,9 +545,9 @@ function albumsInferredFromTracks(items: unknown[], primaryName: string | null):
 }
 
 /**
- * Discographie page artiste — carrousels Albums + Singles & EPs
- * (Singles type « brand new teeth » inclus ; les morceaux 1× hors page
- * artiste restent exclus via l'inférence titres).
+ * Artist page discography — Albums + Singles & EPs carousels
+ * (Singles like "brand new teeth" included; 1× tracks outside the artist
+ * page stay excluded through the tracks inference).
  */
 function releasesFromArtistPage(page: { sections?: unknown[] }, artistName?: string | null): RawAlbum[] {
   const out: RawAlbum[] = []
@@ -572,10 +572,10 @@ function releasesFromArtistPage(page: { sections?: unknown[] }, artistName?: str
 }
 
 /**
- * Sous-titre `getAlbum` = source de vérité (Album / EP / Single · année).
- * Corrige l'heuristique d'occurrences (ex. Detour 3 titres → Album, pas EP).
- * Explicit album = badge header / au moins un titre badgeé.
- * Explicit titre = uniquement le badge du titre (jamais déduit de l'album).
+ * `getAlbum` subtitle = source of truth (Album / EP / Single · year).
+ * Corrects the occurrences heuristic (e.g. Detour 3 tracks → Album, not EP).
+ * Explicit album = header badge / at least one badged track.
+ * Explicit track = only the track's badge (never deduced from the album).
  */
 async function refineAlbumsViaGetAlbum(
   yt: InnertubeLike,
@@ -593,7 +593,7 @@ async function refineAlbumsViaGetAlbum(
     const needsExplicit = !r.explicit
     return needsType || needsExplicit
   })
-  // Albums / EP d'abord : les Singles nombreux ne doivent pas épuiser le budget getAlbum.
+  // Albums / EPs first: the numerous Singles must not exhaust the getAlbum budget.
   need.sort((a, b) => {
     const rank = (r: RawAlbum) => {
       const t = r.releaseType ?? parseReleaseType(r.subtitleParts)
@@ -604,9 +604,9 @@ async function refineAlbumsViaGetAlbum(
     return rank(a) - rank(b)
   })
   const queue = need.slice(0, 12)
-  /** videoId → explicit uniquement si le titre porte le badge. */
+  /** videoId → explicit only if the track carries the badge. */
   const explicitByVideo = new Map<string, true>()
-  /** videoId → année album (les titres de recherche n'ont pas d'année). */
+  /** videoId → album year (search tracks have no year). */
   const yearByVideo = new Map<string, string>()
   for (const raw of queue) {
     try {
@@ -634,10 +634,10 @@ async function refineAlbumsViaGetAlbum(
         if (vid && year) yearByVideo.set(vid, year)
         if (!isExplicit(o)) continue
         raw.explicit = true
-        // Ne marquer que ce titre — pas les autres de l'album.
+        // Mark only this track — not the album's others.
         if (vid) explicitByVideo.set(vid, true)
       }
-    } catch { /* album indisponible */ }
+    } catch { /* album unavailable */ }
   }
   if (tracks?.length) {
     for (const t of tracks) {
@@ -648,7 +648,7 @@ async function refineAlbumsViaGetAlbum(
   }
 }
 
-/** Année absente sur les titres de recherche → reprise depuis l'album homonyme. */
+/** Year missing on search tracks → taken from the album of the same name. */
 function stampTrackYearsFromAlbums(tracks: RawTrack[], albums: RawAlbum[]): void {
   const byAlbum = new Map<string, string>()
   for (const a of albums) {
@@ -668,8 +668,8 @@ function stampTrackYearsFromAlbums(tracks: RawTrack[], albums: RawAlbum[]): void
 function pickPrimaryArtist(candidates: RawArtist[], query: string): RawArtist | null {
   const q = nameKey(query)
   if (!q) return null
-  // Uniquement un artiste dont le nom porte toute la requête (évite « Samara » / « Cyn »
-  // quand on cherche « samara cyn » — mauvaise page artiste).
+  // Only an artist whose name carries the whole query (avoids "Samara" / "Cyn"
+  // when searching "samara cyn" — wrong artist page).
   const strong = artistsMatchingQuery(candidates, query).filter((a) => {
     const n = nameKey(textOf(a.name) ?? textOf(a.title) ?? '')
     return n === q || n.includes(q)
@@ -697,11 +697,11 @@ function shelfItems(contents: unknown[] | undefined): unknown[] {
 
 function isMusicCard(b: Record<string, unknown>): boolean {
   if (b.type === 'MusicCardShelf') return true
-  // Carte top hit : titre + on_tap, pas de item_type (les list items en ont un).
+  // Top hit card: title + on_tap, no item_type (list items have one).
   return b.on_tap != null && b.title != null && typeof b.item_type !== 'string'
 }
 
-/** Collecte les items d'une réponse search (étagères + carte top résultat, y compris ItemSection). */
+/** Collects the items of a search response (shelves + top result card, ItemSection included). */
 function searchItems(result: {
   songs?: { contents?: unknown[] }
   albums?: { contents?: unknown[] }
@@ -714,7 +714,7 @@ function searchItems(result: {
     for (const block of nodes) {
       const b = asRecord(block)
       if (!b) continue
-      // MusicCardShelf : la carte EST le hit (artiste/album) ; `contents` = titres liés.
+      // MusicCardShelf: the card IS the hit (artist/album); `contents` = related tracks.
       if (isMusicCard(b)) {
         out.push(block)
         visit(asList(b.contents), depth + 1)
@@ -730,7 +730,7 @@ function searchItems(result: {
     }
   }
   visit(asList(result.contents), 0)
-  // Recherche filtrée / sans `contents` : repli sur les étagères typées.
+  // Filtered search / without `contents`: fall back on the typed shelves.
   if (!out.length) {
     visit(asList(result.artists?.contents), 0)
     visit(asList(result.albums?.contents), 0)
@@ -740,9 +740,9 @@ function searchItems(result: {
 }
 
 /**
- * Exact match / « contient la requête » NE doit pas réordonner : InnerTube renvoie
- * déjà par pertinence (ex. NTM → Kool Shen avant « NTM Sound »).
- * On ne fait qu'ajouter en queue les artistes déduits des albums absents du filtre.
+ * Exact match / "contains the query" must NOT reorder: InnerTube already returns
+ * by relevance (e.g. NTM → Kool Shen before "NTM Sound").
+ * We only append the artists deduced from the albums missing from the filter.
  */
 function mergeArtistsInOrder(
   primary: RawArtist[],
@@ -751,11 +751,11 @@ function mergeArtistsInOrder(
   return dedupeArtists([...primary, ...extras])
 }
 
-/** Page d'artiste du catalogue vs page d'une chaîne quelconque : YouTube Music le dit lui-même. */
+/** Catalog artist page vs page of any channel: YouTube Music says it itself. */
 const ARTIST_PAGE = 'MUSIC_PAGE_TYPE_ARTIST'
 const USER_CHANNEL_PAGE = 'MUSIC_PAGE_TYPE_USER_CHANNEL'
 
-/** Types de page cités par les crédits d'un item (2ᵉ ligne : artistes, ou nom de chaîne). */
+/** Page types cited by an item's credits (2nd line: artists, or channel name). */
 function creditPageTypes(o: Record<string, unknown>): Set<string> {
   const out = new Set<string>()
   const scan = (runs: unknown) => {
@@ -770,10 +770,10 @@ function creditPageTypes(o: Record<string, unknown>): Set<string> {
 }
 
 /**
- * Mis en ligne par un PARTICULIER : reprise ralentie, concert filmé au téléphone, chorégraphie,
- * « type beat », page de fans. Le crédit pointe alors une chaîne (`USER_CHANNEL`) là où un vrai clip
- * est crédité à ses artistes (`ARTIST`) — c'est le filtre le plus sûr : il vient de YouTube Music.
- * Un item sans aucun crédit cliquable est gardé (rien ne dit qu'il est amateur).
+ * Uploaded by an INDIVIDUAL: slowed-down cover, concert filmed on a phone, choreography,
+ * "type beat", fan page. The credit then points to a channel (`USER_CHANNEL`) where a real video is
+ * credited to its artists (`ARTIST`) — it is the safest filter: it comes from YouTube Music.
+ * An item without any clickable credit is kept (nothing says it is amateur).
  */
 function isUserUpload(o: Record<string, unknown>): boolean {
   const pages = creditPageTypes(o)
@@ -837,16 +837,16 @@ function dedupeArtists(raws: RawArtist[]): RawArtist[] {
 
 export class YtmusicCatalog {
   /**
-   * Une session par LANGUE ('' = sans langue imposée, celle de la recherche et de la bibliothèque) :
-   * les genres s'affichent dans la langue de l'app sans changer les textes que la recherche analyse
-   * (sous-titres « Album · … », compteurs).
+   * One session per LANGUAGE ('' = no forced language, the one for search and library): genres
+   * show in the app's language without changing the texts that search parses ("Album · …"
+   * subtitles, counters).
    */
   private sessions = new Map<string, InnertubeLike>()
   private sessionCookie: string | null = null
 
   constructor(private readonly createSession: CreateSession = defaultCreate) {}
 
-  /** Invalide les sessions (cookie changé / oublié). */
+  /** Invalidates the sessions (cookie changed / forgotten). */
   reset(): void {
     this.sessions.clear()
     this.sessionCookie = null
@@ -862,7 +862,7 @@ export class YtmusicCatalog {
     return yt
   }
 
-  /** Une tentative ; si la session InnerTube est morte, reset + retry. */
+  /** One attempt; if the InnerTube session is dead, reset + retry. */
   private async withSession<T>(cookie: string, fn: (yt: InnertubeLike) => Promise<T>, lang = ''): Promise<T> {
     try {
       return await fn(await this.ensure(cookie, false, lang))
@@ -873,7 +873,7 @@ export class YtmusicCatalog {
     }
   }
 
-  /** Les catégories de « Humeurs et genres », dans la langue demandée. */
+  /** The "Moods & genres" categories, in the requested language. */
   async explore(cookie: string, lang?: string): Promise<YtmusicExplore> {
     return this.withSession(cookie, async (yt) => {
       if (typeof yt.browseRaw !== 'function') return exploreSchema.parse({ forYou: { title: '', categories: [] }, moods: { title: '', categories: [] }, genres: { title: '', categories: [] } })
@@ -882,19 +882,19 @@ export class YtmusicCatalog {
   }
 
   /**
-   * La page d'une catégorie : ses rangées, chacune réduite à ses titres, ses playlists OFFICIELLES
-   * (`RDCLAK…`, éditées par YouTube Music) et ses albums. Les clips et les playlists d'utilisateurs
-   * (`PL…`, de qualité très variable) sont laissés de côté — choix de l'utilisateur.
+   * A category's page: its rows, each reduced to its tracks, its OFFICIAL playlists (`RDCLAK…`,
+   * curated by YouTube Music) and its albums. Videos and user playlists (`PL…`, of very uneven
+   * quality) are left aside — the user's choice.
    */
   async exploreCategory(cookie: string, params: string, lang?: string): Promise<YtmusicExploreCategoryPage> {
     return this.browseShelves(cookie, 'FEmusic_moods_and_genres_category', params, lang)
   }
 
   /**
-   * Les nouveautés de YouTube Music : playlists phares (« RELEASED »…) et albums et singles récents ;
-   * mêmes rangées qu'une catégorie. La page d'accueil des nouveautés n'en montre que 24 : la liste
-   * complète (~180-200, en une réponse) est sur sa page « Voir tout », `FEmusic_new_releases_albums`,
-   * lue en parallèle — et montrée EN ENTIER, choix de l'utilisateur.
+   * YouTube Music's new releases: flagship playlists ("RELEASED"…) and recent albums and singles;
+   * same rows as a category. The new releases home page only shows 24: the full list (~180-200, in
+   * one response) is on its "See all" page, `FEmusic_new_releases_albums`, read in parallel — and
+   * shown IN FULL, the user's choice.
    */
   async newReleases(cookie: string, lang?: string): Promise<YtmusicExploreCategoryPage> {
     const [home, all] = await Promise.all([
@@ -922,9 +922,9 @@ export class YtmusicCatalog {
           return o?.item_type === 'playlist' && typeof o.id === 'string' && o.id.replace(/^VL/, '').startsWith('RDCLAK')
         })
         const albums = items.filter((it) => asRecord(it)?.item_type === 'album')
-        // YouTube répète parfois un élément dans la même rangée (la playlist « RELEASED » deux fois, même
-        // id, dans la grille des nouveautés) : une fois suffit, et deux tuiles ne partagent pas une clé.
-        // On garde le PREMIER exemplaire : le suivant peut venir sans pochette.
+        // YouTube sometimes repeats an item in the same row (the "RELEASED" playlist twice, same id,
+        // in the new releases grid): once is enough, and two tiles cannot share a key.
+        // We keep the FIRST copy: the next one may come without a cover.
         const once = <T,>(items: T[], id: (x: T) => string) => {
           const seen = new Set<string>()
           return items.filter((x) => !seen.has(id(x)) && !!seen.add(id(x)))
@@ -941,9 +941,9 @@ export class YtmusicCatalog {
   }
 
   /**
-   * Recherche classée artiste / album·single·compilation / titre.
-   * Trois requêtes filtrées en parallèle (artist / album / song) — le mix seul
-   * ne remonte qu'une poignée de résultats par catégorie.
+   * Search sorted into artist / album·single·compilation / track.
+   * Three filtered requests in parallel (artist / album / song) — the mix alone
+   * only brings up a handful of results per category.
    */
   async search(cookie: string, query: string): Promise<YtmusicSearchResult> {
     return this.withSession(cookie, (yt) => this.searchWith(yt, query))
@@ -955,8 +955,8 @@ export class YtmusicCatalog {
         if (isDeadSession(err)) throw err
         return null
       })
-    // Songs + Videos : certains titres explicites n'existent que comme Music Video
-    // (ex. « Good Is A LIE » — absent du filtre Songs et de l'album Detour YTM).
+    // Songs + Videos: some explicit tracks only exist as a Music Video
+    // (e.g. "Good Is A LIE" — missing from the Songs filter and from the YTM Detour album).
     const [artistsOnly, albumsOnly, songsOnly, videosOnly] = await Promise.all([
       soft(yt.music.search(query, { type: 'artist' })),
       soft(yt.music.search(query, { type: 'album' })),
@@ -1005,7 +1005,7 @@ export class YtmusicCatalog {
           pushTrack(item)
           continue
         }
-        // MusicCardShelf / item sans item_type : déduire du browseId / sous-titre.
+        // MusicCardShelf / item without item_type: deduce from the browseId / subtitle.
         if (!type) {
           const card = cardToTypedRaw(item)
           if (card?.kind === 'artist') topArtists.push(card.raw)
@@ -1020,7 +1020,7 @@ export class YtmusicCatalog {
       }
     }
 
-    // Ordre filtre artiste (pertinence YTM) + carte top + artistes déduits des albums.
+    // Artist filter order (YTM relevance) + top card + artists deduced from the albums.
     let albumFilterHits = 0
     if (artistsOnly) ingest(searchItems(artistsOnly), shelfArtists)
     if (albumsOnly) {
@@ -1028,11 +1028,11 @@ export class YtmusicCatalog {
       ingest(searchItems(albumsOnly), shelfArtists)
       albumFilterHits = albums.length - before
     }
-    // Assez de titres du CATALOGUE pour remplir la section à eux seuls : les vidéos ne sont plus là
-    // que pour ce qui n'existe qu'en clip, et la plupart d'entre elles sont écartées (chaînes perso).
+    // Enough CATALOG tracks to fill the section on their own: videos are only there for what exists
+    // only as a video, and most of them are discarded (personal channels).
     if (songsOnly) ingest(searchItems(songsOnly).slice(0, SEARCH_SECTION_LIMIT), shelfArtists)
     if (videosOnly) ingest(searchItems(videosOnly).slice(0, 12), shelfArtists)
-    // Remonter les titres qui collent à la requête (ex. vidéo « Good Is A LIE »).
+    // Bring up the tracks that match the query (e.g. the "Good Is A LIE" video).
     {
       const qTokens = nameKey(query).split(/\s+/).filter((w) => w.length > 2)
       const score = (t: RawTrack) => {
@@ -1046,17 +1046,17 @@ export class YtmusicCatalog {
     const primary = pickPrimaryArtist([...topArtists, ...shelfArtists, ...impliedArtists], query)
     const primaryName = primary ? (textOf(primary.name) ?? textOf(primary.title)) : null
 
-    // Filtre Albums vide (ex. Samara Cyn) : page artiste + albums cités par les titres.
+    // Empty Albums filter (e.g. Samara Cyn): artist page + albums cited by the tracks.
     if (albumFilterHits === 0) {
       if (primary?.id && typeof yt.music.getArtist === 'function') {
         try {
           const page = await yt.music.getArtist(primary.id)
           albums.push(...releasesFromArtistPage(page, primaryName))
-        } catch { /* page artiste optionnelle */ }
+        } catch { /* artist page optional */ }
       }
       if (songsOnly) {
         const inferred = albumsInferredFromTracks(searchItems(songsOnly), primaryName)
-        // Ne pas re-ajouter une sortie déjà vue (autre MPRE id) via les titres.
+        // Do not re-add a release already seen (other MPRE id) through the tracks.
         const known = new Set(albums.map(albumDedupeKey))
         for (const a of inferred) {
           const key = albumDedupeKey(a)
@@ -1066,17 +1066,17 @@ export class YtmusicCatalog {
         }
       }
     } else if (primary?.id && typeof yt.music.getArtist === 'function') {
-      // Filtre OK : compléter quand même la discographie artiste.
+      // Filter OK: complete the artist discography anyway.
       try {
         const page = await yt.music.getArtist(primary.id)
         albums.push(...releasesFromArtistPage(page, primaryName))
       } catch { /* ignore */ }
     }
 
-    // getAlbum : type réel + badges explicit (absents de la recherche songs).
+    // getAlbum: real type + explicit badges (missing from the songs search).
     try {
       await refineAlbumsViaGetAlbum(yt, albums, tracks)
-    } catch { /* refine optionnel */ }
+    } catch { /* refine optional */ }
     stampTrackYearsFromAlbums(tracks, albums)
 
     const partitioned = partitionAlbums(mapAlbums(albums))
@@ -1093,7 +1093,7 @@ export class YtmusicCatalog {
     }
   }
 
-  /** Titres aimés : playlist système `LM` (Liked Music). */
+  /** Liked tracks: system playlist `LM` (Liked Music). */
   async liked(cookie: string): Promise<YtmusicTrack[]> {
     return this.playlistTracks(cookie, 'LM')
   }
@@ -1103,7 +1103,7 @@ export class YtmusicCatalog {
       let lib = await yt.music.getLibrary()
       if (typeof lib.applyFilter === 'function') {
         try { lib = await lib.applyFilter('playlists') }
-        catch { /* filtre absent : on lit le contenu tel quel */ }
+        catch { /* filter missing: read the contents as they are */ }
       }
       const items = shelfItems(lib.contents)
       const raws = items.map(itemToRawPlaylist).filter((r): r is RawPlaylist => !!r)
@@ -1125,10 +1125,10 @@ export class YtmusicCatalog {
   }
 
   /**
-   * Un album : ses titres, et le texte de présentation que YouTube Music affiche sous la pochette
-   * (`MusicDescriptionShelf` de l'en-tête, souvent tiré de Wikipédia), s'il y en a un. `lang` : la
-   * langue de ce texte — la même session sert aux titres (les lignes n'ont ni artiste ni sous-titre à
-   * analyser, l'en-tête donne l'année).
+   * An album: its tracks, and the description text YouTube Music shows under the cover (the
+   * header's `MusicDescriptionShelf`, often taken from Wikipedia), if there is one. `lang`: the
+   * language of that text — the same session serves the tracks (the rows have neither artist nor
+   * subtitle to parse, the header gives the year).
    */
   async album(cookie: string, albumId: string, lang?: string): Promise<{ tracks: YtmusicTrack[]; description: string | null }> {
     return this.withSession(cookie, async (yt) => {
@@ -1138,7 +1138,7 @@ export class YtmusicCatalog {
       const albumYear = header
         ? runTexts(header.subtitle).find((p) => /^[12]\d{3}$/.test(p)) ?? null
         : null
-      // Les lignes d'une page d'album n'ont ni pochette ni artiste : les deux sont dans l'en-tête.
+      // An album page's rows have neither cover nor artist: both are in the header.
       const albumArt = header ? bestThumb(thumbsOf(header)) : null
       const albumArtist = header ? textOf(header.strapline_text_one) : null
       const albumTitle = header ? textOf(header.title) : null
@@ -1155,24 +1155,24 @@ export class YtmusicCatalog {
     }, lang)
   }
 
-  /** Titres déjà présents sur la page artiste (Top songs) — pas de 2ᵉ requête localisée. */
+  /** Tracks already on the artist page (Top songs) — no 2nd localized request. */
   async artistTracks(cookie: string, artistId: string): Promise<YtmusicTrack[]> {
     return (await this.artist(cookie, artistId)).tracks
   }
 
   /**
-   * Un artiste : ses titres, et le texte de présentation de l'en-tête (`MusicImmersiveHeader`,
-   * `description`, souvent tiré de Wikipédia) dans la langue `lang`, s'il y en a un.
+   * An artist: their tracks, and the header's description text (`MusicImmersiveHeader`,
+   * `description`, often taken from Wikipedia) in the `lang` language, if there is one.
    */
   async artist(cookie: string, artistId: string, lang?: string): Promise<{ tracks: YtmusicTrack[]; description: string | null }> {
     return this.withSession(cookie, async (yt) => {
       if (typeof yt.music.getArtist !== 'function') return { tracks: [], description: null }
       const artist = await yt.music.getArtist(artistId)
       const items = shelfItems(artist.sections)
-      // La page artiste range aussi ses albums (`MPREb…`), playlists (`VL…`) et artistes proches
-      // (`UC…`) dans ses rangées : 50 éléments sur 73 chez un artiste. Seuls les TITRES se jouent —
-      // les autres partaient en file et échouaient à la lecture. Le type donné par YouTube d'abord ;
-      // à défaut, la forme de l'id (ceux des collections sont longs et préfixés, pas ceux des vidéos).
+      // The artist page also files its albums (`MPREb…`), playlists (`VL…`) and related artists
+      // (`UC…`) in its rows: 50 items out of 73 for one artist. Only TRACKS play — the others went
+      // into the queue and failed at playback. The type given by YouTube first; failing that, the
+      // shape of the id (collections' ids are long and prefixed, videos' are not).
       const notTrack = (it: unknown) => {
         const o = asRecord(it)
         const type = typeof o?.item_type === 'string' ? o.item_type : ''
@@ -1183,8 +1183,8 @@ export class YtmusicCatalog {
       const raws = items.filter((it) => !notTrack(it)).map(itemToRawTrack).filter((r): r is RawTrack => !!r)
       const header = asRecord(artist.header)
       const description = header ? textOf(header.description)?.trim() || null : null
-      // La rangée « Clips » reprend souvent les chansons de « Titres » sous un autre id (le clip) :
-      // une chanson une fois, la première venue — la version audio, rangée avant.
+      // The "Videos" row often repeats the "Songs" row's songs under another id (the video): each
+      // song once, the first one seen — the audio version, filed before.
       const seen = new Set<string>()
       const tracks = mapTracks(raws).filter((t) => {
         const key = `${t.title.trim().toLowerCase()}|${t.artists.join(',').toLowerCase()}`

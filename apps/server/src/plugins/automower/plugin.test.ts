@@ -11,10 +11,10 @@ import { automowerConfigSchema, createAutomowerPlugin, type AutomowerStatus } fr
 import { currentUsage, type AutomowerUsage, type UsageStore } from './state'
 import type { WsFactory, WsLike } from './ws'
 
-// Ce que le plugin doit tenir face au fabricant : lire l'état complet au démarrage et le publier,
-// laisser le FLUX porter le vivant (position) sans dépenser le quota, compter chaque requête,
-// redemander un jeton sur un 401 et se déclarer « à configurer » sur une clé refusée, traduire les
-// trois gestes en actions JSON:API. Aucun compte ni robot réel n'est touché.
+// What the plugin must hold up against the vendor: read the full state at startup and publish it,
+// let the STREAM carry the live data (position) without spending the quota, count every request,
+// request a new token on a 401 and declare itself "to configure" on a refused key, translate the
+// three gestures into JSON:API actions. No real account or robot is touched.
 
 const NOW = Date.UTC(2026, 8, 16, 12)
 const MIN = 60_000
@@ -26,16 +26,16 @@ const response = (body: unknown, status = 200) => ({
   text: async () => (body === null ? '' : JSON.stringify(body)),
 })
 
-/** Faux Husqvarna : serveur de jetons et API, pilotés par un état mutable. */
+/** Fake Husqvarna: token server and API, driven by a mutable state. */
 function fakeHusqvarna() {
   const world = {
     list: MOWERS_ERROR as unknown,
-    /** Le jeton que l'API accepte ; un autre → 401. */
+    /** The token the API accepts; another one → 401. */
     accepts: TOKEN_RESPONSE.access_token,
-    /** Ce que le serveur de jetons rend au prochain appel. */
+    /** What the token server returns on the next call. */
     nextToken: TOKEN_RESPONSE as unknown,
     tokenStatus: 200,
-    /** Les cartes SVG ; `null` = 404, comme un robot sans zone tracée. */
+    /** The SVG maps; `null` = 404, like a robot without a drawn zone. */
     maps: { generated: MAP_GENERATED_SVG as string | null, zone: null as string | null, site: null as string | null },
   }
   const calls: { method: string; path: string; body?: string; headers: Record<string, string> }[] = []
@@ -66,7 +66,7 @@ function fakeHusqvarna() {
   return { fetchImpl, calls, world }
 }
 
-/** Faux WebSocket : on tient les gestionnaires, et on joue les événements à la main. */
+/** Fake WebSocket: we hold the handlers, and play the events by hand. */
 function fakeWs() {
   const sockets: (WsLike & { handlers: Record<string, ((...a: unknown[]) => void)[]>; headers: Record<string, string>; pings: number; closed: boolean })[] = []
   const factory: WsFactory = (_url, headers) => {
@@ -117,20 +117,20 @@ async function started(over: { env?: Record<string, string>; hq?: ReturnType<typ
   return { plugin, ctx, clock, hq, ws, usage, app, ctrl, statusOf }
 }
 
-/** Laisse passer les micro-tâches du poller et du flux. */
+/** Lets the poller's and the stream's microtasks run. */
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve() }
 
-describe('automower — démarrage', () => {
-  it('sans clé : idle, needs_pairing, aucun appel', async () => {
+describe('automower — startup', () => {
+  it('without a key: idle, needs_pairing, no call', async () => {
     const { plugin, hq } = await started({ env: { AUTOMOWER_APP_KEY: '', AUTOMOWER_APP_SECRET: '' } })
     expect(plugin.health!().status).toBe('needs_pairing')
     expect(hq.calls).toHaveLength(0)
     await expect(plugin.execute(MOWER_ID, { type: 'mower.pause' })).rejects.toMatchObject({ code: 'NEEDS_PAIRING' })
   })
 
-  it('lit la liste au démarrage, publie le descripteur et l’état complet, puis ouvre le flux avec le jeton', async () => {
+  it('reads the list at startup, publishes the descriptor and the full state, then opens the stream with the token', async () => {
     const { ctx, hq, ws, plugin } = await started()
-    // un jeton, puis la liste — avec les trois en-têtes du fabricant
+    // a token, then the list — with the vendor's three headers
     expect(hq.calls.map((c) => c.path)).toEqual(['token', '/mowers'])
     expect(hq.calls[0]!.body).toContain('grant_type=client_credentials')
     expect(hq.calls[1]!.headers).toMatchObject({ authorization: `Bearer ${TOKEN_RESPONSE.access_token}`, 'authorization-provider': 'husqvarna', 'x-api-key': 'app-key' })
@@ -140,12 +140,12 @@ describe('automower — démarrage', () => {
     expect(ctx.setAvailable).toHaveBeenCalledWith(MOWER_ID, true)
     expect(ws.sockets).toHaveLength(1)
     expect(ws.sockets[0]!.headers).toEqual({ Authorization: `Bearer ${TOKEN_RESPONSE.access_token}` })
-    // une seule requête comptée : la LISTE ; le jeton ne compte pas (le portail ne le compte pas)
+    // a single request counted: the LIST; the token does not count (the portal does not count it)
     expect(plugin.health!()).toMatchObject({ status: 'ok', deviceCount: 1, quota: { used: 1, limit: 21_000, labelKey: 'mower.quotaRequests', since: NOW } })
     expect(plugin.health!().detail).toContain('polling only')
   })
 
-  it('une clé refusée par le serveur de jetons : degraded, et la commande dit NEEDS_PAIRING', async () => {
+  it('a key refused by the token server: degraded, and the command says NEEDS_PAIRING', async () => {
     const hq = fakeHusqvarna()
     hq.world.nextToken = TOKEN_INVALID_CLIENT
     hq.world.tokenStatus = 400
@@ -156,8 +156,8 @@ describe('automower — démarrage', () => {
   })
 })
 
-describe('automower — le flux porte le vivant', () => {
-  it('ready puis position : l’état gagne une location sans nouvelle requête ; la santé dit « live »', async () => {
+describe('automower — the stream carries the live data', () => {
+  it('ready then position: the state gains a location without a new request; the health says "live"', async () => {
     const { ctx, hq, ws, plugin, clock } = await started()
     ws.emit(0, 'open')
     ws.emit(0, 'message', JSON.stringify(WS_READY))
@@ -165,12 +165,12 @@ describe('automower — le flux porte le vivant', () => {
     expect(ctx.emitState).toHaveBeenLastCalledWith(MOWER_ID, { location: { lat: WS_POSITION.attributes.position.latitude, lon: WS_POSITION.attributes.position.longitude, at: NOW } })
     expect(hq.calls).toHaveLength(2)
     expect(plugin.health!().detail).toContain('live events')
-    // le ping tient la connexion
+    // the ping keeps the connection alive
     clock.advance(61_000)
     expect(ws.sockets[0]!.pings).toBe(1)
   })
 
-  it('des deltas successifs : chacun se fond dans le robot connu, le prochain départ survit au planificateur', async () => {
+  it('successive deltas: each merges into the known robot, the next start survives the planner', async () => {
     const hq = fakeHusqvarna()
     hq.world.list = MOWERS_PARKED
     const { ctx, ws } = await started({ hq })
@@ -180,11 +180,11 @@ describe('automower — le flux porte le vivant', () => {
     ws.emit(0, 'message', JSON.stringify(WS_MOWER_HOME))
     expect(ctx.emitState).toHaveBeenLastCalledWith(MOWER_ID, expect.objectContaining({ restrictedReason: 'park_override' }))
     ws.emit(0, 'message', JSON.stringify(WS_PLANNER))
-    // le planificateur du flux ne redit pas le prochain départ : celui de la liste tient
+    // the stream's planner does not repeat the next start: the list's one holds
     expect(ctx.emitState).toHaveBeenLastCalledWith(MOWER_ID, { nextStartAt: Date.UTC(2026, 8, 17, 8), restrictedReason: 'park_override' })
   })
 
-  it('un événement pour un robot inconnu relit la liste (une fois par minute au plus)', async () => {
+  it('an event for an unknown robot re-reads the list (once a minute at most)', async () => {
     const { hq, ws } = await started()
     ws.emit(0, 'open')
     ws.emit(0, 'message', JSON.stringify(WS_UNKNOWN_MOWER))
@@ -193,7 +193,7 @@ describe('automower — le flux porte le vivant', () => {
     expect(hq.calls.filter((c) => c.path === '/mowers')).toHaveLength(2)
   })
 
-  it('le flux se ferme : reconnexion après backoff avec un jeton, et relecture complète', async () => {
+  it('the stream closes: reconnection after backoff with a token, and a full re-read', async () => {
     const { hq, ws, clock } = await started()
     ws.emit(0, 'open')
     ws.emit(0, 'close', 1006)
@@ -205,73 +205,73 @@ describe('automower — le flux porte le vivant', () => {
     expect(hq.calls.filter((c) => c.path === '/mowers')).toHaveLength(2)
   })
 
-  it('le sondage relit à sa cadence, et publie le nouvel état', async () => {
+  it('polling re-reads at its pace, and publishes the new state', async () => {
     const { ctx, hq, clock } = await started()
     hq.world.list = MOWERS_MOWING
     clock.advance(10 * MIN + 1)
     await flush()
     expect(hq.calls.filter((c) => c.path === '/mowers')).toHaveLength(2)
     expect(ctx.emitState).toHaveBeenLastCalledWith(MOWER_ID, expect.objectContaining({ activity: 'mowing', errorCode: null, battery: 83 }))
-    // même robot, même nom : le descripteur n'est pas republié
+    // same robot, same name: the descriptor is not republished
     expect(ctx.emitDevices).toHaveBeenCalledTimes(1)
   })
 })
 
-describe('automower — jeton et quota', () => {
-  it('un 401 fait redemander UN jeton et rejouer ; le compteur de la fenêtre compte les appels à l’API, pas les jetons, et survit', async () => {
+describe('automower — token and quota', () => {
+  it('a 401 requests ONE new token and replays; the window counter counts API calls, not tokens, and survives', async () => {
     const usage = memoryUsage({ windowStart: NOW - 3 * 86_400_000, requests: 40 })
     const { hq, clock, plugin, statusOf } = await started({ usage })
-    // le jeton devient périmé côté fabricant
+    // the token becomes stale on the vendor's side
     hq.world.accepts = TOKEN_RESPONSE_2.access_token
     hq.world.nextToken = TOKEN_RESPONSE_2
     clock.advance(10 * MIN + 1)
     await flush()
     expect(hq.calls.map((c) => c.path)).toEqual(['token', '/mowers', '/mowers', 'token', '/mowers'])
-    // 40 + liste + (liste refusée + liste rejouée) = 43, écrits au fur et à mesure ; les deux jetons ne comptent pas
+    // 40 + list + (refused list + replayed list) = 43, written as they go; the two tokens do not count
     expect(usage.value).toEqual({ windowStart: NOW - 3 * 86_400_000, requests: 43 })
     expect((await statusOf()).requestsInWindow).toBe(43)
     expect((await statusOf()).windowResetAt).toBe(NOW + 4 * 86_400_000)
     expect(plugin.health!().quota).toMatchObject({ used: 43, limit: 21_000, since: NOW - 3 * 86_400_000 })
   })
 
-  it('POST /usage recale le compte et l’instant de remise à zéro du portail, qui survit au fichier', async () => {
+  it('POST /usage realigns the count and the portal’s reset instant, which survives in the file', async () => {
     const usage = memoryUsage()
     const { app, plugin, hq, clock } = await started({ usage })
     const resetAt = '2026-09-23T17:00:00+02:00'
     const res = await app.inject({ method: 'POST', url: '/usage', payload: { requests: 33, resetAt } })
     expect(res.statusCode).toBe(200)
-    // la grille est celle du portail (remise à zéro le 23 à 17 h de Paris) ; l'horloge du test est le
-    // 16 à 12 h UTC, AVANT la remise à zéro du 16 à 15 h UTC : la fenêtre courante a commencé le 9
+    // the grid is the portal's (reset on the 23rd at 5 pm Paris time); the test clock is the 16th
+    // at 12:00 UTC, BEFORE the reset of the 16th at 15:00 UTC: the current window started on the 9th
     const start = Date.parse(resetAt) - 14 * 86_400_000
     expect(plugin.health!().quota).toMatchObject({ used: 33, since: start })
     expect(usage.value).toEqual({ windowStart: start, requests: 33, anchor: Date.parse(resetAt) })
-    // une requête de plus s'ajoute au compte recalé
+    // one more request adds to the realigned count
     hq.world.list = MOWERS_MOWING
     clock.advance(10 * MIN + 1)
     await flush()
     expect(plugin.health!().quota).toMatchObject({ used: 34 })
-    // un corps invalide est refusé
+    // an invalid body is refused
     expect((await app.inject({ method: 'POST', url: '/usage', payload: { requests: -1 } })).statusCode).toBe(400)
-    // l'ancrage gardé dans le fichier cale la fenêtre suivante sans configuration
+    // the anchor kept in the file aligns the next window without configuration
     const later = memoryUsage(usage.value)
     const clock2 = NOW + 8 * 86_400_000
     expect(currentUsage(later.value, clock2)).toEqual({ windowStart: Date.parse(resetAt), requests: 0, anchor: Date.parse(resetAt) })
   })
 
-  it('une fenêtre de sept jours écoulée repart de zéro, sur la même grille', async () => {
+  it('an elapsed seven-day window restarts from zero, on the same grid', async () => {
     const usage = memoryUsage({ windowStart: NOW - 10 * 86_400_000, requests: 9_000 })
     const { plugin } = await started({ usage })
     expect(plugin.health!().quota).toMatchObject({ used: 1, since: NOW - 3 * 86_400_000 })
   })
 
-  it('un instant de remise à zéro configuré (celui du portail) cale la grille, même dans le futur', async () => {
+  it('a configured reset instant (the portal’s) aligns the grid, even in the future', async () => {
     const { plugin } = await started({ env: { AUTOMOWER_QUOTA_RESET_AT: new Date(NOW + 2 * 86_400_000).toISOString() } })
     expect(plugin.health!().quota).toMatchObject({ used: 1, since: NOW - 5 * 86_400_000 })
   })
 })
 
-describe('automower — commandes', () => {
-  it('tondre une heure, pause, se garer : trois actions JSON:API, accusées en 202', async () => {
+describe('automower — commands', () => {
+  it('mow for an hour, pause, park: three JSON:API actions, acknowledged with 202', async () => {
     const { plugin, hq } = await started()
     await plugin.execute(MOWER_ID, { type: 'mower.start', durationMin: 60 })
     await plugin.execute(MOWER_ID, { type: 'mower.pause' })
@@ -286,26 +286,26 @@ describe('automower — commandes', () => {
     expect(actions[0]!.headers['content-type']).toBe('application/vnd.api+json')
   })
 
-  it('tondre sans durée = reprendre le programme : ResumeSchedule', async () => {
+  it('mow without duration = resume the program: ResumeSchedule', async () => {
     const { plugin, hq } = await started()
     await plugin.execute(MOWER_ID, { type: 'mower.start' })
     expect(hq.calls.filter((c) => c.path.endsWith('/actions')).map((c) => JSON.parse(c.body!))).toEqual([{ data: { type: 'ResumeSchedule' } }])
   })
 
-  it('effacer l’erreur : POST errors/confirm sans corps si le robot la dit confirmable, refus sans appel sinon', async () => {
+  it('clear the error: POST errors/confirm without body if the robot says it is confirmable, refusal without a call otherwise', async () => {
     const { plugin, hq, ws } = await started()
-    // la liste de départ : erreur confirmable
+    // the initial list: confirmable error
     await plugin.execute(MOWER_ID, { type: 'mower.confirm_error' })
     const confirm = () => hq.calls.filter((c) => c.path.endsWith('/errors/confirm'))
     expect(confirm().map((c) => [c.method, c.path, c.body])).toEqual([['POST', `/mowers/${MOWER_ID}/errors/confirm`, undefined]])
-    // le flux dit l'erreur 2, que le fabricant ne lève pas à distance (capture du 2026-09-16)
+    // the stream reports error 2, which the vendor does not clear remotely (capture of 2026-09-16)
     ws.emit(0, 'open')
     ws.emit(0, 'message', JSON.stringify(WS_MOWER_ERROR_CODE))
     await expect(plugin.execute(MOWER_ID, { type: 'mower.confirm_error' })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
     expect(confirm()).toHaveLength(1)
   })
 
-  it('refuse une commande d’un autre kind, un robot inconnu, un robot hors ligne', async () => {
+  it('refuses a command of another kind, an unknown robot, an offline robot', async () => {
     const { plugin, hq, clock } = await started()
     await expect(plugin.execute(MOWER_ID, { type: 'vacuum.start' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
     await expect(plugin.execute('nope', { type: 'mower.pause' })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
@@ -316,16 +316,16 @@ describe('automower — commandes', () => {
   })
 })
 
-describe('automower — redémarrage', () => {
+describe('automower — restart', () => {
   /**
-   * Constaté sur le vrai serveur : après une bascule dans les Réglages, l'hôte vide les appareils du
-   * plugin avec le résultat de `discover`, puis relance `start`. Le plugin croyait avoir déjà publié
-   * ses descripteurs et ne les réémettait pas — robot lu, flux ouvert, et pourtant absent du registre.
+   * Seen on the real server: after a toggle in Settings, the host empties the plugin's devices with
+   * the result of `discover`, then calls `start` again. The plugin believed it had already published
+   * its descriptors and did not re-emit them — robot read, stream open, and yet absent from the registry.
    */
-  it('stop puis init/discover/start : les robots connus sont redits par discover, et republiés après la relecture', async () => {
+  it('stop then init/discover/start: known robots are repeated by discover, and republished after the re-read', async () => {
     const { plugin, ctx, hq } = await started()
     await plugin.stop()
-    // deuxième vie : même instance, nouveau contexte (c'est ce que fait l'hôte)
+    // second life: same instance, new context (that is what the host does)
     const ctx2: PluginContext = { ...ctx, emitDevices: vi.fn(), emitState: vi.fn(), setAvailable: vi.fn(), signal: new AbortController().signal }
     await plugin.init(ctx2)
     const known = await plugin.discover()
@@ -334,14 +334,14 @@ describe('automower — redémarrage', () => {
     await flush()
     expect(hq.calls.filter((c) => c.path === '/mowers')).toHaveLength(2)
     expect(ctx2.emitState).toHaveBeenCalledWith(MOWER_ID, expect.objectContaining({ activity: 'error' }))
-    // la liste n'a pas changé : ce que `discover` a déclaré tient, pas de republication inutile
+    // the list did not change: what `discover` declared holds, no useless republication
     expect(ctx2.emitDevices).not.toHaveBeenCalled()
     await plugin.stop()
   })
 })
 
-describe('automower — journal', () => {
-  it('lu au fabricant une fois, tenu par le flux ensuite, relu après une coupure', async () => {
+describe('automower — log', () => {
+  it('read from the vendor once, kept by the stream afterwards, re-read after a cut', async () => {
     const hq = fakeHusqvarna()
     hq.world.list = MOWERS_PARKED
     const { plugin, hq: h, ws, ctx } = await started({ hq })
@@ -351,10 +351,10 @@ describe('automower — journal', () => {
     expect(j1.entries[0]).toMatchObject({ code: 2, severity: 'error' })
     expect(h.calls.length).toBe(before + 1)
     expect(h.calls.at(-1)!.path).toBe(`/mowers/${MOWER_ID}/messages`)
-    // seconde demande : rien de plus au fabricant
+    // second request: nothing more to the vendor
     await plugin.journal!(MOWER_ID)
     expect(h.calls.length).toBe(before + 1)
-    // une ligne arrive par le flux : elle rejoint le journal, sans doublon
+    // a line arrives through the stream: it joins the log, without duplicate
     ws.emit(0, 'open')
     const fresh = { ...WS_MESSAGE_ERROR, attributes: { message: { ...WS_MESSAGE_ERROR.attributes.message, time: 1789586535, code: 9 } } }
     ws.emit(0, 'message', JSON.stringify(fresh))
@@ -363,7 +363,7 @@ describe('automower — journal', () => {
     expect(j2.entries).toHaveLength(23)
     expect(j2.entries[0]).toMatchObject({ code: 9, message: 'Trapped' })
     expect(ctx.emitState).not.toHaveBeenCalledWith(MOWER_ID, expect.objectContaining({ errorCode: 9 }))
-    // le flux se coupe puis revient : des lignes ont pu passer, la prochaine demande relit
+    // the stream drops then comes back: lines may have gone by, the next request re-reads
     ws.emit(0, 'close', 1006)
     const { clock } = { clock: (ctx.clock as unknown as { advance(ms: number): void }) }
     clock.advance(6_500)
@@ -376,14 +376,14 @@ describe('automower — journal', () => {
     expect(h.calls.at(-1)!.path).toBe(`/mowers/${MOWER_ID}/messages`)
   })
 
-  it('refuse un robot inconnu', async () => {
+  it('refuses an unknown robot', async () => {
     const { plugin } = await started()
     await expect(plugin.journal!('nope')).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
   })
 })
 
-describe('automower — routes et arrêt', () => {
-  it('/status ne porte ni clé ni secret ; /raw relit la liste et la compte', async () => {
+describe('automower — routes and stop', () => {
+  it('/status carries neither key nor secret; /raw re-reads the list and counts it', async () => {
     const { app, statusOf, plugin } = await started()
     const s = await statusOf()
     expect(s).toMatchObject({ configured: true, live: false, timezone: 'Europe/Paris', windowLimit: 21_000, mowers: [{ id: MOWER_ID, name: 'Tondeuse', connected: true }] })
@@ -394,7 +394,7 @@ describe('automower — routes et arrêt', () => {
     expect(plugin.health!().quota?.used).toBe(2)
   })
 
-  it('stop ferme le flux et arrête le sondage', async () => {
+  it('stop closes the stream and stops polling', async () => {
     const { plugin, ws, hq, clock } = await started()
     ws.emit(0, 'open')
     await plugin.stop()
@@ -405,15 +405,15 @@ describe('automower — routes et arrêt', () => {
   })
 })
 
-describe('automower — zones et carte', () => {
-  it('tondre une zone : StartInWorkArea avec sa durée, accusé en 202', async () => {
+describe('automower — zones and map', () => {
+  it('mow an area: StartInWorkArea with its duration, acknowledged with 202', async () => {
     const { plugin, hq } = await started()
     await plugin.execute(MOWER_ID, { type: 'mower.start_in_area', workAreaId: 123456, durationMin: 60 })
     const action = hq.calls.find((c) => c.path.endsWith('/actions'))!
     expect(JSON.parse(action.body!)).toEqual({ data: { type: 'StartInWorkArea', attributes: { workAreaId: 123456, duration: 60 } } })
   })
 
-  it('basculer une zone d’exclusion : PATCH JSON:API, puis UNE relecture quelques secondes après', async () => {
+  it('toggle a stay-out zone: JSON:API PATCH, then ONE re-read a few seconds later', async () => {
     const hq = fakeHusqvarna()
     hq.world.list = MOWERS_ZONES
     const { plugin, clock, ctx } = await started({ hq })
@@ -424,7 +424,7 @@ describe('automower — zones et carte', () => {
     const patches = hq.calls.filter((c) => c.method === 'PATCH')
     expect(patches.map((c) => c.path)).toEqual(Array(2).fill(`/mowers/${MOWER_ID}/stayOutZones/${STAY_OUT_ID}`))
     expect(JSON.parse(patches[0]!.body!)).toEqual({ data: { type: 'stayOutZone', id: STAY_OUT_ID, attributes: { enable: false } } })
-    // l'effet n'est pas publié d'avance : c'est la relecture qui le dira
+    // the effect is not published in advance: the re-read will tell
     expect(reads()).toBe(before)
     clock.advance(5_000)
     await flush()
@@ -432,7 +432,7 @@ describe('automower — zones et carte', () => {
     expect(ctx.emitState).toHaveBeenLastCalledWith(MOWER_ID, expect.objectContaining({ stayOutZones: [{ id: STAY_OUT_ID, name: 'Massif', enabled: true }] }))
   })
 
-  it('une carte en cours de synchronisation : le fabricant refuserait, le plugin le dit sans appeler', async () => {
+  it('a map being synchronized: the vendor would refuse, the plugin says so without calling', async () => {
     const hq = fakeHusqvarna()
     const m = MOWERS_ZONES.data[0]!
     hq.world.list = { data: [{ ...m, attributes: { ...m.attributes, stayOutZones: { ...m.attributes.stayOutZones, dirty: true } } }] }
@@ -441,7 +441,7 @@ describe('automower — zones et carte', () => {
     expect(hq.calls.some((c) => c.method === 'PATCH')).toBe(false)
   })
 
-  it('la carte : terrain puis zones (404 = aucune), lue UNE fois, relue quand la liste des zones change', async () => {
+  it('the map: grounds then zones (404 = none), read ONCE, re-read when the zone list changes', async () => {
     const { plugin, hq, clock } = await started()
     const mapCalls = () => hq.calls.filter((c) => c.path.includes('/maps/')).map((c) => c.path.slice(c.path.lastIndexOf('/') + 1))
     const map = await plugin.siteMap!(MOWER_ID)
@@ -449,7 +449,7 @@ describe('automower — zones et carte', () => {
     expect(map.shapes.map((s) => s.kind)).toEqual(['station', 'lawn', 'obstacle', 'guide'])
     await plugin.siteMap!(MOWER_ID)
     expect(mapCalls()).toEqual(['generated', 'zone'])
-    // une zone tracée dans l'appli : la relecture le voit, la carte se relit avec ses zones
+    // a zone drawn in the app: the re-read sees it, the map is read again with its zones
     hq.world.list = MOWERS_ZONES
     hq.world.maps.zone = MAP_ZONE_SVG
     clock.advance(10 * MIN + 1)
@@ -459,7 +459,7 @@ describe('automower — zones et carte', () => {
     expect(mapCalls()).toEqual(['generated', 'zone', 'generated', 'zone'])
   })
 
-  it('un robot EPOS (pas de carte générée) : sa carte de site', async () => {
+  it('an EPOS robot (no generated map): its site map', async () => {
     const hq = fakeHusqvarna()
     hq.world.maps = { generated: null, zone: null, site: MAP_ZONE_SVG }
     const { plugin } = await started({ hq })
@@ -469,7 +469,7 @@ describe('automower — zones et carte', () => {
   })
 })
 
-describe('automower — carte : détecter un tracé modifié sans dépenser le quota', () => {
+describe('automower — map: detect a modified outline without spending the quota', () => {
   const zonesWith = (patch: (a: typeof MOWERS_ZONES.data[0]['attributes']) => object) => {
     const m = MOWERS_ZONES.data[0]!
     return { data: [{ ...m, attributes: { ...m.attributes, ...patch(m.attributes) } }] }
@@ -485,14 +485,14 @@ describe('automower — carte : détecter un tracé modifié sans dépenser le q
     return { ...s, hq, mapReads, poll }
   }
 
-  it('rien de neuf dans la liste : la carte gardée sert, sans requête', async () => {
+  it('nothing new in the list: the kept map is served, without a request', async () => {
     const { plugin, mapReads, poll } = await withMap()
     await poll()
     await plugin.siteMap!(MOWER_ID)
     expect(mapReads()).toBe(1)
   })
 
-  it('une zone RENOMMÉE dans l’appli : la carte se relit (son nom relie la forme à la zone)', async () => {
+  it('a zone RENAMED in the app: the map is read again (its name links the shape to the zone)', async () => {
     const { plugin, hq, mapReads, poll } = await withMap()
     hq.world.list = zonesWith((a) => ({ workAreas: a.workAreas.map((w) => (w.workAreaId === 123456 ? { ...w, name: 'Verger' } : w)) }))
     await poll()
@@ -500,7 +500,7 @@ describe('automower — carte : détecter un tracé modifié sans dépenser le q
     expect(mapReads()).toBe(2)
   })
 
-  it('la synchronisation d’une carte modifiée (`dirty`) : relue quand elle commence, et quand elle finit', async () => {
+  it('the synchronization of a modified map (`dirty`): re-read when it starts, and when it ends', async () => {
     const { plugin, hq, mapReads, poll } = await withMap()
     hq.world.list = zonesWith((a) => ({ stayOutZones: { ...a.stayOutZones, dirty: true } }))
     await poll()
@@ -511,7 +511,7 @@ describe('automower — carte : détecter un tracé modifié sans dépenser le q
     expect(mapReads()).toBe(3)
   })
 
-  it('un tracé redessiné sans rien changer d’autre : relu au plus tard le lendemain', async () => {
+  it('an outline redrawn without changing anything else: re-read the next day at the latest', async () => {
     const { plugin, clock, mapReads } = await withMap()
     clock.advance(23 * 60 * MIN)
     await flush()
@@ -524,8 +524,8 @@ describe('automower — carte : détecter un tracé modifié sans dépenser le q
   })
 })
 
-describe('automower — la zone en cours suit les ordres', () => {
-  it('un changement d’activité chez un robot à zones relit la liste (la zone n’est que là), une fois par minute au plus', async () => {
+describe('automower — the current area follows the orders', () => {
+  it('an activity change on a robot with areas re-reads the list (the area is only there), once a minute at most', async () => {
     const hq = fakeHusqvarna()
     hq.world.list = MOWERS_ZONES
     const { ws, clock } = await started({ hq })
@@ -537,14 +537,14 @@ describe('automower — la zone en cours suit les ordres', () => {
     ws.emit(0, 'message', JSON.stringify(WS_MOWER_LEAVING))
     await flush()
     expect(reads()).toBe(before + 1)
-    // même activité redite : rien ; autre changement dans la minute : rien non plus
+    // same activity repeated: nothing; another change within the minute: nothing either
     ws.emit(0, 'message', JSON.stringify(WS_MOWER_LEAVING))
     ws.emit(0, 'message', JSON.stringify({ ...WS_MOWER_LEAVING, attributes: { mower: { activity: 'MOWING' } } }))
     await flush()
     expect(reads()).toBe(before + 1)
   })
 
-  it('« tondre une zone » : la liste est relue dix secondes après, pour publier la zone visée', async () => {
+  it('"mow an area": the list is re-read ten seconds later, to publish the target area', async () => {
     const hq = fakeHusqvarna()
     hq.world.list = MOWERS_ZONES
     const { plugin, clock } = await started({ hq })

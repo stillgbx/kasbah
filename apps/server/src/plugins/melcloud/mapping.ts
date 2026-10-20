@@ -1,20 +1,20 @@
 import type { DeviceDescriptor, StatePatch } from '@kasbah/shared'
 import { DEVICE_TYPES, listedDeviceSchema, type DeviceLink, type SystemReading, type ZoneReading } from './types'
 
-// Mappage MELCloud — PUR : aucune entrée/sortie, tout est testable sur la réponse capturée.
+// MELCloud mapping — PURE: no input/output, everything is testable on the captured response.
 //
-// Écrit APRÈS la capture du vrai compte (`__fixtures__/melcloud.ts`), jamais d'après la
-// documentation du fabricant — l'erreur que ce projet a déjà commise trois fois (TaHoma, Renault,
-// COMAP). Quatre pièges viennent directement de cette capture et sont traités ici :
+// Written AFTER the capture of the real account (`__fixtures__/melcloud.ts`), never from the
+// vendor's documentation — the mistake this project has already made three times (TaHoma,
+// Renault, COMAP). Four traps come straight from this capture and are handled here:
 //
-//  1. `RoomTemperatureZone2` vaut **-39** quand la zone n'a pas de sonde d'ambiance. MELCloud rend
-//     une sentinelle, pas un `null` : le champ qui DIT la vérité est `Zone2InRoomMode`.
-//  2. `ErrorCode` vaut **8000** quand tout va bien. Seul `HasError` se lit.
-//  3. Les bornes de consigne ne sont pas les mêmes d'une zone à l'autre : ambiante pour une zone
-//     pilotée sur la pièce, eau de départ (30-60 °C) pour une zone en loi d'eau.
-//  4. `CanCool: false` : ne jamais proposer « Refroidir » à cette machine.
+//  1. `RoomTemperatureZone2` is **-39** when the zone has no room sensor. MELCloud returns a
+//     sentinel, not a `null`: the field that TELLS the truth is `Zone2InRoomMode`.
+//  2. `ErrorCode` is **8000** when all is well. Only `HasError` is read.
+//  3. The setpoint bounds are not the same from one zone to the other: room temperature for a zone
+//     controlled on the room, flow water (30-60 °C) for a zone on the weather curve.
+//  4. `CanCool: false`: never offer "Cool" to this machine.
 
-/** Au-delà, on est dans une structure qu'on ne comprend plus : mieux vaut s'arrêter que boucler. */
+/** Beyond this, we are in a structure we no longer understand: better to stop than to loop. */
 const MAX_DEPTH = 12
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -22,15 +22,15 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 /**
- * Les appareils d'un compte, cherchés par leur FORME et non par leur chemin.
+ * An account's devices, looked up by their SHAPE and not by their path.
  *
- * MELCloud range les appareils à des profondeurs qui dépendent de l'installation : directement sous
- * `Structure.Devices` (le cas de la maison de référence), ou sous une zone (`Structure.Areas[]`), ou
- * sous un étage, ou sous une zone d'un étage. Plutôt que de parier sur un chemin qu'une autre
- * installation démentirait, on descend l'arbre et on retient tout nœud qui porte un `DeviceID`.
+ * MELCloud files devices at depths that depend on the installation: directly under
+ * `Structure.Devices` (the reference house's case), or under an area (`Structure.Areas[]`), or
+ * under a floor, or under an area of a floor. Rather than betting on a path another installation
+ * would contradict, we walk down the tree and keep every node carrying a `DeviceID`.
  *
- * Un nœud reconnu comme appareil n'est PAS parcouru plus loin : son sous-objet `Device` porte des
- * identifiants qui feraient compter la même machine deux fois.
+ * A node recognized as a device is NOT walked any further: its `Device` sub-object carries ids that
+ * would count the same machine twice.
  */
 export function toDeviceLinks(payload: unknown): DeviceLink[] {
   const out = new Map<string, DeviceLink>()
@@ -46,12 +46,12 @@ function walk(node: unknown, buildingName: string | null, out: Map<string, Devic
   }
   if (!isRecord(node)) return
 
-  // un bâtiment : son nom habille les appareils qu'il contient
+  // a building: its name dresses the devices it contains
   const here = isRecord(node.Structure) && typeof node.Name === 'string' ? node.Name : buildingName
 
   if ('DeviceID' in node) {
-    // valider APPAREIL PAR APPAREIL : une machine à la forme inattendue ne doit pas priver la
-    // maison des autres (`3_2_ecrire-un-plugin.md`)
+    // validate DEVICE BY DEVICE: a machine with an unexpected shape must not deprive the house of
+    // the others (`3_2_ecrire-un-plugin.md`)
     const parsed = listedDeviceSchema.safeParse(node)
     if (parsed.success) {
       const link = toLink(parsed.data, here)
@@ -64,19 +64,19 @@ function walk(node: unknown, buildingName: string | null, out: Map<string, Devic
 }
 
 /**
- * Plage plausible pour une température lue chez ce fabricant. Sert à ne PAS publier la sentinelle
- * `-39` d'une sonde absente : une maison n'est jamais à -39 °C, et une eau de chauffage non plus.
+ * Plausible range for a temperature read from this vendor. Used NOT to publish the `-39` sentinel
+ * of a missing sensor: a house is never at -39 °C, and neither is heating water.
  */
 function plausible(t: number | null): t is number {
   return t !== null && t > -30 && t < 100
 }
 
-/** Un appareil listé → ce qu'il faut pour l'adresser, le nommer, et le lire. */
+/** A listed device → what is needed to address it, name it, and read it. */
 function toLink(d: { DeviceID: number | string; BuildingID?: number | string | undefined; DeviceName?: unknown; Device?: unknown }, buildingName: string | null): DeviceLink {
   const deviceId = String(d.DeviceID)
   const inner = isRecord(d.Device) ? d.Device : undefined
-  // l'enveloppe ET le sous-objet portent des champs utiles, et aucun ne se suffit : les bornes de
-  // consigne sont dans l'enveloppe, l'état de la machine dans `Device`, qui gagne en cas de conflit
+  // the envelope AND the sub-object carry useful fields, and neither is enough alone: the setpoint
+  // bounds are in the envelope, the machine's state in `Device`, which wins in case of conflict
   const fields: Record<string, unknown> = { ...(d as Record<string, unknown>), ...(inner ?? {}) }
   const raw = pickNumber(d as Record<string, unknown>, 'DeviceType') ?? (inner ? pickNumber(inner, 'DeviceType') : undefined)
   const deviceType = raw ?? null
@@ -109,15 +109,16 @@ function str(o: Record<string, unknown>, key: string): string | null {
 }
 
 /**
- * Les zones d'une machine, telles qu'elle les pilote VRAIMENT.
+ * A machine's zones, as it REALLY controls them.
  *
- * Le choix `room` / `flow` ne se devine pas d'après les valeurs : il se lit dans `Zone1InRoomMode` /
- * `Zone2InRoomMode`. Sur l'installation de référence, la zone 1 (la maison) est en ambiante à
- * 19,5 °C de consigne, et la zone 2 (l'échangeur) en loi d'eau à 45 °C de départ — deux couples de
- * champs différents, sous un même kind.
+ * The `room` / `flow` choice cannot be guessed from the values: it is read in `Zone1InRoomMode` /
+ * `Zone2InRoomMode`. On the reference installation, zone 1 (the house) is on room temperature with
+ * a 19.5 °C setpoint, and zone 2 (the exchanger) on the weather curve at 45 °C flow — two
+ * different pairs of fields, under the same kind.
  *
- * Une zone en ambiante dont la mesure est aberrante retombe sur le départ : ce serait une sonde
- * débranchée, et publier -39 °C vaudrait moins que publier la température du circuit.
+ * A room-temperature zone whose measurement is absurd falls back on the flow: it would be an
+ * unplugged sensor, and publishing -39 °C would be worth less than publishing the circuit's
+ * temperature.
  */
 export function toZones(fields: Record<string, unknown>): ZoneReading[] {
   const zones: ZoneReading[] = [zone(fields, 1)]
@@ -130,8 +131,8 @@ function zone(f: Record<string, unknown>, z: 1 | 2): ZoneReading {
   const room = num(f, `RoomTemperatureZone${z}`)
   const flow = num(f, `FlowTemperatureZone${z}`)
   const cooling = bool(f, `Zone${z}InCoolMode`)
-  // l'ambiante ne l'emporte que si la zone est PILOTÉE dessus ET que la sonde répond quelque chose
-  // de sensé — les deux conditions viennent de la capture, pas d'une précaution de principe
+  // room temperature only wins if the zone is CONTROLLED on it AND the sensor answers something
+  // sensible — both conditions come from the capture, not from a precaution on principle
   const control: 'room' | 'flow' = roomMode && plausible(room) ? 'room' : 'flow'
   const current = control === 'room' ? room : flow
   const target = control === 'room'
@@ -157,22 +158,22 @@ function pair(min: number | null, max: number | null): [number, number] | null {
 }
 
 /**
- * Au-delà de ce silence, la machine n'est plus suivie. Quinze fois la cadence de remontée observée
- * (une minute) : assez pour absorber un module Wi-Fi qui bafouille, assez court pour que la maison
- * ne montre pas des chiffres d'hier comme s'ils étaient d'aujourd'hui.
+ * Beyond this silence, the machine is no longer followed. Fifteen times the observed reporting
+ * pace (one minute): enough to absorb a stuttering Wi-Fi module, short enough for the house not to
+ * show yesterday's figures as if they were today's.
  */
 export const DEFAULT_STALE_MS = 15 * 60_000
 
 /**
- * Quand la machine a parlé pour la dernière fois, en ms epoch — et c'est ici que se résout le piège
- * des deux bases de temps :
+ * When the machine last talked, in ms epoch — and this is where the trap of the two time bases is
+ * resolved:
  *
- *  - `LastTimeStamp` (dans `ListDevices`, celle qu'on sonde) est en heure **LOCALE**, écrite sans
- *    fuseau : `Date.parse` la lit donc juste, puisqu'il traite une date-heure sans fuseau comme
- *    locale ;
- *  - `LastCommunication` (dans `Device/Get`) est la MÊME instant en **UTC**, écrit sans fuseau lui
- *    aussi — vérifié sur la capture : 17:58:00 UTC contre 19:58:00 local. Le lire pareil décalerait
- *    l'affichage du fuseau tout entier. D'où le `Z` ajouté à la main.
+ *  - `LastTimeStamp` (in `ListDevices`, the one we poll) is in **LOCAL** time, written without a
+ *    time zone: `Date.parse` therefore reads it right, since it treats a date-time without a time
+ *    zone as local;
+ *  - `LastCommunication` (in `Device/Get`) is the SAME instant in **UTC**, also written without a
+ *    time zone — checked on the capture: 17:58:00 UTC against 19:58:00 local. Reading it the same
+ *    way would shift the display by the whole time-zone offset. Hence the `Z` added by hand.
  */
 export function lastSeenAt(f: Record<string, unknown>): number | null {
   const local = str(f, 'LastTimeStamp')
@@ -183,15 +184,15 @@ export function lastSeenAt(f: Record<string, unknown>): number | null {
 }
 
 /**
- * La machine est-elle joignable ? **Pas `Offline`** — ce drapeau ment.
+ * Is the machine reachable? **Not `Offline`** — that flag lies.
  *
- * Relevé sur la vraie installation : `Offline: true` alors que `LastTimeStamp` avançait à chaque
- * minute, que `NextCommunication` annonçait la remontée suivante dans soixante secondes, que
- * `WifiAdapterStatus` valait `NORMAL` et que `HasError` était faux. S'y fier faisait disparaître
- * les deux zones de la maison — grisées, avec des données parfaitement fraîches dessous.
+ * Observed on the real installation: `Offline: true` while `LastTimeStamp` moved forward every
+ * minute, `NextCommunication` announced the next report in sixty seconds, `WifiAdapterStatus` was
+ * `NORMAL` and `HasError` was false. Trusting it made the house's two zones disappear — greyed
+ * out, with perfectly fresh data underneath.
  *
- * Ce qu'on mesure à la place est la seule chose vérifiable : la FRAÎCHEUR de la dernière remontée.
- * Sans horodatage du tout, on retombe faute de mieux sur ce que dit le fabricant.
+ * What we measure instead is the only verifiable thing: the FRESHNESS of the last report. Without
+ * any timestamp at all, we fall back, for want of anything better, on what the vendor says.
  */
 export function unitAvailable(f: Record<string, unknown>, now: number, maxAgeMs = DEFAULT_STALE_MS): boolean {
   const seen = lastSeenAt(f)
@@ -199,16 +200,16 @@ export function unitAvailable(f: Record<string, unknown>, now: number, maxAgeMs 
   return now - seen < maxAgeMs
 }
 
-/** `externalId` d'une zone : l'identifiant MELCloud suffixé. Stable, sans `:` ni espace. */
+/** A zone's `externalId`: the MELCloud id with a suffix. Stable, no `:` and no space. */
 export const zoneExternalId = (deviceId: string, zone: 1 | 2): string => `${deviceId}-z${zone}`
 
 /**
- * Les appareils publiés à la maison : UN `climate` par zone de chauffage.
+ * The devices published to the house: ONE `climate` per heating zone.
  *
- * En lecture seule, la seule capacité déclarée est `current_temp`. `target_temp` et `hvac_mode`
- * annonceraient des commandes que `execute` refuse, et proposer un bouton qui échoue serait mentir
- * — le raisonnement qui a privé le kind `camera` de `on_off`. La CONSIGNE reste lisible, elle fait
- * partie de l'état : c'est le bouton qui manque, pas la valeur.
+ * Read-only, the only declared capability is `current_temp`. `target_temp` and `hvac_mode` would
+ * announce commands that `execute` refuses, and offering a button that fails would be lying — the
+ * reasoning that deprived the `camera` kind of `on_off`. The SETPOINT stays readable, it is part of
+ * the state: it is the button that is missing, not the value.
  */
 export function toDescriptors(link: DeviceLink): DeviceDescriptor[] {
   const f = link.fields
@@ -229,8 +230,8 @@ export function toDescriptors(link: DeviceLink): DeviceDescriptor[] {
         manufacturer: 'Mitsubishi Electric',
         ...(model ? { model: `Ecodan ${model}` } : {}),
         ...(z.bounds ? { targetTempC: z.bounds } : {}),
-        // une zone de pompe à chaleur n'est pas un thermostat : c'est une machine au sol, et la
-        // maison 3D doit la dessiner comme telle
+        // a heat pump zone is not a thermostat: it is a machine on the ground, and the 3D house
+        // must draw it as such
         climate: { modes: [...modes], control: z.control, deviceClass: 'heat_pump' as const },
       },
     }
@@ -238,10 +239,9 @@ export function toDescriptors(link: DeviceLink): DeviceDescriptor[] {
 }
 
 /**
- * L'état d'une zone. `action` distingue ce que beaucoup d'intégrations confondent : la machine est
- * ALLUMÉE (`mode: 'heat'`) presque toute l'année, mais elle ne CHAUFFE (`action: 'heating'`) que
- * quand la zone n'est pas au repos — sur la capture de septembre, les deux zones sont au repos
- * alors que `Power` est vrai.
+ * A zone's state. `action` separates what many integrations mix up: the machine is ON
+ * (`mode: 'heat'`) almost all year round, but it only HEATS (`action: 'heating'`) when the zone is
+ * not idle — on the September capture, both zones are idle while `Power` is true.
  */
 export function toStatePatch(fields: Record<string, unknown>, z: ZoneReading, now: number): StatePatch<'climate'> {
   const prohibited = bool(fields, `Prohibit${z.cooling ? 'Cooling' : 'Heating'}Zone${z.zone}`)
@@ -255,7 +255,7 @@ export function toStatePatch(fields: Record<string, unknown>, z: ZoneReading, no
   }
 }
 
-/** L'état de la machine, pour la vue Chauffage. Jamais publié comme appareil (voir `SystemReading`). */
+/** The machine's state, for the Heating view. Never published as a device (see `SystemReading`). */
 export function toSystem(link: DeviceLink, now: number): SystemReading {
   const f = link.fields
   return {
@@ -274,8 +274,8 @@ export function toSystem(link: DeviceLink, now: number): SystemReading {
     immersionHeater: bool(f, 'ImmersionHeaterStatus'),
     pumps: [1, 2, 3, 4].map((n) => bool(f, `WaterPump${n}Status`)),
     valve3Way: bool(f, 'ValveStatus3Way'),
-    // `HasError` d'abord : `ErrorCode` vaut 8000 quand tout va bien, et le lire comme un booléen
-    // déclarerait la maison en panne en permanence
+    // `HasError` first: `ErrorCode` is 8000 when all is well, and reading it as a boolean would
+    // declare the house failed permanently
     error: { hasError: bool(f, 'HasError'), code: num(f, 'ErrorCode'), message: str(f, 'ErrorMessage') },
     lastSeen: lastSeenAt(f),
     wifi: str(f, 'WifiAdapterStatus'),

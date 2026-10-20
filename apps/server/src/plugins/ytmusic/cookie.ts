@@ -1,13 +1,13 @@
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-// Cookie YouTube Music : collé depuis les Réglages (comme le mot de passe Renault/MELCloud), jamais
-// dans `.env`, jamais journalisé. yt-dlp exige le format Netscape ; InnerTube veut la chaîne brute.
+// YouTube Music cookie: pasted from Settings (like the Renault/MELCloud password), never in
+// `.env`, never logged. yt-dlp requires the Netscape format; InnerTube wants the raw string.
 
-/** Domaine des cookies Music (identique à Music Assistant). */
+/** Domain of the Music cookies (same as Music Assistant). */
 export const YTM_COOKIE_DOMAIN = '.youtube.com'
 
-/** Présence obligatoire pour une session authentifiée Music. */
+/** Must be present for an authenticated Music session. */
 export const REQUIRED_COOKIE = '__Secure-3PAPISID'
 
 export function hasRequiredCookie(raw: string): boolean {
@@ -15,7 +15,7 @@ export function hasRequiredCookie(raw: string): boolean {
 }
 
 /**
- * Netscape → chaîne `Cookie:` pour InnerTube. Ignore les lignes de commentaire.
+ * Netscape → `Cookie:` string for InnerTube. Ignores comment lines.
  */
 export function fromNetscape(text: string): string {
   const pairs: string[] = []
@@ -32,8 +32,8 @@ export function fromNetscape(text: string): string {
 }
 
 /**
- * Convertit une chaîne `Cookie:` (ou paires `a=b; c=d`) en fichier Netscape pour yt-dlp.
- * Même logique que Music Assistant `convert_to_netscape`.
+ * Converts a `Cookie:` string (or `a=b; c=d` pairs) into a Netscape file for yt-dlp.
+ * Same logic as Music Assistant's `convert_to_netscape`.
  */
 export function toNetscape(raw: string, domain = YTM_COOKIE_DOMAIN): string {
   const lines = ['# Netscape HTTP Cookie File']
@@ -57,7 +57,7 @@ export interface CookieStore {
   path: string | null
 }
 
-/** Fichier d'état sous `KASBAH_STATE_DIR` (ou chemin forcé). Chaîne vide = mémoire seule (tests). */
+/** State file under `KASBAH_STATE_DIR` (or a forced path). Empty string = memory only (tests). */
 export function createCookieFile(filePath: string): CookieStore {
   if (!filePath) {
     let mem: string | null = null
@@ -90,7 +90,7 @@ export function createCookieFile(filePath: string): CookieStore {
   }
 }
 
-/** Écrit le Netscape à côté du cookie brut (même dossier, suffixe `.netscape`) pour yt-dlp. */
+/** Writes the Netscape file next to the raw cookie (same folder, `.netscape` suffix) for yt-dlp. */
 export async function writeNetscapeBeside(cookieFile: string, raw: string): Promise<string> {
   const netscapePath = `${cookieFile}.netscape`
   await mkdir(dirname(netscapePath), { recursive: true })

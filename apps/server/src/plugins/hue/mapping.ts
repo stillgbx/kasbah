@@ -4,15 +4,15 @@ import type {
   HueSceneRecallBody, HueZigbeeConnectivity,
 } from './types'
 
-// Mappage PUR Hue ↔ modèle Kasbah. Aucune I/O : testé sur fixtures.
+// PURE Hue ↔ Kasbah model mapping. No I/O: tested on fixtures.
 
 export const HUE_PLUGIN_ID = 'hue'
 const DEFAULT_MIREK_RANGE: [number, number] = [153, 500]
-/** Valeur Hue qui arrête l'effet en cours. */
+/** Hue value that stops the current effect. */
 export const NO_EFFECT = 'no_effect'
-/** Une palette de moins de 2 couleurs n'a rien à animer. */
+/** A palette of fewer than 2 colors has nothing to animate. */
 const MIN_PALETTE = 2
-/** Pastilles d'aperçu affichées (les palettes Hue en comptent jusqu'à 5). */
+/** Preview swatches displayed (Hue palettes have up to 5). */
 const MAX_SWATCHES = 6
 
 export interface HueIndex {
@@ -23,7 +23,7 @@ export interface HueIndex {
   roomOfDevice: Map<string, HueRoom>
   /** service rid (light, zigbee_connectivity…) → device */
   deviceOfService: Map<string, HueDevice>
-  /** device rid → ids des lights qu'il porte */
+  /** device rid → ids of the lights it carries */
   lightsOfDevice: Map<string, string[]>
 }
 
@@ -57,7 +57,7 @@ export function lightCapabilities(light: HueLight): Capability[] {
   return caps
 }
 
-/** Effets du modèle, `no_effect` compris (l'ordre du pont est conservé), ou rien s'il n'en a pas. */
+/** The model's effects, `no_effect` included (the bridge's order is kept), or nothing if it has none. */
 export function lightEffects(light: HueLight): string[] | undefined {
   const values = light.effects_v2?.status?.effect_values ?? light.effects?.effect_values ?? light.effects?.status_values
   return values && values.length > 1 ? values : undefined
@@ -96,7 +96,7 @@ export function toGroupDescriptor(group: HueGroupedLight, room: HueRoom | undefi
   }
 }
 
-/** Patch d'état depuis une ressource complète OU un fragment d'événement (tous les champs optionnels). */
+/** State patch from a full resource OR an event fragment (all fields optional). */
 export function toLightPatch(data: Partial<HueLight> | Partial<HueGroupedLight>): StatePatch<'light'> {
   const patch: StatePatch<'light'> = {}
   if (data.on) patch.on = data.on.on
@@ -112,8 +112,8 @@ export function toLightPatch(data: Partial<HueLight> | Partial<HueGroupedLight>)
 }
 
 /**
- * Corps du PUT pour `light.set`. Règles Hue : brightness 0 interdit (→ off), mirek borné à la plage
- * de la lampe, `color` et `color_temperature` incompatibles dans une même requête (color prime).
+ * PUT body for `light.set`. Hue rules: brightness 0 forbidden (→ off), mirek clamped to the light's
+ * range, `color` and `color_temperature` incompatible in the same request (color wins).
  */
 export function toPutBody(cmd: CommandOf<'light.set'>, descriptor: DeviceDescriptor, minDimLevel = 1): { body: HuePutBody; warnings: string[] } {
   const body: HuePutBody = {}
@@ -130,7 +130,7 @@ export function toPutBody(cmd: CommandOf<'light.set'>, descriptor: DeviceDescrip
     if (descriptor.capabilities.includes('effect')) body.effects = { effect: cmd.effect }
     else warnings.push('effect ignored: capability not supported by this light')
   }
-  // Un effet en cours pilote lui-même la couleur : on ne lui en impose pas une dans le même PUT.
+  // A running effect drives the color itself: we do not impose one on it in the same PUT.
   const effectTakesOver = body.effects !== undefined && cmd.effect !== NO_EFFECT
   if (effectTakesOver) {
     if (cmd.color !== undefined || cmd.colorTempMirek !== undefined) warnings.push('effect and color both given: effect wins')
@@ -148,9 +148,9 @@ export function toPutBody(cmd: CommandOf<'light.set'>, descriptor: DeviceDescrip
 }
 
 /**
- * Aperçu d'une scène. La palette animée passe en premier (c'est ce qu'on voit tourner), sinon les
- * valeurs fixes des actions (fidèles lampe par lampe), sinon la palette de blancs. Doublons ôtés :
- * une scène de 3 lampes au même blanc doit montrer UNE pastille, pas trois.
+ * A scene's preview. The animated palette comes first (it is what you see cycling), otherwise the
+ * actions' fixed values (faithful light by light), otherwise the palette of whites. Duplicates
+ * removed: a scene of 3 lights at the same white must show ONE swatch, not three.
  */
 export function sceneSwatches(scene: HueScene): string[] {
   const out: string[] = []
@@ -188,7 +188,7 @@ export function toSceneDescriptor(scene: HueScene, group?: { name: string; kind:
   }
 }
 
-/** `status.active` du pont → activation Kasbah (tout ce qui n'est pas connu vaut `inactive`). */
+/** The bridge's `status.active` → Kasbah activation (anything unknown counts as `inactive`). */
 export function sceneStatusToActive(scene: Pick<HueScene, 'status'>): SceneActivation {
   switch (scene.status?.active) {
     case 'dynamic_palette': return 'dynamic'
@@ -197,7 +197,7 @@ export function sceneStatusToActive(scene: Pick<HueScene, 'status'>): SceneActiv
   }
 }
 
-/** Corps du rappel. `off` n'en a pas : il s'éteint par le groupe (cf. `index.ts`). */
+/** Recall body. `off` has none: it switches off through the group (cf. `index.ts`). */
 export function toSceneRecallBody(recall: SceneRecall): HueSceneRecallBody {
   return {
     recall: {
@@ -208,7 +208,7 @@ export function toSceneRecallBody(recall: SceneRecall): HueSceneRecallBody {
   }
 }
 
-/** Lampes visées par les actions fixes d'une scène (repli quand le groupe n'a pas de grouped_light). */
+/** Lights targeted by a scene's fixed actions (fallback when the group has no grouped_light). */
 export function sceneTargetLights(scene: HueScene): string[] {
   const out: string[] = []
   for (const a of scene.actions) {
@@ -218,11 +218,11 @@ export function sceneTargetLights(scene: HueScene): string[] {
 }
 
 /**
- * Corps de création d'une ambiance recopiée. La **palette est indépendante du groupe** : on la
- * reprend telle quelle, c'est elle qui porte l'animation. Les `actions`, elles, visent des lampes
- * précises : on distribue celles de la source sur les lampes de la pièce (en boucle si la pièce en
- * a plus), en retombant sur ce que chaque lampe sait faire — une lampe sans couleur reçoit sa
- * température, une lampe sans rien reçoit juste allumage et intensité.
+ * Creation body of a copied light scene. The **palette is independent of the group**: it is taken
+ * over as is, it is what carries the animation. The `actions`, for their part, target specific
+ * lights: the source's are spread over the room's lights (looping if the room has more), falling
+ * back on what each light can do — a light without color gets its temperature, a light with
+ * nothing gets just on and brightness.
  */
 export function toCreateSceneBody(source: HueScene, group: HueRef, lights: HueLight[]): HueSceneCreateBody {
   const sourceActions = source.actions.filter((a) => a.action)
@@ -252,10 +252,10 @@ export function toCreateSceneBody(source: HueScene, group: HueRef, lights: HueLi
 }
 
 /**
- * Palette recopiable. Le pont REFUSE une palette qui porte à la fois `effects` et `effects_v2`,
- * **même vides** (« Both effects and effects_v2 palettes are mutually exclusive », vérifié) : or
- * c'est exactement ce qu'il renvoie quand on lit une scène. On ne garde donc que la liste d'effets
- * non vide, et aucune des deux si elles le sont.
+ * Copyable palette. The bridge REFUSES a palette carrying both `effects` and `effects_v2`, **even
+ * empty** ("Both effects and effects_v2 palettes are mutually exclusive", verified): yet that is
+ * exactly what it returns when a scene is read. So only the non-empty effects list is kept, and
+ * neither of them if both are empty.
  */
 export function toCreatePalette(palette: NonNullable<HueScene['palette']>): Record<string, unknown> {
   const effects = palette.effects_v2.length ? { effects_v2: palette.effects_v2 }
@@ -269,7 +269,7 @@ export function toCreatePalette(palette: NonNullable<HueScene['palette']>): Reco
   }
 }
 
-/** Disponibilité des lights portées par chaque appareil Zigbee : `connected` ⇒ disponible. */
+/** Availability of the lights carried by each Zigbee device: `connected` ⇒ available. */
 export function connectivityToAvailability(items: HueZigbeeConnectivity[], idx: HueIndex): Array<[lightId: string, available: boolean]> {
   const out: Array<[string, boolean]> = []
   for (const z of items) {

@@ -1,6 +1,6 @@
-// Ressources CLIP v2 anonymisées d'un bridge : 2 lampes (couleur + blanc réglable) sur 2 appareils
-// dans une pièce, une lampe blanche seule hors pièce (avec effets), connectivité Zigbee,
-// une zone, deux scènes (une fixe sur la pièce, une à palette animée sur la zone).
+// Anonymized CLIP v2 resources of a bridge: 2 lights (color + tunable white) on 2 devices in a
+// room, a lone white light outside any room (with effects), Zigbee connectivity, a zone, two
+// scenes (a static one on the room, one with an animated palette on the zone).
 
 export const LIGHTS = [
   {
@@ -73,7 +73,7 @@ export const ZIGBEE = [
   { id: 'z-plain', owner: { rid: 'd-plain', rtype: 'device' }, status: 'connected' },
 ]
 
-/** Une trame SSE brute telle que reçue du bridge (4 événements). */
+/** A raw SSE frame as received from the bridge (4 events). */
 export const SSE_FRAME =
   'id: 1725000000:0\n' +
   'data: [{"creationtime":"2026-09-04T10:00:00Z","id":"e1","type":"update","data":[{"id":"l-color","type":"light","dimming":{"brightness":20}},{"id":"l-color","type":"light","color":{"xy":{"x":0.2,"y":0.3}}}]}]\n' +

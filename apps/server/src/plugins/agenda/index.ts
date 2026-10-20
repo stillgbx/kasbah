@@ -9,21 +9,21 @@ import { sendError } from '../../http/errors'
 import { expandEvents, parseIcs, type AgendaEvent, type ParsedCalendar } from './ics'
 import { createCalendarsFile, type CalendarsStore, type StoredCalendar } from './store'
 
-// Plugin Agenda : les agendas Google de la famille, lus par leur « adresse secrète au format
-// iCal » — ni projet Google Cloud ni OAuth, et lecture seule par nature. Aucun appareil publié :
-// la vue Agenda interroge `/events` sur la période qu'elle affiche. Les flux sont relus à
-// intervalle fixe et gardés en mémoire ; le déroulé des récurrences se fait à la demande.
+// Agenda plugin: the family's Google calendars, read through their "secret address in iCal
+// format" — no Google Cloud project, no OAuth, and read-only by nature. No device published: the
+// Calendar view queries `/events` over the period it displays. Feeds are re-read at a fixed
+// interval and kept in memory; recurrences are expanded on demand.
 
 export const agendaConfigSchema = z.object({
   AGENDA_FILE: z.string().trim().default(stateFile('agenda-calendars.json')),
-  /** Google régénère le flux à chaque lecture ; dix minutes suffisent à un agenda familial. */
+  /** Google regenerates the feed on every read; ten minutes are enough for a family calendar. */
   AGENDA_REFRESH_MS: z.coerce.number().int().min(60_000).default(600_000),
 })
 export type AgendaConfig = z.infer<typeof agendaConfigSchema>
 
-/** Couleur d'un agenda ajouté sans en préciser : la suivante de cette liste. */
+/** Color of a calendar added without one: the next one in this list. */
 export const AGENDA_COLORS = ['#3f8cff', '#e5534b', '#2da44e', '#d38b22', '#a371f7', '#1bb3a7', '#db61a2', '#8d96a0']
-/** Une période plus longue qu'un mois affiché (six semaines) n'a pas d'usage ici. */
+/** A period longer than a displayed month (six weeks) has no use here. */
 const MAX_RANGE_MS = 62 * 86_400_000
 const FETCH_TIMEOUT_MS = 20_000
 
@@ -38,12 +38,12 @@ interface Feed { parsed: ParsedCalendar | null; fetchedAt: number | null; error:
 
 const defaultFetch: FetchIcs = async (url, signal) => {
   const res = await fetch(url, { signal, headers: { accept: 'text/calendar' } })
-  // l'adresse ne va pas dans le message : elle vaut mot de passe
+  // the address does not go into the message: it is as good as a password
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.text()
 }
 
-/** `webcal://` est l'adresse d'abonnement d'un agenda ; c'est la même en https. */
+/** `webcal://` is a calendar's subscription address; it is the same one over https. */
 export function normalizeUrl(raw: string): string | null {
   const url = raw.trim().replace(/^webcals?:\/\//i, 'https://')
   try {
@@ -72,7 +72,7 @@ export function createAgendaPlugin(deps: AgendaPluginDeps = {}): DevicePlugin {
       feeds.set(cal.id, feed)
       return feed
     } catch (err) {
-      // on garde la dernière lecture réussie : un flux qui ne répond pas n'efface pas l'agenda
+      // keep the last successful read: a feed that does not answer does not wipe the calendar
       const feed = { parsed: prev?.parsed ?? null, fetchedAt: prev?.fetchedAt ?? null, error: (err as Error).message }
       feeds.set(cal.id, feed)
       ctx?.logger.warn({ calendar: cal.name, err: feed.error }, 'agenda feed failed')
@@ -86,7 +86,7 @@ export function createAgendaPlugin(deps: AgendaPluginDeps = {}): DevicePlugin {
     await store?.save(next)
   }
 
-  /** Ce que l'UI voit d'un agenda : tout sauf l'adresse. */
+  /** What the UI sees of a calendar: everything but the address. */
   const view = (c: StoredCalendar) => {
     const f = feeds.get(c.id)
     return { id: c.id, name: c.name, color: c.color, fetchedAt: f?.fetchedAt ?? null, error: f?.error ?? null }
@@ -120,8 +120,8 @@ export function createAgendaPlugin(deps: AgendaPluginDeps = {}): DevicePlugin {
     registerRoutes(app: FastifyInstance) {
       app.get('/calendars', async () => list())
 
-      // Ajout : le flux est lu tout de suite — une adresse fausse est refusée ici, pas découverte
-      // plus tard dans la santé du plugin.
+      // Add: the feed is read right away — a wrong address is refused here, not discovered later
+      // in the plugin's health.
       app.post<{ Body: unknown }>('/calendars', async (req, reply) => {
         const body = z.object({
           url: z.string().trim().min(1).max(4096),
@@ -153,8 +153,8 @@ export function createAgendaPlugin(deps: AgendaPluginDeps = {}): DevicePlugin {
         return list()
       })
 
-      // Ordre des agendas : le fichier les garde dans cet ordre, la vue les liste ainsi. On attend
-      // TOUS les identifiants, chacun une fois — une liste partielle perdrait des agendas.
+      // Calendar order: the file keeps them in this order, the view lists them that way. We expect
+      // ALL the ids, each one once — a partial list would lose calendars.
       app.put<{ Body: unknown }>('/calendars/order', async (req, reply) => {
         const body = z.object({ ids: z.array(z.string()) }).safeParse(req.body)
         const ids = body.success ? body.data.ids : []

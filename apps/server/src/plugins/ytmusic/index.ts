@@ -13,27 +13,27 @@ import { pingPoToken, resolveStreamUrl } from './resolve'
 import type { YtmusicExploreCategory, YtmusicStatus } from './types'
 import { ART_PLAY_SIZE, upgradeArtUrl } from './mapping'
 
-// Plugin YouTube Music (NON OFFICIEL) : catalogue InnerTube via youtubei.js, flux via yt-dlp +
-// PO Token. La lecture (file, relais LAN vers Cast/Sonos, transfert, écoute locale) est celle du
-// lecteur COMMUN `music/player.ts` (/api/music), auquel ce plugin s'inscrit comme source.
+// YouTube Music plugin (UNOFFICIAL): InnerTube catalog through youtubei.js, stream through yt-dlp +
+// PO Token. Playback (queue, LAN relay to Cast/Sonos, transfer, local listening) is that of the
+// SHARED player `music/player.ts` (/api/music), with which this plugin registers as a source.
 //
-// Aucun appareil publié (`discover` → []). Source ≠ lecteur — même découpage que Music Assistant.
-// Le cookie du compte perso vit dans un fichier d'état (jamais `.env`, jamais journalisé) : celui de
-// la maison, et celui de chaque utilisateur connecté qui a relié le sien (son dossier d'état).
+// No device published (`discover` → []). Source ≠ player — same split as Music Assistant.
+// The personal account's cookie lives in a state file (never `.env`, never logged): the house's,
+// and the one of each signed-in user who linked their own (their state folder).
 
 export const ytmusicConfigSchema = z.object({
-  /** Fichier cookie brut. Chaîne vide = mémoire seule (tests). */
+  /** Raw cookie file. Empty string = memory only (tests). */
   YTM_COOKIE_FILE: z.string().trim().default(stateFile('ytmusic-cookie.txt')),
-  /** Générateur PO Token (bgutil), port 4416 comme Music Assistant. */
+  /** PO Token generator (bgutil), port 4416 like Music Assistant. */
   YTM_PO_TOKEN_URL: z.string().trim().url().default('http://127.0.0.1:4416'),
-  /** Binaire yt-dlp (PATH ou chemin complet). */
+  /** yt-dlp binary (PATH or full path). */
   YTM_YTDLP_PATH: z.string().trim().min(1).default('yt-dlp'),
 })
 export type YtmusicConfig = z.infer<typeof ytmusicConfigSchema>
 
 export interface YtmusicPluginDeps {
   cookieStore?: CookieStore
-  /** Le cookie d'un utilisateur connecté (tests) ; sinon un fichier de son dossier d'état. */
+  /** A signed-in user's cookie (tests); otherwise a file in their state folder. */
   userCookieStore?: (user: string) => CookieStore
   catalog?: YtmusicCatalog
   createSession?: CreateSession
@@ -61,8 +61,8 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   let config: YtmusicConfig | null = null
   let poTokenOk = false
 
-  // HMR tsx : le module peut être rechargé et ses routes réenregistrées SANS repasser par init() —
-  // tout ce que init() construit se reconstruit alors à la demande, et les réglages ont un défaut.
+  // tsx HMR: the module may be reloaded and its routes re-registered WITHOUT going through init()
+  // again — everything init() builds is then rebuilt on demand, and the settings have a default.
   const log = () => ctx?.logger ?? (console as unknown as PluginContext['logger'])
   const now = () => ctx?.clock.now() ?? Date.now()
   const cfg = () => config ?? ytmusicConfigSchema.parse({})
@@ -70,17 +70,17 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   const PROBE_MS = 5 * 60_000
 
   /**
-   * Un compte YouTube Music : celui de la maison (`user: null`, le cookie réglé dans le plugin) ou
-   * celui d'un utilisateur connecté (son cookie à lui, dans son dossier d'état). Chacun a ses sessions
-   * InnerTube, ses caches et son état : la recherche de l'un ne nourrit pas les propositions de l'autre.
+   * A YouTube Music account: the house's (`user: null`, the cookie set in the plugin) or a signed-in
+   * user's (their own cookie, in their state folder). Each has its own InnerTube sessions, caches and
+   * state: one user's searches do not feed the other's suggestions.
    */
   interface Account {
     user: MusicUser
     cookies: CookieStore
     catalog: YtmusicCatalog
-    /** Cache pour `health()` synchrone — mis à jour à chaque lecture cookie. */
+    /** Cache for the synchronous `health()` — updated on every cookie read. */
     linked: boolean
-    /** Cookie présent mais refusé par InnerTube. */
+    /** Cookie present but refused by InnerTube. */
     cookieExpired: boolean
     lastProbeAt: number
     lastError: string | null
@@ -96,7 +96,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         user,
         cookies: user === null
           ? deps.cookieStore ?? createCookieFile(file)
-          // chemin vide = mémoire seule (tests) : de même pour les comptes des utilisateurs
+          // empty path = memory only (tests): likewise for the users' accounts
           : deps.userCookieStore?.(user) ?? createCookieFile(file ? userStateFile(user, 'ytmusic-cookie.txt') : ''),
         catalog: deps.catalog ?? new YtmusicCatalog(deps.createSession),
         linked: false, cookieExpired: false, lastProbeAt: 0, lastError: null,
@@ -120,7 +120,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     return poTokenOk
   }
 
-  /** Sonde légère : likes (`LM`) — échoue en 401 si le cookie est mort. */
+  /** Light probe: likes (`LM`) — fails with a 401 if the cookie is dead. */
   async function probeCookie(a: Account, raw: string): Promise<void> {
     try {
       await a.catalog.liked(raw)
@@ -155,7 +155,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       cookieFile: a.cookies.path,
       poTokenUrl: config?.YTM_PO_TOKEN_URL ?? 'http://127.0.0.1:4416',
       lastError: a.lastError,
-      // l'import lit un navigateur de la machine serveur : celui de la maison, pas d'un utilisateur
+      // the import reads a browser on the server machine: the house's, not a user's
       browsers: a.user === null ? [...YTM_BROWSERS] : [],
       user: a.user,
       anonymous: a.user !== null && !a.linked,
@@ -163,9 +163,9 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
   }
 
   /**
-   * Le cookie du compte. Un utilisateur connecté qui n'a rien relié passe en ANONYME (`''`) : catalogue
-   * public, rien de personnel — sauf `personal` (likes, bibliothèque), qui exige un compte. La maison
-   * sans cookie reste à relier, comme avant.
+   * The account's cookie. A signed-in user who linked nothing goes ANONYMOUS (`''`): public catalog,
+   * nothing personal — except `personal` (likes, library), which requires an account. The house
+   * without a cookie remains to be linked, as before.
    */
   async function requireCookie(a: Account, opts: { personal?: boolean } = {}): Promise<string> {
     const raw = await loadCookie(a)
@@ -175,16 +175,16 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     throw new PluginError('NEEDS_PAIRING', 'no YouTube Music cookie linked (unofficial)')
   }
 
-  // ---- source pour le lecteur commun (`music/player.ts`) ----------------------------------------
+  // ---- source for the shared player (`music/player.ts`) -----------------------------------------
 
   async function resolveTrack(a: Account, cookie: string, videoId: string): Promise<ResolvedStream> {
     let netscapePath: string | undefined
     if (cookie && a.cookies.path) netscapePath = await writeNetscapeBeside(a.cookies.path, cookie)
     return resolveStreamUrl({
       videoId,
-      // Viser un conteneur que les enceintes lisent (AAC en MP4) plutôt que le plus gros débit :
-      // c'est lui qu'on relaiera tel quel, et un Sonos ne lit pas le WebM/Opus que YouTube
-      // propose parfois plus haut. Sans m4a, on tombera dans le repli ffmpeg, qui lit tout.
+      // Aim for a container the speakers play (AAC in MP4) rather than the highest bitrate: it is
+      // what we will relay as is, and a Sonos does not play the WebM/Opus that YouTube sometimes
+      // offers higher up. Without m4a, we fall into the ffmpeg fallback, which plays everything.
       preferExts: ['m4a', 'mp4'],
       cookieRaw: cookie,
       ytdlpPath: cfg().YTM_YTDLP_PATH,
@@ -194,7 +194,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     })
   }
 
-  /** Ce que le lecteur commun sait de YouTube Music : se préparer (cookie, PO Token), trouver le flux d'un titre. */
+  /** What the shared player knows of YouTube Music: get ready (cookie, PO Token), find a track's stream. */
   const source: MusicSource = {
     id: 'ytmusic',
     label: 'YouTube Music',
@@ -280,8 +280,8 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     },
 
     registerRoutes(app: FastifyInstance) {
-      // Chaque route agit sur le compte de qui la demande (`accountFor`) : le sien s'il est connecté,
-      // celui de la maison sinon.
+      // Each route acts on the account of whoever asks (`accountFor`): their own if signed in, the
+      // house's otherwise.
       app.get('/status', async (req) => status(accountFor(req), { probe: true }))
 
       app.put<{ Body: unknown }>('/cookie', async (req, reply) => {
@@ -312,7 +312,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         }).safeParse(req.body ?? {})
         if (!body.success) return sendError(reply, 400, 'INVALID_BODY', `browser must be one of ${YTM_BROWSERS.join(', ')}`)
         const a = accountFor(req)
-        // un navigateur de la machine serveur porte le compte de la maison, pas celui d'un utilisateur
+        // a browser on the server machine carries the house's account, not a user's
         if (a.user !== null) return sendError(reply, 400, 'INVALID_BODY', 'browser import is for the house account only — paste your own cookie')
         if (!a.cookies.path) {
           return sendError(reply, 400, 'INVALID_BODY', 'YTM_COOKIE_FILE is empty — cannot persist browser cookies')
@@ -408,7 +408,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         const a = accountFor(req)
         try {
           const cookie = await requireCookie(a)
-          // `hl` : la langue du texte de présentation de l'album
+          // `hl`: the language of the album's description text
           const { tracks, description } = await a.catalog.album(cookie, req.params.id, langOf(req.query.hl))
           a.lastError = null
           return { tracks, description }
@@ -421,7 +421,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         const a = accountFor(req)
         try {
           const cookie = await requireCookie(a)
-          // `hl` : la langue du texte de présentation de l'artiste
+          // `hl`: the language of the artist's description text
           const { tracks, description } = await a.catalog.artist(cookie, req.params.id, langOf(req.query.hl))
           a.lastError = null
           return { tracks, description }
@@ -430,10 +430,10 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         }
       })
 
-      // ---- Humeurs et genres ------------------------------------------------------------------------
-      // `hl` : la langue de l'app (les noms des genres sont rendus par YouTube). Réponses gardées
-      // quelques minutes : elles changent peu, et l'onglet se rouvre souvent. Par compte : « Pour vous »
-      // est propre à chacun.
+      // ---- Moods & genres ---------------------------------------------------------------------------
+      // `hl`: the app's language (genre names are rendered by YouTube). Responses kept a few
+      // minutes: they change little, and the tab is often reopened. Per account: "For you" is
+      // specific to each.
       const langOf = (hl: unknown) => (typeof hl === 'string' && /^[a-z]{2}(-[A-Z]{2})?$/.test(hl) ? hl : undefined)
       const EXPLORE_TTL_MS = 10 * 60_000
       const exploreCache = new Map<string, { at: number; value: unknown }>()
@@ -447,17 +447,17 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       const scope = (a: Account) => `${a.user ?? ''}|`
 
       /**
-       * Pochettes des catégories : la page « Humeurs et genres » n'a AUCUNE image, on prend donc les
-       * deux premières pochettes de chaque page de catégorie (playlists, sinon albums, sinon titres).
-       * Une page par catégorie (~37), quatre à la fois, gardées 6 h ; les pages lues servent aussi à
-       * l'ouverture d'une catégorie. L'UI affiche les cartes d'abord et les pochettes à leur arrivée.
+       * Category covers: the "Moods & genres" page has NO image, so we take the first two covers of
+       * each category page (playlists, otherwise albums, otherwise tracks). One page per category
+       * (~37), four at a time, kept 6 h; the pages read also serve when a category is opened. The UI
+       * shows the cards first and the covers as they arrive.
        */
       const COVERS_TTL_MS = 6 * 3_600_000
       const COVERS_CONCURRENCY = 4
       /**
-       * Par compte et langue, les pochettes déjà trouvées, catégorie par catégorie : « Pour vous » change
-       * d'une lecture de la page à l'autre, une nouvelle catégorie ne doit pas attendre 6 h ses pochettes —
-       * on ne va chercher que celles qui manquent (ou ont vieilli).
+       * Per account and language, the covers already found, category by category: "For you" changes
+       * from one read of the page to the next, a new category must not wait 6 h for its covers — we
+       * only fetch the ones missing (or gone stale).
        */
       const coverStore = new Map<string, Map<string, { at: number; urls: string[] }>>()
       const coversInflight = new Map<string, Promise<void>>()
@@ -467,7 +467,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           ...page.shelves.flatMap((sh) => sh.albums),
           ...page.shelves.flatMap((sh) => sh.tracks),
         ].map((x) => x.artUrl).filter((u): u is string => !!u)
-        // en 240 px : la carte les montre autour de 90 px, sur des écrans à haute densité
+        // at 240 px: the card shows them around 90 px, on high-density screens
         return [...new Set(arts)].slice(0, 2).map((u) => upgradeArtUrl(u, 240) ?? u)
       }
       async function fillCovers(a: Account, cookie: string, lang: string | undefined, cats: YtmusicExploreCategory[], store: Map<string, { at: number; urls: string[] }>) {
@@ -510,7 +510,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
           if (!store) coverStore.set(key, store = new Map())
           const missing = cats.filter((c) => { const hit = store!.get(c.params); return !hit || now() - hit.at > COVERS_TTL_MS })
           if (missing.length) {
-            // deux onglets ouverts en même temps ne lancent pas deux fois les mêmes lectures
+            // two tabs open at the same time do not launch the same reads twice
             let run = coversInflight.get(key)
             if (!run) {
               run = fillCovers(a, cookie, lang, missing, store).finally(() => coversInflight.delete(key))
@@ -553,7 +553,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       })
     },
 
-    // `health` : le compte de la maison ; `healthFor` : celui d'un utilisateur connecté, qui ne voit que le sien.
+    // `health`: the house's account; `healthFor`: a signed-in user's, who only sees their own.
     health(): PluginHealth {
       const home = accountOf(null)
       return healthFrom(home.linked, home.cookieExpired, poTokenOk, home.lastError, keys())
@@ -563,7 +563,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       const a = accountOf(user)
       await loadCookie(a)
       const base = 'YouTube Music (unofficial)'
-      // sans cookie l'utilisateur écoute en anonyme : ça marche, rien n'est à relier pour autant
+      // without a cookie the user listens anonymously: it works, nothing needs linking for all that
       if (!a.linked) {
         return poTokenOk
           ? { status: 'ok', detail: `${base}: anonymous — public catalog only; paste your cookie for likes and playlists`, keys: keys() }

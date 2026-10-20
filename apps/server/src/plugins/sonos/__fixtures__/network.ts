@@ -1,6 +1,6 @@
-// Captures du 2026-09-19, anonymisées (MAC, serial, household id, jeton HLS). Forme réelle conservée.
-// Port « Bureau » firmware 97.1-80312 (ZPS23) et Play:3 « Cuisine » 83.1-61210 (ZPS3).
-// Repos : STOPPED, file vide. Lecture : Play:3 Cuisine, GET /raw 2026-09-19 ~23:18, HLS `x-sonosapi-hls-static`.
+// Captures of 2026-09-19, anonymized (MAC, serial, household id, HLS token). Real shape kept.
+// Port "Bureau" firmware 97.1-80312 (ZPS23) and Play:3 "Cuisine" 83.1-61210 (ZPS3).
+// Idle: STOPPED, empty queue. Playing: Play:3 Cuisine, GET /raw 2026-09-19 ~23:18, HLS `x-sonosapi-hls-static`.
 
 export const UUID_PORT = 'RINCON_AAAABBBBCCCC01400'
 export const UUID_PLAY3 = 'RINCON_DDDDEEEEFFFF01400'
@@ -46,20 +46,20 @@ export const SOAP_PLAYING = '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soa
 export const SOAP_PAUSED = '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:GetTransportInfoResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><CurrentTransportState>PAUSED_PLAYBACK</CurrentTransportState><CurrentTransportStatus>OK</CurrentTransportStatus><CurrentSpeed>1</CurrentSpeed></u:GetTransportInfoResponse></s:Body></s:Envelope>'
 export const SOAP_POSITION_IDLE = '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:GetPositionInfoResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><Track>0</Track><TrackDuration>0:00:00</TrackDuration><TrackMetaData></TrackMetaData><TrackURI></TrackURI><RelTime>0:00:00</RelTime><AbsTime>NOT_IMPLEMENTED</AbsTime><RelCount>2147483647</RelCount><AbsCount>2147483647</AbsCount></u:GetPositionInfoResponse></s:Body></s:Envelope>'
 
-/** Jeton HLS anonymisé ; `sid=284` conservé (identifiant de service Sonos). */
+/** Anonymized HLS token; `sid=284` kept (Sonos service id). */
 export const HLS_URI = 'x-sonosapi-hls-static:TOKEN?sid=284&flags=8&sn=1'
 export const HLS_ART = '/getaa?s=1&u=x-sonosapi-hls-static%3aTOKEN%3fsid%3d284%26flags%3d8%26sn%3d1'
 
 /**
- * DIDL capturé sur le Play:3 Cuisine en lecture (HLS). Pas d'`upnp:album`. `dc:title` porte
- * « artiste — titre » ; `dc:creator` est le nom de la source (`MicroGram`), pas l'interprète.
- * `albumArtURI` est un chemin relatif `/getaa?…` (le mappage préfixe `http://{ip}:1400`).
+ * DIDL captured on the Play:3 Cuisine while playing (HLS). No `upnp:album`. `dc:title` carries
+ * "artist — title"; `dc:creator` is the source's name (`MicroGram`), not the performer.
+ * `albumArtURI` is a relative path `/getaa?…` (the mapping prefixes `http://{ip}:1400`).
  */
 export const DIDL_TRACK = `<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="-1" parentID="-1" restricted="true"><res protocolInfo="sonos.com-http:*:application/x-mpegURL:*" duration="0:02:18">${HLS_URI.replace(/&/g, '&amp;')}</res><r:streamContent></r:streamContent><upnp:albumArtURI>${HLS_ART.replace(/&/g, '&amp;')}</upnp:albumArtURI><dc:title>Northwind - Quiet Hours</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><dc:creator>MicroGram</dc:creator></item></DIDL-Lite>`
 
 export const SOAP_POSITION_PLAYING = `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:GetPositionInfoResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><Track>1</Track><TrackDuration>0:02:18</TrackDuration><TrackMetaData>${DIDL_TRACK.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</TrackMetaData><TrackURI>${HLS_URI.replace(/&/g, '&amp;')}</TrackURI><RelTime>0:00:25</RelTime><AbsTime>NOT_IMPLEMENTED</AbsTime><RelCount>2147483647</RelCount><AbsCount>2147483647</AbsCount></u:GetPositionInfoResponse></s:Body></s:Envelope>`
 
-/** Même service HLS, piste suivante : titre / artiste / album séparés. */
+/** Same HLS service, next track: title / artist / album separate. */
 export const DIDL_ALBUM = `<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:r="urn:schemas-rinconnetworks-com:metadata-1-0/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/"><item id="-1" parentID="-1" restricted="true"><res protocolInfo="sonos.com-http:*:application/x-mpegURL:*" duration="0:03:18">${HLS_URI.replace(/&/g, '&amp;')}</res><r:streamContent></r:streamContent><upnp:albumArtURI>${HLS_ART.replace(/&/g, '&amp;')}</upnp:albumArtURI><dc:title>Slow Tide</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><dc:creator>Lumen</dc:creator><upnp:album>Meridians</upnp:album></item></DIDL-Lite>`
 
 export const SOAP_POSITION_ALBUM = `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:GetPositionInfoResponse xmlns:u="urn:schemas-upnp-org:service:AVTransport:1"><Track>1</Track><TrackDuration>0:03:18</TrackDuration><TrackMetaData>${DIDL_ALBUM.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</TrackMetaData><TrackURI>${HLS_URI.replace(/&/g, '&amp;')}</TrackURI><RelTime>0:01:26</RelTime><AbsTime>NOT_IMPLEMENTED</AbsTime><RelCount>2147483647</RelCount><AbsCount>2147483647</AbsCount></u:GetPositionInfoResponse></s:Body></s:Envelope>`

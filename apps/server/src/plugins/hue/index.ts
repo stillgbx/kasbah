@@ -16,9 +16,9 @@ import {
   hueZigbeeConnectivitySchema, type HueGroupedLight, type HueLight, type HueRoom, type HueScene, type HueZigbeeConnectivity,
 } from './types'
 
-// Plugin Philips Hue : API locale CLIP v2 + flux d'événements SSE. Sans clé : mode `needs_pairing`
-// et route POST /api/plugins/hue/pair. La clé obtenue est adoptée EN MÉMOIRE immédiatement (le serveur
-// n'écrit jamais .env : c'est à l'utilisateur d'y coller HUE_APP_KEY pour la persister).
+// Philips Hue plugin: local CLIP v2 API + SSE event stream. Without a key: `needs_pairing` mode
+// and the POST /api/plugins/hue/pair route. The key obtained is adopted IN MEMORY immediately (the
+// server never writes .env: it is up to the user to paste HUE_APP_KEY there to persist it).
 
 const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1')
 
@@ -31,7 +31,7 @@ export const hueConfigSchema = z.object({
 export type HueConfig = z.infer<typeof hueConfigSchema>
 
 export interface HuePluginDeps {
-  /** Injection pour les tests (fetch simulé). */
+  /** Injection for the tests (simulated fetch). */
   fetchImpl?: FetchLike
 }
 
@@ -43,10 +43,10 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
   let appKey: string | undefined
   let index: HueIndex = indexResources([], [], [])
   let groups = new Map<string, HueGroupedLight>()
-  /** Zones du pont (regroupements qui traversent les pièces) : même forme qu'une room. */
+  /** The bridge's zones (groupings that cross rooms): same shape as a room. */
   let zones = new Map<string, HueRoom>()
   let scenes: HueScene[] = []
-  /** rid d'une pièce OU d'une zone → rid de son `grouped_light` (sert à éteindre une ambiance). */
+  /** rid of a room OR a zone → rid of its `grouped_light` (used to switch off a light scene). */
   let groupedLightOfGroup = new Map<string, string>()
   let sseCtrl: AbortController | null = null
   let sseDown = false
@@ -86,7 +86,7 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
     return { lights, groups: [...groups.values()], zigbee }
   }
 
-  /** Pièce OU zone dont le nom correspond (même normalisation que l'auto-placement). */
+  /** Room OR zone whose name matches (same normalization as auto-placement). */
   function findGroup(name: string): { ref: { rid: string; rtype: string }; lights: string[] } | undefined {
     const key = roomKey(name)
     for (const [rtype, groups] of [['room', index.rooms], ['zone', zones]] as const) {
@@ -103,7 +103,7 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
     return undefined
   }
 
-  /** Groupe d'une scène : la pièce Hue se rattachera à la pièce homonyme de la maison. */
+  /** A scene's group: the Hue room will attach to the house room of the same name. */
   function sceneGroup(scene: HueScene): { name: string; kind: SceneGroupKind } | undefined {
     const ref = scene.group
     if (!ref) return undefined
@@ -137,7 +137,7 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
     for (const [lightId, available] of connectivityToAvailability(zigbee, index)) ctx!.setAvailable(lightId, available)
   }
 
-  /** Redécouverte complète + réémission des états (après reconnexion SSE ou ajout/suppression). */
+  /** Full rediscovery + re-emission of the states (after SSE reconnection or add/delete). */
   async function resync(emitDevices: boolean): Promise<void> {
     const { lights, groups: grouped, zigbee } = await fetchAll()
     if (emitDevices) ctx!.emitDevices(describeAll(lights, grouped))
@@ -164,11 +164,11 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
           if (item.type === 'light') ctx!.emitState(item.id, toLightPatch(item as Partial<HueLight>))
           else if (item.type === 'grouped_light' && groups.has(item.id)) ctx!.emitState(item.id, toLightPatch(item as Partial<HueGroupedLight>))
           else if (item.type === 'scene') {
-            // fragment de scène : chaque champ n'est là que s'il a changé
+            // scene fragment: each field is only there if it changed
             const fragment = item as { status?: { active?: string }; auto_dynamic?: boolean }
             if (fragment.status?.active) ctx!.emitSceneState(item.id, sceneStatusToActive({ status: fragment.status }))
-            // le réglage « démarrer animée » vit sur le pont : le relire d'où qu'il vienne (Kasbah,
-            // app Hue, autre écran) garde une seule source de vérité
+            // the "start animated" setting lives on the bridge: re-reading it wherever it comes from
+            // (Kasbah, Hue app, another screen) keeps a single source of truth
             if (fragment.auto_dynamic !== undefined) {
               const scene = scenes.find((sc) => sc.id === item.id)
               if (scene && scene.auto_dynamic !== fragment.auto_dynamic) {
@@ -227,7 +227,7 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
 
     async init(c) {
       ctx = c
-      config = c.config as HueConfig   // déjà validé/transformé par l'hôte via configSchema
+      config = c.config as HueConfig   // already validated/transformed by the host via configSchema
       appKey = config.HUE_APP_KEY
       if (config.HUE_BRIDGE_HOST) host = config.HUE_BRIDGE_HOST
       else {
@@ -285,8 +285,8 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
         await client.putLimited('scene', externalId, toSceneRecallBody(recall))
         return
       }
-      // Éteindre : le pont n'a pas de « désactiver la scène ». Un seul PUT sur le grouped_light du
-      // groupe (il couvre aussi les lampes que la scène ne liste pas), sinon lampe par lampe.
+      // Switching off: the bridge has no "deactivate the scene". A single PUT on the group's
+      // grouped_light (it also covers the lights the scene does not list), otherwise light by light.
       const groupedLight = scene.group ? groupedLightOfGroup.get(scene.group.rid) : undefined
       if (groupedLight) {
         await client.putLimited('grouped_light', groupedLight, { on: { on: false } })
@@ -300,7 +300,7 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
     async updateScene(externalId: string, update: SceneUpdate) {
       if (!client || !appKey) throw new PluginError('NEEDS_PAIRING', 'Hue bridge not paired')
       if (!scenes.some((s) => s.id === externalId)) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Hue scene ${externalId}`)
-      // file distincte (`intent`) : ce réglage ne doit pas supplanter un rappel de la même scène
+      // separate queue (`intent`): this setting must not supersede a recall of the same scene
       await client.putLimited('scene', externalId, { auto_dynamic: update.autoDynamic }, 'settings')
     },
 
@@ -315,7 +315,7 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
       const already = scenes.some((s) => s.group?.rid === group.ref.rid && s.metadata?.name === source.metadata?.name)
       if (already) throw new PluginError('UNSUPPORTED_COMMAND', `"${source.metadata?.name}" already exists in "${groupName}"`)
       await client.createResource('scene', toCreateSceneBody(source, group.ref, lights))
-      // le pont émet un `add` : la resynchronisation différée republiera les scènes
+      // the bridge emits an `add`: the deferred resync will republish the scenes
       scheduleResync()
     },
 
@@ -323,7 +323,7 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
       if (!client || !appKey) throw new PluginError('NEEDS_PAIRING', 'Hue bridge not paired')
       if (!scenes.some((s) => s.id === externalId)) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Hue scene ${externalId}`)
       await client.deleteResource('scene', externalId)
-      scheduleResync()   // le pont émet aussi un `delete`
+      scheduleResync()   // the bridge also emits a `delete`
     },
 
     async stop() {

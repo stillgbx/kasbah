@@ -136,7 +136,7 @@ describe('ytmusic mapping', () => {
       artists: [{ name: 'Radiohead' }],
       subtitleParts: ['Album', 'Radiohead', '2008'],
     })?.releaseType).toBe('compilation')
-    // Casse ignorée + releaseType InnerTube « album » ne doit pas bloquer.
+    // Case ignored + InnerTube releaseType "album" must not block.
     expect(mapAlbum({
       id: 'MPREb_best_of_lower',
       title: 'The Best of Depeche Mode, Vol. 1',
@@ -169,7 +169,7 @@ describe('ytmusic mapping', () => {
       artists: [{ name: 'Four Tet' }],
       subtitleParts: ['Album', 'Four Tet', '2006'],
     })?.releaseType).toBe('compilation')
-    // ≥3 artistes → compil même si sous-titre / type EP
+    // ≥3 artists → compilation even if subtitle / type EP
     expect(mapAlbum({
       id: 'MPREb_radio',
       title: 'whose radio?',
@@ -183,7 +183,7 @@ describe('ytmusic mapping', () => {
       artists: [],
       explicit: true,
     })).toMatchObject({ explicit: true })
-    // EP sans badge + Album explicit du même titre → EP aussi explicit
+    // EP without badge + explicit Album of the same title → EP explicit too
     const sexe = [
       mapAlbum({
         id: 'MPREb_sexe_alb',

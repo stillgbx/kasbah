@@ -3,20 +3,20 @@ import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { detail, type AutomowerAuth } from './auth'
 
-// Client HTTP de l'Automower Connect API. Trois en-têtes obligatoires sur chaque appel :
-// `Authorization: Bearer`, `Authorization-Provider: husqvarna` et `X-Api-Key` (la clé d'application,
-// la même que celle du jeton). Le corps est du JSON:API (`application/vnd.api+json`).
+// HTTP client for the Automower Connect API. Three mandatory headers on every call:
+// `Authorization: Bearer`, `Authorization-Provider: husqvarna` and `X-Api-Key` (the application
+// key, the same as the token's). The body is JSON:API (`application/vnd.api+json`).
 //
-// Ce qu'il traduit :
-//  - 401 → le jeton est périmé ou révoqué : on en redemande UN et on rejoue ; encore 401 →
-//    `NEEDS_PAIRING` (clé ou secret à revoir) ;
-//  - 403 → interdit : c'est aussi ainsi que le fabricant répond quand le QUOTA de la clé
-//    (21 000 requêtes par fenêtre de 7 jours, voir `state.ts`) est épuisé — `RATE_LIMITED`, le
-//    corps dit lequel ;
-//  - 429 → plus d'une requête par seconde : `RATE_LIMITED` ;
-//  - 404 → robot inconnu de ce compte : `DEVICE_UNAVAILABLE` ;
-//  - le reste en `UPSTREAM_ERROR`.
-// Chaque requête est COMPTÉE (`onCall`) : c'est au plugin de tenir le quota du mois.
+// What it translates:
+//  - 401 → the token is stale or revoked: request ONE new token and replay; 401 again →
+//    `NEEDS_PAIRING` (key or secret to review);
+//  - 403 → forbidden: that is also how the vendor answers when the key's QUOTA
+//    (21 000 requests per 7-day window, see `state.ts`) is exhausted — `RATE_LIMITED`, the
+//    body says which;
+//  - 429 → more than one request per second: `RATE_LIMITED`;
+//  - 404 → robot unknown to this account: `DEVICE_UNAVAILABLE`;
+//  - the rest as `UPSTREAM_ERROR`.
+// Every request is COUNTED (`onCall`): it is up to the plugin to keep within the month's quota.
 
 export const API_BASE_URL = 'https://api.amc.husqvarna.dev/v1'
 export const REQUEST_TIMEOUT_MS = 20_000
@@ -28,41 +28,41 @@ export interface AutomowerClientOptions {
   baseUrl?: string
   logger?: Logger
   requestTimeoutMs?: number
-  /** Une requête qui a reçu une réponse, quelle qu'elle soit : le quota du fabricant la compte. */
+  /** A request that received a response, whatever it is: the vendor's quota counts it. */
   onCall?: (path: string, status: number) => void
 }
 
 export class AutomowerClient {
   constructor(private readonly opts: AutomowerClientOptions) {}
 
-  /** `GET /mowers` : tous les robots du compte, état complet compris. */
+  /** `GET /mowers`: every robot of the account, full state included. */
   mowers(signal?: AbortSignal): Promise<unknown> { return this.request('GET', '/mowers', { signal }) }
 
-  /** `GET /mowers/{id}/messages` : le journal du robot (erreurs et avertissements, datés et positionnés). */
+  /** `GET /mowers/{id}/messages`: the robot's log (errors and warnings, dated and positioned). */
   messages(mowerId: string, signal?: AbortSignal): Promise<unknown> {
     return this.request('GET', `/mowers/${encodeURIComponent(mowerId)}/messages`, { signal })
   }
 
-  /** `POST /mowers/{id}/actions` : Start, Pause, Park… Le fabricant accuse en 202 sans corps. */
+  /** `POST /mowers/{id}/actions`: Start, Pause, Park… The vendor acknowledges with a 202 without body. */
   action(mowerId: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
     return this.request('POST', `/mowers/${encodeURIComponent(mowerId)}/actions`, { body, signal })
   }
 
-  /** `POST /mowers/{id}/errors/confirm` : lève l'erreur en cours, si le robot la dit confirmable (202). */
+  /** `POST /mowers/{id}/errors/confirm`: clears the current error, if the robot says it is confirmable (202). */
   confirmError(mowerId: string, signal?: AbortSignal): Promise<unknown> {
     return this.request('POST', `/mowers/${encodeURIComponent(mowerId)}/errors/confirm`, { signal })
   }
 
-  /** `PATCH /mowers/{id}/stayOutZones/{zoneId}` : active ou désactive une zone d'exclusion (202). */
+  /** `PATCH /mowers/{id}/stayOutZones/{zoneId}`: enables or disables a stay-out zone (202). */
   stayOutZone(mowerId: string, zoneId: string, enable: boolean, signal?: AbortSignal): Promise<unknown> {
     const body = { data: { type: 'stayOutZone', id: zoneId, attributes: { enable } } }
     return this.request('PATCH', `/mowers/${encodeURIComponent(mowerId)}/stayOutZones/${encodeURIComponent(zoneId)}`, { body, signal })
   }
 
   /**
-   * `GET /mowers/{id}/maps/{kind}` : une carte en SVG (`generated` = le terrain relevé par un robot
-   * AIM, `zone` = ses zones d'exclusion et chemins tracés à la main, `site` = la carte d'un robot
-   * EPOS). `null` quand le robot n'en a pas (404 : aucune zone tracée, ou pas ce type de robot).
+   * `GET /mowers/{id}/maps/{kind}`: a map as SVG (`generated` = the grounds surveyed by an AIM
+   * robot, `zone` = its stay-out zones and hand-drawn paths, `site` = the map of an EPOS robot).
+   * `null` when the robot has none (404: no zone drawn, or not that kind of robot).
    */
   async mapSvg(mowerId: string, kind: 'generated' | 'zone' | 'site', signal?: AbortSignal): Promise<string | null> {
     const path = `/mowers/${encodeURIComponent(mowerId)}/maps/${kind}`
@@ -81,7 +81,7 @@ export class AutomowerClient {
     return this.interpret(await this.exchange(method, path, o), path)
   }
 
-  /** Un aller-retour, rejoué UNE fois avec un jeton neuf sur 401 ; la réponse brute, non interprétée. */
+  /** One round trip, replayed ONCE with a fresh token on 401; the raw response, not interpreted. */
   private async exchange(method: string, path: string, o: { body?: unknown; signal?: AbortSignal; accept?: string }): Promise<{ status: number; text: string }> {
     let token = await this.opts.auth.accessToken(o.signal)
     let res = await this.send(method, path, token, o)
@@ -122,7 +122,7 @@ export class AutomowerClient {
     if (res.status === 429) throw new PluginError('RATE_LIMITED', `Husqvarna rate limit hit on ${path} (1 request per second)`)
     if (res.status === 404) throw new PluginError('DEVICE_UNAVAILABLE', `Husqvarna knows no such mower (HTTP 404 on ${path})`)
     if (res.status >= 400) throw new PluginError('UPSTREAM_ERROR', `Automower Connect API returned HTTP ${res.status} on ${path}${detail(res.text)}`)
-    // 202 Accepted sans corps sur une action : rien à lire
+    // 202 Accepted without body on an action: nothing to read
     if (!res.text.trim()) return null
     try { return JSON.parse(res.text) as unknown }
     catch (err) { throw new PluginError('UPSTREAM_ERROR', `Automower Connect API sent invalid JSON on ${path}`, { cause: err }) }
