@@ -1,31 +1,31 @@
 import type { DeviceDescriptor } from './descriptor'
 import type { DeviceState, StateFor } from './state'
 
-// Lecture « métier » d'un état : l'appareil est-il ACTIF ? Règles pures, partagées depuis que le
-// serveur en a besoin lui aussi (automatisations : « une lumière est allumée dans la pièce », « la
-// TV marche »). Elles vivaient dans `apps/web/src/lib/deviceState.ts` et `cover.ts`, qui les
-// ré-exportent : le comportement est celui de l'interface, à l'identique.
+// "Business" reading of a state: is the device ACTIVE? Pure rules, shared since the
+// server needs them too (automations: "a light is on in the room", "the
+// TV is running"). They used to live in `apps/web/src/lib/deviceState.ts` and `cover.ts`, which
+// re-export them: the behavior is that of the interface, identical.
 
 /**
- * Le lecteur diffuse quelque chose : une lecture, ou une appli à l'écran dont on ne sait rien de plus
- * (`on`, Netflix natif) — l'écran est bien occupé. Sert à l'interrupteur, au point pulsant, à la teinte de
- * l'icône et à l'onde de la scène 3D ; le compteur « en diffusion » de l'en-tête, lui, ne compte que `playing`.
+ * The player is broadcasting something: a playback, or an app on screen of which nothing more is known
+ * (`on`, native Netflix) — the screen is indeed busy. Used for the switch, the pulsing dot, the tint of
+ * the icon and the wave of the 3D scene; the "streaming" counter of the header, for its part, only counts `playing`.
  */
 export function isMediaActive(s: StateFor<'media_player'>): boolean {
   return s.playback === 'playing' || s.playback === 'on'
 }
 
 /**
- * Vocabulaire d'un ouvrant. La commande est la même (`cover.open` / `cover.close`), les mots ne le
- * sont pas : un volet s'OUVRE et se FERME, un store se REMONTE et se BAISSE. Le choix vient de
- * `meta.cover.deviceClass`, posé par le plugin d'après ce que le fabricant déclare — jamais d'une
- * heuristique sur le nom de l'appareil.
+ * Vocabulary of a cover. The command is the same (`cover.open` / `cover.close`), the words are not:
+ * a shutter OPENS and CLOSES, a blind RAISES and LOWERS. The choice comes from
+ * `meta.cover.deviceClass`, set by the plugin from what the vendor declares — never from a
+ * heuristic on the device name.
  *
- * La valeur sert de préfixe i18n : `cover.openClose.*` ou `cover.upDown.*`.
+ * The value serves as an i18n prefix: `cover.openClose.*` or `cover.upDown.*`.
  */
 export type CoverWords = 'openClose' | 'upDown'
 
-/** Un store banne, un BSO ou un écran se manœuvrent verticalement ; le reste s'ouvre. */
+/** An awning, a sunshade or a screen are operated vertically; the rest opens. */
 const UP_DOWN = new Set<string>(['awning', 'blind'])
 
 type Coverish = { meta: { cover?: { deviceClass: string } } }
@@ -35,24 +35,24 @@ export function coverWords(descriptor: Coverish): CoverWords {
 }
 
 /**
- * Ouvrant qui se déploie À PLAT : un store banne, un BSO s'avancent au-dessus d'une terrasse, là où
- * un volet, un portail se tiennent debout dans leur passage. Même liste que le vocabulaire (« se
- * baisse » plutôt que « se ferme ») : une seule source, pour que la forme dessinée, les mots dits et
- * l'état mis en valeur ne se contredisent jamais.
+ * Cover that deploys FLAT: an awning, a sunshade advance above a terrace, where
+ * a shutter, a gate stand upright in their opening. Same list as the vocabulary ("lowers"
+ * rather than "closes"): a single source, so that the drawn shape, the spoken words and
+ * the highlighted state never contradict one another.
  */
 export function isFlatCover(descriptor: Coverish | undefined): boolean {
   return !!descriptor && coverWords(descriptor) === 'upDown'
 }
 
 /**
- * L'ouvrant est-il AU REPOS ? C'est l'état où il ne demande rien à personne : **fermé** pour ce qui
- * se tient debout (volet, portail), **remonté** pour un store — un store au repos est rentré, pas
- * déployé (c'est déployé qu'il craint le vent, voir `coverActivity`).
+ * Is the cover AT REST? It is the state where it asks nothing of anyone: **closed** for what
+ * stands upright (shutter, gate), **raised** for an awning — an awning at rest is retracted, not
+ * deployed (it is when deployed that it fears the wind, see `coverActivity`).
  *
- * **Une position inconnue est SUPPOSÉE au repos.** Une radio unidirectionnelle ne dit jamais où elle
- * en est, et le doute doit pencher du côté sûr : sans cette supposition, un portail muet suffisait à
- * faire croire que la maison n'était pas sécurisée, et l'appui suivant l'aurait ouvert. Ce n'est pas
- * une AFFIRMATION — les libellés continuent de dire « Inconnu » — c'est une décision par défaut.
+ * **An unknown position is ASSUMED at rest.** A one-way radio never says where it
+ * stands, and doubt must lean to the safe side: without this assumption, a silent gate was enough to
+ * make people believe the house was not secured, and the next press would have opened it. It is not
+ * an ASSERTION — the labels keep saying "Unknown" — it is a default decision.
  */
 export function coverAtRest(descriptor: Coverish | undefined, position: number | undefined): boolean {
   if (position === undefined) return true
@@ -60,12 +60,12 @@ export function coverAtRest(descriptor: Coverish | undefined, position: number |
 }
 
 /**
- * Part de l'ouvrant qui SE REMARQUE, de 0 (rien à signaler) à 1. C'est l'inverse d'une nature à
- * l'autre, et c'est voulu : d'un volet on retient qu'il est OUVERT, d'un store qu'il est DÉPLOYÉ —
- * c'est déployé qu'il craint le vent, et replié qu'il n'y a rien à surveiller.
+ * Share of the cover that GETS NOTICED, from 0 (nothing to report) to 1. It is the inverse from one kind to
+ * the other, and that is intended: of a shutter we remember that it is OPEN, of an awning that it is DEPLOYED —
+ * it is when deployed that it fears the wind, and when folded that there is nothing to watch.
  *
- * Sert à tout ce qui met un ouvrant en valeur : teinte de l'icône, jauge de la vue Ouvrants, pilule
- * du marqueur 3D. Position inconnue = 0 : on n'affirme rien d'un moteur qui n'a rien dit.
+ * Used for everything that highlights a cover: icon tint, gauge of the Covers view, pill
+ * of the 3D marker. Unknown position = 0: nothing is asserted about a motor that has said nothing.
  */
 export function coverActivity(descriptor: Coverish | undefined, position: number | undefined): number {
   if (position === undefined) return 0
@@ -73,16 +73,16 @@ export function coverActivity(descriptor: Coverish | undefined, position: number
 }
 
 /**
- * Vrai si l'appareil est « actif » : lampe allumée, volet ouvert, lecture en cours, robot au travail…
+ * True if the device is "active": light on, shutter open, playback in progress, robot at work…
  *
- * `descriptor` : seul un OUVRANT en a besoin, et seulement pour sa nature — un volet se remarque
- * ouvert, un store déployé (voir `coverActivity`). Sans descripteur, c'est la règle du volet.
+ * `descriptor`: only a COVER needs it, and only for its kind — a shutter gets noticed
+ * open, an awning deployed (see `coverActivity`). Without a descriptor, it is the shutter rule.
  */
 export function isDeviceOn(s: DeviceState, descriptor?: DeviceDescriptor): boolean {
   if (!s.available) return false
   switch (s.kind) {
     case 'light': return s.on
-    // position inconnue (RTS sans retour) : ni actif ni inactif, on ne teinte pas l'icône
+    // unknown position (RTS without feedback): neither active nor inactive, the icon is not tinted
     case 'cover': return coverActivity(descriptor, s.position) > 0
     case 'media_player': return isMediaActive(s)
     case 'climate': return s.mode !== 'off'
@@ -95,7 +95,7 @@ export function isDeviceOn(s: DeviceState, descriptor?: DeviceDescriptor): boole
     case 'camera': return false
     case 'weather': return false
     case 'water': return false
-    // une ration EN TRAIN de tomber : le seul moment où une mangeoire fait quelque chose
+      // a portion BEING dispensed: the only moment when a feeder does something
     case 'pet_feeder': return s.feeding === true
     case 'pet_fountain': return s.on
     case 'fan': return s.on
@@ -103,10 +103,10 @@ export function isDeviceOn(s: DeviceState, descriptor?: DeviceDescriptor): boole
 }
 
 /**
- * Nature déclarée d'un appareil, quel que soit son kind (volet ou store, TV ou enceinte, sonnette,
- * pompe à chaleur…) : ce qu'une automatisation filtre quand elle vise « tous les volets » plutôt
- * que « tous les ouvrants ». Les défauts du CONTRAT s'appliquent : un lecteur muet sur sa nature
- * est une enceinte, un climat un thermostat. Absent = le kind n'a pas de nature.
+ * Declared nature of a device, whatever its kind (shutter or awning, TV or speaker, doorbell,
+ * heat pump…): what an automation filters on when it targets "all the shutters" rather
+ * than "all the covers". The CONTRACT defaults apply: a player silent about its nature
+ * is a speaker, a climate a thermostat. Absent = the kind has no nature.
  */
 export function deviceClassOf(descriptor: DeviceDescriptor): string | undefined {
   const m = descriptor.meta

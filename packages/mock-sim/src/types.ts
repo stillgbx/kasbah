@@ -11,65 +11,65 @@ export class SimError extends Error {
 }
 
 export interface TickCtx {
-  /** Temps simulé (ms epoch). */
+  /** Simulated time (ms epoch). */
   simTime: number
-  /** Pas de temps simulé (s). */
+  /** Simulated time step (s). */
   dtS: number
-  /** Accélération du temps simulé (×1 = temps réel) : ce qui doit suivre l'horloge MURALE s'en sert. */
+  /** Acceleration of the simulated time (×1 = real time): whatever must follow the WALL clock uses it. */
   timeScale: number
-  /** Heure locale fractionnaire [0, 24). */
+  /** Fractional local hour [0, 24). */
   hour: number
-  /** Jour de semaine local, 0 = dimanche. */
+  /** Local weekday, 0 = Sunday. */
   dow: number
-  /** Décalage fuseau (minutes, convention Date.getTimezoneOffset : positif à l'ouest d'UTC). */
+  /** Timezone offset (minutes, Date.getTimezoneOffset convention: positive west of UTC). */
   tzOffsetMin: number
   rng: Rng
   world: World
-  /** État courant d'un autre appareil de la simulation (couplages : borne ↔ véhicule). */
+  /** Current state of another device of the simulation (couplings: charger ↔ vehicle). */
   getState(externalId: string): DeviceState | undefined
-  /** Événement transitoire de l'appareil en cours de tick (coup de sonnette) : rien n'est conservé. */
+  /** Transient event of the device being ticked (doorbell ring): nothing is kept. */
   emitEvent?(event: DeviceEventKind): void
 }
 
 export interface SimDevice<K extends DeviceKind = DeviceKind> {
   descriptor: DeviceDescriptor
   /**
-   * Cet appareil simulé fait partie de l'INSTALLATION d'un autre kind : l'exclure avec elle (voir
-   * `Simulation.hiddenFor`). Un panneau photovoltaïque est un capteur de puissance, mais il
-   * appartient à l'installation solaire ; sans ce lien, se débarrasser d'une production solaire
-   * simulée obligerait à exclure TOUS les capteurs, vrais compteurs de piscine compris.
+   * This simulated device is part of the INSTALLATION of another kind: exclude it with it (see
+   * `Simulation.hiddenFor`). A photovoltaic panel is a power sensor, but it
+   * belongs to the solar installation; without this link, getting rid of a simulated solar
+   * production would force excluding ALL the sensors, real pool meters included.
    */
   partOf?: DeviceKind
-  /** État courant, MUTÉ par tick/apply ; le moteur calcule le diff et émet les patchs. */
+  /** Current state, MUTATED by tick/apply; the engine computes the diff and emits the patches. */
   state: StateFor<K>
   tick(ctx: TickCtx): void
-  /** Applique une commande de façon synchrone ; lève SimError si non supportée. */
+  /** Applies a command synchronously; throws SimError if unsupported. */
   apply?(cmd: Command, ctx: TickCtx): void
-  /** Prévisions (appareil `weather`), déduites du monde à l'instant du contexte. */
+  /** Forecasts (`weather` device), deduced from the world at the instant of the context. */
   forecast?(ctx: TickCtx): SimForecast
-  /** Notes de version (véhicule qui déclare `release_notes`). */
+  /** Release notes (vehicle that declares `release_notes`). */
   releaseNotes?(lang?: string): SimReleaseNotes
-  /** Carte du terrain (tondeuse qui déclare `site_map`). */
+  /** Map of the terrain (mower that declares `site_map`). */
   siteMap?(): SimSiteMap
 }
 
-/** Prévisions telles que la simulation les rend : le serveur y ajoute le `deviceId`. */
+/** Forecasts as the simulation renders them: the server adds the `deviceId`. */
 export type SimForecast = Omit<WeatherForecast, 'deviceId'>
-/** Notes de version telles que la simulation les rend : le serveur y ajoute le `deviceId`. */
+/** Release notes as the simulation renders them: the server adds the `deviceId`. */
 export type SimReleaseNotes = Omit<DeviceReleaseNotes, 'deviceId'>
-/** Carte d'un terrain telle que la simulation la rend : le serveur y ajoute le `deviceId`. */
+/** Map of a terrain as the simulation renders it: the server adds the `deviceId`. */
 export type SimSiteMap = Omit<SiteMap, 'deviceId'>
 
-/** Union des SimDevice par kind (SimDevice<K> est invariant en K à cause de `state` mutable). */
+/** Union of the SimDevices by kind (SimDevice<K> is invariant in K because of the mutable `state`). */
 export type AnySimDevice = { [K in DeviceKind]: SimDevice<K> }[DeviceKind]
 
 export interface ChaosConfig {
-  /** Toutes les ~N s, un appareil au hasard devient indisponible. */
+  /** Every ~N s, a random device becomes unavailable. */
   flipEveryS: number
   flipForS: number
-  /** Probabilité qu'une commande échoue en UPSTREAM_ERROR. */
+  /** Probability that a command fails with UPSTREAM_ERROR. */
   failRate: number
-  /** Probabilité qu'une commande traîne `latencyMs` avant de répondre. */
+  /** Probability that a command lingers `latencyMs` before answering. */
   slowRate: number
   latencyMs: number
 }
@@ -78,18 +78,18 @@ export interface Scenario {
   name: string
   build(rng: Rng): AnySimDevice[]
   chaos?: ChaosConfig
-  /** Réglages « monde » (pic solaire, saison). */
+  /** "World" settings (solar peak, season). */
   world?: Partial<WorldConfig>
-  /** Ambiances du fabricant simulé (scènes de lampes rappelables), comme celles d'un pont Hue. */
+  /** Light scenes of the simulated vendor (recallable light scenes), like those of a Hue bridge. */
   scenes?: SimScene[]
 }
 
-/** Valeurs posées sur une lampe par le rappel d'une ambiance. */
+/** Values set on a light by recalling a light scene. */
 export interface SimSceneLight { on: boolean; brightness?: number; colorTempMirek?: number; color?: { x: number; y: number } }
 
 /**
- * Ambiance simulée : ce que le pont publierait (nom, groupe, aperçu) et ce qu'elle POSE sur ses
- * lampes. Elle reste active tant qu'on ne touche pas l'une de ses lampes à la main, comme chez Hue.
+ * Simulated light scene: what the bridge would publish (name, group, preview) and what it SETS on its
+ * lights. It stays active as long as none of its lights is touched by hand, as with Hue.
  */
 export interface SimScene extends Pick<PluginScene, 'externalId' | 'name' | 'group' | 'dynamic' | 'swatches'> {
   lights: Record<string, SimSceneLight>

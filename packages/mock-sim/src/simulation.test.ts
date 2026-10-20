@@ -5,7 +5,7 @@ import { Simulation } from './simulation'
 import { SimError } from './types'
 import { SCENARIOS } from './scenarios'
 
-// Lundi 7 septembre 2026, 00:00 UTC, fuseau 0 → heures locales = UTC.
+// Monday, September 7, 2026, 00:00 UTC, timezone 0 → local hours = UTC.
 const MONDAY = Date.UTC(2026, 8, 7)
 const make = (extra: Partial<ConstructorParameters<typeof Simulation>[0]> = {}) =>
   new Simulation({ scenario: 'default', seed: 7, startTime: MONDAY, tzOffsetMin: 0, clock: new ManualClock(MONDAY), ...extra })
@@ -30,7 +30,7 @@ describe('Simulation', () => {
     sim.start((id, p) => patches.push([id, p]))
     sim.tick(60)
     const light = patches.find(([id]) => id === 'light-living')
-    expect(light).toBeUndefined()                       // une lampe éteinte ne change pas
+    expect(light).toBeUndefined()                       // a light that is off does not change
     const sensor = patches.find(([id]) => id === 'sensor-outdoor-temp')
     expect(sensor?.[1]).toHaveProperty('value')
     sim.stop()
@@ -41,7 +41,7 @@ describe('Simulation', () => {
     const patches: StatePatch[] = []
     sim.start((id, p) => { if (id === 'vehicle-tesla') patches.push(p) })
     sim.tick(1)
-    expect(sim.getState('vehicle-tesla')).toHaveProperty('chargeMinutesRemaining')   // en charge à minuit
+    expect(sim.getState('vehicle-tesla')).toHaveProperty('chargeMinutesRemaining')   // charging at midnight
     await sim.execute('vehicle-tesla', { type: 'vehicle.stop_charge' })
     sim.tick(1)
     expect(sim.getState('vehicle-tesla')).not.toHaveProperty('chargeMinutesRemaining')
@@ -61,35 +61,35 @@ describe('Simulation', () => {
     expect(sim.getState('cover-living')).toMatchObject({ motion: 'stopped', position: 35 })
   })
 
-  it('position favorite : rappel, puis reecriture qui ne deplace rien', async () => {
+  it('favorite position: recall, then rewrite that moves nothing', async () => {
     const sim = make()
-    // `cover-living` memorise 27 ; le rappel y conduit l'ouvrant
+    // `cover-living` stores 27; the recall drives the cover there
     expect(sim.getState('cover-living')).toMatchObject({ presetPosition: 27 })
     await sim.execute('cover-living', { type: 'cover.preset' })
     for (let i = 0; i < 20; i++) sim.tick(1)
     expect(sim.getState('cover-living')).toMatchObject({ motion: 'stopped', position: 27 })
 
-    // reecrire la memoire est un REGLAGE : l'etat change, l'ouvrant ne bouge pas
+    // rewriting the memory is a SETTING: the state changes, the cover does not move
     await sim.execute('cover-living', { type: 'cover.set_preset', position: 60 })
     expect(sim.getState('cover-living')).toMatchObject({ presetPosition: 60, position: 27, motion: 'stopped' })
-    // et le rappel suit desormais la NOUVELLE valeur
+    // and the recall now follows the NEW value
     await sim.execute('cover-living', { type: 'cover.preset' })
     for (let i = 0; i < 20; i++) sim.tick(1)
     expect(sim.getState('cover-living')).toMatchObject({ position: 60 })
 
-    // un volet sans memoire refuse les deux commandes
+    // a shutter without memory refuses both commands
     await expect(sim.execute('cover-kitchen', { type: 'cover.preset' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
     await expect(sim.execute('cover-kitchen', { type: 'cover.set_preset', position: 50 })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
   })
 
-  it('chaque ouvrant DECLARE sa nature, et le parc couvre les trois cas qui divergent', () => {
+  it('each cover DECLARES its kind, and the device set covers the three cases that diverge', () => {
     const covers = make().devices().filter((d) => d.kind === 'cover')
-    // Aucun ouvrant muet : sans `meta.cover.deviceClass`, tout ce qui se decide sur la nature d'un
-    // ouvrant cote interface (mots, forme dessinee, geste d'ensemble, liste a affecter) retombe sur
-    // le cas du volet, et devient invérifiable en simulation.
+    // No silent cover: without `meta.cover.deviceClass`, everything that is decided on the kind of a
+    // cover on the interface side (words, drawn shape, global gesture, list to assign) falls back on
+    // the shutter case, and becomes unverifiable in simulation.
     for (const d of covers) expect(d.meta.cover?.deviceClass, d.externalId).toBeDefined()
-    // Les trois cas qui ne se comportent PAS pareil : le volet, le store (autres mots, forme a plat,
-    // repos inverse) et le portail (aucun geste d'ensemble, n'attend aucune ouverture).
+    // The three cases that do NOT behave the same: the shutter, the awning (other words, flat shape,
+    // inverted rest) and the gate (no global gesture, expects no opening).
     const classes = covers.map((d) => d.meta.cover?.deviceClass)
     expect(classes).toEqual(expect.arrayContaining(['shutter', 'awning', 'gate']))
   })
@@ -125,7 +125,7 @@ describe('Simulation', () => {
     sim.tick(8 * 3600)                                      // 08:00
     const before = sim.getState('vehicle-tesla') as StateFor<'vehicle'>
     expect(before.pluggedIn).toBe(true)
-    sim.tick(1.5 * 3600)                                    // 09:30, en route / arrivé
+    sim.tick(1.5 * 3600)                                    // 09:30, on the road / arrived
     const after = sim.getState('vehicle-tesla') as StateFor<'vehicle'>
     expect(after.pluggedIn).toBe(false)
     expect(after.soc).toBeLessThan(before.soc)
@@ -135,17 +135,17 @@ describe('Simulation', () => {
 
   it('mower follows its weekday schedule and moves within its area', () => {
     const sim = make()
-    sim.tick(10.5 * 3600)                                   // lundi 10:30
+    sim.tick(10.5 * 3600)                                   // Monday 10:30
     const m = sim.getState('mower-automower') as StateFor<'mower'>
     expect(m.activity).toBe('mowing')
     expect(m.position![0]).toBeGreaterThanOrEqual(-1)
     expect(m.position![0]).toBeLessThanOrEqual(26)
-    sim.tick(2 * 3600)                                      // 12:30 → rentrée / charge
+    sim.tick(2 * 3600)                                      // 12:30 → back home / charging
     expect(['returning', 'charging', 'parked']).toContain((sim.getState('mower-automower') as StateFor<'mower'>).activity)
   })
 
   it('chaos scenario flips availability and fails some commands', async () => {
-    // slowRate 0 : la latence simulée attend l'horloge manuelle, qui n'avance pas pendant un await
+    // slowRate 0: the simulated latency waits for the manual clock, which does not advance during an await
     const sim = make({ scenario: { ...SCENARIOS.chaos, chaos: { ...SCENARIOS.chaos.chaos!, slowRate: 0 } } })
     const flips: [string, boolean][] = []
     sim.start(() => {}, (id, a) => flips.push([id, a]))
@@ -161,22 +161,22 @@ describe('Simulation', () => {
     sim.stop()
   })
 
-  it("hiddenFor emporte ce qui appartient a l'installation du kind exclu", () => {
+  it("hiddenFor takes away what belongs to the installation of the excluded kind", () => {
     const sim = make()
     const kinds = (ids: Set<string>) => new Set([...sim.devices()].filter((d) => ids.has(d.externalId)).map((d) => d.kind))
 
-    // rien d'exclu : rien de masque
+    // nothing excluded: nothing hidden
     expect(sim.hiddenFor([]).size).toBe(0)
 
-    // un panneau est un `sensor`, mais il appartient a l'installation solaire : exclure `energy`
-    // emporte le site ET les vingt panneaux, sans toucher aux autres capteurs simules
+    // a panel is a `sensor`, but it belongs to the solar installation: excluding `energy`
+    // takes away the site AND the twenty panels, without touching the other simulated sensors
     const solar = sim.hiddenFor(['energy'])
     expect(kinds(solar)).toEqual(new Set(['energy', 'sensor']))
     expect([...solar].filter((id) => id.startsWith('panel-'))).toHaveLength(20)
     expect(solar.has('energy-site')).toBe(true)
-    expect(solar.has('sensor-pool-temp')).toBe(false)          // la piscine reste simulee
+    expect(solar.has('sensor-pool-temp')).toBe(false)          // the pool stays simulated
 
-    // exclure `sensor` retire bien tous les capteurs, panneaux compris
+    // excluding `sensor` does remove all the sensors, panels included
     const sensors = sim.hiddenFor(['sensor'])
     expect(sensors.has('sensor-pool-temp')).toBe(true)
     expect(sensors.has('energy-site')).toBe(false)
@@ -186,7 +186,7 @@ describe('Simulation', () => {
     const clock = new ManualClock(MONDAY)
     const sim = make({ clock, timeScale: 60 })
     sim.start(() => {})
-    clock.advance(60_000)                                   // 1 min réelle = 1 h simulée
+    clock.advance(60_000)                                   // 1 real min = 1 simulated h
     expect(sim.simTime()).toBeCloseTo(MONDAY + 3_600_000, -2)
     sim.stop()
   })
@@ -198,11 +198,11 @@ describe('simulated weather', () => {
     const s = sim.getState('weather') as StateFor<'weather'>
     expect(s.kind).toBe('weather')
     expect(deviceStateSchema.parse(s)).toEqual(s)
-    // lundi 7 septembre, minuit locale : nuit, et le lever/coucher du monde simulé encadrent la journée
+    // Monday September 7, local midnight: night, and the simulated world's sunrise/sunset frame the day
     expect(s.isDay).toBe(false)
     expect(s.sunrise).toBe(MONDAY + 6 * 3_600_000)
     expect(s.sunset).toBe(MONDAY + 20 * 3_600_000)
-    expect(s.pollen).toMatchObject({ ragweed: 3 })          // septembre : l'ambroisie
+    expect(s.pollen).toMatchObject({ ragweed: 3 })          // September: ragweed
     sim.tick(13 * 3600)
     const noon = sim.getState('weather') as StateFor<'weather'>
     expect(noon.isDay).toBe(true)
@@ -210,15 +210,15 @@ describe('simulated weather', () => {
     expect(deviceStateSchema.parse(noon)).toEqual(noon)
   })
 
-  // Le monde dérive à chaque pas ; la météo, elle, se relit toutes les 20 s de temps RÉEL, quelle que
-  // soit l'accélération. Publiée à chaque pas, elle refaisait le ciel de la scène 3D chaque seconde.
+  // The world drifts at every step; the weather, for its part, is re-read every 20 s of REAL time, whatever
+  // the acceleration. Published at every step, it redid the sky of the 3D scene every second.
   it('publishes the weather every 20 real seconds, whatever the time scale', () => {
     const sim = make({ timeScale: 30 })
     const observed = () => (sim.getState('weather') as StateFor<'weather'>).observedAt
     const first = observed()
-    sim.tick(19 * 30)                                       // 19 s réelles à ×30
+    sim.tick(19 * 30)                                       // 19 real s at ×30
     expect(observed()).toBe(first)
-    sim.tick(2 * 30)                                        // on passe les 20 s
+    sim.tick(2 * 30)                                        // past the 20 s
     const second = observed()
     expect(second).toBeGreaterThan(first)
     sim.tick(10 * 30)
@@ -230,16 +230,16 @@ describe('simulated weather', () => {
     const tesla = () => sim.getState('vehicle-tesla') as StateFor<'vehicle'>
     expect(tesla()).toMatchObject({ softwareVersion: '2026.32.7', softwareUpdate: { status: 'available', version: '2026.38' } })
     expect(sim.releaseNotes('vehicle-tesla')).toMatchObject({ installedVersion: '2026.32.7', pending: { version: '2026.38' } })
-    // à minuit elle charge, donc elle veille : la charge arrêtée, elle s'endort
+    // at midnight it charges, so it stays awake: once the charge is stopped, it falls asleep
     await sim.execute('vehicle-tesla', { type: 'vehicle.stop_charge' })
     sim.tick(1)
     expect(tesla().sleepState).toBe('asleep')
     await expect(sim.execute('vehicle-tesla', { type: 'vehicle.schedule_update', delayS: 60 })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
     await sim.execute('vehicle-tesla', { type: 'vehicle.wake' })
     sim.tick(5)
-    expect(tesla().sleepState).toBe('online')            // un réveil dure : on a le temps d'agir
+    expect(tesla().sleepState).toBe('online')            // a wake-up lasts: there is time to act
     await sim.execute('vehicle-tesla', { type: 'vehicle.schedule_update', delayS: 60 })
-    // 60 s demandées, mais pas moins que le décompte de deux minutes qu'un « maintenant » laisse aussi
+    // 60 s requested, but no less than the two-minute countdown that a "now" also leaves
     expect(tesla().softwareUpdate).toMatchObject({ status: 'scheduled', scheduledAt: MONDAY + 126_000 })
     sim.tick(121)
     expect(tesla().softwareUpdate).toMatchObject({ status: 'installing', installPct: 0 })

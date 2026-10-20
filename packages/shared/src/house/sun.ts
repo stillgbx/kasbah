@@ -1,24 +1,24 @@
-// Où est le soleil, vu d'ici, maintenant. Calcul PUR (aucun réseau, aucune API) : la maison est
-// géoréférencée (`origin`, lat/lon — voir `doc/2_maison/2_0_format-house-json.md`)
-// et l'heure vient de l'horloge. C'est ce qui permet à la scène d'avoir sa propre heure, indépendante
-// du thème clair/sombre de l'application.
+// Where the sun is, seen from here, now. PURE computation (no network, no API): the house is
+// georeferenced (`origin`, lat/lon — see `doc/2_maison/2_0_format-house-json.md`)
+// and the time comes from the clock. It is what lets the scene have its own time, independent
+// of the light/dark theme of the application.
 //
-// Algorithme « low-precision » de l'Astronomical Almanac (le même que le calculateur solaire de la
-// NOAA) : à quelques dixièmes de degré près sur un siècle, très largement assez pour poser une
-// lumière. Ce qui compterait davantage — la réfraction près de l'horizon, l'équation du temps fine —
-// se perd de toute façon dans le choix artistique du style.
+// "Low-precision" algorithm of the Astronomical Almanac (the same as the NOAA solar calculator):
+// to within a few tenths of a degree over a century, more than enough to place a
+// light. What would matter more — refraction near the horizon, the fine equation of time —
+// is lost anyway in the artistic choice of the style.
 
 const RAD = Math.PI / 180
 const DEG = 180 / Math.PI
 
 export interface SunPosition {
-  /** Hauteur au-dessus de l'horizon, en degrés. Négative la nuit. */
+  /** Height above the horizon, in degrees. Negative at night. */
   altitudeDeg: number
-  /** Azimut en degrés depuis le NORD, sens horaire (90 = est, 180 = sud) — la convention de la maison. */
+  /** Azimuth in degrees from NORTH, clockwise (90 = east, 180 = south) — the convention of the house. */
   azimuthDeg: number
 }
 
-/** Jours (fractionnaires) écoulés depuis J2000.0, l'origine des éphémérides. */
+/** Days (fractional) elapsed since J2000.0, the origin of the ephemerides. */
 function daysSinceJ2000(date: Date): number {
   return date.getTime() / 86_400_000 + 2_440_587.5 - 2_451_545.0
 }
@@ -26,7 +26,7 @@ function daysSinceJ2000(date: Date): number {
 export function sunPosition(date: Date, lat: number, lon: number): SunPosition {
   const n = daysSinceJ2000(date)
 
-  // Position du soleil sur l'écliptique, puis sur l'équateur céleste.
+  // Position of the sun on the ecliptic, then on the celestial equator.
   const meanLon = (280.46 + 0.9856474 * n) * RAD
   const meanAnom = (357.528 + 0.9856003 * n) * RAD
   const ecl = meanLon + (1.915 * Math.sin(meanAnom) + 0.02 * Math.sin(2 * meanAnom)) * RAD
@@ -34,18 +34,18 @@ export function sunPosition(date: Date, lat: number, lon: number): SunPosition {
   const ra = Math.atan2(Math.cos(obl) * Math.sin(ecl), Math.cos(ecl))
   const dec = Math.asin(Math.sin(obl) * Math.sin(ecl))
 
-  // Angle horaire : de combien le ciel a tourné depuis que le soleil est passé au méridien du lieu.
+  // Hour angle: how far the sky has turned since the sun passed the meridian of the place.
   const gmstHours = 18.697375 + 24.065709824419 * n
   const lmstDeg = (gmstHours * 15 + lon) % 360
   let haDeg = lmstDeg - ra * DEG
-  haDeg = ((haDeg + 180) % 360 + 360) % 360 - 180        // ramené dans [-180, 180[
+  haDeg = ((haDeg + 180) % 360 + 360) % 360 - 180        // brought into [-180, 180[
   const ha = haDeg * RAD
   const phi = lat * RAD
 
   const sinAlt = Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(ha)
   const alt = Math.asin(Math.max(-1, Math.min(1, sinAlt)))
-  // `acos` ne rend que [0, π] : il ne sait pas distinguer le matin du soir. C'est le signe de l'angle
-  // horaire qui tranche — positif = l'après-midi, donc le soleil est passé à l'ouest.
+  // `acos` only returns [0, π]: it cannot tell morning from evening. It is the sign of the hour
+  // angle that decides — positive = afternoon, so the sun has passed to the west.
   const cosAz = (Math.sin(dec) - Math.sin(phi) * sinAlt) / (Math.cos(phi) * Math.cos(alt) || 1e-9)
   let az = Math.acos(Math.max(-1, Math.min(1, cosAz)))
   if (Math.sin(ha) > 0) az = 2 * Math.PI - az
@@ -54,43 +54,43 @@ export function sunPosition(date: Date, lat: number, lon: number): SunPosition {
 }
 
 /**
- * Course APPROCHÉE, quand la maison n'est pas géoréférencée : on ne sait ni où elle est ni quand le
- * soleil s'y lève, alors on prend l'heure locale du navigateur et une journée type (lever 7 h,
- * coucher 21 h, culmination à 55°). Faux de plusieurs degrés — mais la scène n'a besoin de savoir
- * qu'une chose : s'il fait jour, et de quel côté vient la lumière.
+ * APPROXIMATE course, when the house is not georeferenced: we know neither where it is nor when the
+ * sun rises there, so we take the browser's local time and a typical day (sunrise 7 am,
+ * sunset 9 pm, culmination at 55°). Wrong by several degrees — but the scene only needs to know
+ * one thing: whether it is daytime, and which side the light comes from.
  */
 export function approximateSunPosition(date: Date): SunPosition {
   const hours = date.getHours() + date.getMinutes() / 60
-  const day = (hours - 7) / 14                            // 0 au lever, 1 au coucher
-  const altitudeDeg = 55 * Math.sin(Math.PI * day)        // négatif hors de la plage : il fait nuit
+  const day = (hours - 7) / 14                            // 0 at sunrise, 1 at sunset
+  const altitudeDeg = 55 * Math.sin(Math.PI * day)        // negative outside the range: it is night
   return { altitudeDeg, azimuthDeg: 90 + 180 * Math.min(1, Math.max(0, day)) }
 }
 
-// Heures de passage du soleil — ce qu'une automatisation attend (« 15 min avant le crépuscule »).
-// Calculées sur `sunPosition` seul, sans nouvelle astronomie : balayage du jour local par pas de
-// 10 min, puis dichotomie sur chaque passage. Précision de l'ordre de la seconde, bien en deçà de
-// l'algorithme lui-même (quelques dixièmes de degré, soit une à deux minutes au lever).
+// Sun passage times — what an automation waits for ("15 min before dusk").
+// Computed on `sunPosition` alone, without new astronomy: sweep of the local day in steps of
+// 10 min, then bisection on each passage. Precision of the order of a second, well below
+// the algorithm itself (a few tenths of a degree, i.e. one to two minutes at sunrise).
 
-/** Hauteur du lever et du coucher « officiels » : bord supérieur du disque, réfraction comprise. */
+/** Height of "official" sunrise and sunset: upper edge of the disk, refraction included. */
 export const SUN_HORIZON_DEG = -0.833
-/** Crépuscule CIVIL : le soleil 6° sous l'horizon — on ne lit plus dehors sans lumière. */
+/** CIVIL twilight: the sun 6° below the horizon — one no longer reads outdoors without light. */
 export const CIVIL_TWILIGHT_DEG = -6
 
 export interface SunTimes {
-  /** Aube civile (−6°), en ms epoch. */
+  /** Civil dawn (−6°), in ms epoch. */
   dawn?: number
   sunrise?: number
   sunset?: number
-  /** Crépuscule civil (−6°), en ms epoch. */
+  /** Civil dusk (−6°), in ms epoch. */
   dusk?: number
 }
 
 const STEP_MS = 10 * 60_000
 
 /**
- * Passages du soleil pendant le jour LOCAL (fuseau du process) qui contient `day`. Un passage absent
- * = il n'a pas lieu ce jour-là (jour ou nuit polaire, ou crépuscule qui ne finit pas en été au-delà
- * de ~60° de latitude).
+ * Sun passages during the LOCAL day (process timezone) that contains `day`. A missing passage
+ * = it does not happen that day (polar day or night, or a twilight that does not end in summer beyond
+ * ~60° of latitude).
  */
 export function sunTimes(day: Date, lat: number, lon: number): SunTimes {
   const start = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime()
@@ -101,11 +101,11 @@ export function sunTimes(day: Date, lat: number, lon: number): SunTimes {
   for (let t = start; t < end; t += STEP_MS) samples.push({ t, alt: alt(t) })
   samples.push({ t: end, alt: alt(end) })
 
-  // Le midi solaire coupe le jour en deux : on MONTE avant, on DESCEND après. Sans ce partage, au-delà
-  // de ~55° en été, le crépuscule de la VEILLE (passé minuit) serait pris pour celui du jour.
+  // Solar noon splits the day in two: we CLIMB before, we DESCEND after. Without this split, beyond
+  // ~55° in summer, the twilight of the PREVIOUS day (past midnight) would be taken for that of the day.
   const noon = samples.reduce((best, s) => (s.alt > best.alt ? s : best))
 
-  /** Passage de `threshold`, en montée avant midi ou en descente après, affiné par dichotomie. */
+  /** Passage of `threshold`, rising before noon or falling after, refined by bisection. */
   const crossing = (threshold: number, rising: boolean): number | undefined => {
     const half = rising ? samples.filter((s) => s.t <= noon.t) : samples.filter((s) => s.t >= noon.t)
     let prev = half[0]

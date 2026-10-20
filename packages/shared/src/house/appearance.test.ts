@@ -10,7 +10,7 @@ type Doc = Record<string, unknown> & { rooms: { id: string; style?: Record<strin
 const room = (doc: Doc, id: string) => doc.rooms.find((r) => r.id === id)!
 
 describe('applyAppearanceToJson', () => {
-  it('pose les finitions de plusieurs pièces et de la façade en un seul patch', () => {
+  it('sets the finishes of several rooms and of the facade in a single patch', () => {
     const out = applyAppearanceToJson(demo as Doc, {
       rooms: { salon: { floor: { id: 'walnut' }, walls: { id: 'matte-paint', tint: '#336699' } }, sdb: { walls: { id: 'subway-tile' } } },
       facade: { id: 'red-brick' },
@@ -18,30 +18,30 @@ describe('applyAppearanceToJson', () => {
     expect(room(out, 'salon').style).toEqual({ floor: 'wood', floorFinish: { id: 'walnut' }, wallFinish: { id: 'matte-paint', tint: '#336699' } })
     expect(room(out, 'sdb').style).toEqual({ floor: 'tile', wallFinish: { id: 'subway-tile' } })
     expect(out.style).toEqual({ facade: { id: 'red-brick' } })
-    // les pièces non nommées restent les MÊMES objets : rien d'autre n'est réécrit
+    // the unnamed rooms stay the SAME objects: nothing else is rewritten
     expect(room(out, 'cuisine')).toBe(room(demo as Doc, 'cuisine'))
     expect(() => parseHouse(out)).not.toThrow()
   })
 
-  it('null retire la finition, et un style devenu vide disparaît du fichier', () => {
+  it('null removes the finish, and a style that became empty disappears from the file', () => {
     const set = applyAppearanceToJson(demo as Doc, { rooms: { chambre2: { floor: { id: 'oak' } } }, facade: { id: 'ashlar' } })
     const out = applyAppearanceToJson(set, { rooms: { chambre2: { floor: null } }, facade: null })
     expect('style' in room(out, 'chambre2')).toBe(false)
     expect('style' in out).toBe(false)
   })
 
-  it('refuse une pièce inconnue', () => {
+  it('refuses an unknown room', () => {
     expect(() => applyAppearanceToJson(demo as Doc, { rooms: { nope: { floor: { id: 'oak' } } } })).toThrow(PlacementError)
   })
 
-  it('parseHouse refuse une finition hors de sa surface, et une teinte sur une matière photo', () => {
+  it('parseHouse refuses a finish outside its surface, and a tint on a photo material', () => {
     expect(() => parseHouse(applyAppearanceToJson(demo as Doc, { facade: { id: 'beige-carpet' } as never }))).toThrow()
     expect(() => parseHouse(applyAppearanceToJson(demo as Doc, { rooms: { salon: { floor: { id: 'oak', tint: '#ff0000' } } } }))).toThrow()
   })
 })
 
 describe('mergeAppearancePatch', () => {
-  it('le geste suivant passe devant, surface par surface', () => {
+  it('the following gesture takes precedence, surface by surface', () => {
     const a = { rooms: { salon: { floor: { id: 'oak' as const }, walls: { id: 'matte-paint' as const } } }, facade: { id: 'ashlar' as const } }
     const b = { rooms: { salon: { floor: null }, sdb: { walls: { id: 'subway-tile' as const } } } }
     expect(mergeAppearancePatch(a, b)).toEqual({
@@ -51,8 +51,8 @@ describe('mergeAppearancePatch', () => {
   })
 })
 
-describe('finitions dans la géométrie', () => {
-  it('le sol, les murs d une pièce et la façade arrivent aux descripteurs', () => {
+describe('finishes in the geometry', () => {
+  it('the floor, the walls of a room and the facade reach the descriptors', () => {
     const house = parseHouse(applyAppearanceToJson(demo as Doc, {
       rooms: { salon: { floor: { id: 'walnut' }, walls: { id: 'red-brick' } } }, facade: { id: 'white-brick' },
     }))
@@ -63,13 +63,13 @@ describe('finitions dans la géométrie', () => {
     expect(g.facade).toEqual({ id: 'white-brick' })
   })
 
-  it('une maison sans finition garde des descripteurs sans champ de plus', () => {
+  it('a house without finishes keeps descriptors with no extra field', () => {
     const g = computeHouseGeometry(parseHouse(demo))
     expect(g.levels.every((l) => !('wallFinishes' in l))).toBe(true)
     expect('facade' in g).toBe(false)
   })
 
-  it('le catalogue propose chaque surface, et seules les peintures se teintent', () => {
+  it('the catalog offers each surface, and only paints can be tinted', () => {
     expect(finishesFor('floor').length).toBeGreaterThan(10)
     expect(finishesFor('facade')).toContain('red-brick')
     expect(finishesFor('facade')).not.toContain('beige-carpet')

@@ -8,11 +8,11 @@ export interface ClimateOptions {
   targetTempC?: number
   currentTempC?: number
   heatPowerW?: number
-  /** Thermostat au mur ou pompe à chaleur au sol : ne décide que le marqueur 3D. Absent = rien déclaré. */
+  /** Wall thermostat or floor heat pump: only decides the 3D marker. Absent = nothing declared. */
   deviceClass?: ClimateClass
 }
 
-/** PAC : l'intérieur tend vers la consigne (τ 20 min) ou vers l'extérieur (τ 4 h) si éteinte. */
+/** Heat pump: indoors tends toward the setpoint (τ 20 min), or toward outdoors (τ 4 h) when off. */
 export function climate(externalId: string, o: ClimateOptions): SimDevice<'climate'> {
   const heatPowerW = o.heatPowerW ?? 1800
   const dev: SimDevice<'climate'> = {

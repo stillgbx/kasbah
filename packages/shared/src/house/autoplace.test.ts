@@ -30,7 +30,7 @@ describe('autoPlaceDevices', () => {
     expect(d.name).toBeUndefined()
     expect(d.meta).toEqual({ autoPlaced: true })
     expect(pointInPolygon([d.position![0], d.position![1]], index.roomsById.get('salon')!.polygon)).toBe(true)
-    expect(d.position![2]).toBeCloseTo(2.45, 2) // plafond du niveau (2.6) moins le retrait
+    expect(d.position![2]).toBeCloseTo(2.45, 2) // ceiling of the level (2.6) minus the inset
   })
 
   it('matches the room id as well as the room name', () => {

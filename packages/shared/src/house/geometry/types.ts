@@ -2,9 +2,9 @@ import type { Footprint, ReliefGrid } from './relief'
 import type { Vec2 } from './vec2'
 import type { Finish, FloorStyle, OpeningMaterial, OpeningType, RoomKind, ZoneKind } from '../schema'
 
-// Descripteurs géométriques PURS (aucune dépendance three) : c'est le contrat testé.
-// Les builders côté web les transforment en BufferGeometry sans réfléchir.
-// Sauf mention contraire, les z sont LOCAUX AU NIVEAU (sol fini = 0).
+// PURE geometric descriptors (no three dependency): this is the tested contract.
+// The web-side builders transform them into BufferGeometry without thinking.
+// Unless stated otherwise, z values are LEVEL-LOCAL (finished floor = 0).
 
 export type Vec3 = [number, number, number]
 
@@ -15,11 +15,11 @@ export interface WallPrism {
   levelId: string
   segment: number
   kind: 'interior' | 'exterior'
-  /** Quad convexe CCW (plan), extrudé de z0 à z1. */
+  /** Convex CCW quad (plan), extruded from z0 to z1. */
   footprint: [Vec2, Vec2, Vec2, Vec2]
   z0: number
   z1: number
-  /** Renseigné pour les morceaux sous/sur une ouverture (allège, linteau). */
+  /** Set for the pieces below/above an opening (sill, lintel). */
   openingId?: string
 }
 
@@ -28,33 +28,33 @@ export interface OpeningRect {
   roomId: string
   levelId: string
   type: OpeningType
-  /** Surface qui porte l'ouverture : mur, sol (puits de lumière) ou toit (Velux). */
+  /** Surface that carries the opening: wall, floor (skylight) or roof (Velux). */
   host: 'wall' | 'floor' | 'roof'
-  /** Coin bas-gauche de l'ouverture (z local = allège pour un mur ; face basse de la dalle / du toit pour une surface). */
+  /** Bottom-left corner of the opening (local z = sill for a wall; bottom face of the slab / roof for a surface). */
   origin: Vec3
-  /** Direction unitaire le long de la largeur (dans le plan). */
+  /** Unit direction along the width (in the plane). */
   u: Vec2
-  /** Normale extérieure unitaire du mur (dans le plan) ; `[0, 0]` pour une surface horizontale. */
+  /** Unit outward normal of the wall (in the plane); `[0, 0]` for a horizontal surface. */
   normal: Vec2
   width: number
   height: number
-  /** Épaisseur du porteur (mur, dalle ou toit). */
+  /** Thickness of the carrier (wall, slab or roof). */
   depth: number
-  /** Nombre de vantaux EFFECTIF (`openingLeaves`) : jamais l'optionnel du fichier. */
+  /** EFFECTIVE number of leaves (`openingLeaves`): never the file's optional value. */
   leaves: number
-  /** Cap (azimut) d'une ouverture de surface. */
+  /** Heading (azimuth) of a surface opening. */
   yaw?: number
-  /** Pente (degrés depuis l'horizontal) d'une fenêtre de toit ; 0 = plat / sol. */
+  /** Slope (degrees from the horizontal) of a roof window; 0 = flat / floor. */
   slope?: number
-  /** Matière de la menuiserie, si le fichier en impose une. */
+  /** Material of the joinery, if the file imposes one. */
   material?: OpeningMaterial
-  /** Couleur de la menuiserie (#rrggbb), si le fichier en impose une. */
+  /** Color of the joinery (#rrggbb), if the file imposes one. */
   color?: string
 }
 
 export interface FloorHole {
   openingId: string
-  /** Quad CCW du trou dans le plan de la pièce. */
+  /** CCW quad of the hole in the plane of the room. */
   polygon: [Vec2, Vec2, Vec2, Vec2]
 }
 
@@ -66,20 +66,20 @@ export interface FloorDescriptor {
   z1: number
   kind: RoomKind
   floorStyle?: FloorStyle
-  /** Finition du sol choisie pour la pièce (`room.style.floorFinish`). */
+  /** Floor finish chosen for the room (`room.style.floorFinish`). */
   finish?: Finish
-  /** Trous des puits de lumière (`skylight`) de la pièce. */
+  /** Holes of the skylights (`skylight`) of the room. */
   holes?: FloorHole[]
 }
 
 export interface TerrainDescriptor {
   polygon: Vec2[]
   z: number
-  /** Relief parsé (`site.relief`), `null` = terrain plat. Hauteur en un point : `terrainHeight`. */
+  /** Parsed relief (`site.relief`), `null` = flat terrain. Height at a point: `terrainHeight`. */
   relief: ReliefGrid | null
-  /** Emprises autour desquelles le terrain reste plat : les bassins. */
+  /** Footprints around which the terrain stays flat: the basins. */
   pads: Vec2[][]
-  /** Emprises des pièces : sous elles, le terrain est écrêté sous le plancher. */
+  /** Footprints of the rooms: under them, the terrain is clipped below the floor. */
   footprints: Footprint[]
 }
 export interface ZoneDescriptor { zoneId: string; kind: ZoneKind; polygon: Vec2[]; z: number }
@@ -87,26 +87,26 @@ export interface ZoneDescriptor { zoneId: string; kind: ZoneKind; polygon: Vec2[
 export interface RoofHole {
   openingId: string
   roomId: string
-  /** Quad CCW en plan (projection) — suffit pour un toit plat ; pour un gable, aussi projeté sur la face. */
+  /** CCW quad in plan (projection) — enough for a flat roof; for a gable, also projected on the face. */
   polygon: [Vec2, Vec2, Vec2, Vec2]
-  /** Index de la face gable touchée ; absent pour un toit plat. */
+  /** Index of the gable face touched; absent for a flat roof. */
   faceIndex?: number
-  /** Quatre coins 3D sur la face (absolu) quand `faceIndex` est posé. */
+  /** Four 3D corners on the face (absolute) when `faceIndex` is set. */
   corners?: [Vec3, Vec3, Vec3, Vec3]
 }
 
 export interface RoofDescriptor {
   type: 'flat' | 'gable'
-  /** Emprise agrandie du débord (plan). */
+  /** Footprint enlarged by the overhang (plan). */
   outline: Vec2[]
-  /** z absolu de la base du toit (haut des murs du dernier niveau). */
+  /** Absolute z of the base of the roof (top of the walls of the last level). */
   zBase: number
-  /** z absolu du point le plus haut. */
+  /** Absolute z of the highest point. */
   zRidge: number
   thickness: number
-  /** Faces planes convexes (coordonnées ABSOLUES), vides pour un toit plat (le builder extrude `outline`). */
+  /** Flat convex faces (ABSOLUTE coordinates), empty for a flat roof (the builder extrudes `outline`). */
   faces: Vec3[][]
-  /** Trous des fenêtres de toit. */
+  /** Holes of the roof windows. */
   holes?: RoofHole[]
 }
 
@@ -120,7 +120,7 @@ export interface LevelGeometry {
   walls: WallPrism[]
   openings: OpeningRect[]
   labelAnchors: LabelAnchor[]
-  /** Finition des faces intérieures des murs, par pièce (`room.style.wallFinish`) ; absente = celle du style. */
+  /** Finish of the interior faces of the walls, per room (`room.style.wallFinish`); absent = that of the style. */
   wallFinishes?: Record<string, Finish>
 }
 
@@ -129,8 +129,8 @@ export interface HouseGeometry {
   terrain: TerrainDescriptor
   zones: ZoneDescriptor[]
   roof?: RoofDescriptor
-  /** Finition de la façade (`house.style.facade`) ; absente = celle du style. */
+  /** Finish of the facade (`house.style.facade`); absent = that of the style. */
   facade?: Finish
-  /** Boîte englobante ABSOLUE de tout (niveaux, terrain, toit). */
+  /** ABSOLUTE bounding box of everything (levels, terrain, roof). */
   bounds: AABB3
 }

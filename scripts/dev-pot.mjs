@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Lance le générateur PO Token (bgutil) pour ytmusic en local.
- * Absent de `_external/` (gitignored) ou déjà joignable sur :4416 → skip sans casser `npm run dev`.
- * (Pas dans vite.config : Vite ne doit pas piloter un service Node hors front.)
+ * Starts the PO Token generator (bgutil) for ytmusic locally.
+ * Absent from `_external/` (gitignored) or already reachable on :4416 → skip without breaking `npm run dev`.
+ * (Not in vite.config: Vite must not drive a Node service outside the front end.)
  */
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -25,14 +25,14 @@ async function alreadyUp() {
 
 if (!existsSync(main)) {
   console.warn(
-    '[pot] skip — clone/build dans _external/bgutil-ytdlp-pot-provider/server '
+    '[pot] skip — clone/build in _external/bgutil-ytdlp-pot-provider/server '
     + '(voir doc/3_plugins/3_16_ytmusic.md)',
   )
   process.exit(0)
 }
 
 if (await alreadyUp()) {
-  console.log('[pot] déjà joignable sur', PING, '— skip')
+  console.log('[pot] already reachable on', PING, '— skip')
   process.exit(0)
 }
 

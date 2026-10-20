@@ -3,28 +3,28 @@ import type { SimDevice, SimForecast } from '../types'
 import { outdoorTemperature, solarGeometry, type World } from '../world'
 import { clamp, descriptor, round1 } from './common'
 
-// Météo simulée : ce que le monde partagé (`world.ts`) sait déjà — nuages, température,
-// ensoleillement, précipitations — mis en forme d'un appareil `weather`. C'est ce qui permet de
-// développer le widget, la vue Météo et la scène 3D sans réseau, et de FORCER pluie, neige ou orage
-// (scénario `winter`, graine) pour regarder la maison sous la pluie.
+// Simulated weather: what the shared world (`world.ts`) already knows — clouds, temperature,
+// sunshine, precipitation — shaped as a `weather` device. This is what makes it possible to
+// develop the widget, the Weather view and the 3D scene without a network, and to FORCE rain, snow or storm
+// (`winter` scenario, seed) to look at the house under the rain.
 //
-// Les prévisions sont tirées du même modèle : la courbe de température du monde et une nébulosité
-// qui dérive vers sa moyenne. Elles sont fausses comme toute simulation, mais cohérentes avec
-// l'actuel, ce qui est tout ce qu'une vue a besoin pour se dessiner.
+// The forecasts are drawn from the same model: the world's temperature curve and a cloud cover
+// that drifts toward its mean. They are false like any simulation, but consistent with
+// the current conditions, which is all a view needs to draw itself.
 
 export interface WeatherOptions { name: string }
 
-/** Période de relecture de la météo simulée, en secondes de temps réel. */
+/** Refresh period of the simulated weather, in seconds of real time. */
 const OBSERVATION_REAL_S = 20
 
-/** Lever et coucher du monde simulé (6 h et 20 h locales, `solarGeometry`), pour le jour de `simTime`. */
+/** Sunrise and sunset of the simulated world (6 am and 8 pm local, `solarGeometry`), for the day of `simTime`. */
 export function sunEvents(simTime: number, tzOffsetMin: number): { sunrise: number; sunset: number } {
   const local = simTime - tzOffsetMin * 60_000
   const dayStart = Math.floor(local / 86_400_000) * 86_400_000 + tzOffsetMin * 60_000
   return { sunrise: dayStart + 6 * 3_600_000, sunset: dayStart + 20 * 3_600_000 }
 }
 
-/** La condition en un mot, à partir de la nébulosité, des précipitations et de la température. */
+/** The condition in one word, from the cloud cover, the precipitation and the temperature. */
 export function conditionOf(cloud: number, precipMmH: number, tempC: number, humidity: number): WeatherCondition {
   if (precipMmH > 0) {
     if (tempC < 1) return 'snow'
@@ -36,7 +36,7 @@ export function conditionOf(cloud: number, precipMmH: number, tempC: number, hum
   return cloud < 0.3 ? 'clear' : cloud < 0.7 ? 'partly_cloudy' : 'cloudy'
 }
 
-/** Pollens par mois (0 = janvier), niveaux 0-4 : les saisons françaises, grossièrement. */
+/** Pollens by month (0 = January), levels 0-4: the French seasons, roughly. */
 const POLLEN_SEASON: Record<PollenType, readonly number[]> = {
   alder:   [1, 3, 3, 1, 0, 0, 0, 0, 0, 0, 0, 0],
   birch:   [0, 0, 2, 4, 2, 0, 0, 0, 0, 0, 0, 0],
@@ -57,7 +57,7 @@ function pollenAt(simTime: number, tzOffsetMin: number): Partial<Record<PollenTy
 }
 
 export function weather(externalId: string, o: WeatherOptions): SimDevice<'weather'> {
-  // vent : marche lente propre à l'appareil (le monde n'en a pas besoin), plus fort sous les nuages
+  // wind: slow walk specific to the device (the world does not need it), stronger under clouds
   let wind = 9
   let windDir = 240
   let nextObservation = -Infinity
@@ -73,14 +73,14 @@ export function weather(externalId: string, o: WeatherOptions): SimDevice<'weath
       const s = dev.state
       const w = ctx.world
       const k = Math.min(1, ctx.dtS / 600)
-      // une houle de six heures tient lieu de rafales : pas de tirage aléatoire ici, la suite du
-      // générateur partagé resterait sinon décalée pour tous les autres appareils (et les tests)
+      // a six-hour swell stands in for gusts: no random draw here, the rest of the
+      // shared generator would otherwise stay shifted for all the other devices (and the tests)
       const swell = 4 * Math.sin(ctx.simTime / 3_600_000 / 6 * 2 * Math.PI)
       wind = clamp(wind + (8 + 26 * w.cloud + swell - wind) * k, 0, 90)
       windDir = (windDir + (200 + 60 * w.cloud + 20 * Math.sin(ctx.simTime / 86_400_000 * 2 * Math.PI) - windDir) * k + 360) % 360
-      // Le monde dérive à chaque pas ; la station, elle, ne se relit que toutes les 20 s de temps RÉEL.
-      // Publiée à chaque pas (un pour-cent de nuages suffit), elle refaisait le ciel de la scène 3D
-      // chaque seconde — trente fois plus vite encore à ×30.
+      // The world drifts at every step; the station, for its part, is only re-read every 20 s of REAL time.
+      // Published at every step (one percent of clouds is enough), it redid the sky of the 3D scene
+      // every second — thirty times faster still at ×30.
       if (ctx.simTime < nextObservation) return
       nextObservation = ctx.simTime + OBSERVATION_REAL_S * 1000 * ctx.timeScale
       const tempC = round1(w.outdoorTempC)
@@ -113,9 +113,9 @@ export function weather(externalId: string, o: WeatherOptions): SimDevice<'weath
 }
 
 /**
- * Prévisions déduites du monde : la nébulosité courante dérive vers 0,45 avec une houle de
- * deux jours, la température suit la courbe journalière du monde décalée d'un peu de « météo »
- * (un jour sur trois plus frais). Déterministe : la même heure donne la même prévision.
+ * Forecasts deduced from the world: the current cloud cover drifts toward 0.45 with a swell of
+ * two days, the temperature follows the world's daily curve shifted by a bit of "weather"
+ * (one day in three cooler). Deterministic: the same hour gives the same forecast.
  */
 export function forecastOf(world: World, simTime: number, tzOffsetMin: number, windKmh: number): SimForecast {
   const HOUR = 3_600_000, DAY = 86_400_000

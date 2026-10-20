@@ -2,14 +2,14 @@ import type { Command, DeviceId } from '@kasbah/shared'
 import { SimError, type SimDevice, type TickCtx } from '../types'
 import { descriptor } from './common'
 
-// Ventilateur de plafond (type CREATE / Tuya). Reproduit les deux comportements mesurés :
-// régler la vitesse ALLUME, et éteindre EFFACE la minuterie.
+// Ceiling fan (CREATE / Tuya type). Reproduces the two measured behaviors:
+// setting the speed turns it ON, and turning it off CLEARS the timer.
 
 export const FAN_SPEEDS = [1, 2, 3, 4, 5, 6]
 
 export interface CeilingFanOptions {
   name: string
-  /** Id du descripteur lumière liée (`mock:<id>`). */
+  /** Id of the linked light descriptor (`mock:<id>`). */
   linkedLightId?: string
   speeds?: number[]
 }
@@ -29,7 +29,7 @@ export function ceilingFan(externalId: string, o: CeilingFanOptions): SimDevice<
       kind: 'fan', updatedAt: 0, available: true,
       on: false, speed: 3, direction: 'forward', timerMin: 0, muted: true,
     },
-    tick(_ctx: TickCtx) { /* état tenu par apply */ },
+    tick(_ctx: TickCtx) { /* state held by apply */ },
     apply(cmd: Command) {
       if (cmd.type !== 'fan.set') throw new SimError('UNSUPPORTED_COMMAND', `${cmd.type} on fan`)
       const s = dev.state
@@ -50,7 +50,7 @@ export function ceilingFan(externalId: string, o: CeilingFanOptions): SimDevice<
   return dev
 }
 
-/** Lumière 3CCT non dimmable liée au ventilateur. */
+/** Non-dimmable 3CCT light linked to the fan. */
 export function ceilingFanLight(externalId: string, o: { name: string }): SimDevice<'light'> {
   const steps = [370, 303, 250]
   const dev: SimDevice<'light'> = {
@@ -63,7 +63,7 @@ export function ceilingFanLight(externalId: string, o: { name: string }): SimDev
       kind: 'light', updatedAt: 0, available: true,
       on: true, colorTempMirek: 303,
     },
-    tick(_ctx: TickCtx) { /* état tenu par apply */ },
+    tick(_ctx: TickCtx) { /* state held by apply */ },
     apply(cmd: Command) {
       if (cmd.type !== 'light.set') throw new SimError('UNSUPPORTED_COMMAND', `${cmd.type} on light`)
       const s = dev.state

@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 /**
- * Superviseur de production : lance le serveur (`apps/server/dist/main.js`), le relance s'il tombe,
- * et applique une mise à jour quand Réglages la demande. Le serveur la lui transmet par le canal
- * parent-enfant de Node (IPC) : un serveur ne peut pas se remplacer lui-même.
+ * Production supervisor: starts the server (`apps/server/dist/main.js`), restarts it if it goes down,
+ * and applies an update when Settings asks for it. The server passes it over the
+ * Node parent-child channel (IPC): a server cannot replace itself.
  *
- * Mise à jour : `git fetch` puis avance rapide sur `origin/main`, `npm ci` si `package-lock.json` a
- * changé (serveur arrêté : Windows verrouille les modules natifs en service), build, redémarrage, et
- * le nouveau serveur doit dire « prêt ». Une étape qui échoue ramène au commit précédent, reconstruit
- * et relance. L'avancement s'écrit dans le fichier d'état que le serveur désigne (`update-status.json`),
- * que Réglages relit pendant la mise à jour, coupure comprise.
+ * Update: `git fetch` then fast-forward to `origin/main`, `npm ci` if `package-lock.json` has
+ * changed (server stopped: Windows locks native modules in use), build, restart, and
+ * the new server must say "ready". A step that fails goes back to the previous commit, rebuilds
+ * and restarts. Progress is written in the state file that the server designates (`update-status.json`),
+ * which Settings re-reads during the update, outage included.
  *
- * Journal : `logs/kasbah.log` (serveur et superviseur), une copie `kasbah.1.log` au-delà de 10 Mo.
- * Lancement au démarrage de la machine : doc/5_setup/5_2_production.md.
+ * Log: `logs/kasbah.log` (server and supervisor), a copy `kasbah.1.log` beyond 10 MB.
+ * Launch at machine startup: doc/5_setup/5_2_production.md.
  */
 import { spawn } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, renameSync, statSync, writeFileSync } from 'node:fs'
@@ -23,10 +23,10 @@ const serverDir = join(root, 'apps', 'server')
 const logDir = join(root, 'logs')
 const logFile = join(logDir, 'kasbah.log')
 const LOG_MAX = 10 * 1024 * 1024
-/** Le temps laissé au nouveau serveur pour écouter et démarrer ses plugins. */
+/** The time left for the new server to listen and start its plugins. */
 const READY_TIMEOUT_MS = 3 * 60_000
 const STOP_TIMEOUT_MS = 15_000
-/** Lignes de sortie gardées dans le fichier d'état : de quoi lire une erreur depuis Réglages. */
+/** Output lines kept in the state file: enough to read an error from Settings. */
 const TAIL = 60
 
 mkdirSync(logDir, { recursive: true })
@@ -38,14 +38,14 @@ function log(text) {
     if (logSize > LOG_MAX) { renameSync(logFile, join(logDir, 'kasbah.1.log')); logSize = 0 }
     appendFileSync(logFile, text)
     logSize += Buffer.byteLength(text)
-  } catch { /* un journal verrouillé ou plein n'arrête pas le serveur */ }
+  } catch { /* a locked or full log does not stop the server */ }
 }
 const say = (msg) => log(`[supervisor] ${new Date().toISOString()} ${msg}\n`)
 
 let child = null
-/** Le serveur qui démarre pendant une mise à jour : sa sortie va aussi dans le fichier d'état. */
+/** The server that starts during an update: its output also goes into the state file. */
 let capture = null
-/** Faux pendant l'arrêt du superviseur : plus de relance. */
+/** False while the supervisor shuts down: no more restarts. */
 let wanted = true
 let updating = false
 let crashes = 0
@@ -67,7 +67,7 @@ function startServer() {
   c.on('exit', (code, signal) => {
     if (child === c) child = null
     say(`server exited (code ${code}${signal ? `, ${signal}` : ''})`)
-    // une mise à jour arrête et relance elle-même le serveur
+    // an update stops and restarts the server itself
     if (!wanted || updating) return
     crashes = Date.now() - startedAt > 60_000 ? 1 : crashes + 1
     const delay = Math.min(60_000, 1000 * 2 ** (crashes - 1))
@@ -78,7 +78,7 @@ function startServer() {
   return c
 }
 
-/** Arrêt propre demandé par IPC (le serveur ferme ses plugins), puis arrêt forcé passé le délai. */
+/** Clean shutdown requested through IPC (the server closes its plugins), then forced shutdown after the delay. */
 function stopServer() {
   const c = child
   if (!c) return Promise.resolve()
@@ -90,7 +90,7 @@ function stopServer() {
   })
 }
 
-/** Démarre le serveur et attend qu'il dise « prêt » ; faux s'il tombe ou se tait. */
+/** Starts the server and waits for it to say "ready"; false if it goes down or stays silent. */
 function startAndWait() {
   const c = startServer()
   return new Promise((resolve) => {
@@ -108,14 +108,14 @@ function startAndWait() {
   })
 }
 
-/** Les dernières lignes non vides de `text` dans `tail`, sans les codes de couleur du terminal. */
+/** The last non-empty lines of `text` into `tail`, without the terminal color codes. */
 function keep(tail, text) {
   // eslint-disable-next-line no-control-regex
   tail.push(...text.replace(/\x1b\[[0-9;]*m/g, '').split(/\r?\n/).filter((l) => l.trim()))
   if (tail.length > TAIL) tail.splice(0, tail.length - TAIL)
 }
 
-/** Une commande fixe (aucune entrée utilisateur), sa sortie au journal et dans `tail`. */
+/** A fixed command (no user input), its output to the log and into `tail`. */
 function run(cmd, tail) {
   say(`$ ${cmd}`)
   return new Promise((resolve) => {
@@ -135,8 +135,8 @@ function run(cmd, tail) {
 }
 
 /**
- * `running` : le commit que le serveur a chargé. Il peut différer de HEAD (un `git pull` fait à la main
- * sans build) : on compare alors à lui, pour ne pas déclarer à jour un serveur qui ne l'est pas.
+ * `running`: the commit the server has loaded. It may differ from HEAD (a `git pull` done by hand
+ * without a build): we then compare against it, so as not to declare up to date a server that is not.
  */
 async function update(statusFile, running) {
   if (updating) return
@@ -146,8 +146,8 @@ async function update(statusFile, running) {
     from: running, to: null, startedAt: Date.now(), finishedAt: null,
     error: null, rolledBack: false, supervisorChanged: false, log: [],
   }
-  // Sous Windows, le remplacement échoue (EPERM) si le serveur lit le fichier au même instant : on
-  // réessaie, sinon un « en cours » resterait affiché après la fin.
+  // On Windows, the replacement fails (EPERM) if the server reads the file at the same instant: we
+  // retry, otherwise an "in progress" would stay displayed after the end.
   const save = () => {
     for (let i = 0; ; i++) {
       try {
@@ -160,8 +160,8 @@ async function update(statusFile, running) {
       }
     }
   }
-  // La sortie gardée est celle de l'étape en cours : celle d'une étape qui échoue reste affichée, le
-  // retour en arrière écrit ailleurs (`tail`).
+  // The kept output is that of the current step: that of a step that fails stays displayed, the
+  // rollback writes elsewhere (`tail`).
   const step = async (name, cmd, tail = null) => {
     if (!tail && status.step !== name) status.log = []
     status.step = name
@@ -181,7 +181,7 @@ async function update(statusFile, running) {
 
   let head = null
   let lockChanged = false
-  /** Vrai dès que le code, les dépendances ou le build ont bougé : avant, rien à défaire. */
+  /** True as soon as the code, the dependencies or the build have moved: before that, nothing to undo. */
   let touched = false
   try {
     const branch = await step('fetch', 'git rev-parse --abbrev-ref HEAD')
@@ -223,7 +223,7 @@ async function update(statusFile, running) {
   }
 }
 
-/** Retour au commit d'avant : son code, ses dépendances, son build, et un serveur qui redémarre. */
+/** Back to the previous commit: its code, its dependencies, its build, and a server that restarts. */
 async function rollback(head, lockChanged, status, exec) {
   try {
     if ((await exec('git rev-parse HEAD')) !== head) await exec(`git reset --keep ${head}`)
@@ -253,7 +253,7 @@ process.on('SIGINT', () => void quit('SIGINT'))
 process.on('SIGTERM', () => void quit('SIGTERM'))
 
 say(`supervisor started in ${root}`)
-// Première installation, ou `dist/` effacé : on construit avant de lancer.
+// First installation, or `dist/` erased: we build before launching.
 if (!existsSync(join(serverDir, 'dist', 'main.js'))) {
   const r = await run('npm run build', [])
   if (r.code !== 0) say('initial build failed: starting anyway, the server will say what is missing')

@@ -1,29 +1,29 @@
 #!/usr/bin/env node
 /**
- * Génère les blocs de section de `doc/index.md` depuis le catalogue de chaque section, et contrôle
- * ces catalogues.
+ * Generates the section blocks of `doc/index.md` from the catalog of each section, and checks
+ * these catalogs.
  *
- * Index à deux niveaux :
- *  - la liste des pages d'une section, avec leurs résumés, vit dans le bloc
- *    `<!-- catalogue:begin -->` … `<!-- catalogue:end -->` de `doc/<section>/README.md` : une phrase
- *    d'introduction, puis des groupes `### Nom` portant chacun une table
- *    `Page | Résumé | Dernière mise à jour` ;
- *  - `doc/index.md` n'en porte qu'un bloc généré entre `<!-- section:<nom>:begin … -->` et
- *    `<!-- section:<nom>:end -->` : l'introduction, le lien vers le README, titres et dates.
+ * Two-level index:
+ *  - the list of the pages of a section, with their summaries, lives in the block
+ *    `<!-- catalogue:begin -->` … `<!-- catalogue:end -->` of `doc/<section>/README.md`: an
+ *    introduction sentence, then `### Name` groups each carrying a table
+ *    `Page | Résumé | Dernière mise à jour`;
+ *  - `doc/index.md` only carries one generated block between `<!-- section:<name>:begin … -->` and
+ *    `<!-- section:<name>:end -->`: the introduction, the link to the README, titles and dates.
  *
- * Contrôles :
- *   ERREUR  dossier de section `doc/N_nom/` sans bloc dans index.md ;
- *   ERREUR  lien du catalogue vers un fichier absent ;
- *   ERREUR  page `.md` du dossier absente du catalogue (README.md exclu) ;
- *   ALERTE  résumé de plus de 350 caractères ;
- *   ALERTE  résumé daté (une date AAAA-MM-JJ : il raconte l'historique au lieu du périmètre) ;
- *   ALERTE  ligne de table mal découpée (un ` | ` dans le résumé) ;
- *   ALERTE  en-tête de page (`Dernière mise à jour`) plus récent que la date du catalogue.
+ * Checks:
+ *   ERREUR  section folder `doc/N_name/` without a block in index.md;
+ *   ERREUR  catalog link to a missing file;
+ *   ERREUR  `.md` page of the folder absent from the catalog (README.md excluded);
+ *   ALERTE  summary of more than 350 characters;
+ *   ALERTE  dated summary (a YYYY-MM-DD date: it tells the history instead of the scope);
+ *   ALERTE  badly split table row (a ` | ` in the summary);
+ *   ALERTE  page header (`Dernière mise à jour`) more recent than the catalog date.
  *
- * Idempotent : n'écrit index.md que si son contenu change.
+ * Idempotent: only writes index.md if its content changes.
  *
- *   node scripts/wiki-index.mjs           régénère index.md
- *   node scripts/wiki-index.mjs --check   n'écrit rien ; code 1 si index.md est à régénérer ou en ERREUR
+ *   node scripts/wiki-index.mjs           regenerates index.md
+ *   node scripts/wiki-index.mjs --check   writes nothing; code 1 if index.md must be regenerated or in ERREUR
  */
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
@@ -38,7 +38,7 @@ const check = process.argv.includes('--check')
 const read = (path) => readFileSync(path, 'utf8').replace(/\r\n/g, '\n')
 const blockRe = /<!-- section:([\w.-]+):begin[^>]*-->[\s\S]*?<!-- section:\1:end -->/g
 
-/** Cellules d'une ligne de table markdown, sans les `|` de bord. */
+/** Cells of a markdown table row, without the edge `|`. */
 function cells(line) {
   return line.trim().replace(/^\|/, '').replace(/\|$/, '').split(' | ').map((c) => c.trim())
 }
@@ -112,7 +112,7 @@ function checkCatalogue(section, cat) {
   return issues
 }
 
-// --- Génération -------------------------------------------------------------------
+// --- Generation -------------------------------------------------------------------
 
 const index = read(indexFile)
 const sections = [...index.matchAll(blockRe)].map((m) => m[1])

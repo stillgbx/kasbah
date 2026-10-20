@@ -5,7 +5,7 @@ import { fitGap, fitHeight, fitWidth, freeSpan, hostSegments, newOpeningDims, op
 import { openingPatchSchema, patchOpeningInJson, PlacementError, placeDeviceInJson } from './place'
 import { houseSchema, openingSchema, type Opening, type Room } from './schema'
 
-// Carré de 4 m sur 4, coins dans l'ordre CCW : segment 0 = arête du bas (y = 0), 1 = droite, 2 = haut, 3 = gauche.
+// 4 m by 4 m square, corners in CCW order: segment 0 = bottom edge (y = 0), 1 = right, 2 = top, 3 = left.
 const room = (partial: Partial<Room> & Pick<Room, 'id' | 'polygon'>): Room =>
   houseSchema.shape.rooms.element.parse({ levelId: 'l', name: partial.id, ...partial })
 const opening = (partial: Partial<Opening> & Pick<Opening, 'id'>): Opening =>
@@ -18,7 +18,7 @@ describe('hostSegments', () => {
   it('leaves out the walls that are too short and the ones set to "none"', () => {
     const r = room({ id: 'a', polygon: [[0, 0], [4, 0], [4, 1], [0, 1]], walls: [{ segment: 0, kind: 'none' }] })
     const hosts = hostSegments(r, [r], HOUSE_DEFAULTS, 2, 'x').map((h) => h.seg.index)
-    expect(hosts).toEqual([2])            // 0 est « none », 1 et 3 ne font qu'un mètre
+    expect(hosts).toEqual([2])            // 0 is "none", 1 and 3 are only one meter long
   })
   it('a room without walls hosts nothing', () => {
     const r = room({ id: 'a', kind: 'terrace', polygon: [[0, 0], [4, 0], [4, 4], [0, 4]] })
@@ -46,18 +46,18 @@ describe('slotFromPoint', () => {
     expect(slotFromPoint(r, [r], HOUSE_DEFAULTS, [3.9, 2], 1, 'o1')).toEqual({ segment: 1, offset: 1.5 })
   })
   it('a wall too short for the opening is skipped, the drag runs on to the next one', () => {
-    // arête 1 (droite) ne fait qu'un mètre : une ouverture de 2 m ne peut pas s'y poser
+    // edge 1 (right) is only one meter long: a 2 m opening cannot be placed on it
     const r = room({ id: 'a', polygon: [[0, 0], [4, 0], [4, 1], [0, 1]], openings: [opening({ id: 'o1', width: 2 })] })
     const slot = slotFromPoint(r, [r], HOUSE_DEFAULTS, [4, 0.5], 2, 'o1')
     expect(slot?.segment === 0 || slot?.segment === 2).toBe(true)
   })
   it('butts up against a neighbour instead of jumping over it', () => {
-    // o1 occupe [0, 1] sur le mur du bas, o2 [2, 3] : le doigt passe au-delà de o2, o1 doit S'ARRÊTER
-    // à son bord (offset 1) et non réapparaître de l'autre côté (offset 3).
+    // o1 occupies [0, 1] on the bottom wall, o2 [2, 3]: the finger goes past o2, o1 must STOP
+    // at its edge (offset 1) and not reappear on the other side (offset 3).
     const r = square([opening({ id: 'o1', offset: 0 }), opening({ id: 'o2', offset: 2, width: 1 })])
     const from = { segment: 0, offset: 0 }
     expect(slotFromPoint(r, [r], HOUSE_DEFAULTS, [2.9, 0.1], 1, 'o1', from)).toEqual({ segment: 0, offset: 1 })
-    // sans `from`, le plus proche gagne : l'ouverture saute par-dessus
+    // without `from`, the closest wins: the opening jumps over
     expect(slotFromPoint(r, [r], HOUSE_DEFAULTS, [2.9, 0.1], 1, 'o1')).toEqual({ segment: 0, offset: 3 })
   })
   it('still turns the corner when the finger leaves the wall', () => {
@@ -97,7 +97,7 @@ describe('fitWidth', () => {
     expect(fitWidth(r, [r], HOUSE_DEFAULTS, r.openings[0]!, 2)).toEqual({ width: 2, offset: 1 })
   })
   it('slides the opening left instead of shrinking what was typed', () => {
-    // o1 occupe [1, 2] ; sa voisine commence à 2,5 : il n'y a que 0,5 m à droite, mais 2,5 m de mur libre
+    // o1 occupies [1, 2]; its neighbor starts at 2.5: there is only 0.5 m on the right, but 2.5 m of free wall
     const r = square([opening({ id: 'o1', offset: 1, width: 1 }), opening({ id: 'o2', offset: 2.5, width: 1 })])
     expect(fitWidth(r, [r], HOUSE_DEFAULTS, r.openings[0]!, 2)).toEqual({ width: 2, offset: 0.5 })
   })
@@ -129,7 +129,7 @@ describe('fitGap', () => {
     expect(fitGap(r(), [r()], HOUSE_DEFAULTS, r().openings[0]!, 'right', 0.4)).toBe(0.4)
   })
   it('sets the distance measured from the left, the other one following', () => {
-    // mur de 4 m, ouverture de 1 m : 2,6 m de l'autre bout → offset 0,4
+    // 4 m wall, 1 m opening: 2.6 m from the other end → offset 0.4
     expect(fitGap(r(), [r()], HOUSE_DEFAULTS, r().openings[0]!, 'left', 2.6)).toBe(0.4)
   })
   it('stops at the neighbour instead of overlapping it', () => {
@@ -160,16 +160,16 @@ describe('openingGaps', () => {
     expect(openingGaps(r, r.openings[0]!).left).toBe(0)
   })
   /**
-   * Le sens se dit DE L'INTÉRIEUR de la pièce, et c'est ce que ce test garde : les polygones sont en
-   * sens trigonométrique, donc un observateur dans la pièce, tourné vers le mur, a le coin
-   * `polygon[segment]` — l'origine d'`offset` — à sa DROITE. L'interface a déjà affiché l'inverse.
+   * The direction is told FROM INSIDE the room, and that is what this test guards: the polygons are
+   * counterclockwise, so an observer in the room, turned toward the wall, has the corner
+   * `polygon[segment]` — the origin of `offset` — on their RIGHT. The interface once displayed the opposite.
    */
   it('names the sides as seen from INSIDE the room', () => {
     const r = square([opening({ id: 'o1', offset: 1, width: 1 })])
     const seg = classifySegments(r, [r], HOUSE_DEFAULTS)[0]!
-    // l'observateur regarde vers l'extérieur (la normale du mur) ; sa droite = avant × haut
+    // the observer looks outward (the wall normal); their right = forward × up
     const rightDir: [number, number] = [seg.n[1], -seg.n[0]]
-    // le coin d'où part `offset` est à l'opposé de la direction de l'arête
+    // the corner from which `offset` starts is opposite to the direction of the edge
     const towardsOrigin: [number, number] = [-seg.d[0], -seg.d[1]]
     expect(rightDir[0] * towardsOrigin[0] + rightDir[1] * towardsOrigin[1]).toBeGreaterThan(0)
     expect(openingGaps(r, r.openings[0]!).right).toBe(r.openings[0]!.offset)
@@ -215,15 +215,15 @@ describe('patchOpeningInJson', () => {
   it('an empty patch changes nothing', () => {
     expect(patchOpeningInJson(doc(), 'a', 'o1', openingPatchSchema.parse({}))).toEqual(doc())
   })
-  it('ecrit la menuiserie, et la chaine vide rend la main au defaut', () => {
+  it('writes the joinery, and the empty string hands back to the default', () => {
     const at = (d: JsonLike) => (d.rooms as { openings: Record<string, unknown>[] }[])[0]!.openings[0]!
     const set = patchOpeningInJson(doc(), 'a', 'o1', { leaves: 2, material: 'metal', color: '#c0c4c8' })
     expect(at(set)).toMatchObject({ leaves: 2, material: 'metal', color: '#c0c4c8' })
-    // la chaine vide RETIRE la cle : rendre la main au defaut, ce n'est pas ecrire la valeur deduite
+    // the empty string REMOVES the key: handing back to the default is not writing the deduced value
     const cleared = patchOpeningInJson(set, 'a', 'o1', { leaves: '', material: '', color: '' })
     for (const key of ['leaves', 'material', 'color']) expect(at(cleared)).not.toHaveProperty(key)
   })
-  it('refuse une couleur qui n est pas un #rrggbb et un nombre de vantaux hors bornes', () => {
+  it('refuses a color that is not a #rrggbb and a number of leaves out of bounds', () => {
     expect(openingPatchSchema.safeParse({ color: 'rouge' }).success).toBe(false)
     expect(openingPatchSchema.safeParse({ leaves: 0 }).success).toBe(false)
     expect(openingPatchSchema.safeParse({ leaves: 11 }).success).toBe(false)
@@ -233,17 +233,17 @@ describe('patchOpeningInJson', () => {
 })
 
 describe('openingLeaves', () => {
-  it('un seul vantail par defaut, quelle que soit la largeur', () => {
+  it('a single leaf by default, whatever the width', () => {
     for (const type of ['door', 'window', 'passage', 'garage', 'glass-door'] as const) {
       expect(openingLeaves(opening({ id: 'o', type, width: 3 }))).toBe(1)
     }
   })
-  it('la baie vitree se deduit de sa largeur : une coulissante, deux a trois vantaux', () => {
+  it('the glazed bay is deduced from its width: a sliding door, two to three leaves', () => {
     expect(openingLeaves(opening({ id: 'o', type: 'bay', width: 1.2 }))).toBe(2)
     expect(openingLeaves(opening({ id: 'o', type: 'bay', width: 3.2 }))).toBe(2)
     expect(openingLeaves(opening({ id: 'o', type: 'bay', width: 6 }))).toBe(3)
   })
-  it('le nombre du fichier passe devant ce qui se deduit', () => {
+  it('the file number takes precedence over what is deduced', () => {
     expect(openingLeaves(opening({ id: 'o', type: 'bay', width: 6, leaves: 1 }))).toBe(1)
     expect(openingLeaves(opening({ id: 'o', type: 'window', width: 1, leaves: 4 }))).toBe(4)
   })
@@ -270,18 +270,18 @@ describe('placeDeviceInJson — opening link', () => {
 })
 
 describe('newOpeningDims', () => {
-  it('pose tout ce qui descend au sol a la hauteur de porte de la maison, allege nulle', () => {
+  it('places everything that goes down to the floor at the door height of the house, zero sill', () => {
     for (const type of ['door', 'passage', 'garage', 'bay', 'glass-door'] as const) {
       expect(newOpeningDims(type, HOUSE_DEFAULTS)).toMatchObject({ height: HOUSE_DEFAULTS.doorHeight, sill: 0 })
     }
     expect(newOpeningDims('garage', HOUSE_DEFAULTS).width).toBe(2.4)
     expect(newOpeningDims('door', HOUSE_DEFAULTS).width).toBe(0.9)
   })
-  it('la fenetre arrive en haut a la hauteur d une porte : c est ce qu on voit sur une facade', () => {
+  it('the window arrives at the top at the height of a door: it is what one sees on a facade', () => {
     const w = newOpeningDims('window', { ...HOUSE_DEFAULTS, windowSill: 0.9, doorHeight: 2.1 })
     expect(w.sill + w.height).toBe(HOUSE_DEFAULTS.doorHeight)
   })
-  it('suit les defauts de LA maison : regler l allege une fois vaut pour ce qu on pose ensuite', () => {
+  it('follows the defaults of THE house: setting the sill once applies to what is placed next', () => {
     expect(newOpeningDims('window', { ...HOUSE_DEFAULTS, windowSill: 1.1 }).sill).toBe(1.1)
     expect(newOpeningDims('door', { ...HOUSE_DEFAULTS, doorHeight: 2.4 }).height).toBe(2.4)
   })

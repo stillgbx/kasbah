@@ -9,16 +9,16 @@ import { createWorld, tickWorld, type World } from './world'
 export interface SimulationOptions {
   scenario?: ScenarioName | Scenario
   seed?: number
-  /** Temps simulé de départ (ms epoch). Défaut : maintenant. */
+  /** Starting simulated time (ms epoch). Default: now. */
   startTime?: number
-  /** Facteur d'accélération du temps simulé (60 → une journée en 24 min). */
+  /** Acceleration factor of the simulated time (60 → a day in 24 min). */
   timeScale?: number
   clock?: Clock
-  /** Décalage fuseau (min, convention getTimezoneOffset). Défaut : celui du processus. */
+  /** Timezone offset (min, getTimezoneOffset convention). Default: that of the process. */
   tzOffsetMin?: number
-  /** Période réelle entre deux ticks (ms). */
+  /** Real period between two ticks (ms). */
   tickMs?: number
-  /** Pas simulé maximal par sous-étape (s) : un gros saut est subdivisé pour rester précis. */
+  /** Maximum simulated step per sub-step (s): a big jump is subdivided to stay accurate. */
   maxStepS?: number
 }
 
@@ -26,13 +26,13 @@ export type PatchListener = (externalId: string, patch: StatePatch) => void
 export type AvailabilityListener = (externalId: string, available: boolean) => void
 export type EventListener = (externalId: string, event: DeviceEventKind) => void
 export type SceneListener = (sceneExternalId: string, active: SceneActivation) => void
-/** Ambiance telle que la simulation la publie : sans les valeurs qu'elle pose sur ses lampes. */
+/** Light scene as the simulation publishes it: without the values it sets on its lights. */
 export type SimSceneInfo = Omit<SimScene, 'lights'>
 
 /**
- * Moteur de simulation déterministe (graine + horloge injectée). Fait avancer les appareils,
- * calcule le diff de leur état et n'émet QUE les champs modifiés. Réutilisé tel quel par le
- * plugin serveur `mock` et par le transport in-process de l'app web.
+ * Deterministic simulation engine (seed + injected clock). Advances the devices,
+ * computes the diff of their state and emits ONLY the modified fields. Reused as is by the
+ * server plugin `mock` and by the in-process transport of the web app.
  */
 export class Simulation {
   readonly scenario: Scenario
@@ -75,17 +75,17 @@ export class Simulation {
       this.lastEmitted.set(d.descriptor.externalId, snapshot(d.state))
     }
     if (this.scenario.chaos) this.nextChaosAt = this.simNow + this.scenario.chaos.flipEveryS * 1000
-    // état initial cohérent (monde à l'heure de départ)
+    // consistent initial state (world at the starting hour)
     this.step(0)
   }
 
   devices(): DeviceDescriptor[] { return this.devs.map((d) => d.descriptor) }
 
   /**
-   * `externalId` des appareils à masquer quand la simulation ne fait que COMPLÉTER un parc réel
-   * (sous-items du plugin `mock` décochés dans Réglages → Plugins). Un appareil tombe si son propre
-   * kind est exclu, ou si son `partOf` l'est : exclure `energy` emporte ainsi les panneaux simulés,
-   * qui sont des capteurs de puissance mais appartiennent à l'installation solaire simulée.
+   * `externalId` of the devices to hide when the simulation only COMPLETES a real device set
+   * (sub-items of the `mock` plugin unchecked in Settings → Plugins). A device drops out if its own
+   * kind is excluded, or if its `partOf` is: excluding `energy` thus takes away the simulated panels,
+   * which are power sensors but belong to the simulated solar installation.
    */
   hiddenFor(excluded: Iterable<DeviceKind>): Set<string> {
     const kinds = new Set(excluded)
@@ -133,7 +133,7 @@ export class Simulation {
     this.timer = null
   }
 
-  /** Avance le temps simulé de `dtS` secondes (tests / usage manuel). */
+  /** Advances the simulated time by `dtS` seconds (tests / manual use). */
   tick(dtS: number): void { this.advanceTo(this.simNow + dtS * 1000) }
 
   advanceTo(simTime: number): void {
@@ -155,11 +155,11 @@ export class Simulation {
     if (!apply) throw new SimError('UNSUPPORTED_COMMAND', `${dev.descriptor.kind} accepts no command`)
     apply(cmd, this.ctx(0))
     this.emitDiff(dev)
-    // une lampe réglée à la main sort de l'ambiance qui l'avait posée, comme chez Hue
+    // a light set by hand leaves the light scene that had set it, as with Hue
     if (dev.descriptor.kind === 'light') this.leaveScenes(externalId)
   }
 
-  /** Ambiances du scénario, sans les valeurs qu'elles posent. */
+  /** Light scenes of the scenario, without the values they set. */
   scenes(): SimSceneInfo[] {
     return (this.scenario.scenes ?? []).map(({ lights: _l, ...info }) => info)
   }
@@ -169,8 +169,8 @@ export class Simulation {
   }
 
   /**
-   * Rappel d'une ambiance : pose ses valeurs sur ses lampes (atténuées par `brightness`), ou les
-   * éteint (`off`). Les autres ambiances du même groupe s'effacent : une pièce n'en a qu'une à la fois.
+   * Recall of a light scene: sets its values on its lights (dimmed by `brightness`), or turns them
+   * off (`off`). The other light scenes of the same group fade away: a room has only one at a time.
    */
   async recallScene(externalId: string, recall: { mode: SceneRecallMode; brightness?: number }): Promise<void> {
     const scene = (this.scenario.scenes ?? []).find((s) => s.externalId === externalId)
@@ -205,7 +205,7 @@ export class Simulation {
     this.onScene?.(externalId, active)
   }
 
-  /** Prévisions d'un appareil météo simulé, à l'heure simulée courante. */
+  /** Forecasts of a simulated weather device, at the current simulated hour. */
   forecast(externalId: string): SimForecast {
     const dev = this.byId.get(externalId)
     if (!dev) throw new SimError('DEVICE_UNAVAILABLE', `unknown mock device "${externalId}"`)
@@ -213,7 +213,7 @@ export class Simulation {
     return dev.forecast(this.ctx(0))
   }
 
-  /** Notes de version d'un véhicule simulé. */
+  /** Release notes of a simulated vehicle. */
   releaseNotes(externalId: string, lang?: string): SimReleaseNotes {
     const dev = this.byId.get(externalId)
     if (!dev) throw new SimError('DEVICE_UNAVAILABLE', `unknown mock device "${externalId}"`)
@@ -221,7 +221,7 @@ export class Simulation {
     return dev.releaseNotes(lang)
   }
 
-  /** Carte du terrain d'une tondeuse simulée. */
+  /** Terrain map of a simulated mower. */
   siteMap(externalId: string): SimSiteMap {
     const dev = this.byId.get(externalId)
     if (!dev) throw new SimError('DEVICE_UNAVAILABLE', `unknown mock device "${externalId}"`)
@@ -280,8 +280,8 @@ export class Simulation {
       if (k === 'kind' || k === 'updatedAt' || k === 'available') continue
       if (!shallowEqual(prev[k], v)) { patch[k] = clone(v); changed = true }
     }
-    // un champ RETIRÉ de l'état (`delete s.x`) s'efface chez le client : `null` = « efface ce champ »
-    // dans un patch. Sans cela, la fin d'une installation ou d'une charge restait affichée
+    // a field REMOVED from the state (`delete s.x`) is cleared on the client: `null` = "clear this field"
+    // in a patch. Without this, the end of an installation or of a charge stayed displayed
     for (const k of Object.keys(prev)) {
       if (!(k in cur)) { patch[k] = null; changed = true }
     }

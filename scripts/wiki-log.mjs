@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 /**
- * Archive par mois les entrées de `doc/log.md` antérieures au mois en cours.
+ * Archives by month the entries of `doc/log.md` older than the current month.
  *
- * `doc/log.md` ne garde que le mois en cours. Toute entrée `## [AAAA-MM-JJ] …` d'un mois antérieur
- * part dans `doc/log/AAAA-MM.md` (une archive par mois, plus récentes en haut). Le script tient aussi
- * le catalogue `doc/log/README.md` et les blocs `<!-- log-nav:… -->` (mois précédent / suivant) en
- * tête et en pied de `log.md` et de chaque archive.
+ * `doc/log.md` only keeps the current month. Every entry `## [YYYY-MM-DD] …` of an earlier month
+ * goes into `doc/log/YYYY-MM.md` (one archive per month, most recent at the top). The script also keeps
+ * the catalog `doc/log/README.md` and the `<!-- log-nav:… -->` blocks (previous / next month) at
+ * the head and foot of `log.md` and of each archive.
  *
- * Décision mécanique, script idempotent, sans effet quand il n'y a rien à faire : les skills qui
- * écrivent dans `log.md` le lancent avant chaque ajout. Robuste aux merges : une entrée déjà dans son
- * archive (même texte) n'est pas dupliquée, une entrée d'un mois déjà archivé rejoint son archive à
- * sa place. Les entrées sont déplacées telles quelles : seul l'ordre change, et les blocs log-nav.
+ * Mechanical decision, idempotent script, no effect when there is nothing to do: the skills that
+ * write into `log.md` run it before each addition. Robust to merges: an entry already in its
+ * archive (same text) is not duplicated, an entry of an already archived month joins its archive in
+ * its place. The entries are moved as they are: only the order changes, and the log-nav blocks.
  *
- *   node scripts/wiki-log.mjs                 archive et régénère
- *   node scripts/wiki-log.mjs --check         n'écrit rien ; code 1 si un archivage est nécessaire
- *   node scripts/wiki-log.mjs --month 2026-11 mois courant forcé (essai)
+ *   node scripts/wiki-log.mjs                 archives and regenerates
+ *   node scripts/wiki-log.mjs --check         writes nothing; code 1 if an archiving is needed
+ *   node scripts/wiki-log.mjs --month 2026-11 forced current month (trial)
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
@@ -40,7 +40,7 @@ const navEnd = '<!-- log-nav:end -->'
 
 const read = (path) => (existsSync(path) ? readFileSync(path, 'utf8').replace(/\r\n/g, '\n') : null)
 
-/** Découpe un journal en { head, entries[] } ; les blocs log-nav sont retirés avant. */
+/** Splits a log into { head, entries[] }; the log-nav blocks are removed beforehand. */
 function splitLog(text) {
   const parts = text.replace(navRe, '\n\n').split(headingRe)
   const entries = parts.slice(1).map((part) => {
@@ -50,11 +50,11 @@ function splitLog(text) {
   return { head: parts[0].trimEnd(), entries }
 }
 
-/** Tri par date décroissante ; `sort` est stable : l'ordre d'origine tient à date égale. */
+/** Sorted by descending date; `sort` is stable: the original order holds on equal dates. */
 const sortEntries = (entries) => [...entries].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
 const joinEntries = (entries) => entries.map((e) => e.text).join('\n\n')
 
-// --- État courant ---------------------------------------------------------------
+// --- Current state ---------------------------------------------------------------
 
 const logText = read(logFile)
 if (logText === null) throw new Error(`log.md introuvable : ${logFile}`)
@@ -67,7 +67,7 @@ if (existsSync(archiveDir)) {
   }
 }
 
-// --- Déplacement des entrées antérieures au mois courant --------------------------
+// --- Moving the entries older than the current month --------------------------
 
 const keep = log.entries.filter((e) => e.month >= month)
 const moved = new Map()
@@ -89,17 +89,17 @@ for (const [m, entries] of moved) {
   }
   dupCount += entries.length - fresh.length
   movedCount += fresh.length
-  // Venues de log.md, elles passent devant les entrées déjà archivées à date égale (écrites après).
+  // Coming from log.md, they go ahead of the entries already archived on equal date (written after).
   archives.set(m, sortEntries([...fresh, ...existing]))
 }
 
-// --- Navigation et sorties --------------------------------------------------------
+// --- Navigation and outputs --------------------------------------------------------
 
 const months = [...archives.keys()].sort().reverse()
 const total = months.reduce((n, m) => n + archives.get(m).length, 0)
 const outputs = new Map()
 
-// log.md : le bloc de navigation se place sous l'introduction, avant un éventuel `---` qui la clôt.
+// log.md: the navigation block goes under the introduction, before a possible `---` that closes it.
 let head = log.head
 let headRule = ''
 const ruled = head.match(/^([\s\S]*?)\n+---$/)
@@ -135,7 +135,7 @@ months.forEach((m, i) => {
   )
 })
 
-/** « a 3, b 1 » : valeurs comptées, les plus fréquentes d'abord, puis par nom. */
+/** "a 3, b 1": counted values, the most frequent first, then by name. */
 function tally(values, limit = Infinity) {
   const counts = new Map()
   for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1)
@@ -185,7 +185,7 @@ ${rows.join('\n')}
   )
 }
 
-// --- Écriture ---------------------------------------------------------------------
+// --- Writing ---------------------------------------------------------------------
 
 const changed = [...outputs].filter(([path, text]) => read(path) !== text).map(([path]) => path)
 const rel = (p) => relative(root, p).replaceAll('\\', '/')

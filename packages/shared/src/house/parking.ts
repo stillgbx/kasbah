@@ -3,27 +3,27 @@ import type { DeviceState } from '../devices/state'
 import { pointInPolygon, type Vec2 } from './geometry/vec2'
 import type { House, Parking, Room, Zone } from './schema'
 
-// Ce qu'une place de stationnement sait faire : dire où sont ses quatre coins, à quelle distance
-// tombe un point, et — le tout venant — quel engin s'y range. Le format du champ vit dans
-// `schema.ts` (`parkingSchema`), qui dit POURQUOI il existe ; ici, c'est la règle.
+// What a parking spot knows how to do: tell where its four corners are, at what distance
+// a point falls, and — the most common case — which vehicle parks in it. The format of the field lives in
+// `schema.ts` (`parkingSchema`), which says WHY it exists; here, it is the rule.
 //
-// Rien de tout cela ne touche Three : la scène 3D applique ce que ces fonctions décident, et les
-// tests vérifient la règle sans monter de scène.
+// None of this touches Three: the 3D scene applies what these functions decide, and the
+// tests check the rule without mounting a scene.
 
 /**
- * Distance (m) au-delà du rectangle où un engin s'accroche encore, quand la place n'en dit rien.
- * Deux mètres : l'ordre de grandeur du biais qui reste une fois le `gpsOffset` d'un appareil réglé
- * (récepteur contre un mur, origine de la maison approchée). Plus large, deux places voisines se
- * disputeraient la même voiture ; plus étroit, une voiture garée à sa place n'y rentrerait pas.
+ * Distance (m) beyond the rectangle where a vehicle still snaps, when the spot says nothing about it.
+ * Two meters: the order of magnitude of the bias that remains once a device's `gpsOffset` is set
+ * (receiver against a wall, approximated house origin). Wider, two neighboring spots would
+ * fight over the same car; narrower, a car parked in its spot would not fit in it.
  */
 export const PARKING_SNAP_MARGIN = 2
 
-/** Arrondi au centimètre : ce que ces fonctions rendent part dans `house.json` (cf. `openings.ts`). */
+/** Rounded to the centimeter: what these functions return goes into `house.json` (cf. `openings.ts`). */
 const cm = (v: number) => Math.round(v * 100) / 100
 
 /**
- * Repère de la place : `fwd` vers l'avant, `right` vers sa droite. `yaw` suit la convention des
- * appareils (0 = face à +y, sens trigonométrique), donc l'avant est `(-sin yaw, cos yaw)`.
+ * Reference frame of the spot: `fwd` toward the front, `right` toward its right. `yaw` follows the convention of the
+ * devices (0 = facing +y, counterclockwise), so the front is `(-sin yaw, cos yaw)`.
  */
 export function parkingAxes(p: Pick<Parking, 'yaw'>): { fwd: Vec2; right: Vec2 } {
   const a = (p.yaw * Math.PI) / 180
@@ -31,7 +31,7 @@ export function parkingAxes(p: Pick<Parking, 'yaw'>): { fwd: Vec2; right: Vec2 }
   return { fwd: [-s, c], right: [c, s] }
 }
 
-/** Les quatre coins, dans l'ordre avant-droit, avant-gauche, arrière-gauche, arrière-droit. */
+/** The four corners, in the order front-right, front-left, rear-left, rear-right. */
 export function parkingCorners(p: Parking): [Vec2, Vec2, Vec2, Vec2] {
   const { fwd, right } = parkingAxes(p)
   const [w, l] = p.size
@@ -42,14 +42,14 @@ export function parkingCorners(p: Parking): [Vec2, Vec2, Vec2, Vec2] {
   return [at(l / 2, w / 2), at(l / 2, -w / 2), at(-l / 2, -w / 2), at(-l / 2, w / 2)]
 }
 
-/** Un point dans le repère de la place : `[le long (avant +), le travers (droite +)]`, en mètres. */
+/** A point in the reference frame of the spot: `[along (front +), across (right +)]`, in meters. */
 export function toParkingFrame(p: Parking, xy: Vec2): Vec2 {
   const { fwd, right } = parkingAxes(p)
   const dx = xy[0] - p.center[0], dy = xy[1] - p.center[1]
   return [dx * fwd[0] + dy * fwd[1], dx * right[0] + dy * right[1]]
 }
 
-/** Distance (m) d'un point au rectangle de la place — **0 s'il est dedans**. */
+/** Distance (m) from a point to the rectangle of the spot — **0 if it is inside**. */
 export function parkingDistance(p: Parking, xy: Vec2): number {
   const [u, v] = toParkingFrame(p, xy)
   const [w, l] = p.size
@@ -57,8 +57,8 @@ export function parkingDistance(p: Parking, xy: Vec2): number {
 }
 
 /**
- * Cet appareil a-t-il le droit de cette place ? Le kind d'abord (une voiture ne se gare pas sur la
- * base d'un robot), puis la réservation : une place qui nomme un appareil n'est qu'à lui.
+ * Is this device entitled to this spot? The kind first (a car does not park on a
+ * robot's base), then the reservation: a spot that names a device is only for it.
  */
 export function parkingAccepts(p: Parking, kind: DeviceKind, deviceId?: string): boolean {
   if (p.accepts !== kind) return false
@@ -66,12 +66,12 @@ export function parkingAccepts(p: Parking, kind: DeviceKind, deviceId?: string):
 }
 
 /**
- * L'engin est-il RANGÉ, c'est-à-dire immobile pour de bon ?
+ * Is the vehicle PARKED, that is, truly motionless?
  *
- * La règle est « au repos sauf preuve du contraire », et c'est un choix : la R5 ne publie ni vitesse,
- * ni rapport, ni état de veille (seule la Tesla les donne). Exiger la preuve de l'arrêt reviendrait
- * à ne jamais ranger la voiture qui en a le plus besoin. On accroche donc par défaut, et on lâche
- * dès que le fabricant DIT que l'engin bouge — une Tesla qui roule continue de suivre son GPS.
+ * The rule is "at rest unless proven otherwise", and it is a choice: the R5 publishes neither speed,
+ * nor gear, nor sleep state (only the Tesla gives them). Requiring proof of the stop would amount
+ * to never parking the car that needs it the most. So we snap by default, and let go
+ * as soon as the vendor SAYS the vehicle is moving — a driving Tesla keeps following its GPS.
  */
 export function atRest(state: DeviceState | undefined): boolean {
   if (!state) return true
@@ -81,7 +81,7 @@ export function atRest(state: DeviceState | undefined): boolean {
   return true
 }
 
-/** Un engin candidat à une place : sa clé dans la scène, ce qu'il est, et où son GPS le pose. */
+/** A vehicle candidate for a spot: its key in the scene, what it is, and where its GPS puts it. */
 export interface ParkingCandidate {
   key: string
   kind: DeviceKind
@@ -90,15 +90,15 @@ export interface ParkingCandidate {
   atRest: boolean
 }
 
-/** Où la place range l'engin : son centre, et son cap. */
+/** Where the spot parks the vehicle: its center, and its heading. */
 export interface ParkingFix { parkingId: string; position: Vec2; yaw: number }
 
 /**
- * Qui se range où, pour tous les engins d'un coup. Le résultat est indexé par `key` de candidat.
+ * Who parks where, for all the vehicles at once. The result is indexed by candidate `key`.
  *
- * Une place ne reçoit qu'UN engin et un engin ne prend qu'UNE place : sans cela, deux voitures
- * rentrées le même soir se superposeraient dans le garage le plus proche des deux relevés. Le plus
- * près sert le premier — c'est la seule règle qui ne dépende pas de l'ordre du fichier.
+ * A spot only receives ONE vehicle and a vehicle only takes ONE spot: without this, two cars
+ * returned the same evening would overlap in the garage closest to the two readings. The closest
+ * is served first — it is the only rule that does not depend on the order of the file.
  */
 export function assignParkings(
   parkings: readonly Parking[], candidates: readonly ParkingCandidate[],
@@ -123,29 +123,29 @@ export function assignParkings(
   return out
 }
 
-/** Ce qui PORTE une place : sa pièce, l'emprise de son niveau, sinon la zone ou le terrain. */
+/** What CARRIES a spot: its room, the footprint of its level, otherwise the zone or the terrain. */
 export interface ParkingHost { kind: 'room' | 'level' | 'zone' | 'terrain'; id: string; name: string; polygon: Vec2[] }
 
 /**
- * L'hôte d'une place, cherché sous son centre. Les pièces sont essayées du niveau le plus BAS au
- * plus haut, comme pour le cap d'un véhicule (`HouseScene.vehicleYaw`) : on se gare au rez-de-
- * chaussée, pas dans la chambre qui le surplombe.
+ * The host of a spot, searched under its center. The rooms are tried from the LOWEST level to the
+ * highest, as for a vehicle's heading (`HouseScene.vehicleYaw`): one parks on the ground
+ * floor, not in the bedroom that overhangs it.
  *
- * C'est lui qui donne les quatre cotes du panneau : on mesure une place au mètre ruban depuis les
- * murs du garage, pas depuis l'origine d'un fichier.
+ * It is what gives the four dimensions of the panel: a spot is measured with a tape measure from the
+ * walls of the garage, not from the origin of a file.
  */
 export function parkingHost(house: House, p: Parking): ParkingHost | null {
   const elevation = (levelId: string) => house.levels.find((l) => l.id === levelId)?.elevation ?? 0
-  // Le NIVEAU de la place commande la recherche : une place posée au premier n'a rien à mesurer
-  // depuis le salon qui est dessous. Sans niveau, elle est au sol et les pièces sont essayées du
-  // plus bas au plus haut — ce qui fait qu'une place écrite avant ce champ se cote comme avant.
+  // The LEVEL of the spot drives the search: a spot placed on the first floor has nothing to measure
+  // from the living room below it. Without a level, it is on the ground and the rooms are tried from the
+  // lowest to the highest — which means a spot written before this field is measured as before.
   const rooms: Room[] = p.levelId
     ? house.rooms.filter((r) => r.levelId === p.levelId)
     : [...house.rooms].sort((a, b) => elevation(a.levelId) - elevation(b.levelId))
   const room = rooms.find((r) => pointInPolygon(p.center, r.polygon))
   if (room) return { kind: 'room', id: room.id, name: room.name, polygon: room.polygon }
-  // Un niveau sans pièce sous le point — le toit qui porte une aire de drone — rend son EMPRISE
-  // quand elle est déclarée ; sinon il n'y a rien à coter, et le panneau le dit.
+  // A level without a room under the point — the roof that carries a drone pad — returns its FOOTPRINT
+  // when declared; otherwise there is nothing to measure, and the panel says so.
   if (p.levelId) {
     const level = house.levels.find((l) => l.id === p.levelId)
     return level?.outline && pointInPolygon(p.center, level.outline)
@@ -158,11 +158,11 @@ export function parkingHost(house: House, p: Parking): ParkingHost | null {
   return null
 }
 
-/** Les quatre côtés d'une place, dans l'ordre où le panneau les montre. */
+/** The four sides of a spot, in the order the panel shows them. */
 export const PARKING_SIDES = ['front', 'back', 'left', 'right'] as const
 export type ParkingSide = (typeof PARKING_SIDES)[number]
 
-/** Distance du bord `side` au contour de l'hôte, `null` si le rayon n'en rencontre aucun. */
+/** Distance from the edge `side` to the outline of the host, `null` if the ray meets none. */
 function gapTo(host: readonly Vec2[], from: Vec2, dir: Vec2): number | null {
   let best: number | null = null
   const n = host.length
@@ -171,8 +171,8 @@ function gapTo(host: readonly Vec2[], from: Vec2, dir: Vec2): number | null {
     const e: Vec2 = [b[0] - a[0], b[1] - a[1]]
     const den = dir[0] * e[1] - dir[1] * e[0]
     if (Math.abs(den) < 1e-9) continue
-    const t = ((a[0] - from[0]) * e[1] - (a[1] - from[1]) * e[0]) / den      // le long du rayon
-    const s = ((a[0] - from[0]) * dir[1] - (a[1] - from[1]) * dir[0]) / den  // le long de l'arête
+    const t = ((a[0] - from[0]) * e[1] - (a[1] - from[1]) * e[0]) / den      // along the ray
+    const s = ((a[0] - from[0]) * dir[1] - (a[1] - from[1]) * dir[0]) / den  // along the edge
     if (t < -1e-9 || s < -1e-9 || s > 1 + 1e-9) continue
     if (best === null || t < best) best = t
   }
@@ -180,16 +180,16 @@ function gapTo(host: readonly Vec2[], from: Vec2, dir: Vec2): number | null {
 }
 
 /**
- * Les quatre cotes d'une place dans son hôte : ce qui la sépare du contour devant, derrière, à
- * gauche et à droite. C'est ainsi qu'on pose une place de garage — à tant du mur du fond, à tant du
- * mur de côté — et ce sont les quatre nombres que le panneau règle, comme les deux cotes d'une
- * ouverture (`openingGaps`).
+ * The four dimensions of a spot in its host: what separates it from the outline in front, behind, on the
+ * left and on the right. It is how a garage spot is placed — so far from the back wall, so far from the
+ * side wall — and they are the four numbers the panel sets, like the two dimensions of an
+ * opening (`openingGaps`).
  *
- * Chaque cote part du MILIEU du bord concerné, droit devant lui. Un côté qui ne rencontre pas le
- * contour (place à cheval sur le bord de son hôte) vaut `null` : on n'invente pas une mesure.
+ * Each dimension starts from the MIDDLE of the edge concerned, straight ahead of it. A side that does not meet the
+ * outline (spot straddling the edge of its host) is `null`: a measurement is not invented.
  *
- * **Gauche et droite se disent depuis la place**, c'est-à-dire assis dans la voiture garée : la
- * droite de la place est la droite du conducteur.
+ * **Left and right are told from the spot**, that is, sitting in the parked car: the
+ * right of the spot is the driver's right.
  */
 export function parkingGaps(host: readonly Vec2[], p: Parking): Record<ParkingSide, number | null> {
   const { fwd, right } = parkingAxes(p)
@@ -204,12 +204,12 @@ export function parkingGaps(host: readonly Vec2[], p: Parking): Record<ParkingSi
 }
 
 /**
- * Cote voulue sur un côté → nouveau centre. La place GLISSE de ce qui manque, le long de l'axe du
- * côté saisi : régler la cote avant recule ou avance la voiture, la cote de gauche la déporte.
+ * Wanted dimension on one side → new center. The spot SLIDES by what is missing, along the axis of the
+ * side entered: setting the front dimension moves the car back or forward, the left dimension shifts it sideways.
  *
- * Le rectangle n'est pas borné ici : un centre sorti de l'hôte se voit tout de suite (les cotes
- * passent à « — »), et borner reviendrait à refuser en silence une place qu'on est en train de
- * déplacer d'un mur à l'autre.
+ * The rectangle is not bounded here: a center that left the host shows immediately (the dimensions
+ * turn to "—"), and bounding would amount to silently refusing a spot that one is in the middle of
+ * moving from one wall to the other.
  */
 export function fitParkingGap(host: readonly Vec2[], p: Parking, side: ParkingSide, wanted: number): Vec2 | null {
   const gaps = parkingGaps(host, p)
@@ -222,10 +222,10 @@ export function fitParkingGap(host: readonly Vec2[], p: Parking, side: ParkingSi
 }
 
 /**
- * Cotes d'une place qu'on vient de poser, par nature de ce qui s'y range. Valeurs de CATALOGUE,
- * comme celles d'une ouverture (`newOpeningDims`) : une place de voiture fait 2,50 m sur 5 m, une
- * base de tondeuse tient dans 60 cm. Elles n'ont pas à être justes, elles ont à être reconnaissables
- * dans la scène — les quatre cotes du panneau les corrigent ensuite au centimètre.
+ * Dimensions of a spot that has just been placed, by kind of what parks in it. CATALOG values,
+ * like those of an opening (`newOpeningDims`): a car spot is 2.50 m by 5 m, a mower
+ * base fits in 60 cm. They do not have to be right, they have to be recognizable
+ * in the scene — the four dimensions of the panel then correct them to the centimeter.
  */
 export function newParkingSize(kind: DeviceKind): [number, number] {
   if (kind === 'vehicle') return [2.5, 5]
@@ -233,8 +233,8 @@ export function newParkingSize(kind: DeviceKind): [number, number] {
   return [0.5, 0.5]
 }
 
-/** Ce qu'on affiche pour DÉSIGNER une place : son nom s'il lui en a été donné un, sinon son id. */
+/** What is displayed to DESIGNATE a spot: its name if one was given to it, otherwise its id. */
 export const parkingLabel = (p: Parking): string => p.name ?? p.id
 
-/** Une place est-elle DESSINÉE au sol (marquage) plutôt qu'en objet (base de robot) ? */
+/** Is a spot DRAWN on the ground (marking) rather than as an object (robot base)? */
 export const isParkingBay = (p: Parking): boolean => p.accepts === 'vehicle'

@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
- * Garde-fou des données personnelles : refuse ce qui identifierait la vraie maison ou sa famille.
+ * Personal data safeguard: refuses what would identify the real house or its family.
  *
- * La liste des valeurs interdites est elle-même sensible : elle vit dans `.private-denylist` à la
- * racine, fichier gitignoré qui n'existe que chez le propriétaire. Une ligne par valeur, littérale,
- * ou `re:<expression régulière>` ; `#` commente. Sans ce fichier, le script ne bloque rien.
+ * The list of forbidden values is itself sensitive: it lives in `.private-denylist` at the
+ * root, a gitignored file that only exists at the owner's. One line per value, literal,
+ * or `re:<regular expression>`; `#` comments. Without this file, the script blocks nothing.
  *
- *   node scripts/check-private.mjs            tout le dépôt suivi (fichiers de travail)
- *   node scripts/check-private.mjs --staged   les lignes ajoutées du commit en préparation (hook pre-commit)
- *   node scripts/check-private.mjs --message <fichier>   le message de commit (hook commit-msg)
+ *   node scripts/check-private.mjs            the whole tracked repo (working files)
+ *   node scripts/check-private.mjs --staged   the added lines of the commit being prepared (pre-commit hook)
+ *   node scripts/check-private.mjs --message <file>   the commit message (commit-msg hook)
  *
- * Hooks : `npm run hooks` pointe git sur `.githooks/` (une fois par clone).
+ * Hooks: `npm run hooks` points git at `.githooks/` (once per clone).
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -21,7 +21,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const listFile = join(root, '.private-denylist')
 
 if (!existsSync(listFile)) {
-  if (process.argv.includes('--all')) console.warn('[check-private] pas de .private-denylist : rien à vérifier')
+  if (process.argv.includes('--all')) console.warn('[check-private] no .private-denylist: nothing to check')
   process.exit(0)
 }
 
@@ -53,7 +53,7 @@ if (mode === '--message') {
 }
 
 if (found.length) {
-  // On nomme l'endroit, jamais la valeur : la sortie peut finir dans un journal.
-  console.error(`[check-private] donnée personnelle trouvée (voir .private-denylist) :\n  ${[...new Set(found)].join('\n  ')}`)
+  // We name the place, never the value: the output may end up in a log.
+  console.error(`[check-private] personal data found (see .private-denylist):\n  ${[...new Set(found)].join('\n  ')}`)
   process.exit(1)
 }

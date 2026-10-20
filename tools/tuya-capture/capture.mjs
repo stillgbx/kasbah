@@ -1,30 +1,30 @@
 #!/usr/bin/env node
-// Capture des DPS (« data points ») d'un appareil Tuya en LOCAL, sans cloud au fonctionnement.
-// But : découvrir quel DP porte quoi sur le ventilateur CREATE (marche, vitesse, lumière,
-// intensité…) et sur quelle échelle, en observant ce qui change quand on actionne la
-// télécommande RF ou l'appli du fabricant. La sortie JSONL sert ensuite de fixture au plugin.
+// Capture of the DPS ("data points") of a Tuya device LOCALLY, with no cloud at run time.
+// Goal: discover which DP carries what on the CREATE fan (on/off, speed, light,
+// intensity…) and on what scale, by observing what changes when the RF remote
+// or the vendor's app is operated. The JSONL output then serves as a fixture for the plugin.
 //
-// Prérequis (une seule fois, pour obtenir l'id et la clé locale) :
-//   1. Compte sur https://iot.tuya.com → Cloud → Development → projet « Smart Home ».
-//      Choisir le data center de l'appli (Europe centrale pour un compte français).
-//   2. Onglet « Link Tuya App Account » → scanner le QR code depuis l'appli mobile
-//      (Smart Life / Tuya Smart ; pour l'appli CREATE, essayer « Others » — sinon ré-appairer le
-//      ventilateur dans Smart Life). Le service « IoT Core » est un essai d'un mois : il ne sert
-//      qu'à lire la clé, plus jamais ensuite. La clé change si l'appareil est ré-appairé.
-//   3. npx @tuyapi/cli wizard → liste noms, ids et clés locales des appareils du compte.
+// Prerequisites (only once, to obtain the id and the local key):
+//   1. Account on https://iot.tuya.com → Cloud → Development → "Smart Home" project.
+//      Choose the data center of the app (Central Europe for a French account).
+//   2. "Link Tuya App Account" tab → scan the QR code from the mobile app
+//      (Smart Life / Tuya Smart; for the CREATE app, try "Others" — otherwise re-pair the
+//      fan in Smart Life). The "IoT Core" service is a one-month trial: it is only used
+//      to read the key, never again afterwards. The key changes if the device is re-paired.
+//   3. npx @tuyapi/cli wizard → lists names, ids and local keys of the devices of the account.
 //
-// Usage (dans tools/tuya-capture, après `npm install`) :
+// Usage (in tools/tuya-capture, after `npm install`):
 //   npm run capture -- --id <deviceId> --key <localKey> [--ip <ip>] [--version 3.3|3.4|3.5]
-//                       [--set <dp>=<valeurJSON>] [--out captures/ventilateur.jsonl]
-//   ou via .env (copier .env.example) : TUYA_ID, TUYA_KEY, TUYA_IP, TUYA_VERSION.
+//                       [--set <dp>=<JSONvalue>] [--out captures/ventilateur.jsonl]
+//   or via .env (copy .env.example): TUYA_ID, TUYA_KEY, TUYA_IP, TUYA_VERSION.
 //
-// Une fois connecté, taper dans le terminal :
-//   <dp> <valeurJSON>   → envoie la valeur sur ce DP (ex. `3 4` pour vitesse 4, `1 true`, `9 false`)
-//   get                 → relit tous les DPS
-//   Ctrl+C              → déconnecte et affiche le récapitulatif des valeurs vues par DP
+// Once connected, type in the terminal:
+//   <dp> <JSONvalue>    → sends the value on that DP (e.g. `3 4` for speed 4, `1 true`, `9 false`)
+//   get                 → re-reads all the DPS
+//   Ctrl+C              → disconnects and displays the summary of the values seen per DP
 //
-// Piège connu : un appareil Tuya n'accepte qu'UNE connexion locale à la fois. Fermer l'appli
-// mobile (ou la sortir du même Wi-Fi) si la connexion est refusée ou tombe aussitôt.
+// Known pitfall: a Tuya device only accepts ONE local connection at a time. Close the mobile
+// app (or take it off the same Wi-Fi) if the connection is refused or drops immediately.
 
 import { parseArgs } from 'node:util'
 import { mkdir, appendFile } from 'node:fs/promises'
@@ -50,21 +50,21 @@ const ip = args.ip ?? process.env.TUYA_IP
 const version = args.version ?? process.env.TUYA_VERSION
 
 if (args.help || !id || !key) {
-  console.error(`Usage : node capture.mjs --id <deviceId> --key <localKey> [--ip <ip>] [--version 3.3|3.4|3.5]
-                        [--set <dp>=<valeurJSON>] [--out captures/ventilateur.jsonl]
-Ou via variables d'environnement TUYA_ID, TUYA_KEY, TUYA_IP, TUYA_VERSION (fichier .env pris en compte).`)
+  console.error(`Usage: node capture.mjs --id <deviceId> --key <localKey> [--ip <ip>] [--version 3.3|3.4|3.5]
+                        [--set <dp>=<JSONvalue>] [--out captures/ventilateur.jsonl]
+Or via environment variables TUYA_ID, TUYA_KEY, TUYA_IP, TUYA_VERSION (.env file taken into account).`)
   process.exit(args.help ? 0 : 2)
 }
 
 const now = () => new Date().toISOString()
 const log = (...parts) => console.log(now().slice(11, 23), ...parts)
 
-// Journal JSONL : une ligne par événement, réutilisable telle quelle comme fixture (anonymiser
-// l'id avant de la committer).
+// JSONL log: one line per event, reusable as is as a fixture (anonymize
+// the id before committing it).
 await mkdir(dirname(args.out), { recursive: true })
 const record = (event, payload) => appendFile(args.out, JSON.stringify({ at: now(), event, ...payload }) + '\n')
 
-/** Dernier état complet connu et, par DP, la liste ordonnée des valeurs distinctes observées. */
+/** Last known complete state and, per DP, the ordered list of distinct values observed. */
 const state = {}
 const seen = new Map()
 
@@ -101,7 +101,7 @@ const device = new TuyAPI({
   key,
   ...(ip ? { ip } : {}),
   ...(version ? { version } : {}),
-  // On veut voir chaque trame arriver nous-mêmes, pas un get implicite à la connexion.
+  // We want to see each frame arrive ourselves, not an implicit get on connection.
   issueGetOnConnect: false,
   issueRefreshOnConnect: false,
 })
@@ -112,20 +112,20 @@ device.on('error', (err) => {
   log('erreur :', err?.message ?? err)
   void record('error', { message: String(err?.message ?? err) })
 })
-// `data` : réponse complète (ou trame spontanée) ; `dp-refresh` : mise à jour partielle poussée
-// par l'appareil. Les deux portent { dps } — c'est là qu'on lit ce que la télécommande a changé.
+// `data`: complete response (or spontaneous frame); `dp-refresh`: partial update pushed
+// by the device. Both carry { dps } — that is where one reads what the remote changed.
 device.on('data', (msg) => absorb('data', msg?.dps))
 device.on('dp-refresh', (msg) => absorb('dp-refresh', msg?.dps))
 
-// Pas d'IP fournie : recherche par diffusion UDP (l'appareil annonce son IP et sa version).
+// No IP provided: search by UDP broadcast (the device announces its IP and its version).
 if (!ip) {
   log('recherche de l\'appareil sur le LAN (10 s)…')
   try {
     await device.find({ timeout: 10 })
     log(`trouvé : ip=${device.device.ip} version=${device.device.version}`)
   } catch (err) {
-    console.error(`Appareil introuvable par diffusion : ${err?.message ?? err}
-→ Donner --ip (et --version 3.5 pour un firmware récent, qui ne diffuse pas sur les ports écoutés).`)
+    console.error(`Device not found by broadcast: ${err?.message ?? err}
+→ Give --ip (and --version 3.5 for a recent firmware, which does not broadcast on the listened ports).`)
     process.exit(1)
   }
 }
@@ -137,16 +137,16 @@ const first = await device.get({ schema: true })
 absorb('get', first?.dps ?? first)
 printTable()
 
-// Commande unique passée en ligne : utile pour scripter (ex. tester chaque vitesse 1 à 6).
+// Single command passed on the command line: useful for scripting (e.g. testing each speed from 1 to 6).
 if (args.set) {
   const [dp, ...rest] = args.set.split('=')
   await sendSet(dp, rest.join('='))
 }
 
 console.log(`
-Actionnez la télécommande RF ou l'appli du fabricant : chaque DP qui change s'affiche ci-dessus
-et va dans ${args.out}. Tapez « <dp> <valeur> » pour envoyer une commande, « get » pour tout relire,
-Ctrl+C pour terminer.`)
+Operate the RF remote or the vendor's app: each DP that changes is displayed above
+and goes into ${args.out}. Type "<dp> <value>" to send a command, "get" to re-read everything,
+Ctrl+C to finish.`)
 
 const rl = createInterface({ input: process.stdin })
 rl.on('line', async (line) => {
@@ -171,13 +171,13 @@ async function sendSet(dp, raw) {
   try {
     value = JSON.parse(raw)
   } catch {
-    value = raw // valeur textuelle brute (énumérations Tuya : "low", "forward"…)
+    value = raw // raw text value (Tuya enumerations: "low", "forward"…)
   }
   log(`→ set DP ${dpNumber} = ${JSON.stringify(value)}`)
   void record('set', { dps: { [dpNumber]: value } })
   try {
     const res = await device.set({ dps: dpNumber, set: value })
-    // L'appareil répond souvent avec l'état résultant ; s'il refuse, la valeur ne bouge pas.
+    // The device often answers with the resulting state; if it refuses, the value does not move.
     if (res?.dps) absorb('set-response', res.dps)
     else log('réponse :', JSON.stringify(res))
   } catch (err) {
@@ -186,7 +186,7 @@ async function sendSet(dp, raw) {
 }
 
 process.on('SIGINT', () => {
-  console.log('\n\nRécapitulatif des valeurs observées par DP :')
+  console.log('\n\nSummary of the values observed per DP:')
   console.table(
     [...seen.entries()]
       .sort(([a], [b]) => Number(a) - Number(b))

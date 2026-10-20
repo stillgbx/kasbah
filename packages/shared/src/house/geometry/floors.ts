@@ -5,7 +5,7 @@ import { centroid } from './vec2'
 
 const THIN_SLAB = 0.05
 
-/** Dalles de sol (z locaux : la face supérieure est à 0, la dalle descend sous le niveau). */
+/** Floor slabs (local z: the top face is at 0, the slab goes down below the level). */
 export function computeFloors(
   level: Level, roomsOnLevel: readonly Room[], defaults: HouseDefaults,
   floorHoles?: ReadonlyMap<string, FloorHole[]>,

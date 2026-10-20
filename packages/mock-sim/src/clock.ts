@@ -1,5 +1,5 @@
-// Horloge injectable : le moteur ne touche jamais `Date.now`/`setInterval` directement,
-// ce qui permet des tests déterministes (ManualClock) et une accélération du temps simulé.
+// Injectable clock: the engine never touches `Date.now`/`setInterval` directly,
+// which allows deterministic tests (ManualClock) and an acceleration of the simulated time.
 
 export interface Clock {
   now(): number
@@ -17,7 +17,7 @@ export const systemClock: Clock = {
   clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
 }
 
-/** Horloge manuelle pour les tests : `advance(ms)` déclenche les timers échus dans l'ordre. */
+/** Manual clock for tests: `advance(ms)` fires the due timers in order. */
 export class ManualClock implements Clock {
   private t: number
   private seq = 0

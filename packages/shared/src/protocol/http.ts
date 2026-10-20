@@ -17,12 +17,12 @@ export type ScenesResponse = z.infer<typeof scenesResponseSchema>
 /** `GET /api/automations`. */
 export const automationsResponseSchema = z.object({ automations: z.array(automationEntrySchema) })
 export type AutomationsResponse = z.infer<typeof automationsResponseSchema>
-/** `PUT` et `PATCH /api/automations/:id` : l'automatisation écrite et son statut recalculé. */
+/** `PUT` and `PATCH /api/automations/:id`: the automation written and its recomputed status. */
 export const automationResponseSchema = z.object({ automation: automationEntrySchema })
-/** `POST /api/automations/:id/run` : le compte rendu, même en échec partiel. */
+/** `POST /api/automations/:id/run`: the report, even on partial failure. */
 export const automationRunResponseSchema = z.object({ run: automationRunSchema })
 
-/** Toutes les routes `/api/shopping` : la liste entière après l'opération. */
+/** All the `/api/shopping` routes: the whole list after the operation. */
 export const shoppingResponseSchema = z.object({ shopping: shoppingListSchema })
 
 export const PLUGIN_HEALTH_STATUSES = ['ok', 'degraded', 'needs_pairing', 'error', 'not_implemented', 'disabled'] as const
@@ -30,42 +30,42 @@ export const pluginHealthSchema = z.object({
   status: z.enum(PLUGIN_HEALTH_STATUSES),
   detail: z.string().optional(),
   deviceCount: z.number().int().optional(),
-  /** Noms des variables d'environnement lues par le plugin (jamais leurs valeurs). */
+  /** Names of the environment variables read by the plugin (never their values). */
   keys: z.array(z.string()).optional(),
   /**
-   * Consommation d'un quota, quand l'API du fabricant est FACTURÉE ou bornée et que le plugin se
-   * rationne (Tesla : les lectures du jour). `labelKey` est une clé i18n de l'app web — même
-   * convention que `PluginPart.labelKey`, le serveur ne connaît pas la langue de l'interface.
-   * Absent = ce plugin ne compte rien, et l'UI n'a rien à montrer.
+   * Consumption of a quota, when the vendor's API is BILLED or bounded and the plugin rations
+   * itself (Tesla: the day's reads). `labelKey` is an i18n key of the web app — same
+   * convention as `PluginPart.labelKey`, the server does not know the language of the interface.
+   * Absent = this plugin counts nothing, and the UI has nothing to show.
    */
   quota: z.object({
     used: z.number().min(0),
     limit: z.number().positive(),
     labelKey: z.string(),
-    /** `usd` : `used` et `limit` sont des DOLLARS, à formater comme une somme. Absent = un décompte. */
+    /** `usd`: `used` and `limit` are DOLLARS, to be formatted as an amount. Absent = a count. */
     unit: z.literal('usd').optional(),
-    /** Début de la période comptée (ms epoch), quand elle en a une : l'UI peut la dater. */
+    /** Start of the counted period (ms epoch), when it has one: the UI can date it. */
     since: z.number().optional(),
   }).optional(),
 })
 export type PluginHealth = z.infer<typeof pluginHealthSchema>
 
-/** Sous-item d'un plugin (un kind simulé par `mock`…) : ce que l'UI affiche et bascule. */
+/** Sub-item of a plugin (a kind simulated by `mock`…): what the UI displays and toggles. */
 export const pluginPartSchema = z.object({
   id: z.string(),
-  /** Clé i18n du libellé (`kinds.light`…) : le serveur ne connaît pas la langue de l'interface. */
+  /** i18n key of the label (`kinds.light`…): the server does not know the language of the interface. */
   labelKey: z.string(),
   enabled: z.boolean(),
 })
 export type PluginPartInfo = z.infer<typeof pluginPartSchema>
 
-/** Un plugin tel que le voit l'écran Réglages : ce qu'il est, ce qu'on en a choisi, comment il va. */
+/** A plugin as the Settings screen sees it: what it is, what was chosen for it, how it is doing. */
 export const pluginInfoSchema = z.object({
   id: z.string(),
-  /** Un squelette déclaré mais pas encore écrit ne s'active pas (interrupteur grisé). */
+  /** A skeleton declared but not yet written cannot be activated (switch grayed out). */
   implemented: z.boolean(),
   enabled: z.boolean(),
-  /** N'a de sens que pour un plugin à scènes ; absent sinon. */
+  /** Only makes sense for a plugin with scenes; absent otherwise. */
   autoDynamicForNewScenes: z.boolean().optional(),
   parts: z.array(pluginPartSchema),
   health: pluginHealthSchema,
@@ -75,10 +75,10 @@ export type PluginInfo = z.infer<typeof pluginInfoSchema>
 export const pluginsResponseSchema = z.object({ plugins: z.array(pluginInfoSchema) })
 
 /**
- * Une PROPRIÉTÉ que l'application sait montrer : une maison, un appartement. Un serveur lancé sans
- * maison (`KASBAH_HOUSE_FILE` absent) propose les démonstrations, en lecture seule (`demo`), et les
- * propriétés créées ou dupliquées sur ce poste ; une installation réelle n'en a qu'une, et la liste
- * ne compte alors qu'elle — le sélecteur ne s'affiche pas.
+ * A PROPERTY that the application can show: a house, an apartment. A server launched without a
+ * house (`KASBAH_HOUSE_FILE` absent) offers the demonstrations, read-only (`demo`), and the
+ * properties created or duplicated on this machine; a real installation only has one, and the list
+ * then only counts it — the selector is not displayed.
  */
 export const PROPERTY_KINDS = ['house', 'apartment'] as const
 export type PropertyKind = (typeof PROPERTY_KINDS)[number]
@@ -86,26 +86,26 @@ export const propertySummarySchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   kind: z.enum(PROPERTY_KINDS),
-  /** Propriété de démonstration : elle se regarde, elle ne se modifie pas (on la duplique). */
+  /** Demo property: it can be looked at, not modified (it is duplicated). */
   demo: z.boolean().optional(),
 })
 export type PropertySummary = z.infer<typeof propertySummarySchema>
-/** `GET /api/properties` : les propriétés et celle qui est montrée. `switchable` = on peut en changer. */
+/** `GET /api/properties`: the properties and the one that is shown. `switchable` = it can be changed. */
 export const propertiesResponseSchema = z.object({
   activeId: z.string().min(1),
   switchable: z.boolean(),
   properties: z.array(propertySummarySchema),
-  /** Le serveur sait créer et dupliquer une propriété (`POST /api/properties`, `…/duplicate`). */
+  /** The server can create and duplicate a property (`POST /api/properties`, `…/duplicate`). */
   canCreate: z.boolean().optional(),
-  /** Le mode montré : les démonstrations, ou les propriétés réelles du poste. Absent = maison imposée. */
+  /** The mode shown: the demonstrations, or the real properties of the machine. Absent = house imposed. */
   mode: z.enum(['demo', 'real']).optional(),
-  /** Il existe au moins une propriété réelle : le mode « réel » peut se choisir. */
+  /** At least one real property exists: the "real" mode can be chosen. */
   realAvailable: z.boolean().optional(),
 })
 export type PropertiesResponse = z.infer<typeof propertiesResponseSchema>
 
 const propertyNameSchema = z.string().trim().min(1).max(60)
-/** `POST /api/properties` : la maison d'une installation neuve (voir `newHouseJson`). */
+/** `POST /api/properties`: the house of a new installation (see `newHouseJson`). */
 export const newPropertyBodySchema = z.object({
   name: propertyNameSchema,
   kind: z.enum(PROPERTY_KINDS),
@@ -120,13 +120,13 @@ export const newPropertyBodySchema = z.object({
   roomName: propertyNameSchema,
 })
 export type NewPropertyBody = z.infer<typeof newPropertyBodySchema>
-/** `POST /api/properties/:id/duplicate` : la copie modifiable d'une propriété, sous un autre nom. */
+/** `POST /api/properties/:id/duplicate`: the editable copy of a property, under another name. */
 export const duplicatePropertyBodySchema = z.object({ name: propertyNameSchema })
 export const propertyCreatedSchema = z.object({ id: z.string().min(1) })
-/** Les deux modes d'un serveur sans maison imposée : démonstrations (lecture seule) ou propriétés réelles. */
+/** The two modes of a server without an imposed house: demonstrations (read-only) or real properties. */
 export const PROPERTY_MODES = ['demo', 'real'] as const
 export type PropertyMode = (typeof PROPERTY_MODES)[number]
-/** `POST /api/properties/mode` : passer en démo ou en réel (le serveur rouvre la propriété retenue du mode). */
+/** `POST /api/properties/mode`: switch to demo or real (the server reopens the property retained for the mode). */
 export const propertyModeBodySchema = z.object({ mode: z.enum(PROPERTY_MODES) })
 export type PluginsResponse = z.infer<typeof pluginsResponseSchema>
 
@@ -140,9 +140,9 @@ export type HealthResponse = z.infer<typeof healthResponseSchema>
 
 export const commandResponseSchema = z.object({ ok: z.literal(true) })
 
-/** Historique horaire d'un appareil énergie (moyennes par heure, ordre chronologique). */
+/** Hourly history of an energy device (averages per hour, chronological order). */
 export const energyHistoryPointSchema = z.object({
-  /** Début de l'heure (ms epoch). */
+  /** Start of the hour (ms epoch). */
   t: z.number(),
   productionW: z.number(),
   consumptionW: z.number(),
@@ -154,14 +154,14 @@ export type EnergyHistoryPoint = z.infer<typeof energyHistoryPointSchema>
 export type EnergyHistory = z.infer<typeof energyHistorySchema>
 
 /**
- * Prévisions d'un appareil `weather`, servies À LA DEMANDE (`GET /api/devices/:id/forecast`) et non
- * poussées : plusieurs Ko qui changent à chaque sondage n'ont rien à faire sur le WebSocket d'un
- * écran qui n'a pas la vue Météo ouverte — même arbitrage que l'historique énergie. Deux
- * granularités, chacune bornée : l'horaire pour la journée qui vient, le quotidien pour la semaine.
- * Les pourcentages sont sur 100, comme dans l'état.
+ * Forecasts of a `weather` device, served ON DEMAND (`GET /api/devices/:id/forecast`) and not
+ * pushed: several KB that change at every poll have no business on the WebSocket of a
+ * screen that does not have the Weather view open — same trade-off as the energy history. Two
+ * granularities, each bounded: hourly for the coming day, daily for the week.
+ * Percentages are out of 100, as in the state.
  */
 export const weatherHourlyPointSchema = z.object({
-  /** Début de l'heure (ms epoch). */
+  /** Start of the hour (ms epoch). */
   t: z.number(),
   condition: z.enum(WEATHER_CONDITIONS),
   tempC: z.number(),
@@ -171,7 +171,7 @@ export const weatherHourlyPointSchema = z.object({
   isDay: z.boolean(),
 })
 export const weatherDailyPointSchema = z.object({
-  /** Minuit local du jour (ms epoch). */
+  /** Local midnight of the day (ms epoch). */
   t: z.number(),
   condition: z.enum(WEATHER_CONDITIONS),
   minC: z.number(),
@@ -184,7 +184,7 @@ export const weatherDailyPointSchema = z.object({
 })
 export const weatherForecastSchema = z.object({
   deviceId: z.string(),
-  /** Heure du run ou du sondage dont ces prévisions sortent (ms epoch). */
+  /** Time of the run or poll these forecasts come from (ms epoch). */
   issuedAt: z.number(),
   hourly: z.array(weatherHourlyPointSchema),
   daily: z.array(weatherDailyPointSchema),
@@ -194,62 +194,62 @@ export type WeatherDailyPoint = z.infer<typeof weatherDailyPointSchema>
 export type WeatherForecast = z.infer<typeof weatherForecastSchema>
 
 /**
- * Journal d'un appareil : ce qu'il a CONSIGNÉ lui-même — erreurs, avertissements —, daté et parfois
- * positionné. Servi à la demande (`GET /api/devices/:id/journal`) par un plugin qui déclare la
- * capacité `journal`, comme les prévisions d'un appareil météo : c'est un historique, pas un état.
- * Le premier robot à le publier est la tondeuse Husqvarna (`GET /mowers/{id}/messages`).
+ * Log of a device: what it has itself LOGGED — errors, warnings —, dated and sometimes
+ * positioned. Served on demand (`GET /api/devices/:id/journal`) by a plugin that declares the
+ * `journal` capability, like the forecasts of a weather device: it is a history, not a state.
+ * The first robot to publish it is the Husqvarna mower (`GET /mowers/{id}/messages`).
  */
 export const JOURNAL_SEVERITIES = ['info', 'warning', 'error', 'fatal'] as const
 export type JournalSeverity = (typeof JOURNAL_SEVERITIES)[number]
 export const journalEntrySchema = z.object({
-  /** Quand (ms epoch, vrai instant). */
+  /** When (ms epoch, true instant). */
   at: z.number(),
   severity: z.enum(JOURNAL_SEVERITIES),
-  /** Code du fabricant, quand il en a un : c'est ce que le support demande. */
+  /** Vendor code, when it has one: it is what support asks for. */
   code: z.number().int().optional(),
-  /** Texte du fabricant, tel qu'il le publie (pas traduit). */
+  /** Vendor text, as it publishes it (not translated). */
   message: z.string().min(1),
-  /** Où c'est arrivé, quand l'appareil le sait — un GPS sans fix ne donne rien. */
+  /** Where it happened, when the device knows — a GPS without a fix gives nothing. */
   location: z.object({ lat: z.number(), lon: z.number() }).optional(),
 })
 export const deviceJournalSchema = z.object({
   deviceId: z.string(),
-  /** Du plus récent au plus ancien. */
+  /** From the most recent to the oldest. */
   entries: z.array(journalEntrySchema),
 })
 export type JournalEntry = z.infer<typeof journalEntrySchema>
 
 /**
- * Carte du terrain d'une tondeuse (capacité `site_map`), servie à la demande
- * (`GET /api/devices/:id/map`) : elle ne change que lorsqu'on retrace une zone dans l'appli du
- * fabricant. Repère LOCAL du robot, en mètres : `x` vers l'est, `y` vers le nord, origine
- * quelconque — elle ne se pose sur le monde que par la STATION (`station`), que la vue fait
- * coïncider avec la base du robot. Husqvarna la publie en SVG (`/maps/generated`, `/maps/zone`).
+ * Terrain map of a mower (`site_map` capability), served on demand
+ * (`GET /api/devices/:id/map`): it only changes when a zone is redrawn in the vendor's
+ * app. LOCAL frame of the robot, in meters: `x` toward the east, `y` toward the north, arbitrary
+ * origin — it is only placed on the world by the STATION (`station`), which the view makes
+ * coincide with the robot's base. Husqvarna publishes it as SVG (`/maps/generated`, `/maps/zone`).
  */
 /**
- * `lawn` : le terrain entier tel que le robot l'a relevé ; `work_area` : une zone de travail TRACÉE,
- * dont le `name` est celui de `workAreas[].name` (Husqvarna ne la relie pas autrement : son `id` de
- * carte est un UUID, pas le `workAreaId`). `rewilding` : une zone de RÉENSAUVAGEMENT (l'herbe y
- * pousse), que Husqvarna ne publie QUE sur la carte — elle n'est pas dans `stayOutZones`.
+ * `lawn`: the whole terrain as the robot surveyed it; `work_area`: a DRAWN work zone,
+ * whose `name` is that of `workAreas[].name` (Husqvarna does not link it otherwise: its map `id`
+ * is a UUID, not the `workAreaId`). `rewilding`: a REWILDING zone (grass grows there),
+ * which Husqvarna ONLY publishes on the map — it is not in `stayOutZones`.
  */
 export const SITE_MAP_SHAPE_KINDS = ['lawn', 'work_area', 'obstacle', 'stay_out', 'rewilding', 'guide', 'transport', 'station'] as const
 export type SiteMapShapeKind = (typeof SITE_MAP_SHAPE_KINDS)[number]
 export const siteMapShapeSchema = z.object({
   kind: z.enum(SITE_MAP_SHAPE_KINDS),
-  /** Identifiant du fabricant ; pour une zone d'exclusion, celui de `stayOutZones[].id` quand il le partage. */
+  /** Vendor identifier; for an exclusion zone, that of `stayOutZones[].id` when it shares it. */
   id: z.string(),
   name: z.string().optional(),
   /**
-   * Zone d'exclusion ou de réensauvagement : activée selon la CARTE (absent = activée). L'état du robot
-   * (`stayOutZones[].enabled`) prime quand il connaît la zone ; il ne connaît pas le réensauvagement.
+   * Exclusion or rewilding zone: activated according to the MAP (absent = activated). The robot's state
+   * (`stayOutZones[].enabled`) takes precedence when it knows the zone; it does not know rewilding.
    */
   enabled: z.boolean().optional(),
-  /** Polygone (zones, obstacles) ou ligne (câbles, chemins, station), en mètres. */
+  /** Polygon (zones, obstacles) or line (cables, paths, station), in meters. */
   points: z.array(z.tuple([z.number(), z.number()])),
 })
 export const siteMapSchema = z.object({
   deviceId: z.string(),
-  /** Le point de la station dans ce repère ; `null` = carte sans station, impossible à poser. */
+  /** The station point in this frame; `null` = map without a station, impossible to place. */
   station: z.tuple([z.number(), z.number()]).nullable(),
   shapes: z.array(siteMapShapeSchema),
 })
@@ -257,31 +257,31 @@ export type SiteMapShape = z.infer<typeof siteMapShapeSchema>
 export type SiteMap = z.infer<typeof siteMapSchema>
 
 /**
- * Ce qu'un appareil a CONSOMMÉ, par pas de temps — servi à la demande
- * (`GET /api/devices/:id/consumption`) comme les prévisions et le journal : c'est un historique,
- * pas un état, et il n'a rien à faire dans les messages poussés à chaque sondage.
+ * What a device has CONSUMED, per time step — served on demand
+ * (`GET /api/devices/:id/consumption`) like the forecasts and the log: it is a history,
+ * not a state, and it has no business in the messages pushed at every poll.
  *
- * Trois séries, parce qu'un compteur d'eau se lit à trois échelles et qu'aucune ne se déduit des
- * autres : `hourly` dit à quelle heure on tire, `daily` couvre la semaine ET le mois (la même
- * série sert les deux vues, inutile de la stocker deux fois), `monthly` donne les douze mois.
+ * Three series, because a water meter is read at three scales and none can be deduced from the
+ * others: `hourly` says at what hour water is drawn, `daily` covers the week AND the month (the same
+ * series serves both views, no need to store it twice), `monthly` gives the twelve months.
  *
- * Chaque point porte ce qui a été consommé PENDANT son pas, jamais un cumul : un graphique
- * additionne des barres, il ne dérive pas un compteur. C'est au plugin de faire cette
- * soustraction, parce que lui seul sait quand son compteur est reparti de zéro.
+ * Each point carries what was consumed DURING its step, never a cumulative total: a chart
+ * adds up bars, it does not derive a meter. It is up to the plugin to do this
+ * subtraction, because only it knows when its meter started over from zero.
  */
 export const consumptionPointSchema = z.object({
-  /** Début du pas (ms epoch) : heure pleine, minuit, ou premier jour du mois selon la série. */
+  /** Start of the step (ms epoch): full hour, midnight, or first day of the month depending on the series. */
   t: z.number().int(),
-  /** Volume consommé pendant CE pas, en litres. */
+  /** Volume consumed during THIS step, in liters. */
   litres: z.number().min(0),
 })
 export const deviceConsumptionSchema = z.object({
   deviceId: z.string(),
-  /** Du plus ancien au plus récent, un point par heure. Un pas jamais mesuré est absent, pas à zéro. */
+  /** From the oldest to the most recent, one point per hour. A step never measured is absent, not zero. */
   hourly: z.array(consumptionPointSchema),
-  /** Un point par jour. */
+  /** One point per day. */
   daily: z.array(consumptionPointSchema),
-  /** Un point par mois. */
+  /** One point per month. */
   monthly: z.array(consumptionPointSchema),
 })
 export type ConsumptionPoint = z.infer<typeof consumptionPointSchema>
@@ -289,15 +289,15 @@ export type DeviceConsumption = z.infer<typeof deviceConsumptionSchema>
 export type DeviceJournal = z.infer<typeof deviceJournalSchema>
 
 /**
- * Notes de version d'un véhicule qui déclare la capacité `release_notes`, servies à la demande
- * (`GET /api/devices/:id/release-notes`). C'est du CONTENU, pas un état : il change une fois par
- * version, le plugin le garde en cache et ne le relit que quand une version change. Le texte est
- * celui du fabricant, dans SA langue (Tesla répond en anglais) : rien n'est traduit ici.
+ * Release notes of a vehicle that declares the `release_notes` capability, served on demand
+ * (`GET /api/devices/:id/release-notes`). It is CONTENT, not a state: it changes once per
+ * version, the plugin caches it and only re-reads it when a version changes. The text is
+ * the vendor's, in ITS language (Tesla answers in English): nothing is translated here.
  */
 export const releaseNoteSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
-  /** Illustration pour le thème sombre, et sa variante claire. URL signées qui EXPIRENT : absentes une fois périmées. */
+  /** Illustration for the dark theme, and its light variant. Signed URLs that EXPIRE: absent once stale. */
   imageUrl: z.string().optional(),
   lightImageUrl: z.string().optional(),
 })
@@ -308,25 +308,25 @@ export const releaseNotesVersionSchema = z.object({
 export const deviceReleaseNotesSchema = z.object({
   deviceId: z.string(),
   /**
-   * Langue des textes SERVIS (`fr`, `en`) : celle demandée (`?lang=`) quand le fabricant la publie,
-   * sinon l'anglais. Absente = inconnue (le fabricant ne la dit pas).
+   * Language of the SERVED texts (`fr`, `en`): the one requested (`?lang=`) when the vendor publishes it,
+   * otherwise English. Absent = unknown (the vendor does not say).
    */
   lang: z.string().optional(),
-  /** Version installée, d'après la dernière lecture des notes. */
+  /** Installed version, according to the last reading of the notes. */
   installedVersion: z.string().optional(),
-  /** La mise à jour en attente et ce qu'elle apporte ; absente = rien en attente, ou notes pas encore lues. */
+  /** The pending update and what it brings; absent = nothing pending, or notes not yet read. */
   pending: releaseNotesVersionSchema.optional(),
-  /** Versions installées, de la plus récente à la plus ancienne (le plugin les garde au fil des mises à jour). */
+  /** Installed versions, from the most recent to the oldest (the plugin keeps them over the updates). */
   history: z.array(releaseNotesVersionSchema),
-  /** Dernière lecture chez le fabricant (ms epoch) ; absente = jamais lues. */
+  /** Last read at the vendor (ms epoch); absent = never read. */
   fetchedAt: z.number().optional(),
 })
 export type ReleaseNote = z.infer<typeof releaseNoteSchema>
 export type ReleaseNotesVersion = z.infer<typeof releaseNotesVersionSchema>
 export type DeviceReleaseNotes = z.infer<typeof deviceReleaseNotesSchema>
-/** Langue de repli des notes de version : celle que tous les fabricants publient. */
+/** Fallback language of the release notes: the one that all vendors publish. */
 export const RELEASE_NOTES_FALLBACK_LANG = 'en'
-/** `fr-FR`, `FR`, `fr` → `fr` ; tout ce qui n'est pas une langue sur deux lettres → la langue de repli. */
+/** `fr-FR`, `FR`, `fr` → `fr`; anything that is not a two-letter language → the fallback language. */
 export function releaseNotesLang(lang: string | undefined): string {
   const l = lang?.trim().slice(0, 2).toLowerCase()
   return l && /^[a-z]{2}$/.test(l) ? l : RELEASE_NOTES_FALLBACK_LANG

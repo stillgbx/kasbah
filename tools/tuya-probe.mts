@@ -1,12 +1,12 @@
 /**
- * Sonde Tuya locale : connexion 3.5, accumulation des DP, observation des changements.
- * Lecture seule par défaut ; `--set <dp>=<json>` pour une écriture (puis attendre l'état).
+ * Local Tuya probe: 3.5 connection, DP accumulation, observation of changes.
+ * Read-only by default; `--set <dp>=<json>` for a write (then wait for the state).
  *
  *   npx tsx --env-file=apps/server/.env tools/tuya-probe.mts
  *   npx tsx --env-file=apps/server/.env tools/tuya-probe.mts --set 20=false
  *
- * Ne JAMAIS passer la clé en argument CLI (visible dans la liste des processus).
- * Source : TUYA_DEVICES dans apps/server/.env (premier appareil du tableau).
+ * NEVER pass the key as a CLI argument (visible in the process list).
+ * Source: TUYA_DEVICES in apps/server/.env (first device of the array).
  */
 import TuyAPI from 'tuyapi'
 import { parseTuyaDevices } from '../apps/server/src/plugins/tuya/types.ts'
@@ -14,7 +14,7 @@ import { parseTuyaDevices } from '../apps/server/src/plugins/tuya/types.ts'
 const raw = process.env.TUYA_DEVICES ?? ''
 const devices = parseTuyaDevices(raw)
 if (!devices.length) {
-  console.error('TUYA_DEVICES vide ou absent. Voir apps/server/.env.example.')
+  console.error('TUYA_DEVICES empty or absent. See apps/server/.env.example.')
   process.exit(2)
 }
 
@@ -41,18 +41,18 @@ const absorb = (label: string, dps: Record<string, unknown> | undefined) => {
     etat[k] = v
   }
   if (changed.length) console.log(`[${label}]`, changed.join(' | '))
-  else console.log(`[${label}] (inchangé)`, JSON.stringify(dps))
+  else console.log(`[${label}] (unchanged)`, JSON.stringify(dps))
 }
 
 device.on('data', (d: { dps?: Record<string, unknown> }) => absorb('data', d?.dps))
 device.on('dp-refresh', (d: { dps?: Record<string, unknown> }) => absorb('dp-refresh', d?.dps))
-device.on('error', () => {}) // bruit de reconnexion
-device.on('disconnected', () => console.log('déconnecté'))
+device.on('error', () => {}) // reconnection noise
+device.on('disconnected', () => console.log('disconnected'))
 
 process.on('SIGINT', () => { vivant = false; try { device.disconnect() } catch { /* */ }; process.exit(0) })
 
 console.log(`Sonde ${cfg.name} @ ${cfg.ip} (id ${cfg.id.slice(0, 6)}…, v${cfg.version})`)
-console.log('Ctrl+C pour quitter. Ne sonde JAMAIS un DP isolé (ECONNRESET).\n')
+console.log('Ctrl+C to quit. NEVER probe an isolated DP (ECONNRESET).\n')
 
 async function sleep(ms: number) {
   await new Promise((r) => setTimeout(r, ms))
@@ -70,13 +70,13 @@ async function waitEtat(dp: string, value: unknown, ms = 8_000): Promise<boolean
 while (vivant) {
   try {
     await device.connect()
-    console.log('connecté — état :', JSON.stringify(etat))
+    console.log('connected — state:', JSON.stringify(etat))
 
     if (setArg) {
       const eq = setArg.indexOf('=')
       const dp = setArg.slice(0, eq)
       const value = JSON.parse(setArg.slice(eq + 1)) as unknown
-      console.log(`écriture DP ${dp} =`, value)
+      console.log(`write DP ${dp} =`, value)
       await device.set({ dps: Number(dp), set: value })
       const ok = await waitEtat(dp, value)
       console.log(ok ? 'effet confirmé sur l\'état' : 'plafond atteint — effet non vu (accusé non fiable)')
@@ -90,11 +90,11 @@ while (vivant) {
       const t = setTimeout(done, 60_000)
     })
   } catch (err) {
-    console.log('connexion échouée:', (err as Error).message)
+    console.log('connection failed:', (err as Error).message)
   }
   if (!vivant) break
   await sleep(700)
 }
 
 try { device.disconnect() } catch { /* */ }
-console.log('\nÉtat final :', JSON.stringify(etat, null, 2))
+console.log('\nFinal state:', JSON.stringify(etat, null, 2))

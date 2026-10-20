@@ -7,12 +7,12 @@ export interface SensorOptions {
   unit: string
   deviceClass: SensorClass
   precision?: number
-  /** Valeur cible à chaque tick ; le capteur y tend avec la constante de temps `tauS` (0 = instantané). */
+  /** Target value on each tick; the sensor tends toward it with the time constant `tauS` (0 = instantaneous). */
   target: (ctx: TickCtx, previous: number) => number
   initial: number
   tauS?: number
   noise?: number
-  /** Appareil principal dont ce capteur fait physiquement partie (`meta.linkedTo`). */
+  /** Main device this sensor is physically part of (`meta.linkedTo`). */
   linkedTo?: string
 }
 
@@ -35,9 +35,9 @@ export function sensor(externalId: string, o: SensorOptions): SimDevice<'sensor'
   return dev
 }
 
-/** Capteurs prêts à l'emploi. */
+/** Ready-to-use sensors. */
 export const sensors = {
-  /** Panneau d'un volet solaire : la luminance suit l'ensoleillement (~40 000 lx en plein soleil). */
+  /** Panel of a solar shutter: the illuminance follows the sunshine (~40,000 lx in full sun). */
   shutterLight: (id: string, name: string, coverId: string) => sensor(id, {
     name, unit: 'lx', deviceClass: 'illuminance', precision: 0, initial: 0, tauS: 120, linkedTo: coverId,
     target: (ctx) => Math.max(0, ctx.world.irradiance * 40_000),
@@ -56,7 +56,7 @@ export const sensors = {
   }),
   filtrationPressure: (id: string, name: string) => sensor(id, {
     name, unit: 'bar', deviceClass: 'pressure', initial: 1.1, precision: 2, tauS: 60, noise: 0.01,
-    // la pompe tourne 8 h → 20 h ; la pression monte lentement avec l'encrassement du filtre
+    // the pump runs 8 am → 8 pm; the pressure slowly rises as the filter clogs
     target: (ctx) => (ctx.hour >= 8 && ctx.hour < 20 ? 1.1 + ((ctx.simTime / 86_400_000) % 14) * 0.02 : 0.05),
   }),
   waterFlow: (id: string, name: string) => sensor(id, {

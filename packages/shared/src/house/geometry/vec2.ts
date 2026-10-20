@@ -1,4 +1,4 @@
-// Utilitaires 2D purs sur des tuples [x, y] (mètres, repère maison : x est, y nord).
+// Pure 2D utilities on [x, y] tuples (meters, house reference frame: x east, y north).
 
 export type Vec2 = [number, number]
 
@@ -18,11 +18,11 @@ export function normalize(a: Vec2): Vec2 {
   return l < EPS ? [0, 0] : [a[0] / l, a[1] / l]
 }
 
-/** Normale à droite du sens de parcours : pour un polygone CCW, c'est l'EXTÉRIEUR. */
+/** Right-hand normal of the direction of travel: for a CCW polygon, it is the OUTSIDE. */
 export const perpRight = (d: Vec2): Vec2 => [d[1], -d[0]]
 export const perpLeft = (d: Vec2): Vec2 => [-d[1], d[0]]
 
-/** Intersection des droites (p + s·d) et (q + t·e) ; null si parallèles. */
+/** Intersection of the lines (p + s·d) and (q + t·e); null if parallel. */
 export function lineIntersect(p: Vec2, d: Vec2, q: Vec2, e: Vec2): Vec2 | null {
   const den = cross(d, e)
   if (Math.abs(den) < 1e-9) return null
@@ -30,7 +30,7 @@ export function lineIntersect(p: Vec2, d: Vec2, q: Vec2, e: Vec2): Vec2 | null {
   return add(p, scale(d, s))
 }
 
-/** Aire signée (shoelace) : > 0 pour un polygone CCW. */
+/** Signed area (shoelace): > 0 for a CCW polygon. */
 export function signedArea(poly: readonly Vec2[]): number {
   let a = 0
   for (let i = 0; i < poly.length; i++) {
@@ -46,7 +46,7 @@ export function ensureCCW(poly: readonly Vec2[]): Vec2[] {
   return isCCW(poly) ? [...poly] : [...poly].reverse()
 }
 
-/** Test point-dans-polygone (ray casting, frontière incluse de façon tolérante). */
+/** Point-in-polygon test (ray casting, boundary included tolerantly). */
 export function pointInPolygon(p: Vec2, poly: readonly Vec2[]): boolean {
   let inside = false
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -59,8 +59,8 @@ export function pointInPolygon(p: Vec2, poly: readonly Vec2[]): boolean {
 }
 
 /**
- * Polygone SIMPLE : au moins trois sommets distincts, aucun côté nul, et deux côtés non voisins ne
- * se touchent pas (un contour en huit, ou qui revient sur lui-même, n'a pas d'intérieur clair).
+ * SIMPLE polygon: at least three distinct vertices, no zero-length side, and two non-neighboring sides do not
+ * touch each other (a figure-eight outline, or one that doubles back on itself, has no clear interior).
  */
 export function isSimplePolygon(poly: readonly Vec2[]): boolean {
   const n = poly.length
@@ -78,14 +78,14 @@ export function isSimplePolygon(poly: readonly Vec2[]): boolean {
   }
   for (let i = 0; i < n; i++) {
     for (let j = i + 2; j < n; j++) {
-      if (i === 0 && j === n - 1) continue                  // voisins par la fermeture
+      if (i === 0 && j === n - 1) continue                  // neighbors through the closing edge
       if (touch(poly[i]!, poly[(i + 1) % n]!, poly[j]!, poly[(j + 1) % n]!)) return false
     }
   }
   return true
 }
 
-/** Convexité d'un polygone : tous les tournants dans le même sens (colinéaires ignorés). */
+/** Convexity of a polygon: all the turns in the same direction (collinear ones ignored). */
 export function isConvex(poly: readonly Vec2[]): boolean {
   let sign = 0
   const n = poly.length
@@ -100,8 +100,8 @@ export function isConvex(poly: readonly Vec2[]): boolean {
 }
 
 /**
- * Intersection de `subject` avec le CONVEXE `clip` (Sutherland–Hodgman : on coupe le sujet
- * par le demi-plan intérieur de chaque arête du clip). Renvoie [] si les deux sont disjoints.
+ * Intersection of `subject` with the CONVEX `clip` (Sutherland–Hodgman: the subject is cut
+ * by the inner half-plane of each edge of the clip). Returns [] if the two are disjoint.
  */
 export function clipConvex(subject: readonly Vec2[], clip: readonly Vec2[]): Vec2[] {
   let out: Vec2[] = ensureCCW(subject)
@@ -134,7 +134,7 @@ export function bbox(points: readonly Vec2[]): BBox2 {
   return { min, max }
 }
 
-/** Centroïde surfacique (repli sur la moyenne des sommets pour une aire nulle). */
+/** Area centroid (falls back on the mean of the vertices for a zero area). */
 export function centroid(poly: readonly Vec2[]): Vec2 {
   const a = signedArea(poly)
   if (Math.abs(a) < EPS) {
@@ -151,15 +151,15 @@ export function centroid(poly: readonly Vec2[]): Vec2 {
   return [cx / (6 * a), cy / (6 * a)]
 }
 
-/** Abscisse curviligne (m) de la projection de p sur la droite (a → b). */
+/** Curvilinear abscissa (m) of the projection of p on the line (a → b). */
 export function projectOntoSegment(p: Vec2, a: Vec2, b: Vec2): number {
   const d = normalize(sub(b, a))
   return dot(sub(p, a), d)
 }
 
 /**
- * Décale un polygone CCW vers l'extérieur de `dist` (coins mitrés, repli en bout droit
- * quand deux arêtes sont colinéaires). Sert au débord de toit.
+ * Offsets a CCW polygon outward by `dist` (mitered corners, falls back to a straight end
+ * when two edges are collinear). Used for the roof overhang.
  */
 export function offsetPolygon(poly: readonly Vec2[], distance: number): Vec2[] {
   const p = ensureCCW(poly)
@@ -177,11 +177,11 @@ export function offsetPolygon(poly: readonly Vec2[], distance: number): Vec2[] {
 }
 
 /**
- * Orientation de la plus longue arête d'un polygone, en degrés dans la convention `yaw` des
- * appareils (0 = face à +y, sens trigonométrique). `null` si le polygone est dégénéré.
+ * Orientation of the longest edge of a polygon, in degrees in the `yaw` convention of the
+ * devices (0 = facing +y, counterclockwise). `null` if the polygon is degenerate.
  *
- * C'est l'axe d'une pièce : dans un garage rectangulaire, la grande arête est le sens dans lequel
- * une voiture s'y range. Sert à orienter ce que le fabricant ne sait pas orienter.
+ * It is the axis of a room: in a rectangular garage, the long edge is the direction in which
+ * a car parks in it. Used to orient what the vendor cannot orient.
  */
 export function longestEdgeYawDeg(poly: readonly Vec2[]): number | null {
   let best: Vec2 | null = null
@@ -191,6 +191,6 @@ export function longestEdgeYawDeg(poly: readonly Vec2[]): number | null {
     const l = length(d)
     if (l > bestLen) { bestLen = l; best = d }
   }
-  // +y tourné de `yaw` donne (-sin yaw, cos yaw) : l'aligner sur l'arête, c'est atan2(-dx, dy)
+  // +y rotated by `yaw` gives (-sin yaw, cos yaw): aligning it on the edge is atan2(-dx, dy)
   return best ? (Math.atan2(-best[0], best[1]) * 180) / Math.PI : null
 }

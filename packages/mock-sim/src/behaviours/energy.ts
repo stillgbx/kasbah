@@ -4,22 +4,22 @@ import { sensor } from './sensor'
 
 export interface PanelOptions {
   name: string
-  /** Puissance crête du module (W). */
+  /** Peak power of the module (W). */
   peakW?: number
-  /** Rendement relatif du module (orientation, salissure) : 1 = plein rendement. */
+  /** Relative efficiency of the module (orientation, dirt): 1 = full efficiency. */
   factor?: number
-  /** Heure locale à partir de laquelle un obstacle ombre le module (cheminée, arbre). */
+  /** Local hour from which an obstacle shades the module (chimney, tree). */
   shadeFrom?: number
 }
 
 /**
- * Module photovoltaïque avec son micro-onduleur : un capteur de puissance (W) qui suit
- * l'ensoleillement, module par module, pour qu'un champ de panneaux ait quelque chose à colorer.
+ * Photovoltaic module with its microinverter: a power sensor (W) that follows the sunshine,
+ * module by module, so that a panel array has something to color.
  */
 export function solarPanel(externalId: string, o: PanelOptions): SimDevice<'sensor'> {
   const peakW = o.peakW ?? 400, factor = o.factor ?? 1
-  // `partOf: 'energy'` : un panneau est un capteur de puissance, mais il appartient à l'installation
-  // solaire — exclure `energy` pour un vrai parc Enphase doit l'emporter avec elle.
+  // `partOf: 'energy'`: a panel is a power sensor, but it belongs to the solar installation —
+  // excluding `energy` for a real Enphase device set must take it away with it.
   const dev = sensor(externalId, {
     name: o.name, unit: 'W', deviceClass: 'power', precision: 0, initial: 0, tauS: 20, noise: 2,
     target: (ctx) => {
@@ -27,7 +27,7 @@ export function solarPanel(externalId: string, o: PanelOptions): SimDevice<'sens
       return Math.max(0, ctx.world.irradiance * peakW * factor * shade)
     },
   })
-  // le RECORD du panneau, comme une passerelle Enphase le tient pour chacun de ses onduleurs
+  // the panel's RECORD, as an Enphase gateway keeps it for each of its inverters
   const tick = dev.tick!.bind(dev)
   dev.tick = (ctx) => {
     tick(ctx)
@@ -38,20 +38,20 @@ export function solarPanel(externalId: string, o: PanelOptions): SimDevice<'sens
 
 export interface EnergyOptions {
   name: string
-  /** Puissance crête PV (W). */
+  /** PV peak power (W). */
   peakW?: number
-  /** Capacité batterie (Wh) ; 0 = pas de batterie. */
+  /** Battery capacity (Wh); 0 = no battery. */
   batteryWh?: number
   batteryMaxW?: number
-  /** Consommation de base de la maison (veilles, frigo…) en W. */
+  /** Baseline consumption of the house (standby, fridge…) in W. */
   baseLoadW?: number
 }
 
 /**
- * Site énergie (type Enphase) : production = ensoleillement × crête ; consommation = base + charges
- * déclarées par les autres appareils ce tick (le site doit donc être TICKÉ EN DERNIER) ;
- * la batterie absorbe le surplus le jour et se décharge la nuit jusqu'à 10 %.
- * Identité maintenue à chaque tick : gridW = consumptionW − productionW + batteryW.
+ * Energy site (Enphase type): production = sunshine × peak; consumption = baseline + loads
+ * declared by the other devices this tick (so the site must be TICKED LAST);
+ * the battery absorbs the surplus during the day and discharges at night down to 10 %.
+ * Identity maintained on every tick: gridW = consumptionW − productionW + batteryW.
  */
 export function energySite(externalId: string, o: EnergyOptions): SimDevice<'energy'> {
   const peakW = o.peakW ?? 6000, batteryWh = o.batteryWh ?? 5000, batteryMaxW = o.batteryMaxW ?? 3500, baseLoadW = o.baseLoadW ?? 350
@@ -70,7 +70,7 @@ export function energySite(externalId: string, o: EnergyOptions): SimDevice<'ene
       const s = dev.state
       const day = Math.floor((ctx.simTime - (ctx.tzOffsetMin ?? 0) * 60_000) / 86_400_000)
       if (day !== lastDay) { lastDay = day; s.todayProductionWh = 0; s.todayConsumptionWh = 0 }
-      // électroménager aléatoire : ~1 événement / 2 h de 1 à 2,5 kW pendant 20–60 min
+      // random appliance: ~1 event / 2 h of 1 to 2.5 kW for 20–60 min
       if (applianceLeftS <= 0 && ctx.rng() < ctx.dtS / 7200) { applianceLeftS = 1200 + ctx.rng() * 2400; applianceW = 1000 + ctx.rng() * 1500 }
       if (applianceLeftS > 0) applianceLeftS -= ctx.dtS
       const production = Math.round(ctx.world.irradiance * peakW)

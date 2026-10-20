@@ -4,17 +4,17 @@ import {
   CHARGER_STATUSES, CLIMATE_ACTIONS, COVER_MOTIONS, MOWER_ACTIVITIES, PLAYBACKS, VACUUM_ACTIVITIES, VEHICLE_SLEEP_STATES,
 } from '../devices/state'
 
-// Champs d'état qu'un prédicat `device` PROPOSE, par kind : ce que l'éditeur affiche dans ses
-// listes. C'est un guide et non une barrière — le moteur accepte toute clé du kind (`stateKeys`),
-// ce qui laisse un champ ajouté au contrat utilisable avant d'arriver ici. Un test vérifie que
-// chaque entrée existe bien dans l'état de son kind.
+// State fields that a `device` predicate OFFERS, by kind: what the editor shows in its
+// lists. It is a guide and not a barrier — the engine accepts any key of the kind (`stateKeys`),
+// which lets a field added to the contract be usable before it gets here. A test checks that
+// each entry does exist in the state of its kind.
 
 export type TriggerFieldType = 'boolean' | 'number' | 'enum'
 
 export interface TriggerField {
   field: string
   type: TriggerFieldType
-  /** Valeurs possibles d'un champ `enum`. */
+  /** Possible values of an `enum` field. */
   values?: readonly string[]
 }
 

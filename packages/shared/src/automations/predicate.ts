@@ -2,64 +2,64 @@ import { z } from 'zod'
 import { deviceIdSchema } from '../devices/descriptor'
 import { CAMERA_CLASSES, CLIMATE_CLASSES, COVER_CLASSES, DEVICE_KINDS, MEDIA_PLAYER_CLASSES, SENSOR_CLASSES } from '../devices/kinds'
 
-// Prédicats d'une automatisation : ce qu'on teste pour déclencher (`state.when`) ou pour empêcher
-// (`unless`). Tout s'écrit sur le CONTRAT (kinds, champs d'état, pièces de la maison), jamais sur un
-// fabricant : un plugin éteint retire ses appareils, et le prédicat devient « inconnu » (voir le
-// statut `incomplete`), sans que rien ne le supprime.
+// Predicates of an automation: what is tested to trigger (`state.when`) or to prevent
+// (`unless`). Everything is written on the CONTRACT (kinds, state fields, rooms of the house), never on a
+// vendor: a plugin that is off removes its devices, and the predicate becomes "unknown" (see the
+// `incomplete` status), without anything deleting it.
 //
-// Évaluation à TROIS valeurs, côté serveur : vrai, faux, ou inconnu (appareil absent ou
-// indisponible, champ facultatif absent). Seul « vrai » passe. C'est ce qui rend un front montant
-// sûr : un redémarrage, un plugin qui revient, un appareil qui réapparaît ne déclenchent rien.
+// THREE-valued evaluation, server side: true, false, or unknown (device absent or
+// unavailable, optional field absent). Only "true" passes. This is what makes a rising edge
+// safe: a restart, a plugin that comes back, a device that reappears trigger nothing.
 //
-// Aucun `.default()` dans ce module : le fichier d'automatisations est écrit tel que parsé, et zod 4
-// ne valide pas ses défauts (piège documenté dans `house/schema.ts`).
+// No `.default()` in this module: the automations file is written as parsed, and zod 4
+// does not validate its defaults (pitfall documented in `house/schema.ts`).
 
 export const PREDICATE_OPS = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte'] as const
 export type PredicateOp = (typeof PREDICATE_OPS)[number]
 
-/** Heure murale locale « HH:MM ». */
+/** Local wall-clock time "HH:MM". */
 export const hhmmSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'heure : HH:MM')
-/** Date locale « AAAA-MM-JJ ». */
+/** Local date "YYYY-MM-DD". */
 export const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date : AAAA-MM-JJ')
-/** Jours de la semaine, 0 = dimanche : convention de `Date.getDay()` (et de `workDays` dans mock-sim). */
+/** Days of the week, 0 = Sunday: convention of `Date.getDay()` (and of `workDays` in mock-sim). */
 export const daysSchema = z.array(z.number().int().min(0).max(6)).min(1).max(7)
 
-/** Nature d'un appareil, tous kinds confondus (volet, TV, sonnette, pompe à chaleur…). */
+/** Kind of a device, all kinds combined (shutter, TV, doorbell, heat pump…). */
 export const deviceClassSchema = z.union([
   z.enum(COVER_CLASSES), z.enum(MEDIA_PLAYER_CLASSES), z.enum(CAMERA_CLASSES), z.enum(SENSOR_CLASSES), z.enum(CLIMATE_CLASSES),
 ])
 
-/** `not` inverse le résultat ; un « inconnu » reste inconnu. */
+/** `not` inverts the result; an "unknown" stays unknown. */
 const negatable = { not: z.boolean().optional() }
 
 const LEAVES = [
   /**
-   * Comparaison d'un champ d'état. `field` est validé À L'EXÉCUTION contre les clés du kind
-   * (`stateKeys`) : un champ inconnu rend la règle `incomplete`, pas un refus d'enregistrer.
+   * Comparison of a state field. `field` is validated AT RUN TIME against the keys of the kind
+   * (`stateKeys`): an unknown field makes the rule `incomplete`, not a refusal to save.
    */
   z.object({
     type: z.literal('device'), deviceId: deviceIdSchema, field: z.string().min(1),
     op: z.enum(PREDICATE_OPS), value: z.union([z.string(), z.number(), z.boolean()]), ...negatable,
   }),
-  /** L'appareil est ACTIF (`isDeviceOn`) : lampe allumée, lecteur qui diffuse, volet ouvert… */
+  /** The device is ACTIVE (`isDeviceOn`): light on, player playing, shutter open… */
   z.object({ type: z.literal('deviceOn'), deviceId: deviceIdSchema, ...negatable }),
-  /** Le véhicule est à la maison : à moins de `HOME_RADIUS_M` de l'origine. */
+  /** The vehicle is at home: within `HOME_RADIUS_M` of the origin. */
   z.object({ type: z.literal('vehicleOnSite'), deviceId: deviceIdSchema, ...negatable }),
-  /** Le véhicule est garé sur cette place (règle d'accrochage `assignParkings`, au repos). */
+  /** The vehicle is parked on this spot (snapping rule `assignParkings`, at rest). */
   z.object({ type: z.literal('vehicleParkedAt'), deviceId: deviceIdSchema, parkingId: z.string().min(1), ...negatable }),
-  /** Au moins un appareil de ce kind (et de cette nature) est ACTIF dans la pièce. */
+  /** At least one device of this kind (and of this nature) is ACTIVE in the room. */
   z.object({ type: z.literal('anyInRoom'), roomId: z.string().min(1), kind: z.enum(DEVICE_KINDS), deviceClass: deviceClassSchema.optional(), ...negatable }),
-  /** Plage horaire locale ; `to` avant `from` = la plage passe minuit. */
+  /** Local time range; `to` before `from` = the range crosses midnight. */
   z.object({ type: z.literal('timeWindow'), from: hhmmSchema, to: hhmmSchema, ...negatable }),
   z.object({ type: z.literal('days'), days: daysSchema, ...negatable }),
-  /** Période, bornes comprises. */
+  /** Period, bounds included. */
   z.object({ type: z.literal('dateRange'), from: isoDateSchema, to: isoDateSchema, ...negatable }),
 ] as const
 
 export const leafPredicateSchema = z.discriminatedUnion('type', [...LEAVES])
 export type LeafPredicate = z.infer<typeof leafPredicateSchema>
 
-/** Un seul niveau de OU : un groupe `any` ne contient que des feuilles. */
+/** A single level of OR: an `any` group contains only leaves. */
 export const anyPredicateSchema = z.object({ type: z.literal('any'), of: z.array(leafPredicateSchema).min(1).max(10), ...negatable })
 
 export const predicateSchema = z.discriminatedUnion('type', [...LEAVES, anyPredicateSchema])

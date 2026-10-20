@@ -1,10 +1,10 @@
 import type { SimDevice, TickCtx } from '../types'
 import { descriptor } from './common'
 
-// Station de traitement d'eau (type COMAP Proteo) : un seul appareil, comme le vrai plugin.
-// Relevés de départ pris sur la vraie station (2026-09-16) : usures ~95-96 %, ~412 L/1 210 L/6 980 L
-// pour jour/semaine/mois, débit à 0 la plupart du temps. Seuils d'alerte non documentés par le
-// fabricant (les codes D0xx restent muets) : posés ici pour la démo, pas déduits d'une spec.
+// Water treatment station (COMAP Proteo type): a single device, like the real plugin.
+// Starting readings taken on the real station (2026-09-16): wear ~95-96 %, ~412 L/1,210 L/6,980 L
+// for day/week/month, flow at 0 most of the time. Alert thresholds not documented by the
+// vendor (the D0xx codes remain silent): set here for the demo, not deduced from a spec.
 
 export interface WaterOptions { name: string }
 
@@ -12,10 +12,10 @@ const WARNING_PCT = 20
 const DEFECT_PCT = 5
 
 /**
- * Usure d'un consommable : décroît très lentement (mois) puis repart à neuf, comme
- * `filtrationPressure` (sawtooth) tient lieu de nettoyage périodique — ça donne, sur une simulation
- * accélérée, un passage par une usure basse et une alerte sans attendre de vrais mois.
- * `startPct` cale la valeur à l'instant initial sur le relevé réel.
+ * Wear of a consumable: decreases very slowly (months) then starts over, as
+ * `filtrationPressure` (sawtooth) stands in for periodic cleaning — this gives, in an accelerated
+ * simulation, a pass through a low wear and an alert without waiting for real months.
+ * `startPct` calibrates the value at the initial instant on the real reading.
  */
 function wearPct(simTime: number, periodDays: number, startPct: number): number {
   const period = periodDays * 86_400_000
@@ -25,8 +25,8 @@ function wearPct(simTime: number, periodDays: number, startPct: number): number 
 }
 
 export function water(externalId: string, o: WaterOptions): SimDevice<'water'> {
-  // débit : bornes réelles (robinet plein débit ~900 L/h, pointe historique 2 556 L/h), quantifié au
-  // pas du débitmètre (36 L/h) — jamais de valeur continue
+  // flow: real bounds (full-flow tap ~900 L/h, historical peak 2,556 L/h), quantized at the
+  // flowmeter step (36 L/h) — never a continuous value
   let flowLeftS = 0, flowTarget = 0
   let lastDay = -1, lastWeek = -1, lastMonth = -1
   const dev: SimDevice<'water'> = {
@@ -40,7 +40,7 @@ export function water(externalId: string, o: WaterOptions): SimDevice<'water'> {
     },
     tick(ctx: TickCtx) {
       const s = dev.state
-      // usures : périodes différentes pour ne pas épuiser les 4 consommables le même jour
+      // wear: different periods so as not to exhaust the 4 consumables on the same day
       s.prefilterPct = wearPct(ctx.simTime, 200, 95)
       s.carbon1Pct = wearPct(ctx.simTime, 150, 95)
       s.carbon2Pct = wearPct(ctx.simTime, 170, 95)
@@ -50,9 +50,9 @@ export function water(externalId: string, o: WaterOptions): SimDevice<'water'> {
       s.defect = worst <= DEFECT_PCT
       s.uvOn = true
 
-      // l'eau coule par à-coups, jamais en continu : une salve démarre au hasard (plus probable le
-      // jour), dure quelques minutes, puis retombe à 0 ; un pas de temps nul (état initial) ne tire
-      // rien, la probabilité d'un événement y est de toute façon nulle
+      // water flows in bursts, never continuously: a burst starts at random (more likely
+      // during the day), lasts a few minutes, then drops back to 0; a zero time step (initial state) draws
+      // nothing, the probability of an event there is nil anyway
       if (flowLeftS > 0) {
         flowLeftS -= ctx.dtS
       } else if (ctx.dtS > 0) {
@@ -68,9 +68,9 @@ export function water(externalId: string, o: WaterOptions): SimDevice<'water'> {
       const flow = flowLeftS > 0 ? flowTarget : 0
       s.flowLph = flow
 
-      // consommation : jour/semaine/mois locaux, chacun remis à zéro à sa propre limite (comme
-      // `energySite.todayProductionWh`) ; le premier tick adopte la période courante sans la vider,
-      // pour garder le relevé réel comme point de départ
+      // consumption: local day/week/month, each reset to zero at its own boundary (like
+      // `energySite.todayProductionWh`); the first tick adopts the current period without emptying it,
+      // to keep the real reading as the starting point
       const local = ctx.simTime - ctx.tzOffsetMin * 60_000
       const day = Math.floor(local / 86_400_000)
       const week = Math.floor((day + 4) / 7)

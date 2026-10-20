@@ -14,20 +14,20 @@ import { petFeeder, petFountain } from './behaviours/pets'
 import { ceilingFan, ceilingFanLight } from './behaviours/fan'
 import { camera } from './behaviours/camera'
 
-// Les parcs des trois PROPRIÉTÉS DE DÉMONSTRATION (`house/demos/*.json`) : chacun est lié appareil
-// par appareil à sa maison, et ensemble ils montrent tout ce que l'application sait faire. Les
-// lieux (Dijon, Pornic, Lille) tombent sur un espace public — un cours, le bord d'un golf, une
-// grand-place —, jamais sur la maison de quelqu'un. Le travail des véhicules est à 1,3–1,5 km, pour
-// que la carte cadre les deux (règle des 3 km de `lib/map.ts`).
+// The device sets of the three DEMO PROPERTIES (`house/demos/*.json`): each one is linked device
+// by device to its house, and together they show everything the application can do. The
+// places (Dijon, Pornic, Lille) fall on a public space — a boulevard, the edge of a golf course, a
+// main square —, never on someone's house. The vehicles' workplace is 1.3–1.5 km away, so
+// that the map frames both (3 km rule of `lib/map.ts`).
 
-/** Origines des maisons : `origin` de `house/demos/tilleuls.json` et `embruns.json` (cap 0). */
+/** Origins of the houses: `origin` of `house/demos/tilleuls.json` and `embruns.json` (heading 0). */
 const TILLEULS = { lat: 47.309343, lon: 5.045591 }
 const TILLEULS_WORK = { lat: 47.3216, lon: 5.0415 }
 const EMBRUNS = { lat: 47.1135, lon: -2.1215 }
 const EMBRUNS_WORK = { lat: 47.1153, lon: -2.104 }
 /**
- * Où une voiture se gare À LA MAISON : sur sa place (`site.parkings`), pas sur l'origine du repère.
- * Le GPS d'un véhicule garé tombe ainsi dans la marge de la place, et la scène l'y range.
+ * Where a car parks AT THE HOUSE: on its spot (`site.parkings`), not on the origin of the reference frame.
+ * The GPS of a parked vehicle thus falls in the margin of the spot, and the scene tucks it in there.
  */
 const parked = (home: { lat: number; lon: number }, x: number, y: number) => {
   const g = localToGeo({ ...home, alt: 0, heading: 0 }, [x, y, 0])
@@ -36,7 +36,7 @@ const parked = (home: { lat: number; lon: number }, x: number, y: number) => {
 
 const warm = 454, neutral = 300, cool = 200
 
-/** Les Tilleuls : maison familiale à étage, toit à deux pans — la vitrine complète. */
+/** Les Tilleuls: two-story family house, gable roof — the complete showcase. */
 export function tilleulsDevices(opts: { winter?: boolean } = {}): AnySimDevice[] {
   const w = !!opts.winter
   return [
@@ -56,11 +56,11 @@ export function tilleulsDevices(opts: { winter?: boolean } = {}): AnySimDevice[]
     light('tl-light-terrasse', { name: 'Appliques terrasse', colorTemp: true, brightness: 70, powerW: 16 }),
     light('tl-light-jardin', { name: 'Bornes jardin', brightness: 60, powerW: 20 }),
     light('tl-light-piscine', { name: 'Projecteur piscine', color: true, effects: ['candle', 'prism'], brightness: 80, powerW: 35 }),
-    // ventilateur-plafonnier de la suite : deux appareils liés, aucune commande commune
+    // suite ceiling fan: two linked devices, no shared command
     ceilingFanLight('tl-fan-suite_light', { name: 'Plafonnier suite' }),
     ceilingFan('tl-fan-suite_fan', { name: 'Ventilateur suite', linkedLightId: 'mock:tl-fan-suite_light' }),
 
-    // volet solaire et discret, dont le panneau se déclare en capteur de luminosité
+    // solar and quiet shutter, whose panel is declared as a light sensor
     cover('tl-cover-baie', { name: 'Volet baie salon', deviceClass: 'shutter', position: 100, preset: 27, quiet: true }),
     sensors.shutterLight('tl-sensor-baie-light', 'Volet baie salon · luminosité', 'mock:tl-cover-baie'),
     cover('tl-cover-salon', { name: 'Volet fenêtre salon', deviceClass: 'shutter', position: 100 }),
@@ -71,7 +71,7 @@ export function tilleulsDevices(opts: { winter?: boolean } = {}): AnySimDevice[]
     cover('tl-cover-chambre2', { name: 'Volet chambre 2', deviceClass: 'shutter', position: 100 }),
     cover('tl-cover-suite', { name: 'Volet suite', deviceClass: 'shutter', position: 100 }),
     cover('tl-cover-velux', { name: 'Fenêtre de toit palier', deviceClass: 'window', position: 0 }),
-    // l'été le store est déployé (c'est déployé qu'il se remarque), l'hiver il est rentré
+    // in summer the awning is deployed (it is when deployed that it gets noticed), in winter it is retracted
     cover('tl-cover-store', { name: 'Store terrasse', deviceClass: 'awning', position: w ? 100 : 40 }),
     cover('tl-cover-portail', { name: 'Portail', deviceClass: 'gate', position: 0 }),
     cover('tl-cover-garage1', { name: 'Porte de garage gauche', deviceClass: 'garage', position: 0, speedPctPerS: 8 }),
@@ -80,7 +80,7 @@ export function tilleulsDevices(opts: { winter?: boolean } = {}): AnySimDevice[]
     mediaPlayer('tl-media-salon', { name: 'Enceinte salon', volume: 30 }),
     mediaPlayer('tl-media-cuisine', { name: 'Écran cuisine', deviceClass: 'display', volume: 45, playing: true }),
     mediaPlayer('tl-media-tv', { name: 'TV home cinéma', deviceClass: 'tv', volume: 25 }),
-    // la TV sort son son par cette barre (`meta.audioOutput` dans la maison)
+    // the TV sends its sound through this bar (`meta.audioOutput` in the house)
     mediaPlayer('tl-media-barre', { name: 'Barre de son', model: 'Soundbar', volume: 35 }),
     mediaPlayer('tl-media-suite', { name: 'Réveil suite', volume: 20 }),
     mediaPlayer('tl-media-terrasse', { name: 'Enceinte terrasse', volume: 40 }),
@@ -109,7 +109,7 @@ export function tilleulsDevices(opts: { winter?: boolean } = {}): AnySimDevice[]
     vehicle('tl-vehicle-r5', { name: 'Renault 5', manufacturer: 'Renault', model: 'Renault 5 E-Tech', batteryKwh: 52, rangeKmFull: 410, home: parked(TILLEULS, 18.9, 3.4), work: TILLEULS_WORK, workDays: [], soc: 55, chargeLimit: 80, socMin: 20, chargerPowerW: 0,
       climate: { minC: 16, maxC: 26, stepC: 1, seats: ['fl', 'fr'], seatLevels: 1, steeringWheelHeat: true, heatWhileOff: true } }),
     evCharger('tl-charger', { name: 'Borne de recharge', vehicleId: 'tl-vehicle-tesla' }),
-    // un champ de douze modules sur le pan sud ; le dernier, ombré par la cheminée en fin de journée
+    // an array of twelve modules on the south slope; the last one, shaded by the chimney at the end of the day
     ...Array.from({ length: 12 }, (_, i) => solarPanel(`tl-panel-${String(i + 1).padStart(2, '0')}`, {
       name: `Panneau ${i + 1}`, factor: 0.95 + ((i * 3) % 5) * 0.01, ...(i === 11 ? { shadeFrom: 16 } : {}),
     })),
@@ -136,7 +136,7 @@ export const TILLEULS_SCENES: SimScene[] = [
     lights: { 'tl-light-terrasse': { on: true, brightness: 70, colorTempMirek: warm }, 'tl-light-jardin': { on: true, brightness: 60 }, 'tl-light-piscine': { on: true, brightness: 80, color: { x: 0.16, y: 0.33 } } } },
 ]
 
-/** Les Embruns : plain-pied contemporain en L, toit plat, au bord de la mer. */
+/** Les Embruns: contemporary L-shaped single-story house, flat roof, by the sea. */
 export function embrunsDevices(opts: { winter?: boolean } = {}): AnySimDevice[] {
   const w = !!opts.winter
   return [
@@ -152,7 +152,7 @@ export function embrunsDevices(opts: { winter?: boolean } = {}): AnySimDevice[] 
     ceilingFanLight('em-fan-chambre_light', { name: 'Plafonnier chambre parentale' }),
     ceilingFan('em-fan-chambre_fan', { name: 'Ventilateur chambre parentale', linkedLightId: 'mock:em-fan-chambre_light' }),
 
-    // brise-soleil orientables : des lames qui pivotent, la nature `blind`
+    // adjustable sunshades: slats that pivot, the `blind` kind
     cover('em-cover-baie1', { name: 'Brise-soleil baie ouest', deviceClass: 'blind', position: 100, tilt: true }),
     cover('em-cover-baie2', { name: 'Brise-soleil baie est', deviceClass: 'blind', position: 100, tilt: true }),
     cover('em-cover-chambre', { name: 'Brise-soleil chambre', deviceClass: 'blind', position: w ? 100 : 20, tilt: true }),
@@ -181,7 +181,7 @@ export function embrunsDevices(opts: { winter?: boolean } = {}): AnySimDevice[] 
     vehicle('em-vehicle', { name: 'Renault 5', manufacturer: 'Renault', model: 'Renault 5 E-Tech', batteryKwh: 52, rangeKmFull: 410, home: parked(EMBRUNS, 19.5, 6), work: EMBRUNS_WORK, soc: 72, chargeLimit: 90, socMin: 20,
       climate: { minC: 16, maxC: 26, stepC: 1, seats: ['fl', 'fr'], seatLevels: 1, steeringWheelHeat: true, heatWhileOff: true } }),
     evCharger('em-charger', { name: 'Borne du carport', vehicleId: 'em-vehicle' }),
-    // deux rangées de cinq modules sur châssis : un toit plat les redresse vers le soleil
+    // two rows of five modules on a frame: a flat roof tilts them toward the sun
     ...Array.from({ length: 10 }, (_, i) => solarPanel(`em-panel-${String(i + 1).padStart(2, '0')}`, {
       name: `Panneau ${i + 1}`, factor: 0.97 + ((i * 3) % 5) * 0.01,
     })),
@@ -200,7 +200,7 @@ export const EMBRUNS_SCENES: SimScene[] = [
     lights: { 'em-light-terrasse': { on: true, brightness: 50, colorTempMirek: warm }, 'em-light-piscine': { on: true, brightness: 90, color: { x: 0.15, y: 0.3 } } } },
 ]
 
-/** Belvédère : appartement en étage, balcon, ni jardin ni véhicule. */
+/** Belvédère: upper-floor apartment, balcony, neither garden nor vehicle. */
 export function belvedereDevices(opts: { winter?: boolean } = {}): AnySimDevice[] {
   const w = !!opts.winter
   return [

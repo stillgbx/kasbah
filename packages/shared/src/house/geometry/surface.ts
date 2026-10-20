@@ -7,8 +7,8 @@ import type { FloorHole, OpeningRect, RoofDescriptor, RoofHole, Vec3 } from './t
 import { pointInPolygon, type Vec2 } from './vec2'
 
 /**
- * Hauteur absolue et pente du toit au point (x, y). `null` si hors emprise.
- * Toit plat : zBase, pente 0. Gable : plan de la face dont la projection contient le point.
+ * Absolute height and slope of the roof at the point (x, y). `null` if outside the footprint.
+ * Flat roof: zBase, slope 0. Gable: plane of the face whose projection contains the point.
  */
 export function roofAtPoint(
   roof: RoofDescriptor, x: number, y: number,
@@ -21,7 +21,7 @@ export function roofAtPoint(
     const face = roof.faces[i]!
     const poly: Vec2[] = face.map((p) => [p[0], p[1]])
     if (!pointInPolygon([x, y], poly)) continue
-    // plan ax + by + cz = d via trois points non colinéaires
+    // plane ax + by + cz = d via three non-collinear points
     const a = face[0]!, b = face[1]!, c = face[2]!
     const ab: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
     const ac: Vec3 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]
@@ -30,7 +30,7 @@ export function roofAtPoint(
     const nz = ab[0] * ac[1] - ab[1] * ac[0]
     if (Math.abs(nz) < 1e-9) continue
     const z = a[2] - (nx * (x - a[0]) + ny * (y - a[1])) / nz
-    // pente = angle du plan avec l'horizontal
+    // slope = angle of the plane with the horizontal
     const nLen = Math.hypot(nx, ny, nz) || 1
     const slope = Math.acos(Math.min(1, Math.abs(nz) / nLen)) * (180 / Math.PI)
     return { z, slope, faceIndex: i }
@@ -38,7 +38,7 @@ export function roofAtPoint(
   return { z: roof.zBase, slope: 0 }
 }
 
-/** Cap par défaut d'une fenêtre de toit au point donné : sens de la descente du versant. */
+/** Default heading of a roof window at the given point: direction of the slope's descent. */
 export function defaultRoofYaw(roof: RoofDescriptor, x: number, y: number): number {
   const at = roofAtPoint(roof, x, y)
   if (!at || at.faceIndex === undefined || !roof.faces[at.faceIndex]) return 180
@@ -49,22 +49,22 @@ export function defaultRoofYaw(roof: RoofDescriptor, x: number, y: number): numb
   const nx = ab[1] * ac[2] - ab[2] * ac[1]
   const ny = ab[2] * ac[0] - ab[0] * ac[2]
   const nz = ab[0] * ac[1] - ab[1] * ac[0]
-  // normale orientée vers le haut : elle PENCHE vers l'aval, sa projection horizontale est la descente
-  // (jusqu'au 2026-09-26 on prenait l'opposé : un Velux posé au doigt regardait le faîtage)
+  // normal oriented upward: it LEANS downslope, its horizontal projection is the descent
+  // (until 2026-09-26 the opposite was taken: a Velux placed by finger faced the ridge)
   if (Math.abs(nx) + Math.abs(ny) < 1e-9) return 180
   const sign = nz >= 0 ? 1 : -1
   const dx = sign * nx, dy = sign * ny
-  // yaw : 0 = +y → atan2(-dx, dy) en degrés
+  // yaw : 0 = +y → atan2(-dx, dy) in degrees
   const deg = (Math.atan2(-dx, dy) * 180) / Math.PI
   return Math.round(((deg % 360) + 360) % 360)
 }
 
 /**
- * Emprise VUE DU CIEL d'une ouverture de surface. Un Velux posé sur un VERSANT suit la pente, comme
- * une vraie pose : son cap est celui de la descente (`defaultRoofYaw` — le `yaw` écrit est ignoré, et
- * il se retourne seul d'un versant à l'autre) et sa longueur, mesurée le long de la pente, se
- * raccourcit de cos(pente). Puits de lumière, toit plat, hors toit : l'ouverture telle qu'écrite.
- * Tout ce qui raisonne en plan (trou, cotes, place dans la pièce, chevauchement, pose) passe par elle.
+ * Footprint SEEN FROM THE SKY of a surface opening. A Velux placed on a SLOPE follows the slope, like
+ * a real installation: its heading is that of the descent (`defaultRoofYaw` — the written `yaw` is ignored, and
+ * it flips by itself from one slope to the other) and its length, measured along the slope,
+ * shortens by cos(slope). Skylight, flat roof, off roof: the opening as written.
+ * Everything that reasons in plan (hole, dimensions, place in the room, overlap, placement) goes through it.
  */
 export function surfaceFootprint(
   o: { type: OpeningType; x: number; y: number; yaw: number; width: number; height: number },
@@ -80,7 +80,7 @@ export function surfaceFootprint(
   }
 }
 
-/** Coin bas-gauche (vers −fwd, −right) du rectangle de surface, pour alimenter `OpeningRect.origin`. */
+/** Bottom-left corner (toward −fwd, −right) of the surface rectangle, to feed `OpeningRect.origin`. */
 function surfaceOrigin(center: Vec2, yaw: number, width: number, height: number): Vec2 {
   const { fwd, right } = surfaceAxes(yaw)
   return [
@@ -94,8 +94,8 @@ function asSurfaceOpening(o: Opening): o is Opening & { x: number; y: number; ya
 }
 
 /**
- * Rectangles d'ouverture de SURFACE d'un niveau (sols + toits des pièces de ce niveau), plus les
- * trous à percer dans les dalles. Les trous de toit sont collectés à part (`roofHolesOf`).
+ * SURFACE opening rectangles of a level (floors + roofs of the rooms of this level), plus the
+ * holes to pierce in the slabs. The roof holes are collected separately (`roofHolesOf`).
  */
 export function computeSurfaceOpenings(
   level: Level, roomsOnLevel: readonly Room[], defaults: HouseDefaults, roof: RoofDescriptor | undefined,
@@ -137,7 +137,7 @@ export function computeSurfaceOpenings(
       const roofOrigin = surfaceOrigin([o.x, o.y], fp.yaw, o.width, fp.height)
       openings.push({
         openingId: o.id, roomId: room.id, levelId: level.id, type: o.type, host: 'roof',
-        // z : à mi-épaisseur sur le plan du versant, pour que le verre soit DANS le trou
+        // z: at mid-thickness on the slope plane, so that the glass is IN the hole
         origin: [roofOrigin[0], roofOrigin[1], at.z - level.elevation - depth / 2],
         u: surfaceAxes(fp.yaw).right, normal: [0, 0],
         width: o.width, height: o.height, depth,
@@ -151,7 +151,7 @@ export function computeSurfaceOpenings(
   return { openings, floorHoles }
 }
 
-/** Trous de toit pour toutes les `roof-window` de la maison. */
+/** Roof holes for all the `roof-window`s of the house. */
 export function roofHolesOf(house: House, roof: RoofDescriptor): RoofHole[] {
   const holes: RoofHole[] = []
   for (const room of house.rooms) {

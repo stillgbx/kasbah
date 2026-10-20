@@ -4,7 +4,7 @@ import type { AABB3, RoofDescriptor, Vec3 } from './types'
 import { parseRelief, reliefRange } from './relief'
 import { bbox, type Vec2 } from './vec2'
 
-// Boîtes englobantes ABSOLUES (repère maison, z absolu) pour le cadrage caméra.
+// ABSOLUTE bounding boxes (house reference frame, absolute z) for camera framing.
 
 export function emptyBounds(): AABB3 {
   return { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }
@@ -58,7 +58,7 @@ export function zoneBounds(house: House, zoneId: string): AABB3 | null {
   return fromPolygon(zone.polygon, house.site.elevation + lo, house.site.elevation + hi + 0.1)
 }
 
-/** Emprise de la seule dalle de toiture : le niveau-toit se cadre sur elle, pas sur le bâti entier. */
+/** Footprint of the roof slab alone: the roof level is framed on it, not on the whole building. */
 export function roofBounds(roof: RoofDescriptor): AABB3 {
   return fromPolygon(roof.outline, roof.zBase, roof.zRidge)
 }
@@ -78,7 +78,7 @@ export function houseBounds(house: House, defaults: HouseDefaults, roof?: RoofDe
   return b
 }
 
-/** Emprise « bâtie » (niveaux + toit, sans le terrain) — pour la vue par défaut centrée sur la maison. */
+/** "Built" footprint (levels + roof, without the terrain) — for the default view centered on the house. */
 export function buildingBounds(house: House, defaults: HouseDefaults, roof?: RoofDescriptor): AABB3 {
   let b = emptyBounds()
   for (const level of house.levels) {

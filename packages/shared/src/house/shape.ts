@@ -1,10 +1,10 @@
-// Gestes sur la FORME d'une pièce, exprimés sur ses cotes (le relevé) : pousser un mur, fixer la
-// longueur d'un côté, déplacer / ajouter / retirer un sommet. Chaque geste rend les nouvelles cotes
-// des pièces qu'il touche (unité et repère du relevé), prêtes pour `HouseEditPatch.shapes`.
+// Gestures on the SHAPE of a room, expressed on its measurements (the survey): push a wall, set the
+// length of a side, move / add / remove a vertex. Each gesture returns the new measurements
+// of the rooms it touches (unit and reference frame of the survey), ready for `HouseEditPatch.shapes`.
 //
-// Pousser un mur garde les angles : le mur glisse le long de sa normale et ses deux sommets
-// glissent le long des murs voisins. Un mur MITOYEN entraîne celui de la pièce d'en face (même
-// ligne dans le relevé) : la cuisine grandit, le salon rétrécit d'autant, sans trou ni chevauchement.
+// Pushing a wall keeps the angles: the wall slides along its normal and its two vertices
+// slide along the neighboring walls. A SHARED wall drags that of the room across (same
+// line in the survey): the kitchen grows, the living room shrinks by as much, without gap or overlap.
 
 import { houseToSurveyPoint, surveyEdges, surveyPointsToHouse, type SurveyConventions, type SurveyDoc } from './survey'
 import { withSurveyPoints } from './edit'
@@ -12,7 +12,7 @@ import type { Vec2 } from './geometry/vec2'
 
 export type Shapes = Record<string, Vec2[]>
 
-/** Deux lignes de relevé plus proches que ça sont la MÊME cloison (m). */
+/** Two survey lines closer than this are the SAME partition (m). */
 const SAME_LINE_M = 0.02
 const EPS = 1e-9
 
@@ -29,12 +29,12 @@ const rawOf = (c: Ctx, id: string): Vec2[] => {
 const levelOf = (c: Ctx, id: string) => c.doc.rooms.find((x) => x.id === id)!.levelId
 const toSurvey = (c: Ctx, id: string, pts: readonly Vec2[]): Vec2[] => pts.map((p) => houseToSurveyPoint(p, levelOf(c, id), c.conv))
 
-/** Les cotes d'une pièce en mètres, dans le repère de la maison (conversion faite si la maison n'est pas relevée). */
+/** The measurements of a room in meters, in the house reference frame (conversion done if the house is not surveyed). */
 export function roomShape(doc: SurveyDoc, roomId: string): Vec2[] {
   return rawOf(ctxOf(doc), roomId)
 }
 
-/** Intersection de deux droites (point, direction) ; `null` si parallèles. */
+/** Intersection of two lines (point, direction); `null` if parallel. */
 function meet(p: Vec2, d: Vec2, q: Vec2, e: Vec2): Vec2 | null {
   const den = d[0] * e[1] - d[1] * e[0]
   if (Math.abs(den) < EPS) return null
@@ -42,7 +42,7 @@ function meet(p: Vec2, d: Vec2, q: Vec2, e: Vec2): Vec2 | null {
   return [p[0] + d[0] * t, p[1] + d[1] * t]
 }
 
-/** L'arête `i` de `pts` repoussée de `delta` le long de sa normale extérieure ; ses sommets suivent les murs voisins. */
+/** The edge `i` of `pts` pushed by `delta` along its outward normal; its vertices follow the neighboring walls. */
 function shiftEdge(pts: readonly Vec2[], i: number, delta: number): Vec2[] {
   const n = pts.length
   const es = surveyEdges(pts)
@@ -57,7 +57,7 @@ function shiftEdge(pts: readonly Vec2[], i: number, delta: number): Vec2[] {
   return out
 }
 
-/** Les murs des AUTRES pièces du niveau qui sont la même cloison que l'arête `i` de `roomId`. */
+/** The walls of the OTHER rooms of the level that are the same partition as the edge `i` of `roomId`. */
 function partnerEdges(c: Ctx, roomId: string, i: number): { id: string; edge: number }[] {
   const e = surveyEdges(rawOf(c, roomId))[i]!
   const level = levelOf(c, roomId)
@@ -77,15 +77,15 @@ function partnerEdges(c: Ctx, roomId: string, i: number): { id: string; edge: nu
 }
 
 /**
- * Pousse le mur `edge` de `roomId` de `delta` mètres vers l'EXTÉRIEUR de la pièce (négatif = vers
- * l'intérieur). `coupled` : le mur de la pièce d'en face suit (même ligne de relevé).
+ * Pushes the wall `edge` of `roomId` by `delta` meters toward the OUTSIDE of the room (negative = toward
+ * the inside). `coupled`: the wall of the room across follows (same survey line).
  */
 export function pushWall(doc: SurveyDoc, roomId: string, edge: number, delta: number, coupled = true): Shapes {
   const c = ctxOf(doc)
   const out: Shapes = { [roomId]: toSurvey(c, roomId, shiftEdge(rawOf(c, roomId), edge, delta)) }
   if (coupled) {
     for (const p of partnerEdges(c, roomId, edge)) {
-      // en face, la normale est opposée : le même déplacement dans le monde est un `-delta`
+      // across, the normal is opposite: the same displacement in the world is a `-delta`
       out[p.id] = toSurvey(c, p.id, shiftEdge(rawOf(c, p.id), p.edge, -delta))
     }
   }
@@ -93,8 +93,8 @@ export function pushWall(doc: SurveyDoc, roomId: string, edge: number, delta: nu
 }
 
 /**
- * Donne la longueur `length` (m) au côté `edge` : c'est le mur SUIVANT qui recule ou avance (le
- * premier sommet du côté reste en place). `null` si le mur suivant prolonge celui-ci.
+ * Gives the length `length` (m) to the side `edge`: it is the NEXT wall that backs off or advances (the
+ * first vertex of the side stays in place). `null` if the next wall extends this one.
  */
 export function setEdgeLength(doc: SurveyDoc, roomId: string, edge: number, length: number, coupled = true): Shapes | null {
   const pts = roomShape(doc, roomId)
@@ -105,7 +105,7 @@ export function setEdgeLength(doc: SurveyDoc, roomId: string, edge: number, leng
   return pushWall(doc, roomId, (edge + 1) % pts.length, (length - e.L) / k, coupled)
 }
 
-/** Déplace le sommet `index` en `to` (m, repère de la maison). Aucune voisine n'est entraînée. */
+/** Moves the vertex `index` to `to` (m, house reference frame). No neighbor is dragged. */
 export function moveVertex(doc: SurveyDoc, roomId: string, index: number, to: Vec2): Shapes {
   const c = ctxOf(doc)
   const pts = rawOf(c, roomId)
@@ -113,7 +113,7 @@ export function moveVertex(doc: SurveyDoc, roomId: string, index: number, to: Ve
   return { [roomId]: toSurvey(c, roomId, pts) }
 }
 
-/** Coupe le côté `edge` en deux par un sommet en son milieu (un décroché commence là). */
+/** Cuts the side `edge` in two with a vertex at its middle (a step starts there). */
 export function insertVertex(doc: SurveyDoc, roomId: string, edge: number): Shapes {
   const c = ctxOf(doc)
   const pts = rawOf(c, roomId)
@@ -122,7 +122,7 @@ export function insertVertex(doc: SurveyDoc, roomId: string, edge: number): Shap
   return { [roomId]: toSurvey(c, roomId, pts) }
 }
 
-/** Retire le sommet `index` ; `null` s'il n'en resterait que deux. */
+/** Removes the vertex `index`; `null` if only two would remain. */
 export function removeVertex(doc: SurveyDoc, roomId: string, index: number): Shapes | null {
   const c = ctxOf(doc)
   const pts = rawOf(c, roomId)
@@ -131,15 +131,15 @@ export function removeVertex(doc: SurveyDoc, roomId: string, index: number): Sha
   return { [roomId]: toSurvey(c, roomId, pts) }
 }
 
-/** Profondeur d'une pièce posée contre un mur (m). */
+/** Depth of a room placed against a wall (m). */
 export const NEW_ROOM_DEPTH = 3
-/** Côté d'une pièce posée au tap (m). */
+/** Side of a room placed on tap (m). */
 export const NEW_ROOM_SIDE = 4
 
 /**
- * Les cotes d'une pièce qui naît CONTRE le mur `edge` de `roomId` : un rectangle de la longueur du
- * mur sur `depth` m, de l'autre côté. Il partage exactement la ligne du relevé : `fitSurvey` en fait
- * une cloison mitoyenne, et le mur coulissé ensuite entraîne les deux pièces.
+ * The measurements of a room born AGAINST the wall `edge` of `roomId`: a rectangle of the length of the
+ * wall by `depth` m, on the other side. It shares exactly the survey line: `fitSurvey` makes it
+ * a shared partition, and the wall slid afterwards drags both rooms.
  */
 export function roomAgainstWall(doc: SurveyDoc, roomId: string, edge: number, depth = NEW_ROOM_DEPTH): Vec2[] {
   const c = ctxOf(doc)
@@ -149,7 +149,7 @@ export function roomAgainstWall(doc: SurveyDoc, roomId: string, edge: number, de
   return toSurvey(c, roomId, [e.b, e.a, out(e.a), out(e.b)])
 }
 
-/** Les cotes d'un rectangle `w` × `d` m centré sur `at` (repère de la maison), coins calés au décimètre. */
+/** The measurements of a `w` × `d` m rectangle centered on `at` (house reference frame), corners snapped to the decimeter. */
 export function rectRoomAt(doc: SurveyDoc, levelId: string, at: Vec2, w = NEW_ROOM_SIDE, d = NEW_ROOM_SIDE): Vec2[] {
   const c = ctxOf(doc)
   const snap = (v: number) => Math.round(v * 10) / 10

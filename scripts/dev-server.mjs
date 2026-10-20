@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Serveur de développement relancé quand une source change (`apps/server/src`, `packages/<x>/src`).
- * Remplace `node --watch` : sous Windows, libuv abonne `fs.watch` à l'heure de DERNIER ACCÈS, et NTFS
- * la réécrit à la lecture d'un fichier non lu depuis plus d'une heure. Le simple chargement des
- * modules arrivait donc comme une modification, et le serveur se relançait en cascade au premier
- * démarrage de la journée. Ici, un événement ne compte que si la date de modification ou la taille a
- * bougé, et une rafale d'écritures ne relance qu'une fois. Détail et issues :
+ * Development server restarted when a source changes (`apps/server/src`, `packages/<x>/src`).
+ * Replaces `node --watch`: on Windows, libuv subscribes `fs.watch` to the LAST ACCESS time, and NTFS
+ * rewrites it when reading a file not read for more than an hour. Merely loading the
+ * modules thus arrived as a modification, and the server restarted in cascade at the first
+ * start of the day. Here, an event only counts if the modification date or the size has
+ * moved, and a burst of writes only restarts once. Details and issues:
  * doc/6_faq/6_0_pieges-outillage.md (2026-10-10).
  */
 import { spawn } from 'node:child_process'
@@ -19,10 +19,10 @@ const dirs = [join(serverDir, 'src'), ...readdirSync(join(root, 'packages')).map
   .filter((d) => existsSync(d))
 const DEBOUNCE_MS = 300
 
-/** Les sources que le serveur charge ; un test modifié ne le relance pas. */
+/** The sources the server loads; a modified test does not restart it. */
 const watched = (name) => /\.[cm]?[jt]s$/.test(name) && !/\.test\.[cm]?[jt]s$/.test(name)
 
-/** Ce qui change à une écriture, pas à une lecture. `null` : fichier absent. */
+/** What changes on a write, not on a read. `null`: file absent. */
 function stamp(file) {
   try {
     const s = statSync(file)
@@ -57,12 +57,12 @@ function run() {
       restartQueued = false
       run()
     } else {
-      console.log(`[dev-server] serveur arrêté (code ${code}), relance à la prochaine modification`)
+      console.log(`[dev-server] server stopped (code ${code}), restarting on the next change`)
     }
   })
 }
 
-/** Sous Windows, `kill()` coupe net : le `shutdown()` de `main.ts` ne tourne pas (comme sous `node --watch`). */
+/** On Windows, `kill()` cuts dead: the `shutdown()` of `main.ts` does not run (as under `node --watch`). */
 function restart(files) {
   console.log(`[dev-server] relance : ${files.map((f) => f.slice(root.length + 1)).join(', ')}`)
   if (child) {
@@ -81,7 +81,7 @@ for (const dir of dirs) {
     if (!name || !watched(name)) return
     const file = join(dir, name)
     const now = stamp(file)
-    if (stamps.get(file) === now) return   // lecture (heure d'accès) ou doublon d'événement
+    if (stamps.get(file) === now) return   // read (access time) or duplicate event
     stamps.set(file, now)
     changed.add(file)
     clearTimeout(timer)
@@ -96,7 +96,7 @@ for (const dir of dirs) {
 function stop(signal) {
   stopping = true
   if (!child) process.exit(0)
-  // sous Windows, l'enfant reçoit le même Ctrl+C de la console : le tuer couperait son arrêt propre
+  // on Windows, the child receives the same Ctrl+C from the console: killing it would cut its clean shutdown
   if (process.platform !== 'win32') child.kill(signal)
   setTimeout(() => child?.kill(), 10_000).unref()
 }

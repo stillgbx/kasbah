@@ -1,12 +1,12 @@
 import type { Command, CommandInput } from '../devices/command'
 
-// « Pendant N minutes » : la commande qui défait celle d'une action, au bout du délai. Seulement
-// les inverses ÉVIDENTS (ouvrir ↔ fermer, allumer ↔ éteindre…) : une position, une luminosité, un
-// volume ou une consigne n'ont pas d'inverse sans relever la valeur d'avant, qu'on ne fait pas.
+// "For N minutes": the command that undoes that of an action, at the end of the delay. Only
+// the OBVIOUS inverses (open ↔ close, turn on ↔ turn off…): a position, a brightness, a
+// volume or a setpoint have no inverse without reading the previous value, which we do not do.
 
 /**
- * La commande ne fait QUE basculer `on` (pas de luminosité, de vitesse, de couleur…). Un fondu ne
- * compte pas : allumée en 10 min, la lampe s'éteint en 10 min au bout du délai.
+ * The command ONLY toggles `on` (no brightness, speed, color…). A fade does not
+ * count: turned on over 10 min, the light turns off over 10 min at the end of the delay.
  */
 const onlyOn = (cmd: { on?: boolean }): cmd is { on: boolean } =>
   typeof cmd.on === 'boolean' && Object.keys(cmd).every((k) => k === 'type' || k === 'on' || k === 'transitionMs')

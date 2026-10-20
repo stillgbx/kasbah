@@ -7,8 +7,8 @@ import { TRIGGER_FIELDS } from './fields'
 import { inverseCommand } from './inverse'
 import { predicateSchema } from './predicate'
 
-// Les volets au crépuscule, l'exemple qui a lancé le chantier : soleil décalé et borné, jours,
-// bloqueurs (musique ou lumière sur la terrasse), sélection de tous les volets.
+// Shutters at dusk, the example that started the project: shifted and bounded sun, days,
+// blockers (music or light on the terrace), selection of all the shutters.
 const shuttersAtDusk: Automation = {
   id: 'volets-crepuscule',
   name: 'Volets au crépuscule',

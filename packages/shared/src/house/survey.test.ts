@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { fitSurvey, overlappingRooms, type SurveyDoc } from './survey'
 import type { Vec2 } from './geometry/vec2'
 
-// `fitSurvey` (portage de house/fit-survey.mjs) sur une maison relevée minimale : deux pièces murées
-// dos à dos (cloison de 8 cm) et une terrasse contre la façade sud.
+// `fitSurvey` (port of house/fit-survey.mjs) on a minimal surveyed house: two walled rooms
+// back to back (8 cm partition) and a terrace against the south facade.
 
 const room = (id: string, points: Vec2[], kind?: string) => ({ id, levelId: 'rdc', name: id, polygon: [] as Vec2[], openings: [], ...(kind ? { kind } : {}), meta: { survey: { points } } })
 const house = (): SurveyDoc => ({
@@ -19,7 +19,7 @@ const house = (): SurveyDoc => ({
 const poly = (d: SurveyDoc, id: string) => d.rooms.find((r) => r.id === id)!.polygon
 
 describe('fitSurvey', () => {
-  it('cloison commune : demi-cloison de chaque côté, surcharge mitoyenne écrite', () => {
+  it('shared partition: half-partition on each side, shared override written', () => {
     const { doc, problems } = fitSurvey(house())
     expect(problems).toEqual([])
     expect(poly(doc, 'a')).toEqual([[0, 0], [3.96, 0], [3.96, 3], [0, 3]])
@@ -27,19 +27,19 @@ describe('fitSurvey', () => {
     expect(doc.rooms.find((r) => r.id === 'a')!.walls).toEqual([{ segment: 1, kind: 'interior', thickness: 0.04 }])
   })
 
-  it('terrasse contre une façade : la pièce murée garde sa face, la terrasse absorbe le mur', () => {
+  it('terrace against a facade: the walled room keeps its face, the terrace absorbs the wall', () => {
     const { doc } = fitSurvey(house())
     expect(poly(doc, 't')[2]).toEqual([7, -0.3])
     expect(poly(doc, 't')[3]).toEqual([0, -0.3])
     expect(poly(doc, 'a')[0]).toEqual([0, 0])
   })
 
-  it('emprise du niveau = boîte des pièces murées, élargie du mur extérieur', () => {
+  it('level footprint = box of the walled rooms, enlarged by the exterior wall', () => {
     const { doc } = fitSurvey(house())
     expect(doc.levels[0]!.outline).toEqual([[-0.3, -0.3], [7.3, -0.3], [7.3, 3.3], [-0.3, 3.3]])
   })
 
-  it('ne modifie pas le document reçu, et redonne le même résultat une seconde fois', () => {
+  it('does not modify the received document, and gives the same result a second time', () => {
     const input = house()
     const once = fitSurvey(input)
     expect(input.rooms[0]!.polygon).toEqual([])
@@ -47,7 +47,7 @@ describe('fitSurvey', () => {
     expect(twice.changed).toBe(0)
   })
 
-  it('chevauchement : vu par overlappingRooms, pas par le contrôle des vis-à-vis', () => {
+  it('overlap: seen by overlappingRooms, not by the facing-gap check', () => {
     const h = house()
     h.rooms[0]!.meta!.survey!.points = [[0, 0], [450, 0], [450, 300], [0, 300]]
     const { doc, problems } = fitSurvey(h)

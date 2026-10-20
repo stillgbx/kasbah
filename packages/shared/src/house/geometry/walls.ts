@@ -3,24 +3,24 @@ import type { Level, Opening, Room, WallKind } from '../schema'
 import type { OpeningRect, Vec3, WallPrism } from './types'
 import { add, clipConvex, cross, dot, isConvex, lineIntersect, normalize, perpRight, pointInPolygon, scale, signedArea, sub, type Vec2 } from './vec2'
 
-// Murs : chaque pièce porte ses propres murs vers l'EXTÉRIEUR de sa face intérieure.
-// Deux pièces adjacentes s'écrivent avec un écart = t + t' ; chaque côté remplit sa moitié.
-// Pas de CSG ni de Shape à trous : on découpe chaque mur le long de sa longueur autour des
-// ouvertures en quads convexes (mitrés aux coins), extrudés vers le haut. Robuste et rapide.
+// Walls: each room carries its own walls toward the OUTSIDE of its inner face.
+// Two adjacent rooms are written with a gap = t + t'; each side fills its half.
+// No CSG or Shape with holes: each wall is cut along its length around the
+// openings into convex quads (mitered at the corners), extruded upward. Robust and fast.
 
 const EPS = 1e-6
-const MIRROR_TOL = 0.02          // tolérance (m) sur l'écart t + t' entre faces en vis-à-vis
+const MIRROR_TOL = 0.02          // tolerance (m) on the gap t + t' between facing faces
 const PROBE_MARGIN = 0.05
 const MAX_MITER_FACTOR = 3
-const OVERLAP_MIN_AREA = 1e-4    // m² de recouvrement sous lesquels rien ne se voit
+const OVERLAP_MIN_AREA = 1e-4    // m² of overlap below which nothing shows
 const TRIM_EPS = 1e-4
 
 export interface WallSegment {
   index: number
   a: Vec2
   b: Vec2
-  d: Vec2          // direction unitaire a → b
-  n: Vec2          // normale extérieure unitaire
+  d: Vec2          // unit direction a → b
+  n: Vec2          // unit outward normal
   L: number
   kind: WallKind
   thickness: number
@@ -43,14 +43,14 @@ export function roomHeight(room: Room, level: Level, defaults: HouseDefaults): n
 }
 
 /**
- * Hauteur d'un MUR, qui n'est pas celle de la pièce. `room.height` décrit le PLAFOND : c'est
- * lui qu'`autoplace` utilise pour accrocher un plafonnier, lui que `validate` compare à une
- * ouverture. Aucun mur ne le suit vers le bas. Une FAÇADE appartient à l'enveloppe du bâtiment,
- * sinon le mur extérieur marche d'une pièce à l'autre ; une CLOISON est UN mur dont chaque pièce
- * porte une moitié, et la voisine monte la sienne au niveau — la moitié basse laissait une marche
- * de 40 cm en haut du mur, vue d'en dessus (relevé de la remise à 2,20 m dans un niveau à 2,60 m).
+ * Height of a WALL, which is not that of the room. `room.height` describes the CEILING: it is
+ * what `autoplace` uses to hang a ceiling light, what `validate` compares to an
+ * opening. No wall follows it downward. A FACADE belongs to the building envelope,
+ * otherwise the exterior wall steps from one room to the next; a PARTITION is ONE wall of which each room
+ * carries a half, and the neighbor raises its own to the level — the lower half left a 40 cm step
+ * at the top of the wall, seen from above (survey of the shed at 2.20 m in a level at 2.60 m).
  *
- * `max` et non la hauteur du niveau : une pièce plus HAUTE que son niveau garde ses murs hauts.
+ * `max` and not the level height: a room taller than its level keeps its walls high.
  */
 export function wallHeight(room: Room, level: Level, defaults: HouseDefaults): number {
   return Math.max(roomHeight(room, level, defaults), level.height ?? defaults.levelHeight)
@@ -60,17 +60,17 @@ export function openingSill(o: Opening, defaults: HouseDefaults): number {
   return o.sill ?? (o.type === 'window' ? defaults.windowSill : 0)
 }
 
-/** Largeur (m) de vantail au-delà de laquelle une baie en prend un de plus : une coulissante. */
+/** Leaf width (m) beyond which a bay takes one more: a sliding door. */
 const BAY_LEAF_W = 1.6
 const BAY_LEAVES_AUTO_MAX = 3
 
 /**
- * Nombre de vantaux EFFECTIF : celui du fichier, sinon celui qui se déduit. Seule la baie vitrée
- * en déduit plus d'un — trois mètres de verre d'un seul tenant ne ressemblent à rien, et personne
- * ne va renseigner ce nombre sur un relevé pour que la scène soit juste.
+ * EFFECTIVE number of leaves: the file's, otherwise the one that is deduced. Only the glazed
+ * bay deduces more than one — three meters of glass in one piece look like nothing, and nobody
+ * is going to fill in that number on a survey for the scene to be right.
  *
- * Ici et non dans `openings.ts` : `computeWalls` en a besoin, et `openings.ts` importe déjà ce
- * module — le placer là-bas ferait un cycle.
+ * Here and not in `openings.ts`: `computeWalls` needs it, and `openings.ts` already imports this
+ * module — placing it there would make a cycle.
  */
 export function openingLeaves(o: Opening): number {
   if (o.leaves !== undefined) return o.leaves
@@ -78,7 +78,7 @@ export function openingLeaves(o: Opening): number {
   return 1
 }
 
-/** Classe chaque arête de la pièce (intérieur / extérieur / none) et fixe son épaisseur. */
+/** Classifies each edge of the room (interior / exterior / none) and sets its thickness. */
 export function classifySegments(room: Room, roomsOnLevel: readonly Room[], defaults: HouseDefaults): WallSegment[] {
   const poly = room.polygon
   const n = poly.length
@@ -108,17 +108,17 @@ export function classifySegments(room: Room, roomsOnLevel: readonly Room[], defa
 export interface SegmentCorners {
   outerStart: Vec2
   outerEnd: Vec2
-  /** Débord (m) au-delà de `u = 0` : une façade passe DEVANT la cloison qui la rejoint. */
+  /** Overhang (m) beyond `u = 0`: a facade goes IN FRONT OF the partition that joins it. */
   startExt: number
-  /** Débord (m) au-delà de `u = L`, même raison. */
+  /** Overhang (m) beyond `u = L`, same reason. */
   endExt: number
 }
 
 /**
- * Points extérieurs aux deux bouts de chaque arête : intersection des lignes décalées des
- * arêtes voisines (miter). Bout droit si voisin `none`, colinéaire ou angle trop aigu.
+ * Exterior points at the two ends of each edge: intersection of the offset lines of the
+ * neighboring edges (miter). Straight end if the neighbor is `none`, collinear or the angle too sharp.
  *
- * Exception au T façade / cloison (`extendAcross`) : la FAÇADE passe devant, la cloison s'arrête.
+ * Exception to the facade / partition T (`extendAcross`): the FACADE goes in front, the partition stops.
  */
 export function miterCorners(segs: readonly WallSegment[]): SegmentCorners[] {
   const n = segs.length
@@ -144,15 +144,15 @@ export function miterCorners(segs: readonly WallSegment[]): SegmentCorners[] {
 }
 
 /**
- * Coin entre une FAÇADE et une CLOISON. Mitrer les deux vers un point commun laisse, entre les
- * deux façades des pièces voisines, un triangle que seules les pointes des cloisons remplissent
- * — et la scène 3D ABAISSE les cloisons à 1,05 m, donc le triangle se creuse au-dessus.
+ * Corner between a FACADE and a PARTITION. Mitering both toward a common point leaves, between the
+ * two facades of the neighboring rooms, a triangle that only the tips of the partitions fill
+ * — and the 3D scene LOWERS the partitions to 1.05 m, so the triangle opens up above.
  *
- * La façade passe donc **devant** : son bout, perpendiculaire à elle, avance de l'épaisseur de
- * la cloison, c'est-à-dire jusqu'au milieu de l'écart entre les deux pièces, là où la façade
- * voisine arrive en reculant de sa propre demi-épaisseur. Les deux plans coïncident (l'écart
- * VAUT la somme des deux demi-épaisseurs, cf. `MIRROR_TOL`). La cloison, elle, s'arrête net à la
- * face intérieure de la façade au lieu de la traverser.
+ * The facade therefore goes **in front**: its end, perpendicular to it, advances by the thickness of
+ * the partition, that is to the middle of the gap between the two rooms, where the neighboring
+ * facade arrives backing off by its own half-thickness. The two planes coincide (the gap
+ * EQUALS the sum of the two half-thicknesses, cf. `MIRROR_TOL`). The partition, for its part, stops dead at the
+ * inner face of the facade instead of crossing it.
  */
 function extendAcross(A: WallSegment, B: WallSegment, cornersA: SegmentCorners, cornersB: SegmentCorners): void {
   if (A.kind === 'exterior') {
@@ -164,7 +164,7 @@ function extendAcross(A: WallSegment, B: WallSegment, cornersA: SegmentCorners, 
   }
 }
 
-/** Trous de l'arête : ses ouvertures + celles des pièces en vis-à-vis (miroir), fusionnées. */
+/** Holes of the edge: its openings + those of the rooms facing it (mirror), merged. */
 export function collectHoles(
   room: Room, seg: WallSegment, roomsOnLevel: readonly Room[], level: Level, defaults: HouseDefaults,
 ): Hole[] {
@@ -183,9 +183,9 @@ export function collectHoles(
         if (o.segment === undefined || o.offset === undefined) continue
         const os = oSegs[o.segment]
         if (!os || os.kind === 'none') continue
-        if (dot(seg.d, os.d) > -0.99) continue                                   // pas antiparallèle
-        const gap = dot(sub(os.a, seg.a), seg.n)                                  // distance entre faces intérieures
-        if (Math.abs(gap - (seg.thickness + os.thickness)) > MIRROR_TOL) continue // pas en vis-à-vis direct
+        if (dot(seg.d, os.d) > -0.99) continue                                   // not antiparallel
+        const gap = dot(sub(os.a, seg.a), seg.n)                                  // distance between inner faces
+        if (Math.abs(gap - (seg.thickness + os.thickness)) > MIRROR_TOL) continue // not directly facing
         const P1 = add(os.a, scale(os.d, o.offset)), P2 = add(os.a, scale(os.d, o.offset + o.width))
         const u1 = dot(sub(P1, seg.a), seg.d), u2 = dot(sub(P2, seg.a), seg.d)
         const lo = Math.max(0, Math.min(u1, u2)), hi = Math.min(seg.L, Math.max(u1, u2))
@@ -198,7 +198,7 @@ export function collectHoles(
   return mergeHoles(holes)
 }
 
-/** Fusionne les trous qui se chevauchent en u (union en u et en z). */
+/** Merges the holes that overlap in u (union in u and in z). */
 export function mergeHoles(holes: Hole[]): Hole[] {
   const sorted = [...holes].sort((a, b) => a.u0 - b.u0)
   const out: Hole[] = []
@@ -216,7 +216,7 @@ export function mergeHoles(holes: Hole[]): Hole[] {
 
 export interface WallPiece { u0: number; u1: number; z0: number; z1: number; openingId?: string }
 
-/** Découpe [0, L] × [0, H] autour des trous en morceaux pleins, allèges et linteaux. */
+/** Cuts [0, L] × [0, H] around the holes into solid pieces, sills and lintels. */
 export function splitWall(L: number, H: number, holes: readonly Hole[]): WallPiece[] {
   const pieces: WallPiece[] = []
   let cursor = 0
@@ -238,7 +238,7 @@ export function pieceFootprint(seg: WallSegment, corners: SegmentCorners, u0: nu
   return [P(u0), Q(u0), Q(u1), P(u1)]
 }
 
-/** Une arête de pièce prête à être extrudée, avec la portion `u` qui lui reste après arbitrage. */
+/** A room edge ready to be extruded, with the portion `u` left to it after arbitration. */
 interface SegmentPlan {
   room: Room
   seg: WallSegment
@@ -254,10 +254,10 @@ interface TrimCandidate { plan: SegmentPlan; u0: number; u1: number; lost: numbe
 const planFootprint = (p: SegmentPlan, u0 = p.u0, u1 = p.u1) => pieceFootprint(p.seg, p.corners, u0, u1)
 
 /**
- * Bout à retirer de `p` pour libérer `other`, ou null s'il n'y a rien à retirer, si l'autre
- * mur est plus BAS (on découvrirait un cran), si le recouvrement tombe au MILIEU de l'arête
- * (un rognage en bout n'y peut rien) ou si `other` ne reprend pas toute la part retirée en
- * plan (on ouvrirait une fente).
+ * End to remove from `p` to free `other`, or null if there is nothing to remove, if the other
+ * wall is LOWER (a step would be uncovered), if the overlap falls in the MIDDLE of the edge
+ * (trimming at the end cannot help) or if `other` does not take over the whole part removed in
+ * plan (a gap would be opened).
  */
 function trimCandidate(p: SegmentPlan, other: readonly Vec2[], otherHeight: number): TrimCandidate | null {
   if (otherHeight < p.height - 1e-3) return null
@@ -284,21 +284,21 @@ function trimCandidate(p: SegmentPlan, other: readonly Vec2[], otherHeight: numb
 }
 
 /**
- * Chaque pièce écrit ses propres murs : à un ANGLE DE BÂTIMENT, deux pièces voisines
- * portent les deux faces perpendiculaires et leurs prismes se traversent — faces
- * coplanaires (z-fighting) et lame qui dépasse, bien visibles en plongée. Le mitre de
- * `miterCorners` ne joue qu'à l'intérieur d'une pièce ; ici on arbitre entre pièces.
+ * Each room writes its own walls: at a BUILDING CORNER, two neighboring rooms
+ * carry the two perpendicular faces and their prisms cross each other — coplanar
+ * faces (z-fighting) and a blade that sticks out, clearly visible from above. The miter of
+ * `miterCorners` only works inside a room; here we arbitrate between rooms.
  *
- * Règle : on rogne en bout celui des deux dont la part retirée est INTÉGRALEMENT reprise
- * par l'autre mur. Impossible d'ouvrir une fente par construction, et quand aucun des deux
- * ne couvre l'autre on garde le recouvrement (moins laid qu'un trou).
+ * Rule: we trim at the end the one of the two whose removed part is ENTIRELY taken over
+ * by the other wall. Impossible to open a gap by construction, and when neither
+ * covers the other we keep the overlap (less ugly than a hole).
  */
 function trimCrossRoomOverlaps(plans: readonly SegmentPlan[]): void {
   for (let i = 0; i < plans.length; i++) {
     for (let j = i + 1; j < plans.length; j++) {
       const A = plans[i]!, B = plans[j]!
       if (A.room.id === B.room.id) continue
-      if (Math.abs(cross(A.seg.d, B.seg.d)) < 0.05) continue  // quasi parallèles : c'est un vis-à-vis, pas un angle
+      if (Math.abs(cross(A.seg.d, B.seg.d)) < 0.05) continue  // nearly parallel: it is a facing pair, not a corner
       const fa = planFootprint(A), fb = planFootprint(B)
       if (!isConvex(fa) || !isConvex(fb)) continue
       if (Math.abs(signedArea(clipConvex(fa, fb))) < OVERLAP_MIN_AREA) continue
@@ -312,16 +312,16 @@ function trimCrossRoomOverlaps(plans: readonly SegmentPlan[]): void {
 }
 
 /**
- * Le CENTRE d'un rectangle d'ouverture (z local au niveau, comme l'origine). C'est le point d'ancrage
- * de tout ce qui habille l'ouverture — le tablier d'un volet, la pilule de son marqueur — plutôt que
- * la `position` du JSON : une ouverture affinée après coup laisserait l'appareil à l'écart (mesuré à
- * 2,11 m sur `cover.volet-bureau`), alors que ce qui est dessiné, lui, épouse déjà la baie.
+ * The CENTER of an opening rectangle (local z to the level, like the origin). It is the anchor point
+ * of everything that dresses the opening — the apron of a shutter, the pill of its marker — rather than
+ * the `position` of the JSON: an opening refined after the fact would leave the device off to the side (measured at
+ * 2.11 m on `cover.volet-bureau`), whereas what is drawn already hugs the bay.
  *
- * Pour une surface (sol / toit), le centre est au milieu du rectangle, à mi-épaisseur du porteur.
+ * For a surface (floor / roof), the center is at the middle of the rectangle, at mid-thickness of the carrier.
  */
 /**
- * Longueur VUE DU CIEL d'une ouverture de surface : sa longueur (`height`, le long du cap) se mesure
- * le long de la pente — la vraie taille d'un Velux — et se raccourcit de cos(pente) en plan.
+ * Length SEEN FROM THE SKY of a surface opening: its length (`height`, along the heading) is measured
+ * along the slope — the true size of a Velux — and shortens by cos(slope) in plan.
  */
 export const planLength = (height: number, slopeDeg = 0): number => height * Math.cos((slopeDeg * Math.PI) / 180)
 
@@ -329,8 +329,8 @@ export function openingCentre(o: OpeningRect): Vec3 {
   if (o.host === 'wall') {
     return [o.origin[0] + (o.u[0] * o.width) / 2, o.origin[1] + (o.u[1] * o.width) / 2, o.origin[2] + o.height / 2]
   }
-  // surface : origin est le coin « bas-gauche » ; le centre en plan suit u × width et la direction
-  // perpendiculaire (sens du cap) × height ; z à mi-épaisseur
+  // surface: origin is the "bottom-left" corner; the center in plan follows u × width and the perpendicular
+  // direction (heading direction) × height; z at mid-thickness
   const { fwd } = (() => {
     const yaw = o.yaw ?? 0
     const a = (yaw * Math.PI) / 180
@@ -346,7 +346,7 @@ export function openingCentre(o: OpeningRect): Vec3 {
 
 export interface WallsResult { prisms: WallPrism[]; openings: OpeningRect[] }
 
-/** Murs et rectangles d'ouverture d'un niveau (z locaux au niveau). */
+/** Walls and opening rectangles of a level (level-local z). */
 export function computeWalls(level: Level, roomsOnLevel: readonly Room[], defaults: HouseDefaults): WallsResult {
   const prisms: WallPrism[] = []
   const openings: OpeningRect[] = []
@@ -367,7 +367,7 @@ export function computeWalls(level: Level, roomsOnLevel: readonly Room[], defaul
     const { room, seg, kind, corners, height: H } = plan
     const holes = collectHoles(room, seg, roomsOnLevel, level, defaults)
     for (const piece of splitWall(seg.L, H, holes)) {
-      // le morceau de bout prend la borne du plan (débord de façade, ou rognage d'angle)
+      // the end piece takes the plan bound (facade overhang, or corner trimming)
       const u0 = piece.u0 <= EPS ? plan.u0 : Math.max(piece.u0, plan.u0)
       const u1 = piece.u1 >= seg.L - EPS ? plan.u1 : Math.min(piece.u1, plan.u1)
       if (u1 - u0 < TRIM_EPS) continue

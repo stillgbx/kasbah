@@ -10,7 +10,7 @@ import belvedere from '../../../house/demos/belvedere.json'
 interface DemoJson { meta: { demo: { scenario: string } }; devices: { deviceId?: string }[]; arrays?: { panels: (string | null)[] }[] }
 const HOUSES: Record<string, DemoJson> = { tilleuls, embruns, belvedere }
 
-// Lundi 7 septembre 2026, 00:00 UTC, fuseau 0 → heures locales = UTC.
+// Monday, September 7, 2026, 00:00 UTC, timezone 0 → local hours = UTC.
 const MONDAY = Date.UTC(2026, 8, 7)
 const make = (scenario: 'tilleuls' | 'embruns' | 'belvedere' | 'tilleuls-winter') =>
   new Simulation({ scenario, seed: 7, startTime: MONDAY, tzOffsetMin: 0, clock: new ManualClock(MONDAY) })
@@ -27,8 +27,8 @@ describe('demo properties', () => {
     }
   })
 
-  // la maison et son parc vont ensemble : un appareil posé que la simulation ne publie pas resterait
-  // grisé, un appareil publié sans place irait « hors plan » (seule la météo n'a pas de place)
+  // the house and its device set go together: a placed device that the simulation does not publish would stay
+  // grayed out, a published device without a place would go "off plan" (only the weather has no place)
   it.each([['tilleuls', 'tl'], ['embruns', 'em'], ['belvedere', 'ap']] as const)('%s: the house binds exactly the simulated devices', (name, prefix) => {
     const house = HOUSES[name]!
     expect(house.meta.demo.scenario).toBe(name)

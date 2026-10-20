@@ -1,18 +1,18 @@
-// Relevé métré : les COTES d'une pièce sont la donnée de référence, son polygone en est déduit.
+// Measured survey: the MEASUREMENTS of a room are the reference data, its polygon is deduced from them.
 //
-// `room.meta.survey.points` (unité du relevé, cm par défaut) sont mesurés à l'intérieur des pièces :
-// une cloison mitoyenne y est réduite à une seule ligne partagée. Le moteur de murs veut, lui, un
-// écart de `t + t'` entre deux faces en vis-à-vis (chaque pièce porte son mur vers l'extérieur,
-// cf. doc/2_maison/2_1_geometrie.md). `fitSurvey` recule donc chaque face en vis-à-vis de
-// l'épaisseur que le voisin pousse dans elle (`t_voisin × manque / (t + t')`) :
-//   - deux pièces murées → demi-cloison chacune, et une surcharge `walls[].thickness` ;
-//   - pièce murée ↔ pièce SANS mur (terrasse, balcon, sas) → la pièce murée ne bouge pas et garde sa
-//     façade, la pièce sans mur absorbe toute l'épaisseur.
-// Les arêtes de façade ne bougent pas : l'emprise du relevé est conservée.
+// `room.meta.survey.points` (survey unit, cm by default) are measured inside the rooms:
+// a shared partition is reduced there to a single shared line. The wall engine, for its part, wants a
+// gap of `t + t'` between two facing faces (each room carries its wall toward the outside,
+// cf. doc/2_maison/2_1_geometrie.md). `fitSurvey` therefore pulls back each facing face by
+// the thickness that the neighbor pushes into it (`t_neighbor × missing / (t + t')`):
+//   - two walled rooms → a half-partition each, and a `walls[].thickness` override;
+//   - walled room ↔ room WITHOUT walls (terrace, balcony, airlock) → the walled room does not move and keeps its
+//     facade, the room without walls absorbs the whole thickness.
+// The facade edges do not move: the footprint of the survey is preserved.
 //
-// Portage À L'IDENTIQUE de `house/fit-survey.mjs` (qui n'est plus qu'une enveloppe de ce module) :
-// même arrondi, mêmes avertissements, même contrôle final. Il travaille sur le JSON BRUT (comme
-// `place.ts`) pour ne pas injecter les défauts zod dans le fichier de l'utilisateur.
+// IDENTICAL port of `house/fit-survey.mjs` (which is now only a wrapper of this module):
+// same rounding, same warnings, same final check. It works on the RAW JSON (like
+// `place.ts`) so as not to inject the zod defaults into the user's file.
 
 import type { Vec2 } from './geometry/vec2'
 
@@ -26,7 +26,7 @@ interface RawRoom extends Json {
   meta?: Json & { survey?: { points?: Vec2[] } }
 }
 interface RawLevel extends Json { id: string; outline?: Vec2[] }
-/** Ce que le calcul lit d'une maison (JSON brut ou maison parsée). */
+/** What the computation reads from a house (raw JSON or parsed house). */
 export interface SurveyDoc extends Json {
   rooms: RawRoom[]
   levels: RawLevel[]
@@ -35,14 +35,14 @@ export interface SurveyDoc extends Json {
 }
 export interface SurveyConventions {
   unit?: 'cm' | 'mm' | 'm'
-  /** Cloison complète entre deux pièces murées (m) ; chacune en porte la moitié. */
+  /** Full partition between two walled rooms (m); each carries half of it. */
   partition?: number
-  /** Correction du repère d'une campagne, par niveau (unité du relevé). */
+  /** Correction of the reference frame of a campaign, per level (survey unit). */
   levelOffsets?: Record<string, Vec2>
   [k: string]: unknown
 }
 
-/** Mêmes pièces murées que `WALLED_KINDS` (geometry/walls.ts). */
+/** Same walled rooms as `WALLED_KINDS` (geometry/walls.ts). */
 const WALLED = new Set(['room', 'corridor', 'stairs', 'garage'])
 
 const EPS = 1e-9
@@ -54,7 +54,7 @@ const len = (a: Vec2) => Math.hypot(a[0], a[1])
 const signedArea = (p: readonly Vec2[]) => p.reduce((s, a, i) => s + cross(a, p[(i + 1) % p.length]!), 0) / 2
 
 interface Edge { a: Vec2; b: Vec2; d: Vec2; n: Vec2; L: number }
-/** Arêtes orientées d'un polygone CCW : direction unitaire `d` et normale extérieure `n`. */
+/** Oriented edges of a CCW polygon: unit direction `d` and outward normal `n`. */
 export function surveyEdges(poly: readonly Vec2[]): Edge[] {
   return poly.map((a, i) => {
     const b = poly[(i + 1) % poly.length]!
@@ -64,7 +64,7 @@ export function surveyEdges(poly: readonly Vec2[]): Edge[] {
   })
 }
 
-/** Rentre chaque arête de `inset[i]`, sommets à l'intersection des droites décalées voisines. */
+/** Insets each edge by `inset[i]`, vertices at the intersection of the neighboring offset lines. */
 function insetPolygon(poly: readonly Vec2[], inset: readonly number[]): Vec2[] {
   const es = surveyEdges(poly)
   const n = poly.length
@@ -75,7 +75,7 @@ function insetPolygon(poly: readonly Vec2[], inset: readonly number[]): Vec2[] {
     const p0: Vec2 = [prev.a[0] - prev.n[0] * pi, prev.a[1] - prev.n[1] * pi]
     const p1: Vec2 = [cur.a[0] - cur.n[0] * ci, cur.a[1] - cur.n[1] * ci]
     const den = cross(prev.d, cur.d)
-    if (Math.abs(den) < EPS) return [round(p1[0]), round(p1[1])]   // arêtes colinéaires
+    if (Math.abs(den) < EPS) return [round(p1[0]), round(p1[1])]   // collinear edges
     const t = cross(sub(p1, p0), cur.d) / den
     return [round(p0[0] + prev.d[0] * t), round(p0[1] + prev.d[1] * t)]
   })
@@ -84,7 +84,7 @@ function insetPolygon(poly: readonly Vec2[], inset: readonly number[]): Vec2[] {
 interface Fit { id: string; levelId: string; walled: boolean; poly: Vec2[] }
 interface Facing { other: Fit; gap: number; lo: number; hi: number }
 
-/** Pièces dont une arête antiparallèle fait face à `e`, avec l'écart mesuré et le recouvrement. */
+/** Rooms of which an antiparallel edge faces `e`, with the measured gap and the overlap. */
 function facingRooms(e: Edge, others: readonly Fit[]): Facing[] {
   const out: Facing[] = []
   for (const other of others) {
@@ -102,7 +102,7 @@ function facingRooms(e: Edge, others: readonly Fit[]): Facing[] {
   return out
 }
 
-/** Longueur d'arête effectivement couverte par des vis-à-vis (union des recouvrements). */
+/** Edge length actually covered by facing edges (union of the overlaps). */
 function covered(facings: readonly Facing[]): number {
   const spans = facings.map(({ lo, hi }) => [lo, hi] as const).sort((a, b) => a[0] - b[0])
   let total = 0, end = -Infinity
@@ -116,13 +116,13 @@ function covered(facings: readonly Facing[]): number {
 
 const unitOf = (c: SurveyConventions) => (c.unit === 'cm' ? 0.01 : c.unit === 'mm' ? 0.001 : 1)
 
-/** Les points bruts d'une pièce, en mètres dans le repère de la maison (décalage de niveau appliqué). */
+/** The raw points of a room, in meters in the house reference frame (level offset applied). */
 export function surveyPointsToHouse(points: readonly Vec2[], levelId: string, conv: SurveyConventions): Vec2[] {
   const [dx, dy] = conv.levelOffsets?.[levelId] ?? [0, 0]
   const unit = unitOf(conv)
   return points.map(([x, y]) => [round((x + dx) * unit), round((y + dy) * unit)])
 }
-/** L'inverse : un point en mètres de la maison vers l'unité et le repère du relevé (arrondi 0,01 unité). */
+/** The inverse: a point in house meters to the unit and reference frame of the survey (rounded to 0.01 unit). */
 export function houseToSurveyPoint(p: Vec2, levelId: string, conv: SurveyConventions): Vec2 {
   const [dx, dy] = conv.levelOffsets?.[levelId] ?? [0, 0]
   const unit = unitOf(conv)
@@ -132,22 +132,22 @@ export function houseToSurveyPoint(p: Vec2, levelId: string, conv: SurveyConvent
 
 export interface SurveyReport { id: string; levelId: string; brut: number; fini: number; inset: number; mitoyen: number; total: number }
 export interface FitResult<T> {
-  /** Copie du document, polygones, surcharges mitoyennes et emprises des niveaux relevés recalculés. */
+  /** Copy of the document, polygons, shared overrides and footprints of the surveyed levels recomputed. */
   doc: T
-  /** Polygones ou emprises qui ont changé. */
+  /** Polygons or footprints that changed. */
   changed: number
   report: SurveyReport[]
-  /** Arêtes à couper (mitoyennes ET en façade) : signalées, pas bloquantes. */
+  /** Edges to cut (shared AND on the facade): flagged, not blocking. */
   warnings: string[]
-  /** Vis-à-vis plus serrés que l'épaisseur requise : la maison n'est pas constructible. */
+  /** Facing gaps tighter than the required thickness: the house is not buildable. */
   problems: string[]
-  /** Emprises de niveau réécrites (pour le compte rendu du script). */
+  /** Level footprints rewritten (for the script's report). */
   outlines: { levelId: string; outline: Vec2[] }[]
 }
 
 /**
- * Recalcule, depuis `meta.survey.points`, le polygone de chaque pièce relevée, ses surcharges de
- * murs mitoyens et l'emprise (`outline`) des niveaux relevés. Ne modifie pas `doc`.
+ * Recomputes, from `meta.survey.points`, the polygon of each surveyed room, its shared-wall overrides and the
+ * footprint (`outline`) of the surveyed levels. Does not modify `doc`.
  */
 export function fitSurvey<T extends SurveyDoc>(input: T): FitResult<T> {
   const house = JSON.parse(JSON.stringify(input)) as SurveyDoc
@@ -159,7 +159,7 @@ export function fitSurvey<T extends SurveyDoc>(input: T): FitResult<T> {
   const empty: FitResult<T> = { doc: house as T, changed: 0, report: [], warnings: [], problems: [], outlines: [] }
   if (!surveyed.length) return empty
 
-  /** Épaisseur que `self` porte sur une arête faisant face à `other` (0 si `self` n'a pas de mur). */
+  /** Thickness that `self` carries on an edge facing `other` (0 if `self` has no wall). */
   const thicknessAgainst = (self: Fit, other: Fit) => (!self.walled ? 0 : other.walled ? half : ext)
   const raw = new Map<string, Fit>(surveyed.map((r) => [r.id, {
     id: r.id, levelId: r.levelId, walled: WALLED.has(r.kind ?? 'room'),
@@ -175,20 +175,20 @@ export function fitSurvey<T extends SurveyDoc>(input: T): FitResult<T> {
     const others = [...raw.values()].filter((r) => r.id !== room.id && r.levelId === room.levelId)
     const es = surveyEdges(self.poly)
     const facing = es.map((e) => facingRooms(e, others))
-    // Le calcul POSSÈDE les surcharges `interior` (régénérées à chaque passage) ; seules celles qu'il
-    // ne sait pas déduire sont gardées : `none` (passage ouvert) et `exterior` (façade forcée).
+    // The computation OWNS the `interior` overrides (regenerated at every pass); only those it
+    // cannot deduce are kept: `none` (open passage) and `exterior` (forced facade).
     const kept = new Map((room.walls ?? [])
       .filter((w) => w.kind === 'none' || w.kind === 'exterior')
       .map((w) => [w.segment, { segment: w.segment, kind: w.kind, ...(w.thickness == null ? {} : { thickness: w.thickness }) }]))
-    // Un PASSAGE OUVERT n'a pas de cloison : son arête ne recule pas (ajout au script d'origine,
-    // sans effet sur une maison qui n'en déclare aucun — la maison de démo en a un).
+    // An OPEN PASSAGE has no partition: its edge does not pull back (addition to the original script,
+    // no effect on a house that declares none — the demo house has one).
     const open = (i: number) => kept.get(i)?.kind === 'none'
     const inset = facing.map((fs, i) => open(i) ? 0 : round(Math.max(0, ...fs.map(({ other, gap }) => {
       const t = thicknessAgainst(self, other), t2 = thicknessAgainst(other, self)
       return t + t2 > EPS ? (t2 * Math.max(0, t + t2 - gap)) / (t + t2) : 0
     }))))
-    // Un alignement droit reste droit : une arête coupée en deux (partie mitoyenne + partie
-    // façade, cas d'un décroché) prend le rentrement de sa portion la plus rentrée.
+    // A straight alignment stays straight: an edge cut in two (shared part + facade
+    // part, the case of a step) takes the inset of its most inset portion.
     for (let pass = 0; pass < inset.length; pass++) {
       for (let i = 0; i < inset.length; i++) {
         const j = (i + 1) % inset.length
@@ -219,7 +219,7 @@ export function fitSurvey<T extends SurveyDoc>(input: T): FitResult<T> {
     else delete room.walls
     if (before !== JSON.stringify([room.polygon, room.walls ?? null])) changed++
 
-    // Ordre de clés lisible (walls juste avant openings, meta en dernier).
+    // Readable key order (walls just before openings, meta last).
     const order = ['id', 'levelId', 'name', 'polygon', 'kind', 'height', 'walls', 'openings', 'style', 'meta']
     const keys = [...order.filter((k) => k in room), ...Object.keys(room).filter((k) => !order.includes(k))]
     house.rooms[house.rooms.indexOf(room)] = Object.fromEntries(keys.map((k) => [k, room[k]])) as RawRoom
@@ -230,7 +230,7 @@ export function fitSurvey<T extends SurveyDoc>(input: T): FitResult<T> {
     })
   }
 
-  // Emprise de chaque niveau relevé = boîte des pièces MURÉES, élargie du mur extérieur.
+  // Footprint of each surveyed level = box of the WALLED rooms, enlarged by the exterior wall.
   const outlines: { levelId: string; outline: Vec2[] }[] = []
   for (const level of house.levels) {
     const polys = [...raw.values()].filter((r) => r.levelId === level.id && r.walled).map((r) => r.poly)
@@ -249,7 +249,7 @@ export function fitSurvey<T extends SurveyDoc>(input: T): FitResult<T> {
     }
   }
 
-  // Contrôle : plus aucune paire de faces en vis-à-vis en dessous de l'écart requis.
+  // Check: no pair of facing faces left below the required gap.
   const byId = new Map(house.rooms.map((r) => [r.id, r]))
   const fitted = new Map(surveyed.map((r) => [r.id, { ...raw.get(r.id)!, poly: byId.get(r.id)!.polygon }]))
   const problems: string[] = []
@@ -258,7 +258,7 @@ export function fitSurvey<T extends SurveyDoc>(input: T): FitResult<T> {
     const others = [...fitted.values()].filter((r) => r.id !== room.id && r.levelId === room.levelId)
     const openEdges = new Set((byId.get(room.id)!.walls ?? []).filter((w) => w.kind === 'none').map((w) => w.segment))
     for (const [i, e] of surveyEdges(self.poly).entries()) {
-      if (openEdges.has(i)) continue                     // passage ouvert : aucun écart requis
+      if (openEdges.has(i)) continue                     // open passage: no gap required
       for (const { other, gap } of facingRooms(e, others)) {
         const need = thicknessAgainst(self, other) + thicknessAgainst(other, self)
         if (gap < need - 1e-3) problems.push(`${room.id} ↔ ${other.id} : écart ${(gap * 100).toFixed(1)} cm < ${(need * 100).toFixed(0)} cm`)
@@ -274,7 +274,7 @@ export class SurveyError extends Error {
   constructor(message: string) { super(message); this.name = 'SurveyError' }
 }
 
-/** Deux segments qui se coupent en un point intérieur à chacun (pas un simple contact). */
+/** Two segments that cross at a point interior to each of them (not a mere contact). */
 function crosses(p1: Vec2, p2: Vec2, q1: Vec2, q2: Vec2): boolean {
   const d1 = cross(sub(p2, p1), sub(q1, p1)), d2 = cross(sub(p2, p1), sub(q2, p1))
   const d3 = cross(sub(q2, q1), sub(p1, q1)), d4 = cross(sub(q2, q1), sub(p2, q1))
@@ -290,10 +290,10 @@ function inside(p: Vec2, poly: readonly Vec2[]): boolean {
 }
 
 /**
- * Pièces d'un même niveau qui se CHEVAUCHENT (faces finies resserrées d'1 cm : deux pièces qui se
- * touchent par un passage ouvert, ou séparées par leur cloison, ne comptent pas). Le contrôle de
- * `fitSurvey` ne voit que les faces en vis-à-vis : une pièce poussée au travers de sa voisine lui
- * échappait.
+ * Rooms of a same level that OVERLAP (finished faces tightened by 1 cm: two rooms that
+ * touch through an open passage, or separated by their partition, do not count). The check of
+ * `fitSurvey` only sees facing faces: a room pushed through its neighbor
+ * escaped it.
  */
 export function overlappingRooms(doc: Pick<SurveyDoc, 'rooms'>): string[] {
   const shrunk = doc.rooms.map((r) => ({ r, p: insetPolygon(r.polygon, r.polygon.map(() => 0.01)) }))

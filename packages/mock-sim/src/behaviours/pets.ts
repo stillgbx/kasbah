@@ -2,36 +2,36 @@ import { SimError } from '../types'
 import type { SimDevice, TickCtx } from '../types'
 import { descriptor } from './common'
 
-// Mangeoire et fontaine pour animaux (type PetKit). Deux kinds, un seul fichier : ils vivent au
-// même endroit de la maison et se lisent ensemble.
+// Feeder and fountain for pets (PetKit type). Two kinds, a single file: they live in the
+// same place in the house and are read together.
 //
-// Ce qui est simulé ici est ce que le CONTRAT porte, pas ce que le fabricant expose : le plan de
-// repas, l'historique et les vidéos n'en font pas partie.
+// What is simulated here is what the CONTRACT carries, not what the vendor exposes: the meal
+// plan, the history and the videos are not part of it.
 //
-// La MANGEOIRE est calée sur la capture du 2026-09-21 : elle ne publie ni le mangé (pas de plateau
-// pesant) ni une charge de batterie (machine au secteur, sans piles) — simuler ce que la vraie
-// machine tait donnerait une carte qu'on ne pourrait pas vérifier chez soi.
+// The FEEDER is calibrated on the 2026-09-21 capture: it publishes neither what was eaten (no
+// weighing tray) nor a battery level (mains-powered machine, no batteries) — simulating what the
+// real machine does not say would give a card that could not be verified at home.
 //
-// La FONTAINE compte des PASSAGES et leur durée, comme la vraie : une Eversweet Max ne mesure
-// aucun volume (elle rend -1 pour l'eau distribuée) mais tient le registre de ses visites.
+// The FOUNTAIN counts VISITS and their duration, like the real one: an Eversweet Max measures
+// no volume (it returns -1 for the water dispensed) but keeps a log of its visits.
 
-/** Rations d'une Fresh Element Solo, en DIXIÈMES DE TASSE — son unité, pas des grammes. */
+/** Portions of a Fresh Element Solo, in TENTHS OF A CUP — its unit, not grams. */
 export const FEEDER_PORTIONS = [1, 2, 3, 4, 5]
 
 export interface PetFeederOptions {
   name: string
-  /** Heures locales des repas programmés. */
+  /** Local hours of the scheduled meals. */
   mealHours?: number[]
-  /** Ration d'un repas programmé, dans l'unité de l'appareil (dixièmes de tasse). */
+  /** Portion of a scheduled meal, in the device's unit (tenths of a cup). */
   meal?: number
 }
 
 export function petFeeder(externalId: string, o: PetFeederOptions): SimDevice<'pet_feeder'> {
   const mealHours = o.mealHours ?? [7, 19]
   const meal = o.meal ?? 2
-  // La trémie se vide en quelques semaines puis se regarnit : sans cela, `foodLow` ne se
-  // vérifierait jamais dans la simulation (le même raisonnement que l'usure des consommables
-  // de la station d'eau, qui repart à neuf pour être observable).
+  // The hopper empties in a few weeks then refills: without this, `foodLow` would never be
+  // verified in the simulation (the same reasoning as the wear of the consumables
+  // of the water station, which starts over to be observable).
   let hopper = 120
   let feedingLeftS = 0
   let servedHour = -1
@@ -42,9 +42,9 @@ export function petFeeder(externalId: string, o: PetFeederOptions): SimDevice<'p
       manufacturer: 'PetKit', model: 'Fresh Element Solo', petFeeder: { portions: FEEDER_PORTIONS, unit: 'cup' },
     }),
     state: {
-      // Calé sur la VRAIE machine (capture du 21/09) : pas de `eatenTodayG` — une Fresh Element
-      // Solo n'a pas de plateau pesant — et pas de `batteryPct`, l'appareil vit au secteur sans
-      // piles. Simuler ce que la machine ne dit pas rendrait la carte invérifiable ici.
+      // Calibrated on the REAL machine (capture of Sep 21): no `eatenTodayG` — a Fresh Element
+      // Solo has no weighing tray — and no `batteryPct`, the device runs on mains without
+      // batteries. Simulating what the machine does not say would make the card unverifiable here.
       kind: 'pet_feeder', updatedAt: 0, available: true,
       foodLow: false, feeding: false, servedToday: 0, plannedToday: 0, desiccantDays: 21,
     },
@@ -59,18 +59,18 @@ export function petFeeder(externalId: string, o: PetFeederOptions): SimDevice<'p
         s.plannedToday = mealHours.length * meal
         servedHour = -1
         s.desiccantDays = Math.max(0, (s.desiccantDays ?? 0) - 1)
-        // sachet remplacé quand il est à bout : la maison ne reste pas éternellement en alerte
+        // pouch replaced when it is used up: the house does not stay in alert forever
         if (s.desiccantDays === 0) s.desiccantDays = 30
       }
 
-      // repas programmé : une fois par heure de repas et par jour
+      // scheduled meal: once per meal hour and per day
       const hour = Math.floor(ctx.hour)
       if (mealHours.includes(hour) && servedHour !== hour) { servedHour = hour; serve(meal) }
 
       if (feedingLeftS > 0) { feedingLeftS -= ctx.dtS; s.feeding = feedingLeftS > 0 }
 
       if (s.plannedToday === 0) s.plannedToday = mealHours.length * meal
-      // Le prochain repas du jour, s'il en reste un : c'est ce que la carte annonce en tête.
+      // The next meal of the day, if one is left: it is what the card announces at the top.
       const nextHour = mealHours.find((h) => h > ctx.hour)
       const midnight = ctx.simTime - ctx.hour * 3_600_000
       s.nextMealAt = nextHour === undefined ? undefined : Math.round(midnight + nextHour * 3_600_000)
@@ -82,7 +82,7 @@ export function petFeeder(externalId: string, o: PetFeederOptions): SimDevice<'p
     apply(cmd) {
       switch (cmd.type) {
         case 'pet_feeder.feed': serve(cmd.amount); break
-        // le son est joué, rien ne change dans l'état : c'est un geste, pas un réglage
+        // the sound is played, nothing changes in the state: it is a gesture, not a setting
         case 'pet_feeder.call_pet': break
         default: throw new SimError('UNSUPPORTED_COMMAND', `${cmd.type} on pet_feeder`)
       }
@@ -103,16 +103,16 @@ export function petFeeder(externalId: string, o: PetFeederOptions): SimDevice<'p
 
 export interface PetFountainOptions {
   name: string
-  /** Passages de l'animal dans une journée, répartis sur les heures d'éveil. */
+  /** Visits of the animal in a day, spread over the waking hours. */
   dailyDrinks?: number
 }
 
 export function petFountain(externalId: string, o: PetFountainOptions): SimDevice<'pet_fountain'> {
   const dailyDrinks = o.dailyDrinks ?? 8
   let lastDay = -1
-  // Le vrai appareil est lu par relais Bluetooth toutes les dix minutes : la simulation reproduit
-  // ce RYTHME, pas seulement les valeurs. Sans cela, `syncedAt` resterait toujours frais et la
-  // ligne « relevé il y a … » de la carte ne serait jamais vérifiable.
+  // The real device is read through a Bluetooth relay every ten minutes: the simulation reproduces
+  // that RHYTHM, not only the values. Without it, `syncedAt` would always stay fresh and the
+  // "read … ago" line of the card could never be verified.
   const SYNC_EVERY_MS = 600_000
   let syncedAt = 0
 
@@ -141,15 +141,15 @@ export function petFountain(externalId: string, o: PetFountainOptions): SimDevic
 
       if (ctx.simTime - syncedAt >= SYNC_EVERY_MS) { syncedAt = ctx.simTime; s.syncedAt = syncedAt }
 
-      // le chat boit le jour ; pompe à l'arrêt, il ne vient plus à la fontaine
+      // the cat drinks during the day; with the pump stopped, it no longer comes to the fountain
       if (s.on && ctx.dtS > 0) {
         const awake = ctx.hour >= 6 && ctx.hour < 23
         if (awake && ctx.rng() < (ctx.dtS / (17 * 3600)) * dailyDrinks) {
           s.drinksToday = (s.drinksToday ?? 0) + 1
           s.drinkAvgS = Math.round(20 + ctx.rng() * 60)
         }
-        // en cycle intermittent la pompe dort entre deux marches : la batterie tient bien plus
-        // longtemps qu'en continu, ce qui est justement l'argument du mode
+        // in intermittent cycle the pump sleeps between two runs: the battery lasts much longer
+        // than in continuous, which is precisely the argument for the mode
         const drainPerDay = s.mode === 'intermittent' ? 3 : 12
         s.batteryPct = Math.max(0, (s.batteryPct ?? 0) - (drainPerDay / 86_400) * ctx.dtS)
         if (s.batteryPct === 0) s.batteryPct = 100

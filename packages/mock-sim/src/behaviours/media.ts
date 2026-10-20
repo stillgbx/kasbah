@@ -4,7 +4,7 @@ import { clamp, descriptor } from './common'
 
 const PLAYLIST = [
   { title: 'Morning Light', artist: 'The Kasbah Ensemble', album: 'Courtyard', durationS: 214 },
-  // un titre marqué explicit : la simulation doit pouvoir montrer ce badge, aucune enceinte ne le dit
+  // a title flagged explicit: the simulation must be able to show that badge, no speaker reports it
   { title: 'Terracotta', artist: 'Mira Solano', album: 'Ochre', durationS: 187, explicit: true },
   { title: 'Riad at Dusk', artist: 'Nour Quartet', album: 'Lanterns', durationS: 256 },
   { title: 'Tiles', artist: 'The Kasbah Ensemble', album: 'Courtyard', durationS: 198 },
@@ -16,9 +16,9 @@ export interface MediaOptions {
   name: string
   volume?: number
   playing?: boolean
-  /** Nature du lecteur (enceinte par défaut) : décide l'icône et le marqueur 3D. */
+  /** Kind of the player (speaker by default): decides the icon and the 3D marker. */
   deviceClass?: MediaPlayerClass
-  /** Modèle annoncé (« Soundbar », « Smart TV ») ; défaut d'après la nature. */
+  /** Announced model ("Soundbar", "Smart TV"); default based on the kind. */
   model?: string
 }
 
@@ -51,7 +51,7 @@ export function mediaPlayer(externalId: string, o: MediaOptions): SimDevice<'med
         case 'media_player.stop': dev.state.playback = 'idle'; delete dev.state.nowPlaying; break
         case 'media_player.next': track = (track + 1) % PLAYLIST.length; dev.state.nowPlaying = now(0); break
         case 'media_player.previous':
-          // comme une télécommande : passé 3 s, retour au début du morceau ; sinon le précédent
+          // like a remote control: past 3 s, back to the start of the track; otherwise the previous one
           if ((dev.state.nowPlaying?.positionS ?? 0) > 3) { dev.state.nowPlaying = now(0); break }
           track = (track - 1 + PLAYLIST.length) % PLAYLIST.length; dev.state.nowPlaying = now(0); break
         case 'media_player.set_volume': dev.state.volume = clamp(Math.round(cmd.volume), 0, 100); break

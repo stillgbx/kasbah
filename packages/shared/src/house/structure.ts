@@ -5,14 +5,14 @@ import { resolveDefaults } from './defaults'
 import { surveyPointsToHouse, type SurveyConventions } from './survey'
 import type { Vec2 } from './geometry/vec2'
 
-// La STRUCTURE de la maison changée dans une séance d'édition : pièces et niveaux qui naissent ou
-// disparaissent, nom et type d'une pièce, nom d'un niveau, nom de la propriété. Mêmes règles que le reste de la séance : tout est dans le
-// patch, rien n'est écrit avant « Valider ». Une pièce qui naît a sa FORME dans `shapes` (des cotes,
-// comme les autres) : tous les gestes de l'onglet Dimensions marchent sur elle.
+// The STRUCTURE of the house changed in an editing session: rooms and levels that are born or
+// disappear, name and type of a room, name of a level, name of the property. Same rules as the rest of the session: everything is in the
+// patch, nothing is written before "Apply". A room that is born has its SHAPE in `shapes` (measurements,
+// like the others): all the gestures of the Dimensions tab work on it.
 
 const newIdSchema = z.string().min(1).regex(/^[a-z0-9_.-]+$/i, 'id: [a-z0-9_.-]+')
 
-/** Un niveau naît au-dessus du plus haut étage habité, ou sous le plus bas. */
+/** A level is born above the highest inhabited floor, or below the lowest. */
 export const NEW_LEVEL_SIDES = ['above', 'below'] as const
 export type NewLevelSide = (typeof NEW_LEVEL_SIDES)[number]
 
@@ -24,17 +24,17 @@ export const structurePatchShape = {
     side: z.enum(NEW_LEVEL_SIDES),
   })).optional(),
   removeLevels: z.array(z.string().min(1)).optional(),
-  /** Pièces nées dans la séance ; leurs cotes sont dans `shapes`, leur nom et leur type dans `rooms`. */
+  /** Rooms born in the session; their measurements are in `shapes`, their name and type in `rooms`. */
   newRooms: z.array(z.object({ id: newIdSchema, levelId: z.string().min(1) })).optional(),
   removeRooms: z.array(z.string().min(1)).optional(),
-  /** Nom et nom court (onglets ; vide = retiré), par niveau (existant ou né dans la séance). */
+  /** Name and short name (tabs; empty = removed), per level (existing or born in the session). */
   levels: z.record(z.string().min(1), z.object({
     name: z.string().trim().min(1).max(60).optional(),
     shortName: z.string().trim().max(12).optional(),
   })).optional(),
-  /** Le nom de la propriété (en-tête, sélecteur). */
+  /** The name of the property (header, selector). */
   propertyName: z.string().trim().min(1).max(60).optional(),
-  /** Nom et type, par pièce (existante ou née dans la séance). */
+  /** Name and type, per room (existing or born in the session). */
   rooms: z.record(z.string().min(1), z.object({
     name: z.string().trim().min(1).max(60).optional(),
     kind: z.enum(ROOM_KINDS).optional(),
@@ -45,20 +45,20 @@ export type StructurePatch = z.infer<z.ZodObject<typeof structurePatchShape>>
 type Json = Record<string, unknown>
 const isObject = (v: unknown): v is Json => typeof v === 'object' && v !== null && !Array.isArray(v)
 const round4 = (v: number) => Math.round(v * 1e4) / 1e4
-/** Mêmes pièces murées que `WALLED_KINDS` (geometry/walls.ts). */
+/** Same walled rooms as `WALLED_KINDS` (geometry/walls.ts). */
 const WALLED = new Set(['room', 'corridor', 'stairs', 'garage'])
 
-/** Le patch change-t-il quelque chose qui demande de recalculer les murs (pièces, types) ? */
+/** Does the patch change something that requires recomputing the walls (rooms, types)? */
 export function structureReshapes(patch: StructurePatch): boolean {
   return !!(patch.newRooms?.length || patch.removeRooms?.length
     || Object.values(patch.rooms ?? {}).some((r) => r.kind !== undefined))
 }
 
 /**
- * Applique la structure au JSON brut, AVANT l'apparence et les formes. `shapes` donne les cotes des
- * pièces qui naissent ; `conv` les conventions du relevé (la maison est déjà convertie quand une pièce
- * naît). Ce qui empêche d'écrire (niveau retiré qui porte encore quelque chose) est rendu dans
- * `blocking` ; une référence inconnue lève (`PlacementError`).
+ * Applies the structure to the raw JSON, BEFORE the appearance and the shapes. `shapes` gives the measurements of the
+ * rooms that are born; `conv` the conventions of the survey (the house is already converted when a room
+ * is born). What prevents writing (removed level that still carries something) is returned in
+ * `blocking`; an unknown reference throws (`PlacementError`).
  */
 export function applyStructureToJson(input: Json, patch: StructurePatch, shapes: Record<string, Vec2[]>, conv: SurveyConventions): { doc: Json; blocking: string[] } {
   const doc: Json = { ...input }
@@ -67,9 +67,9 @@ export function applyStructureToJson(input: Json, patch: StructurePatch, shapes:
   const blocking: string[] = []
   const { levelHeight, slabThickness: slab } = resolveDefaults(isObject(doc.defaults) ? doc.defaults : undefined)
 
-  // -- niveaux qui naissent : un étage se pose sur le plus haut niveau HABITÉ, un sous-sol sous le
-  //    plus bas. Les niveaux vides au-dessus de l'étage (le niveau du toit) montent d'autant.
-  // un niveau né puis retiré dans la même séance n'a jamais existé : il ne monte pas le toit
+  // -- levels that are born: a floor is set on the highest INHABITED level, a basement under the
+  //    lowest. The empty levels above the floor (the roof level) go up by as much.
+  // a level born then removed in the same session never existed: it does not raise the roof
   const dropped = new Set(patch.removeLevels ?? [])
   const added = new Set<string>()
   const roomLevels = new Set([...rooms.map((r) => r.levelId as string), ...(patch.newRooms ?? []).map((r) => r.levelId)])
@@ -96,7 +96,7 @@ export function applyStructureToJson(input: Json, patch: StructurePatch, shapes:
     added.add(nl.id)
   }
 
-  // -- pièces qui naissent : leur polygone provisoire est leur relevé, `fitSurvey` le recalcule
+  // -- rooms that are born: their provisional polygon is their survey, `fitSurvey` recomputes it
   const removed = new Set(patch.removeRooms ?? [])
   for (const nr of patch.newRooms ?? []) {
     if (removed.has(nr.id)) continue
@@ -112,7 +112,7 @@ export function applyStructureToJson(input: Json, patch: StructurePatch, shapes:
     }]
   }
 
-  // -- noms : la propriété, les niveaux (un nom court vide le retire : l'onglet reprend le nom)
+  // -- names: the property, the levels (an empty short name removes it: the tab takes the name back)
   if (patch.propertyName !== undefined) doc.name = patch.propertyName
   for (const [id, ident] of Object.entries(patch.levels ?? {})) {
     if ((patch.removeLevels ?? []).includes(id)) continue
@@ -127,7 +127,7 @@ export function applyStructureToJson(input: Json, patch: StructurePatch, shapes:
     levels = levels.map((l, k) => (k === i ? next : l))
   }
 
-  // -- nom et type
+  // -- name and type
   for (const [id, ident] of Object.entries(patch.rooms ?? {})) {
     if (removed.has(id)) continue
     const i = rooms.findIndex((r) => r.id === id)
@@ -141,13 +141,13 @@ export function applyStructureToJson(input: Json, patch: StructurePatch, shapes:
     rooms = rooms.map((r, k) => (k === i ? next : r))
   }
 
-  // -- pièces retirées : leurs appareils restent connus de la maison, sans place dans la scène
+  // -- removed rooms: their devices stay known to the house, without a place in the scene
   let devices = (Array.isArray(doc.devices) ? doc.devices : []) as Json[]
   let devicesTouched = false
   for (const id of removed) {
     const room = rooms.find((r) => r.id === id)
     if (!room) {
-      if ((patch.newRooms ?? []).some((r) => r.id === id)) continue    // née et retirée dans la séance
+      if ((patch.newRooms ?? []).some((r) => r.id === id)) continue    // born and removed in the session
       throw new PlacementError(`unknown room "${id}"`)
     }
     const openingIds = new Set((Array.isArray(room.openings) ? room.openings as Json[] : []).map((o) => o.id))
@@ -169,8 +169,8 @@ export function applyStructureToJson(input: Json, patch: StructurePatch, shapes:
     })
   }
 
-  // -- le toit suit le plus haut niveau qui a des pièces murées (avant le contrôle des niveaux
-  //    retirés : l'étage qu'on vide puis retire n'est plus celui qui porte le toit)
+  // -- the roof follows the highest level that has walled rooms (before the check of the removed
+  //    levels: the floor that is emptied then removed is no longer the one that carries the roof)
   let roof = isObject(doc.roof) ? doc.roof : null
   const moved = !!(patch.newLevels?.length || patch.removeLevels?.length || patch.newRooms?.length || removed.size)
   if (roof && moved) {
@@ -179,7 +179,7 @@ export function applyStructureToJson(input: Json, patch: StructurePatch, shapes:
     if (high && high.id !== roof.levelId) roof = doc.roof = { ...roof, levelId: high.id }
   }
 
-  // -- niveaux retirés : seulement vides (aucune pièce, aucun appareil, champ, place ni toit dessus)
+  // -- removed levels: only empty ones (no room, no device, array, spot or roof on it)
   const site = isObject(doc.site) ? doc.site : {}
   const parkings = (Array.isArray(site.parkings) ? site.parkings : []) as Json[]
   const arrays = (Array.isArray(doc.arrays) ? doc.arrays : []) as Json[]

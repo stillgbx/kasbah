@@ -6,18 +6,18 @@ export interface CameraOptions {
   name: string
   deviceClass: CameraClass
   /**
-   * Heures locales où la sonnette SONNE, une fois par jour chacune (le facteur, un livreur). Une
-   * sonnette qui sonnerait au hasard prendrait la main sur l'écran pendant qu'on regarde autre
-   * chose : la démo garde des passages rares et prévisibles. Ignoré hors sonnette.
+   * Local hours at which the doorbell RINGS, once a day each (the mail carrier, a delivery person).
+   * A doorbell that rang at random would grab the screen while one is looking at something else:
+   * the demo keeps rare, predictable visits. Ignored outside a doorbell.
    */
   rings?: number[]
 }
 
 /**
- * Caméra sans flux : la simulation n'a pas de vidéo à servir, donc elle ne déclare pas
- * `live_stream` (et la vue dit « pas de flux » au lieu d'attendre une image). Ce qu'elle montre,
- * c'est la NATURE de l'appareil — caméra, sonnette, écran — et, pour une sonnette, le coup de
- * sonnette, qui est un événement et non un état.
+ * Camera without a stream: the simulation has no video to serve, so it does not declare
+ * `live_stream` (and the view says "no stream" instead of waiting for an image). What it shows is
+ * the NATURE of the device — camera, doorbell, display — and, for a doorbell, the ring, which is
+ * an event and not a state.
  */
 export function camera(externalId: string, o: CameraOptions): SimDevice<'camera'> {
   const caps: Capability[] = o.deviceClass === 'doorbell' ? ['chime'] : []
@@ -32,7 +32,7 @@ export function camera(externalId: string, o: CameraOptions): SimDevice<'camera'
     tick(ctx) {
       const day = Math.floor(ctx.simTime / 86_400_000)
       for (const h of rings) {
-        // fenêtre d'une minute : un pas de simulation tombe forcément dedans (pas maximal 60 s)
+        // one-minute window: a simulation step always falls inside it (max step 60 s)
         if (inWindow(ctx.hour, h, h + 1 / 60) && rungOn.get(h) !== day) {
           rungOn.set(h, day)
           ctx.emitEvent?.('chime')

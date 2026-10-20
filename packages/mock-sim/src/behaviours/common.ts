@@ -9,10 +9,10 @@ export function descriptor(externalId: string, kind: DeviceKind, name: string, c
 export const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 export const round1 = (v: number) => Math.round(v * 10) / 10
 
-/** Vrai si `hour` ∈ [start, end) (heures fractionnaires). */
+/** True if `hour` ∈ [start, end) (fractional hours). */
 export const inWindow = (hour: number, start: number, end: number) => hour >= start && hour < end
 
-/** Timestamp (ms) de la prochaine occurrence de `hour` (locale) après `simTime`, en respectant les jours autorisés. */
+/** Timestamp (ms) of the next occurrence of `hour` (local) after `simTime`, honoring the allowed days. */
 export function nextOccurrence(simTime: number, hour: number, dow: number, tzOffsetMin: number, allowedDows: readonly number[]): number {
   const local = simTime - tzOffsetMin * 60_000
   const dayStart = Math.floor(local / 86_400_000) * 86_400_000

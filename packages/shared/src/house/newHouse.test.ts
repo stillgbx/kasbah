@@ -3,12 +3,12 @@ import { parseHouse } from './validate'
 import { computeHouseGeometry } from './geometry'
 import { FIRST_ROOM, newHouseJson, propertyIdFor } from './newHouse'
 
-// La maison d'une installation neuve : valide, dessinable, point 0 au coin de la première pièce.
+// The house of a new installation: valid, drawable, point 0 at the corner of the first room.
 
 const input = { name: 'Maison du lac', kind: 'house' as const, origin: { lat: 45, lon: 5, heading: 20 }, terrain: { width: 30, depth: 20 }, levelName: 'RDC', roomName: 'Séjour' }
 
 describe('newHouseJson', () => {
-  it('une maison : valide, une pièce au point 0, terrain centré, toit plat, aucun plugin', () => {
+  it('a house: valid, one room at point 0, centered terrain, flat roof, no plugin', () => {
     const h = parseHouse(newHouseJson('lac', input))
     expect(h.rooms[0]!.polygon).toEqual(FIRST_ROOM)
     expect(h.site.terrain).toEqual([[-12.5, -8], [17.5, -8], [17.5, 12], [-12.5, 12]])
@@ -17,7 +17,7 @@ describe('newHouseJson', () => {
     expect(() => computeHouseGeometry(h)).not.toThrow()
   })
 
-  it('un appartement : pas de toit, une marge de 2 m autour de la pièce, son type retenu', () => {
+  it('an apartment: no roof, a 2 m margin around the room, its type retained', () => {
     const raw = newHouseJson('apt', { ...input, kind: 'apartment', terrain: undefined })
     const h = parseHouse(raw)
     expect(h.roof).toBeUndefined()
@@ -27,7 +27,7 @@ describe('newHouseJson', () => {
 })
 
 describe('propertyIdFor', () => {
-  it('tire un id lisible du nom, unique', () => {
+  it('draws a readable id from the name, unique', () => {
     expect(propertyIdFor('Maison du Lac', [])).toBe('maison-du-lac')
     expect(propertyIdFor('Été à l’Île', [])).toBe('ete-a-l-ile')
     expect(propertyIdFor('Maison du lac', ['maison-du-lac', 'maison-du-lac-2'])).toBe('maison-du-lac-3')

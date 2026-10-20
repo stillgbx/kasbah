@@ -6,12 +6,12 @@ import { isWalled } from './walls'
 
 const FLAT_THICKNESS = 0.2
 
-/** Niveau le plus haut (l'ordre du tableau n'est pas sémantique). */
+/** Highest level (the order of the array is not semantic). */
 export function topLevel(levels: readonly Level[]): Level {
   return levels.reduce((best, l) => (l.elevation > best.elevation ? l : best), levels[0]!)
 }
 
-/** Emprise par défaut d'un niveau : bbox des pièces murées agrandie de l'épaisseur extérieure. */
+/** Default footprint of a level: bbox of the walled rooms enlarged by the exterior thickness. */
 export function defaultOutline(level: Level, rooms: readonly Room[], defaults: HouseDefaults): Vec2[] | null {
   const pts = rooms.filter((r) => r.levelId === level.id && isWalled(r)).flatMap((r) => r.polygon)
   if (pts.length === 0) return null
@@ -43,18 +43,18 @@ export function computeRoof(house: House, defaults: HouseDefaults): RoofDescript
   if (axis === 'x') {
     const my = (min[1] + max[1]) / 2
     faces.push(
-      [[min[0], min[1], zBase], [max[0], min[1], zBase], [max[0], my, zRidge], [min[0], my, zRidge]],   // versant sud
-      [[max[0], max[1], zBase], [min[0], max[1], zBase], [min[0], my, zRidge], [max[0], my, zRidge]],   // versant nord
-      [[min[0], max[1], zBase], [min[0], min[1], zBase], [min[0], my, zRidge]],                          // pignon ouest
-      [[max[0], min[1], zBase], [max[0], max[1], zBase], [max[0], my, zRidge]],                          // pignon est
+      [[min[0], min[1], zBase], [max[0], min[1], zBase], [max[0], my, zRidge], [min[0], my, zRidge]],   // south slope
+      [[max[0], max[1], zBase], [min[0], max[1], zBase], [min[0], my, zRidge], [max[0], my, zRidge]],   // north slope
+      [[min[0], max[1], zBase], [min[0], min[1], zBase], [min[0], my, zRidge]],                          // west gable
+      [[max[0], min[1], zBase], [max[0], max[1], zBase], [max[0], my, zRidge]],                          // east gable
     )
   } else {
     const mx = (min[0] + max[0]) / 2
     faces.push(
-      [[max[0], min[1], zBase], [max[0], max[1], zBase], [mx, max[1], zRidge], [mx, min[1], zRidge]],   // versant est
-      [[min[0], max[1], zBase], [min[0], min[1], zBase], [mx, min[1], zRidge], [mx, max[1], zRidge]],   // versant ouest
-      [[min[0], min[1], zBase], [max[0], min[1], zBase], [mx, min[1], zRidge]],                          // pignon sud
-      [[max[0], max[1], zBase], [min[0], max[1], zBase], [mx, max[1], zRidge]],                          // pignon nord
+      [[max[0], min[1], zBase], [max[0], max[1], zBase], [mx, max[1], zRidge], [mx, min[1], zRidge]],   // east slope
+      [[min[0], max[1], zBase], [min[0], min[1], zBase], [mx, min[1], zRidge], [mx, max[1], zRidge]],   // west slope
+      [[min[0], min[1], zBase], [max[0], min[1], zBase], [mx, min[1], zRidge]],                          // south gable
+      [[max[0], max[1], zBase], [min[0], max[1], zBase], [mx, max[1], zRidge]],                          // north gable
     )
   }
   return { type: 'gable', outline, zBase, zRidge, thickness: 0, faces }

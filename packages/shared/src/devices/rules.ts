@@ -4,7 +4,7 @@ import { COMMAND_REQUIRES, commandKind, type Command } from './command'
 import type { DeviceKind } from './kinds'
 import type { DeviceState, StateFor, StatePatch } from './state'
 
-// Règles pures partagées serveur/client : identifiants, autorisation de commande, fusion d'état.
+// Pure rules shared server/client: identifiers, command authorization, state merging.
 
 export function makeDeviceId(pluginId: string, externalId: string): DeviceId {
   return `${pluginId}:${externalId}`
@@ -24,7 +24,7 @@ export class CommandNotAllowedError extends Error {
   }
 }
 
-/** Vérifie que la commande vise le bon kind et une capacité déclarée par l'appareil. */
+/** Checks that the command targets the right kind and a capability declared by the device. */
 export function assertCommandAllowed(descriptor: DeviceDescriptor, cmd: Command): void {
   const kind = commandKind(cmd)
   if (kind !== descriptor.kind) {
@@ -36,27 +36,27 @@ export function assertCommandAllowed(descriptor: DeviceDescriptor, cmd: Command)
   }
 }
 
-/** Sous ces seuils, l'arrondi du fabricant et l'effondrement du courant en fin de charge faussent tout. */
+/** Below these thresholds, the vendor's rounding and the collapse of the current at the end of charge distort everything. */
 const MIN_POINTS_TO_ESTIMATE = 2
 const MIN_MINUTES_TO_ESTIMATE = 5
 const MIN_PLAUSIBLE_CHARGE_W = 200
 const MAX_PLAUSIBLE_CHARGE_W = 150_000
 
 /**
- * Puissance de charge ESTIMÉE, pour un véhicule qui ne la dit pas (la Renault 5 E-Tech ; Tesla, si).
+ * ESTIMATED charge power, for a vehicle that does not say it (the Renault 5 E-Tech; Tesla does).
  *
- * Elle ne se déduit PAS d'une pente de `soc` : un point de charge vaut un demi-kWh, le sondage est à
- * dix minutes, le bruit d'arrondi dépasserait le signal. Elle se déduit de ce que la VOITURE annonce
- * — l'énergie qu'il reste à mettre (cible − niveau, sur la capacité de la batterie) divisée par le
- * temps qu'elle se donne. C'est donc la voiture qui estime ; Kasbah ne fait qu'une règle de trois.
+ * It is NOT deduced from a slope of `soc`: one charge point is worth half a kWh, polling is at
+ * ten minutes, the rounding noise would exceed the signal. It is deduced from what the CAR announces
+ * — the energy left to put in (target − level, over the battery capacity) divided by the
+ * time it gives itself. So it is the car that estimates; Kasbah only does a rule of three.
  *
- * `batteryKwh` vient de la maison (`HouseDevice.batteryKwh`), saisi par l'utilisateur : AUCUN
- * fabricant ne donne la capacité de la batterie — ni Tesla, ni Renault, pas même dans la fiche du
- * véhicule. Sans elle, pas d'estimation.
+ * `batteryKwh` comes from the house (`HouseDevice.batteryKwh`), entered by the user: NO
+ * vendor gives the battery capacity — neither Tesla nor Renault, not even in the
+ * vehicle's data sheet. Without it, no estimate.
  *
- * `undefined` dès qu'un morceau manque, quand le véhicule donne déjà sa puissance (il n'y a rien à
- * estimer), quand la charge touche à sa fin, ou quand le résultat sort des puissances qu'une voiture
- * sait avaler — mieux vaut se taire qu'annoncer un chiffre absurde.
+ * `undefined` as soon as a piece is missing, when the vehicle already gives its power (there is nothing to
+ * estimate), when the charge is nearing its end, or when the result falls outside the powers a car
+ * can swallow — better to stay silent than announce an absurd figure.
  */
 export function estimateChargePowerW(state: StateFor<'vehicle'>, batteryKwh: number | undefined): number | undefined {
   if (!state.charging || state.chargePowerW || !batteryKwh || batteryKwh <= 0) return undefined
@@ -66,7 +66,7 @@ export function estimateChargePowerW(state: StateFor<'vehicle'>, batteryKwh: num
   if (points < MIN_POINTS_TO_ESTIMATE || minutes < MIN_MINUTES_TO_ESTIMATE) return undefined
   const watts = ((points / 100) * batteryKwh * 1000 * 60) / minutes
   if (watts < MIN_PLAUSIBLE_CHARGE_W || watts > MAX_PLAUSIBLE_CHARGE_W) return undefined
-  return Math.round(watts / 100) * 100                   // à la centaine de watts : le calcul n'en dit pas plus
+  return Math.round(watts / 100) * 100                   // to the nearest hundred watts: the computation says no more
 }
 
 export function shallowEqual(a: unknown, b: unknown): boolean {
@@ -79,14 +79,14 @@ export function shallowEqual(a: unknown, b: unknown): boolean {
 }
 
 /**
- * Fusionne un patch dans l'état. Retourne la MÊME référence si rien ne change (dédup) :
- * c'est ce qui garde le tick 1 Hz du mock silencieux sur le WebSocket.
+ * Merges a patch into the state. Returns the SAME reference if nothing changes (dedup):
+ * it is what keeps the mock's 1 Hz tick silent on the WebSocket.
  */
 export function mergeState<K extends DeviceKind>(prev: StateFor<K>, patch: StatePatch<K>, now: number): StateFor<K> {
   let changed = false
   const prevRec = prev as Record<string, unknown>
-  // `null` demande l'EFFACEMENT du champ (voir `StatePatch`) : il ne change quelque chose que si
-  // le champ était présent, sinon un plugin qui efface à chaque trame réveillerait le WebSocket.
+  // `null` asks for the CLEARING of the field (see `StatePatch`): it only changes something if
+  // the field was present, otherwise a plugin that clears on every frame would wake up the WebSocket.
   for (const [k, v] of Object.entries(patch)) {
     if (k === 'kind' || k === 'updatedAt' || v === undefined) continue
     if (v === null ? k in prevRec : !shallowEqual(prevRec[k], v)) { changed = true; break }
@@ -102,12 +102,12 @@ export function mergeState<K extends DeviceKind>(prev: StateFor<K>, patch: State
   return next as StateFor<K>
 }
 
-/** État initial complet (indisponible) pour un kind : le client reçoit toujours un objet entier. */
+/** Complete initial state (unavailable) for a kind: the client always receives a whole object. */
 export function defaultState(kind: DeviceKind, now = 0): DeviceState {
   const base = { updatedAt: now, available: false }
   switch (kind) {
     case 'light': return { kind, ...base, on: false }
-    // sans `position` : un ouvrant dont on n'a rien reçu n'est pas « fermé », il est inconnu
+    // without `position`: a cover we have received nothing about is not "closed", it is unknown
     case 'cover': return { kind, ...base, motion: 'stopped' }
     case 'media_player': return { kind, ...base, playback: 'off', volume: 0, muted: false }
     case 'climate': return { kind, ...base, mode: 'off', targetTempC: 20, currentTempC: 20 }
@@ -116,16 +116,16 @@ export function defaultState(kind: DeviceKind, now = 0): DeviceState {
     case 'sensor': return { kind, ...base, value: 0 }
     case 'energy': return { kind, ...base, productionW: 0, consumptionW: 0, gridW: 0 }
     case 'ev_charger': return { kind, ...base, status: 'disconnected', powerW: 0, sessionWh: 0 }
-    // sans `locked` : tous les constructeurs ne le disent pas, inconnu n'est pas Â« verrouille Â»
+    // without `locked`: not all makers report it, unknown is not "locked"
     case 'vehicle': return { kind, ...base, soc: 0, rangeKm: 0, pluggedIn: false, charging: false }
     case 'camera': return { kind, ...base }
-    // indisponible ET vide de sens : ces valeurs ne s'affichent jamais, `available: false` les grise
+    // unavailable AND meaningless: these values are never displayed, `available: false` grays them out
     case 'weather': return { kind, ...base, condition: 'clear', tempC: 0, humidity: 0, windKmh: 0, windDirDeg: 0, cloudCover: 0, isDay: true, sunrise: 0, sunset: 0, observedAt: 0 }
-    // aucune mesure : tant que la station n'a pas répondu, chaque grandeur est inconnue, pas nulle
+    // no measurement: as long as the station has not answered, each quantity is unknown, not zero
     case 'water': return { kind, ...base }
-    // rien de connu tant que le cloud n'a pas répondu : ni manque de croquettes, ni ration servie
+    // nothing known as long as the cloud has not answered: neither lack of kibble nor portion served
     case 'pet_feeder': return { kind, ...base }
-    // `on: false` parce que l'interrupteur doit montrer quelque chose ; `available: false` le grise
+    // `on: false` because the switch must show something; `available: false` grays it out
     case 'pet_fountain': return { kind, ...base, on: false }
     case 'fan': return { kind, ...base, on: false }
   }

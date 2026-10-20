@@ -1,6 +1,6 @@
-// Fuseau imposé AVANT tout calcul de date : `sunTimes` découpe le jour LOCAL. Node relit `TZ` à
-// l'exécution ; la garde ci-dessous saute le fichier si la plateforme l'ignore.
-// (package sans types Node : `process` passe par `globalThis`)
+// Timezone imposed BEFORE any date computation: `sunTimes` slices the LOCAL day. Node re-reads `TZ` at
+// run time; the guard below skips the file if the platform ignores it.
+// (package without Node types: `process` goes through `globalThis`)
 ;(globalThis as unknown as { process: { env: Record<string, string> } }).process.env.TZ = 'Europe/Paris'
 
 import { describe, expect, it } from 'vitest'
@@ -10,7 +10,7 @@ const tzApplied = new Date(2026, 0, 1).getTimezoneOffset() === -60
 const DIJON = { lat: 47.322, lon: 5.041 }
 const hm = (t: number | undefined) => t === undefined ? undefined
   : new Date(t).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' })
-/** Écart en minutes entre un instant et une heure murale de Paris le même jour. */
+/** Gap in minutes between an instant and a wall-clock hour of Paris the same day. */
 const offBy = (t: number | undefined, day: Date, hhmm: string) => {
   const [h, m] = hhmm.split(':').map(Number)
   const ref = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m).getTime()
@@ -18,8 +18,8 @@ const offBy = (t: number | undefined, day: Date, hhmm: string) => {
 }
 
 describe.skipIf(!tzApplied)('sunTimes', () => {
-  // Référence : midi solaire de Dijon à 13:41 CEST (longitude 5,04° E, équation du temps −1,8 min)
-  // et 15 h 56 de jour au solstice → lever 05:43, coucher 21:40.
+  // Reference: solar noon in Dijon at 13:41 CEST (longitude 5.04° E, equation of time −1.8 min)
+  // and 15 h 56 of daylight at the solstice → sunrise 05:43, sunset 21:40.
   it('gives Dijon summer solstice times within two minutes', () => {
     const day = new Date(2026, 5, 21, 12)
     const s = sunTimes(day, DIJON.lat, DIJON.lon)
@@ -39,8 +39,8 @@ describe.skipIf(!tzApplied)('sunTimes', () => {
     expect(sunTimes(new Date(2026, 5, 21, 12), 78, 15)).toEqual({})
   })
 
-  // À 60° en juin, le crépuscule de la veille tombe après minuit : il ne doit pas être pris pour
-  // celui du jour, qui tombe lui-même après le minuit suivant — donc absent.
+  // At 60° in June, the previous day's twilight falls after midnight: it must not be taken for
+  // that of the day, which itself falls after the following midnight — hence absent.
   it('never returns the previous evening dusk after midnight', () => {
     const s = sunTimes(new Date(2026, 5, 21, 12), 60, 10)
     expect(hm(s.dawn)).toBe('02:09')

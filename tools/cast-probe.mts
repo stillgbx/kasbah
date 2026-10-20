@@ -1,13 +1,13 @@
 /**
- * RELEVÉ (jetable) : ouvre une connexion Cast vers un appareil, s'annonce auprès de l'appli qui
- * tourne, et écoute TOUT ce qui passe sur les canaux qu'elle déclare — plus quelques questions
- * envoyées à la main. Sert à répondre « le protocole donne-t-il X ? » par une capture, pas par une
- * supposition (ici : l'id de la vidéo YouTube, pour en tirer la vignette publique).
+ * SURVEY (throwaway): opens a Cast connection to a device, announces itself to the running
+ * app, and listens to EVERYTHING that passes on the channels it declares — plus a few questions
+ * sent by hand. Used to answer "does the protocol give X?" with a capture, not with a
+ * guess (here: the YouTube video id, to derive the public thumbnail from it).
  *
  *   npx tsx tools/cast-probe.mts 192.168.1.87
  *
- * Lecture seule : aucune commande de transport n'est envoyée. Une seconde connexion de « sender »
- * ne dérange pas le plugin, le protocole en accepte plusieurs.
+ * Read-only: no transport command is sent. A second "sender" connection
+ * does not disturb the plugin, the protocol accepts several.
  */
 import { connect } from 'node:tls'
 import { FrameDecoder, encodeFrame, jsonMessage, NS_CONNECTION, NS_HEARTBEAT, NS_MEDIA, NS_RECEIVER, RECEIVER_ID } from '../apps/server/src/plugins/google_cast/protocol'
@@ -20,7 +20,7 @@ const NS_SYSTEM = 'urn:x-cast:com.google.cast.system'
 const LISTEN_MS = 20_000
 
 const socket = connect({ host, port: 8009, rejectUnauthorized: false }, () => {
-  console.log(`connecté à ${host}:8009`)
+  console.log(`connected to ${host}:8009`)
   send(RECEIVER_ID, NS_CONNECTION, { type: 'CONNECT' })
   send(RECEIVER_ID, NS_RECEIVER, { type: 'GET_STATUS', requestId: nextId() })
 })
@@ -41,14 +41,14 @@ socket.on('data', (chunk: Buffer) => {
     const short = m.namespace.replace('urn:x-cast:com.google.', '')
     console.log(`← ${short} ${m.payload.slice(0, 2000)}`)
     if (transportId || m.namespace !== NS_RECEIVER) continue
-    // première réponse du récepteur : s'annoncer auprès de l'appli et l'interroger sur ses canaux
+    // first reply of the receiver: announce ourselves to the app and query it about its channels
     const app = (JSON.parse(m.payload) as { status?: { applications?: { transportId?: string; isIdleScreen?: boolean }[] } }).status?.applications?.find((a) => !a.isIdleScreen)
-    if (!app?.transportId) { console.log('aucune appli à interroger'); continue }
+    if (!app?.transportId) { console.log('no app to query'); continue }
     transportId = app.transportId
     send(transportId, NS_CONNECTION, { type: 'CONNECT' })
     send(transportId, NS_MEDIA, { type: 'GET_STATUS', requestId: nextId() })
-    // Le canal MDX est celui qu'utilise le téléphone pour piloter YouTube sur la TV : on lui pose les
-    // questions connues de ce protocole, et on regarde ce qu'il pousse de lui-même.
+    // The MDX channel is the one the phone uses to drive YouTube on the TV: we ask it the
+    // known questions of this protocol, and watch what it pushes by itself.
     send(transportId, NS_MDX, { type: 'getMdxSessionStatus' })
     send(transportId, NS_MDX, { type: 'getNowPlaying' })
     send(transportId, NS_CUSTOM, { type: 'getStatus' })
@@ -58,4 +58,4 @@ socket.on('data', (chunk: Buffer) => {
 
 socket.on('error', (err) => { console.error('erreur socket', err.message); process.exit(1) })
 setInterval(() => send(RECEIVER_ID, NS_HEARTBEAT, { type: 'PING' }), 5000)
-setTimeout(() => { console.log('fin du relevé'); socket.destroy(); process.exit(0) }, LISTEN_MS)
+setTimeout(() => { console.log('end of the survey'); socket.destroy(); process.exit(0) }, LISTEN_MS)

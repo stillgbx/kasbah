@@ -1,4 +1,4 @@
-/** Générateur pseudo-aléatoire mulberry32 : rapide, 32 bits, reproductible par graine. */
+/** mulberry32 pseudo-random generator: fast, 32 bits, reproducible by seed. */
 export type Rng = () => number
 
 export function mulberry32(seed: number): Rng {
@@ -12,8 +12,8 @@ export function mulberry32(seed: number): Rng {
   }
 }
 
-/** Uniforme dans [min, max). */
+/** Uniform in [min, max). */
 export const uniform = (rng: Rng, min: number, max: number) => min + rng() * (max - min)
 
-/** Approximation gaussienne (somme de 3 uniformes), moyenne 0, écart-type ≈ 1. */
+/** Gaussian approximation (sum of 3 uniforms), mean 0, standard deviation ≈ 1. */
 export const gauss = (rng: Rng) => (rng() + rng() + rng() - 1.5) * 2

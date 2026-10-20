@@ -81,7 +81,7 @@ describe('surface openings', () => {
   })
 
   it('surfaceGaps measured on the footprint of a roof-window start at the edge of its hole', () => {
-    // 1,2 m le long d'une pente de 60° : 0,6 m vu du ciel, donc 2,7 m de chaque côté dans 6 m
+    // 1.2 m along a 60° slope: 0.6 m seen from the sky, so 2.7 m on each side in 6 m
     const velux = { id: 'v', type: 'roof-window' as const, x: 3, y: 3, yaw: 0, width: 1, height: 0.6 }
     const gaps = surfaceGaps(square, velux)
     expect(gaps.front).toBeCloseTo(2.7, 9)
@@ -109,7 +109,7 @@ describe('demo house surface openings', () => {
     if (geo.roof) {
       const at = roofAtPoint(geo.roof, velux!.x!, velux!.y!)
       expect(at).not.toBeNull()
-      expect(defaultRoofYaw(geo.roof, velux!.x!, velux!.y!)).toBe(180)          // versant sud : la descente va vers −y
+      expect(defaultRoofYaw(geo.roof, velux!.x!, velux!.y!)).toBe(180)          // south slope: the descent goes toward −y
     }
   })
 
@@ -118,14 +118,14 @@ describe('demo house surface openings', () => {
     const house = parseHouse(raw) as House
     const roof = computeHouseGeometry(house).roof!
     const cos35 = Math.cos((35 * Math.PI) / 180)
-    // versant sud : le cap écrit (0, vers le faîtage) cède à la descente (180)
+    // south slope: the written heading (0, toward the ridge) yields to the descent (180)
     const south = surfaceFootprint({ type: 'roof-window', x: 2.45, y: 3.1, yaw: 0, width: 1, height: 1.2 }, roof)
     expect(south).toMatchObject({ x: 2.45, y: 3.1, yaw: 180, width: 1 })
     expect(south.height).toBeCloseTo(1.2 * cos35, 9)
     expect(south.slope).toBeCloseTo(35, 6)
-    // versant nord : il se retourne tout seul
+    // north slope: it flips by itself
     expect(surfaceFootprint({ type: 'roof-window', x: 2.45, y: 6, yaw: 180, width: 1, height: 1.2 }, roof).yaw).toBe(0)
-    // un puits de lumière, ou un Velux sans toit sous lui, reste tel qu'écrit
+    // a skylight, or a Velux without a roof under it, stays as written
     expect(surfaceFootprint({ type: 'skylight', x: 2.45, y: 3.1, yaw: 30, width: 1, height: 1.2 }, roof)).toMatchObject({ yaw: 30, height: 1.2, slope: 0 })
     expect(surfaceFootprint({ type: 'roof-window', x: 2.45, y: 3.1, yaw: 30, width: 1, height: 1.2 }, undefined)).toMatchObject({ yaw: 30, height: 1.2, slope: 0 })
   })
@@ -133,7 +133,7 @@ describe('demo house surface openings', () => {
   it('validates a roof-window by its footprint: it may overhang the room by its unshortened length', async () => {
     const { default: raw } = await import('./__fixtures__/demo-house.json')
     const doc = JSON.parse(JSON.stringify(raw)) as House
-    // 1,2 m le long de la pente = 0,98 m en plan : à 0,52 m du mur sud, il tient (1,2 m en plan n'y tiendrait pas)
+    // 1.2 m along the slope = 0.98 m in plan: at 0.52 m from the south wall, it fits (1.2 m in plan would not fit)
     const velux = doc.rooms.find((r) => r.id === 'chambre1')!.openings.find((o) => o.id === 'velux-ch1')!
     Object.assign(velux, { y: 0.52, yaw: 0 })
     expect(() => parseHouse(doc)).not.toThrow()
@@ -148,7 +148,7 @@ describe('demo house surface openings', () => {
     expect(panels.length).toBeGreaterThan(0)
     for (const v of veluxes) {
       for (const { d, at, p } of panels) {
-        // emprise du module vue du ciel : sa longueur penchée se raccourcit de cos(pente)
+        // footprint of the module seen from the sky: its tilted length shortens by cos(slope)
         const footprint = { x: at[0], y: at[1], yaw: d.yaw ?? 0, width: p.width, height: p.height * Math.cos((p.tilt * Math.PI) / 180) }
         expect(surfaceRectsOverlap(v as typeof footprint, footprint), `${v.id} sous ${d.id}`).toBe(false)
       }

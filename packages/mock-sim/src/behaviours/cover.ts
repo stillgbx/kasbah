@@ -5,9 +5,9 @@ import { clamp, descriptor } from './common'
 export interface CoverOptions { name: string; deviceClass: CoverClass; position?: number; tilt?: boolean; speedPctPerS?: number; preset?: number; quiet?: boolean }
 
 /**
- * Modèle annoncé pour chaque nature. Un vrai plugin lit ce que le fabricant déclare (`uiClass` chez
- * Overkiz) ; la simulation ne peut que le décider, mais elle le décide DEVICE PAR DEVICE, jamais
- * d'après le nom : un coffret de portail ne s'annonce pas « Roller shutter ».
+ * Model announced for each kind. A real plugin reads what the vendor declares (`uiClass` on
+ * Overkiz); the simulation can only decide it, but it decides it DEVICE BY DEVICE, never from the
+ * name: a gate controller does not announce itself as "Roller shutter".
  */
 const MODELS: Record<CoverClass, string> = {
   shutter: 'Roller shutter', awning: 'Awning', blind: 'Venetian blind', curtain: 'Curtain rail',
@@ -15,24 +15,24 @@ const MODELS: Record<CoverClass, string> = {
 }
 
 /**
- * Ouvrant : se déplace vers une cible à vitesse constante (5 %/s par défaut), `stop` fige.
+ * Cover: moves toward a target at constant speed (5 %/s by default), `stop` freezes it.
  *
- * `deviceClass` est OBLIGATOIRE, comme chez un vrai plugin : c'est elle qui voyage dans
- * `meta.cover.deviceClass` et décide du vocabulaire, de la forme dessinée et de l'état au repos
- * (`apps/web/src/lib/cover.ts`). Sans elle, toutes ces règles retomberaient sur le cas du volet et
- * seraient invérifiables en simulation.
+ * `deviceClass` is MANDATORY, as with a real plugin: it is what travels in
+ * `meta.cover.deviceClass` and decides the vocabulary, the drawn shape and the resting state
+ * (`apps/web/src/lib/cover.ts`). Without it, all these rules would fall back on the shutter case
+ * and could not be verified in simulation.
  */
 export function cover(externalId: string, o: CoverOptions): SimDevice<'cover'> {
   const caps: Capability[] = ['open_close', 'position', 'stop']
   if (o.tilt) caps.push('tilt')
-  // position favorite mémorisée « dans le moteur » : la simulation la connaît, donc elle la montre,
-  // et elle sait la réécrire — d'où les deux capacités, comme un moteur io-homecontrol
+  // favorite position stored "in the motor": the simulation knows it, so it shows it,
+  // and it can rewrite it — hence the two capabilities, like an io-homecontrol motor
   if (o.preset !== undefined) caps.push('preset', 'preset_set')
-  // mode discret : le moteur sait rouler en vitesse lente (moitié moins vite ici)
+  // quiet mode: the motor can run at slow speed (half as fast here)
   if (o.quiet) caps.push('quiet')
-  // le volet discret de la démo est aussi SOLAIRE : il publie sa batterie
+  // the demo's quiet shutter is also SOLAR: it publishes its battery
   if (o.quiet) caps.push('battery')
-  // la mémoire est MUTABLE : `cover.set_preset` la réécrit, et `cover.preset` suit la nouvelle valeur
+  // the memory is MUTABLE: `cover.set_preset` rewrites it, and `cover.preset` follows the new value
   let preset = o.preset
   const speed = o.speedPctPerS ?? 5
   let target: number | null = null
@@ -45,8 +45,8 @@ export function cover(externalId: string, o: CoverOptions): SimDevice<'cover'> {
       ...(o.tilt ? { tilt: 50 } : {}), ...(preset !== undefined ? { presetPosition: preset } : {}),
       ...(o.quiet ? { quiet: false, batteryPct: 86 } : {}),
     },
-    // `position` est optionnelle dans le contrat (une radio unidirectionnelle ne la connaît pas),
-    // mais la simulation la pose au démarrage et ne l'efface jamais : d'où les `!` ci-dessous.
+    // `position` is optional in the contract (a one-way radio does not know it),
+    // but the simulation sets it at startup and never clears it: hence the `!` below.
     tick(ctx) {
       if (target === null) return
       const delta = target - dev.state.position!
@@ -73,13 +73,13 @@ export function cover(externalId: string, o: CoverOptions): SimDevice<'cover'> {
           break
         case 'cover.set_preset':
           if (preset === undefined) throw new SimError('UNSUPPORTED_COMMAND', 'no preset')
-          // réécrire la mémoire ne DÉPLACE pas l'ouvrant : c'est un réglage, pas une manœuvre
+          // rewriting the memory does NOT MOVE the cover: it is a setting, not a maneuver
           preset = cmd.position
           dev.state.presetPosition = cmd.position
           return
         case 'cover.set_quiet':
           if (!o.quiet) throw new SimError('UNSUPPORTED_COMMAND', 'no low speed')
-          // un réglage, pas une manœuvre : l'ouvrant ne bouge pas
+          // a setting, not a maneuver: the cover does not move
           dev.state.quiet = cmd.on
           return
         case 'cover.set_tilt':

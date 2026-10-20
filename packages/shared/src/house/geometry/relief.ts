@@ -2,11 +2,11 @@ import type { Relief } from '../schema'
 import { offsetPolygon, pointInPolygon, type Vec2 } from './vec2'
 import type { TerrainDescriptor } from './types'
 
-// Relief du terrain : une grille de hauteurs (`site.relief`) lue comme une surface lisse, écrêtée
-// sous les planchers et aplanie autour des bassins. Pur, sans Three : la scène s'en sert pour son maillage, `deviceFloorZ` pour
-// poser un appareil du jardin, l'éditeur pour ses poignées.
+// Terrain relief: a grid of heights (`site.relief`) read as a smooth surface, clipped
+// below the floors and flattened around the basins. Pure, without Three: the scene uses it for its mesh, `deviceFloorZ` to
+// place a garden device, the editor for its handles.
 
-/** La grille parsée : `cm[j * cols + i]`, rangée 0 au sud (y = origin[1]), colonne 0 à l'ouest. */
+/** The parsed grid: `cm[j * cols + i]`, row 0 at the south (y = origin[1]), column 0 at the west. */
 export interface ReliefGrid {
   step: number
   origin: Vec2
@@ -16,14 +16,14 @@ export interface ReliefGrid {
 }
 
 /**
- * Un BASSIN se pose sur un sol plat : sous lui et sur `PAD_FLAT` mètres autour le relief ne compte
- * pas, il revient ensuite en douceur sur `PAD_BLEND` mètres — sans quoi la margelle flotterait ou
- * s'enterrait. Le palier fait aussi que le maillage, découpé autour du bassin, n'y montre aucune
- * fente : tout y est à la même hauteur.
+ * A BASIN sits on a flat ground: under it and over `PAD_FLAT` meters around it the relief does not
+ * count, it then comes back gently over `PAD_BLEND` meters — otherwise the coping would float or
+ * be buried. The landing also means the mesh, cut out around the basin, shows no
+ * gap there: everything there is at the same height.
  *
- * La MAISON, elle, n'aplanit rien : le terrain peut monter contre ses murs (un talus qui vient
- * toucher la terrasse), et des nœuds SOUS elle servent à modeler ses abords. Il est seulement
- * écrêté sous chaque plancher (`Footprint`), pour qu'aucune bosse ne perce un sol.
+ * The HOUSE, for its part, flattens nothing: the terrain can rise against its walls (an embankment that comes
+ * to touch the terrace), and nodes UNDER it serve to shape its surroundings. It is only
+ * clipped below each floor (`Footprint`), so that no bump pierces a floor.
  */
 export const PAD_FLAT = 1
 export const PAD_BLEND = 2
@@ -43,8 +43,8 @@ export function serializeRelief(grid: ReliefGrid): Relief {
 export const isFlatRelief = (grid: ReliefGrid): boolean => grid.cm.every((v) => Math.round(v) === 0)
 
 /**
- * Une grille à zéro qui couvre `polygon` avec une maille de marge, calée sur les multiples du pas :
- * deux grilles faites au même pas ont les mêmes nœuds, quel que soit le contour.
+ * A zero grid that covers `polygon` with a margin of one cell, aligned on multiples of the step:
+ * two grids made at the same step have the same nodes, whatever the outline.
  */
 export function emptyReliefGrid(polygon: readonly Vec2[], step: number): ReliefGrid {
   const xs = polygon.map((p) => p[0]), ys = polygon.map((p) => p[1])
@@ -55,10 +55,10 @@ export function emptyReliefGrid(polygon: readonly Vec2[], step: number): ReliefG
 }
 
 /**
- * La grille agrandie, si besoin, pour couvrir `polygon` avec une maille de marge (un contour qu'on
- * vient d'étendre). Les nœuds existants gardent leur place et leur hauteur ; les nouveaux prennent
- * celle du bord le plus proche — ce qu'on lisait déjà là, puisque hors de la grille la hauteur est
- * celle du bord : le terrain ne bouge pas. Rend la MÊME grille quand elle couvre déjà tout.
+ * The grid enlarged, if needed, to cover `polygon` with a margin of one cell (an outline that
+ * has just been extended). The existing nodes keep their place and height; the new ones take
+ * that of the nearest edge — what was already read there, since outside the grid the height
+ * is that of the edge: the terrain does not move. Returns the SAME grid when it already covers everything.
  */
 export function extendReliefGrid(grid: ReliefGrid, polygon: readonly Vec2[]): ReliefGrid {
   const xs = polygon.map((p) => p[0]), ys = polygon.map((p) => p[1])
@@ -74,7 +74,7 @@ export function extendReliefGrid(grid: ReliefGrid, polygon: readonly Vec2[]): Re
   return { step: s, origin: [grid.origin[0] - left * s, grid.origin[1] - bottom * s], cols, rows, cm }
 }
 
-/** Position d'un nœud en repère maison. */
+/** Position of a node in the house reference frame. */
 export const reliefNodeXY = (grid: ReliefGrid, i: number, j: number): Vec2 => [grid.origin[0] + i * grid.step, grid.origin[1] + j * grid.step]
 
 const node = (g: ReliefGrid, i: number, j: number): number => {
@@ -84,11 +84,11 @@ const node = (g: ReliefGrid, i: number, j: number): number => {
 }
 
 /**
- * Cubique MONOTONE (Fritsch–Butland) sur [p1, p2] : passe PAR les nœuds (la poignée qu'on tire est
- * bien à la hauteur affichée) et ne sort JAMAIS de [p1, p2] entre eux. Catmull-Rom dépassait : un
- * plateau suivi d'une chute gagnait une bosse avant la descente, et un creux au pied du talus.
- * La pente en un nœud est la moyenne HARMONIQUE des deux pentes voisines, nulle quand elles changent
- * de signe (un sommet, un fond, un bord de plateau restent plats) : c'est ce qui borne la courbe.
+ * MONOTONE cubic (Fritsch–Butland) on [p1, p2]: passes THROUGH the nodes (the handle one pulls is
+ * indeed at the displayed height) and NEVER leaves [p1, p2] between them. Catmull-Rom overshot: a
+ * plateau followed by a drop gained a bump before the descent, and a dip at the foot of the slope.
+ * The slope at a node is the HARMONIC mean of the two neighboring slopes, zero when they change
+ * sign (a peak, a bottom, a plateau edge stay flat): that is what bounds the curve.
  */
 function monotone(p0: number, p1: number, p2: number, p3: number, t: number): number {
   const slope = (a: number, b: number) => (a * b <= 0 ? 0 : (2 * a * b) / (a + b))
@@ -98,7 +98,7 @@ function monotone(p0: number, p1: number, p2: number, p3: number, t: number): nu
   return (2 * t3 - 3 * t2 + 1) * p1 + (t3 - 2 * t2 + t) * m1 + (-2 * t3 + 3 * t2) * p2 + (t3 - t2) * m2
 }
 
-/** Écart de hauteur (m) de la grille en (x, y), bicubique monotone ; bord prolongé hors grille. */
+/** Height offset (m) of the grid at (x, y), monotone bicubic; edge extended outside the grid. */
 export function reliefDelta(grid: ReliefGrid, x: number, y: number): number {
   const u = (x - grid.origin[0]) / grid.step, v = (y - grid.origin[1]) / grid.step
   const i = Math.floor(u), j = Math.floor(v), tu = u - i, tv = v - j
@@ -106,7 +106,7 @@ export function reliefDelta(grid: ReliefGrid, x: number, y: number): number {
   return monotone(row(j - 1), row(j), row(j + 1), row(j + 2), tv) / 100
 }
 
-/** Plus bas et plus haut écart de la grille (m) — la surface lissée n'en sort pas. */
+/** Lowest and highest offset of the grid (m) — the smoothed surface does not leave it. */
 export function reliefRange(grid: ReliefGrid | null): [number, number] {
   if (!grid) return [0, 0]
   let lo = 0, hi = 0
@@ -114,22 +114,22 @@ export function reliefRange(grid: ReliefGrid | null): [number, number] {
   return [lo / 100, hi / 100]
 }
 
-/** Emprises aplanies : les bassins. */
+/** Flattened footprints: the basins. */
 export function terrainPads(house: { site: { zones: readonly { kind: string; polygon: Vec2[] }[] } }): Vec2[][] {
   return house.site.zones.filter((z) => z.kind === 'pool').map((z) => z.polygon)
 }
 
-/** Emprise d'une pièce vue du terrain : sous elle, le sol ne dépasse pas `ceiling` (z absolu). */
+/** Footprint of a room seen from the terrain: under it, the ground does not exceed `ceiling` (absolute z). */
 export interface Footprint { polygon: Vec2[]; ceiling: number }
 
 /**
- * Une emprise par pièce, élargie de la MOITIÉ du mur extérieur (qui se pose dehors, contre le
- * contour de la pièce) : le passage du terrain libre au terrain écrêté tombe dans l'épaisseur du
- * mur, invisible, et le sol touche la face extérieure à sa vraie hauteur. Le plafond est le dessous
- * de la dalle du niveau — jamais sous la cote du terrain, qui reste le sol d'une maison plate.
+ * One footprint per room, widened by HALF the exterior wall (which sits outside, against the
+ * outline of the room): the transition from free terrain to clipped terrain falls within the thickness of the
+ * wall, invisible, and the ground touches the outer face at its true height. The ceiling is the underside
+ * of the level's slab — never below the terrain elevation, which stays the ground of a flat house.
  *
- * Les contours de niveau (`outline`) n'en font pas partie : ce sont des emprises approchées (celles
- * de la maison réelle sont des rectangles plus grands, ou plus petits, que les pièces).
+ * The level outlines (`outline`) are not part of it: they are approximate footprints (those
+ * of the real house are rectangles larger, or smaller, than the rooms).
  */
 export function terrainFootprints(
   house: { rooms: readonly { polygon: Vec2[]; levelId: string }[]; levels: readonly { id: string; elevation: number }[]; site: { elevation: number } },
@@ -166,7 +166,7 @@ function padSet(pads: Vec2[][]): PadSet {
   return set
 }
 
-/** Part du relief qui s'applique en (x, y) : 0 sur le bâti et son palier, 1 au-delà du raccord. */
+/** Share of the relief that applies at (x, y): 0 on the building and its landing, 1 beyond the blend. */
 export function padWeight(pads: Vec2[][], x: number, y: number): number {
   const set = padSet(pads)
   if (x < set.min[0] || y < set.min[1] || x > set.max[0] || y > set.max[1]) return 1
@@ -182,7 +182,7 @@ export function padWeight(pads: Vec2[][], x: number, y: number): number {
 interface FootprintBox { f: Footprint; x0: number; y0: number; x1: number; y1: number }
 const footprintBoxes = new WeakMap<Footprint[], FootprintBox[]>()
 
-/** Le plus bas des plafonds des emprises qui couvrent (x, y) ; `Infinity` hors de la maison. */
+/** The lowest of the ceilings of the footprints that cover (x, y); `Infinity` outside the house. */
 export function footprintCeiling(footprints: Footprint[], x: number, y: number): number {
   let boxes = footprintBoxes.get(footprints)
   if (!boxes) {
@@ -201,8 +201,8 @@ export function footprintCeiling(footprints: Footprint[], x: number, y: number):
 }
 
 /**
- * La surface LIBRE du relief en (x, y), avant écrêtage sous les planchers : c'est là qu'est un nœud
- * qu'on tire, même sous la maison, où le terrain dessiné reste sous le sol.
+ * The FREE surface of the relief at (x, y), before clipping below the floors: it is where a node
+ * one pulls is, even under the house, where the drawn terrain stays below the floor.
  */
 export function reliefSurface(terrain: TerrainDescriptor, x: number, y: number): number {
   if (!terrain.relief) return terrain.z
@@ -210,7 +210,7 @@ export function reliefSurface(terrain: TerrainDescriptor, x: number, y: number):
   return w === 0 ? terrain.z : terrain.z + w * reliefDelta(terrain.relief, x, y)
 }
 
-/** Hauteur ABSOLUE du terrain en (x, y). Sans relief, c'est `terrain.z` partout, comme avant. */
+/** ABSOLUTE height of the terrain at (x, y). Without relief, it is `terrain.z` everywhere, as before. */
 export function terrainHeight(terrain: TerrainDescriptor, x: number, y: number): number {
   if (!terrain.relief) return terrain.z
   return Math.min(reliefSurface(terrain, x, y), footprintCeiling(terrain.footprints, x, y))

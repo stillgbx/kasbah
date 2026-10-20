@@ -6,102 +6,102 @@ import { computeHouseGeometry, extendReliefGrid, isSimplePolygon, openingCentre,
 import { parseHouse } from './validate'
 import type { Vec3 } from './geometry/types'
 
-// Écritures de l'UI dans house.json (placement d'un appareil, ordre d'affichage des pièces).
-// On travaille sur le JSON BRUT (pas la maison parsée) pour ne réécrire que ce qui a changé et ne
-// pas injecter les défauts zod (kind: 'room', openings: []…) dans le fichier de l'utilisateur.
-// Le résultat doit ensuite être validé par `parseHouse` avant d'être écrit.
+// Writes from the UI into house.json (placement of a device, display order of the rooms).
+// We work on the RAW JSON (not the parsed house) so as to rewrite only what changed and not
+// inject the zod defaults (kind: 'room', openings: []…) into the user's file.
+// The result must then be validated by `parseHouse` before being written.
 
 export const devicePlacementSchema = z.object({
   /**
-   * x, y absolus ; z relatif au sol de l'ancre (comme `HouseDevice.position`). **Absente = on ne
-   * touche pas à la place** : une entrée existante garde la sienne, une entrée créée n'en reçoit
-   * aucune (appareil connu de la maison mais non placé — un véhicule qu'on ne fait que renommer).
+   * Absolute x, y; z relative to the anchor's floor (like `HouseDevice.position`). **Absent = the place
+   * is not touched**: an existing entry keeps its own, a created entry receives none
+   * (device known to the house but not placed — a vehicle that is only being renamed).
    */
   position: vec3Schema.optional(),
   /**
-   * Nom choisi par l'utilisateur, qui l'emporte sur celui du descripteur de plugin. **Chaîne vide =
-   * effacer** et revenir au nom du fabricant — c'est le seul moyen de défaire un renommage.
+   * Name chosen by the user, which takes precedence over that of the plugin descriptor. **Empty string =
+   * clear** and go back to the vendor's name — it is the only way to undo a rename.
    */
   name: z.string().trim().max(60).optional(),
-  /** Nouvelle pièce d'ancrage (déplacement vers une pièce voisine du même niveau). */
+  /** New anchor room (move to a neighboring room of the same level). */
   roomId: z.string().min(1).optional(),
-  /** Niveau d'ancrage quand l'appareil n'est dans AUCUNE pièce (couloir non relevé, façade) ; ignoré si `roomId` est donné. */
+  /** Anchor level when the device is in NO room (unsurveyed hallway, facade); ignored if `roomId` is given. */
   levelId: z.string().min(1).optional(),
   mount: z.enum(MOUNTS).optional(),
-  /** Orientation en degrés, 0 = face à +y (comme `HouseDevice.yaw`) : un écran, une caméra regardent quelque part. */
+  /** Orientation in degrees, 0 = facing +y (like `HouseDevice.yaw`): a display, a camera look somewhere. */
   yaw: z.number().min(0).max(360).optional(),
-  /** Encombrement dessiné (m, comme `HouseDevice.size`) : un portail posé dehors n'a pas d'ouverture pour le dimensionner. */
+  /** Drawn footprint (m, like `HouseDevice.size`): a gate placed outside has no opening to size it. */
   size: z.object({ width: z.number().positive().max(50), height: z.number().positive().max(50) }).optional(),
-  /** Vantaux d'un ouvrant (comme `HouseDevice.leaves`) : les battants d'un portail, les panneaux d'un volet. */
+  /** Leaves of a cover (like `HouseDevice.leaves`): the wings of a gate, the panels of a shutter. */
   leaves: z.union([z.literal(1), z.literal(2)]).optional(),
   /**
-   * Matière d'un ouvrant (comme `HouseDevice.coverMaterial`). **Chaîne vide = effacer** et rendre la
-   * main à la matière d'ouvrant du style de rendu, comme pour la couleur de carrosserie.
+   * Material of a cover (like `HouseDevice.coverMaterial`). **Empty string = clear** and hand back to
+   * the cover material of the render style, as for the body color.
    */
   coverMaterial: z.union([z.literal(''), z.enum(OPENING_MATERIALS)]).optional(),
-  /** Couleur d'un ouvrant (comme `HouseDevice.coverColor`). **Chaîne vide = effacer**, même règle. */
+  /** Color of a cover (like `HouseDevice.coverColor`). **Empty string = clear**, same rule. */
   coverColor: z.union([z.literal(''), hexColorSchema]).optional(),
   /**
-   * Correction (m, repère maison) de la place calculée d'un appareil placé par son GPS — un
-   * véhicule (comme `HouseDevice.gpsOffset`). `[0, 0]` EFFACE la correction : c'est le seul moyen
-   * de revenir au relevé brut, comme la chaîne vide pour le nom.
+   * Correction (m, house reference frame) of the computed place of a device placed by its GPS — a
+   * vehicle (like `HouseDevice.gpsOffset`). `[0, 0]` CLEARS the correction: it is the only way
+   * to get back to the raw reading, like the empty string for the name.
    */
   gpsOffset: vec2Schema.optional(),
-  /** Correction (m, repère maison) de la carte du terrain d'une tondeuse (comme `HouseDevice.mapOffset`). `[0, 0]` EFFACE. */
+  /** Correction (m, house reference frame) of the terrain map of a mower (like `HouseDevice.mapOffset`). `[0, 0]` CLEARS. */
   mapOffset: vec2Schema.optional(),
   /**
-   * Correction (degrés, ±180) de l'orientation calculée d'un appareil placé par son GPS — un
-   * véhicule (comme `HouseDevice.yawOffset`). `0` EFFACE la correction, comme `[0, 0]` pour le
-   * décalage : on revient à ce que la scène déduit toute seule.
+   * Correction (degrees, ±180) of the computed orientation of a device placed by its GPS — a
+   * vehicle (like `HouseDevice.yawOffset`). `0` CLEARS the correction, like `[0, 0]` for the
+   * offset: we go back to what the scene deduces on its own.
    */
   yawOffset: z.number().min(-180).max(180).optional(),
   /**
-   * Capacité de la batterie d'un véhicule (kWh, comme `HouseDevice.batteryKwh`), saisie faute que
-   * les fabricants la donnent. `0` EFFACE la valeur, comme `[0, 0]` pour le décalage.
+   * Battery capacity of a vehicle (kWh, like `HouseDevice.batteryKwh`), entered since vendors
+   * do not give it. `0` CLEARS the value, like `[0, 0]` for the offset.
    */
   batteryKwh: z.number().min(0).max(500).optional(),
   /**
-   * Carrosserie 3D d'un véhicule (comme `HouseDevice.model3d`) : un identifiant du catalogue, ou
-   * `'none'` pour la silhouette générique. **Chaîne vide = effacer** et revenir au choix
-   * automatique, comme pour le nom — `'none'` est un choix, pas une absence de choix.
+   * 3D bodywork of a vehicle (like `HouseDevice.model3d`): a catalog identifier, or
+   * `'none'` for the generic silhouette. **Empty string = clear** and go back to the automatic
+   * choice, as for the name — `'none'` is a choice, not an absence of choice.
    */
   model3d: z.union([z.literal(''), model3dSchema]).optional(),
   /**
-   * Couleur de carrosserie (comme `HouseDevice.bodyColor`). **Chaîne vide = effacer** et rendre la
-   * main à la couleur de véhicule de la scène, qui suit le thème.
+   * Body color (like `HouseDevice.bodyColor`). **Empty string = clear** and hand back to
+   * the scene's vehicle color, which follows the theme.
    */
   bodyColor: z.union([z.literal(''), hexColorSchema]).optional(),
   /**
-   * Aspect de la peinture (comme `HouseDevice.bodyFinish`). **Chaîne vide = effacer** et rendre la
-   * main à ce que le fabricant dit, comme pour la couleur.
+   * Paint finish (like `HouseDevice.bodyFinish`). **Empty string = clear** and hand back to
+   * what the vendor says, as for the color.
    */
   bodyFinish: z.union([z.literal(''), z.enum(VEHICLE_FINISHES)]).optional(),
   /**
-   * Silhouette 3D d'une enceinte (comme `HouseDevice.speakerShape`). **Chaîne vide = effacer** et
-   * revenir au cylindre par défaut.
+   * 3D silhouette of a speaker (like `HouseDevice.speakerShape`). **Empty string = clear** and
+   * go back to the default cylinder.
    */
   speakerShape: z.union([z.literal(''), z.enum(SPEAKER_SHAPES)]).optional(),
   /**
-   * LOA / LLD d'un véhicule (comme `HouseDevice.lease`), écrite d'un bloc : début, fin et forfait
-   * n'ont de sens qu'ensemble. **Chaîne vide = effacer**, comme pour le nom.
+   * Lease (LOA / LLD) of a vehicle (like `HouseDevice.lease`), written in one block: start, end and flat fee
+   * only make sense together. **Empty string = clear**, as for the name.
    */
   lease: z.union([z.literal(''), vehicleLeaseSchema]).optional(),
   /**
-   * Ouverture que l'appareil habille (comme `HouseDevice.openingId`) : un volet, un capteur de
-   * fenêtre épousent son rectangle au lieu d'occuper un point. **Chaîne vide = délier**, comme la
-   * chaîne vide pour le nom — c'est le seul moyen de rendre l'appareil à la pièce.
+   * Opening the device dresses (like `HouseDevice.openingId`): a shutter, a window sensor
+   * hug its rectangle instead of occupying a point. **Empty string = unlink**, like the empty
+   * string for the name — it is the only way to give the device back to the room.
    *
-   * Lier RE-ANCRE l'appareil sur la pièce qui porte l'ouverture : la validation croisée l'exige, et
-   * le geste vient de la 3D, où l'on montre une fenêtre sans penser à la pièce derrière.
+   * Linking RE-ANCHORS the device on the room that carries the opening: the cross validation requires it, and
+   * the gesture comes from the 3D, where a window is shown without thinking of the room behind it.
    */
   openingId: z.union([z.literal(''), z.string().min(1)]).optional(),
-  /** Requis quand l'appareil n'existe pas encore dans le JSON (appareil auto-placé). */
+  /** Required when the device does not exist yet in the JSON (auto-placed device). */
   deviceId: deviceIdSchema.optional(),
 })
 export type DevicePlacement = z.infer<typeof devicePlacementSchema>
 
 export const roomOrderSchema = z.object({
-  /** Ordre voulu, complet ou partiel ; les pièces absentes suivent, par ordre alphabétique. */
+  /** Wanted order, complete or partial; the absent rooms follow, in alphabetical order. */
   roomIds: z.array(z.string().min(1)),
 })
 export type RoomOrder = z.infer<typeof roomOrderSchema>
@@ -115,37 +115,37 @@ export class PlacementError extends Error {
 type JsonObject = Record<string, unknown>
 const isObject = (v: unknown): v is JsonObject => typeof v === 'object' && v !== null && !Array.isArray(v)
 
-/** Pièce qui porte l'ouverture `openingId` dans le JSON brut. */
+/** Room that carries the opening `openingId` in the raw JSON. */
 function openingOwner(rooms: readonly JsonObject[], openingId: string): JsonObject {
   const owner = rooms.find((r) => Array.isArray(r.openings) && r.openings.some((o) => isObject(o) && o.id === openingId))
   if (!owner) throw new PlacementError(`unknown opening "${openingId}"`)
   return owner
 }
 
-/** Deux places identiques au millimètre : inutile de réécrire le fichier pour du bruit de virgule. */
+/** Two places identical to the millimeter: no point rewriting the file for decimal noise. */
 const samePlace = (a: readonly unknown[], b: Vec3) =>
   a.length === 3 && a.every((v, i) => typeof v === 'number' && Math.abs(v - b[i]!) < 1e-6)
 
-/** Au millimètre : un relevé se lit à la main, il n'a pas à porter quinze décimales. */
+/** To the millimeter: a survey is read by hand, it does not have to carry fifteen decimals. */
 const roundPlace = (p: Vec3): Vec3 => [
   Math.round(p[0] * 1000) / 1000, Math.round(p[1] * 1000) / 1000, Math.round(p[2] * 1000) / 1000,
 ]
 
 /**
- * Recale sur le centre de leur baie les appareils LIÉS aux ouvertures données.
+ * Realigns on the center of their bay the devices LINKED to the given openings.
  *
- * Un volet, un capteur de fenêtre n'occupent pas un point : ils habillent un rectangle, et c'est ce
- * rectangle que la scène dessine — leur `position` n'est plus ce qui les place. Mais elle se LIT,
- * dans un fichier qu'on ouvre à la main, et une ouverture affinée après coup la laissait mentir
- * (2,11 m d'écart mesurés sur le volet du bureau). Elle suit donc la baie, dans la même écriture que
- * l'ouverture qui vient de bouger.
+ * A shutter, a window sensor do not occupy a point: they dress a rectangle, and it is that
+ * rectangle the scene draws — their `position` is no longer what places them. But it is READ,
+ * in a file that is opened by hand, and an opening refined after the fact let it lie
+ * (2.11 m of gap measured on the office shutter). It therefore follows the bay, in the same write as
+ * the opening that has just moved.
  *
- * Seuls les appareils qui ont DÉJÀ une place sont recalés : lier un appareil jamais posé ne lui en
- * invente pas une, la scène sait s'en passer.
+ * Only the devices that ALREADY have a place are realigned: linking a device never placed does not invent
+ * one for it, the scene can do without.
  *
- * Le document est relu pour en tirer la géométrie : c'est le seul moyen d'avoir le MÊME centre que
- * la scène, plutôt qu'un second calcul qui divergerait. Un document que `parseHouse` refuse est
- * rendu tel quel — c'est l'appelant qui valide, et son erreur sera plus claire que la nôtre.
+ * The document is re-read to extract the geometry: it is the only way to get the SAME center as
+ * the scene, rather than a second computation that would diverge. A document that `parseHouse` refuses is
+ * returned as is — it is the caller that validates, and its error will be clearer than ours.
  */
 function alignDevicesOnOpenings(doc: JsonObject, openingIds: readonly string[]): JsonObject {
   const devices = Array.isArray(doc.devices) ? doc.devices : []
@@ -172,13 +172,13 @@ function alignDevicesOnOpenings(doc: JsonObject, openingIds: readonly string[]):
 }
 
 /**
- * Renvoie une copie du document JSON avec l'appareil `id` (re)placé ou renommé : entrée existante
- * mise à jour (position, nom, pièce, mount, yaw, size, leaves, coverMaterial, coverColor, gpsOffset, mapOffset,
- * yawOffset, batteryKwh, model3d, bodyColor, bodyFinish, lease), ou entrée créée
- * `{ id, deviceId, … }` avec ce qui a été donné.
+ * Returns a copy of the JSON document with the device `id` (re)placed or renamed: existing entry
+ * updated (position, name, room, mount, yaw, size, leaves, coverMaterial, coverColor, gpsOffset, mapOffset,
+ * yawOffset, batteryKwh, model3d, bodyColor, bodyFinish, lease), or entry created
+ * `{ id, deviceId, … }` with what was given.
  *
- * Tout est facultatif, position comprise : renommer un appareil qui n'a PAS de place dans la scène
- * (un véhicule) est un usage à part entière, et c'est ce qui lui donne son entrée dans la maison.
+ * Everything is optional, position included: renaming a device that has NO place in the scene
+ * (a vehicle) is a use in its own right, and it is what gives it its entry in the house.
  */
 export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePlacement): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -250,16 +250,16 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
     }
     if (room) {
       next.roomId = room.id
-      // le JSON de démo porte roomId ET levelId : garder les deux cohérents, sans en ajouter
+      // the demo JSON carries roomId AND levelId: keep both consistent, without adding any
       if ('levelId' in prev) next.levelId = room.levelId
       delete next.zoneId
     } else if (level) {
-      // sorti de toute pièce : le niveau devient l'ancre, la pièce et la zone tombent
+      // out of any room: the level becomes the anchor, the room and the zone drop
       next.levelId = level.id
       delete next.roomId
       delete next.zoneId
     }
-    // APRÈS l'ancrage : lier une ouverture emporte la pièce qui la porte, quoi qu'ait dit le patch
+    // AFTER the anchoring: linking an opening takes along the room that carries it, whatever the patch said
     if (placement.openingId !== undefined) {
       if (placement.openingId) {
         const owner = openingOwner(rooms, placement.openingId)
@@ -300,20 +300,20 @@ export function placeDeviceInJson(doc: unknown, id: string, placement: DevicePla
   const out = [...devices]
   if (i >= 0) out[i] = next
   else out.push(next)
-  // lier un appareil à une ouverture lui donne la place de la baie : il l'habille désormais
+  // linking a device to an opening gives it the place of the bay: it now dresses it
   return placement.openingId
     ? alignDevicesOnOpenings({ ...doc, devices: out }, [placement.openingId])
     : { ...doc, devices: out }
 }
 
 /**
- * Renvoie une copie du document JSON SANS l'appareil `id` : il sort de la maison et redevient ce qu'il
- * était avant d'être posé — auto-placé si sa pièce de plugin existe, sinon « non placé ». Geste inverse
- * du placement, confirmé côté UI. Un id inconnu est refusé (rien à retirer).
+ * Returns a copy of the JSON document WITHOUT the device `id`: it leaves the house and becomes what it
+ * was before being placed — auto-placed if its plugin room exists, otherwise "unplaced". Inverse gesture
+ * of placement, confirmed on the UI side. An unknown id is refused (nothing to remove).
  *
- * Les CHAMPS DE PANNEAUX qui nomment cet appareil (`siteId`) partent avec lui : une installation
- * solaire retirée de la maison n'y laisse pas vingt modules orphelins, que plus aucun panneau ne
- * permettrait de régler. Les champs d'un autre site, ou ceux qui ne nomment personne, restent.
+ * The PANEL ARRAYS that name this device (`siteId`) leave with it: a solar installation
+ * removed from the house does not leave twenty orphan modules in it, which no panel could
+ * ever set. The arrays of another site, or those that name nobody, stay.
  */
 export function removeDeviceFromJson(doc: unknown, id: string): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -331,10 +331,10 @@ export function removeDeviceFromJson(doc: unknown, id: string): JsonObject {
 }
 
 /**
- * Renvoie une copie du document JSON avec le réglage de lumière de la scène 3D posé
- * (`render.tuning`), tel qu'il sort du banc de la vue Maison. Un réglage NEUTRE n'est pas écrit :
- * il est retiré du fichier, pour qu'une maison sans retouche reste une maison sans section
- * `render` — le style redevient alors la seule source, ce qui est bien ce qu'on veut dire.
+ * Returns a copy of the JSON document with the 3D scene light setting set
+ * (`render.tuning`), as it comes out of the Home view test bench. A NEUTRAL setting is not written:
+ * it is removed from the file, so that a house without touch-ups remains a house without a `render`
+ * section — the style then becomes the only source, which is exactly what we mean.
  */
 export function setRenderTuningInJson(doc: unknown, tuning: SceneTuning): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -347,9 +347,9 @@ export function setRenderTuningInJson(doc: unknown, tuning: SceneTuning): JsonOb
 }
 
 /**
- * Renvoie une copie du document JSON avec l'origine GPS (`origin`) remplacée, telle qu'elle sort du
- * calage sur la photo des Réglages. Rien d'autre ne change : pièces, terrain, relief, places et
- * décalages des appareils restent en repère maison — c'est la maison ENTIÈRE qui glisse sur le monde.
+ * Returns a copy of the JSON document with the GPS origin (`origin`) replaced, as it comes out of the
+ * alignment on the photo in Settings. Nothing else changes: rooms, terrain, relief, spots and
+ * device offsets stay in the house reference frame — it is the WHOLE house that slides over the world.
  */
 export function setOriginInJson(doc: unknown, origin: GeoOrigin): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -357,9 +357,9 @@ export function setOriginInJson(doc: unknown, origin: GeoOrigin): JsonObject {
 }
 
 /**
- * Renvoie une copie du document JSON avec le relief du terrain posé (`site.relief`), tel qu'il sort de
- * l'éditeur de la vue Maison. Un relief PLAT (toutes les hauteurs à zéro) ou `null` n'est pas écrit :
- * il est retiré, pour qu'un terrain sans relief reste un terrain sans champ.
+ * Returns a copy of the JSON document with the terrain relief set (`site.relief`), as it comes out of
+ * the Home view editor. A FLAT relief (all heights at zero) or `null` is not written:
+ * it is removed, so that a terrain without relief remains a terrain without the field.
  */
 export function setReliefInJson(doc: unknown, relief: Relief | null): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -370,11 +370,11 @@ export function setReliefInJson(doc: unknown, relief: Relief | null): JsonObject
 }
 
 /**
- * Renvoie une copie du document JSON avec le CONTOUR du terrain (`site.terrain`) remplacé, posé
- * depuis l'éditeur de la vue Maison. Un contour qui se croise lui-même est refusé (400, rien n'est
- * écrit). Un relief présent est agrandi s'il ne couvre plus le contour (`extendReliefGrid`) : ses
- * nouveaux nœuds prennent la hauteur du bord, le terrain déjà modelé ne bouge pas. Ce qui se
- * retrouve hors du contour (arbres, places, zones) n'est PAS retiré : l'éditeur le signale.
+ * Returns a copy of the JSON document with the terrain OUTLINE (`site.terrain`) replaced, set
+ * from the Home view editor. An outline that crosses itself is refused (400, nothing is
+ * written). An existing relief is enlarged if it no longer covers the outline (`extendReliefGrid`): its
+ * new nodes take the height of the edge, the already shaped terrain does not move. What ends
+ * up outside the outline (trees, spots, zones) is NOT removed: the editor flags it.
  */
 export function setTerrainInJson(doc: unknown, polygon: readonly Vec2[]): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -390,10 +390,10 @@ export function setTerrainInJson(doc: unknown, polygon: readonly Vec2[]): JsonOb
 }
 
 /**
- * Renvoie une copie du document JSON avec les réglages du plugin `pluginId` modifiés (activation,
- * sous-items, défaut des ambiances). Une maison qui n'a pas encore de section `plugins` la reçoit
- * ÉCRITE EN ENTIER à partir du défaut : sans ça, activer Hue dans une maison muette éteindrait la
- * simulation, que seul le défaut du schéma gardait allumée.
+ * Returns a copy of the JSON document with the settings of the plugin `pluginId` modified (activation,
+ * sub-items, default light scene). A house that does not yet have a `plugins` section receives it
+ * WRITTEN IN FULL from the default: without this, enabling Hue in a silent house would turn off the
+ * simulation, which only the schema default kept on.
  */
 export function setPluginInJson(doc: unknown, pluginId: string, patch: PluginSettingsPatch): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -402,16 +402,16 @@ export function setPluginInJson(doc: unknown, pluginId: string, patch: PluginSet
   const next: JsonObject = { ...prev }
   if (patch.enabled !== undefined) next.enabled = patch.enabled
   if (patch.autoDynamicForNewScenes !== undefined) next.autoDynamicForNewScenes = patch.autoDynamicForNewScenes
-  // les sous-items se fusionnent clé à clé : l'UI n'envoie que celui qu'on vient de basculer
+  // sub-items merge key by key: the UI only sends the one that has just been toggled
   if (patch.parts) next.parts = { ...(isObject(prev.parts) ? prev.parts : {}), ...patch.parts }
   plugins[pluginId] = next
   return { ...doc, plugins }
 }
 
 /**
- * Renvoie une copie du document JSON avec `roomOrder` posé sur le niveau `levelId`. Les ids qui ne
- * sont pas des pièces de ce niveau sont refusés (un ordre qui ne correspond plus à la maison serait
- * silencieusement ignoré à l'affichage).
+ * Returns a copy of the JSON document with `roomOrder` set on the level `levelId`. Ids that are
+ * not rooms of this level are refused (an order that no longer matches the house would be
+ * silently ignored at display time).
  */
 export function setRoomOrderInJson(doc: unknown, levelId: string, roomIds: string[]): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -429,44 +429,44 @@ export function setRoomOrderInJson(doc: unknown, levelId: string, roomIds: strin
 }
 
 /**
- * Champ de panneaux (`house.arrays`) écrit depuis l'UI : seuls les champs présents sont posés, comme
- * pour un placement d'appareil. `levelId` et `origin` sont requis à la CRÉATION — un champ sans
- * niveau ni coin n'a nulle part où se dessiner.
+ * Panel array (`house.arrays`) written from the UI: only the present fields are set, as
+ * for a device placement. `levelId` and `origin` are required at CREATION — an array without a
+ * level or a corner has nowhere to be drawn.
  */
 export const panelArrayPatchSchema = z.object({
   name: z.string().min(1).optional(),
-  /** Installation dont le champ fait partie (`deviceId` du site) : elle l'emporte quand elle se retire. */
+  /** Installation the array is part of (`deviceId` of the site): it takes it along when it is removed. */
   siteId: deviceIdSchema.optional(),
   levelId: z.string().min(1).optional(),
-  /** Coin du champ : x, y absolus ; z relatif au sol du niveau (comme `PanelArray.origin`). */
+  /** Corner of the array: absolute x, y; z relative to the level floor (like `PanelArray.origin`). */
   origin: vec3Schema.optional(),
   yaw: z.number().min(0).max(360).optional(),
-  /** Pente du support (le toit sous le champ) ; `tilt` est l'angle des modules SUR ce support. */
+  /** Slope of the support (the roof under the array); `tilt` is the angle of the modules ON this support. */
   slope: z.number().min(0).max(90).optional(),
-  /** Inclinaison des modules : positive, ils se redressent face à l'azimut (voir `panelArraySchema`). */
+  /** Tilt of the modules: positive, they tilt up facing the azimuth (see `panelArraySchema`). */
   tilt: z.number().min(-90).max(90).optional(),
   rows: z.number().int().min(1).max(20).optional(),
   cols: z.number().int().min(1).max(20).optional(),
-  /** Module : `width` le long des colonnes, `height` le long des rangées (portrait ↔ paysage = les deux échangées). */
+  /** Module: `width` along the columns, `height` along the rows (portrait ↔ landscape = the two swapped). */
   panel: z.object({
     width: z.number().positive().max(5).optional(),
     height: z.number().positive().max(5).optional(),
-    /** Puissance crête du module (Wc) : l'échelle de couleur du champ, cf. `panelArraySchema`. */
+    /** Peak power of the module (Wp): the color scale of the array, cf. `panelArraySchema`. */
     peakW: z.number().positive().max(2000).optional(),
   }).optional(),
-  /** Puissance de sortie max des onduleurs du champ (W, 0 = inconnue) : voir `panelArraySchema`. */
+  /** Maximum output power of the array inverters (W, 0 = unknown): see `panelArraySchema`. */
   maxOutputW: z.number().min(0).max(2000).optional(),
   gap: z.number().min(0).max(1).optional(),
-  /** Onduleur de chaque emplacement, rangée par rangée ; `null` = emplacement non suivi. */
+  /** Inverter of each slot, row by row; `null` = untracked slot. */
   panels: z.array(deviceIdSchema.nullable()).optional(),
 })
 export type PanelArrayPatch = z.infer<typeof panelArrayPatchSchema>
 
 /**
- * Renvoie une copie du document JSON avec le champ `id` créé ou modifié. La liste des onduleurs est
- * RAMENÉE à la grille : rétrécir un champ de 2 × 5 à 2 × 3 laisserait sinon plus de modules que
- * d'emplacements, ce que la validation refuse — l'UI ne peut pas se le voir refuser en plein geste.
- * Les emplacements vides de la fin ne sont pas écrits (un champ à demi équipé garde un JSON court).
+ * Returns a copy of the JSON document with the array `id` created or modified. The inverter list is
+ * BROUGHT BACK to the grid: shrinking an array from 2 × 5 to 2 × 3 would otherwise leave more modules than
+ * slots, which the validation refuses — the UI cannot have it refused in the middle of a gesture.
+ * The empty slots at the end are not written (a half-equipped array keeps a short JSON).
  */
 export function putArrayInJson(doc: unknown, id: string, patch: PanelArrayPatch): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -483,8 +483,8 @@ export function putArrayInJson(doc: unknown, id: string, patch: PanelArrayPatch)
   for (const key of ['name', 'siteId', 'origin', 'yaw', 'slope', 'tilt', 'rows', 'cols', 'maxOutputW', 'gap'] as const) {
     if (patch[key] !== undefined) next[key] = patch[key]
   }
-  // Le module se patche champ par champ, lui : coucher un module (`width`/`height` échangées) ne
-  // doit pas effacer sa puissance crête, qui retomberait alors sur la valeur par défaut.
+  // The module is patched field by field, though: tilting a module (`width`/`height` swapped) must
+  // not clear its peak power, which would then fall back on the default value.
   if (patch.panel) next.panel = { ...(isObject(prev?.panel) ? prev.panel : {}), ...patch.panel }
   const rows = Number(next.rows ?? 1), cols = Number(next.cols ?? 1)
   next.rows = rows
@@ -501,9 +501,9 @@ export function putArrayInJson(doc: unknown, id: string, patch: PanelArrayPatch)
 }
 
 /**
- * Renvoie une copie du document JSON SANS le champ `id` : ses modules disparaissent de la maison
- * (ils n'existaient que dérivés) et ses onduleurs redeviennent des appareils à placer. Un id inconnu
- * est refusé.
+ * Returns a copy of the JSON document WITHOUT the array `id`: its modules disappear from the house
+ * (they only existed derived) and its inverters become devices to place again. An unknown id
+ * is refused.
  */
 export function removeArrayFromJson(doc: unknown, id: string): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -514,52 +514,52 @@ export function removeArrayFromJson(doc: unknown, id: string): JsonObject {
 }
 
 /**
- * Ouverture (`rooms[i].openings[j]`) réglée depuis l'UI : cotes et place sur le contour de la pièce.
- * Seuls les champs présents sont posés, comme pour un placement d'appareil — régler l'allège ne doit
- * pas redéposer la largeur qu'on était en train de saisir ailleurs.
+ * Opening (`rooms[i].openings[j]`) set from the UI: dimensions and place on the outline of the room.
+ * Only the present fields are set, as for a device placement — setting the sill must not
+ * redeposit the width that was being typed elsewhere.
  *
- * Le patch ne CRÉE pas : une ouverture naît du relevé, l'UI ne fait que l'ajuster.
+ * The patch does not CREATE: an opening is born from the survey, the UI only adjusts it.
  */
 export const openingPatchSchema = z.object({
-  /** Nom en clair (comme `Opening.name`). **Chaîne vide = effacer** et revenir à l'`id` du relevé. */
+  /** Plain name (like `Opening.name`). **Empty string = clear** and go back to the survey `id`. */
   name: z.string().trim().max(60).optional(),
   type: z.enum(OPENING_TYPES).optional(),
-  /** Arête de la pièce qui porte l'ouverture (index dans `room.polygon`). */
+  /** Edge of the room that carries the opening (index in `room.polygon`). */
   segment: z.number().int().min(0).optional(),
-  /** Distance (m) depuis le coin `polygon[segment]` jusqu'au bord proche. */
+  /** Distance (m) from the corner `polygon[segment]` to the near edge. */
   offset: z.number().min(0).max(100).optional(),
-  /** Centre en plan d'une ouverture de surface. */
+  /** Center in plan of a surface opening. */
   x: z.number().optional(),
   y: z.number().optional(),
-  /** Cap (azimut) d'une ouverture de surface. */
+  /** Heading (azimuth) of a surface opening. */
   yaw: z.number().min(-360).max(360).optional(),
   width: z.number().positive().max(20).optional(),
   height: z.number().positive().max(10).optional(),
   /**
-   * Hauteur d'allège depuis le sol fini. **Absente = on n'y touche pas** ; `0` est une valeur, pas
-   * un effacement — une porte est à 0 et le reste. L'ouverture qui n'en a jamais eu suit le défaut
-   * de la maison (`defaults.windowSill`), c'est `openingSill` qui tranche.
+   * Sill height from the finished floor. **Absent = not touched**; `0` is a value, not
+   * a clearing — a door is at 0 and the rest. An opening that never had one follows the house default
+   * (`defaults.windowSill`), it is `openingSill` that decides.
    */
   sill: z.number().min(0).max(10).optional(),
   /**
-   * Nombre de vantaux. **Chaîne vide = effacer** et rendre la main à ce qui se déduit
-   * (`openingLeaves`) : écrire le nombre déduit au lieu de retirer la clé FIGERAIT une baie qui
-   * suivait sa largeur.
+   * Number of leaves. **Empty string = clear** and hand back to what is deduced
+   * (`openingLeaves`): writing the deduced number instead of removing the key would FREEZE a bay that
+   * followed its width.
    */
   leaves: z.union([z.number().int().min(MIN_OPENING_LEAVES).max(MAX_OPENING_LEAVES), z.literal('')]).optional(),
-  /** Matière de la menuiserie. **Chaîne vide = effacer** et rendre la main à la nature de l'ouverture. */
+  /** Material of the joinery. **Empty string = clear** and hand back to the nature of the opening. */
   material: z.union([z.enum(OPENING_MATERIALS), z.literal('')]).optional(),
-  /** Couleur de la menuiserie. **Chaîne vide = effacer** et rendre la main à la palette du style. */
+  /** Color of the joinery. **Empty string = clear** and hand back to the style palette. */
   color: z.union([hexColorSchema, z.literal('')]).optional(),
 })
 export type OpeningPatch = z.infer<typeof openingPatchSchema>
 
 /**
- * Renvoie une copie du document JSON avec l'ouverture `openingId` de la pièce `roomId` modifiée.
+ * Returns a copy of the JSON document with the opening `openingId` of the room `roomId` modified.
  *
- * Contrairement aux autres patches, la cible est IMBRIQUÉE : on recopie la pièce et son tableau
- * d'ouvertures, sans toucher aux autres pièces. Le reste des règles (ouverture dans son segment,
- * sous le plafond, sans chevauchement) est vérifié par `parseHouse` avant écriture, comme partout.
+ * Unlike the other patches, the target is NESTED: we copy the room and its array
+ * of openings, without touching the other rooms. The rest of the rules (opening within its segment,
+ * under the ceiling, without overlap) is checked by `parseHouse` before writing, as everywhere.
  */
 export function patchOpeningInJson(doc: unknown, roomId: string, openingId: string, patch: OpeningPatch): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -575,10 +575,10 @@ export function patchOpeningInJson(doc: unknown, roomId: string, openingId: stri
   for (const key of ['type', 'segment', 'offset', 'x', 'y', 'yaw', 'width', 'height', 'sill'] as const) {
     if (patch[key] !== undefined) next[key] = patch[key]
   }
-  // les quatre champs EFFAÇABLES : une chaîne vide retire la clé du fichier, et ce qui la remplace
-  // est le défaut déduit — l'id du relevé pour le nom, la largeur pour les vantaux, la nature pour
-  // la matière, le style pour la couleur. Écrire un `null` laisserait une clé morte dans un relevé
-  // qu'on relit à la main.
+  // the four CLEARABLE fields: an empty string removes the key from the file, and what replaces it
+  // is the deduced default — the survey id for the name, the width for the leaves, the nature for
+  // the material, the style for the color. Writing a `null` would leave a dead key in a survey
+  // that is reread by hand.
   for (const key of ['name', 'leaves', 'material', 'color'] as const) {
     if (patch[key] === undefined) continue
     if (patch[key]) next[key] = patch[key]
@@ -588,14 +588,14 @@ export function patchOpeningInJson(doc: unknown, roomId: string, openingId: stri
   nextOpenings[oi] = next
   const nextRooms = [...rooms]
   nextRooms[ri] = { ...room, openings: nextOpenings }
-  // l'ouverture a bougé (ou changé de cotes) : ce qui l'habille la suit, dans la même écriture
+  // the opening moved (or changed dimensions): what dresses it follows, in the same write
   return alignDevicesOnOpenings({ ...doc, rooms: nextRooms }, [openingId])
 }
 
 /**
- * Ouverture AJOUTÉE à une pièce depuis le mode édition. Complète, contrairement au patch : une
- * ouverture qui naît doit dire où elle se pose et ce qu'elle mesure, sinon elle n'existe nulle part.
- * L'id est choisi par l'UI, comme celui d'un champ de panneaux.
+ * Opening ADDED to a room from edit mode. Complete, unlike the patch: an
+ * opening that is born must say where it sits and what it measures, otherwise it exists nowhere.
+ * The id is chosen by the UI, like that of a panel array.
  */
 export const newOpeningSchema = z.object({
   id: z.string().min(1).max(60),
@@ -623,13 +623,13 @@ export const newOpeningSchema = z.object({
 export type NewOpening = z.infer<typeof newOpeningSchema>
 
 /**
- * Renvoie une copie du document JSON avec une ouverture de PLUS dans la pièce `roomId`. L'id doit
- * être libre dans TOUTE la maison, pas seulement dans la pièce : un ouvrant nomme son ouverture sans
- * dire où elle est (`devices[].openingId`), et `parseHouse` refuserait le doublon.
+ * Returns a copy of the JSON document with one MORE opening in the room `roomId`. The id must be
+ * free in the WHOLE house, not only in the room: a cover names its opening without
+ * saying where it is (`devices[].openingId`), and `parseHouse` would refuse the duplicate.
  *
- * L'allège n'est écrite que si elle dit quelque chose : `0` est le défaut implicite de tout ce qui
- * descend au sol, et l'omettre garde le fichier lisible pour qui relit son relevé. La FENÊTRE fait
- * exception — sans `sill`, elle retomberait sur `defaults.windowSill`, donc un 0 voulu s'écrit.
+ * The sill is only written if it says something: `0` is the implicit default of everything that
+ * goes down to the floor, and omitting it keeps the file readable for whoever rereads their survey. The WINDOW makes an
+ * exception — without `sill`, it would fall back on `defaults.windowSill`, so an intended 0 is written.
  */
 export function addOpeningToJson(doc: unknown, roomId: string, opening: NewOpening): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -661,12 +661,12 @@ export function addOpeningToJson(doc: unknown, roomId: string, opening: NewOpeni
 }
 
 /**
- * Renvoie une copie du document JSON SANS l'ouverture `openingId` de la pièce `roomId`.
+ * Returns a copy of the JSON document WITHOUT the opening `openingId` of the room `roomId`.
  *
- * L'ouvrant qui l'habillait est LIBÉRÉ dans la même écriture (`openingId` effacé) : un volet qui
- * nomme une ouverture disparue fait rejeter la maison entière par `parseHouse`, et la suppression
- * échouerait sans rien dire de la vraie raison. Le volet reste dans la maison, sans ouverture — la
- * vue Ouvrants le compte alors parmi ceux qui attendent une place.
+ * The cover that dressed it is FREED in the same write (`openingId` cleared): a shutter that
+ * names a vanished opening makes `parseHouse` reject the whole house, and the deletion
+ * would fail without saying the real reason. The shutter stays in the house, without an opening — the
+ * Covers view then counts it among those waiting for a place.
  */
 export function removeOpeningFromJson(doc: unknown, roomId: string, openingId: string): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -687,41 +687,41 @@ export function removeOpeningFromJson(doc: unknown, roomId: string, openingId: s
     const { openingId: _gone, ...rest } = d
     return rest
   })
-  // pas de clé `devices` posée dans une maison qui n'en avait pas : on ne réécrit que ce qui change
+  // no `devices` key set in a house that had none: we only rewrite what changes
   return { ...doc, rooms: nextRooms, ...(bound ? { devices: freed } : {}) }
 }
 
 /**
- * Place de stationnement réglée depuis le mode édition : ses cotes, son centre, son cap.
- * Seuls les champs présents sont posés — régler la cote avant ne redépose pas la largeur.
+ * Parking spot set from edit mode: its dimensions, its center, its heading.
+ * Only the present fields are set — setting the front dimension does not redeposit the width.
  *
- * Deux champs suivent la règle du nom vide qui efface (comme `openingPatchSchema`) : `name` rend la
- * main à l'id, et `margin` à la marge commune (`PARKING_SNAP_MARGIN`). Le `deviceId` d'une base,
- * lui, ne se patche pas : une base qui change de robot est une autre place.
+ * Two fields follow the rule of the empty name that clears (like `openingPatchSchema`): `name` hands
+ * back to the id, and `margin` to the common margin (`PARKING_SNAP_MARGIN`). The `deviceId` of a base,
+ * for its part, is not patched: a base that changes robot is another spot.
  */
 export const parkingPatchSchema = z.object({
   name: z.string().trim().max(60).optional(),
   center: vec2Schema.optional(),
   size: z.tuple([z.number().min(MIN_PARKING_DIM).max(30), z.number().min(MIN_PARKING_DIM).max(30)]).optional(),
   /**
-   * Cap de l'avant. L'UI le ramène dans `[0, 360[` avant l'envoi, comme le `yaw` d'un appareil
-   * orienté (`PlacementControl`) ; les bornes restent larges parce qu'un axe CALCULÉ (celui d'un
-   * garage, `longestEdgeYawDeg`) revient négatif, et qu'un refus n'apprendrait rien à personne.
+   * Heading of the front. The UI brings it back into `[0, 360[` before sending, like the `yaw` of an
+   * oriented device (`PlacementControl`); the bounds stay wide because a COMPUTED axis (that of a
+   * garage, `longestEdgeYawDeg`) comes back negative, and a refusal would teach nobody anything.
    */
   yaw: z.number().min(-360).max(360).optional(),
-  /** `0` EFFACE et rend la main à la marge commune — une place sans marge propre n'accrocherait rien. */
+  /** `0` CLEARS and hands back to the common margin — a spot without its own margin would snap nothing. */
   margin: z.number().min(0).max(20).optional(),
 })
 export type ParkingPatch = z.infer<typeof parkingPatchSchema>
 
-/** Les places du document, telles qu'elles y sont écrites (tableau absent = maison sans place). */
+/** The spots of the document, as they are written there (absent array = house without spots). */
 function parkingsOf(doc: JsonObject): { site: JsonObject; list: unknown[] } {
   const site = isObject(doc.site) ? doc.site : null
   if (!site) throw new PlacementError('house document has no site')
   return { site, list: Array.isArray(site.parkings) ? site.parkings : [] }
 }
 
-/** Renvoie une copie du document JSON avec la place `id` modifiée. */
+/** Returns a copy of the JSON document with the spot `id` modified. */
 export function patchParkingInJson(doc: unknown, id: string, patch: ParkingPatch): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
   const { site, list } = parkingsOf(doc)
@@ -740,16 +740,16 @@ export function patchParkingInJson(doc: unknown, id: string, patch: ParkingPatch
 }
 
 /**
- * Place AJOUTÉE depuis le mode édition. Complète, comme une ouverture qui naît : une place doit dire
- * ce qui s'y range et où elle est, sinon elle n'existe nulle part. L'id est choisi par l'UI.
+ * Spot ADDED from edit mode. Complete, like an opening that is born: a spot must say
+ * what parks in it and where it is, otherwise it exists nowhere. The id is chosen by the UI.
  */
 export const newParkingSchema = z.object({
   id: z.string().min(1).max(60),
   name: z.string().trim().max(60).optional(),
   accepts: z.enum(DEVICE_KINDS),
-  /** Base réservée à cet appareil. Absent = place partagée par tous les appareils du kind. */
+  /** Base reserved for this device. Absent = spot shared by all the devices of the kind. */
   deviceId: deviceIdSchema.optional(),
-  /** Niveau qui porte la place, donné par le SOL tapé dans la 3D. Absent = sur le terrain. */
+  /** Level that carries the spot, given by the GROUND tapped in the 3D. Absent = on the terrain. */
   levelId: z.string().min(1).optional(),
   center: vec2Schema,
   size: z.tuple([z.number().min(MIN_PARKING_DIM).max(30), z.number().min(MIN_PARKING_DIM).max(30)]),
@@ -757,7 +757,7 @@ export const newParkingSchema = z.object({
 })
 export type NewParking = z.infer<typeof newParkingSchema>
 
-/** Renvoie une copie du document JSON avec une place de PLUS. L'id doit être libre dans la maison. */
+/** Returns a copy of the JSON document with one MORE spot. The id must be free in the house. */
 export function addParkingToJson(doc: unknown, parking: NewParking): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
   const { site, list } = parkingsOf(doc)
@@ -772,9 +772,9 @@ export function addParkingToJson(doc: unknown, parking: NewParking): JsonObject 
 }
 
 /**
- * Renvoie une copie du document JSON SANS la place `id`. Rien à libérer ailleurs : une place n'est
- * nommée par aucun appareil — c'est elle qui nomme le sien (l'inverse d'une ouverture et de son
- * ouvrant). L'engin qui s'y rangeait retourne simplement à son point GPS.
+ * Returns a copy of the JSON document WITHOUT the spot `id`. Nothing to free elsewhere: a spot is not
+ * named by any device — it is the spot that names its own (the inverse of an opening and its
+ * cover). The vehicle that parked there simply goes back to its GPS point.
  */
 export function removeParkingFromJson(doc: unknown, id: string): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -783,42 +783,42 @@ export function removeParkingFromJson(doc: unknown, id: string): JsonObject {
   return { ...doc, site: { ...site, parkings: list.filter((p) => !(isObject(p) && p.id === id)) } }
 }
 
-/** Élément du jardin AJOUTÉ depuis le mode édition. L'id est choisi par l'UI. */
+/** Garden element ADDED from edit mode. The id is chosen by the UI. */
 export const newGardenItemSchema = z.object({
   id: z.string().min(1).max(60),
   kind: z.enum(GARDEN_KINDS),
   center: vec2Schema,
   height: z.number().min(MIN_GARDEN_HEIGHT).max(MAX_GARDEN_HEIGHT),
   yaw: z.number().min(-360).max(360).optional(),
-  /** Longueur d'une haie (m). */
+  /** Length of a hedge (m). */
   length: z.number().min(MIN_HEDGE_LENGTH).max(MAX_HEDGE_LENGTH).optional(),
-  /** Largeur d'une haie (m). */
+  /** Width of a hedge (m). */
   width: z.number().min(MIN_HEDGE_WIDTH).max(MAX_HEDGE_WIDTH).optional(),
-  /** Espacement entre les sujets d'une haie (m). */
+  /** Spacing between the plants of a hedge (m). */
   spacing: z.number().min(MIN_HEDGE_SPACING).max(MAX_HEDGE_SPACING).optional(),
   seed: z.number().int().min(0).optional(),
-  /** Espèce du catalogue de l'app. Dans un réglage, la chaîne vide l'EFFACE (retour à la famille). */
+  /** Species from the app catalog. In a setting, the empty string CLEARS it (back to the family). */
   species: z.string().regex(/^([a-z0-9_.-]+)?$/i).max(60).optional(),
 })
 export type NewGardenItem = z.infer<typeof newGardenItemSchema>
 
 /**
- * Élément du jardin réglé : seuls les champs présents sont posés. Changer de famille est permis.
- * `spacing: null` EFFACE l'espacement d'une haie (retour à l'automatique).
+ * Garden element set: only the present fields are set. Changing family is allowed.
+ * `spacing: null` CLEARS the spacing of a hedge (back to automatic).
  */
 export const gardenItemPatchSchema = newGardenItemSchema.omit({ id: true }).partial().extend({
   spacing: z.number().min(MIN_HEDGE_SPACING).max(MAX_HEDGE_SPACING).nullable().optional(),
 })
 export type GardenItemPatch = z.infer<typeof gardenItemPatchSchema>
 
-/** Les éléments du jardin, tels qu'ils sont écrits (tableau absent = jardin vide). */
+/** The garden elements, as they are written (absent array = empty garden). */
 function gardenOf(doc: JsonObject): { site: JsonObject; list: unknown[] } {
   const site = isObject(doc.site) ? doc.site : null
   if (!site) throw new PlacementError('house document has no site')
   return { site, list: Array.isArray(site.garden) ? site.garden : [] }
 }
 
-/** Renvoie une copie du document JSON avec un élément de jardin de PLUS. L'id doit être libre. */
+/** Returns a copy of the JSON document with one MORE garden element. The id must be free. */
 export function addGardenItemToJson(doc: unknown, item: NewGardenItem): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
   const { site, list } = gardenOf(doc)
@@ -833,7 +833,7 @@ export function addGardenItemToJson(doc: unknown, item: NewGardenItem): JsonObje
   return { ...doc, site: { ...site, garden: [...list, next] } }
 }
 
-/** Renvoie une copie du document JSON avec l'élément de jardin `id` modifié. */
+/** Returns a copy of the JSON document with the garden element `id` modified. */
 export function patchGardenItemInJson(doc: unknown, id: string, patch: GardenItemPatch): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
   const { site, list } = gardenOf(doc)
@@ -842,7 +842,7 @@ export function patchGardenItemInJson(doc: unknown, id: string, patch: GardenIte
   const next: JsonObject = { ...(list[i] as JsonObject) }
   for (const key of ['kind', 'center', 'height', 'length', 'width', 'seed'] as const) if (patch[key] !== undefined) next[key] = patch[key]
   if (patch.spacing !== undefined) { if (patch.spacing === null) delete next.spacing; else next.spacing = patch.spacing }
-  // un cap nul n'est pas écrit : c'est la valeur par défaut
+  // a zero heading is not written: it is the default value
   if (patch.yaw !== undefined) { if (patch.yaw) next.yaw = patch.yaw; else delete next.yaw }
   if (patch.species !== undefined) { if (patch.species) next.species = patch.species; else delete next.species }
   const nextList = [...list]
@@ -850,7 +850,7 @@ export function patchGardenItemInJson(doc: unknown, id: string, patch: GardenIte
   return { ...doc, site: { ...site, garden: nextList } }
 }
 
-/** Renvoie une copie du document JSON SANS l'élément de jardin `id`. Rien ne le nomme ailleurs. */
+/** Returns a copy of the JSON document WITHOUT the garden element `id`. Nothing names it elsewhere. */
 export function removeGardenItemFromJson(doc: unknown, id: string): JsonObject {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
   const { site, list } = gardenOf(doc)

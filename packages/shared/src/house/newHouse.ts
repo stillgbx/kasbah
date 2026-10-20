@@ -1,30 +1,30 @@
 import type { Vec2 } from './geometry/vec2'
 
-// La maison d'une installation NEUVE, telle que l'assistant « Créer une propriété » l'écrit : le
-// point 0 (géoréférencé, cap compris), un rez-de-chaussée, une première pièce de 5 × 4 m dont un coin
-// est sur le point 0, un terrain rectangulaire autour, et aucun plugin actif. Tout le reste se fait
-// ensuite dans le mode édition (contour du terrain, cotes, pièces, niveaux) et dans Réglages (plugins).
+// The house of a NEW installation, as the "Create a property" wizard writes it: the
+// point 0 (georeferenced, heading included), a ground floor, a first 5 × 4 m room with one corner
+// on point 0, a rectangular terrain around it, and no active plugin. Everything else is done
+// afterwards in edit mode (terrain outline, measurements, rooms, levels) and in Settings (plugins).
 
 export interface NewHouseInput {
   name: string
   kind: 'house' | 'apartment'
-  /** Le point 0 : WGS84, et le cap de l'axe local +y (degrés, horaire depuis le nord). */
+  /** Point 0: WGS84, and the heading of the local +y axis (degrees, clockwise from north). */
   origin: { lat: number; lon: number; heading: number; alt?: number }
-  /** Terrain (m) ; absent pour un appartement, qui n'a qu'une marge autour de sa pièce. */
+  /** Terrain (m); absent for an apartment, which only has a margin around its room. */
   terrain?: { width: number; depth: number }
-  /** Libellés écrits dans le fichier, dans la langue de l'écran qui crée. */
+  /** Labels written in the file, in the language of the screen that creates. */
   levelName: string
   roomName: string
 }
 
-/** La première pièce : 5 × 4 m, coin sur le point 0, le long des axes +x et +y. */
+/** The first room: 5 × 4 m, corner on point 0, along the +x and +y axes. */
 export const FIRST_ROOM: readonly Vec2[] = [[0, 0], [5, 0], [5, 4], [0, 4]]
-/** Marge autour de la pièce d'un appartement (m) : un sol où poser un balcon. */
+/** Margin around the room of an apartment (m): a floor on which to place a balcony. */
 const APARTMENT_MARGIN = 2
 
 const round2 = (v: number) => Math.round(v * 100) / 100
 
-/** Un id de fichier lisible tiré du nom (`Maison du lac` → `maison-du-lac`), unique parmi `taken`. */
+/** A readable file id drawn from the name (`Maison du lac` → `maison-du-lac`), unique among `taken`. */
 export function propertyIdFor(name: string, taken: Iterable<string>): string {
   const base = name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'propriete'
@@ -35,7 +35,7 @@ export function propertyIdFor(name: string, taken: Iterable<string>): string {
   return `${base}-${n}`
 }
 
-/** Le JSON brut d'une maison neuve (valide pour `parseHouse`). */
+/** The raw JSON of a new house (valid for `parseHouse`). */
 export function newHouseJson(id: string, input: NewHouseInput): Record<string, unknown> {
   const xs = FIRST_ROOM.map((p) => p[0]), ys = FIRST_ROOM.map((p) => p[1])
   const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2

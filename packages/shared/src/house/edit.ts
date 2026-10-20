@@ -6,18 +6,18 @@ import { PlacementError } from './place'
 import { applyStructureToJson, structurePatchShape, structureReshapes } from './structure'
 import type { Vec2 } from './geometry/vec2'
 
-// Une SÉANCE d'édition de la maison, écrite d'un coup par « Valider » : l'apparence (finitions), la
-// FORME des pièces (leurs cotes) et la STRUCTURE (pièces et niveaux qui naissent ou disparaissent,
-// nom et type d'une pièce, `structure.ts`). Un seul patch, un seul brouillon côté écran, une seule
+// An editing SESSION of the house, written all at once by "Apply": the appearance (finishes), the
+// SHAPE of the rooms (their measurements) and the STRUCTURE (rooms and levels that are born or disappear,
+// name and type of a room, `structure.ts`). A single patch, a single draft on the screen side, a single
 // route (`PUT /api/house/edit`).
 //
-// La forme s'écrit en COTES (`meta.survey.points`, unité du relevé) : le polygone, les murs
-// mitoyens et l'emprise des niveaux en sont recalculés par `fitSurvey`, et les ouvertures de chaque
-// pièce dont le polygone change sont recalées à leur place réelle sur leur mur.
+// The shape is written as MEASUREMENTS (`meta.survey.points`, survey unit): the polygon, the shared
+// walls and the footprint of the levels are recomputed from them by `fitSurvey`, and the openings of each
+// room whose polygon changes are readjusted to their real place on their wall.
 
 export const houseEditPatchSchema = z.object({
   appearance: appearancePatchSchema.optional(),
-  /** Nouvelles cotes, par pièce (unité et repère du relevé : `house.meta.survey`). */
+  /** New measurements, per room (unit and reference frame of the survey: `house.meta.survey`). */
   shapes: z.record(z.string().min(1), z.array(vec2Schema).min(3)).optional(),
   ...structurePatchShape,
 })
@@ -27,16 +27,16 @@ type Json = Record<string, unknown>
 const isObject = (v: unknown): v is Json => typeof v === 'object' && v !== null && !Array.isArray(v)
 const round4 = (v: number) => Math.round(v * 1e4) / 1e4
 
-/** Conventions d'une maison qui n'a jamais été relevée : centimètres, cloison = deux murs intérieurs. */
+/** Conventions of a house that has never been surveyed: centimeters, partition = two interior walls. */
 function defaultConventions(doc: SurveyDoc): SurveyConventions {
   return { unit: 'cm', partition: round4(2 * (doc.defaults?.interiorWallThickness ?? 0.1)) }
 }
 
 /**
- * Donne des COTES à chaque pièce qui n'en a pas, par le calcul inverse de `fitSurvey` : chaque arête
- * mitoyenne est repoussée de la moitié de l'écart (deux pièces murées dos à dos), l'arête d'une pièce
- * sans mur qui touche une façade est repoussée jusqu'à la face intérieure de la pièce murée. Une
- * maison convertie redonne exactement ses polygones par `fitSurvey` (vérifié par les tests).
+ * Gives MEASUREMENTS to each room that has none, by the inverse computation of `fitSurvey`: each shared
+ * edge is pushed back by half the gap (two walled rooms back to back), the edge of a room
+ * without walls that touches a facade is pushed back to the inner face of the walled room. A
+ * converted house gives back exactly its polygons through `fitSurvey` (verified by the tests).
  */
 export function withSurveyPoints<T extends SurveyDoc>(input: T): T {
   if (input.rooms.every((r) => r.meta?.survey?.points)) return input
@@ -69,7 +69,7 @@ export function withSurveyPoints<T extends SurveyDoc>(input: T): T {
       }
       return push
     })
-    // la règle de `fitSurvey` : deux arêtes consécutives alignées prennent le même rentrement
+    // the rule of `fitSurvey`: two consecutive aligned edges take the same inset
     for (let pass = 0; pass < out.length; pass++) {
       for (let i = 0; i < out.length; i++) {
         const j = (i + 1) % out.length
@@ -85,7 +85,7 @@ export function withSurveyPoints<T extends SurveyDoc>(input: T): T {
   return doc as T
 }
 
-/** Repousse chaque arête de `push[i]` vers l'extérieur (sommets à l'intersection des droites voisines). */
+/** Pushes each edge outward by `push[i]` (vertices at the intersection of the neighboring lines). */
 function offsetEdges(poly: readonly Vec2[], push: readonly number[]): Vec2[] {
   const es = surveyEdges(poly)
   const n = poly.length
@@ -102,8 +102,8 @@ function offsetEdges(poly: readonly Vec2[], push: readonly number[]): Vec2[] {
 }
 
 /**
- * L'arête de `next` qui prolonge l'arête `seg` de `prev` : même sens, et la plus proche du point
- * `at` (sur la droite, puis hors de l'arête). `-1` si aucune arête n'a plus ce sens.
+ * The edge of `next` that extends the edge `seg` of `prev`: same direction, and the closest to the point
+ * `at` (on the line, then off the edge). `-1` if no edge has that direction anymore.
  */
 function matchEdge(prev: readonly Vec2[], seg: number, next: readonly Vec2[], at: Vec2): number {
   const d = surveyEdges(prev)[seg]?.d
@@ -121,10 +121,10 @@ function matchEdge(prev: readonly Vec2[], seg: number, next: readonly Vec2[], at
 }
 
 /**
- * Recale les ouvertures MURALES d'une pièce dont le polygone a changé : chacune garde sa place
- * réelle (son centre, projeté sur l'arête qui prolonge son ancien mur), pas sa distance au coin —
- * pousser le mur voisin ne la fait pas glisser. Aucune n'est rognée : une ouverture qui ne tient
- * plus est refusée par la validation de la maison, et l'écran le dit.
+ * Readjusts the WALL openings of a room whose polygon has changed: each keeps its real
+ * place (its center, projected onto the edge that extends its old wall), not its distance to the corner —
+ * pushing the neighboring wall does not make it slide. None is trimmed: an opening that no longer
+ * fits is refused by the validation of the house, and the screen says so.
  */
 function remapOpenings(room: Json, prev: readonly Vec2[], next: readonly Vec2[]): Json {
   if (!Array.isArray(room.openings)) return room
@@ -143,7 +143,7 @@ function remapOpenings(room: Json, prev: readonly Vec2[], next: readonly Vec2[])
   return { ...room, openings }
 }
 
-/** Les surcharges que `fitSurvey` garde (`none`, `exterior`) suivent leur arête quand on ajoute ou retire un sommet. */
+/** The overrides that `fitSurvey` keeps (`none`, `exterior`) follow their edge when a vertex is added or removed. */
 function remapKeptWalls(room: Json, prevRaw: readonly Vec2[], nextRaw: readonly Vec2[]): Json {
   if (!Array.isArray(room.walls) || prevRaw.length === nextRaw.length) return room
   const es = surveyEdges(prevRaw)
@@ -159,24 +159,24 @@ function remapKeptWalls(room: Json, prevRaw: readonly Vec2[], nextRaw: readonly 
 
 export interface HouseEditResult<T> {
   doc: T
-  /** Ce qui empêche d'écrire (vis-à-vis trop serré, relevé retourné) : « Valider » reste grisé. */
+  /** What prevents writing (facing gap too tight, flipped survey): "Apply" stays grayed out. */
   blocking: string[]
-  /** À signaler sans bloquer (arête mitoyenne ET en façade). */
+  /** To flag without blocking (edge both shared AND on the facade). */
   warnings: string[]
 }
 
 /**
- * Applique une séance d'édition. Ne lève que pour une pièce inconnue (`PlacementError`) ; ce qui
- * rend la maison inconstructible est rendu dans `blocking` — le serveur refuse alors d'écrire, l'écran
- * l'affiche. La validation complète (ouvertures qui ne tiennent plus…) reste celle de `parseHouse`.
+ * Applies an editing session. Only throws for an unknown room (`PlacementError`); what
+ * makes the house unbuildable is returned in `blocking` — the server then refuses to write, the screen
+ * displays it. The complete validation (openings that no longer fit…) stays that of `parseHouse`.
  */
 export function applyHouseEditToJson<T>(input: T, patch: HouseEditPatch): HouseEditResult<T> {
   if (!isObject(input)) throw new PlacementError('house document is not an object')
-  // ce que la séance dit d'une pièce qu'elle retire ne compte plus (ses cotes, ses finitions)
+  // what the session says about a room it removes no longer counts (its measurements, its finishes)
   const removed = new Set(patch.removeRooms ?? [])
   const shapes = Object.entries(patch.shapes ?? {}).filter(([id]) => !removed.has(id))
   const reshape = shapes.length > 0 || structureReshapes(patch)
-  // une pièce qui naît s'écrit en cotes : la maison est convertie en relevé AVANT
+  // a room that is born is written as measurements: the house is converted into a survey BEFORE
   let doc: unknown = reshape ? withSurveyPoints(input as unknown as SurveyDoc) : input
   const structure = applyStructureToJson(doc as Json, patch, Object.fromEntries(shapes), (doc as SurveyDoc).meta?.survey ?? {})
   doc = structure.doc

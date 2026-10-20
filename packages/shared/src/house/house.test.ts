@@ -61,73 +61,73 @@ describe('house schema & validation', () => {
   })
 })
 
-describe('champs de panneaux', () => {
+describe('panel arrays', () => {
   const array = (over: Record<string, unknown> = {}) => panelArraySchema.parse({
     id: 'pv', levelId: 'toit', origin: [10, 20, 0.1], rows: 2, cols: 3, gap: 0, panel: { width: 1, height: 2 },
     panels: ['mock:p1', null, 'mock:p3'], ...over,
   })
 
-  it('dérive un module par emplacement, centré, rangée par rangée, lié ou non', () => {
+  it('derives one module per slot, centered, row by row, linked or not', () => {
     const devices = panelArrayDevices(array())
     expect(devices).toHaveLength(6)
     expect(devices[0]).toMatchObject({ id: 'pv.r0c0', deviceId: 'mock:p1', kind: 'sensor', levelId: 'toit', position: [10.5, 21, 0.1] })
-    expect(devices[1]!.deviceId).toBeUndefined()                     // emplacement sans onduleur suivi : module quand même
+    expect(devices[1]!.deviceId).toBeUndefined()                     // slot without a tracked inverter: a module all the same
     expect(devices[2]).toMatchObject({ id: 'pv.r0c2', deviceId: 'mock:p3', position: [12.5, 21, 0.1] })
-    expect(devices[5]!.position).toEqual([12.5, 23, 0.1])            // rangée 1 : +height
+    expect(devices[5]!.position).toEqual([12.5, 23, 0.1])            // row 1: +height
     expect(panelOf(devices[0]!)).toMatchObject({ arrayId: 'pv', row: 0, col: 0, width: 1, height: 2, tilt: 0 })
   })
 
-  it('donne au module la puissance crête de son champ, et une valeur courante à qui ne la dit pas', () => {
-    // c'est l'échelle de couleur d'un module : sa dalle en 3D, la jauge de sa ligne dans la vue Énergie
+  it('gives the module the peak power of its array, and a current value to whoever does not say it', () => {
+    // it is the color scale of a module: its slab in 3D, the gauge of its line in the Energy view
     expect(panelOf(panelArrayDevices(array())[0]!)!.peakW).toBe(PANEL_PEAK_W)
     const wp = array({ panel: { width: 1, height: 2, peakW: 500 } })
     expect(panelOf(panelArrayDevices(wp)[0]!)!.peakW).toBe(500)
   })
 
-  it('tourne le champ autour de son origine (yaw) et le fait monter le long des rangées (slope)', () => {
+  it('rotates the array around its origin (yaw) and makes it climb along the rows (slope)', () => {
     const [d] = panelArrayDevices(array({ rows: 1, cols: 1, yaw: 90, panels: ['mock:p1'] }))
-    // colonnes vers +y, rangées vers -x : le centre (0,5 ; 1) devient (-1 ; 0,5)
+    // columns toward +y, rows toward -x: the center (0.5, 1) becomes (-1, 0.5)
     expect(d!.position![0]).toBeCloseTo(9)
     expect(d!.position![1]).toBeCloseTo(20.5)
     const [t] = panelArrayDevices(array({ rows: 1, cols: 1, slope: 30, panels: ['mock:p1'] }))
-    expect(t!.position![1]).toBeCloseTo(20 + Math.cos(Math.PI / 6))   // projection au sol de la rangée
-    expect(t!.position![2]).toBeCloseTo(0.1 - Math.sin(Math.PI / 6))  // et sa DESCENTE vers l'azimut
+    expect(t!.position![1]).toBeCloseTo(20 + Math.cos(Math.PI / 6))   // ground projection of the row
+    expect(t!.position![2]).toBeCloseTo(0.1 - Math.sin(Math.PI / 6))  // and its DESCENT toward the azimuth
   })
 
-  it('redresse les modules SANS les déplacer : sur un toit plat, le châssis n incline que le verre', () => {
+  it('tilts the modules WITHOUT moving them: on a flat roof, the frame only tilts the glass', () => {
     const flat = panelArrayDevices(array({ rows: 2, cols: 1, tilt: 20, panels: ['mock:p1', 'mock:p3'] }))
-    expect(flat[0]!.position![2]).toBe(0.1)                           // deux rangées, une seule hauteur
+    expect(flat[0]!.position![2]).toBe(0.1)                           // two rows, a single height
     expect(flat[1]!.position![2]).toBe(0.1)
-    expect(flat[1]!.position![1]).toBeCloseTo(23)                     // le pas des rangées ne change pas
-    expect(panelOf(flat[0]!)!.tilt).toBe(20)                         // mais le verre, lui, est incliné
-    // les deux angles s'ajoutent, du même côté : une terrasse en pente avec des châssis
+    expect(flat[1]!.position![1]).toBeCloseTo(23)                     // the row pitch does not change
+    expect(panelOf(flat[0]!)!.tilt).toBe(20)                         // but the glass itself is tilted
+    // the two angles add up, on the same side: a sloping terrace with frames
     const both = panelArrayDevices(array({ rows: 1, cols: 1, slope: 30, tilt: 20, panels: ['mock:p1'] }))
     expect(panelOf(both[0]!)!.tilt).toBe(50)
-    expect(both[0]!.position![2]).toBeCloseTo(0.1 - Math.sin(Math.PI / 6))   // la descente ne suit QUE la pente
-    // un châssis négatif bascule le verre en arrière sans rien déplacer non plus
+    expect(both[0]!.position![2]).toBeCloseTo(0.1 - Math.sin(Math.PI / 6))   // the descent follows ONLY the slope
+    // a negative frame tilts the glass backward without moving anything either
     const back = panelArrayDevices(array({ rows: 1, cols: 1, tilt: -15, panels: ['mock:p1'] }))
     expect(panelOf(back[0]!)!.tilt).toBe(-15)
     expect(back[0]!.position![2]).toBe(0.1)
   })
 
-  it('la maison démo porte ses deux champs sur le niveau toit, et withPanelArrays les ajoute aux appareils', () => {
+  it('the demo house carries its two arrays on the roof level, and withPanelArrays adds them to the devices', () => {
     const house = parseHouse(demo)
     expect(house.arrays.map((a) => a.id)).toEqual(['pv-sud', 'pv-nord'])
     const full = withPanelArrays(house)
     expect(full.devices.length).toBe(house.devices.length + 20)
     expect(indexHouse(full).devicesByLevel.get('toit')).toHaveLength(20)
     const bare = { ...house, arrays: [] }
-    expect(withPanelArrays(bare)).toBe(bare)                        // sans champ : la même référence, rien à recalculer
+    expect(withPanelArrays(bare)).toBe(bare)                        // without an array: the same reference, nothing to recompute
   })
 
-  it('refuse un champ sur un niveau inconnu, trop de modules, ou un onduleur lié deux fois', () => {
+  it('refuses an array on an unknown level, too many modules, or an inverter linked twice', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const bad = (patch: (h: any) => void) => { const h = clone(); patch(h); const r = safeParseHouse(h); return r.success ? [] : r.issues.map((i) => i.path) }
     expect(bad((h) => { h.arrays[0].levelId = 'grenier' })).toContainEqual('arrays[0].levelId')
     expect(bad((h) => { h.arrays[0].panels.push('mock:extra') })).toContainEqual('arrays[0].panels')
     expect(bad((h) => { h.arrays[1].panels[0] = 'mock:panel-s01' })).toContainEqual('arrays[1].panels[0]')
-    // panel-s01 est le DERNIER de la liste : l'origine d'un champ est son coin haut, et la grille
-    // s'en va vers l'azimut (le module 1 du plan est donc en bas du champ)
+    // panel-s01 is the LAST of the list: the origin of an array is its top corner, and the grid
+    // goes toward the azimuth (module 1 of the plan is therefore at the bottom of the array)
     expect(bad((h) => { h.devices[0].deviceId = 'mock:panel-s01' })).toContainEqual('arrays[0].panels[9]')
   })
 })
@@ -137,7 +137,7 @@ describe('geometry of the demo house', () => {
   const geom = computeHouseGeometry(house)
   it('levels are sorted and populated', () => {
     expect(geom.levels.map((l) => l.levelId)).toEqual(['rdc', 'etage', 'toit'])
-    expect(geom.levels[2]!.walls).toHaveLength(0)                  // le toit est un niveau sans pièce : ni mur ni sol
+    expect(geom.levels[2]!.walls).toHaveLength(0)                  // the roof is a level without a room: neither wall nor floor
     expect(geom.levels[0]!.floors).toHaveLength(3)
     expect(geom.levels[0]!.walls.length).toBeGreaterThan(10)
     expect(geom.levels[0]!.openings.map((o) => o.openingId)).toContain('baie')
@@ -192,18 +192,18 @@ describe('lookup & geo', () => {
     expect(back[2]).toBeCloseTo(p[2], 6)
     expect(geoDistance(house.origin, g)).toBeCloseTo(Math.hypot(12.5, 7.25), 1)
   })
-  it('une position GPS se place sur le terrain, et RIEN hors du terrain', () => {
-    // le centre de la maison tombe forcément dans son propre terrain
+  it('a GPS position is placed on the terrain, and NOTHING outside the terrain', () => {
+    // the center of the house necessarily falls inside its own terrain
     const here = localToGeo(house.origin, [0, 0, 0])
     const at = sitePosition(house, here)
     expect(at).not.toBeNull()
     expect(at![0]).toBeCloseTo(0, 3)
     expect(at![1]).toBeCloseTo(0, 3)
-    expect(at![2]).toBe(0)                       // posé sur le terrain
-    // un kilomètre plus loin : la voiture est ailleurs, elle n'a pas à apparaître dans le jardin
+    expect(at![2]).toBe(0)                       // set on the terrain
+    // one kilometer further: the car is elsewhere, it has no business appearing in the garden
     expect(sitePosition(house, localToGeo(house.origin, [1000, 1000, 0]))).toBeNull()
   })
-  it('un décalage de correction déplace la place calculée, en mètres du repère maison', () => {
+  it('a correction offset shifts the computed place, in meters of the house reference frame', () => {
     const here = localToGeo(house.origin, [0, 0, 0])
     const at = sitePosition(house, here, [3, -2])
     expect(at![0]).toBeCloseTo(3, 3)
@@ -217,15 +217,15 @@ describe('lookup & geo', () => {
     expect(east.lon).toBeGreaterThan(5)
     expect(Math.abs(east.lat - 45)).toBeLessThan(1e-9)
   })
-  it("le calage glisse l'origine en mètres du monde, et la tourne autour d'un point qui ne bouge pas", () => {
+  it("the alignment slides the origin in world meters, and rotates it around a point that does not move", () => {
     const o = { lat: 45, lon: 5, alt: 0, heading: 6 }
-    // 3 m vers l'est, 2 m vers le sud : le 0;0 de la maison se retrouve là sur la photo
+    // 3 m east, 2 m south: the house's 0;0 ends up there on the photo
     const moved = shiftOrigin(o, 3, -2)
     const at = geoToLocal({ ...o, heading: 0 }, moved)
     expect(at[0]).toBeCloseTo(3, 3)
     expect(at[1]).toBeCloseTo(-2, 3)
     expect(moved.heading).toBe(6)
-    // tourner de 18° autour du centre de la maison : le centre reste à sa place, le coin bouge
+    // rotate by 18° around the center of the house: the center stays in place, the corner moves
     const centre: [number, number] = [5, 7]
     const turned = turnOrigin(o, 24, centre)
     expect(turned.heading).toBe(24)

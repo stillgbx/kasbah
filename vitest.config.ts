@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config'
 
-// Un seul point d'entrée `vitest` à la racine : chaque workspace garde son propre
-// vitest.config.ts (environnement node vs happy-dom, alias, plugins Vue).
+// A single `vitest` entry point at the root: each workspace keeps its own
+// vitest.config.ts (node vs happy-dom environment, aliases, Vue plugins).
 export default defineConfig({
   test: {
     projects: ['packages/*', 'apps/*'],

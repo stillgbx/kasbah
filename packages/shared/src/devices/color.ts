@@ -1,5 +1,5 @@
-// Conversions couleur pures : CIE xy (canonique, natif Hue) ↔ sRGB ↔ HSV, mirek ↔ kelvin.
-// Le gamut n'est pas contraint (les bridges corrigent eux-mêmes) ; les valeurs sont clampées.
+// Pure color conversions: CIE xy (canonical, native Hue) ↔ sRGB ↔ HSV, mirek ↔ kelvin.
+// The gamut is not constrained (the bridges correct it themselves); values are clamped.
 
 export interface RGB { r: number; g: number; b: number }   // 0..1
 export interface HSV { h: number; s: number; v: number }   // h 0..360, s/v 0..1
@@ -13,7 +13,7 @@ function gammaDecode(c: number): number {
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
 }
 
-/** xy (+ luminance Y, défaut 1) → sRGB normalisé sur le canal max. */
+/** xy (+ luminance Y, default 1) → sRGB normalized on the max channel. */
 export function xyToRgb(x: number, y: number, Y = 1): RGB {
   if (y <= 0) return { r: 0, g: 0, b: 0 }
   const z = 1 - x - y
@@ -33,7 +33,7 @@ export function rgbToXy(rgb: RGB): { x: number; y: number } {
   const Y = r * 0.283881 + g * 0.668433 + b * 0.047685
   const Z = r * 0.000088 + g * 0.072310 + b * 0.986039
   const sum = X + Y + Z
-  if (sum === 0) return { x: 0.3127, y: 0.3290 } // blanc D65
+  if (sum === 0) return { x: 0.3127, y: 0.3290 } // white D65
   return { x: X / sum, y: Y / sum }
 }
 
@@ -80,7 +80,7 @@ export function hexToRgb(hex: string): RGB {
   return { r: parseInt(m[1]!, 16) / 255, g: parseInt(m[2]!, 16) / 255, b: parseInt(m[3]!, 16) / 255 }
 }
 
-/** Approximation blanc chaud/froid d'une température (mirek) en sRGB (algorithme de Tanner Helland). */
+/** Warm/cool white approximation of a temperature (mirek) in sRGB (Tanner Helland's algorithm). */
 export function mirekToRgb(mirek: number): RGB {
   const k = Math.min(6500, Math.max(2000, mirekToKelvin(mirek))) / 100
   const r = k <= 66 ? 1 : clamp01(1.2929 * Math.pow(k - 60, -0.1332))

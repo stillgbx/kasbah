@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-// Dérive les polygones de pièces (face intérieure finie, en mètres) depuis les relevés bruts
-// `room.meta.survey.points` (cm, mesurés à l'intérieur des pièces).
+// Derives the room polygons (finished inner face, in meters) from the raw surveys
+// `room.meta.survey.points` (cm, measured inside the rooms).
 //
-// Le calcul vit dans `packages/shared/src/house/survey.ts` (`fitSurvey`) : c'est le même que celui
-// que le serveur rejoue à chaque écriture des cotes depuis l'interface. Ce script n'en est que
-// l'enveloppe en ligne de commande (lecture, compte rendu, écriture). Le pourquoi du calcul —
-// demi-cloisons, pièces sans mur, `partition`, `levelOffsets` — est expliqué en tête du module.
+// The computation lives in `packages/shared/src/house/survey.ts` (`fitSurvey`): it is the same one
+// the server replays on every write of the measurements from the UI. This script is only its
+// command-line wrapper (reading, report, writing). The why of the computation — half-partitions,
+// rooms without walls, `partition`, `levelOffsets` — is explained at the top of the module.
 //
-// Usage : node house/fit-survey.mjs [house/maison.json] [--check]
-//         --check : ne réécrit rien, sort en 1 si un polygone calculé diffère du fichier.
+// Usage: node house/fit-survey.mjs [house/maison.json] [--check]
+//        --check: rewrites nothing, exits 1 if a computed polygon differs from the file.
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { register } from 'tsx/esm/api'
@@ -22,7 +22,7 @@ const file = args.find((a) => !a.startsWith('--')) ?? 'house/maison.json'
 
 const house = JSON.parse(readFileSync(file, 'utf8'))
 if (!house.rooms.some((r) => r.meta?.survey?.points)) {
-  console.error(`${file} : aucune pièce avec meta.survey.points`)
+  console.error(`${file}: no room with meta.survey.points`)
   process.exit(1)
 }
 
@@ -44,27 +44,27 @@ for (const level of [...new Set(report.map((r) => r.levelId))]) {
   for (const r of rows) {
     console.log(
       `${r.id.padEnd(w)}  ${r.brut.toFixed(2).padStart(6)} → ${r.fini.toFixed(2).padStart(6)} m²  ` +
-      `(${r.mitoyen}/${r.total} arêtes mitoyennes, ${r.inset} rentrée${r.inset > 1 ? 's' : ''})`,
+      `(${r.mitoyen}/${r.total} shared edges, ${r.inset} inset${r.inset > 1 ? 's' : ''})`,
     )
   }
-  console.log(`${rows.length} pièces, ${rows.reduce((s, r) => s + r.brut, 0).toFixed(2)} → ` +
+  console.log(`${rows.length} rooms, ${rows.reduce((s, r) => s + r.brut, 0).toFixed(2)} → ` +
     `${rows.reduce((s, r) => s + r.fini, 0).toFixed(2)} m²`)
 }
-console.log(`cloison ${(partition * 100).toFixed(0)} cm (${((Math.round(partition / 2 * 1e4) / 1e4) * 100).toFixed(0)} cm portés par chaque pièce murée), ` +
-  `façade ${(ext * 100).toFixed(0)} cm`)
+console.log(`partition ${(partition * 100).toFixed(0)} cm (${((Math.round(partition / 2 * 1e4) / 1e4) * 100).toFixed(0)} cm carried by each walled room), ` +
+  `facade ${(ext * 100).toFixed(0)} cm`)
 for (const m of warnings) console.warn(`  ! ${m}`)
 if (problems.length) {
-  console.error(`\n${problems.length} vis-à-vis trop serré(s) :`)
+  console.error(`\n${problems.length} facing gap(s) too tight:`)
   for (const p of problems) console.error(`  - ${p}`)
   process.exit(1)
 }
 
 if (check) {
-  if (changed) { console.error(`\n${changed} polygone(s) divergent du relevé — rejouer sans --check`); process.exit(1) }
-  console.log('\npolygones à jour')
+  if (changed) { console.error(`\n${changed} polygon(s) differ from the survey — rerun without --check`); process.exit(1) }
+  console.log('\npolygons up to date')
 } else if (changed) {
   writeFileSync(file, `${JSON.stringify(doc, null, 2)}\n`)
-  console.log(`\n${changed} polygone(s) réécrit(s) dans ${file}`)
+  console.log(`\n${changed} polygon(s) rewritten in ${file}`)
 } else {
-  console.log('\nrien à réécrire')
+  console.log('\nnothing to rewrite')
 }

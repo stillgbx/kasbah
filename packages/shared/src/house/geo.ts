@@ -2,8 +2,8 @@ import type { GeoOrigin, Site } from './schema'
 import { pointInPolygon, type Vec2 } from './geometry/vec2'
 import type { Vec3 } from './geometry/types'
 
-// Conversion repère local (mètres, x est, y nord, tourné du cap `heading`) ↔ WGS84.
-// Approximation équirectangulaire : largement suffisante à l'échelle d'une parcelle.
+// Conversion of local reference frame (meters, x east, y north, rotated by the `heading`) ↔ WGS84.
+// Equirectangular approximation: largely sufficient at the scale of a plot.
 
 const R = 6378137
 const toRad = (d: number) => (d * Math.PI) / 180
@@ -13,7 +13,7 @@ export interface GeoPoint { lat: number; lon: number; alt: number }
 
 export function localToGeo(origin: GeoOrigin, [x, y, z]: Vec3): GeoPoint {
   const h = toRad(origin.heading)
-  // l'axe local +y pointe au cap `heading` (horaire depuis le nord)
+  // the local +y axis points at heading `heading` (clockwise from north)
   const east = x * Math.cos(h) + y * Math.sin(h)
   const north = -x * Math.sin(h) + y * Math.cos(h)
   const lat = origin.lat + toDeg(north / R)
@@ -31,14 +31,14 @@ export function geoToLocal(origin: GeoOrigin, p: { lat: number; lon: number; alt
 }
 
 /**
- * Rayon « à la maison » autour de l'origine, en mètres. Plus tolérant que le polygone du terrain
- * (`sitePosition`, un test de DESSIN) : une voiture garée dans la rue devant la maison est rentrée.
- * Partagé par le serveur (coordination voiture ↔ borne) et les vues web (`VehiclesView`, `VehicleCard`,
- * `HouseScene`) : une seule valeur.
+ * "At home" radius around the origin, in meters. More tolerant than the terrain polygon
+ * (`sitePosition`, a DRAWING test): a car parked in the street in front of the house is home.
+ * Shared by the server (car ↔ charger coordination) and the web views (`VehiclesView`, `VehicleCard`,
+ * `HouseScene`): a single value.
  */
 export const HOME_RADIUS_M = 120
 
-/** Distance au sol (m) entre deux points WGS84 (haversine). */
+/** Ground distance (m) between two WGS84 points (haversine). */
 export function geoDistance(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
   const dLat = toRad(b.lat - a.lat), dLon = toRad(b.lon - a.lon)
   const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2
@@ -46,18 +46,18 @@ export function geoDistance(a: { lat: number; lon: number }, b: { lat: number; l
 }
 
 /**
- * Place d'un point GPS dans la scène, **ou `null` s'il tombe hors du terrain de la maison**.
+ * Place of a GPS point in the scene, **or `null` if it falls outside the terrain of the house**.
  *
- * C'est ainsi qu'un véhicule prend sa place en 3D : il n'a pas de `position` dans `house.json` (voir
- * `schema.ts`), elle se CALCULE à chaque relevé. Le terrain fait office de test d'appartenance — une
- * voiture au bureau ou en vadrouille n'a rien à faire dans le jardin, et ne doit donc pas y
- * apparaître, fût-ce au bord.
+ * This is how a vehicle takes its place in 3D: it has no `position` in `house.json` (see
+ * `schema.ts`), it is COMPUTED at each reading. The terrain serves as a membership test — a
+ * car at the office or out and about has no business in the garden, and must therefore not
+ * appear there, even at the edge.
  *
- * `offset` (mètres, repère maison) corrige un décalage CONSTANT entre le relevé et la réalité : le
- * GPS d'un véhicule a son biais, l'origine de la maison son approximation, et les deux s'ajoutent.
- * Il s'applique AVANT le test du terrain — la place corrigée est la vraie.
+ * `offset` (meters, house reference frame) corrects a CONSTANT shift between the survey and reality: the
+ * GPS of a vehicle has its bias, the origin of the house its approximation, and the two add up.
+ * It is applied BEFORE the terrain test — the corrected place is the true one.
  *
- * `z = 0` : posé sur le terrain, comme tout marqueur d'extérieur.
+ * `z = 0`: set on the terrain, like any outdoor marker.
  */
 export function sitePosition(
   house: { origin: GeoOrigin; site: Site },
@@ -70,17 +70,17 @@ export function sitePosition(
 }
 
 /**
- * L'origine glissée de `east`, `north` mètres sur le terrain (repère du MONDE, pas de la maison) :
- * toute la maison glisse d'autant sur la photo. C'est le geste du calage, flèches nord/sud/est/ouest.
+ * The origin slid by `east`, `north` meters on the terrain (WORLD reference frame, not the house's):
+ * the whole house slides by as much on the photo. It is the gesture of the alignment, north/south/east/west arrows.
  */
 export function shiftOrigin(origin: GeoOrigin, east: number, north: number): GeoOrigin {
   return { ...origin, lat: origin.lat + toDeg(north / R), lon: origin.lon + toDeg(east / (R * Math.cos(toRad(origin.lat)))) }
 }
 
 /**
- * L'origine tournée au cap `heading` AUTOUR de `pivot` (repère maison) : ce point reste où il est sur
- * la photo, la maison tourne sur elle-même. Tourner autour du 0;0, un coin, ferait glisser l'autre
- * bout de la maison de plusieurs mètres à chaque degré.
+ * The origin rotated to heading `heading` AROUND `pivot` (house reference frame): that point stays where it is on
+ * the photo, the house turns on itself. Rotating around 0;0, a corner, would make the other
+ * end of the house slide by several meters per degree.
  */
 export function turnOrigin(origin: GeoOrigin, heading: number, pivot: Vec2): GeoOrigin {
   const before = localToGeo(origin, [pivot[0], pivot[1], 0])

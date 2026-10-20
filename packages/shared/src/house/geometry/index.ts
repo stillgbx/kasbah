@@ -19,8 +19,8 @@ export * from './roof'
 export * from './bounds'
 export * from './surface'
 
-/** Point d'entrée : toute la géométrie descriptive d'une maison, niveaux triés par élévation. */
-/** Les finitions murales des pièces qui en ont une ; rien du tout si aucune n'en a (géométrie inchangée). */
+/** Entry point: all the descriptive geometry of a house, levels sorted by elevation. */
+/** The wall finishes of the rooms that have one; nothing at all if none has one (geometry unchanged). */
 function wallFinishesOf(rooms: readonly Room[]): { wallFinishes?: Record<string, Finish> } {
   const out: Record<string, Finish> = {}
   for (const r of rooms) if (r.style?.wallFinish) out[r.id] = r.style.wallFinish

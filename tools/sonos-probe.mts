@@ -1,12 +1,12 @@
 /**
- * RELEVÉ (jetable) : trouve les enceintes Sonos sur le LAN et capture ce que les portes locales
- * rendent vraiment — SSDP, HTTP :1400, SOAP lecture seule, WebSocket :1443. Sert à trancher la
- * porte du plugin (UPnP vs WS vs cloud) d'après une capture, pas d'après la spec.
+ * SURVEY (throwaway): finds the Sonos speakers on the LAN and captures what the local doors
+ * really return — SSDP, HTTP :1400, read-only SOAP, WebSocket :1443. Used to decide the
+ * plugin's door (UPnP vs WS vs cloud) from a capture, not from the spec.
  *
- *   npx tsx tools/sonos-probe.mts           # SSDP puis sondage de chaque réponse
- *   npx tsx tools/sonos-probe.mts 192.168.1.12 # IP connue, SSDP en plus
+ *   npx tsx tools/sonos-probe.mts           # SSDP then probe of each reply
+ *   npx tsx tools/sonos-probe.mts 192.168.1.12 # known IP, SSDP in addition
  *
- * Lecture seule : aucune commande de transport n'est envoyée.
+ * Read-only: no transport command is sent.
  */
 import dgram from 'node:dgram'
 import os from 'node:os'
@@ -56,7 +56,7 @@ async function ssdpOnInterface(address: string): Promise<string[]> {
   const found = new Set<string>()
   await new Promise<void>((resolve) => {
     const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true })
-    const finish = () => { try { socket.close() } catch { /* déjà fermé */ }; resolve() }
+    const finish = () => { try { socket.close() } catch { /* already closed */ }; resolve() }
     socket.on('error', (err) => { console.log(`SSDP ${address} erreur: ${err.message}`); finish() })
     socket.on('message', (buf, rinfo) => {
       const text = buf.toString()
@@ -70,7 +70,7 @@ async function ssdpOnInterface(address: string): Promise<string[]> {
     socket.bind(0, address, () => {
       try { socket.setBroadcast(true) } catch { /* pile Windows */ }
       try { socket.setMulticastTTL(2) } catch { /* idem */ }
-      try { socket.addMembership(MULTICAST, address) } catch { /* déjà membre */ }
+      try { socket.addMembership(MULTICAST, address) } catch { /* already a member */ }
       const buf = Buffer.from(MSEARCH)
       socket.send(buf, SSDP_PORT, MULTICAST)
       socket.send(buf, SSDP_PORT, '255.255.255.255')
@@ -91,7 +91,7 @@ async function ssdpDiscover(): Promise<string[]> {
   return [...found]
 }
 
-/** Repli si le multicast est filtré : un Sonos écoute HTTP :1400. */
+/** Fallback if multicast is filtered: a Sonos listens on HTTP :1400. */
 async function scanPort1400(prefix: string): Promise<string[]> {
   const found: string[] = []
   const batch = 40
@@ -204,7 +204,7 @@ function probeWs(ip: string, withKey: boolean): Promise<string> {
     const lines: string[] = []
     const finish = (why: string) => {
       lines.push(`fin: ${why}`)
-      try { ws.close() } catch { /* déjà fermé */ }
+      try { ws.close() } catch { /* already closed */ }
       resolve(lines.join('\n'))
     }
     ws.on('upgrade', (res) => lines.push(`upgrade ${res.statusCode} ${JSON.stringify(res.headers)}`))

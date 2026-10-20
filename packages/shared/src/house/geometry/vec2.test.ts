@@ -43,29 +43,29 @@ describe('vec2', () => {
 })
 
 describe('longestEdgeYawDeg', () => {
-  it('donne le sens de la plus longue arête, dans la convention yaw (0 = +y)', () => {
-    // garage 3 × 6 allongé selon y : une voiture s'y range face à +y, yaw 0
+  it('gives the direction of the longest edge, in the yaw convention (0 = +y)', () => {
+    // 3 × 6 garage elongated along y: a car parks in it facing +y, yaw 0
     expect(longestEdgeYawDeg([[0, 0], [3, 0], [3, 6], [0, 6]])).toBeCloseTo(0, 6)
-    // le même couché selon x : un quart de tour
+    // the same lying along x: a quarter turn
     expect(Math.abs(longestEdgeYawDeg([[0, 0], [6, 0], [6, 3], [0, 3]])!)).toBeCloseTo(90, 6)
   })
-  it('rend null sur un polygone dégénéré', () => {
+  it('returns null on a degenerate polygon', () => {
     expect(longestEdgeYawDeg([])).toBeNull()
     expect(longestEdgeYawDeg([[1, 1], [1, 1], [1, 1]])).toBeNull()
   })
 })
 
 describe('isSimplePolygon', () => {
-  it('accepte un carré, un L, et les deux sens de parcours', () => {
+  it('accepts a square, an L, and both winding directions', () => {
     expect(isSimplePolygon(square)).toBe(true)
     expect(isSimplePolygon([...square].reverse())).toBe(true)
     expect(isSimplePolygon([[0, 0], [4, 0], [4, 1], [1, 1], [1, 4], [0, 4]])).toBe(true)
   })
-  it('refuse un huit, un côté nul, un sommet posé sur un autre côté, et moins de trois points', () => {
+  it('refuses a figure eight, a zero-length side, a vertex lying on another side, and fewer than three points', () => {
     expect(isSimplePolygon([[0, 0], [2, 2], [2, 0], [0, 2]])).toBe(false)
     expect(isSimplePolygon([[0, 0], [2, 0], [2, 0], [0, 2]])).toBe(false)
     expect(isSimplePolygon([[0, 0], [4, 0], [4, 4], [2, 0], [0, 4]])).toBe(false)
     expect(isSimplePolygon([[0, 0], [2, 0]])).toBe(false)
-    expect(isSimplePolygon([[0, 0], [1, 0], [2, 0]])).toBe(false)     // aplati : pas d'aire
+    expect(isSimplePolygon([[0, 0], [1, 0], [2, 0]])).toBe(false)     // flattened: no area
   })
 })

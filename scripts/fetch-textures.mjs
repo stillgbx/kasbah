@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// Récupère les matières PHOTO du pack « photo » (apps/web/src/three/textures/assets.ts) depuis
-// ambientCG — tout y est CC0, sans compte — et les réduit pour l'app :
-//   apps/web/public/assets/textures/photo/<rôle>/{color,normal,roughness}.jpg   (512 px, JPEG)
-// plus un SOURCES.md qui dit d'où vient chaque image.
+// Fetches the PHOTO materials of the "photo" pack (apps/web/src/three/textures/assets.ts) from
+// ambientCG — everything there is CC0, no account — and shrinks them for the app:
+//   apps/web/public/assets/textures/photo/<role>/{color,normal,roughness}.jpg   (512 px, JPEG)
+// plus a SOURCES.md that says where each image comes from.
 //
-// Pourquoi un script et pas les zips tels quels : un jeu 1K d'ambientCG pèse 5 Mo (couleur, deux
-// normales, déplacement, occlusion, .blend…) ; l'app n'en garde que trois cartes, à 512 px, soit
-// ~300 Ko par matière. Une image d'un mètre cinquante vue à quinze mètres n'a pas besoin de plus.
+// Why a script and not the zips as they are: an ambientCG 1K set weighs 5 MB (color, two
+// normals, displacement, occlusion, .blend…); the app keeps only three maps, at 512 px, i.e.
+// ~300 KB per material. An image of a meter and a half seen from fifteen meters does not need more.
 //
-// Usage : node scripts/fetch-textures.mjs [--size 512] [--force]
-// Requiert `ffmpeg` dans le PATH (déjà nécessaire au serveur pour le relais vidéo).
-// Les archives sont des zips « stored » ou « deflate » : lues ici sans dépendance (zlib de Node).
+// Usage: node scripts/fetch-textures.mjs [--size 512] [--force]
+// Requires `ffmpeg` in the PATH (already needed by the server for the video relay).
+// The archives are "stored" or "deflate" zips: read here without dependency (Node's zlib).
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -20,15 +20,15 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { inflateRawSync } from 'node:zlib'
 
-/** rôle → identifiant ambientCG. Changer une ligne = changer la matière (puis relancer avec --force). */
+/** role → ambientCG identifier. Changing a line = changing the material (then rerun with --force). */
 const ROLES = {
   plaster: 'Plaster001',
   concrete: 'Concrete046',
-  wood: 'WoodFloor051',   // parquet ; Planks033B archivé sous photo/wood033b/
-  tile: 'Tiles107',       // carreaux blancs clairs à joint fin (Tiles052 était trop sombre)
-  poolTile: 'Tiles133A',  // faïence du bassin, inchangée
+  wood: 'WoodFloor051',   // parquet; Planks033B archived under photo/wood033b/
+  tile: 'Tiles107',       // light white tiles with a thin joint (Tiles052 was too dark)
+  poolTile: 'Tiles133A',  // basin earthenware, unchanged
   carpet: 'Carpet016',
-  grass: 'Grass006',      // pelouse ; Grass004 archivée sous photo/grass004/
+  grass: 'Grass006',      // lawn; Grass004 archived under photo/grass004/
   pavers: 'PavingStones128',
   soil: 'Ground048',
   roof: 'RoofingTiles013A',
@@ -36,9 +36,9 @@ const ROLES = {
   gravel: 'Gravel043',
 }
 /**
- * Finitions du catalogue (`packages/shared/src/house/finishes.ts`) qui ne sont pas déjà un rôle du
- * pack : elles vivent sous `textures/finishes/<asset>/`. Liste à tenir avec le catalogue (un test
- * côté web vérifie que chaque dossier du catalogue existe).
+ * Catalog finishes (`packages/shared/src/house/finishes.ts`) that are not already a role of the
+ * pack: they live under `textures/finishes/<asset>/`. List to keep in step with the catalog (a test
+ * on the web side checks that each folder of the catalog exists).
  */
 const FINISH_ASSETS = [
   'WoodFloor040', 'WoodFloor062', 'WoodFloor064', 'WoodFloor036', 'WoodFloor070', 'Planks029S',
@@ -46,9 +46,9 @@ const FINISH_ASSETS = [
   'Carpet012', 'Carpet014', 'Concrete016', 'Concrete048', 'PaintedPlaster017', 'Plaster002',
   'Bricks101', 'Bricks060', 'Bricks084', 'WoodSiding009', 'PavingStones136', 'PavingStones137', 'PavingStones144',
 ]
-/** Vignette du sélecteur de finitions (px). */
+/** Thumbnail of the finishes selector (px). */
 const THUMB = 128
-/** fichier de sortie → suffixe ambientCG. NormalGL : convention OpenGL (Y vers le haut), celle de three. */
+/** output file → ambientCG suffix. NormalGL: OpenGL convention (Y up), that of three. */
 const MAPS = { color: 'Color', normal: 'NormalGL', roughness: 'Roughness' }
 const QUALITY = '1K-JPG'
 
@@ -59,16 +59,16 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const texRoot = join(root, 'apps/web/public/assets/textures')
 const outRoot = join(texRoot, 'photo')
 
-/** Les entrées d'un zip, par nom, décompressées à la demande (répertoire central → en-tête local). */
+/** The entries of a zip, by name, decompressed on demand (central directory → local header). */
 function readZip(buf) {
   let eocd = buf.length - 22
   while (eocd >= 0 && buf.readUInt32LE(eocd) !== 0x06054b50) eocd--
-  if (eocd < 0) throw new Error('zip : fin de répertoire central introuvable')
+  if (eocd < 0) throw new Error('zip: central directory end not found')
   const count = buf.readUInt16LE(eocd + 10)
   let p = buf.readUInt32LE(eocd + 16)
   const entries = new Map()
   for (let i = 0; i < count; i++) {
-    if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error('zip : entrée de répertoire invalide')
+    if (buf.readUInt32LE(p) !== 0x02014b50) throw new Error('zip: invalid directory entry')
     const method = buf.readUInt16LE(p + 10)
     const compSize = buf.readUInt32LE(p + 20)
     const nameLen = buf.readUInt16LE(p + 28), extraLen = buf.readUInt16LE(p + 30), commentLen = buf.readUInt16LE(p + 32)
@@ -79,7 +79,7 @@ function readZip(buf) {
       const raw = buf.subarray(start, start + compSize)
       if (method === 0) return raw
       if (method === 8) return inflateRawSync(raw)
-      throw new Error(`zip : compression ${method} non gérée (${name})`)
+      throw new Error(`zip: compression ${method} not handled (${name})`)
     })
     p += 46 + nameLen + extraLen + commentLen
   }
@@ -88,7 +88,7 @@ function readZip(buf) {
 
 async function fetchRole(role, id, tmp, dir = join(outRoot, role)) {
   if (!force && [...Object.keys(MAPS), 'thumb'].every((m) => existsSync(join(dir, `${m}.jpg`)))) {
-    console.log(`  ${role.padEnd(9)} ${id.padEnd(18)} déjà là`)
+    console.log(`  ${role.padEnd(9)} ${id.padEnd(18)} already there`)
     return
   }
   const url = `https://ambientcg.com/get?file=${id}_${QUALITY}.zip`
@@ -102,7 +102,7 @@ async function fetchRole(role, id, tmp, dir = join(outRoot, role)) {
     if (!entry) throw new Error(`${id} : ${name} absent de l'archive (${[...zip.keys()].join(', ')})`)
     const src = join(tmp, name)
     writeFileSync(src, entry())
-    // -q:v 4 : JPEG de bonne qualité (échelle 2–31, 2 = meilleur) ; carré, la texture se répète
+    // -q:v 4: good-quality JPEG (scale 2–31, 2 = best); square, the texture repeats
     execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-vf', `scale=${size}:${size}`, '-q:v', '4', join(dir, `${out}.jpg`)])
     if (out === 'color') execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-vf', `scale=${THUMB}:${THUMB}`, '-q:v', '5', join(dir, 'thumb.jpg')])
   }

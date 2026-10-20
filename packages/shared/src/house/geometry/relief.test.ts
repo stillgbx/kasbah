@@ -7,34 +7,34 @@ import type { Vec2 } from './vec2'
 const square = (x0: number, y0: number, s: number): Vec2[] => [[x0, y0], [x0 + s, y0], [x0 + s, y0 + s], [x0, y0 + s]]
 const bump: Relief = { step: 2, origin: [0, 0], rows: ['0 0 0 0', '0 50 0 0', '0 0 0 0', '0 0 0 -20'] }
 
-describe('relief du terrain', () => {
-  it('se relit tel qu’il a été écrit', () => {
+describe('terrain relief', () => {
+  it('reads back as it was written', () => {
     expect(serializeRelief(parseRelief(bump)!)).toEqual(bump)
   })
 
-  it('passe PAR les nœuds et se prolonge par le bord hors de la grille', () => {
+  it('passes THROUGH the nodes and extends by the edge outside the grid', () => {
     const g = parseRelief(bump)!
     expect(reliefDelta(g, 2, 2)).toBeCloseTo(0.5, 6)
     expect(reliefDelta(g, 6, 6)).toBeCloseTo(-0.2, 6)
-    expect(reliefDelta(g, 40, 40)).toBeCloseTo(-0.2, 6)       // coin nord-est prolongé
-    expect(reliefDelta(g, 3, 2)).toBeGreaterThan(0)            // entre deux nœuds, la bosse retombe en douceur
+    expect(reliefDelta(g, 40, 40)).toBeCloseTo(-0.2, 6)       // north-east corner extended
+    expect(reliefDelta(g, 3, 2)).toBeGreaterThan(0)            // between two nodes, the bump falls back gently
     expect(reliefDelta(g, 3, 2)).toBeLessThan(0.5)
     expect(reliefRange(g)).toEqual([-0.2, 0.5])
   })
 
-  it('un plateau suivi d’une chute ne gagne ni bosse avant la descente, ni creux au pied', () => {
-    // plateau à 1 m sur trois nœuds, puis chute à 0 : sur toute la rangée, jamais au-dessus de 1 m ni sous 0
+  it('a plateau followed by a drop gains neither a bump before the descent, nor a dip at the foot', () => {
+    // plateau at 1 m over three nodes, then a drop to 0: over the whole row, never above 1 m nor below 0
     const g = parseRelief({ step: 2, origin: [0, 0], rows: Array.from({ length: 4 }, () => '100 100 100 0 0 0') })!
     for (let x = 0; x <= 10; x += 0.1) {
       const h = reliefDelta(g, x, 2)
       expect(h).toBeLessThanOrEqual(1 + 1e-9)
       expect(h).toBeGreaterThanOrEqual(-1e-9)
     }
-    expect(reliefDelta(g, 3, 2)).toBeCloseTo(1, 9)             // le plateau reste plat jusqu'à son bord
-    expect(reliefDelta(g, 5, 2)).toBeCloseTo(0.5, 9)           // la descente est symétrique
+    expect(reliefDelta(g, 3, 2)).toBeCloseTo(1, 9)             // the plateau stays flat up to its edge
+    expect(reliefDelta(g, 5, 2)).toBeCloseTo(0.5, 9)           // the descent is symmetric
   })
 
-  it('reste plat autour d’un bassin, puis revient en douceur', () => {
+  it('stays flat around a basin, then comes back gently', () => {
     const pads = [square(0, 0, 4)]
     expect(padWeight(pads, 2, 2)).toBe(0)
     expect(padWeight(pads, 4 + PAD_FLAT - 0.01, 2)).toBe(0)
@@ -45,31 +45,31 @@ describe('relief du terrain', () => {
     expect(padWeight(pads, 100, 100)).toBe(1)
   })
 
-  it('sans relief, le terrain est à sa cote partout — comme avant le champ', () => {
+  it('without relief, the terrain is at its elevation everywhere — as before the field', () => {
     const site: Site = { elevation: -0.15, terrain: square(-10, -10, 40), zones: [], parkings: [], garden: [] }
     expect(terrainHeight(computeTerrain(site), 20, 20)).toBe(-0.15)
   })
 
-  it('monte jusqu’au mur, mais s’écrête sous le plancher de la pièce', () => {
+  it('rises up to the wall, but is clipped below the floor of the room', () => {
     const house = {
       site: { elevation: -0.15 },
       levels: [{ id: 'rdc', elevation: 0 }, { id: 'etage', elevation: 2.85 }],
       rooms: [{ levelId: 'rdc', polygon: square(4, 4, 4) }, { levelId: 'etage', polygon: square(4, 12, 4) }],
     }
     const footprints = terrainFootprints(house, { slabThickness: 0.25, exteriorWallThickness: 0.3 })
-    // l'emprise déborde de la moitié du mur, et son plafond est le dessous de la dalle (jamais sous le terrain)
+    // the footprint overflows by half the wall, and its ceiling is the underside of the slab (never below the terrain)
     expect(footprintCeiling(footprints, 3.9, 6)).toBe(-0.15)
     expect(footprintCeiling(footprints, 3.8, 6)).toBe(Infinity)
-    expect(footprintCeiling(footprints, 6, 14)).toBeCloseTo(2.6, 6)   // sous un étage : son plancher
+    expect(footprintCeiling(footprints, 6, 14)).toBeCloseTo(2.6, 6)   // under an upper floor: its floor
     const hill: Relief = { step: 2, origin: [0, 0], rows: Array.from({ length: 10 }, () => Array(10).fill('120').join(' ')) }
     const t = computeTerrain({ elevation: -0.15, terrain: square(0, 0, 20), relief: hill, zones: [], parkings: [], garden: [] }, [], footprints)
-    expect(terrainHeight(t, 3.5, 6)).toBeCloseTo(1.05, 6)            // contre le mur : à sa vraie hauteur
-    expect(terrainHeight(t, 6, 6)).toBe(-0.15)                        // dans la pièce : sous le sol
-    expect(reliefSurface(t, 6, 6)).toBeCloseTo(1.05, 6)               // …mais le nœud, lui, est bien là-haut
-    expect(terrainHeight(t, 6, 14)).toBeCloseTo(1.05, 6)              // sous l'étage en surplomb : libre sous 2,6 m
+    expect(terrainHeight(t, 3.5, 6)).toBeCloseTo(1.05, 6)            // against the wall: at its true height
+    expect(terrainHeight(t, 6, 6)).toBe(-0.15)                        // in the room: below the floor
+    expect(reliefSurface(t, 6, 6)).toBeCloseTo(1.05, 6)               // …but the node itself is indeed up there
+    expect(terrainHeight(t, 6, 14)).toBeCloseTo(1.05, 6)              // under the overhanging upper floor: free below 2.6 m
   })
 
-  it('une grille vide couvre le contour avec une maille de marge, calée sur le pas', () => {
+  it('an empty grid covers the outline with a margin of one cell, aligned on the step', () => {
     const g = emptyReliefGrid(square(-3, 1, 5), 2)
     expect(g.origin).toEqual([-6, -2])
     expect(g.origin[0] + (g.cols - 1) * g.step).toBeGreaterThanOrEqual(2 + 2)
@@ -79,17 +79,17 @@ describe('relief du terrain', () => {
 })
 
 describe('extendReliefGrid', () => {
-  it('rend la même grille quand elle couvre déjà le contour', () => {
+  it('gives back the same grid when it already covers the outline', () => {
     const grid = emptyReliefGrid(square(0, 0, 10), 2)
     expect(extendReliefGrid(grid, square(0, 0, 10))).toBe(grid)
   })
-  it('agrandit sans bouger les nœuds existants, les nouveaux à la hauteur du bord', () => {
+  it('enlarges without moving the existing nodes, the new ones at the height of the edge', () => {
     const grid = parseRelief(bump)!
     const t0 = computeTerrain({ elevation: 0, terrain: square(0, 0, 6), zones: [], parkings: [], garden: [] })
     const grown = extendReliefGrid(grid, square(-5, 0, 11))
     expect(grown.step).toBe(2)
     expect(grown.origin).toEqual([-8, -2])
-    // même surface partout : ce qui était lu hors de la grille (le bord) l'est maintenant dans la grille
+    // same surface everywhere: what was read outside the grid (the edge) is now read inside the grid
     for (const [x, y] of [[-6, 0], [2, 2], [7, 5], [-3, 9], [11, 11]] as Vec2[]) {
       expect(terrainHeight({ ...t0, relief: grown }, x, y)).toBeCloseTo(terrainHeight({ ...t0, relief: grid }, x, y), 6)
     }

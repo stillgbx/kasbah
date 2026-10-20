@@ -9,9 +9,9 @@ export interface LightOptions {
   color?: boolean
   on?: boolean
   brightness?: number
-  /** Puissance consommée à pleine luminosité (W), déclarée au monde. */
+  /** Power drawn at full brightness (W), declared to the world. */
   powerW?: number
-  /** Effets du fabricant (« bougie », « feu de cheminée ») : déclare la capacité `effect`. */
+  /** Vendor effects ("candle", "fireplace"): declares the `effect` capability. */
   effects?: string[]
 }
 
@@ -26,7 +26,7 @@ export function light(externalId: string, o: LightOptions): SimDevice<'light'> {
     descriptor: descriptor(externalId, 'light', o.name, caps, {
       manufacturer: 'Mock', model: o.color ? 'Color bulb' : 'White bulb',
       ...(o.colorTemp ? { colorTempMirek: [153, 500] as [number, number] } : {}),
-      // `no_effect` en premier, comme le contrat le demande : c'est l'entrée qui arrête l'effet
+      // `no_effect` first, as the contract requires: it is the entry that stops the effect
       ...(o.effects?.length ? { effects: ['no_effect', ...o.effects] } : {}),
     }),
     state: {

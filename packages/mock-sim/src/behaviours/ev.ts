@@ -2,8 +2,8 @@ import type { DeviceMeta, ReleaseNote, VehicleSeat } from '@kasbah/shared'
 import { SimError, type SimDevice } from '../types'
 import { clamp, descriptor, inWindow } from './common'
 
-// Véhicule + borne. Le véhicule part le matin (trajet 25 min), revient le soir, se branche
-// automatiquement au retour. La borne lit l'état du véhicule associé via ctx.getState.
+// Vehicle + charger. The vehicle leaves in the morning (25 min trip), comes back in the evening, and
+// plugs in automatically on return. The charger reads the state of the associated vehicle via ctx.getState.
 
 export interface VehicleOptions {
   name: string
@@ -13,33 +13,33 @@ export interface VehicleOptions {
   rangeKmFull?: number
   home: { lat: number; lon: number }
   work: { lat: number; lon: number }
-  /** Jours ouvrés de départ (0 = dimanche). */
+  /** Working days of departure (0 = Sunday). */
   workDays?: number[]
   leaveHour?: number
   returnHour?: number
   soc?: number
   chargeLimit?: number
-  /** Plancher de charge voulu, quand le fabricant a cette notion (Renault ; Tesla ne l'a pas). */
+  /** Wanted charge floor, when the vendor has that notion (Renault; Tesla does not). */
   socMin?: number
-  /** Puissance de la borne qui le charge quand branché (W) ; 0 = jamais chargé par cette sim. */
+  /** Power of the charger that charges it when plugged in (W); 0 = never charged by this sim. */
   chargerPowerW?: number
-  /** Ce que sa climatisation sait faire (`meta.vehicle.climate`) ; défaut : celle d'une Tesla. */
+  /** What its climate control can do (`meta.vehicle.climate`); default: that of a Tesla. */
   climate?: ClimateFeatures
   /**
-   * Logiciel, comme une Tesla : version installée et, s'il y en a une, la mise à jour déjà
-   * téléchargée (`pending`). Déclare `release_notes` et `software_update` ; sans lui, ni l'un ni l'autre.
+   * Software, like a Tesla: installed version and, if there is one, the update already downloaded
+   * (`pending`). Declares `release_notes` and `software_update`; without it, neither.
    */
   software?: { version: string; pending?: string; notes?: Record<string, Record<string, ReleaseNote[]>> }
 }
 
-/** Décompte laissé par « installer maintenant » avant que l'installation démarre (secondes simulées). */
+/** Countdown left by "Install now" before the installation starts (simulated seconds). */
 const NOW_COUNTDOWN_S = 120
-/** Réveillé à la demande, il reste éveillé ce temps-là (simulé) : une Tesla se rendort au bout d'un quart d'heure. */
+/** Woken on demand, it stays awake that long (simulated): a Tesla falls back asleep after a quarter of an hour. */
 const AWAKE_AFTER_WAKE_MS = 10 * 60_000
 
 /**
- * Notes simulées, par LANGUE puis par version : de quoi essayer la boîte des notes, son historique et
- * le repli sur l'anglais sans compte. L'anglais est complet, le français aussi (comme chez Tesla).
+ * Simulated notes, by LANGUAGE then by version: enough to try out the notes box, its history and
+ * the fallback to English without an account. English is complete, French too (as with Tesla).
  */
 const SAMPLE_NOTES: Record<string, Record<string, ReleaseNote[]>> = {
   en: {
@@ -92,7 +92,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
   let installStartedAt = 0
   const notesIn = o.software?.notes ?? SAMPLE_NOTES
   const lerp = (a: number, b: number, t: number) => a + (b - a) * t
-  /** Cap (0 = nord, horaire) de `a` vers `b`, en plan : assez pour orienter le marqueur d'une simulation. */
+  /** Heading (0 = north, clockwise) from `a` to `b`, in plan: enough to orient a simulation's marker. */
   const bearing = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => {
     const dx = (b.lon - a.lon) * Math.cos((a.lat * Math.PI) / 180), dy = b.lat - a.lat
     return Math.round(((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360)
@@ -103,7 +103,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
   const dev: SimDevice<'vehicle'> = {
     descriptor: descriptor(externalId, 'vehicle', o.name, [
       'soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'climate_precondition',
-      // pas de borne, pas de puissance à dire : ce véhicule-là se fait estimer comme une vraie R5
+      // no charger, no power to report: this vehicle gets estimated like a real R5
       ...((o.chargerPowerW ?? 7400) > 0 ? ['charge_power' as const] : []),
       ...(o.software ? ['release_notes' as const, 'software_update' as const] : []),
     ], {
@@ -114,7 +114,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       soc: o.soc ?? 72, rangeKm: Math.round(((o.soc ?? 72) / 100) * rangeFull), pluggedIn: true, charging: false,
       locked: true, chargeLimit: o.chargeLimit ?? 80, ...(o.socMin === undefined ? {} : { socMin: o.socMin }),
       location: { lat: o.home.lat, lon: o.home.lon, at: 0 }, odometerKm: 24_310,
-      // ce qu'un vrai véhicule connecté dit aussi : la simulation le fournit pour que l'UI s'essaie dessus
+      // what a real connected vehicle also reports: the simulation provides it so the UI can try itself on it
       sleepState: 'asleep', gear: 'P', speedKmh: 0, headingDeg: bearing(o.home, o.work),
       tirePressureBar: { fl: 2.9, fr: 2.9, rl: 2.95, rr: 2.95 }, insideTempC: 21.5, outsideTempC: 17,
       climateOn: false, climateTargetC: 20, steeringWheelHeat: false,
@@ -132,7 +132,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
         tripProgress = clamp(tripProgress + ctx.dtS / (tripMin * 60), 0, 1)
         const t = phase === 'toWork' ? tripProgress : 1 - tripProgress
         setLocation(t, ctx.simTime, s)
-        s.soc = clamp(s.soc - (18 / (tripMin * 60)) * ctx.dtS * 0.5, 0, 100)   // ≈ 9 % par trajet
+        s.soc = clamp(s.soc - (18 / (tripMin * 60)) * ctx.dtS * 0.5, 0, 100)   // ≈ 9 % per trip
         s.odometerKm = Math.round(((s.odometerKm ?? 0) + (32 / (tripMin * 60)) * ctx.dtS) * 10) / 10
         if (tripProgress >= 1) {
           if (phase === 'toWork') phase = 'work'
@@ -146,19 +146,19 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       if (s.charging) {
         s.soc = clamp(s.soc + ((power * ctx.dtS) / 3600 / (batteryKwh * 1000)) * 100, 0, s.chargeLimit ?? 80)
         s.chargePowerW = power
-        // ce qu'un vrai véhicule estime lui-même : le temps qu'il reste à la puissance du moment
+        // what a real vehicle estimates by itself: the time left at the current power
         s.chargeMinutesRemaining = Math.round((((s.chargeLimit ?? 80) - s.soc) / 100 * batteryKwh * 1000 * 60) / power)
         ctx.world.loadsW += power
       } else { s.chargePowerW = 0; delete s.chargeMinutesRemaining }
       s.soc = Math.round(s.soc * 10) / 10
       s.rangeKm = Math.round((s.soc / 100) * rangeFull)
-      // en route : rapport D et vitesse moyenne du trajet ; garé : P, 0 — et il s'endort dès qu'il ne fait rien
+      // on the road: gear D and average speed of the trip; parked: P, 0 — and it falls asleep as soon as it does nothing
       const driving = phase === 'toWork' || phase === 'toHome'
       s.gear = driving ? 'D' : 'P'
       if (driving) s.headingDeg = phase === 'toWork' ? bearing(o.home, o.work) : bearing(o.work, o.home)
       s.speedKmh = driving ? Math.round((32 / tripMin) * 60) : 0
-      // une installation programmée démarre à son heure, et la voiture reste éveillée jusqu'au bout.
-      // Nouvel objet à chaque changement : le diff du mock compare les références
+      // a scheduled installation starts at its time, and the car stays awake until the end.
+      // New object on every change: the mock's diff compares references
       const su = s.softwareUpdate
       if (su?.status === 'scheduled' && su.scheduledAt !== undefined && ctx.simTime >= su.scheduledAt) {
         installStartedAt = ctx.simTime
@@ -180,19 +180,19 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
         case 'vehicle.stop_charge': s.chargeLimit = Math.floor(s.soc); break
         case 'vehicle.set_charge_limit': s.chargeLimit = clamp(Math.round(cmd.percent), 50, 100); break
         case 'vehicle.wake': s.sleepState = 'online'; awakeUntil = ctx.simTime + AWAKE_AFTER_WAKE_MS; break
-        // comme la vraie : le préconditionnement réveille la voiture, et la tient éveillée
-        // comme Tesla (`low_soc`) : pas de clim sous 20 %
+        // like the real one: preconditioning wakes the car up, and keeps it awake
+        // like Tesla (`low_soc`): no climate control below 20 %
         case 'vehicle.climate_start': if (s.soc < 20) throw new SimError('LOW_BATTERY', 'battery too low to run the climate'); s.sleepState = 'online'; s.climateOn = true; if (cmd.targetTempC !== undefined) s.climateTargetC = cmd.targetTempC; break
         case 'vehicle.climate_stop': s.climateOn = false; break
         case 'vehicle.climate_set': {
           const climate = o.climate ?? TESLA_CLIMATE
-          // Tesla refuse un réglage voiture endormie ; la R5 écrit des réglages de préconditionnement, sans veille
+          // Tesla refuses a setting while the car is asleep; the R5 writes preconditioning settings, with no sleep
           if (!climate.heatWhileOff && s.sleepState !== 'online') throw new SimError('DEVICE_UNAVAILABLE', 'vehicle is asleep')
           if (cmd.targetTempC !== undefined) s.climateTargetC = clamp(cmd.targetTempC, climate.minC, climate.maxC)
           for (const [seat, level] of Object.entries(cmd.seatHeat ?? {}) as [VehicleSeat, number | undefined][]) {
             if (level === undefined) continue
             if (!climate.seats.includes(seat)) throw new SimError('UNSUPPORTED_COMMAND', `no heater on seat ${seat}`)
-            // nouvel objet : la fusion de l'état est superficielle, et le diff du mock compare les références
+            // new object: state merging is shallow, and the mock's diff compares references
             s.seatHeat = { ...s.seatHeat, [seat]: Math.min(level, climate.seatLevels) }
           }
           if (cmd.steeringWheelHeat !== undefined) {
@@ -202,14 +202,14 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
           break
         }
         case 'vehicle.refresh': break
-        // comme la vraie : voiture éveillée, mise à jour téléchargée
+        // like the real one: car awake, update downloaded
         case 'vehicle.schedule_update': {
           const su = s.softwareUpdate
           if (!o.software) throw new SimError('UNSUPPORTED_COMMAND', 'no software updates on this vehicle')
           if (s.sleepState !== 'online') throw new SimError('DEVICE_UNAVAILABLE', 'vehicle is asleep: wake it first')
           if (su?.status !== 'available' && su?.status !== 'scheduled') throw new SimError('DEVICE_UNAVAILABLE', 'no downloaded software update to install')
-          // « maintenant » ne démarre pas tout de suite chez Tesla : il laisse un décompte, annulable (vu
-          // sur la vraie voiture le 2026-10-02) ; la simulation en laisse deux minutes
+          // "now" does not start right away on a Tesla: it leaves a countdown, cancelable (seen
+          // on the real car on 2026-10-02); the simulation leaves two minutes
           s.softwareUpdate = { ...su, status: 'scheduled', scheduledAt: ctx.simTime + Math.max(cmd.delayS, NOW_COUNTDOWN_S) * 1000 }
           break
         }
@@ -244,7 +244,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
 
 export interface ChargerOptions { name: string; vehicleId: string; maxCurrentA?: number }
 
-/** Borne : reflète l'état de charge du véhicule associé ; start/stop agissent sur la limite du véhicule. */
+/** Charger: mirrors the charge state of the associated vehicle; start/stop act on the vehicle's limit. */
 export function evCharger(externalId: string, o: ChargerOptions): SimDevice<'ev_charger'> {
   let enabled = true, sessionWh = 0, wasCharging = false
   const dev: SimDevice<'ev_charger'> = {

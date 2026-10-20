@@ -17,17 +17,17 @@ describe('removeDeviceFromJson', () => {
   })
 })
 
-describe('removeDeviceFromJson et les champs de panneaux', () => {
+describe('removeDeviceFromJson and the panel arrays', () => {
   const arrays = (doc: Record<string, unknown>) => doc.arrays as Record<string, unknown>[]
 
-  it('emporte les champs qui nomment cet appareil, et laisse les autres', () => {
+  it('takes away the arrays that name this device, and leaves the others', () => {
     const owned = putArrayInJson(demo, 'pv-sud', { siteId: 'mock:energy-site' })
     const out = removeDeviceFromJson(owned, 'energy.site')                     // deviceId: mock:energy-site
-    expect(arrays(out).map((a) => a.id)).toEqual(['pv-nord'])                  // le champ sans siteId reste
+    expect(arrays(out).map((a) => a.id)).toEqual(['pv-nord'])                  // the array without siteId stays
     expect(() => parseHouse(out)).not.toThrow()
   })
 
-  it('ne touche pas aux champs quand l appareil retire n en porte aucun', () => {
+  it('does not touch the arrays when the removed device carries none', () => {
     const out = removeDeviceFromJson(demo, 'light.salon')
     expect(out.arrays).toBe(demo.arrays)
   })
@@ -50,20 +50,20 @@ describe('placeDeviceInJson', () => {
     expect(() => parseHouse(out)).not.toThrow()
   })
 
-  it('écrit le décalage GPS d un véhicule, et [0, 0] l efface', () => {
-    // un véhicule n'a pas de position : son entrée se crée par son deviceId, comme au renommage
+  it('writes the GPS offset of a vehicle, and [0, 0] clears it', () => {
+    // a vehicle has no position: its entry is created by its deviceId, as when renaming
     const entry = (doc: Record<string, unknown>) => devices(doc).find((x) => x.id === 'vehicle.model-s')
     const created = placeDeviceInJson(demo, 'vehicle.model-s', { deviceId: 'tesla:5YJ', gpsOffset: [2.5, -1] })
     expect(entry(created)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ', gpsOffset: [2.5, -1] })
     expect(() => parseHouse(created)).not.toThrow()
     const cleared = placeDeviceInJson(created, 'vehicle.model-s', { gpsOffset: [0, 0] })
     expect(entry(cleared)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ' })
-    // un placement muet sur le décalage n'y touche pas
+    // a placement silent about the offset does not touch it
     const renamed = placeDeviceInJson(created, 'vehicle.model-s', { name: 'Voiture 1' })
     expect(entry(renamed)).toMatchObject({ gpsOffset: [2.5, -1], name: 'Voiture 1' })
   })
 
-  it('écrit le décalage de la carte d une tondeuse, à part de son décalage GPS, et [0, 0] l efface', () => {
+  it('writes the map offset of a mower, apart from its GPS offset, and [0, 0] clears it', () => {
     const entry = (doc: Record<string, unknown>) => devices(doc).find((x) => x.id === 'mower.robot')
     const created = placeDeviceInJson(demo, 'mower.robot', { deviceId: 'automower:abc', mapOffset: [-3, 1.5] })
     expect(entry(created)).toEqual({ id: 'mower.robot', deviceId: 'automower:abc', mapOffset: [-3, 1.5] })
@@ -74,7 +74,7 @@ describe('placeDeviceInJson', () => {
     expect(entry(cleared)).toEqual({ id: 'mower.robot', deviceId: 'automower:abc', gpsOffset: [1, 0] })
   })
 
-  it('écrit la rotation d un véhicule, et 0 l efface', () => {
+  it('writes the rotation of a vehicle, and 0 clears it', () => {
     const entry = (doc: Record<string, unknown>) => devices(doc).find((x) => x.id === 'vehicle.model-s')
     const created = placeDeviceInJson(demo, 'vehicle.model-s', { deviceId: 'tesla:5YJ', yawOffset: 180 })
     expect(entry(created)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ', yawOffset: 180 })
@@ -83,13 +83,13 @@ describe('placeDeviceInJson', () => {
     expect(entry(cleared)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ' })
   })
 
-  it('écrit la carrosserie et la couleur d un véhicule, et la chaîne vide les efface', () => {
+  it('writes the body and the color of a vehicle, and the empty string clears them', () => {
     const entry = (doc: Record<string, unknown>) => devices(doc).find((x) => x.id === 'vehicle.model-s')
     const created = placeDeviceInJson(demo, 'vehicle.model-s', { deviceId: 'tesla:5YJ', model3d: 'tesla/model-s', bodyColor: '#b31b1b' })
     expect(entry(created)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ', model3d: 'tesla/model-s', bodyColor: '#b31b1b' })
     expect(() => parseHouse(created)).not.toThrow()
 
-    // 'none' est un CHOIX (la silhouette générique), pas une absence de choix : il s'écrit.
+    // 'none' is a CHOICE (the generic silhouette), not an absence of choice: it is written.
     const generic = placeDeviceInJson(created, 'vehicle.model-s', { model3d: 'none' })
     expect(entry(generic)).toMatchObject({ model3d: 'none', bodyColor: '#b31b1b' })
 
@@ -97,7 +97,7 @@ describe('placeDeviceInJson', () => {
     expect(entry(cleared)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ' })
   })
 
-  it('écrit la LOA d un véhicule d un bloc, et la chaîne vide l efface', () => {
+  it('writes the lease of a vehicle in one block, and the empty string clears it', () => {
     const entry = (doc: Record<string, unknown>) => devices(doc).find((x) => x.id === 'vehicle.model-s')
     const lease = { start: '2025-01-01', end: '2028-01-01', km: 45000, startKm: 10 }
     const created = placeDeviceInJson(demo, 'vehicle.model-s', { deviceId: 'tesla:5YJ', lease })
@@ -107,33 +107,33 @@ describe('placeDeviceInJson', () => {
     expect(entry(cleared)).toEqual({ id: 'vehicle.model-s', deviceId: 'tesla:5YJ' })
   })
 
-  it('refuse une LOA qui finit avant de commencer', () => {
+  it('refuses a lease that ends before it starts', () => {
     expect(devicePlacementSchema.safeParse({ lease: { start: '2028-01-01', end: '2025-01-01', km: 45000 } }).success).toBe(false)
   })
 
-  it("écrit les vantaux, la matière et la couleur d'un ouvrant, et la chaîne vide les efface", () => {
-    // Ce que le fabricant ne dit pas d'un volet : combien de vantaux, en quoi, de quelle couleur.
+  it("writes the leaves, the material and the color of a cover, and the empty string clears them", () => {
+    // What the vendor does not say about a shutter: how many leaves, in what, of what color.
     const entry = (doc: Record<string, unknown>) => devices(doc).find((x) => x.id === 'cover.baie')
     const dressed = placeDeviceInJson(demo, 'cover.baie', { leaves: 2, coverMaterial: 'wood', coverColor: '#f2efe6' })
     expect(entry(dressed)).toMatchObject({ leaves: 2, coverMaterial: 'wood', coverColor: '#f2efe6' })
     expect(() => parseHouse(dressed)).not.toThrow()
-    // la place et l'ouverture liée ne bougent pas : on n'a réglé que ce qui est DESSINÉ
+    // the place and the linked opening do not move: only what is DRAWN was set
     expect(entry(dressed)).toMatchObject({ position: entry(demo as Record<string, unknown>)!.position, openingId: 'baie' })
 
     const bare = placeDeviceInJson(dressed, 'cover.baie', { coverMaterial: '', coverColor: '' })
     expect(entry(bare)).not.toHaveProperty('coverMaterial')
     expect(entry(bare)).not.toHaveProperty('coverColor')
-    expect(entry(bare)).toMatchObject({ leaves: 2 })      // les vantaux, eux, n'ont pas d'« automatique »
+    expect(entry(bare)).toMatchObject({ leaves: 2 })      // the leaves have no "automatic" value
     expect(() => parseHouse(bare)).not.toThrow()
   })
 
-  it("écrit la silhouette d'une enceinte, et la chaîne vide la ramène au cylindre", () => {
+  it("writes the silhouette of a speaker, and the empty string brings it back to the cylinder", () => {
     const entry = (doc: Record<string, unknown>) => devices(doc).find((x) => x.id === 'speaker.salon')
     expect(entry(demo as Record<string, unknown>)).not.toHaveProperty('speakerShape')
     const bar = placeDeviceInJson(demo, 'speaker.salon', { speakerShape: 'bar' })
     expect(entry(bar)).toMatchObject({ speakerShape: 'bar' })
     expect(() => parseHouse(bar)).not.toThrow()
-    // la place ne bouge pas : on n'a réglé que la silhouette
+    // the place does not move: only the silhouette was set
     expect(entry(bar)!.position).toEqual(entry(demo as Record<string, unknown>)!.position)
 
     const pebble = placeDeviceInJson(bar, 'speaker.salon', { speakerShape: 'pebble' })
@@ -148,22 +148,22 @@ describe('placeDeviceInJson', () => {
     expect(() => parseHouse(cleared)).not.toThrow()
   })
 
-  it("recale sur sa baie l'ouvrant qui l'habille, quand elle bouge et quand on la lie", () => {
+  it("realigns on its bay the cover that dresses it, when it moves and when it is linked", () => {
     const place = (doc: Record<string, unknown>, id: string) => devices(doc).find((x) => x.id === id)!.position
-    // le fichier de démo porte la même dérive que la vraie maison : le volet est posé 1,7 m à côté
+    // the demo file carries the same drift as the real house: the shutter is placed 1.7 m to the side
     expect(place(demo as unknown as Record<string, unknown>, 'cover.baie')).toEqual([4.2, 0.05, 1.3])
 
-    // la baie du salon glisse de 50 cm le long de son mur (y = 0, de x = 3,2 à 10) : le volet suit,
-    // au centre de la baie — 3,2 + 2 + 2,4 / 2 — et à mi-hauteur (allège 0,2 + 2,15 / 2)
+    // the living room bay slides by 50 cm along its wall (y = 0, from x = 3.2 to 10): the shutter follows,
+    // at the center of the bay — 3.2 + 2 + 2.4 / 2 — and at mid-height (sill 0.2 + 2.15 / 2)
     const moved = patchOpeningInJson(demo, 'salon', 'baie', { offset: 2 })
     expect(place(moved, 'cover.baie')).toEqual([6.4, 0, 1.275])
     expect(() => parseHouse(moved)).not.toThrow()
-    // les autres ouvrants n'ont pas bougé : seule la baie touchée compte
+    // the other covers did not move: only the touched bay counts
     expect(place(moved, 'cover.cuisine')).toEqual([9.95, 5.8, 1.6])
 
-    // LIER un ouvrant lui donne aussi la place de sa baie, dans la même écriture
+    // LINKING a cover also gives it the place of its bay, in the same write
     const linked = placeDeviceInJson(demo, 'cover.terrasse', { openingId: 'fen-salon-est' })
-    // fenêtre du mur est du salon (segment 1, de [10, 0] à [10, 5]), à 1,5 m du coin, large de 1,2
+    // window of the east wall of the living room (segment 1, from [10, 0] to [10, 5]), 1.5 m from the corner, 1.2 wide
     expect(place(linked, 'cover.terrasse')).toEqual([10, 2.1, 1.55])
     expect(() => parseHouse(linked)).not.toThrow()
   })
@@ -171,7 +171,7 @@ describe('placeDeviceInJson', () => {
   it('writes the orientation when given, and leaves it alone otherwise', () => {
     const turned = placeDeviceInJson(demo, 'light.salon', { position: [5, 3, 0.75], yaw: 270 })
     expect(devices(turned).find((x) => x.id === 'light.salon')).toMatchObject({ position: [5, 3, 0.75], yaw: 270 })
-    // un placement sans yaw ne touche pas à l'orientation déjà écrite
+    // a placement without yaw does not touch the orientation already written
     const moved = placeDeviceInJson(turned, 'light.salon', { position: [5.5, 3, 0.75] })
     expect(devices(moved).find((x) => x.id === 'light.salon')).toMatchObject({ position: [5.5, 3, 0.75], yaw: 270 })
     const created = placeDeviceInJson(demo, 'auto.hue-xyz', { position: [1, 1, 1.2], roomId: 'salon', deviceId: 'hue:xyz', yaw: 90 })
@@ -182,29 +182,29 @@ describe('placeDeviceInJson', () => {
   it('writes the drawn size when given (a gate has no opening to measure it)', () => {
     const sized = placeDeviceInJson(demo, 'light.salon', { position: [5, 3, 0.75], size: { width: 3.5, height: 1.5 } })
     expect(devices(sized).find((x) => x.id === 'light.salon')).toMatchObject({ size: { width: 3.5, height: 1.5 } })
-    // un placement sans taille ne touche pas à celle déjà écrite
+    // a placement without size does not touch the one already written
     const moved = placeDeviceInJson(sized, 'light.salon', { position: [5.5, 3, 0.75] })
     expect(devices(moved).find((x) => x.id === 'light.salon')).toMatchObject({ size: { width: 3.5, height: 1.5 } })
     expect(() => parseHouse(moved)).not.toThrow()
     const created = placeDeviceInJson(demo, 'auto.tahoma-portail', { position: [1, 1, 1], roomId: 'salon', deviceId: 'tahoma:portail', size: { width: 3, height: 1.6 }, leaves: 2 })
     expect(devices(created).at(-1)).toMatchObject({ size: { width: 3, height: 1.6 }, leaves: 2 })
     expect(() => parseHouse(created)).not.toThrow()
-    // les battants s'écrivent seuls, et un placement sans eux n'y touche pas
+    // the leaves are written alone, and a placement without them does not touch them
     const oneLeaf = placeDeviceInJson(sized, 'light.salon', { position: [5, 3, 0.75], leaves: 1 })
     expect(devices(oneLeaf).find((x) => x.id === 'light.salon')).toMatchObject({ leaves: 1 })
     expect(devices(placeDeviceInJson(oneLeaf, 'light.salon', { position: [5, 3, 0.8] })).find((x) => x.id === 'light.salon')).toMatchObject({ leaves: 1 })
   })
 
   it('anchors on a level alone when the device is dropped outside any room', () => {
-    // création hors pièce (appareil découvert tard, posé dans un couloir non relevé)
+    // creation outside a room (device discovered late, placed in an unsurveyed hallway)
     const created = placeDeviceInJson(demo, 'auto.google_cast-tv', { position: [3, 3, 1.2], levelId: 'rdc', deviceId: 'google_cast:tv' })
     expect(devices(created).at(-1)).toEqual({ id: 'auto.google_cast-tv', deviceId: 'google_cast:tv', position: [3, 3, 1.2], levelId: 'rdc' })
     expect(() => parseHouse(created)).not.toThrow()
-    // un appareil de pièce qui sort dans le couloir : la pièce tombe, le niveau reste
+    // a room device that moves out into the hallway: the room drops, the level stays
     const out = placeDeviceInJson(demo, 'light.salon', { position: [9, 9, 2.4], levelId: 'rdc' })
     expect(devices(out).find((x) => x.id === 'light.salon')).toMatchObject({ levelId: 'rdc' })
     expect(devices(out).find((x) => x.id === 'light.salon')!.roomId).toBeUndefined()
-    // la pièce l'emporte sur le niveau quand les deux sont donnés
+    // the room wins over the level when both are given
     const both = placeDeviceInJson(demo, 'light.salon', { position: [6.6, 6.5, 2.4], roomId: 'cuisine', levelId: 'etage' })
     expect(devices(both).find((x) => x.id === 'light.salon')).toMatchObject({ roomId: 'cuisine', levelId: 'rdc' })
     expect(() => placeDeviceInJson(demo, 'light.salon', { position: [0, 0, 0], levelId: 'nope' })).toThrow(PlacementError)
@@ -257,8 +257,8 @@ describe('setPluginInJson', () => {
   const plugins = (doc: Record<string, unknown>) => doc.plugins as Record<string, Record<string, unknown>>
 
   it('writes the default section in full before applying the patch', () => {
-    // sans ca, activer un fabricant dans une maison muette eteindrait la simulation, que seul le
-    // defaut du schema gardait allumee
+    // without this, enabling a vendor in a silent house would turn off the simulation, which only the
+    // schema default kept on
     const out = setPluginInJson(demo, 'hue', { enabled: true })
     expect(plugins(out).hue).toEqual({ enabled: true })
     expect(plugins(out).mock).toMatchObject({ enabled: true })
@@ -290,7 +290,7 @@ describe('putArrayInJson', () => {
     expect(made).toEqual({ id: 'pv-est', levelId: 'toit', origin: [3, 4, 0], rows: 2, cols: 5, slope: 35, panels: ['mock:p1'] })
     expect(arrays(out)).toHaveLength(demo.arrays.length + 1)
     expect(() => putArrayInJson(demo, 'pv-est', { levelId: 'grenier', origin: [0, 0, 0] })).toThrow(PlacementError)
-    expect(() => putArrayInJson(demo, 'pv-est', { rows: 2 })).toThrow(PlacementError)          // ni niveau ni origine
+    expect(() => putArrayInJson(demo, 'pv-est', { rows: 2 })).toThrow(PlacementError)          // neither level nor origin
     expect(() => putArrayInJson(demo, 'pv-est', { levelId: 'toit', rows: 2 })).toThrow(PlacementError)
   })
 
@@ -301,25 +301,25 @@ describe('putArrayInJson', () => {
     expect(() => parseHouse(out)).not.toThrow()
   })
 
-  it('ecrit la puissance de sortie max des onduleurs du champ, et 0 quand on ne la sait pas', () => {
+  it('writes the max output power of the array inverters, and 0 when it is not known', () => {
     const out = putArrayInJson(demo, 'pv-sud', { maxOutputW: 480 })
     expect(first(out).maxOutputW).toBe(480)
     expect(parseHouse(out).arrays[0]!.maxOutputW).toBe(480)
-    // un champ qui n'en dit rien : pas de plafond invente (la vue Energie ne marque alors rien)
+    // an array that says nothing about it: no invented ceiling (the Energy view then marks nothing)
     expect(parseHouse(demo).arrays[0]!.maxOutputW).toBe(0)
   })
 
-  it('patche le MODULE champ par champ : coucher un panneau ne perd pas sa puissance crete', () => {
+  it('patches the MODULE field by field: tilting a panel does not lose its peak power', () => {
     const wp = putArrayInJson(demo, 'pv-sud', { panel: { width: 1.13, height: 1.76, peakW: 500 } })
     const laid = putArrayInJson(wp, 'pv-sud', { panel: { width: 1.76, height: 1.13 } })
-    // sans la fusion, `panel` etait remplace en entier et la crete retombait sur la valeur par defaut
+    // without the merge, `panel` was replaced entirely and the peak fell back on the default value
     expect(first(laid).panel).toEqual({ width: 1.76, height: 1.13, peakW: 500 })
     expect(parseHouse(laid).arrays[0]!.panel.peakW).toBe(500)
   })
 
   it('fits the inverters to the grid when it shrinks, and drops the empty tail', () => {
-    // sans ca, reduire 2 x 5 en 2 x 3 laisserait dix onduleurs pour six emplacements : la validation
-    // refuserait le champ en plein geste
+    // without this, reducing 2 x 5 to 2 x 3 would leave ten inverters for six slots: the validation
+    // would refuse the array in the middle of the gesture
     const out = putArrayInJson(demo, 'pv-sud', { rows: 2, cols: 3 })
     expect(first(out).panels).toHaveLength(6)
     expect(() => parseHouse(out)).not.toThrow()
@@ -349,21 +349,21 @@ describe('addOpeningToJson', () => {
   const openingsOf = (doc: Record<string, unknown>, roomId: string) =>
     ((doc.rooms as Record<string, unknown>[]).find((r) => r.id === roomId)!.openings as Record<string, unknown>[])
 
-  it('pose l ouverture dans sa piece et laisse les autres tranquilles', () => {
+  it('places the opening in its room and leaves the others alone', () => {
     const out = addOpeningToJson(demo, 'salon', { id: 'window-1', type: 'window', segment: 3, offset: 1, width: 1.2, height: 1.2, sill: 0.9 })
     expect(openingsOf(out, 'salon').map((o) => o.id)).toEqual(['baie', 'fen-salon-est', 'puits-salon', 'window-1'])
     expect(openingsOf(out, 'cuisine')).toEqual(openingsOf(demo as unknown as Record<string, unknown>, 'cuisine'))
     expect(() => parseHouse(out)).not.toThrow()
   })
 
-  it('n ecrit l allege que si elle dit quelque chose — sauf pour une fenetre, ou 0 est un choix', () => {
+  it('only writes the sill if it says something — except for a window, where 0 is a choice', () => {
     const door = addOpeningToJson(demo, 'salon', { id: 'door-1', type: 'door', segment: 3, offset: 1, width: 0.9, height: 2.1, sill: 0 })
     expect(openingsOf(door, 'salon').at(-1)).not.toHaveProperty('sill')
     const flat = addOpeningToJson(demo, 'salon', { id: 'window-1', type: 'window', segment: 3, offset: 1, width: 1.2, height: 2.1, sill: 0 })
     expect(openingsOf(flat, 'salon').at(-1)).toMatchObject({ sill: 0 })
   })
 
-  it('refuse un id deja pris, meme dans une AUTRE piece (un ouvrant le nommerait sans savoir ou)', () => {
+  it('refuses an id already taken, even in ANOTHER room (a cover would name it without knowing where)', () => {
     expect(() => addOpeningToJson(demo, 'salon', { id: 'fen-cuisine', type: 'window', segment: 3, offset: 1, width: 1, height: 1 })).toThrow(PlacementError)
     expect(() => addOpeningToJson(demo, 'nope', { id: 'x', type: 'window', segment: 0, offset: 1, width: 1, height: 1 })).toThrow(PlacementError)
   })
@@ -377,23 +377,23 @@ describe('addOpeningToJson', () => {
 })
 
 describe('removeOpeningFromJson', () => {
-  it('libere l ouvrant qui l habillait, dans la meme ecriture', () => {
-    const out = removeOpeningFromJson(demo, 'salon', 'baie')                    // cover.baie y est posé
+  it('frees the cover that dressed it, in the same write', () => {
+    const out = removeOpeningFromJson(demo, 'salon', 'baie')                    // cover.baie is placed there
     const room = (out.rooms as Record<string, unknown>[]).find((r) => r.id === 'salon')!
     expect((room.openings as Record<string, unknown>[]).map((o) => o.id)).toEqual(['fen-salon-est', 'puits-salon'])
     expect(devices(out).find((d) => d.id === 'cover.baie')).not.toHaveProperty('openingId')
     expect(devices(out).find((d) => d.id === 'cover.cuisine')).toMatchObject({ openingId: 'fen-cuisine' })
-    // sans cette libération, la maison entière serait refusée : l'ouvrant nommerait une ouverture disparue
+    // without this release, the whole house would be refused: the cover would name a vanished opening
     expect(() => parseHouse(out)).not.toThrow()
   })
 
-  it('ne touche pas aux appareils quand rien n etait pose dessus', () => {
+  it('does not touch the devices when nothing was placed on it', () => {
     const out = removeOpeningFromJson(demo, 'salon', 'fen-salon-est')
     expect(out.devices).toBe(demo.devices)
     expect(() => parseHouse(out)).not.toThrow()
   })
 
-  it('refuse une piece inconnue ou une ouverture qui n y est pas', () => {
+  it('refuses an unknown room or an opening that is not in it', () => {
     expect(() => removeOpeningFromJson(demo, 'nope', 'baie')).toThrow(PlacementError)
     expect(() => removeOpeningFromJson(demo, 'cuisine', 'baie')).toThrow(PlacementError)
   })
@@ -402,53 +402,53 @@ describe('removeOpeningFromJson', () => {
 describe('setRenderTuningInJson', () => {
   const render = (doc: Record<string, unknown>) => doc.render as { tuning?: Record<string, number> } | undefined
 
-  it('écrit le réglage et le relit tel quel', () => {
+  it('writes the setting and reads it back as is', () => {
     const out = setRenderTuningInJson(demo, { ...NEUTRAL_TUNING, bloomThreshold: 1.45, toneMapping: 'agx' })
     expect(render(out)!.tuning!.bloomThreshold).toBe(1.45)
     expect(parseHouse(out).render!.tuning!.toneMapping).toBe('agx')
   })
 
-  it('efface la section quand le réglage est neutre : une maison sans retouche n’en porte pas', () => {
+  it('clears the section when the setting is neutral: a house without touch-ups carries none', () => {
     const tuned = setRenderTuningInJson(demo, { ...NEUTRAL_TUNING, exposure: 0.8 })
     const back = setRenderTuningInJson(tuned, NEUTRAL_TUNING)
     expect(back.render).toBeUndefined()
     expect(parseHouse(back).render).toBeUndefined()
   })
 
-  it('ne modifie pas le document d’entrée', () => {
+  it('does not modify the input document', () => {
     const before = JSON.stringify(demo)
     setRenderTuningInJson(demo, { ...NEUTRAL_TUNING, vignette: 1.5 })
     expect(JSON.stringify(demo)).toBe(before)
   })
 })
 
-describe('éléments du jardin', () => {
+describe('garden elements', () => {
   const garden = (doc: Record<string, unknown>) => (doc.site as Record<string, unknown>).garden as Record<string, unknown>[]
   const base = addGardenItemToJson(demo, { id: 'oak-1', kind: 'broadleaf', center: [3, -4], height: 8 })
 
-  it('ajoute un élément valide, sans écrire un cap nul', () => {
+  it('adds a valid element, without writing a zero heading', () => {
     expect(garden(base)).toEqual([{ id: 'oak-1', kind: 'broadleaf', center: [3, -4], height: 8 }])
     expect(parseHouse(base).site.garden[0]!.kind).toBe('broadleaf')
   })
 
-  it('refuse un id déjà pris', () => {
+  it('refuses an id already taken', () => {
     expect(() => addGardenItemToJson(base, { id: 'oak-1', kind: 'rock', center: [0, 0], height: 1 })).toThrow(PlacementError)
   })
 
-  it('règle seulement les champs donnés, et un cap nul efface le cap', () => {
+  it('only sets the given fields, and a zero heading clears the heading', () => {
     const turned = patchGardenItemInJson(base, 'oak-1', { yaw: 45, height: 10 })
     expect(garden(turned)[0]).toMatchObject({ yaw: 45, height: 10, center: [3, -4] })
     expect(garden(patchGardenItemInJson(turned, 'oak-1', { yaw: 0 }))[0]).not.toHaveProperty('yaw')
     expect(() => patchGardenItemInJson(base, 'nope', { height: 2 })).toThrow(PlacementError)
   })
 
-  it('pose une espèce, et la chaîne vide la retire', () => {
+  it('places a species, and the empty string removes it', () => {
     const cherry = patchGardenItemInJson(base, 'oak-1', { species: 'cherry' })
     expect(parseHouse(cherry).site.garden[0]!.species).toBe('cherry')
     expect(garden(patchGardenItemInJson(cherry, 'oak-1', { species: '' }))[0]).not.toHaveProperty('species')
   })
 
-  it('une haie porte sa longueur, sa largeur et son espacement, posés puis réglés, dans les bornes', () => {
+  it('a hedge carries its length, its width and its spacing, placed then set, within the bounds', () => {
     const hedge = addGardenItemToJson(demo, { id: 'hedge-1', kind: 'hedge', center: [0, 0], height: 1.8, length: 4 })
     expect(parseHouse(hedge).site.garden[0]).toMatchObject({ kind: 'hedge', length: 4 })
     expect(garden(patchGardenItemInJson(hedge, 'hedge-1', { length: 7.5 }))[0]!.length).toBe(7.5)
@@ -457,17 +457,17 @@ describe('éléments du jardin', () => {
     expect(() => parseHouse(patchGardenItemInJson(hedge, 'hedge-1', { width: 9 }))).toThrow()
     const spaced = patchGardenItemInJson(hedge, 'hedge-1', { spacing: 1.5 })
     expect(garden(spaced)[0]!.spacing).toBe(1.5)
-    expect(garden(patchGardenItemInJson(spaced, 'hedge-1', { spacing: null }))[0]).not.toHaveProperty('spacing')   // retour à l'automatique
+    expect(garden(patchGardenItemInJson(spaced, 'hedge-1', { spacing: null }))[0]).not.toHaveProperty('spacing')   // back to automatic
     expect(gardenItemPatchSchema.parse({ spacing: null })).toEqual({ spacing: null })
     expect(() => parseHouse(patchGardenItemInJson(hedge, 'hedge-1', { spacing: 0.05 }))).toThrow()
   })
 
-  it('retire un élément', () => {
+  it('removes an element', () => {
     expect(garden(removeGardenItemFromJson(base, 'oak-1'))).toEqual([])
     expect(() => removeGardenItemFromJson(base, 'nope')).toThrow(PlacementError)
   })
 
-  it('rejette une maison où un élément reprend l\'id d\'une pièce', () => {
+  it('rejects a house where an element reuses the id of a room', () => {
     const roomId = (demo.rooms[0] as { id: string }).id
     expect(() => parseHouse(addGardenItemToJson(demo, { id: roomId, kind: 'rock', center: [0, 0], height: 1 }))).toThrow()
   })

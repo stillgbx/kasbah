@@ -44,17 +44,17 @@ describe('miterCorners', () => {
     expect(corners[0]!.outerEnd[0]).toBeCloseTo(4.3)
     expect(corners[0]!.outerEnd[1]).toBeCloseTo(-0.3)
   })
-  it('T façade / cloison : la façade avance devant la cloison, qui bute sur sa face intérieure', () => {
+  it('facade / partition T: the facade advances in front of the partition, which butts against its inner face', () => {
     const a = room({ id: 'a', polygon: [[0, 0], [3, 0], [3, 4], [0, 4]] })
     const b = room({ id: 'b', polygon: [[3.2, 0], [6, 0], [6, 4], [3.2, 4]] })
     const corners = miterCorners(classifySegments(a, [a, b], HOUSE_DEFAULTS))
-    // mur sud (ext 0.3) : son bout avance de 0.1 (la cloison est) → (3.1, -0.3), débord 0.1
+    // south wall (ext 0.3): its end advances by 0.1 (the partition is east) → (3.1, -0.3), overhang 0.1
     expect(corners[0]!.outerEnd[0]).toBeCloseTo(3.1)
     expect(corners[0]!.outerEnd[1]).toBeCloseTo(-0.3)
     expect(corners[0]!.endExt).toBeCloseTo(0.1)
-    // mur est (int 0.1) : bout DROIT à la face intérieure de la façade, il ne la traverse plus
-    // (avant le 2026-09-12 il partageait le point mitré du mur sud, laissant au-dessus de 1,05 m
-    //  un triangle que seule la cloison remplissait)
+    // east wall (int 0.1): STRAIGHT end at the inner face of the facade, it no longer crosses it
+    // (before 2026-09-12 it shared the mitered point of the south wall, leaving above 1.05 m
+    //  a triangle that only the partition filled)
     expect(corners[1]!.outerStart[0]).toBeCloseTo(3.1)
     expect(corners[1]!.outerStart[1]).toBeCloseTo(0)
     expect(corners[1]!.startExt).toBe(0)
@@ -103,11 +103,11 @@ describe('computeWalls', () => {
     const { prisms } = computeWalls(level, [a, b], HOUSE_DEFAULTS)
     const aEast = prisms.filter((p) => p.roomId === 'a' && p.segment === 1)
     const bWest = prisms.filter((p) => p.roomId === 'b' && p.segment === 3)
-    expect(aEast).toHaveLength(3)   // gauche, linteau, droite
-    expect(bWest).toHaveLength(3)   // miroir
+    expect(aEast).toHaveLength(3)   // left, lintel, right
+    expect(bWest).toHaveLength(3)   // mirror
     const lintel = bWest.find((p) => p.openingId === 'd')!
     expect(lintel.z0).toBeCloseTo(2.1)
-    // b.segment 3 va de (3.2,4) à (3.2,0) : u = 4 - y ; la porte est en y ∈ [1, 1.9] → u ∈ [2.1, 3]
+    // b.segment 3 goes from (3.2,4) to (3.2,0): u = 4 - y; the door is at y ∈ [1, 1.9] → u ∈ [2.1, 3]
     const ys = lintel.footprint.map((p) => p[1])
     expect(Math.min(...ys)).toBeCloseTo(1)
     expect(Math.max(...ys)).toBeCloseTo(1.9)
@@ -117,9 +117,9 @@ describe('computeWalls', () => {
     expect(computeWalls(level, [t], HOUSE_DEFAULTS).prisms).toHaveLength(0)
   })
   it('building corner: the wall whose stub the neighbour covers is trimmed back', () => {
-    // `a` pousse son mur est de 0.3 vers +x (bande x ∈ [2, 2.3]) ; `b` pousse son mur sud de
-    // 0.3 vers -y (bande y ∈ [1.7, 2]) et arrive en x = 2.1, donc DANS la bande de `a`.
-    // Le bout de `b` est entièrement repris par le mur de `a` : c'est `b` qui recule.
+    // `a` pushes its east wall by 0.3 toward +x (band x ∈ [2, 2.3]); `b` pushes its south wall by
+    // 0.3 toward -y (band y ∈ [1.7, 2]) and arrives at x = 2.1, therefore INSIDE the band of `a`.
+    // The end of `b` is entirely taken over by the wall of `a`: it is `b` that backs off.
     const a = room({ id: 'a', polygon: [[0, 0], [2, 0], [2, 2], [0, 2]] })
     const b = room({ id: 'b', polygon: [[2.1, 2], [5, 2], [5, 4], [2.1, 4]], walls: [{ segment: 3, kind: 'none' }] })
     const { prisms } = computeWalls(level, [a, b], HOUSE_DEFAULTS)
@@ -131,29 +131,29 @@ describe('computeWalls', () => {
     expect(Math.abs(signedArea(overlap))).toBeLessThan(1e-9)
   })
   it('building corner: nothing is trimmed when neither wall covers the other', () => {
-    // Ici le mitre de `b` sort de la bande de `a` : reculer `b` ouvrirait une fente, on garde
-    // donc le recouvrement (moins laid qu'un trou).
+    // Here the miter of `b` leaves the band of `a`: backing `b` off would open a gap, so we keep
+    // the overlap (less ugly than a hole).
     const a = room({ id: 'a', polygon: [[0, 0], [2, 0], [2, 2], [0, 2]] })
     const b = room({ id: 'b', polygon: [[2.1, 2], [5, 2], [5, 4], [2.1, 4]] })
     const { prisms } = computeWalls(level, [a, b], HOUSE_DEFAULTS)
     const bSouth = prisms.find((p) => p.roomId === 'b' && p.segment === 0)!
     expect(Math.min(...bSouth.footprint.map((v) => v[0]))).toBeCloseTo(1.8)
   })
-  it('un plafond plus bas ne fait redescendre ni la façade ni la cloison', () => {
-    // La remise du relevé : 2,20 m de plafond dans un niveau à 2,60 m. La façade suit le bâtiment,
-    // sinon le mur extérieur marche entre deux pièces ; la cloison est un seul mur avec sa voisine,
-    // sinon sa moitié basse laisse une marche en haut du mur.
+  it('a lower ceiling brings down neither the facade nor the partition', () => {
+    // The shed from the survey: 2.20 m ceiling in a level at 2.60 m. The facade follows the building,
+    // otherwise the exterior wall steps between two rooms; the partition is a single wall with its neighbor,
+    // otherwise its lower half leaves a step at the top of the wall.
     const a = room({ id: 'a', polygon: [[0, 0], [3, 0], [3, 4], [0, 4]], height: 2.2 })
     const b = room({ id: 'b', polygon: [[3.2, 0], [6, 0], [6, 4], [3.2, 4]] })
     const { prisms } = computeWalls(level, [a, b], HOUSE_DEFAULTS)
     const of = (roomId: string, segment: number) => prisms.find((p) => p.roomId === roomId && p.segment === segment)!
     expect(of('a', 0).kind).toBe('exterior')
-    expect(of('a', 0).z1).toBeCloseTo(HOUSE_DEFAULTS.levelHeight)  // façade : hauteur du niveau
+    expect(of('a', 0).z1).toBeCloseTo(HOUSE_DEFAULTS.levelHeight)  // facade: height of the level
     expect(of('a', 1).kind).toBe('interior')
-    expect(of('a', 1).z1).toBeCloseTo(of('b', 3).z1)                // cloison : même hauteur que sa moitié voisine
-    expect(of('b', 0).z1).toBeCloseTo(HOUSE_DEFAULTS.levelHeight)   // la voisine ne marche pas
+    expect(of('a', 1).z1).toBeCloseTo(of('b', 3).z1)                // partition: same height as its neighboring half
+    expect(of('b', 0).z1).toBeCloseTo(HOUSE_DEFAULTS.levelHeight)   // the neighbor has no step
   })
-  it('une pièce plus haute que son niveau garde sa façade haute', () => {
+  it('a room taller than its level keeps its facade high', () => {
     const a = room({ id: 'a', polygon: [[0, 0], [3, 0], [3, 4], [0, 4]], height: 3.2 })
     const { prisms } = computeWalls(level, [a], HOUSE_DEFAULTS)
     expect(prisms[0]!.z1).toBeCloseTo(3.2)
@@ -164,7 +164,7 @@ describe('computeWalls', () => {
     expect(prisms).toHaveLength(6)
     for (const p of prisms) {
       expect(signedArea(p.footprint)).toBeGreaterThan(0)
-      // convexité : tous les produits vectoriels consécutifs de même signe
+      // convexity: all the consecutive cross products of the same sign
       const f = p.footprint
       for (let i = 0; i < 4; i++) {
         const a = f[i]!, b = f[(i + 1) % 4]!, c = f[(i + 2) % 4]!

@@ -67,7 +67,7 @@ describe('assertCommandAllowed', () => {
     catch (e) { expect((e as CommandNotAllowedError).code).toBe('UNSUPPORTED_COMMAND') }
     expect(() => assertCommandAllowed({ ...player, capabilities: ['playback', 'play_url'] }, { type: 'media_player.play_url', url: 'https://icecast.example/a.mp3' })).not.toThrow()
   })
-  it('choisir le mode d\'une borne : vert ou manuel seulement, et la capacité charge_mode exigée', () => {
+  it('choose a charger mode: green or manual only, and the charge_mode capability required', () => {
     expect(commandSchema.safeParse({ type: 'ev_charger.set_mode', mode: 'manual' }).success).toBe(true)
     expect(commandSchema.safeParse({ type: 'ev_charger.set_mode', mode: 'scheduled' }).success).toBe(false)
     const charger: DeviceDescriptor = { ...light, id: 'mock:e', externalId: 'e', kind: 'ev_charger', capabilities: ['charge_control'] }
@@ -94,14 +94,14 @@ describe('mergeState', () => {
     expect(next).not.toBe(prev)
     expect(next).toEqual({ ...prev, on: true, updatedAt: 99 })
   })
-  it('efface un champ optionnel avec `null`, sans bruit inutile', () => {
-    // Seul moyen de repasser une valeur a « inconnue » : rappeler la position favorite d'un moteur
-    // unidirectionnel le deplace vers une position qu'on ne connait pas.
+  it('clears an optional field with `null`, without useless noise', () => {
+    // Only way to bring a value back to "unknown": recalling the favorite position of a one-way
+    // motor moves it to a position that is not known.
     const cover: StateFor<'cover'> = { kind: 'cover', updatedAt: 1, available: true, position: 40, motion: 'stopped' }
     const cleared = mergeState(cover, { position: null }, 99)
     expect('position' in cleared).toBe(false)
     expect(cleared).toEqual({ kind: 'cover', updatedAt: 99, available: true, motion: 'stopped' })
-    // effacer ce qui est deja absent ne change rien : meme reference, donc rien sur le WebSocket
+    // clearing what is already absent changes nothing: same reference, hence nothing on the WebSocket
     expect(mergeState(cleared, { position: null }, 123)).toBe(cleared)
   })
   it('compares nested objects structurally', () => {
@@ -125,9 +125,9 @@ describe('defaultState', () => {
     }
   })
 
-  it('ne pose AUCUNE position pour un ouvrant', () => {
-    // Un `position: 0` par défaut se lit comme un fait : une radio unidirectionnelle n'en publie
-    // jamais, et l'interface annonçait « fermé » (compteurs du résumé compris) sans rien savoir.
+  it('sets NO position for a cover', () => {
+    // A default `position: 0` reads as a fact: a one-way radio never publishes one,
+    // and the interface announced "closed" (summary counters included) without knowing anything.
     const s = defaultState('cover')
     expect(s.kind === 'cover' && s.position).toBeUndefined()
     expect(deviceStateSchema.parse(s)).toEqual(s)
@@ -135,9 +135,9 @@ describe('defaultState', () => {
 })
 
 /**
- * Aucun fabricant ne donne la capacité de la batterie, et certains (la R5) ne donnent pas non plus
- * la puissance de charge : elle se déduit de ce que la voiture annonce — 6 points à mettre sur
- * 52 kWh en 43 min ≈ 4,4 kW — ou pas du tout.
+ * No vendor gives the capacity of the battery, and some (the R5) do not give the charge
+ * power either: it is deduced from what the car announces — 6 points to add on
+ * 52 kWh in 43 min ≈ 4.4 kW — or not at all.
  */
 describe('estimateChargePowerW', () => {
   const charging = (extra: Partial<StateFor<'vehicle'>> = {}): StateFor<'vehicle'> => ({
@@ -145,24 +145,24 @@ describe('estimateChargePowerW', () => {
     chargeLimit: 80, chargeMinutesRemaining: 43, ...extra,
   })
 
-  it('déduit la puissance du temps que la voiture se donne', () => {
+  it('deduces the power from the time the car gives itself', () => {
     expect(estimateChargePowerW(charging(), 52)).toBe(4400)
     expect(estimateChargePowerW(charging(), 40)).toBe(3300)
   })
 
-  it('se tait quand il n’y a rien à estimer', () => {
-    expect(estimateChargePowerW(charging(), undefined)).toBeUndefined()          // capacité jamais saisie
-    expect(estimateChargePowerW(charging({ chargePowerW: 7000 }), 52)).toBeUndefined()  // le véhicule la DIT
+  it('stays silent when there is nothing to estimate', () => {
+    expect(estimateChargePowerW(charging(), undefined)).toBeUndefined()          // capacity never entered
+    expect(estimateChargePowerW(charging({ chargePowerW: 7000 }), 52)).toBeUndefined()  // the vehicle SAYS it
     expect(estimateChargePowerW(charging({ charging: false }), 52)).toBeUndefined()
     expect(estimateChargePowerW(charging({ chargeLimit: undefined }), 52)).toBeUndefined()
     expect(estimateChargePowerW(charging({ chargeMinutesRemaining: undefined }), 52)).toBeUndefined()
   })
 
-  it('se tait aussi quand le calcul mentirait', () => {
-    // fin de charge : le courant s'effondre sur les derniers pourcents, une minute d'erreur y pèse trop
+  it('also stays silent when the computation would lie', () => {
+    // end of charge: the current collapses over the last percents, a minute of error weighs too much there
     expect(estimateChargePowerW(charging({ soc: 79 }), 52)).toBeUndefined()
     expect(estimateChargePowerW(charging({ chargeMinutesRemaining: 3 }), 52)).toBeUndefined()
-    // 60 points en 5 min feraient 374 kW sur une voiture branchée au garage : invraisemblable
+    // 60 points in 5 min would make 374 kW on a car plugged in at the garage: implausible
     expect(estimateChargePowerW(charging({ soc: 20, chargeMinutesRemaining: 5 }), 52)).toBeUndefined()
   })
 })

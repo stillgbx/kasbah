@@ -4,17 +4,17 @@ import { applyHouseEditToJson } from './edit'
 import { insertVertex, moveVertex, pushWall, removeVertex, roomShape, setEdgeLength } from './shape'
 import type { SurveyDoc } from './survey'
 
-// Gestes sur la forme. RDC de la démo, en cotes (cm) : entrée x 0→310, salon x 310→1000 / y 0→500,
-// cuisine x 310→1000 / y 500→800 ; la cloison x = 310 est commune aux trois.
+// Gestures on the shape. Demo ground floor, in measurements (cm): entrance x 0→310, living room x 310→1000 / y 0→500,
+// kitchen x 310→1000 / y 500→800; the partition x = 310 is shared by the three.
 
 const doc = demo as unknown as SurveyDoc
 
 describe('pushWall', () => {
-  it('une façade : seule la pièce bouge, et ses angles restent droits', () => {
+  it('a facade: only the room moves, and its corners stay square', () => {
     expect(pushWall(doc, 'salon', 0, 0.5)).toEqual({ salon: [[310, -50], [1000, -50], [1000, 500], [310, 500]] })
   })
 
-  it('une cloison entraîne les pièces d’en face, du même déplacement', () => {
+  it('a partition drags the rooms across from it, by the same displacement', () => {
     const shapes = pushWall(doc, 'entree', 1, 0.2)
     expect(Object.keys(shapes).sort()).toEqual(['cuisine', 'entree', 'salon'])
     expect(shapes.entree).toEqual([[0, 0], [330, 0], [330, 800], [0, 800]])
@@ -23,7 +23,7 @@ describe('pushWall', () => {
     expect(applyHouseEditToJson(demo, { shapes }).blocking).toEqual([])
   })
 
-  it('détachée, la cloison empiète sur les voisines : la séance est bloquée', () => {
+  it('detached, the partition encroaches on the neighbors: the session is blocked', () => {
     const shapes = pushWall(doc, 'entree', 1, 0.2, false)
     expect(Object.keys(shapes)).toEqual(['entree'])
     expect(applyHouseEditToJson(demo, { shapes }).blocking.length).toBeGreaterThan(0)
@@ -31,14 +31,14 @@ describe('pushWall', () => {
 })
 
 describe('setEdgeLength', () => {
-  it('le mur suivant recule : la façade sud passe à 7,50 m', () => {
+  it('the next wall backs off: the south facade goes to 7.50 m', () => {
     const shapes = setEdgeLength(doc, 'salon', 0, 7.5)!
     expect(shapes.salon).toEqual([[310, 0], [1060, 0], [1060, 500], [310, 500]])
   })
 })
 
-describe('sommets', () => {
-  it('ajouter au milieu d’un côté, déplacer, retirer', () => {
+describe('vertices', () => {
+  it('add in the middle of a side, move, remove', () => {
     const one = insertVertex(doc, 'salon', 0)
     expect(one.salon).toEqual([[310, 0], [655, 0], [1000, 0], [1000, 500], [310, 500]])
     const moved = moveVertex(doc, 'salon', 1, [10, -1])
@@ -47,7 +47,7 @@ describe('sommets', () => {
     expect(removeVertex({ ...doc, rooms: [{ ...doc.rooms[0]!, polygon: [[0, 0], [1, 0], [0, 1]] }] } as SurveyDoc, 'entree', 0)).toBeNull()
   })
 
-  it('roomShape lit les cotes en mètres, maison relevée ou non', () => {
+  it('roomShape reads the measurements in meters, surveyed house or not', () => {
     expect(roomShape(doc, 'salon')).toEqual([[3.1, 0], [10, 0], [10, 5], [3.1, 5]])
   })
 })

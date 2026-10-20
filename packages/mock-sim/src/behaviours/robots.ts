@@ -2,7 +2,7 @@ import { localToGeo, type StateFor } from '@kasbah/shared'
 import { SimError, type SimDevice } from '../types'
 import { clamp, descriptor, inWindow, nextOccurrence, round1 } from './common'
 
-// Robots : aspirateur (cycle quotidien) et tondeuse (planning hebdomadaire, errance dans un rectangle).
+// Robots: vacuum (daily cycle) and mower (weekly schedule, roaming within a rectangle).
 
 export interface VacuumOptions { name: string; startHour?: number; durationMin?: number }
 
@@ -10,8 +10,8 @@ export function vacuum(externalId: string, o: VacuumOptions): SimDevice<'vacuum'
   const startHour = o.startHour ?? 11, durationMin = o.durationMin ?? 45
   let cleaningLeftS = 0, returningLeftS = 0, lastDay = -1, manual = false
   const dev: SimDevice<'vacuum'> = {
-    // l'aspirateur simulé LAVE aussi : sans la capacité `mop`, les contrôles de serpillière ne
-    // seraient vérifiables qu'avec un vrai Combo sous la main
+    // the simulated vacuum also MOPS: without the `mop` capability, the mop controls could
+    // only be verified with a real Combo at hand
     descriptor: descriptor(externalId, 'vacuum', o.name, ['clean', 'dock', 'battery', 'locate', 'mop'], { manufacturer: 'Mock', model: 'Robot vacuum' }),
     state: { kind: 'vacuum', updatedAt: 0, available: true, activity: 'docked', battery: 100, binFull: false, mopAttached: true, tankLevel: 80 },
     tick(ctx) {
@@ -24,7 +24,7 @@ export function vacuum(externalId: string, o: VacuumOptions): SimDevice<'vacuum'
         case 'cleaning':
           cleaningLeftS -= ctx.dtS
           s.battery = round1(clamp(s.battery - (65 / (durationMin * 60)) * ctx.dtS, 0, 100))
-          // le réservoir se vide en lavant, et personne ne le remplit tout seul
+          // the tank empties while mopping, and nobody refills it on its own
           if (s.mopAttached && s.tankLevel !== undefined && s.tankLevel !== null) {
             s.tankLevel = round1(clamp(s.tankLevel - (70 / (durationMin * 60)) * ctx.dtS, 0, 100))
           }
@@ -62,35 +62,35 @@ export function vacuum(externalId: string, o: VacuumOptions): SimDevice<'vacuum'
 
 export interface MowerOptions {
   name: string
-  /** Rectangle d'errance [x0, y0, x1, y1] (repère maison). */
+  /** Roaming rectangle [x0, y0, x1, y1] (house reference frame). */
   area: [number, number, number, number]
-  /** Position de la station de charge. */
+  /** Position of the charging station. */
   dock: [number, number]
   schedule?: { days: number[]; startHour: number; endHour: number } | null
   /**
-   * Origine GPS de la maison : la simulation publie alors AUSSI une `location`, comme un vrai robot
-   * (Husqvarna), pour que la carte de la vue Robots ait quelque chose à montrer. Repère supposé
-   * plein nord : c'est une simulation, pas un relevé.
+   * GPS origin of the house: the simulation then ALSO publishes a `location`, like a real robot
+   * (Husqvarna), so that the map of the Robots view has something to show. Reference frame assumed
+   * due north: this is a simulation, not a survey.
    */
   home?: { lat: number; lon: number }
 }
 
-/** Rectangle [x0, y0, x1, y1] → polygone, sens trigonométrique. */
+/** Rectangle [x0, y0, x1, y1] → polygon, counterclockwise. */
 const rect = ([x0, y0, x1, y1]: [number, number, number, number]): [number, number][] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
 
 export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
   const schedule = o.schedule === undefined ? { days: [1, 2, 3, 4, 5], startHour: 10, endHour: 12 } : o.schedule
   let heading = 0.7, parkedUntilNext = false, manualUntil = 0, returningLeftS = 0, leavingLeftS = 0
-  // Deux zones de travail (le rectangle d'errance coupé en deux) et une zone d'exclusion dans la
-  // seconde : de quoi montrer la carte et ses commandes. Repère maison supposé plein nord, comme la
-  // `location` : la carte est donc dans le repère maison, station comprise.
+  // Two work zones (the roaming rectangle cut in two) and an exclusion zone in the
+  // second: enough to show the map and its commands. House reference frame assumed due north, like
+  // the `location`: the map is therefore in the house reference frame, station included.
   const [ax0, ay0, ax1, ay1] = o.area
   const xm = (ax0 + ax1) / 2
   const areas: Record<number, [number, number, number, number]> = { 1: [ax0, ay0, xm, ay1], 2: [xm, ay0, ax1, ay1] }
   const potager: [number, number, number, number] = [ax1 - Math.min(6, (ax1 - xm) / 2), ay1 - Math.min(4, (ay1 - ay0) / 2), ax1 - 1, ay1 - 1]
-  /** Où le robot erre : tout le terrain, ou la zone qu'on lui a donnée. */
+  /** Where the robot roams: the whole terrain, or the zone it was given. */
   let bounds = o.area
-  /** Il part de la station : « en route » une vingtaine de secondes, le temps d'arriver sur sa zone. */
+  /** It leaves the station: "on its way" for about twenty seconds, long enough to reach its zone. */
   const depart = (s: StateFor<'mower'>) => { s.activity = 'mowing'; s.leaving = true; leavingLeftS = 20 }
   const dev: SimDevice<'mower'> = {
     descriptor: descriptor(externalId, 'mower', o.name, ['mow', 'park', 'battery', 'schedule', 'work_areas', 'stay_out_zones', 'site_map', 'confirm_error'], { manufacturer: 'Mock', model: 'Robotic mower' }),
@@ -110,7 +110,7 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
           { kind: 'work_area', id: 'area-1', name: 'Devant', points: rect(areas[1]!) },
           { kind: 'work_area', id: 'area-2', name: 'Fond', points: rect(areas[2]!) },
           { kind: 'stay_out', id: 'potager', name: 'Potager', points: rect(potager) },
-          // une zone de réensauvagement : sur la carte seulement, comme chez Husqvarna
+          // a rewilding zone: on the map only, as with Husqvarna
           { kind: 'rewilding', id: 'prairie', name: 'Prairie', enabled: true, points: rect([ax0 + 1, ay0 + 1, ax0 + Math.min(6, (xm - ax0) / 2), ay0 + Math.min(4, (ay1 - ay0) / 2)]) },
           { kind: 'guide', id: 'guide_1', points: [[dx, dy], [ax1 - 1, ay0 + 1]] },
           { kind: 'station', id: 'station', points: [[dx, dy], [dx + 1.5, dy]] },
@@ -138,7 +138,7 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
           s.activity = s.battery < 100 ? 'charging' : 'parked'
           if (s.activity === 'charging') ctx.world.loadsW += 45
           if (wantsMow && s.battery > 30) {
-            // le planning tond tout le terrain ; un ordre manuel garde la zone qu'il a donnée
+            // the schedule mows the whole terrain; a manual order keeps the zone it was given
             if (ctx.simTime >= manualUntil) { bounds = o.area; s.workAreaId = 0 }
             depart(s)
           }
@@ -179,8 +179,8 @@ export function mower(externalId: string, o: MowerOptions): SimDevice<'mower'> {
           parkedUntilNext = false
           bounds = o.area
           s.workAreaId = 0
-          // sans durée = reprendre le programme : plus d'ordre manuel, le planning décide au prochain pas
-          // (en pause hors créneau, le robot repart… pour rentrer)
+          // no duration = resume the program: no more manual order, the schedule decides at the next step
+          // (paused outside the time slot, the robot sets off… to go home)
           manualUntil = cmd.durationMin === undefined ? 0 : ctx.simTime + cmd.durationMin * 60_000
           if (s.activity === 'paused') s.activity = 'mowing'
           else if (cmd.durationMin !== undefined && (s.activity === 'parked' || s.activity === 'charging')) depart(s)

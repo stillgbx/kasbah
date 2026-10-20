@@ -4,8 +4,8 @@ import { terrainFootprints, terrainHeight, terrainPads } from './geometry/relief
 import { computeTerrain } from './geometry/site'
 import type { TerrainDescriptor } from './geometry/types'
 
-// Index en O(1) sur une maison validée. La maison est traitée comme immuable : on ré-indexe
-// quand l'objet change (référence), jamais en place.
+// O(1) index on a validated house. The house is treated as immutable: it is re-indexed
+// when the object changes (reference), never in place.
 
 export interface HouseIndex {
   levelsById: Map<string, Level>
@@ -13,16 +13,16 @@ export interface HouseIndex {
   zonesById: Map<string, Zone>
   devicesById: Map<string, HouseDevice>
   openingsById: Map<string, { room: Room; opening: Opening }>
-  /** Niveaux dans l'ordre d'affichage : du plus haut au plus bas (on descend dans la maison). */
+  /** Levels in display order: from the highest to the lowest (we go down into the house). */
   levelsSorted: Level[]
-  /** Pièces d'un niveau dans l'ordre d'affichage : `level.roomOrder` d'abord, puis les autres par nom. */
+  /** Rooms of a level in display order: `level.roomOrder` first, then the others by name. */
   roomsByLevel: Map<string, Room[]>
   devicesByRoom: Map<string, HouseDevice[]>
   devicesByLevel: Map<string, HouseDevice[]>
   devicesByZone: Map<string, HouseDevice[]>
-  /** Appareils extérieurs (ni niveau, ni pièce). */
+  /** Outdoor devices (neither level nor room). */
   outdoorDevices: HouseDevice[]
-  /** Appareils de la maison indexés par `deviceId` de plugin. */
+  /** Devices of the house indexed by plugin `deviceId`. */
   devicesByBinding: Map<string, HouseDevice>
 }
 
@@ -32,7 +32,7 @@ function push<K, V>(m: Map<K, V[]>, k: K, v: V) {
   else m.set(k, [v])
 }
 
-/** Niveau effectif d'un appareil : explicite, sinon celui de sa pièce, sinon null (extérieur). */
+/** Effective level of a device: explicit, otherwise that of its room, otherwise null (outdoor). */
 export function resolveDeviceLevelId(device: HouseDevice, roomsById: Map<string, Room>): string | null {
   if (device.levelId) return device.levelId
   if (device.roomId) return roomsById.get(device.roomId)?.levelId ?? null
@@ -65,8 +65,8 @@ export function indexHouse(house: House): HouseIndex {
     if (d.zoneId) push(devicesByZone, d.zoneId, d)
     if (d.deviceId) devicesByBinding.set(d.deviceId, d)
   }
-  // Ordre d'affichage, commun à toutes les listes de l'UI (onglets, panneau maison, vue Lumières) :
-  // niveaux du haut vers le bas, pièces dans l'ordre choisi par l'utilisateur puis alphabétique.
+  // Display order, common to all the UI lists (tabs, house panel, Lights view):
+  // levels from top to bottom, rooms in the order chosen by the user then alphabetical.
   const levelsSorted = [...house.levels].sort((a, b) => b.elevation - a.elevation)
   for (const level of house.levels) {
     const rank = new Map((level.roomOrder ?? []).map((id, i) => [id, i]))
@@ -80,7 +80,7 @@ export function indexHouse(house: House): HouseIndex {
 }
 
 const terrains = new WeakMap<House, TerrainDescriptor>()
-/** Le terrain d'une maison, relief compris, calculé une fois par objet maison (immuable). */
+/** The terrain of a house, relief included, computed once per house object (immutable). */
 export function houseTerrain(house: House): TerrainDescriptor {
   let t = terrains.get(house)
   if (!t) { t = computeTerrain(house.site, terrainPads(house), terrainFootprints(house, resolveDefaults(house.defaults))); terrains.set(house, t) }
@@ -88,8 +88,8 @@ export function houseTerrain(house: House): TerrainDescriptor {
 }
 
 /**
- * z absolu du sol d'ancrage d'un appareil : son niveau, sinon le terrain SOUS LUI — un appareil du
- * jardin posé sur une bosse suit la bosse.
+ * Absolute z of the anchoring floor of a device: its level, otherwise the terrain UNDER IT — a garden
+ * device placed on a bump follows the bump.
  */
 export function deviceFloorZ(house: House, device: HouseDevice, index: HouseIndex): number {
   const lvl = resolveDeviceLevelId(device, index.roomsById)

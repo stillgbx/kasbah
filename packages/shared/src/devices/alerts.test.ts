@@ -10,10 +10,10 @@ describe('deviceAlerts', () => {
   it('raises an info alert for a pending software update, keyed by its version', () => {
     const [a] = deviceAlerts('tesla:car', vehicle({ softwareUpdate: { status: 'available', version: '2026.38' } }))!
     expect(a).toMatchObject({ deviceId: 'tesla:car', severity: 'info', type: 'software_update' })
-    // programmée ensuite : la même mise à jour, la même alerte
+    // scheduled afterwards: the same update, the same alert
     const [b] = deviceAlerts('tesla:car', vehicle({ softwareUpdate: { status: 'scheduled', version: '2026.38' } }))!
     expect(b!.id).toBe(a!.id)
-    // la version suivante est une alerte nouvelle
+    // the next version is a new alert
     const [c] = deviceAlerts('tesla:car', vehicle({ softwareUpdate: { status: 'available', version: '2026.40' } }))!
     expect(c!.id).not.toBe(a!.id)
     expect(deviceAlerts('tesla:car', vehicle())).toEqual([])
@@ -21,7 +21,7 @@ describe('deviceAlerts', () => {
 
   it('cannot tell for an unavailable or never-read device', () => {
     expect(deviceAlerts('tesla:car', vehicle({ readAt: undefined, softwareUpdate: { status: 'available' } }))).toBeNull()
-    // une tondeuse en panne qui a perdu le réseau est toujours en panne
+    // a mower in fault that lost the network is still in fault
     expect(deviceAlerts('m:1', mower({ available: false, activity: 'error', errorMessage: 'Stuck' }))).toMatchObject([{ type: 'device_error', detail: 'Stuck' }])
   })
 
@@ -57,6 +57,6 @@ describe('deviceAlerts', () => {
     const [red] = deviceAlerts('om:home', weather([w('red')]))!
     expect(orange).toMatchObject({ severity: 'problem', type: 'vigilance' })
     expect(red).toMatchObject({ severity: 'critical' })
-    expect(red!.id).not.toBe(orange!.id)           // passer au rouge : une alerte nouvelle
+    expect(red!.id).not.toBe(orange!.id)           // going to red: a new alert
   })
 })

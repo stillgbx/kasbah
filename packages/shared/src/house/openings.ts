@@ -7,34 +7,34 @@ import { isSurfaceOpening, type Opening, type OpeningType, type Room } from './s
 export type { ParkingSide as SurfaceSide }
 export { PARKING_SIDES as SURFACE_SIDES } from './parking'
 
-// Où une ouverture a le DROIT de se poser sur le contour de sa pièce, et ce que devient un point
-// attrapé à la souris. La règle est celle de `validate.ts` — segment mur (jamais « none »), tenant
-// dans sa longueur, sans chevaucher une voisine — mais prise à l'endroit : la validation REFUSE,
-// ici on RAMÈNE à l'emplacement admissible le plus proche. Un glissement ne doit jamais produire
-// une maison que le serveur rejette ; il doit buter.
+// Where an opening has the RIGHT to be placed on the outline of its room, and what becomes of a point
+// grabbed with the mouse. The rule is that of `validate.ts` — wall segment (never "none"), fitting
+// in its length, without overlapping a neighbor — but taken at the place: the validation REFUSES,
+// here we BRING BACK to the closest admissible location. A drag must never produce
+// a house that the server rejects; it must stop short.
 
 /**
- * Plus petite cote d'une ouverture (m). Une ouverture de zéro disparaîtrait de la scène sans qu'on
- * sache pourquoi ; c'est le même garde-fou que les bornes de taille d'un ouvrant posé dehors.
+ * Smallest dimension of an opening (m). A zero opening would vanish from the scene without anyone
+ * knowing why; it is the same safeguard as the size bounds of a cover placed outside.
  */
 export const MIN_OPENING_DIM = 0.3
 
 /**
- * Arrondi au centimètre. Ce que rendent les fonctions d'ajustement part dans house.json : une allège
- * de `0.2999999999999998` y resterait, illisible pour qui relit son relevé. Le centimètre est la
- * précision d'un mètre ruban, donc celle du fichier.
+ * Rounded to the centimeter. What the adjustment functions return goes into house.json: a sill
+ * of `0.2999999999999998` would stay there, unreadable for whoever rereads their survey. The centimeter is the
+ * precision of a tape measure, hence that of the file.
  */
 const cm = (v: number) => Math.round(v * 100) / 100
 
-/** Place d'une ouverture sur le contour : l'arête qui la porte, et la distance depuis son coin. */
+/** Place of an opening on the outline: the edge that carries it, and the distance from its corner. */
 export interface OpeningSlot { segment: number; offset: number }
 
-/** Place d'une ouverture de SURFACE : centre en plan et cap. */
+/** Place of a SURFACE opening: center in plan and heading. */
 export interface SurfaceSlot { x: number; y: number; yaw: number }
 
 /**
- * Axes d'une ouverture de surface (même convention que les places : 0 = face à +y).
- * `fwd` = sens du cap (hauteur du rectangle), `right` = travers (largeur).
+ * Axes of a surface opening (same convention as the places: 0 = facing +y).
+ * `fwd` = direction of the heading (height of the rectangle), `right` = across (width).
  */
 export function surfaceAxes(yaw: number): { fwd: Vec2; right: Vec2 } {
   const a = (yaw * Math.PI) / 180
@@ -42,7 +42,7 @@ export function surfaceAxes(yaw: number): { fwd: Vec2; right: Vec2 } {
   return { fwd: [-s, c], right: [c, s] }
 }
 
-/** Les quatre coins du rectangle de surface, CCW depuis l'avant-droit. */
+/** The four corners of the surface rectangle, CCW from the front-right. */
 export function surfaceCorners(center: Vec2, yaw: number, width: number, height: number): [Vec2, Vec2, Vec2, Vec2] {
   const { fwd, right } = surfaceAxes(yaw)
   const at = (u: number, v: number): Vec2 => [
@@ -52,15 +52,15 @@ export function surfaceCorners(center: Vec2, yaw: number, width: number, height:
   return [at(height / 2, width / 2), at(height / 2, -width / 2), at(-height / 2, -width / 2), at(-height / 2, width / 2)]
 }
 
-/** Tous les coins du rectangle sont-ils dans le polygone ? */
+/** Are all the corners of the rectangle inside the polygon? */
 export function surfaceFitsInPolygon(center: Vec2, yaw: number, width: number, height: number, poly: readonly Vec2[]): boolean {
   return surfaceCorners(center, yaw, width, height).every((p) => pointInPolygon(p, poly))
 }
 
 /**
- * Point → emplacement admissible pour une ouverture de SURFACE dans la pièce. On garde le centre
- * tapé s'il passe, sinon on le ramène vers le centroïde jusqu'à ce que le rectangle tienne (ou on
- * abandonne).
+ * Point → admissible location for a SURFACE opening in the room. We keep the tapped
+ * center if it passes, otherwise we bring it toward the centroid until the rectangle fits (or we
+ * give up).
  */
 export function slotFromSurfacePoint(
   room: Room, point: Vec2, yaw: number, width: number, height: number,
@@ -69,7 +69,7 @@ export function slotFromSurfacePoint(
   if (surfaceFitsInPolygon(point, yaw, width, height, poly)) {
     return { x: cm(point[0]), y: cm(point[1]), yaw: cm(yaw) }
   }
-  // ramener vers le centre de la pièce : une série de pas le long du segment [point → centroïde]
+  // bring toward the center of the room: a series of steps along the segment [point → centroid]
   let cx = 0, cy = 0
   for (const [x, y] of poly) { cx += x; cy += y }
   cx /= poly.length
@@ -83,12 +83,12 @@ export function slotFromSurfacePoint(
   return null
 }
 
-/** Deux rectangles de surface se chevauchent-ils (AABB en plan, approx rapide) ? */
+/** Do two surface rectangles overlap (plan AABB, quick approximation)? */
 export function surfaceRectsOverlap(
   a: { x: number; y: number; yaw: number; width: number; height: number },
   b: { x: number; y: number; yaw: number; width: number; height: number },
 ): boolean {
-  // test séparé d'axes (SAT) sur les deux orientations
+  // separating axis test (SAT) on the two orientations
   const ca = surfaceCorners([a.x, a.y], a.yaw, a.width, a.height)
   const cb = surfaceCorners([b.x, b.y], b.yaw, b.width, b.height)
   const axes = [surfaceAxes(a.yaw).fwd, surfaceAxes(a.yaw).right, surfaceAxes(b.yaw).fwd, surfaceAxes(b.yaw).right]
@@ -109,12 +109,12 @@ export function surfaceRectsOverlap(
   return true
 }
 
-/** Intervalle de `offset` admissible : une ouverture large de `width` peut commencer entre min et max. */
+/** Admissible `offset` interval: an opening of width `width` can start between min and max. */
 interface Range { min: number; max: number }
 
 /**
- * Intervalles libres d'un segment, une fois retirées les ouvertures déjà posées dessus.
- * `taken` est donné en abscisses curvilignes [début, fin] sur le segment.
+ * Free intervals of a segment, once the openings already placed on it are removed.
+ * `taken` is given in curvilinear abscissae [start, end] on the segment.
  */
 function freeRanges(L: number, width: number, taken: readonly [number, number][]): Range[] {
   const sorted = [...taken].sort((a, b) => a[0] - b[0])
@@ -128,7 +128,7 @@ function freeRanges(L: number, width: number, taken: readonly [number, number][]
   return out
 }
 
-/** Les ouvertures d'un segment, sauf celle qu'on déplace. */
+/** The openings of a segment, except the one being moved. */
 function neighbours(room: Room, segment: number, exceptId: string): [number, number][] {
   return room.openings
     .filter((o) => o.id !== exceptId && o.segment === segment && o.offset !== undefined)
@@ -136,8 +136,8 @@ function neighbours(room: Room, segment: number, exceptId: string): [number, num
 }
 
 /**
- * Segments capables de porter une ouverture large de `width` : ceux qui sont un mur (une terrasse
- * n'en a pas, un segment « none » est une ouverture de plain-pied) et où il reste la place.
+ * Segments able to carry an opening of width `width`: those that are a wall (a terrace
+ * has none, a "none" segment is a ground-level opening) and where there is room left.
  */
 export function hostSegments(
   room: Room, roomsOnLevel: readonly Room[], defaults: HouseDefaults, width: number, exceptId: string,
@@ -149,7 +149,7 @@ export function hostSegments(
     .filter((c) => c.ranges.length > 0)
 }
 
-/** L'intervalle libre qui CONTIENT `offset`, ou, à défaut, le plus proche. */
+/** The free interval that CONTAINS `offset`, or, failing that, the closest. */
 function rangeAt(ranges: readonly Range[], offset: number): Range | null {
   let best: Range | null = null
   for (const r of ranges) {
@@ -160,7 +160,7 @@ function rangeAt(ranges: readonly Range[], offset: number): Range | null {
   return best
 }
 
-/** Ramène `offset` dans l'intervalle libre le plus proche ; `null` si le segment ne peut rien porter. */
+/** Brings `offset` into the closest free interval; `null` if the segment cannot carry anything. */
 function snapIntoRanges(ranges: readonly Range[], offset: number): number | null {
   let best: number | null = null
   for (const r of ranges) {
@@ -170,25 +170,25 @@ function snapIntoRanges(ranges: readonly Range[], offset: number): number | null
   return best
 }
 
-/** Distance (m) du point au segment lui-même (projection ramenée entre ses deux bouts). */
+/** Distance (m) from the point to the segment itself (projection brought between its two ends). */
 function distToSegment(p: Vec2, seg: WallSegment): number {
   const t = Math.min(seg.L, Math.max(0, (p[0] - seg.a[0]) * seg.d[0] + (p[1] - seg.a[1]) * seg.d[1]))
   return dist(p, [seg.a[0] + seg.d[0] * t, seg.a[1] + seg.d[1] * t])
 }
 
 /**
- * Point du repère maison → emplacement admissible sur le CONTOUR de la pièce. Deux questions, dans
- * cet ordre, parce que c'est ainsi qu'on lit le geste :
+ * House reference frame point → admissible location on the room's OUTLINE. Two questions, in
+ * this order, because that is how the gesture is read:
  *
- * 1. **Quel mur ?** Le plus proche du doigt, parmi ceux qui peuvent la recevoir. C'est ce qui fait
- *    passer les coins : on tire vers le mur d'à côté, l'ouverture y va.
- * 2. **Où sur ce mur ?** Le doigt projeté, ramené dans un intervalle libre.
+ * 1. **Which wall?** The closest to the finger, among those that can receive it. It is what makes
+ *    corners work: one drags toward the next wall, the opening goes there.
+ * 2. **Where on this wall?** The finger projected, brought into a free interval.
  *
- * `from` = la place qu'occupe l'ouverture en ce moment. Donnée, elle rend le geste CONTINU : sur son
- * propre mur, l'ouverture reste dans l'intervalle libre où elle se trouve, donc elle BUTE sur sa
- * voisine au lieu de se téléporter de l'autre côté dès que le doigt dépasse le milieu. Pour aller
- * au-delà d'une voisine, on fait le tour de la pièce — c'est ce que « courir le long des murs » veut
- * dire, et c'est ce qui rend le geste prévisible. Sans `from`, le plus proche gagne.
+ * `from` = the place the opening occupies right now. When given, it makes the gesture CONTINUOUS: on its
+ * own wall, the opening stays in the free interval where it is, so it STOPS against its
+ * neighbor instead of teleporting to the other side as soon as the finger passes the middle. To go
+ * past a neighbor, one goes around the room — that is what "running along the walls" means,
+ * and it is what makes the gesture predictable. Without `from`, the closest wins.
  */
 export function slotFromPoint(
   room: Room, roomsOnLevel: readonly Room[], defaults: HouseDefaults,
@@ -208,7 +208,7 @@ export function slotFromPoint(
   return offset === null ? null : { segment: nearest.seg.index, offset }
 }
 
-/** Longueur (m) de l'arête qui porte `segment`, ou 0 si elle n'existe pas. */
+/** Length (m) of the edge that carries `segment`, or 0 if it does not exist. */
 function segmentLength(room: Room, segment: number): number {
   const n = room.polygon.length
   const a = room.polygon[segment]
@@ -217,25 +217,25 @@ function segmentLength(room: Room, segment: number): number {
 }
 
 /**
- * Ce qu'on affiche pour DÉSIGNER une ouverture : son nom s'il lui en a été donné un, sinon son
- * identifiant de relevé. Une seule règle, pour que le panneau, la liste de la pièce et l'étiquette
- * de la scène ne disent jamais trois choses différentes de la même fenêtre.
+ * What is displayed to DESIGNATE an opening: its name if one was given to it, otherwise its
+ * survey identifier. A single rule, so that the panel, the room list and the label
+ * of the scene never say three different things about the same window.
  */
 export const openingLabel = (o: Opening): string => o.name ?? o.id
 
 /**
- * Les deux cotes qui comptent quand on pose une ouverture : ce qui la sépare de chaque bout de son
- * mur. C'est ainsi qu'on relève une maison au mètre ruban — depuis les coins, pas depuis une origine
- * de fichier — et c'est ce que la scène annote pendant le déplacement.
+ * The two dimensions that matter when placing an opening: what separates it from each end of its
+ * wall. It is how a house is surveyed with a tape measure — from the corners, not from a file
+ * origin — and it is what the scene annotates during the move.
  *
- * **Gauche et droite se disent DE L'INTÉRIEUR de la pièce**, parce que c'est de là qu'on mesure. Le
- * fichier, lui, ne connaît que `offset`, la distance au coin `polygon[segment]` ; la convention est
- * donc posée ICI, une fois, plutôt que laissée à chaque écran qui affiche les deux nombres — une
- * inversion silencieuse s'est déjà produite, et elle ne se voit qu'en se mettant dans la pièce.
+ * **Left and right are told FROM INSIDE the room**, because that is where one measures from. The
+ * file only knows `offset`, the distance to the corner `polygon[segment]`; the convention is
+ * therefore set HERE, once, rather than left to each screen that displays the two numbers — a silent
+ * inversion has already happened, and it only shows when standing in the room.
  *
- * La correspondance ne dépend pas de la pièce : `ccwPolygonSchema` impose le sens trigonométrique,
- * donc l'intérieur est TOUJOURS à gauche de l'arête `polygon[i] → polygon[i+1]`. Un observateur
- * placé dedans et tourné vers le mur a donc `polygon[segment]` — l'origine d'`offset` — à sa DROITE.
+ * The mapping does not depend on the room: `ccwPolygonSchema` imposes the counterclockwise direction,
+ * so the inside is ALWAYS to the left of the edge `polygon[i] → polygon[i+1]`. An observer
+ * standing inside and turned toward the wall therefore has `polygon[segment]` — the origin of `offset` — on their RIGHT.
  */
 export function openingGaps(room: Room, opening: Opening): { left: number; right: number } {
   if (isSurfaceOpening(opening.type) || opening.segment === undefined || opening.offset === undefined) {
@@ -247,10 +247,10 @@ export function openingGaps(room: Room, opening: Opening): { left: number; right
 }
 
 /**
- * Les quatre cotes d'une ouverture de SURFACE dans sa pièce — devant / derrière / gauche / droite
- * dans le sens du cap (`yaw`), comme une place de stationnement. Absent ou hors pièce : `null`.
- * Un Velux sur un versant se mesure sur son EMPRISE (`surfaceFootprint`) : c'est à l'appelant de la
- * passer (cap de la descente, longueur raccourcie), pour que les cotes partent du bord de son trou.
+ * The four dimensions of a SURFACE opening in its room — front / back / left / right
+ * in the direction of the heading (`yaw`), like a parking spot. Absent or outside the room: `null`.
+ * A Velux on a slope is measured on its FOOTPRINT (`surfaceFootprint`): it is up to the caller to
+ * pass it (heading of the descent, shortened length), so that the dimensions start from the edge of its hole.
  */
 export function surfaceGaps(room: Room, opening: Opening): Record<ParkingSide, number | null> {
   if (!isSurfaceOpening(opening.type) || opening.x === undefined || opening.y === undefined || opening.yaw === undefined) {
@@ -266,7 +266,7 @@ export function surfaceGaps(room: Room, opening: Opening): Record<ParkingSide, n
 }
 
 /**
- * Cote voulue sur un côté → nouveau centre (l'ouverture GLISSE). Même règle que `fitParkingGap`.
+ * Wanted dimension on one side → new center (the opening SLIDES). Same rule as `fitParkingGap`.
  */
 export function fitSurfaceGap(
   room: Room, opening: Opening, side: ParkingSide, wanted: number,
@@ -283,12 +283,12 @@ export function fitSurfaceGap(
 }
 
 /**
- * Le vide où l'ouverture est POSÉE : l'intervalle libre de son mur qui la contient, voisines
- * retirées, en abscisses curvilignes depuis le coin `polygon[segment]`.
+ * The void where the opening is PLACED: the free interval of its wall that contains it, neighbors
+ * removed, in curvilinear abscissae from the corner `polygon[segment]`.
  *
- * C'est la place réellement disponible, et non ce qui reste à droite de l'ouverture : élargir une
- * fenêtre qui a un mètre libre à sa gauche et dix centimètres à sa droite doit pouvoir prendre les
- * deux, quitte à la faire glisser.
+ * It is the place actually available, and not what is left to the right of the opening: widening a
+ * window that has one meter free on its left and ten centimeters on its right must be able to take
+ * both, even if it means sliding it.
  */
 export function freeSpan(
   room: Room, roomsOnLevel: readonly Room[], defaults: HouseDefaults, opening: Opening,
@@ -300,21 +300,21 @@ export function freeSpan(
   let u0 = 0
   let u1 = seg.L
   for (const [a, b] of neighbours(room, opening.segment, opening.id)) {
-    if (b <= opening.offset + 1e-6) u0 = Math.max(u0, b)          // voisine à gauche
-    else if (a >= opening.offset + opening.width - 1e-6) u1 = Math.min(u1, a)   // à droite
-    else return null                                              // chevauchement déjà écrit : on ne décide rien
+    if (b <= opening.offset + 1e-6) u0 = Math.max(u0, b)          // neighbor on the left
+    else if (a >= opening.offset + opening.width - 1e-6) u1 = Math.min(u1, a)   // on the right
+    else return null                                              // overlap already written: we decide nothing
   }
   return u1 > u0 ? { u0, u1 } : null
 }
 
 /**
- * Largeur voulue → largeur retenue et place où elle PASSE. L'ouverture ne bouge que si elle doit :
- * on garde son bord gauche tant qu'il y a la place à droite, et on la fait glisser vers la gauche
- * quand il n'y en a plus.
+ * Wanted width → retained width and the place where it FITS. The opening only moves if it has to:
+ * we keep its left edge as long as there is room on the right, and we slide it to the left
+ * when there is none.
  *
- * C'est la différence avec un simple bornage : taper 3 m dans une fenêtre qui a 3 m de mur libre
- * mais seulement 1 m à sa droite donnait 1 m, sans dire pourquoi. Maintenant elle fait 3 m et s'est
- * déplacée — ce que les deux cotes du panneau montrent, puisqu'elles ont changé avec elle.
+ * It is the difference from a simple clamp: typing 3 m in a window that has 3 m of free wall
+ * but only 1 m to its right gave 1 m, without saying why. Now it is 3 m and has
+ * moved — which the two dimensions of the panel show, since they changed with it.
  */
 export function fitWidth(
   room: Room, roomsOnLevel: readonly Room[], defaults: HouseDefaults, opening: Opening, wanted: number,
@@ -327,9 +327,9 @@ export function fitWidth(
 }
 
 /**
- * Hauteur voulue → hauteur retenue et allège où elle PASSE. Même règle, dans l'autre sens : une
- * hauteur qui ne tient plus sous le plafond fait DESCENDRE l'allège au lieu d'être rognée. Elle ne
- * descend que de ce qu'il faut, et jamais sous le sol.
+ * Wanted height → retained height and the sill where it FITS. Same rule, the other way around: a
+ * height that no longer fits under the ceiling LOWERS the sill instead of being trimmed. It only
+ * lowers by what is needed, and never below the floor.
  */
 export function fitHeight(sill: number, height: number, ceiling: number, wanted: number): { height: number; sill: number } {
   const h = cm(Math.min(Math.max(wanted, MIN_OPENING_DIM), Math.max(MIN_OPENING_DIM, ceiling)))
@@ -337,9 +337,9 @@ export function fitHeight(sill: number, height: number, ceiling: number, wanted:
 }
 
 /**
- * Place voulue, donnée par l'une des DEUX cotes du panneau → `offset` retenu. Les côtés se disent de
- * l'INTÉRIEUR de la pièce, comme pour `openingGaps` : on saisit la cote qu'on a mesurée au mètre
- * ruban depuis un coin, l'autre suit.
+ * Wanted place, given by one of the TWO dimensions of the panel → retained `offset`. The sides are told from
+ * the INSIDE of the room, as for `openingGaps`: one enters the dimension measured with a tape
+ * measure from a corner, the other follows.
  */
 export function fitGap(
   room: Room, roomsOnLevel: readonly Room[], defaults: HouseDefaults, opening: Opening,
@@ -354,10 +354,10 @@ export function fitGap(
 }
 
 /**
- * Cotes admissibles d'une ouverture. La largeur est bornée par le VIDE où elle est posée, pas par ce
- * qui reste à sa droite : on peut l'élargir jusqu'à remplir son intervalle, elle glissera pour
- * passer (`fitWidth`). La hauteur est bornée par le plafond, pas par ce qui reste au-dessus de
- * l'allège : c'est l'allège qui descend (`fitHeight`). L'allège, elle, est bornée par la hauteur.
+ * Admissible dimensions of an opening. The width is bounded by the VOID where it is placed, not by what
+ * is left to its right: it can be widened until it fills its interval, it will slide to
+ * fit (`fitWidth`). The height is bounded by the ceiling, not by what is left above
+ * the sill: it is the sill that goes down (`fitHeight`). The sill, for its part, is bounded by the height.
  */
 export function openingLimits(
   room: Room, roomsOnLevel: readonly Room[], defaults: HouseDefaults, opening: Opening, ceiling: number,
@@ -371,15 +371,15 @@ export function openingLimits(
 }
 
 /**
- * Cotes d'une ouverture qu'on vient de poser, par nature. Ce sont des valeurs de CATALOGUE — une
- * porte fait 90 cm, une baie 2,40 m — que le relevé corrigera au centimètre dans le panneau : elles
- * n'ont pas à être justes, elles ont à être plausibles pour qu'on reconnaisse ce qu'on vient de
- * poser dans la scène.
+ * Dimensions of an opening that has just been placed, by kind. These are CATALOG values — a
+ * door is 90 cm, a bay 2.40 m — that the survey will correct to the centimeter in the panel: they
+ * do not have to be right, they have to be plausible so that one recognizes what has just been
+ * placed in the scene.
  *
- * La hauteur vient de la maison (`doorHeight`) pour tout ce qui descend au sol, l'allège aussi
- * (`windowSill`) : régler ces défauts une fois doit valoir pour ce qu'on pose ensuite. Une fenêtre
- * de 1,20 m sur une allège de 0,90 m arrive pile à la hauteur d'une porte — c'est ce qu'on voit sur
- * une façade, et c'est pourquoi les deux nombres vont ensemble.
+ * The height comes from the house (`doorHeight`) for everything that goes down to the floor, the sill too
+ * (`windowSill`): setting these defaults once must apply to what is placed next. A window
+ * of 1.20 m on a sill of 0.90 m arrives exactly at the height of a door — it is what one sees on
+ * a facade, and it is why the two numbers go together.
  */
 export function newOpeningDims(type: OpeningType, defaults: HouseDefaults): { width: number; height: number; sill: number } {
   if (isSurfaceOpening(type)) return { width: 1.2, height: 1.2, sill: 0 }

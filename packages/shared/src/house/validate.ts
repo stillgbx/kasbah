@@ -8,7 +8,7 @@ import type { RoofDescriptor } from './geometry/types'
 import { classifySegments, isWalled, openingSill, roomHeight } from './geometry/walls'
 import { surfaceFitsInPolygon, surfaceRectsOverlap } from './openings'
 
-// Validation croisée (références, ouvertures dans leur segment…) et lint non bloquant.
+// Cross validation (references, openings within their segment…) and non-blocking lint.
 
 export interface HouseIssue { path: string; message: string }
 
@@ -22,8 +22,8 @@ export class HouseValidationError extends Error {
 function crossRefs(house: House, ctx: z.RefinementCtx) {
   const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: 'custom', path, message })
   const defaults = resolveDefaults(house.defaults)
-  // Le toit n'est calculé que si un Velux le demande. La maison est en cours de validation : un toit
-  // qui ne se calcule pas encore laisse juger le Velux sur ses cotes écrites (le contrôle d'avant).
+  // The roof is only computed if a Velux asks for it. The house is being validated: a roof
+  // that cannot be computed yet lets the Velux be judged on its written dimensions (the previous check).
   let roofMemo: { value: RoofDescriptor | undefined } | undefined
   const roof = (): RoofDescriptor | undefined => {
     if (!roofMemo) {
@@ -71,17 +71,17 @@ function crossRefs(house: House, ctx: z.RefinementCtx) {
     room.openings.forEach((o, oi) => {
       const path = ['rooms', ri, 'openings', oi]
       if (isSurfaceOpening(o.type)) {
-        if (o.x === undefined || o.y === undefined || o.yaw === undefined) return // schéma a déjà signalé
+        if (o.x === undefined || o.y === undefined || o.yaw === undefined) return // schema already reported
         if (o.type === 'roof-window' && roofLevelId && room.levelId !== roofLevelId) {
           issue(path, `roof-window must belong to a room on the roof level ("${roofLevelId}")`)
         }
-        // un Velux sur un versant se juge sur son emprise vue du ciel (longueur raccourcie par la pente)
+        // a Velux on a slope is judged on its footprint seen from the sky (length shortened by the slope)
         const fp = surfaceFootprint({ type: o.type, x: o.x, y: o.y, yaw: o.yaw, width: o.width, height: o.height }, o.type === 'roof-window' ? roof() : undefined)
         if (!surfaceFitsInPolygon([fp.x, fp.y], fp.yaw, fp.width, fp.height, room.polygon)) {
           issue(path, `surface opening does not fit inside room polygon`)
         }
-        // Sol et toit sont deux porteurs distincts : un puits de lumière et une fenêtre de toit
-        // peuvent partager la même emprise en plan (puits traversant) sans se chevaucher.
+        // Floor and roof are two distinct carriers: a skylight and a roof window
+        // can share the same footprint in plan (through light well) without overlapping.
         for (const other of surfaceList) {
           if (other.type !== o.type) continue
           if (surfaceRectsOverlap(fp, other)) issue(path, `overlaps opening "${other.id}"`)
@@ -126,7 +126,7 @@ function crossRefs(house: House, ctx: z.RefinementCtx) {
     }
   })
 
-  // un module lié deux fois (à un appareil posé, ou à deux emplacements) donnerait deux marqueurs pour un onduleur
+  // a module linked twice (to a placed device, or to two slots) would give two markers for one inverter
   const bound = new Map<string, string>()
   house.devices.forEach((d, i) => { if (d.deviceId) bound.set(d.deviceId, `devices[${i}]`) })
   house.arrays.forEach((a, ai) => {
@@ -153,7 +153,7 @@ function toIssues(err: z.ZodError): HouseIssue[] {
   }))
 }
 
-/** Parse + validation croisée. Lève `HouseValidationError` avec des chemins lisibles. */
+/** Parse + cross validation. Throws `HouseValidationError` with readable paths. */
 export function parseHouse(json: unknown): House {
   const r = houseSchemaStrict.safeParse(json)
   if (!r.success) throw new HouseValidationError(toIssues(r.error))
@@ -167,7 +167,7 @@ export function safeParseHouse(json: unknown): { success: true; house: House } |
 
 export interface HouseWarning { code: string; path: string; message: string }
 
-/** Avertissements non bloquants (choses légales mais probablement involontaires). */
+/** Non-blocking warnings (legal things that are probably unintended). */
 export function lintHouse(house: House, knownDeviceIds?: ReadonlySet<string>): HouseWarning[] {
   const out: HouseWarning[] = []
   const devicesPerRoom = new Map<string, number>()

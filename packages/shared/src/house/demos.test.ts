@@ -5,8 +5,8 @@ import tilleuls from '../../../../house/demos/tilleuls.json'
 import embruns from '../../../../house/demos/embruns.json'
 import belvedere from '../../../../house/demos/belvedere.json'
 
-// Les trois propriétés de démonstration (`house/demos/`) : valides, sans avertissement, et chacune
-// sa forme de toit — deux pans, plat, aucun (un appartement n'a pas de toit à lui).
+// The three demo properties (`house/demos/`): valid, without warnings, and each
+// with its own roof shape — gable, flat, none (an apartment has no roof of its own).
 
 const RAW: Record<string, unknown> = { tilleuls, embruns, belvedere }
 const demo = (id: string) => parseHouse(RAW[id])
@@ -26,7 +26,7 @@ describe('demo properties', () => {
     expect(g.levels.length).toBe(house.levels.length)
   })
 
-  it('every demo says which simulated park populates it', () => {
+  it('every demo says which simulated device set populates it', () => {
     for (const id of ['tilleuls', 'embruns', 'belvedere']) {
       expect((demo(id).meta?.demo as { scenario?: string }).scenario).toBe(id)
     }

@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-// Couleurs dominantes d'une ZONE de photo, pour la skill `garden-species` : le feuillage, le tronc,
-// les fruits d'un arbre photographié deviennent les couleurs de sa recette.
+// Dominant colors of a photo ZONE, for the `garden-species` skill: the foliage, the trunk,
+// the fruits of a photographed tree become the colors of its recipe.
 //
-// L'image est réduite par ffmpeg (déjà requis par le serveur) en pixels RGB bruts, puis les pixels
-// de la zone sont regroupés par k-moyennes. Le ciel et les blancs cramés sont écartés : un arbre
-// photographié à contre-jour ramènerait sinon du blanc dans son feuillage.
+// The image is shrunk by ffmpeg (already required by the server) into raw RGB pixels, then the pixels
+// of the zone are grouped by k-means. The sky and blown-out whites are discarded: a tree
+// photographed against the light would otherwise bring white back into its foliage.
 //
-// Usage : node scripts/photo-palette.mjs <image> [--crop x,y,w,h] [--k 3]
-//   --crop : zone en FRACTIONS de l'image (0..1), par défaut l'image entière.
-// Sortie : une ligne par couleur, de la plus présente à la moins présente : `#rrggbb  42 %`.
+// Usage: node scripts/photo-palette.mjs <image> [--crop x,y,w,h] [--k 3]
+//   --crop: zone in FRACTIONS of the image (0..1), the whole image by default.
+// Output: one line per color, from the most present to the least present: `#rrggbb  42 %`.
 
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -32,12 +32,12 @@ const pixels = []
 for (let i = 0; i + 2 < raw.length; i += 3) {
   const [r, g, b] = [raw[i], raw[i + 1], raw[i + 2]]
   const max = Math.max(r, g, b), min = Math.min(r, g, b)
-  if (max > 235 && max - min < 25) continue        // ciel, blanc cramé
+  if (max > 235 && max - min < 25) continue        // sky, blown-out white
   pixels.push([r, g, b])
 }
-if (!pixels.length) { console.error('zone vide (tout est ciel ?)'); process.exit(1) }
+if (!pixels.length) { console.error('empty zone (is it all sky?)'); process.exit(1) }
 
-// k-moyennes, graines réparties sur la luminance pour un résultat stable d'un lancement à l'autre
+// k-means, seeds spread over the luminance for a result that is stable from one run to the next
 const lum = (p) => 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]
 const sorted = [...pixels].sort((a, b) => lum(a) - lum(b))
 let centers = Array.from({ length: K }, (_, k) => [...sorted[Math.floor(((k + 0.5) / K) * sorted.length)]])

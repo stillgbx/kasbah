@@ -5,37 +5,37 @@ import type { House, HouseDevice, Vec2 } from './schema'
 import { roomHeight } from './geometry/walls'
 import { centroid, pointInPolygon } from './geometry/vec2'
 
-// Auto-placement : un appareil remonté par un plugin mais absent du JSON est rattaché à la pièce
-// dont le nom (ou l'id) correspond à la pièce déclarée par le plugin (`meta.room` : pièce Hue…).
-// Sens UNIQUE plugin → placement : le JSON ne contient que les positions qu'on veut préciser,
-// l'inventaire, le kind, les capacités et le nom restent au plugin.
+// Auto-placement: a device reported by a plugin but absent from the JSON is attached to the room
+// whose name (or id) matches the room declared by the plugin (`meta.room`: Hue room…).
+// ONE-WAY plugin → placement: the JSON only contains the positions one wants to specify,
+// the inventory, the kind, the capabilities and the name stay with the plugin.
 
-/** Ce qu'il faut d'un appareil de plugin pour le placer. */
+/** What is needed of a plugin device to place it. */
 export interface PlaceableDevice {
   /** `<plugin>:<externalId>`. */
   id: string
   kind: DeviceKind
-  /** Pièce déclarée par le plugin. */
+  /** Room declared by the plugin. */
   room?: string | undefined
 }
 
 export interface AutoPlacement {
-  /** Appareils synthétisés, à concaténer à `house.devices`. */
+  /** Synthesized devices, to be concatenated to `house.devices`. */
   placed: HouseDevice[]
-  /** Appareils qu'aucune pièce ne réclame : listés dans l'UI, absents de la scène. */
+  /** Devices that no room claims: listed in the UI, absent from the scene. */
   unplaced: PlaceableDevice[]
 }
 
-/** Clé de rapprochement : sans accents, sans casse, sans séparateurs (« Chambre 1 » = `chambre1`). */
+/** Matching key: without accents, without case, without separators ("Chambre 1" = `chambre1`). */
 export function roomKey(label: string): string {
   return label.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/[^a-z0-9]/gu, '')
 }
 
-/** Écart au centroïde quand plusieurs appareils partagent une pièce (m). */
+/** Offset from the centroid when several devices share a room (m). */
 const SPREAD_R = 0.9
-/** Retrait sous le plafond pour un appareil au plafond (m). */
+/** Inset below the ceiling for a ceiling device (m). */
 const CEILING_GAP = 0.15
-/** Hauteur d'un appareil non plafonnier (m). */
+/** Height of a non-ceiling device (m). */
 const FREE_Z = 1.2
 
 function spread(poly: readonly Vec2[], c: Vec2, i: number, n: number): Vec2 {
@@ -91,12 +91,12 @@ export function autoPlaceDevices(house: House, devices: readonly PlaceableDevice
 
 const round = (v: number) => Math.round(v * 100) / 100
 
-/** Id d'appareil maison dérivé du `deviceId` (les caractères hors `[a-z0-9_.-]` sont remplacés). */
+/** House device id derived from the `deviceId` (characters outside `[a-z0-9_.-]` are replaced). */
 export function houseIdForDevice(deviceId: string): string {
   return `auto.${deviceId.replace(/[^a-z0-9_.-]+/gi, '-')}`
 }
 
-/** Le même, rendu unique dans la maison courante. */
+/** The same, made unique in the current house. */
 function autoId(deviceId: string, index: HouseIndex): string {
   const base = houseIdForDevice(deviceId)
   if (!index.devicesById.has(base)) return base

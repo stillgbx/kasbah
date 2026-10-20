@@ -1,9 +1,9 @@
 import { z } from 'zod'
 import { AQI_LEVELS, CHARGE_MODES, CLIMATE_MODES, FAN_DIRECTIONS, PET_PUMP_MODES, POLLEN_TYPES, WEATHER_CONDITIONS, type DeviceKind } from './kinds'
 
-// État courant d'un appareil, discriminé par `kind`. `updatedAt` est posé par le serveur
-// (jamais par un plugin) ; `available:false` conserve les dernières valeurs connues
-// (l'UI les grise au lieu de les perdre).
+// Current state of a device, discriminated by `kind`. `updatedAt` is set by the server
+// (never by a plugin); `available:false` keeps the last known values
+// (the UI grays them out instead of losing them).
 
 const pct = z.number().min(0).max(100)
 export const xySchema = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })
@@ -17,7 +17,7 @@ export const lightStateSchema = z.object({
   brightness: pct.optional(),
   colorTempMirek: z.number().optional(),
   color: xySchema.optional(),
-  /** Effet du fabricant en cours (`no_effect` quand aucun) — voir `meta.effects`. */
+  /** Vendor effect in progress (`no_effect` when none) — see `meta.effects`. */
   effect: z.string().optional(),
 })
 
@@ -25,35 +25,35 @@ export const COVER_MOTIONS = ['opening', 'closing', 'stopped'] as const
 export const coverStateSchema = z.object({
   kind: z.literal('cover'), ...base,
   /**
-   * 0 = fermé, 100 = ouvert. **Absente = position inconnue**, et c'est un cas courant : une radio
-   * unidirectionnelle (RTS chez Somfy) ne renvoie jamais où elle en est. Tant qu'aucune commande
-   * n'est passée par Kasbah, il n'y a rien à afficher — une valeur par défaut se lirait comme un
-   * fait (« Baissé » pour un store en réalité remonté, et un compteur de résumé faux avec lui).
+   * 0 = closed, 100 = open. **Absent = unknown position**, and it is a common case: a one-way
+   * radio (RTS at Somfy) never reports where it stands. As long as no command has gone
+   * through Kasbah, there is nothing to display — a default value would read as a
+   * fact ("Lowered" for an awning that is actually raised, and a wrong summary counter with it).
    */
   position: pct.optional(),
   tilt: pct.optional(),
   motion: z.enum(COVER_MOTIONS),
   /**
-   * Position favorite MÉMORISÉE DANS LE MOTEUR (le « my » de Somfy), même échelle que `position`.
-   * Absente = l'appareil sait y aller mais ne dit pas où elle est — c'est le cas d'une radio
-   * unidirectionnelle. La capacité `preset` dit qu'on peut la rappeler ; cette valeur, seulement
-   * qu'on peut la montrer. Kasbah ne la programme pas, il la lit.
+   * Favorite position STORED IN THE MOTOR (Somfy's "my"), same scale as `position`.
+   * Absent = the device knows how to go there but does not say where it is — the case of a one-way
+   * radio. The `preset` capability says it can be recalled; this value, only
+   * that it can be shown. Kasbah does not program it, it reads it.
    */
   presetPosition: pct.optional(),
   /**
-   * Mode discret (capacité `quiet`) : les manœuvres passées par Kasbah roulent en vitesse lente.
-   * C'est un réglage de KASBAH, pas du moteur — la télécommande murale garde sa vitesse normale.
-   * Absent = l'appareil ne sait pas rouler lentement.
+   * Quiet mode (`quiet` capability): the maneuvers made through Kasbah run at slow speed.
+   * It is a KASBAH setting, not the motor's — the wall remote keeps its normal speed.
+   * Absent = the device cannot run slowly.
    */
   quiet: z.boolean().optional(),
   /**
-   * Charge de la batterie d'un moteur autonome (capacité `battery`) : un volet SOLAIRE vit sur sa
-   * batterie, rechargée par son panneau. Absente = le moteur ne la publie pas.
+   * Battery charge of a standalone motor (`battery` capability): a SOLAR shutter lives on its
+   * battery, recharged by its panel. Absent = the motor does not publish it.
    */
   batteryPct: pct.optional(),
 })
 
-/** `on` : une appli est à l'écran mais ne dit pas ce qu'elle fait (Netflix natif sur un Chromecast) — ni lecture ni pause connues. */
+/** `on`: an app is on screen but does not say what it is doing (native Netflix on a Chromecast) — neither playback nor pause known. */
 export const PLAYBACKS = ['playing', 'paused', 'idle', 'on', 'off'] as const
 export const mediaPlayerStateSchema = z.object({
   kind: z.literal('media_player'), ...base,
@@ -69,24 +69,24 @@ export const mediaPlayerStateSchema = z.object({
     positionS: z.number().optional(),
     source: z.string().optional(),
     /**
-     * Flux EN DIRECT (radio, chaîne d'info) : il n'a ni début où revenir, ni fin, ni piste voisine.
-     * Absent = on ne sait pas, et on suppose un morceau ordinaire. Distinct d'une durée absente,
-     * qui dit seulement « inconnue » : une appli native de TV n'annonce pas de durée sans être un
-     * direct. Ce que l'UI en fait : précédent / suivant / se placer sont refusés.
+     * LIVE stream (radio, news channel): it has no start to go back to, no end, no neighboring track.
+     * Absent = unknown, and an ordinary track is assumed. Distinct from an absent duration,
+     * which only says "unknown": a native TV app does not announce a duration without being
+     * a live stream. What the UI does with it: previous / next / seek are refused.
      */
     live: z.boolean().optional(),
     /**
-     * Titre marqué EXPLICIT par le service qui l'a lancé (`media_player.play_url`) : les enceintes
-     * ne le publient jamais. Absent = on ne sait pas, et l'UI ne marque rien.
+     * Title marked EXPLICIT by the service that started it (`media_player.play_url`): speakers
+     * never publish it. Absent = unknown, and the UI marks nothing.
      */
     explicit: z.boolean().optional(),
   }).optional(),
   /**
-   * Où SORT le son de l'appareil, quand il sait le dire (une TV Sony par son API locale) : `internal`
-   * (ses haut-parleurs), `external` (un système audio branché — HDMI ARC, optique — c'est LUI qu'on
-   * entend), `both`. `name` : le nom que l'appareil donne à ce système (nom CEC, « Flexus 300 »).
-   * Absent = inconnu. L'UI s'en sert pour poser l'onde sonore sur le bon appareil, avec le lien
-   * `meta.audioOutput` déclaré dans house.json.
+   * Where the device's sound COMES OUT, when it can say so (a Sony TV through its local API): `internal`
+   * (its speakers), `external` (a connected audio system — HDMI ARC, optical — it is THAT one you
+   * hear), `both`. `name`: the name the device gives to that system (CEC name, "Flexus 300").
+   * Absent = unknown. The UI uses it to put the sound wave on the right device, with the
+   * `meta.audioOutput` link declared in house.json.
    */
   audioOutput: z.object({ terminal: z.enum(['internal', 'external', 'both']), name: z.string().optional() }).optional(),
 })
@@ -110,25 +110,25 @@ export const vacuumStateSchema = z.object({
   binFull: z.boolean().optional(),
   errorMessage: z.string().optional(),
   /**
-   * Le patin de serpillière est-il posé (capacité `mop`). Sans lui le robot aspire mais ne lave
-   * pas, et son appli le dit avant de proposer un lavage. Absent = le robot ne le rapporte pas.
+   * Is the mop pad on (`mop` capability). Without it the robot vacuums but does not mop,
+   * and its app says so before offering a mopping. Absent = the robot does not report it.
    */
   mopAttached: z.boolean().optional(),
   /**
-   * Eau restante, en pour cent (capacité `mop`). Absent aussi quand le RÉSERVOIR n'est pas en
-   * place : les deux se confondent ici volontairement, parce qu'un réservoir retiré et un niveau
-   * inconnu appellent le même geste — aller voir la machine. Ne pas confondre avec `binFull`, qui
-   * parle du bac à poussière.
+   * Remaining water, in percent (`mop` capability). Also absent when the TANK is not in
+   * place: the two are deliberately conflated here, because a removed tank and an unknown level
+   * call for the same gesture — go and look at the machine. Not to be confused with `binFull`, which
+   * is about the dust bin.
    */
   tankLevel: pct.optional(),
 })
 
-/** `stopped` : arrêté là où il est (bouton STOP, arrêt dans le jardin, robot éteint) — ni garé, ni en pause. */
+/** `stopped`: stopped where it is (STOP button, stop in the garden, robot off) — neither parked nor paused. */
 export const MOWER_ACTIVITIES = ['parked', 'mowing', 'charging', 'returning', 'paused', 'stopped', 'error'] as const
 /**
- * Pourquoi la tondeuse ne tond pas alors qu'elle pourrait (Husqvarna `restrictedReason`) : le
- * planning, une consigne de parquer, un capteur (pluie), la limite journalière, une mise à jour, le
- * gel, toutes les zones faites, une consigne externe. Absent = le fabricant ne le dit pas.
+ * Why the mower does not mow when it could (Husqvarna `restrictedReason`): the
+ * schedule, an order to park, a sensor (rain), the daily limit, an update, the
+ * frost, all zones done, an external order. Absent = the vendor does not say.
  */
 export const MOWER_RESTRICTIONS = [
   'none', 'week_schedule', 'park_override', 'sensor', 'daily_limit', 'fota', 'frost', 'all_work_areas_completed', 'external', 'not_applicable',
@@ -140,40 +140,40 @@ export const mowerStateSchema = z.object({
   battery: pct,
   nextStartAt: z.number().optional(),
   errorMessage: z.string().optional(),
-  /** Code d'erreur du fabricant (Husqvarna en a 160) : ce que le support demande, à côté du texte. */
+  /** Vendor error code (Husqvarna has 160): what support asks for, next to the text. */
   errorCode: z.number().int().optional(),
-  /** Quand l'erreur est survenue. */
+  /** When the error occurred. */
   errorAt: z.number().optional(),
-  /** L'erreur en cours se lève à distance (commande `mower.confirm_error`) ; sinon, au clavier du robot. */
+  /** The current error can be cleared remotely (`mower.confirm_error` command); otherwise, on the robot's keypad. */
   errorConfirmable: z.boolean().optional(),
   restrictedReason: z.enum(MOWER_RESTRICTIONS).optional(),
-  /** Position locale (repère maison, mètres) si le robot la publie. */
+  /** Local position (house reference frame, meters) if the robot publishes it. */
   position: z.tuple([z.number(), z.number()]).optional(),
   /**
-   * Position GPS, pour un robot qui la publie ainsi (Husqvarna) : c'est la scène qui la projette sur
-   * le terrain, comme pour un véhicule — le plugin ne connaît pas le repère de la maison. `position`
-   * (locale) prime si les deux sont là.
+   * GPS position, for a robot that publishes it that way (Husqvarna): it is the scene that projects it onto
+   * the terrain, as for a vehicle — the plugin does not know the house's reference frame. `position`
+   * (local) takes precedence if both are there.
    */
   location: z.object({ lat: z.number(), lon: z.number(), at: z.number() }).optional(),
-  /** Hauteur de coupe en centimètres (1 à 9 chez Husqvarna : c'est ainsi que son appli la nomme). */
+  /** Cutting height in centimeters (1 to 9 at Husqvarna: that is how its app names it). */
   cuttingHeight: z.number().int().min(1).max(9).optional(),
-  /** Dernier statut REÇU du robot par le fabricant : plus vieux qu'`updatedAt` quand le robot ne parle plus. */
+  /** Last status RECEIVED from the robot by the vendor: older than `updatedAt` when the robot no longer talks. */
   statusAt: z.number().optional(),
   /**
-   * Zones de travail (capacité `work_areas`), tracées dans l'appli du fabricant. Un nom vide est
-   * possible : Husqvarna publie une zone `0` sans nom, tout le terrain, tant qu'on n'en a pas tracé.
+   * Work zones (`work_areas` capability), drawn in the vendor's app. An empty name is
+   * possible: Husqvarna publishes a nameless zone `0`, the whole terrain, as long as none has been drawn.
    */
   workAreas: z.array(z.object({ id: z.number().int().min(0), name: z.string(), enabled: z.boolean() })).optional(),
   /**
-   * La zone de travail où le robot tond, ou vers laquelle il part (`workAreas[].id` ; `0` = tout le
-   * terrain). Husqvarna la publie dans la lecture complète, pas dans ses événements temps réel.
+   * The work zone where the robot mows, or toward which it is heading (`workAreas[].id`; `0` = the whole
+   * terrain). Husqvarna publishes it in the full read, not in its real-time events.
    */
   workAreaId: z.number().int().min(0).optional(),
-  /** En route vers sa zone (Husqvarna `LEAVING`) : l'activité dit déjà `mowing`, ceci précise qu'il n'y est pas encore. */
+  /** On its way to its zone (Husqvarna `LEAVING`): the activity already says `mowing`, this specifies that it is not there yet. */
   leaving: z.boolean().optional(),
-  /** Zones d'exclusion (capacité `stay_out_zones`) : `enabled` = le robot n'y entre pas. */
+  /** Exclusion zones (`stay_out_zones` capability): `enabled` = the robot does not enter them. */
   stayOutZones: z.array(z.object({ id: z.string().min(1), name: z.string(), enabled: z.boolean() })).optional(),
-  /** Compteurs de vie du robot, tels que le fabricant les tient (secondes, mètres, nombres). */
+  /** Life counters of the robot, as the vendor keeps them (seconds, meters, counts). */
   statistics: z.object({
     cuttingTimeS: z.number().optional(),
     chargingTimeS: z.number().optional(),
@@ -190,21 +190,21 @@ export const sensorStateSchema = z.object({
   kind: z.literal('sensor'), ...base,
   value: z.number(),
   /**
-   * Plus haute valeur jamais rapportée par l'appareil, quand c'est LUI qui la tient (un micro-onduleur
-   * Enphase publie son `maxReportWatts`). Un record, pas une caractéristique : il dit ce qui s'est
-   * produit, jamais ce que l'appareil sait faire. Absent = l'appareil ne le dit pas.
+   * Highest value ever reported by the device, when IT keeps it (an Enphase microinverter
+   * publishes its `maxReportWatts`). A record, not a characteristic: it says what has
+   * happened, never what the device can do. Absent = the device does not say.
    */
   maxValue: z.number().optional(),
 })
 
 export const energyStateSchema = z.object({
   kind: z.literal('energy'), ...base,
-  /** Jamais négatif : un champ photovoltaïque produit ou ne produit pas, il ne consomme pas. */
+  /** Never negative: a photovoltaic field produces or does not produce, it does not consume. */
   productionW: z.number(),
   consumptionW: z.number(),
-  /** >0 import réseau, <0 export. */
+  /** >0 grid import, <0 export. */
   gridW: z.number(),
-  /** >0 charge, <0 décharge. */
+  /** >0 charge, <0 discharge. */
   batteryW: z.number().optional(),
   batterySoc: pct.optional(),
   todayProductionWh: z.number().optional(),
@@ -219,39 +219,39 @@ export const evChargerStateSchema = z.object({
   sessionWh: z.number(),
   maxCurrentA: z.number().optional(),
   /**
-   * La borne s'est repliée sur son intensité de SÉCURITÉ (Enphase `safeLimitState: 1`, « mode
-   * sécurisé », 8 A sur la borne de référence) : sa répartition dynamique de charge n'a plus de
-   * mesure, typiquement quand elle a perdu la passerelle. `maxCurrentA` ne vaut alors plus. Absent = inconnu.
+   * The charger has fallen back on its SAFETY current (Enphase `safeLimitState: 1`, "safe
+   * mode", 8 A on the reference charger): its dynamic load balancing has no
+   * measurement anymore, typically when it lost the gateway. `maxCurrentA` is then no longer valid. Absent = unknown.
    */
   safeLimit: z.boolean().optional(),
   /**
-   * La borne obéit à une ANNULATION MANUELLE (un démarrer / arrêter, Enphase `mode: 0`), plus à son
-   * mode habituel (charge verte, programmée), jusqu'au débranchement. Sa préférence affichée, elle, ne
-   * change pas : sans ce champ, une borne branchée sous le soleil qui ne donne rien est inexplicable.
-   * `ev_charger.resume_mode` la lève. Absent = la borne ne le dit pas.
+   * The charger obeys a MANUAL OVERRIDE (a start / stop, Enphase `mode: 0`), no longer its
+   * usual mode (green charging, scheduled), until unplugging. Its displayed preference does not
+   * change: without this field, a charger plugged in under the sun that delivers nothing is inexplicable.
+   * `ev_charger.resume_mode` lifts it. Absent = the charger does not say.
    */
   manualOverride: z.boolean().optional(),
-  /** Le mode choisi (capacité `charge_mode`). Absent = inconnu. */
+  /** The chosen mode (`charge_mode` capability). Absent = unknown. */
   chargeMode: z.enum(CHARGE_MODES).optional(),
 })
 
 /**
- * Veille d'un véhicule connecté. `asleep` est un état NORMAL, pas une panne : une Tesla à l'arrêt
- * coupe son ordinateur au bout d'un quart d'heure pour ne pas vider sa batterie, et ne répond plus
- * à rien tant qu'on ne la réveille pas. Les autres valeurs de l'état sont alors les DERNIÈRES
- * connues, toujours affichées ; `available` reste vrai. `offline` = injoignable par le fabricant
- * (parking souterrain, sans réseau).
+ * Sleep of a connected vehicle. `asleep` is a NORMAL state, not a fault: a parked Tesla
+ * shuts down its computer after a quarter of an hour so as not to drain its battery, and no longer answers
+ * anything until it is woken up. The other values of the state are then the LAST
+ * known ones, still displayed; `available` stays true. `offline` = unreachable by the vendor
+ * (underground parking, no network).
  */
 export const VEHICLE_SLEEP_STATES = ['online', 'asleep', 'offline'] as const
 export type VehicleSleepState = (typeof VEHICLE_SLEEP_STATES)[number]
-/** Rapport engagé : `P` = à l'arrêt. Absent = inconnu (véhicule endormi, jamais lu). */
+/** Engaged gear: `P` = stopped. Absent = unknown (vehicle asleep, never read). */
 export const VEHICLE_GEARS = ['P', 'R', 'N', 'D'] as const
 export type VehicleGear = (typeof VEHICLE_GEARS)[number]
 
 /**
- * Où en est une mise à jour logicielle du véhicule. `available` = téléchargée, prête à installer ;
- * `scheduled` = installation programmée (`scheduledAt`) ; `waiting_wifi` = le téléchargement attend
- * un Wi-Fi (Tesla `downloading_wifi_wait`). Rien en attente = pas de `softwareUpdate` du tout.
+ * Where a software update of the vehicle stands. `available` = downloaded, ready to install;
+ * `scheduled` = installation scheduled (`scheduledAt`); `waiting_wifi` = the download is waiting for
+ * a Wi-Fi (Tesla `downloading_wifi_wait`). Nothing pending = no `softwareUpdate` at all.
  */
 export const VEHICLE_UPDATE_STATUSES = ['available', 'scheduled', 'downloading', 'waiting_wifi', 'installing'] as const
 export type VehicleUpdateStatus = (typeof VEHICLE_UPDATE_STATUSES)[number]
@@ -266,101 +266,101 @@ export const vehicleStateSchema = z.object({
   charging: z.boolean(),
   chargePowerW: z.number().optional(),
   /**
-   * Puissance de charge TELLE QUE LE VÉHICULE LA DIT. Absente = il ne la dit pas (la Renault 5
-   * E-Tech, vérifié voiture en charge) : Kasbah l'ESTIME alors à l'affichage (`estimateChargePowerW`)
-   * à partir de la capacité saisie dans la maison, et l'annonce comme une estimation. Rien de déduit
-   * n'entre ici : cet état est ce que le fabricant a répondu.
+   * Charge power AS THE VEHICLE SAYS IT. Absent = it does not say it (the Renault 5
+   * E-Tech, verified with the car charging): Kasbah then ESTIMATES it at display time (`estimateChargePowerW`)
+   * from the capacity entered in the house, and announces it as an estimate. Nothing deduced
+   * enters here: this state is what the vendor answered.
    */
   /**
-   * Plancher de charge voulu par l'utilisateur (%) : le niveau sous lequel il ne veut pas que la
-   * voiture descende (`socMin` de Renault, seuil de la décharge V2L comprise). Tesla n'a pas cette
-   * notion — le champ reste absent, et la jauge ne montre alors qu'un repère.
+   * Charge floor wanted by the user (%): the level below which they do not want the
+   * car to go (Renault's `socMin`, V2L discharge threshold included). Tesla has no such
+   * notion — the field stays absent, and the gauge then only shows a mark.
    */
   socMin: pct.optional(),
   /**
-   * Minutes restantes avant la fin de la charge, telles que le VÉHICULE les estime (Tesla
-   * `time_to_full_charge`, Renault `chargingRemainingTime`) — jamais un calcul de Kasbah, qui ne
-   * connaît ni la courbe de charge ni le chauffage de la batterie. Absent = pas d'estimation ; ne
-   * vaut que pendant la charge (un véhicule à l'arrêt garde parfois la dernière valeur, périmée).
+   * Minutes remaining before the end of the charge, as the VEHICLE estimates them (Tesla
+   * `time_to_full_charge`, Renault `chargingRemainingTime`) — never a Kasbah computation, which
+   * knows neither the charge curve nor the battery heating. Absent = no estimate; only
+   * valid during the charge (a stopped vehicle sometimes keeps the last value, stale).
    */
   chargeMinutesRemaining: z.number().min(0).optional(),
   chargeLimit: pct.optional(),
   /**
-   * Verrouillage. **Optionnel = inconnu** : tous les constructeurs ne le disent pas (la R5 E-Tech
-   * repond 403 sur son endpoint `lock-status`). Meme arbitrage que la `position` d'un ouvrant :
-   * afficher Â« â Â» plutot qu'un cadenas qui mentirait.
+   * Lock. **Optional = unknown**: not all makers report it (the R5 E-Tech
+   * answers 403 on its `lock-status` endpoint). Same trade-off as the `position` of a cover:
+   * display "—" rather than a padlock that would lie.
    */
   locked: z.boolean().optional(),
   location: z.object({ lat: z.number(), lon: z.number(), at: z.number() }).optional(),
-  /** Cap du véhicule (degrés, 0 = nord, sens horaire) : oriente son marqueur sur la carte. Absent = inconnu. */
+  /** Heading of the vehicle (degrees, 0 = north, clockwise): orients its marker on the map. Absent = unknown. */
   headingDeg: z.number().min(0).max(360).optional(),
   odometerKm: z.number().optional(),
   sleepState: z.enum(VEHICLE_SLEEP_STATES).optional(),
-  /** Vitesse instantanée ; 0 à l'arrêt. Absente = inconnue. */
+  /** Instantaneous speed; 0 when stopped. Absent = unknown. */
   speedKmh: z.number().min(0).optional(),
   gear: z.enum(VEHICLE_GEARS).optional(),
   /**
-   * Pression des quatre pneus (avant gauche, avant droit, arrière gauche, arrière droit), en bar.
-   * Chaque roue est optionnelle : les capteurs ne rapportent qu'en roulant, un véhicule qui n'a pas
-   * bougé depuis longtemps n'en donne aucune.
+   * Pressure of the four tires (front left, front right, rear left, rear right), in bar.
+   * Each wheel is optional: the sensors only report while driving, a vehicle that has not
+   * moved for a long time gives none.
    */
   tirePressureBar: z.object({
     fl: z.number().optional(), fr: z.number().optional(), rl: z.number().optional(), rr: z.number().optional(),
   }).optional(),
   insideTempC: z.number().optional(),
   outsideTempC: z.number().optional(),
-  /** Climatisation de l'habitacle en marche (préconditionnement compris). Absent = inconnu. */
+  /** Cabin climate control running (preconditioning included). Absent = unknown. */
   climateOn: z.boolean().optional(),
-  /** Consigne de l'habitacle, °C, telle que la voiture la garde. Absente = inconnue. */
+  /** Cabin setpoint, °C, as the car keeps it. Absent = unknown. */
   climateTargetC: z.number().optional(),
-  /** Chauffage de chaque siège, cran 0 (arrêt) à 3. Une place absente = inconnue ou sans chauffage. */
+  /** Heating of each seat, level 0 (off) to 3. An absent seat = unknown or without heating. */
   seatHeat: z.object({
     fl: seatLevel.optional(), fr: seatLevel.optional(), rl: seatLevel.optional(), rc: seatLevel.optional(), rr: seatLevel.optional(),
   }).optional(),
   steeringWheelHeat: z.boolean().optional(),
-  /** Version logicielle INSTALLÉE, telle que le fabricant la nomme (`2026.32.7`). Absente = inconnue. */
+  /** INSTALLED software version, as the vendor names it (`2026.32.7`). Absent = unknown. */
   softwareVersion: z.string().optional(),
   /**
-   * Mise à jour EN ATTENTE ; absente = aucune (ou inconnu). Chaque nombre est facultatif et ne vaut
-   * que dans son statut : Tesla laisse traîner `install_perc` hors installation, le plugin ne le
-   * publie que pendant `installing`.
+   * PENDING update; absent = none (or unknown). Each number is optional and only valid
+   * in its status: Tesla lets `install_perc` linger outside of installation, the plugin only
+   * publishes it during `installing`.
    */
   softwareUpdate: z.object({
     status: z.enum(VEHICLE_UPDATE_STATUSES),
     version: z.string().optional(),
     downloadPct: pct.optional(),
     installPct: pct.optional(),
-    /** Heure d'installation programmée (ms epoch), en `scheduled` seulement. */
+    /** Scheduled installation time (ms epoch), in `scheduled` only. */
     scheduledAt: z.number().optional(),
-    /** Durée annoncée de l'installation, secondes : la voiture est inutilisable pendant ce temps. */
+    /** Announced duration of the installation, seconds: the car is unusable during that time. */
     expectedDurationS: z.number().min(0).optional(),
   }).optional(),
   /**
-   * Date (ms epoch) de la dernière LECTURE COMPLÈTE du véhicule — pas `updatedAt`, que la seule veille
-   * fait bouger. C'est ce que l'UI affiche (« lu il y a 12 min ») : sur une API facturée et un
-   * véhicule qui dort, les valeurs ont un âge, et l'utilisateur doit le voir. Absente = jamais lu.
+   * Date (ms epoch) of the last FULL READ of the vehicle — not `updatedAt`, which sleep alone
+   * moves. It is what the UI displays ("Read 12 min ago"): on a billed API and a
+   * sleeping vehicle, the values have an age, and the user must see it. Absent = never read.
    */
   readAt: z.number().int().optional(),
 })
 
 /**
- * Une caméra n'a pour l'instant pas d'état propre : l'API Google Nest ne dit ni si elle filme ni si
- * elle est « allumée » (ce réglage n'y est pas exposé). Seule `available` porte une information.
- * Les événements (sonnerie, mouvement) viendront s'ajouter ici quand le flux Pub/Sub sera branché.
+ * A camera currently has no state of its own: the Google Nest API says neither whether it is filming nor whether
+ * it is "on" (that setting is not exposed there). Only `available` carries information.
+ * Events (ring, motion) will be added here when the Pub/Sub stream is hooked up.
  */
 export const cameraStateSchema = z.object({
   kind: z.literal('camera'), ...base,
 })
 
 /**
- * La météo AU-DESSUS de la maison, maintenant. Un seul appareil par plugin (sa position est
- * `house.origin`), en lecture seule comme une caméra. Ce qui est ici est ce que le widget, la scène
- * 3D et une future routine ont besoin de savoir SANS rien demander : les prévisions, plus lourdes et
- * qui changent à chaque sondage, se lisent à la demande (`GET /api/devices/:id/forecast`).
+ * The weather ABOVE the house, right now. A single device per plugin (its position is
+ * `house.origin`), read-only like a camera. What is here is what the widget, the 3D scene
+ * and a future routine need to know WITHOUT asking anything: the forecasts, heavier and
+ * changing at every poll, are read on demand (`GET /api/devices/:id/forecast`).
  *
- * Les champs OPTIONNELS sont ceux qu'un fournisseur peut ne pas avoir ; absent = il ne le dit pas,
- * jamais un zéro. Les pourcentages sont sur 100 comme partout ailleurs dans le contrat
- * (`climate.humidity`) — la scène 3D, qui pense en 0-1, convertit.
+ * The OPTIONAL fields are those a provider may not have; absent = it does not say,
+ * never a zero. Percentages are out of 100 as everywhere else in the contract
+ * (`climate.humidity`) — the 3D scene, which thinks in 0-1, converts.
  */
 export const VIGILANCE_LEVELS = ['yellow', 'orange', 'red'] as const
 export type VigilanceLevel = (typeof VIGILANCE_LEVELS)[number]
@@ -375,33 +375,33 @@ export const weatherStateSchema = z.object({
   pressureHpa: z.number().optional(),
   windKmh: z.number().min(0),
   windGustKmh: z.number().min(0).optional(),
-  /** D'où vient le vent (degrés, 0 = nord, sens horaire). */
+  /** Where the wind comes from (degrees, 0 = north, clockwise). */
   windDirDeg: z.number().min(0).max(360),
   cloudCover: pct,
-  /** Précipitations de l'heure écoulée (mm). */
+  /** Precipitation of the past hour (mm). */
   precipMm: z.number().min(0).optional(),
   precipProbability: pct.optional(),
   visibilityM: z.number().min(0).optional(),
   uvIndex: z.number().min(0).optional(),
   isDay: z.boolean(),
-  /** Lever et coucher du JOUR COURANT (ms epoch) : ce qu'une routine « avant le coucher » attend. */
+  /** Sunrise and sunset of the CURRENT DAY (ms epoch): what a "before sunset" routine waits for. */
   sunrise: z.number().int(),
   sunset: z.number().int(),
-  /** Indice européen de qualité de l'air (0-20 bon … >100 extrêmement mauvais) et son palier. */
+  /** European air quality index (0-20 good … >100 extremely poor) and its step. */
   aqi: z.number().min(0).optional(),
   aqiLevel: z.enum(AQI_LEVELS).optional(),
-  /** Niveau par pollen, 0 (nul) à 4 (très élevé). Absent = ce fournisseur ne suit pas les pollens. */
+  /** Level per pollen, 0 (none) to 4 (very high). Absent = this provider does not track pollens. */
   pollen: z.partialRecord(z.enum(POLLEN_TYPES), z.number().int().min(0).max(4)).optional(),
-  /** Heure de l'observation ou du pas de modèle (ms epoch), distincte d'`updatedAt` (heure du sondage). */
+  /** Time of the observation or of the model step (ms epoch), distinct from `updatedAt` (time of the poll). */
   observedAt: z.number().int(),
   /**
-   * Vigilances Météo-France EN COURS sur le département de la maison (au moins jaunes), la plus
-   * forte d'abord : ce qu'une alerte ou une routine lit sans rien demander. `[]` = aucune ; absent =
-   * on ne sait pas (hors de la métropole, ou flux pas encore lu). Les vigilances à venir et celles
-   * d'un autre lieu se lisent à la demande (`/api/plugins/open_meteo/alerts`).
+   * Météo-France warnings IN PROGRESS on the department of the house (at least yellow), the
+   * strongest first: what an alert or a routine reads without asking anything. `[]` = none; absent =
+   * unknown (outside metropolitan France, or feed not yet read). Upcoming warnings and those
+   * of another place are read on demand (`/api/plugins/open_meteo/alerts`).
    */
   vigilance: z.array(z.object({
-    /** Phénomène (`thunderstorm`, `wind`…), `other` pour un phénomène inconnu. */
+    /** Phenomenon (`thunderstorm`, `wind`…), `other` for an unknown phenomenon. */
     type: z.string(),
     level: z.enum(VIGILANCE_LEVELS),
     onset: z.number().int(),
@@ -410,51 +410,51 @@ export const weatherStateSchema = z.object({
 })
 
 /**
- * Une station qui traite l'eau de toute la maison (COMAP Proteo) : elle filtre, passe aux
- * ultraviolets, et tient les compteurs de ce qu'elle a laissé passer. En lecture seule comme la
- * météo — ses réglages (dureté de l'eau, créneaux de la lampe, horloge) se font sur son écran
- * tactile. Son protocole sait pourtant écrire : c'est un choix, pas une limite, parce qu'une fausse
- * manœuvre à distance sur l'eau potable coûterait plus cher que le confort gagné.
+ * A station that treats the water of the whole house (COMAP Proteo): it filters, passes it through
+ * ultraviolet, and keeps the counters of what it let through. Read-only like the
+ * weather — its settings (water hardness, lamp time slots, clock) are done on its touch
+ * screen. Its protocol can nevertheless write: it is a choice, not a limit, because a wrong
+ * remote maneuver on drinking water would cost more than the comfort gained.
  *
- * TOUS les champs de mesure sont optionnels, et c'est délibéré : avant la première lecture réussie,
- * « absent » se lit « inconnu ». Un `0 %` d'usure ou un `0 L` de consommation affirmerait une
- * mesure qu'on n'a pas — même règle que `cover.position`.
+ * ALL the measurement fields are optional, and that is deliberate: before the first successful read,
+ * "absent" reads "unknown". A `0 %` of wear or a `0 L` of consumption would assert a
+ * measurement we do not have — same rule as `cover.position`.
  */
 export const waterStateSchema = z.object({
   kind: z.literal('water'), ...base,
   /**
-   * Ce qu'il RESTE de chaque consommable, 100 = neuf. Le préfiltre retient les sédiments (il se
-   * lave, une fois par an), les deux cartouches de charbon actif le goût de chlore et les
-   * pesticides, la lampe UVc les bactéries et les virus.
+   * What REMAINS of each consumable, 100 = new. The prefilter holds back sediments (it is
+   * washed, once a year), the two activated carbon cartridges the taste of chlorine and
+   * pesticides, the UVc lamp bacteria and viruses.
    */
   prefilterPct: pct.optional(),
   carbon1Pct: pct.optional(),
   carbon2Pct: pct.optional(),
   uvLampPct: pct.optional(),
   /**
-   * La lampe UVc éclaire EN CE MOMENT. Elle s'économise d'elle-même : la station accepte trois
-   * créneaux quotidiens de « mode économie » pendant lesquels elle s'éteint au bout d'une heure
-   * sans tirage d'eau — une lampe éteinte la nuit n'est donc pas une panne.
+   * The UVc lamp is lit RIGHT NOW. It saves itself: the station accepts three daily
+   * "economy mode" time slots during which it turns off after an hour
+   * without water draw — a lamp that is off at night is therefore not a fault.
    */
   uvOn: z.boolean().optional(),
   /**
-   * Débit instantané, en litres par heure — CONFIRMÉ au robinet le 2026-09-16 : un mitigeur
-   * ouvert à fond a fait monter la station à 900, soit 15 L/min, l'ordre de grandeur exact d'un
-   * robinet (en litres par minute, il aurait fallu croire à 54 m³/h).
+   * Instantaneous flow, in liters per hour — CONFIRMED at the tap on 2026-09-16: a mixer tap
+   * opened fully made the station climb to 900, i.e. 15 L/min, the exact order of magnitude of a
+   * tap (in liters per minute, one would have had to believe in 54 m³/h).
    *
-   * Le débitmètre compte par pas de 36 L/h — toutes les valeurs relevées en sont des multiples —
-   * donc la mesure est BEAUCOUP plus grossière que ses trois chiffres ne le laissent croire : à
-   * montrer comme un ordre de grandeur, jamais comme une précision au litre.
+   * The flowmeter counts in steps of 36 L/h — all the values read are multiples of it —
+   * so the measurement is MUCH coarser than its three digits suggest: to
+   * be shown as an order of magnitude, never as liter-level precision.
    */
   flowLph: z.number().min(0).optional(),
-  /** Eau consommée (litres), sur les fenêtres que la station compte elle-même. */
+  /** Water consumed (liters), over the windows the station counts itself. */
   todayL: z.number().min(0).optional(),
   weekL: z.number().min(0).optional(),
   monthL: z.number().min(0).optional(),
   /**
-   * La station signale un avertissement, ou un défaut. Elle tient par ailleurs un historique
-   * d'alertes codées que sa notice ne documente pas (elle renvoie au SAV) : Kasbah n'en publie donc
-   * que ces deux résumés-là, les seuls dont le sens soit établi.
+   * The station reports a warning, or a fault. It also keeps a history of
+   * coded alerts that its manual does not document (it refers to the after-sales service): Kasbah therefore publishes
+   * only these two summaries, the only ones whose meaning is established.
    */
   warning: z.boolean().optional(),
   defect: z.boolean().optional(),
@@ -463,35 +463,35 @@ export const waterStateSchema = z.object({
 export const petFeederStateSchema = z.object({
   kind: z.literal('pet_feeder'), ...base,
   /**
-   * Le fabricant annonce un MANQUE de croquettes, pas un niveau : la mangeoire n'a qu'un détecteur
-   * de trémie vide, aucune jauge. Publier un pourcentage serait inventer une précision qui n'existe
-   * pas. Absent = la machine ne s'est pas prononcée.
+   * The vendor announces a LACK of kibble, not a level: the feeder only has an empty-hopper
+   * detector, no gauge. Publishing a percentage would be inventing a precision that does not
+   * exist. Absent = the machine has not spoken.
    */
   foodLow: z.boolean().optional(),
-  /** Une ration tombe EN CE MOMENT. Dure quelques secondes ; sert à accuser le geste. */
+  /** A portion is falling RIGHT NOW. Lasts a few seconds; used to acknowledge the gesture. */
   feeding: z.boolean().optional(),
   /**
-   * Servi depuis minuit et ce que le plan du jour prévoit EN TOUT, **dans l'unité que l'appareil
-   * déclare** (`meta.petFeeder.unit`). Ce n'est pas toujours une masse : une Fresh Element Solo
-   * compte en TASSES (0,3 tasse), une Fresh Element Infinity en grammes. L'écart entre servi et
-   * prévu dit s'il reste des repas à venir.
+   * Served since midnight and what the day's plan provides IN TOTAL, **in the unit the device
+   * declares** (`meta.petFeeder.unit`). It is not always a mass: a Fresh Element Solo
+   * counts in CUPS (0.3 cup), a Fresh Element Infinity in grams. The gap between served and
+   * planned says whether meals remain to come.
    */
   servedToday: z.number().min(0).optional(),
   plannedToday: z.number().min(0).optional(),
   /**
-   * Mangé depuis minuit. Absent sur les modèles SANS pesée : une Fresh Element Solo dit ce qu'elle
-   * a versé, pas ce que l'animal a pris (vérifié sur la machine réelle le 21/09) — seuls les
-   * modèles à plateau pesant le rapportent.
+   * Eaten since midnight. Absent on models WITHOUT weighing: a Fresh Element Solo says what it
+   * poured, not what the animal took (verified on the real machine on Sep 21) — only
+   * models with a weighing tray report it.
    */
   eatenToday: z.number().min(0).optional(),
-  /** Quand tombe le prochain repas programmé, et combien. Absent = plus rien d'ici minuit. */
+  /** When the next scheduled meal falls, and how much. Absent = nothing more until midnight. */
   nextMealAt: z.number().int().optional(),
   nextMealAmount: z.number().min(0).optional(),
-  /** Jours qu'il reste au sachet dessiccant (capacité `consumables`). */
+  /** Days left in the desiccant pouch (`consumables` capability). */
   desiccantDays: z.number().int().min(0).optional(),
   /**
-   * Batterie de SECOURS (capacité `battery`) : la mangeoire vit sur secteur et ne tient sur pile
-   * qu'une coupure. Absente = pas de pile en place, ce qui n'est pas une panne.
+   * BACKUP battery (`battery` capability): the feeder runs on mains and only survives
+   * an outage on battery. Absent = no battery in place, which is not a fault.
    */
   batteryPct: pct.optional(),
   errorMessage: z.string().optional(),
@@ -499,31 +499,31 @@ export const petFeederStateSchema = z.object({
 
 export const petFountainStateSchema = z.object({
   kind: z.literal('pet_fountain'), ...base,
-  /** La pompe tourne. Seul champ obligatoire : c'est ce que l'interrupteur montre. */
+  /** The pump is running. Only mandatory field: it is what the switch shows. */
   on: z.boolean(),
   mode: z.enum(PET_PUMP_MODES).optional(),
-  /** Ce qu'il reste au filtre (capacité `consumables`), et en jours quand le fabricant l'estime. */
+  /** What remains of the filter (`consumables` capability), and in days when the vendor estimates it. */
   filterPct: pct.optional(),
   filterDays: z.number().int().min(0).optional(),
-  /** Le bac est vide, ou presque — l'alerte que le fabricant lève, pas un niveau mesuré. */
+  /** The tank is empty, or nearly — the alert the vendor raises, not a measured level. */
   waterLow: z.boolean().optional(),
   batteryPct: pct.optional(),
   /**
-   * Ce que la fontaine sait de la journée (capacité `water_usage`). Une Eversweet Max ne mesure
-   * PAS un volume — elle compte les PASSAGES et leur durée. Le volume reste là pour les modèles
-   * qui le mesurent ; l'un ou l'autre peut manquer, jamais les deux ensemble sur une même machine.
+   * What the fountain knows about the day (`water_usage` capability). An Eversweet Max does NOT
+   * measure a volume — it counts the VISITS and their duration. The volume stays there for the models
+   * that measure it; one or the other may be missing, never both together on the same machine.
    */
   drinksToday: z.number().int().min(0).optional(),
-  /** Durée moyenne d'un passage, en secondes. */
+  /** Average duration of a visit, in seconds. */
   drinkAvgS: z.number().min(0).optional(),
   todayMl: z.number().min(0).optional(),
   errorMessage: z.string().optional(),
   /**
-   * Quand ces valeurs ont été relevées SUR la fontaine. Indispensable ici et nulle part ailleurs :
-   * une Eversweet n'a pas de Wi-Fi, elle est lue par relais Bluetooth au travers d'un appareil
-   * voisin. Entre deux relais, le cloud rend la dernière synchro — parfois vieille de plusieurs
-   * heures si le relais était hors de portée. Montrer l'âge vaut mieux que laisser croire au direct
-   * (même raison que `readAt` d'un véhicule endormi). Absent = on ne sait pas dater le relevé.
+   * When these values were read ON the fountain. Essential here and nowhere else:
+   * an Eversweet has no Wi-Fi, it is read through a Bluetooth relay via a neighboring
+   * device. Between two relays, the cloud returns the last sync — sometimes several hours
+   * old if the relay was out of range. Showing the age beats letting people believe it is live
+   * (same reason as `readAt` of a sleeping vehicle). Absent = the reading cannot be dated.
    */
   syncedAt: z.number().int().optional(),
 })
@@ -531,17 +531,17 @@ export const petFountainStateSchema = z.object({
 export const fanStateSchema = z.object({
   kind: z.literal('fan'), ...base,
   on: z.boolean(),
-  /** Vitesse courante (capacité `fan_speed`) — valeurs acceptées dans `meta.fan.speeds`. */
+  /** Current speed (`fan_speed` capability) — accepted values in `meta.fan.speeds`. */
   speed: z.number().int().positive().optional(),
   direction: z.enum(FAN_DIRECTIONS).optional(),
   /**
-   * Minutes restantes sur la minuterie. 0 / absent = aucune. Effacée quand le ventilateur
-   * s'éteint (mesuré sur le CREATE : éteindre remet `dp 64` à 0).
+   * Minutes remaining on the timer. 0 / absent = none. Cleared when the fan
+   * turns off (measured on the CREATE: turning off resets `dp 64` to 0).
    */
   timerMin: z.number().int().min(0).optional(),
   /**
-   * Bip d'accusé coupé (`true` = silencieux). Capacité `mute` — pas le son d'un lecteur
-   * multimédia ; voir commentaire sur la capacité dans `kinds.ts`.
+   * Acknowledgment beep muted (`true` = silent). `mute` capability — not the sound of a
+   * media player; see the comment on the capability in `kinds.ts`.
    */
   muted: z.boolean().optional(),
 })
@@ -554,13 +554,13 @@ export const deviceStateSchema = z.discriminatedUnion('kind', [
 ])
 export type DeviceState = z.infer<typeof deviceStateSchema>
 export type StateFor<K extends DeviceKind> = Extract<DeviceState, { kind: K }>
-/** Patch émis par un plugin : tout est optionnel ; `kind`/`updatedAt` ne se patchent pas (distributif sur K). */
+/** Patch emitted by a plugin: everything is optional; `kind`/`updatedAt` cannot be patched (distributive over K). */
 /**
- * Modification partielle d'un état, côté serveur uniquement (le client reçoit toujours l'état
- * entier). `undefined` = « je ne parle pas de ce champ » ; **`null` = « efface ce champ »**, et
- * n'est accepté que sur un champ déjà optionnel — c'est le seul moyen de repasser une valeur à
- * « inconnue ». Un plugin en a besoin : rappeler la position favorite d'un moteur unidirectionnel
- * le déplace vers une position qu'on ne connaît pas, donc celle qu'on affichait devient fausse.
+ * Partial modification of a state, server side only (the client always receives the
+ * whole state). `undefined` = "I am not talking about this field"; **`null` = "clear this field"**, and
+ * is only accepted on a field that is already optional — it is the only way to bring a value back to
+ * "unknown". A plugin needs it: recalling the favorite position of a one-way motor
+ * moves it to a position that is not known, so the one that was displayed becomes wrong.
  */
 export type StatePatch<K extends DeviceKind = DeviceKind> = K extends DeviceKind
   ? { [P in keyof Omit<StateFor<K>, 'kind' | 'updatedAt'>]?: undefined extends StateFor<K>[P] ? StateFor<K>[P] | null : StateFor<K>[P] }
@@ -569,7 +569,7 @@ export type StatePatch<K extends DeviceKind = DeviceKind> = K extends DeviceKind
 const STATE_KEYS = new Map<DeviceKind, ReadonlySet<string>>(
   deviceStateSchema.options.map((o) => [o.shape.kind.value as DeviceKind, new Set(Object.keys(o.shape))]),
 )
-/** Clés légales de l'état d'un kind (pour rejeter un patch qui ne le concerne pas). */
+/** Legal keys of the state of a kind (to reject a patch that does not concern it). */
 export function stateKeys(kind: DeviceKind): ReadonlySet<string> {
   return STATE_KEYS.get(kind) ?? new Set()
 }

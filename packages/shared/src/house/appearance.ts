@@ -2,12 +2,12 @@ import { z } from 'zod'
 import { finishSchema } from './schema'
 import { PlacementError } from './place'
 
-// Apparence de la maison écrite depuis l'UI : finitions du sol et des murs de chaque pièce, et de la
-// façade. Un seul patch porte TOUT ce qu'une séance d'édition a changé (plusieurs pièces et la
-// façade) : « Valider » l'écrit d'un coup, ou rien. `null` RETIRE la finition (retour au style).
+// Appearance of the house written from the UI: finishes of the floor and walls of each room, and of the
+// facade. A single patch carries EVERYTHING an editing session changed (several rooms and the
+// facade): "Apply" writes it all at once, or nothing. `null` REMOVES the finish (back to the style).
 //
-// Même fonction pour le JSON brut (serveur, transport simulé) et pour la maison parsée (brouillon
-// montré par la scène avant l'écriture) : ce qu'on voit pendant l'édition est ce qu'on gardera.
+// Same function for the raw JSON (server, simulated transport) and for the parsed house (draft
+// shown by the scene before writing): what is seen during editing is what will be kept.
 
 const finishOrNull = finishSchema.nullable().optional()
 
@@ -20,7 +20,7 @@ export type AppearancePatch = z.infer<typeof appearancePatchSchema>
 type JsonObject = Record<string, unknown>
 const isObject = (v: unknown): v is JsonObject => typeof v === 'object' && v !== null && !Array.isArray(v)
 
-/** Pose `value` sous `key` (null retire) ; un objet devenu vide disparaît du fichier. */
+/** Sets `value` under `key` (null removes); an object that became empty disappears from the file. */
 function setKey(obj: JsonObject | undefined, key: string, value: unknown): JsonObject | undefined {
   const next: JsonObject = { ...obj }
   if (value === null) delete next[key]
@@ -36,9 +36,9 @@ function withStyle<T extends JsonObject>(owner: T, style: JsonObject | undefined
 }
 
 /**
- * Copie de `doc` avec le patch d'apparence appliqué. Une pièce inconnue lève `PlacementError`
- * (400, rien n'est écrit). La validation des finitions (surface admise, teinte permise) reste celle
- * du schéma de la maison, rejouée par `parseHouse` avant l'écriture.
+ * Copy of `doc` with the appearance patch applied. An unknown room throws `PlacementError`
+ * (400, nothing is written). The validation of the finishes (allowed surface, allowed tint) stays that
+ * of the house schema, replayed by `parseHouse` before writing.
  */
 export function applyAppearanceToJson<T>(doc: T, patch: AppearancePatch): T {
   if (!isObject(doc)) throw new PlacementError('house document is not an object')
@@ -67,8 +67,8 @@ export function applyAppearanceToJson<T>(doc: T, patch: AppearancePatch): T {
 }
 
 /**
- * Compose deux patchs : `next` passe devant `prev`, pièce par pièce et surface par surface. C'est
- * ce que fait le brouillon à chaque geste — l'historique garde les états successifs.
+ * Composes two patches: `next` takes precedence over `prev`, room by room and surface by surface. It is
+ * what the draft does at each gesture — the history keeps the successive states.
  */
 export function mergeAppearancePatch(prev: AppearancePatch, next: AppearancePatch): AppearancePatch {
   const rooms: NonNullable<AppearancePatch['rooms']> = { ...prev.rooms }
