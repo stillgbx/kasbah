@@ -7,9 +7,9 @@ import { useWeather } from '../../composables/useWeather'
 import { conditionIcon } from '../../lib/weather'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Le widget de la vue Maison (maquette : en bas à gauche) : condition et température, puis l'heure
-// et la date. Emplacement RÉSERVÉ — la carte a toujours la même taille, météo ou pas : sans
-// appareil, la zone météo montre un tiret et l'horloge reste. Un tap ouvre la vue Météo.
+// The House view widget (mockup: bottom left): condition and temperature, then the time
+// and the date. RESERVED slot — the card always has the same size, weather or not: with no
+// device, the weather area shows a dash and the clock stays. A tap opens the Weather view.
 const { d, n, t } = useI18n()
 const router = useRouter()
 const weather = useWeather()
@@ -36,7 +36,7 @@ const condition = computed(() => (live.value ? t(`weather.conditions.${live.valu
 </template>
 
 <style scoped>
-/* même verre que les boutons de vue : la scène passe dessous */
+/* same glass as the view buttons: the scene passes underneath */
 .wx {
   width: var(--wx-w); height: 132px; padding: 12px 14px; text-align: left; border-radius: var(--radius); border: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
@@ -49,7 +49,7 @@ const condition = computed(() => (live.value ? t(`weather.conditions.${live.valu
 .wx__cond { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wx__time { font-size: 20px; font-weight: 500; line-height: 1; align-self: end; font-variant-numeric: tabular-nums; }
 .wx__date { font-size: 12px; color: var(--muted); white-space: nowrap; text-transform: capitalize; }
-/* Téléphone : la carte ne garde que l'essentiel — température et heure — sur deux lignes. */
+/* Phone: the card keeps only the essentials — temperature and time — on two lines. */
 @media (max-width: 599px), (max-height: 500px) {
   .wx { height: 72px; padding: 10px 12px; grid-template-rows: 26px 1fr; }
   .wx__row { gap: 6px; }
@@ -58,8 +58,8 @@ const condition = computed(() => (live.value ? t(`weather.conditions.${live.valu
   .wx__time { font-size: 16px; }
   .wx__cond, .wx__date { display: none; }
 }
-/* Téléphone en portrait : une pastille de la hauteur des boutons de vue, sous les onglets de niveau
-   (voir HomeView) — icône, température, heure. */
+/* Portrait phone: a pill the height of the view buttons, under the level tabs
+   (see HomeView) — icon, temperature, time. */
 @media (max-width: 599px) {
   .wx {
     width: auto; height: var(--ctl-w); padding: 0 14px 0 10px; border-radius: 999px;

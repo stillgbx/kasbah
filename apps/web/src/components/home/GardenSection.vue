@@ -7,14 +7,14 @@ import { GARDEN_ICON } from '../../lib/gardenIcons'
 import { SPECIES, type SpeciesRecipe } from '../../three/garden/species'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Section « Jardin » du panneau de la maison en mode édition : une touche par famille. Toucher une
-// famille l'ARME (forme générique) et montre SES espèces dessous — le catalogue grossit, on ne les
-// étale plus toutes. Chaque tap sur le terrain plante alors un élément, jusqu'à « Terminé ».
+// "Garden" section of the house panel in edit mode: one key per family. Touching a family ARMS it
+// (generic shape) and shows ITS species below — the catalog grows, we no longer spread them all
+// out. Each tap on the ground then plants an item, until "Done".
 const house = useHouseStore()
 const { locale } = useI18n()
 const speciesName = (s: SpeciesRecipe) => (locale.value.startsWith('en') ? s.name.en : s.name.fr)
 
-/** La famille dont on montre les espèces : la dernière touchée, et elle le reste après « Terminé ». */
+/** The family whose species are shown: the last one touched, and it stays so after "Done". */
 const family = ref<GardenKind | null>(house.placingGarden?.kind ?? null)
 const familySpecies = computed(() => SPECIES.filter((s) => s.kind === family.value))
 function pickFamily(k: GardenKind) {
@@ -22,7 +22,7 @@ function pickFamily(k: GardenKind) {
   toggle(k)
 }
 
-/** Armée exactement : la famille seule (forme générique), ou cette espèce. */
+/** Armed exactly: the family alone (generic shape), or this species. */
 const armed = (kind: GardenKind, species?: string) => house.placingGarden?.kind === kind && house.placingGarden.species === species
 function toggle(kind: GardenKind, species?: string) {
   if (armed(kind, species)) house.cancelPlacingGarden()
@@ -40,14 +40,14 @@ function toggle(kind: GardenKind, species?: string) {
         <span class="kind__label">{{ $t(`garden.kinds.${k}`) }}</span>
       </button>
     </div>
-    <!-- bouton toujours présent : seul son état change, la section ne saute pas quand on arme -->
+    <!-- button always present: only its state changes, the section does not jump when arming -->
     <button type="button" class="pill add" :class="{ 'add--armed': house.placingGarden }"
             :disabled="!house.placingGarden" @click="house.cancelPlacingGarden()">
       {{ $t('garden.done') }}
     </button>
     <p class="muted hint">{{ house.placingGarden ? $t('garden.placeHint') : $t('garden.hint') }}</p>
-    <!-- sous le bouton et la consigne : la liste change de hauteur d'une famille à l'autre, elle ne
-         pousse rien de ce qu'on touche au-dessus -->
+    <!-- under the button and the instruction: the list changes height from one family to another, it
+         pushes nothing of what is touched above -->
     <template v-if="family">
       <div class="section-label">{{ $t('garden.species') }} · {{ $t(`garden.kinds.${family}`) }}</div>
       <div v-if="familySpecies.length" class="species">

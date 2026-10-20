@@ -6,8 +6,8 @@ import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import PlacementControl from './PlacementControl.vue'
 
-// Saisie directe des valeurs du mode « Déplacer » : ce qui compte est QUAND on écrit dans house.json
-// (à la validation, jamais à la frappe) et ce qu'on écrit (borné, virgule française acceptée).
+// Direct input of the "Move" mode values: what matters is WHEN we write to house.json
+// (on validation, never while typing) and what we write (bounded, French decimal comma accepted).
 
 const gate: DeviceEntry = {
   descriptor: {
@@ -35,17 +35,17 @@ function setup() {
 describe('PlacementControl — saisie directe', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
 
-  it('écrit à la VALIDATION, pas à la frappe', async () => {
+  it('writes on VALIDATION, not while typing', async () => {
     const { save, field } = setup()
     const width = field('Largeur')
     await width.trigger('focus')
     await width.setValue('3')
-    expect(save).not.toHaveBeenCalled()      // une maison par caractère : non
+    expect(save).not.toHaveBeenCalled()      // one house per character: no
     await width.trigger('blur')
     expect(save).toHaveBeenCalledWith({ size: { width: 3, height: 1.5 } })
   })
 
-  it('accepte la virgule décimale et borne la valeur', async () => {
+  it('accepts the decimal comma and bounds the value', async () => {
     const { save, field } = setup()
     const height = field('Hauteur')
     await height.trigger('focus')
@@ -55,12 +55,12 @@ describe('PlacementControl — saisie directe', () => {
 
     const width = field('Largeur')
     await width.trigger('focus')
-    await width.setValue('99')               // au-delà du portail le plus large
+    await width.setValue('99')               // beyond the widest gate
     await width.trigger('blur')
     expect(save).toHaveBeenLastCalledWith({ size: { width: 12, height: 1.5 } })
   })
 
-  it('ramène une orientation dans le tour, et ignore une saisie illisible', async () => {
+  it('brings an orientation back into the turn, and ignores unreadable input', async () => {
     const { save, field } = setup()
     const yaw = field('Orientation')
     await yaw.trigger('focus')
@@ -71,10 +71,10 @@ describe('PlacementControl — saisie directe', () => {
     await yaw.trigger('focus')
     await yaw.setValue('vers la rue')
     await yaw.trigger('blur')
-    expect(save).toHaveBeenCalledTimes(1)    // rien d'écrit : on garde ce qui était là
+    expect(save).toHaveBeenCalledTimes(1)    // nothing written: we keep what was there
   })
 
-  it('Échap abandonne la saisie', async () => {
+  it('Escape abandons the input', async () => {
     const { save, field } = setup()
     const width = field('Largeur')
     await width.trigger('focus')
@@ -84,7 +84,7 @@ describe('PlacementControl — saisie directe', () => {
     expect(save).not.toHaveBeenCalled()
   })
 
-  it("n'écrit pas une valeur identique à celle déjà posée", async () => {
+  it("does not write a value identical to the one already set", async () => {
     const { save, field } = setup()
     const width = field('Largeur')
     await width.trigger('focus')

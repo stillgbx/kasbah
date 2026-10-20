@@ -10,22 +10,22 @@ import { useHouseStore } from '../../stores/house'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Réglages d'un appareil posé : « Modifier » ouvre le mode édition — x;y en glissant dans la 3D,
-// hauteur, orientation, taille TV / forme d'enceinte, battants… Chaque réglage est écrit dans
-// house.json (store `house`) ; « Rétablir » renvoie au placement d'entrée dans le mode.
+// Settings of a placed device: "Edit" opens the edit mode — x;y by dragging in the 3D,
+// height, orientation, TV size / speaker shape, leaves… Each setting is written to
+// house.json (store `house`); "Revert" goes back to the placement on entering the mode.
 //
-// La section vit au FOND du panneau : sa ligne de titre est en bas, et le corps s'ouvre AU-DESSUS
-// d'elle, en douceur (transition de `max-height`). Le bouton « Modifier » et le bouton
-// « Terminé » occupent exactement la même place (même largeur, même coin) : on referme là où on a
-// ouvert. « Rétablir » a une place réservée dans le corps, invisible tant qu'il n'y a rien à rétablir —
-// rien ne se décale quand il apparaît.
+// The section lives at the BOTTOM of the panel: its title row is at the bottom, and the body opens ABOVE
+// it, smoothly (`max-height` transition). The "Edit" button and the
+// "Done" button occupy exactly the same place (same width, same corner): one closes where one
+// opened. "Revert" has a reserved place in the body, invisible as long as there is nothing to revert —
+// nothing shifts when it appears.
 const props = defineProps<{ device: PlacedHouseDevice }>()
 const house = useHouseStore()
 const devices = useDevicesStore()
 const { t } = useI18n()
 
-// Hauteur naturelle du corps, mesurée (ResizeObserver) : la transition anime `max-height` de 0 vers
-// cette valeur — une hauteur en pixels s'anime partout, là où `grid-template-rows: 0fr → 1fr` sautait.
+// Natural height of the body, measured (ResizeObserver): the transition animates `max-height` from 0 to
+// this value — a height in pixels animates everywhere, where `grid-template-rows: 0fr → 1fr` jumped.
 const inner = ref<HTMLElement | null>(null)
 const innerHeight = ref(0)
 let observer: ResizeObserver | null = null
@@ -37,12 +37,12 @@ onMounted(() => {
 })
 onBeforeUnmount(() => observer?.disconnect())
 
-// Orientation (`yaw`, 0 = face à +y) : proposée aux appareils qui REGARDENT quelque part (règle
-// partagée avec la scène 3D : `lib/orientation.ts`). Deux touches, pas de 45°, écrit à chaque pression.
+// Orientation (`yaw`, 0 = facing +y): offered to devices that LOOK somewhere (rule
+// shared with the 3D scene: `lib/orientation.ts`). Two keys, 45° steps, written on each press.
 //
-// Le `yaw` du JSON tourne dans le sens TRIGONOMÉTRIQUE (l'axe Z monte), donc l'AUGMENTER fait pivoter
-// l'objet vers la gauche vu de dessus. C'est la touche de gauche qui l'augmente, et celle de droite
-// qui le diminue : ce qu'on voit tourner suit la touche qu'on appuie, pas la convention du fichier.
+// The JSON's `yaw` turns COUNTERCLOCKWISE (the Z axis points up), so INCREASING it pivots
+// the object to the left seen from above. It is the left key that increases it, and the right one
+// that decreases it: what one sees turning follows the key pressed, not the file's convention.
 const YAW_STEP = 45
 const descriptor = computed(() => (props.device.deviceId ? devices.descriptors[props.device.deviceId] : undefined))
 const orientable = computed(() => isOrientable(props.device, descriptor.value))
@@ -51,20 +51,20 @@ function rotate(delta: number) {
   void house.savePlacement({ yaw: (((yaw.value + delta) % 360) + 360) % 360 })
 }
 
-// Taille de ce qui est DESSINÉ : ouvrants libres (largeur × hauteur ou avancée, en mètres) et
-// téléviseurs (une seule diagonale en pouces — c'est le chiffre sur le carton, converti en dalle
-// 16:9 pour la scène). Voir `lib/orientation.ts`. Bornes larges mais finies.
+// Size of what is DRAWN: free covers (width × height or projection, in meters) and
+// TVs (a single diagonal in inches — the number on the box, converted to a 16:9
+// slab for the scene). See `lib/orientation.ts`. Wide but finite bounds.
 const SIZE_STEP = 0.25
 const SIZE_LIMITS = { width: { min: 0.25, max: 12 }, height: { min: 0.25, max: 4 } } as const
-/** Pas et bornes de la diagonale TV (pouces) : les tailles commerciales vont par pouce entier. */
+/** Step and bounds of the TV diagonal (inches): commercial sizes go by whole inch. */
 const DIAGONAL_STEP = 1
 const DIAGONAL_LIMITS = { min: 20, max: 100 } as const
 const sizable = computed(() => isSizable(props.device, descriptor.value))
 const tv = computed(() => isTv(descriptor.value))
 const size = computed(() => coverSize(props.device, descriptor.value))
 const inches = computed(() => tvInchesFromSize(size.value))
-// La seconde dimension n'est pas la même chose selon la nature : la HAUTEUR d'un portail debout,
-// l'AVANCÉE d'un store déployé à plat. Même champ dans le JSON, deux mots à l'écran.
+// The second dimension is not the same thing depending on the kind: the HEIGHT of a standing
+// gate, the PROJECTION of an awning deployed flat. Same field in the JSON, two words on screen.
 const dimLabel = (dim: 'width' | 'height') =>
   t(dim === 'width' ? 'place.size.width' : isFlatCover(descriptor.value) ? 'place.size.projection' : 'place.size.height')
 function resize(dim: 'width' | 'height', delta: number) {
@@ -79,19 +79,19 @@ function resizeDiagonal(delta: number) {
   void house.savePlacement({ size: tvSizeFromInches(next) })
 }
 
-// Battants d'un portail : ce qui s'écarte quand il s'ouvre, donc ce que la scène anime. Un store se
-// déploie d'une pièce, la question ne se pose que pour ce qui se tient debout.
+// Leaves of a gate: what swings apart when it opens, hence what the scene animates. An awning
+// deploys in one piece, the question only arises for what stands upright.
 const leavesShown = computed(() => hasLeaves(props.device, descriptor.value))
-// `Segmented` parle en chaînes (sa clé de segment) ; le JSON, lui, compte des battants.
+// `Segmented` speaks in strings (its segment key); the JSON, for its part, counts leaves.
 const leaves = computed(() => String(coverLeaves(props.device, descriptor.value)))
 const leavesOptions = [{ value: '1', label: '1' }, { value: '2', label: '2' }]
 
-/** Enceinte : silhouette 3D (cylindre / galet / barre / bloc), indépendante du mode glisser. */
+/** Speaker: 3D silhouette (cylinder / pebble / bar / block), independent of the drag mode. */
 const isSpeaker = computed(() =>
   descriptor.value?.kind === 'media_player'
   && (descriptor.value.meta.mediaPlayer?.deviceClass ?? 'speaker') === 'speaker')
 const speakerShape = computed(() => props.device.speakerShape ?? 'default')
-/** Glyphe par silhouette : le Segmented n'affiche que l'icône, le libellé reste en title / aria. */
+/** Glyph per silhouette: the Segmented only displays the icon, the label stays in title / aria. */
 const SPEAKER_SHAPE_ICONS: Record<SpeakerShape, IconName> = {
   default: 'speakerTube',
   pebble: 'speakerPebble',
@@ -105,36 +105,36 @@ function setSpeakerShape(raw: string): void {
   if (next === speakerShape.value) return
   const id = props.device.deviceId
   if (!id) return
-  // `''` efface → cylindre par défaut ; les autres valeurs s'écrivent telles quelles
+  // `''` clears → default cylinder; the other values are written as they are
   void house.setDeviceTuning(id, { speakerShape: next === 'default' ? '' : next })
 }
 
-// Saisie DIRECTE d'une valeur, à côté des touches −/+ : régler un portail de 4,10 m au quart de
-// mètre demandait seize appuis. Le champ ne commite qu'à la validation (Entrée ou perte du focus) —
-// écrire house.json à chaque frappe enverrait une maison par caractère. Tant qu'on tape, c'est le
-// brouillon qui s'affiche : sinon la valeur relue du serveur écraserait la saisie en cours.
+// DIRECT input of a value, next to the −/+ keys: adjusting a 4.10 m gate by quarter
+// meter took sixteen presses. The field only commits on validation (Enter or focus loss) —
+// writing house.json on each keystroke would send one house per character. While typing, it is the
+// draft that is displayed: otherwise the value reread from the server would overwrite the input in progress.
 type Field = 'yaw' | 'width' | 'height' | 'diagonal'
 const editing = ref<Field | null>(null)
 const draft = ref('')
 
-/** Le contenu se SÉLECTIONNE à la prise de focus : taper remplace la valeur au lieu de s'y ajouter. */
+/** The content gets SELECTED on focus: typing replaces the value instead of being appended to it. */
 function startEdit(field: Field, shown: string, ev?: FocusEvent) {
   editing.value = field
   draft.value = shown
-  // APRÈS le rendu : Vue réécrit `value` quand le brouillon se pose, ce qui efface la sélection
+  // AFTER the render: Vue rewrites `value` when the draft is set, which clears the selection
   const el = ev?.target as HTMLInputElement | undefined
   if (el) void nextTick(() => el.select())
 }
 function cancelEdit() { editing.value = null }
-/** Valeur affichée par un champ : le brouillon s'il est en cours d'édition, sinon l'état. */
+/** Value displayed by a field: the draft if it is being edited, otherwise the state. */
 const shownValue = (field: Field, value: string) => (editing.value === field ? draft.value : value)
 
 function commitEdit(field: Field) {
-  if (editing.value !== field) return          // sortie par Échap : rien à écrire
+  if (editing.value !== field) return          // exit via Escape: nothing to write
   editing.value = null
-  // virgule décimale acceptée : c'est ce que tape un clavier français
+  // decimal comma accepted: it is what a French keyboard types
   const raw = Number(draft.value.replace(',', '.').trim())
-  if (!Number.isFinite(raw)) return            // saisie illisible : on garde ce qui était là
+  if (!Number.isFinite(raw)) return            // unreadable input: we keep what was there
   if (field === 'yaw') {
     const next = (((Math.round(raw) % 360) + 360) % 360)
     if (next !== yaw.value) void house.savePlacement({ yaw: next })
@@ -161,17 +161,17 @@ const PRESETS: { value: Exclude<Preset, ''>; mount: Mount; z: (ceiling: number) 
 const presetOptions = computed(() => PRESETS.map((p) => ({ value: p.value as Preset, label: t(`place.presets.${p.value}`) })))
 const preset = computed<Preset>(() => (props.device.mount === 'free' ? 'table' : props.device.mount ?? ''))
 
-/** Hauteur sous plafond de la pièce d'ancrage (borne du curseur) ; 4 m hors pièce. */
+/** Ceiling height of the anchor room (slider bound); 4 m outside a room. */
 const ceiling = computed(() => {
   const room = props.device.roomId ? house.index?.roomsById.get(props.device.roomId) : undefined
   const level = room ? house.index?.levelsById.get(room.levelId) : undefined
   return house.house && room && level ? roomHeight(room, level, resolveDefaults(house.house.defaults)) : 4
 })
 const position = computed(() => house.draft?.position ?? props.device.position)
-// Changer de niveau se fait ICI, par un sélecteur, jamais par les onglets de niveau (un clic pour aller
-// regarder ailleurs ré-ancrait l'appareil sans le dire). Du haut vers le bas, comme les listes de l'app.
+// Changing level is done HERE, by a selector, never by the level tabs (a click to go
+// look elsewhere re-anchored the device without saying so). From top to bottom, like the app's lists.
 const levelOptions = computed(() => house.levels.map((l) => ({ value: l.id, title: l.shortName ?? l.name })))
-// Ce qui ancre l'appareil : sa pièce, ou à défaut son niveau — un niveau sans pièce (le toit) ancre seul.
+// What anchors the device: its room, or failing that its level — a level without a room (the roof) anchors alone.
 const anchorName = computed(() => {
   const id = house.draft?.roomId ?? props.device.roomId
   if (id) return house.index?.roomsById.get(id)?.name ?? id
@@ -179,11 +179,11 @@ const anchorName = computed(() => {
   return level ? level.shortName ?? level.name : t('place.outside')
 })
 
-// Retirer de la maison : geste en deux temps (armer, puis confirmer dans les 4 s) pour ne pas sortir un
-// appareil d'un doigt qui glisse ; l'emplacement est réservé, le libellé seul change.
+// Remove from house: two-step gesture (arm, then confirm within 4 s) so as not to take a
+// device out with a sliding finger; the place is reserved, only the label changes.
 //
-// Une installation solaire emporte ses CHAMPS DE PANNEAUX (`siteId`, voir `house/place.ts`) : la
-// confirmation le dit, parce que c'est le moment où l'on décide — vingt modules disparaissent avec elle.
+// A solar installation takes its PANEL ARRAYS with it (`siteId`, see `house/place.ts`): the
+// confirmation says so, because it is the moment when one decides — twenty modules disappear with it.
 const removeArmed = ref(false)
 const ownedArrays = computed(() => (props.device.deviceId
   ? house.arrays.filter((a) => a.siteId === props.device.deviceId).length
@@ -210,12 +210,12 @@ function applyPreset(p: Preset) {
 
 <template>
   <div class="card card--soft place" :data-open="house.placing ? '1' : '0'">
-    <!-- corps repliable, AU-DESSUS du pied : hauteur animée de 0 à son contenu -->
+    <!-- collapsible body, ABOVE the foot: height animated from 0 to its content -->
     <div class="place__body" :style="{ '--place-h': `${innerHeight}px` }" :aria-hidden="house.placing ? 'false' : 'true'">
       <div ref="inner" class="place__inner">
         <div class="place__row place__top">
           <p class="muted place__hint">{{ $t('place.hint') }}</p>
-          <!-- place réservée : invisible tant qu'il n'y a rien à rétablir, la ligne ne bouge pas -->
+          <!-- reserved place: invisible as long as there is nothing to revert, the row does not move -->
           <button type="button" class="pill place__revert" :class="{ 'place__revert--off': !house.canRevert }"
                   :disabled="house.saving || !house.canRevert" :tabindex="house.canRevert ? 0 : -1" @click="house.revertPlacement()">
             {{ $t('place.revert') }}
@@ -257,7 +257,7 @@ function applyPreset(p: Preset) {
             </button>
           </span>
         </div>
-        <!-- TV : une diagonale en pouces (le chiffre du carton). Ouvrant : largeur × hauteur/avancée. -->
+        <!-- TV: a diagonal in inches (the number on the box). Cover: width × height/projection. -->
         <div v-if="sizable && tv" class="place__row">
           <span class="muted">{{ $t('place.size.diagonal') }}</span>
           <span class="place__turn">
@@ -325,7 +325,7 @@ function applyPreset(p: Preset) {
         </div>
         <div class="place__row place__bottom">
           <div class="muted place__coords">x {{ position[0].toFixed(2) }} · y {{ position[1].toFixed(2) }} · {{ anchorName }}</div>
-          <!-- place réservée : invisible pour un provisoire (« Annuler » suffit), sinon retrait en deux temps -->
+          <!-- reserved place: invisible for a provisional one ("Cancel" is enough), otherwise two-step removal -->
           <button type="button" class="pill place__remove" :class="{ 'place__remove--off': house.isProvisional, 'place__remove--armed': removeArmed }"
                   :disabled="house.saving || house.isProvisional" :tabindex="house.isProvisional ? -1 : 0"
                   :title="$t('place.removeHint')" @click="removeClick">
@@ -334,13 +334,13 @@ function applyPreset(p: Preset) {
         </div>
       </div>
     </div>
-    <!-- pied : titre à gauche, UN bouton à droite qui garde sa place et sa largeur dans les deux états -->
+    <!-- foot: title on the left, ONE button on the right that keeps its place and width in both states -->
     <div class="place__foot">
       <span class="muted">{{ $t('place.title') }}</span>
       <button v-if="!house.placing" type="button" class="pill place__cta" @click="house.startPlacing()">
         <StrokeIcon name="move" :size="16" /> {{ $t('place.move') }}
       </button>
-      <!-- un provisoire jamais déposé s'abandonne : le bouton le dit -->
+      <!-- a provisional one never dropped is abandoned: the button says so -->
       <button v-else type="button" class="pill place__cta" data-on="1" @click="house.stopPlacing()">{{ house.isProvisional ? $t('place.cancel') : $t('place.done') }}</button>
     </div>
   </div>
@@ -348,48 +348,48 @@ function applyPreset(p: Preset) {
 
 <style scoped>
 .place { padding: 12px 14px; font-size: 13px; }
-/* le corps s'ouvre par sa hauteur (0 → hauteur mesurée) et s'éclaire ; fermé, il n'occupe rien */
+/* the body opens by its height (0 → measured height) and lights up; closed, it occupies nothing */
 .place__body {
   overflow: hidden; max-height: 0; opacity: 0; visibility: hidden;
-  transition: max-height .3s ease, opacity .25s ease, visibility 0s linear .3s;   /* invisible seulement une fois replié */
+  transition: max-height .3s ease, opacity .25s ease, visibility 0s linear .3s;   /* invisible only once folded */
 }
 .place[data-open="1"] .place__body { max-height: var(--place-h, 400px); opacity: 1; visibility: visible; transition: max-height .3s ease, opacity .25s ease, visibility 0s; }
-/* L'espace entre le corps et le pied fait partie du corps : il se replie avec lui.
-   `minmax(0, 1fr)` et non la colonne `auto` par défaut : une colonne auto ne descend jamais sous le
-   min-content de ses lignes (les quatre préréglages de hauteur, la pilule « Retirer de la maison »),
-   et le corps, en `overflow: hidden`, coupait alors les 3 px qui dépassaient — le « m » de la hauteur
-   de pose y passait. Les lignes se serrent maintenant à la largeur du panneau. */
+/* The space between the body and the foot is part of the body: it folds with it.
+   `minmax(0, 1fr)` and not the default `auto` column: an auto column never goes below the
+   min-content of its rows (the four height presets, the "Remove from house" pill),
+   and the body, in `overflow: hidden`, then cut the 3 px that stuck out — the "m" of the mounting
+   height went through there. The rows now squeeze to the panel's width. */
 .place__inner { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; padding-bottom: 12px; }
 .place__foot, .place__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .place__top { align-items: flex-start; }
 .place__hint { margin: 0; font-size: 12px; flex: 1 1 auto; }
 .place__revert { flex: 0 0 auto; }
 .place__revert--off { visibility: hidden; }
-/* même largeur pour « Déplacer » et « Terminé » : le bouton ne change ni de place ni de taille */
+/* same width for "Move" and "Done": the button changes neither place nor size */
 .place__cta { min-width: 124px; justify-content: center; }
 .place__value { font-variant-numeric: tabular-nums; font-weight: 600; }
 .place__coords { font-size: 12px; font-variant-numeric: tabular-nums; min-width: 0; }
 .place__bottom { align-items: center; }
-/* largeur fixe pour les deux libellés (« Retirer de la maison » / « Confirmer le retrait ») : rien ne bouge */
+/* fixed width for both labels ("Remove from house" / "Confirm removal"): nothing moves */
 .place__remove { flex: 0 0 auto; min-width: 150px; justify-content: center; font-size: 12px; }
 .place__remove--off { visibility: hidden; }
 .place__remove--armed { border-color: var(--error, #e5484d); color: var(--error, #e5484d); }
 .place__turn { display: inline-flex; align-items: center; gap: 6px; }
-/* le sélecteur de niveau reste au bout de sa ligne, à largeur fixe : changer de niveau ne déplace rien */
+/* the level selector stays at the end of its row, at fixed width: changing level moves nothing */
 .place__level { flex: 0 0 auto; width: 150px; }
-/* deux choix seulement : le segmenté reste au bout de sa ligne plutôt que d'en prendre la largeur */
+/* only two choices: the segmented control stays at the end of its row rather than taking its width */
 .place__leaves { flex: 0 0 auto; }
-/* Les quatre préréglages de hauteur demandaient 264 px pour 257 : dès que le panneau prend sa barre
-   de défilement, la dernière pilule débordait de la carte. Un segmenté ne se serre pas tout seul (ses
-   mots ne se coupent pas), on lui reprend donc quelques pixels sur les côtés de chaque segment. */
+/* The four height presets asked for 264 px out of 257: as soon as the panel takes its scrollbar,
+   the last pill overflowed the card. A segmented control does not squeeze by itself (its
+   words do not break), so we take a few pixels back on the sides of each segment. */
 .place__presets { max-width: 100%; }
 .place__presets :deep(.segmented__item) { padding: 0 8px; }
-/* largeur fixe (« 315° », « 10.25 ») : la valeur change sans déplacer les touches */
+/* fixed width ("315°", "10.25"): the value changes without moving the keys */
 .place__deg { width: 5ch; display: inline-flex; align-items: center; justify-content: center; }
 .place__unit { flex: 0 0 auto; }
-/* Le champ de saisie occupe exactement la place qu'occupait le texte : même police, même graisse,
-   même largeur, chiffres à chasse fixe — passer en édition ne déplace donc rien. Le soulignement est
-   posé en `box-shadow` et non en bordure, pour la même raison. */
+/* The input field occupies exactly the place the text occupied: same font, same weight,
+   same width, fixed-width digits — switching to edit therefore moves nothing. The underline is
+   set as `box-shadow` and not as a border, for the same reason. */
 .place__num {
   width: 3.5ch; min-width: 0; height: 30px; padding: 0; border: 0; background: transparent;
   color: inherit; font: inherit; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums;

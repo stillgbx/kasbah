@@ -7,13 +7,13 @@ import type { WeatherPlace } from '../../api/transport'
 import { useWeatherPlaces } from '../../composables/useWeather'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Barre de lieux de la vue Météo, dans l'en-tête : la maison, les favoris, et le lieu affiché s'il
-// n'est pas favori (pastille en pointillés, étoile pour le garder) ; la pastille allumée dit TOUJOURS
-// ce qu'on regarde. À droite, la recherche : ses résultats s'ouvrent PAR-DESSUS la page, rien ne bouge.
+// Places bar of the Weather view, in the header: the house, the favorites, and the displayed place if it
+// is not a favorite (dotted pill, star to keep it); the lit pill ALWAYS says
+// what is being looked at. On the right, the search: its results open OVER the page, nothing moves.
 const { t, locale } = useI18n()
 const places = useWeatherPlaces()
 const selected = places.selected
-/** Le lieu affiché hors favoris : sa pastille provisoire, en fin de rangée. */
+/** The place displayed outside the favorites: its temporary pill, at the end of the row. */
 const transient = computed(() => (selected.value && !places.isFavorite(selected.value) ? selected.value : null))
 const isOn = (p: WeatherPlace | null) => (p ? selected.value?.id === p.id : !selected.value)
 const titleOf = (p: WeatherPlace) => (p.region ? `${p.name} — ${p.region}` : p.name)
@@ -84,7 +84,7 @@ function onKey(e: KeyboardEvent): void {
           <StrokeIcon name="close" :size="12" />
         </button>
       </div>
-      <!-- par-dessus la page : `mousedown.prevent` garde le champ actif, le clic choisit avant que le flou ne ferme -->
+      <!-- over the page: `mousedown.prevent` keeps the field active, the click chooses before the blur closes -->
       <div v-if="open && status !== 'idle'" class="wxp__menu card" role="listbox">
         <div v-if="status === 'loading' && !results.length" class="wxp__note muted">{{ t('weather.searching') }}</div>
         <div v-else-if="status === 'error'" class="wxp__note muted">{{ t('weather.searchFailed') }}</div>
@@ -102,7 +102,7 @@ function onKey(e: KeyboardEvent): void {
 
 <style scoped>
 .wxp { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 0 1 auto; }
-/* une seule rangée qui défile de côté : ajouter un favori n'agrandit jamais l'en-tête */
+/* a single row that scrolls sideways: adding a favorite never enlarges the header */
 .wxp__pills { display: flex; gap: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none; padding: 2px; }
 .wxp__pills::-webkit-scrollbar { display: none; }
 .wxp-pill {
@@ -151,8 +151,8 @@ button.wxp-pill { cursor: pointer; }
 .wxp__row-name { font-size: 14px; font-weight: 500; white-space: nowrap; }
 .wxp__row-region { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
-/* étroit : la recherche garde sa place, les pastilles se serrent et défilent */
+/* narrow: the search keeps its place, the pills squeeze and scroll */
 @media (max-width: 760px) { .wxp__search { flex-basis: 180px; } }
-/* téléphone : les pastilles au-dessus, la recherche dessous, chacune sur toute la largeur */
+/* phone: the pills above, the search below, each over the full width */
 @media (max-width: 560px) { .wxp { flex-wrap: wrap; row-gap: 8px; } .wxp__pills, .wxp__search { flex: 1 1 100%; } }
 </style>

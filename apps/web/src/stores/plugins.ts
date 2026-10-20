@@ -5,14 +5,14 @@ import { ApiRequestError, getTransport } from '../api'
 import { t } from '../i18n'
 import { useNotificationsStore } from './notifications'
 
-// Plugins : le serveur les déclare TOUS, la maison dit lesquels tournent (`house.plugins`). Ce
-// store n'est que le miroir de l'inventaire du serveur — l'écriture rend l'inventaire à jour, donc
-// aucune valeur n'est recalculée ici. Optimiste sur l'interrupteur, avec retour arrière : allumer
-// un fabricant demande une découverte, la réponse peut prendre une seconde.
+// Plugins: the server declares ALL of them, the house says which ones run (`house.plugins`). This
+// store is only the mirror of the server's inventory — the write returns the up-to-date inventory, so
+// no value is recomputed here. Optimistic on the switch, with rollback: turning on
+// a vendor requires a discovery, the answer may take a second.
 
 export const usePluginsStore = defineStore('plugins', () => {
   const list = shallowRef<PluginInfo[]>([])
-  /** Ids en cours d'écriture : l'interrupteur reste affiché, il attend juste. */
+  /** Ids being written: the switch stays displayed, it just waits. */
   const busy = ref<Record<string, boolean>>({})
   const loaded = ref(false)
 
@@ -21,11 +21,11 @@ export const usePluginsStore = defineStore('plugins', () => {
 
   async function load(): Promise<void> {
     try { list.value = await getTransport().getPlugins() }
-    catch { /* inventaire indisponible : l'écran le dit par sa liste vide */ }
+    catch { /* inventory unavailable: the screen says so through its empty list */ }
     finally { loaded.value = true }
   }
 
-  /** Écrit un choix et adopte l'inventaire renvoyé par le serveur. */
+  /** Writes a choice and adopts the inventory returned by the server. */
   async function patch(pluginId: string, body: PluginSettingsPatch, optimistic: (p: PluginInfo) => PluginInfo): Promise<boolean> {
     const before = list.value
     list.value = before.map((p) => (p.id === pluginId ? optimistic(p) : p))

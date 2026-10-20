@@ -6,31 +6,32 @@ import { coverAtRest, isFlatCover, isPassageCover } from '../../lib/cover'
 import { useDevicesStore } from '../../stores/devices'
 import Segmented from '../ui/Segmented.vue'
 
-// Commande d'ensemble des ouvrants, en haut de la vue Ouvrants. Comme celle des lampes
-// (`LightsMaster`), le protocole n'a rien de tel — c'est un LOT de commandes (`runScene`) — et ce
-// sont DEUX gestes nommés plutôt qu'un interrupteur : sur dix-neuf ouvrants dont seize sont
-// ouverts, un interrupteur laissait deviner ce que l'appui allait faire.
+// Master control of the covers, at the top of the Covers view. Like the one for lights
+// (`LightsMaster`), the protocol has nothing of the kind — it is a BATCH of commands (`runScene`) —
+// and there are TWO named gestures rather than a switch: with nineteen covers of which sixteen are
+// open, a switch left one guessing what the press would do.
 //
-// Les deux gestes ne sont volontairement pas symétriques :
+// The two gestures are deliberately not symmetrical:
 //
-// - **« Tout fermer » met chacun AU REPOS** : volets et portail fermés, stores REMONTÉS. Un store
-//   déployé n'est pas une maison sécurisée, c'est de la toile au vent — fermer ne doit donc jamais
-//   le baisser, alors que la commande `cover.close` le ferait (`lib/cover.ts`, `coverAtRest`).
-// - **« Tout ouvrir » n'ouvre que les VOLETS.** Ni le portail ni les stores ne bougent : un geste
-//   d'ensemble n'ouvre pas sur la rue, et ne déploie pas une toile. Ce qu'on ouvre par erreur ici
-//   coûte plus cher que ce qu'on oublie d'ouvrir. Sans rien à ouvrir (une terrasse de stores et un
-//   portail), le segment est grisé : il ne promet pas un geste qu'il ne ferait pas.
+// - **"Close all" puts each one AT REST**: shutters and gate closed, awnings RETRACTED. A deployed
+//   awning is not a secured house, it is fabric in the wind — closing must therefore never lower
+//   it, whereas the `cover.close` command would (`lib/cover.ts`, `coverAtRest`).
+// - **"Open all" opens only the SHUTTERS.** Neither the gate nor the awnings move: a master gesture
+//   does not open onto the street, and does not deploy a fabric. What is opened by mistake here
+//   costs more than what is forgotten to open. With nothing to open (a terrace of awnings and a
+//   gate), the segment is grayed out: it does not promise a gesture it would not make.
 //
-// Une position inconnue est supposée au repos pour l'ÉTAT montré (sans ça, un portail muet suffisait
-// à ne jamais rien allumer) mais reçoit quand même la commande quand on ferme : on ne sait pas où il
-// en est, et fermer ce qui est déjà fermé ne coûte rien.
+// An unknown position is assumed at rest for the STATE shown (without that, a silent gate was
+// enough to never light anything) but still receives the command when closing: we do not know
+// where it stands, and closing what is already closed costs nothing.
 //
-// Tout se lit sur la position VISÉE quand le store en tient une (`targetPosition`), jamais sur la
-// seule position publiée. C'est ce qui permet de se raviser : un volet lancé vers le bas compte
-// comme fermé dès le geste, donc « Tout ouvrir » dans la seconde qui suit le voit encore à ouvrir
-// et le relance — alors qu'avec la position du moteur, muette pendant les ~20 s de descente, il
-// l'aurait cru déjà ouvert et ne lui aurait rien dit. C'est aussi ce qui fait prendre au segment sa
-// valeur cible au doigt, et revenir tout seul si le serveur refuse (le store libère la cible).
+// Everything is read on the TARGETED position when the store holds one (`targetPosition`), never on
+// the published position alone. That is what allows changing one's mind: a shutter sent down counts
+// as closed from the gesture on, so "Open all" within the next second still sees it as needing
+// opening and sends it again — whereas with the motor position, silent during the ~20 s of descent,
+// it would have believed it already open and said nothing to it. It is also what makes the segment
+// take its target value under the finger, and come back by itself if the server refuses (the store
+// releases the target).
 type Choice = 'rest' | 'open' | ''
 
 const props = defineProps<{ entries: DeviceEntry[]; label: string }>()
@@ -41,7 +42,7 @@ const covers = computed(() => props.entries.filter((e) => e.state.kind === 'cove
 const reachable = computed(() => covers.value.filter((e) => e.state.available))
 const position = (e: DeviceEntry) => devices.targetPosition(e.descriptor.id) ?? (e.state as StateFor<'cover'>).position
 const atRest = (e: DeviceEntry) => coverAtRest(e.descriptor, position(e))
-/** Ce que le geste « ouvrir » touche : volets, rideaux, fenêtres — jamais un passage ni un store. */
+/** What the "open" gesture touches: shutters, curtains, windows — never a passage nor an awning. */
 const openable = computed(() => reachable.value.filter((e) => !isFlatCover(e.descriptor) && !isPassageCover(e.descriptor)))
 
 const value = computed<Choice>(() => {
@@ -57,13 +58,13 @@ const options = computed(() => [
 
 function apply(choice: Choice) {
   if (choice === 'open') {
-    // les volets qu'on ne sait pas déjà grands ouverts
+    // the shutters not already known to be wide open
     const targets = openable.value.filter((e) => (position(e) ?? 0) < 100)
     void devices.runScene(targets.map((e) => ({ deviceId: e.descriptor.id, command: { type: 'cover.open' as const } })))
     return
   }
   if (choice !== 'rest') return
-  // chacun vers son repos — fermer ce qui se tient debout, remonter les stores
+  // each toward its rest — close what stands upright, retract the awnings
   const targets = reachable.value.filter((e) => position(e) === undefined || !atRest(e))
   void devices.runScene(targets.map((e) => ({
     deviceId: e.descriptor.id,

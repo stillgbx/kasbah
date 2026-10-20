@@ -22,7 +22,7 @@ describe('alerts store', () => {
     expect(alerts.viewSeverity('robots')).toBeNull()
     alerts.markViewSeen('vehicles')
     expect(alerts.viewSeverity('vehicles')).toBeNull()
-    // une autre version revient d'elle-même
+    // another version comes back by itself
     devices.applyMessage({ type: 'state', deviceId: 'tesla:car', state: carState({ softwareUpdate: { status: 'available', version: '2026.40' } }) })
     await nextTick()
     expect(alerts.viewSeverity('vehicles')).toBe('info')
@@ -56,7 +56,7 @@ describe('alerts store', () => {
   })
 
   it('forgets a dismissed alert once a reading says it is over, not before', async () => {
-    // démarrage : rien de reçu, le stockage garde tout
+    // startup: nothing received, the storage keeps everything
     localStorage.setItem('kasbah.alerts.dismissed', JSON.stringify({ 'tesla:car|software_update|2026.38': 'tesla:car' }))
     const fresh = useAlertsStore()
     await nextTick()
@@ -65,10 +65,10 @@ describe('alerts store', () => {
     const d = useDevicesStore()
     d.setEntries([{ descriptor: car, state: carState({ ...update, available: false }) }])
     await nextTick()
-    expect(fresh.isDismissed('tesla:car|software_update|2026.38')).toBe(true) // injoignable : inconnu
+    expect(fresh.isDismissed('tesla:car|software_update|2026.38')).toBe(true) // unreachable: unknown
     d.applyMessage({ type: 'state', deviceId: 'tesla:car', state: carState() })
     await nextTick()
-    expect(fresh.isDismissed('tesla:car|software_update|2026.38')).toBe(false) // installée : oubliée
+    expect(fresh.isDismissed('tesla:car|software_update|2026.38')).toBe(false) // installed: forgotten
   })
 
   it('forgets the alerts of a device that no longer exists', async () => {

@@ -9,17 +9,17 @@ import { t } from '../i18n'
 import { useHouseStore } from './house'
 import { useNotificationsStore } from './notifications'
 
-// Liste de courses de la maison, miroir du serveur : REMPLACÉE à chaque message (`snapshot`,
-// `shopping`). Chaque geste est OPTIMISTE — on coche au magasin, la ligne doit se barrer sous le
-// doigt, pas après l'aller-retour — par les mêmes opérations pures que le serveur ; un refus remet
-// la liste d'avant, si rien d'autre ne l'a changée entre-temps.
+// The house's shopping list, a mirror of the server: REPLACED on each message (`snapshot`,
+// `shopping`). Each gesture is OPTIMISTIC — one ticks off at the shop, the row must be struck
+// through under the finger, not after the round trip — through the same pure operations as the server; a refusal puts
+// the previous list back, if nothing else changed it in the meantime.
 
-/** Propositions de la recherche, au plus. */
+/** Suggestions of the search, at most. */
 export const SHOPPING_SUGGESTIONS = 8
 
 export const useShoppingStore = defineStore('shopping', () => {
   const list = shallowRef<ShoppingList>(EMPTY_SHOPPING_LIST)
-  /** Coupée dans Réglages → Plugins (`plugins.shopping` de la maison) ; allumée tant qu'elle n'en dit rien. */
+  /** Turned off in Settings → Plugins (the house's `plugins.shopping`); on as long as it says nothing. */
   const house = useHouseStore()
   const enabled = computed(() => pluginSettingsOf(house.house?.plugins ?? {}, 'shopping').enabled)
 
@@ -29,18 +29,18 @@ export const useShoppingStore = defineStore('shopping', () => {
 
   const items = computed(() => list.value.items)
   const checkedCount = computed(() => list.value.items.filter((i) => i.checked).length)
-  /** Les habituels, par nom : un ordre FIXE, une tuile ne change pas de place quand on la touche. */
+  /** The usual ones, by name: a FIXED order, a tile does not change place when touched. */
   const favorites = computed(() => list.value.products.filter((p) => p.favorite).sort((a, b) => a.name.localeCompare(b.name)))
   const favoriteIds = computed(() => new Set(favorites.value.map((p) => p.id)))
-  /** Produits à acheter (non cochés) : une tuile habituelle s'y grise. */
+  /** Products to buy (not ticked): a usual tile grays out there. */
   const toBuyIds = computed(() => new Set(list.value.items.filter((i) => !i.checked).map((i) => i.id)))
 
   const isFavorite = (name: string) => favoriteIds.value.has(shoppingKey(name))
   const isToBuy = (name: string) => toBuyIds.value.has(shoppingKey(name))
 
   /**
-   * Produits connus qui contiennent la saisie (sans casse ni accents) : début de nom d'abord, puis
-   * habituels, puis les plus souvent achetés.
+   * Known products that contain the input (case- and accent-insensitive): start of name first, then
+   * usual ones, then the most often bought.
    */
   function suggest(query: string): ShoppingProduct[] {
     const q = shoppingKey(query)
@@ -77,7 +77,7 @@ export const useShoppingStore = defineStore('shopping', () => {
   const setFavorite = (name: string, favorite: boolean) =>
     run(setShoppingFavorite(list.value, name, favorite, now()), () => getTransport().setShoppingFavorite(name, favorite))
 
-  /** Relit la liste (première ouverture de la vue, avant tout message). */
+  /** Rereads the list (first opening of the view, before any message). */
   async function load(): Promise<void> {
     try { list.value = await getTransport().getShopping() }
     catch (err) { useNotificationsStore().error(t('shopping.toast.error', { message: (err as Error).message })) }

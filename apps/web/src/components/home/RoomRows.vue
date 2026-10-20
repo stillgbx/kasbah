@@ -6,18 +6,18 @@ import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import RoomLightsToggle from '../devices/RoomLightsToggle.vue'
 
-// Lignes de pièce (ou de zone du jardin), partagées par le panneau maison et le panneau d'un
-// niveau : nom, compteurs, interrupteur maître des lampes, sélection au clic. `where` ne sert qu'au
-// panneau maison, qui mêle tous les niveaux — dans un niveau, il répéterait le titre.
+// Room rows (or garden zone rows), shared by the house panel and a level's
+// panel: name, counters, master switch for the lights, selection on click. `where` is only used by the
+// house panel, which mixes all the levels — in a level, it would repeat the title.
 const props = defineProps<{ rows: { id: string; name: string; where?: string; deviceIds: (string | undefined)[] }[] }>()
 const house = useHouseStore()
 const devices = useDevicesStore()
 const { t } = useI18n()
 
-/** « 5 appareils · 2 actifs » : l'inventaire de la pièce, et ce qui y est actif en ce moment. */
+/** "5 devices · 2 active": the room's inventory, and what is active in it right now. */
 function counts(ids: (string | undefined)[]) {
   const bound = ids.filter((id): id is string => !!id && !!devices.states[id])
-  // actif par lui-même, ou parce qu'il joue le son d'un autre (barre de son d'une TV, `lib/audioRouting.ts`)
+  // active by itself, or because it plays another one's sound (a TV's soundbar, `lib/audioRouting.ts`)
   const on = bound.filter((id) => isDeviceOn(devices.states[id]!, devices.descriptors[id]) || house.soundRoutes.relays.has(id)).length
   return `${t('home.devicesCount', { n: ids.length }, ids.length)} · ${t('home.active', { n: on }, on)}`
 }
@@ -25,8 +25,8 @@ const list = computed(() => props.rows.map((r) => ({ ...r, sub: counts(r.deviceI
 </script>
 
 <template>
-  <!-- `div` et non `button` : la ligne porte un interrupteur, et un bouton dans un bouton n'est pas
-       du HTML valide (l'imbrication casse le clic sur Safari iOS) -->
+  <!-- `div` and not `button`: the row carries a switch, and a button inside a button is not
+       valid HTML (the nesting breaks the click on Safari iOS) -->
   <div v-for="r in list" :key="r.id" class="room-row" role="button" tabindex="0"
        :data-on="house.selectedRoomId === r.id ? '1' : '0'" @click="house.selectRoom(r.id)" @keydown.enter="house.selectRoom(r.id)">
     <div class="room-row__main">
@@ -34,7 +34,7 @@ const list = computed(() => props.rows.map((r) => ({ ...r, sub: counts(r.deviceI
       <div class="room-row__sub">{{ r.sub }}</div>
     </div>
     <div v-if="r.where" class="room-row__where">{{ r.where }}</div>
-    <!-- éteindre une pièce sans y entrer : le geste le plus court depuis le panneau -->
+    <!-- turn a room off without entering it: the shortest gesture from the panel -->
     <RoomLightsToggle :device-ids="r.deviceIds" />
   </div>
 </template>
@@ -48,9 +48,9 @@ const list = computed(() => props.rows.map((r) => ({ ...r, sub: counts(r.deviceI
 .room-row:hover { filter: brightness(1.03); }
 .room-row[data-on='1'] { outline: 2px solid var(--accent); outline-offset: -2px; }
 .room-row__main { flex: 1 1 0; min-width: 0; }
-/* une ligne chacun, coupés aux points de suspension comme partout ailleurs : l'interrupteur maître
-   a pris 52 px, et sans cela « Salle de Jeux · Rez-de-chaussée » passait sur deux lignes — la
-   liste n'aurait plus eu des lignes de même hauteur */
+/* one line each, cut with ellipsis as everywhere else: the master switch
+   took 52 px, and without this "Game room · Ground floor" went onto two lines — the
+   list would no longer have had rows of the same height */
 .room-row__name { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .room-row__sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .room-row__where { font-size: 12px; color: var(--muted); white-space: nowrap; }

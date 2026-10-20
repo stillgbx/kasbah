@@ -8,9 +8,9 @@ import { SPECIES, speciesOf, type SpeciesRecipe } from '../../three/garden/speci
 import { autoHedgeSpacing } from '../../three/garden/hedgeShape'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Panneau « élément du jardin » : sa famille, sa hauteur, son cap, une autre forme, le supprimer.
-// Mêmes idiomes que `ParkingPanel` (touches −/+, saisie qui ne s'écrit qu'à la validation, virgule
-// acceptée, chiffres à chasse fixe, suppression en deux temps).
+// "Garden item" panel: its family, its height, its heading, another shape, delete it.
+// Same idioms as `ParkingPanel` (−/+ keys, input that is only written on validation, comma
+// accepted, fixed-width digits, two-step deletion).
 const emit = defineEmits<{ back: [] }>()
 const house = useHouseStore()
 
@@ -20,11 +20,11 @@ const busy = computed(() => house.savingGarden)
 const { t, locale } = useI18n()
 const speciesName = (s: SpeciesRecipe) => (locale.value.startsWith('en') ? s.name.en : s.name.fr)
 const species = computed(() => (item.value ? speciesOf(item.value) : undefined))
-/** Les espèces de la famille de l'élément : on ne fait pas d'un palmier un cerisier. */
+/** The species of the item's family: we do not make a palm into a cherry tree. */
 const kindSpecies = computed(() => SPECIES.filter((s) => s.kind === item.value?.kind))
 const title = computed(() => (species.value ? speciesName(species.value) : item.value ? t(`garden.kinds.${item.value.kind}`) : ''))
 
-/** Changer de famille rend la forme générique : l'espèce appartenait à l'ancienne. */
+/** Changing family gives back the generic shape: the species belonged to the old one. */
 function setKind(kind: GardenKind) {
   if (item.value && item.value.kind !== kind) void house.saveGardenItem({ kind, species: '' })
 }
@@ -32,7 +32,7 @@ function setSpecies(id: string) {
   if (item.value && (item.value.species ?? '') !== id) void house.saveGardenItem({ species: id })
 }
 
-// --- hauteur : pas de 10 cm sous 2 m (buisson, pierre), de 50 cm au-dessus (arbre)
+// --- height: steps of 10 cm under 2 m (bush, stone), of 50 cm above (tree)
 const round = (v: number) => Math.round(v * 100) / 100
 const clampHeight = (v: number) => Math.min(MAX_GARDEN_HEIGHT, Math.max(MIN_GARDEN_HEIGHT, round(v)))
 const height = computed(() => item.value?.height ?? 0)
@@ -59,7 +59,7 @@ function commitHeight() {
   if (next !== height.value) void house.saveGardenItem({ height: next })
 }
 
-// --- longueur d'une haie : pas de 50 cm
+// --- length of a hedge: steps of 50 cm
 const LENGTH_STEP = 0.5
 const clampLength = (v: number) => Math.min(MAX_HEDGE_LENGTH, Math.max(MIN_HEDGE_LENGTH, round(v)))
 const length = computed(() => item.value?.length ?? DEFAULT_HEDGE_LENGTH)
@@ -84,7 +84,7 @@ function commitLength() {
   if (next !== length.value) void house.saveGardenItem({ length: next })
 }
 
-// --- largeur d'une haie : pas de 10 cm
+// --- width of a hedge: steps of 10 cm
 const WIDTH_STEP = 0.1
 const clampWidth = (v: number) => Math.min(MAX_HEDGE_WIDTH, Math.max(MIN_HEDGE_WIDTH, round(v)))
 const width = computed(() => item.value?.width ?? DEFAULT_HEDGE_WIDTH)
@@ -109,7 +109,7 @@ function commitWidth() {
   if (next !== width.value) void house.saveGardenItem({ width: next })
 }
 
-// --- espacement entre les sujets d'une haie : pas de 10 cm ; absent, la valeur automatique s'affiche
+// --- spacing between the plants of a hedge: steps of 10 cm; when absent, the automatic value is displayed
 const SPACING_STEP = 0.1
 const clampSpacing = (v: number) => Math.min(MAX_HEDGE_SPACING, Math.max(MIN_HEDGE_SPACING, round(v)))
 const spacing = computed(() => item.value?.spacing ?? round(autoHedgeSpacing(width.value)))
@@ -133,11 +133,11 @@ function commitSpacing() {
   const next = clampSpacing(raw)
   if (next !== spacing.value) void house.saveGardenItem({ spacing: next })
 }
-/** Espacement réglé : la pastille « auto » y ramène ; automatique, elle le dit (même place, rien ne bouge). */
+/** Spacing set: the "auto" pill brings it back; when automatic, it says so (same place, nothing moves). */
 const spacingSet = computed(() => item.value?.spacing !== undefined)
 function resetSpacing() { if (spacingSet.value) void house.saveGardenItem({ spacing: null }) }
 
-// --- cap : sens trigonométrique, comme une place (la touche de gauche fait tourner à gauche)
+// --- heading: counterclockwise, like a place (the left key turns left)
 const YAW_STEP = 15
 const norm = (deg: number) => ((Math.round(deg) % 360) + 360) % 360
 const yaw = computed(() => norm(item.value?.yaw ?? 0))
@@ -158,7 +158,7 @@ function commitYaw() {
   void house.saveGardenItem({ yaw: norm(raw) })
 }
 
-// --- supprimer : armer, puis confirmer dans les 4 s
+// --- delete: arm, then confirm within 4 s
 const removeArmed = ref(false)
 let disarm: ReturnType<typeof setTimeout> | undefined
 function clickRemove() {
@@ -361,15 +361,15 @@ onBeforeUnmount(() => clearTimeout(disarm))
 .gp__species { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; }
 .gp__sp[data-on='1'] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .gp__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-/* libellé et pastille empilés : côte à côte, ils faisaient déborder la carte de 23 px */
+/* label and pill stacked: side by side, they made the card overflow by 23 px */
 .gp__lab { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; }
-/* pastille « auto » : largeur fixe, qu'elle porte l'icône de retour ou non */
+/* "auto" pill: fixed width, whether it carries the return icon or not */
 .gp__auto { box-sizing: border-box; width: 76px; height: 24px; min-height: 0; padding: 0 8px; justify-content: center; gap: 4px; font-size: 11px; line-height: 1; }
 .gp__auto[data-on='1'] { background: transparent; color: var(--muted); border-color: var(--border, currentColor); }
 .gp__auto[data-on='1']:disabled { opacity: 1; }
 .gp__turn { display: inline-flex; align-items: center; gap: 6px; }
 .gp__val { display: inline-flex; align-items: baseline; gap: 1px; }
-/* largeur fixe (« 12.34 ») : la valeur change sans déplacer les touches */
+/* fixed width ("12.34"): the value changes without moving the keys */
 .gp__num {
   width: 5ch; min-width: 0; height: 30px; padding: 0; border: 0; background: transparent;
   color: inherit; font: inherit; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums;

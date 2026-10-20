@@ -9,12 +9,12 @@ import { dayOf, delayUntil } from '../../lib/vehicleSoftware'
 import { useDevicesStore } from '../../stores/devices'
 import { useSettingsStore } from '../../stores/settings'
 
-// Logiciel d'un véhicule : une ligne de la carte (version installée, mise à jour en attente), qui
-// ouvre une boîte PAR-DESSUS la page — rien ne bouge — avec les notes de la version à venir, la
-// programmation de son installation, et l'historique des notes.
+// A vehicle's software: a row of the card (installed version, pending update), which
+// opens a box OVER the page — nothing moves — with the notes of the upcoming version, the
+// scheduling of its installation, and the history of the notes.
 //
-// La ligne existe TOUJOURS (« — » à défaut, grisée pour un véhicule qui n'en dit rien, la R5) : une
-// mise à jour qui apparaît change son texte, jamais la hauteur de la carte.
+// The row ALWAYS exists ("—" by default, grayed out for a vehicle that says nothing about it, the R5): an
+// update that appears changes its text, never the height of the card.
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'vehicle'> }>()
 
 const { t, locale } = useI18n()
@@ -28,7 +28,7 @@ const update = computed(() => props.state.softwareUpdate)
 const asleep = computed(() => props.state.sleepState !== undefined && props.state.sleepState !== 'online')
 
 const time = (ms: number) => new Date(ms).toLocaleTimeString(locale.value, { hour: '2-digit', minute: '2-digit' })
-/** « à 02:00 », « demain à 02:00 », « le 5 oct. à 02:00 » */
+/** "at 02:00", "tomorrow at 02:00", "on Oct 5 at 02:00" */
 function when(at: number): string {
   const day = dayOf(at, Date.now())
   if (day === 'today') return t('vehicle.software.at', { time: time(at) })
@@ -36,13 +36,13 @@ function when(at: number): string {
   return t('vehicle.software.onDate', { date: new Date(at).toLocaleDateString(locale.value, { day: 'numeric', month: 'short' }), time: time(at) })
 }
 /**
- * Sous ce délai, une installation programmée se montre en DÉCOMPTE, avec l'annulation seule — comme
- * l'appli Tesla après « Installer maintenant » (Tesla laisse lui-même quelques minutes, vu le 2026-10-02).
+ * Under this delay, a scheduled installation is shown as a COUNTDOWN, with cancellation only — like
+ * the Tesla app after "Install now" (Tesla itself leaves a few minutes, seen on 2026-10-02).
  */
 const COUNTDOWN_MS = 15 * 60_000
 /**
- * L'horloge de la vue, tant qu'une installation est programmée : à la demi-minute de loin, à la
- * seconde à l'approche du décompte. Elle s'arrête d'elle-même quand plus rien n'est programmé.
+ * The view's clock, as long as an installation is scheduled: every half minute from afar, every
+ * second as the countdown approaches. It stops by itself when nothing is scheduled anymore.
  */
 const now = ref(Date.now())
 let tick: ReturnType<typeof setTimeout> | null = null
@@ -55,7 +55,7 @@ function loop(): void {
 watch(() => update.value?.status === 'scheduled', (v) => { if (v && !tick) loop() }, { immediate: true })
 onBeforeUnmount(() => { if (tick) clearTimeout(tick) })
 
-/** Où en est l'installation : prête (programmable), décompte, démarrage attendu, en cours. */
+/** Where the installation stands: ready (schedulable), countdown, start awaited, in progress. */
 type Phase = 'ready' | 'countdown' | 'starting' | 'installing' | 'other'
 const phase = computed<Phase>(() => {
   const u = update.value
@@ -73,14 +73,14 @@ const left = computed(() => {
   const sec = Math.ceil(ms / 1000)
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
 })
-/** Fin estimée d'après la progression et la durée annoncée : rien quand l'une des deux manque. */
+/** Estimated end from the progress and the announced duration: nothing when either is missing. */
 const endsAround = computed(() => {
   const u = update.value
   if (u?.status !== 'installing' || !u.expectedDurationS || u.installPct === undefined) return ''
   return t('vehicle.software.endsAround', { time: time(Date.now() + u.expectedDurationS * 1000 * (1 - u.installPct / 100)) })
 })
 
-/** Où en est la mise à jour, en une ligne ; vide quand rien n'attend. */
+/** Where the update stands, in one line; empty when nothing is pending. */
 const status = computed(() => {
   const u = update.value
   if (!u) return ''
@@ -96,13 +96,13 @@ const status = computed(() => {
 })
 const line = computed(() => [props.state.softwareVersion ?? EMPTY, status.value].filter(Boolean).join(' · '))
 
-// ---- la boîte ---------------------------------------------------------------------------------
+// ---- the box ----------------------------------------------------------------------------------
 
 const open = ref(false)
 const notes = ref<DeviceReleaseNotes | null>(null)
 const loading = ref(false)
 const failed = ref(false)
-/** Les notes viennent du cache du serveur : les redemander à l'ouverture ne coûte aucun appel au fabricant. */
+/** The notes come from the server's cache: asking for them again on opening costs no call to the vendor. */
 async function load(): Promise<void> {
   if (!has('release_notes')) return
   loading.value = true
@@ -112,20 +112,20 @@ async function load(): Promise<void> {
   finally { loading.value = false }
 }
 watch(open, (v) => { if (v) void load() })
-// une version installée ou attendue qui change pendant que la boîte est ouverte : ses notes aussi
-// … et la langue de l'app, qui choisit celle des notes
+// a version installed or awaited that changes while the box is open: its notes too
+// … and the app's language, which chooses that of the notes
 watch(() => `${props.state.softwareVersion}|${update.value?.version}|${locale.value}`, () => { if (open.value) void load() })
-/** Notes servies dans une autre langue que celle de l'app : le fabricant ne la publie pas (ou pas encore lue). */
+/** Notes served in a language other than the app's: the vendor does not publish it (or not yet read). */
 const fallback = computed(() => !!notes.value?.lang && notes.value.lang !== locale.value)
 
-/** L'illustration du thème courant : Tesla en publie une pour le sombre, une pour le clair. */
+/** The illustration of the current theme: Tesla publishes one for dark, one for light. */
 const image = (n: ReleaseNote) => (settings.isDark ? n.imageUrl ?? n.lightImageUrl : n.lightImageUrl ?? n.imageUrl)
 
-// ---- installer --------------------------------------------------------------------------------
+// ---- install ----------------------------------------------------------------------------------
 
-/** On ne programme que ce qui est TÉLÉCHARGÉ : Tesla refuserait le reste. */
+/** We only schedule what is DOWNLOADED: Tesla would refuse the rest. */
 const wakeText = computed(() => {
-  // l'installation lancée, la voiture n'attend plus de commande : on dit ce qu'elle fait
+  // installation started, the car no longer awaits a command: we say what it is doing
   if (phase.value === 'starting' || phase.value === 'installing') return t('vehicle.software.blockedNow')
   if (phase.value === 'countdown' && !asleep.value) return t('vehicle.software.countdownHint')
   return t(asleep.value ? (waking.value ? 'vehicle.software.waking' : 'vehicle.software.wakeFirst') : 'vehicle.software.awake')
@@ -138,7 +138,7 @@ const duration = computed(() => {
   const s = update.value?.expectedDurationS
   return s ? formatMinutes(Math.round(s / 60), locale.value) : t('vehicle.software.unknownDuration')
 })
-/** Confirmation en cours : l'installation immobilise la voiture, c'est un geste qu'on confirme. */
+/** Confirmation in progress: the installation immobilizes the car, it is a gesture that is confirmed. */
 const confirming = ref<{ delayS: number; when: string } | null>(null)
 function ask(delayS: number): void {
   confirming.value = { delayS, when: delayS === 0 ? t('vehicle.software.now') : when(Date.now() + delayS * 1000) }
@@ -149,9 +149,9 @@ async function confirm(): Promise<void> {
   if (c) await devices.sendCommand(props.descriptor.id, { type: 'vehicle.schedule_update', delayS: c.delayS })
 }
 /**
- * Réveiller sans quitter la boîte : endormie, la voiture refuse l'installation. Comme le bouton de la
- * carte, le réveil est DEMANDÉ avant d'être constaté (une dizaine de secondes) : le bouton tourne
- * jusqu'à ce que la voiture se dise éveillée, ou `WAKE_MAX_MS` si elle ne répond pas.
+ * Wake without leaving the box: asleep, the car refuses the installation. Like the card's button,
+ * the wake-up is REQUESTED before being observed (about ten seconds): the button spins
+ * until the car says it is awake, or `WAKE_MAX_MS` if it does not answer.
  */
 const WAKE_MAX_MS = 90_000
 const waking = ref(false)
@@ -170,7 +170,7 @@ async function cancelSchedule(): Promise<void> {
 </script>
 
 <template>
-  <!-- la ligne : un seul bouton, la boîte s'ouvre par-dessus -->
+  <!-- the row: a single button, the box opens over it -->
   <button type="button" class="card card--soft soft" :disabled="!supported" :title="supported ? $t('vehicle.software.open') : $t('vehicle.unsupported')"
           :aria-haspopup="'dialog'" @click="open = true">
     <StrokeIcon class="wm" name="sparkle" :size="48" />
@@ -193,15 +193,15 @@ async function cancelSchedule(): Promise<void> {
         </button>
       </div>
       <div class="box__body">
-        <!-- à venir : la mise à jour en attente, ce qu'elle apporte, et son installation -->
+        <!-- upcoming: the pending update, what it brings, and its installation -->
         <section v-if="update" class="sec">
           <div class="section-label">{{ $t('vehicle.software.pending') }}</div>
           <div class="sec__status">{{ status }}</div>
-          <!-- la durée annoncée par le fabricant, quand il la donne : la voiture est bloquée pendant ce temps -->
+          <!-- the duration announced by the vendor, when it gives it: the car is blocked during that time -->
           <p v-if="update.expectedDurationS && update.status !== 'installing'" class="sec__duration">
             <StrokeIcon name="clock" :size="14" />{{ $t('vehicle.software.durationNote', { duration }) }}
           </p>
-          <!-- la zone d'action : une hauteur FIXE, quatre états — boutons, décompte, démarrage, progression -->
+          <!-- the action area: a FIXED height, four states — buttons, countdown, start, progress -->
           <div v-if="installable || phase === 'starting' || phase === 'installing'" class="stage">
           <div v-if="phase === 'countdown'" class="count">
             <div class="count__k muted">{{ $t('vehicle.software.countdown') }}</div>
@@ -235,8 +235,8 @@ async function cancelSchedule(): Promise<void> {
             </button>
           </div>
           </div>
-          <!-- une rangée de hauteur FIXE : endormie, l'explication et « Réveiller » ; réveillée, « prête » à
-               la même place — rien ne bouge dans la boîte quand la voiture ouvre les yeux -->
+          <!-- a row of FIXED height: asleep, the explanation and "Wake up"; awake, "ready" in
+               the same place — nothing moves in the box when the car opens its eyes -->
           <div v-if="installable || phase === 'starting' || phase === 'installing'" class="wakerow">
             <span class="muted wakerow__text" :title="wakeText">{{ wakeText }}</span>
             <button v-if="asleep && (phase === 'ready' || phase === 'countdown')" type="button" class="pill wakerow__btn" :disabled="!state.available || waking || busy"
@@ -255,7 +255,7 @@ async function cancelSchedule(): Promise<void> {
           <p v-else-if="has('release_notes') && !loading" class="muted hint">{{ $t('vehicle.software.notRead') }}</p>
         </section>
 
-        <!-- historique : ce que les versions installées ont apporté, la plus récente en haut -->
+        <!-- history: what the installed versions brought, the most recent at the top -->
         <section v-if="has('release_notes')" class="sec">
           <div class="section-label">{{ $t('vehicle.software.history') }}</div>
           <div v-if="loading && !notes" class="sec__loading"><v-progress-circular indeterminate size="20" width="2" /></div>
@@ -275,7 +275,7 @@ async function cancelSchedule(): Promise<void> {
     </div>
   </v-dialog>
 
-  <!-- l'installation immobilise la voiture : confirmée, avec sa durée -->
+  <!-- the installation immobilizes the car: confirmed, with its duration -->
   <v-dialog :model-value="confirming !== null" max-width="420" @update:model-value="(v: boolean) => { if (!v) confirming = null }">
     <div v-if="confirming" class="card box">
       <h2 class="box__title">{{ $t('vehicle.software.confirmTitle', { version: update?.version ?? '' }) }}</h2>
@@ -289,7 +289,7 @@ async function cancelSchedule(): Promise<void> {
 </template>
 
 <style scoped>
-/* la ligne : même boîte que les cases d'état de la carte (`.stat`), sur toute la largeur */
+/* the row: same box as the card's status cells (`.stat`), over the full width */
 .soft {
   position: relative; overflow: hidden; isolation: isolate; width: 100%; padding: 10px 12px;
   display: flex; align-items: center; gap: 8px; text-align: left; color: var(--text); font: inherit;
@@ -304,8 +304,8 @@ async function cancelSchedule(): Promise<void> {
 .soft:disabled .soft__chevron { opacity: 0; }
 .wm { position: absolute; right: -6px; bottom: -6px; z-index: -1; color: var(--text); opacity: .07; pointer-events: none; }
 
-/* toute la largeur que le v-dialog accorde (560 px au plus) : sans quoi la boîte prenait celle de son
-   contenu, plus étroite en anglais, et ses lignes changeaient de hauteur d'une langue à l'autre */
+/* the full width the v-dialog grants (560 px at most): otherwise the box took that of its
+   content, narrower in English, and its rows changed height from one language to another */
 .box { width: 100%; container-type: inline-size; padding: 18px 20px 20px; display: grid; gap: 12px; box-shadow: var(--shadow); max-height: 85vh; grid-template-rows: auto minmax(0, 1fr); }
 .box__head { display: flex; align-items: flex-start; gap: 12px; }
 .min0 { min-width: 0; flex: 1 1 auto; }
@@ -319,7 +319,7 @@ async function cancelSchedule(): Promise<void> {
 .sec__duration { margin: -4px 0 0; display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .sec__duration :deep(svg) { flex: none; color: var(--muted); }
 .sec__loading { display: grid; place-items: center; padding: 12px; }
-/* deux rangées de boutons : la hauteur la plus grande des quatre états, réservée pour tous */
+/* two rows of buttons: the greatest height of the four states, reserved for all */
 .stage { min-height: 88px; display: grid; align-content: start; }
 .acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .count { min-height: 88px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
@@ -339,14 +339,14 @@ async function cancelSchedule(): Promise<void> {
 }
 .hint { margin: 0; font-size: 12px; }
 .wakerow { height: 40px; display: flex; align-items: center; gap: 10px; }
-/* deux lignes au plus, dans la hauteur FIXE de la rangée : sur téléphone, le texte et le bouton ne
-   tiennent pas sur une ligne, et la rangée ne doit pas grandir d'un état à l'autre */
+/* two lines at most, within the FIXED height of the row: on a phone, the text and the button do not
+   fit on one line, and the row must not grow from one state to another */
 .wakerow__text {
   flex: 1 1 auto; min-width: 0; font-size: 12px; line-height: 16px; overflow: hidden;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
 }
 .wakerow__btn { flex: none; }
-/* boîte très étroite (téléphone zoomé) : le bouton passe SOUS le texte ; hauteur fixe ici aussi, avec ou sans bouton */
+/* very narrow box (zoomed phone): the button goes BELOW the text; fixed height here too, with or without a button */
 @container (max-width: 340px) {
   .wakerow { height: 84px; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 8px; }
   .wakerow__text { flex: none; }
@@ -356,7 +356,7 @@ async function cancelSchedule(): Promise<void> {
 .ver__name { font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; padding-top: 4px; border-top: 1px solid var(--line); }
 .ver:first-of-type .ver__name { border-top: 0; padding-top: 0; }
 .note { display: grid; gap: 4px; }
-/* place réservée au format des illustrations de Tesla (740 × 463) : rien ne saute quand elles arrivent */
+/* place reserved for the format of Tesla's illustrations (740 × 463): nothing jumps when they arrive */
 .note__img { width: 100%; aspect-ratio: 740 / 463; object-fit: contain; border-radius: var(--radius-sm); background: var(--surface2); margin-bottom: 4px; }
 .note__title { margin: 0; font-size: 14px; font-weight: 600; }
 .note__desc { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }

@@ -7,21 +7,21 @@ import { zoneRows, type ZoneRow } from '../../lib/siteMap'
 import { workAreaLabel } from '../../lib/mowerTask'
 import { useSceneZonesStore } from '../../stores/sceneZones'
 
-// Les zones d'une tondeuse, en UNE liste : d'abord tout le terrain et les câbles, puis les zones de
-// travail, enfin les exclusions et le réensauvagement. Chaque ligne fait ce que le robot permet —
-// tondre la zone une heure (Husqvarna exige une durée), ouvrir ou fermer une exclusion. Les zones se
-// TRACENT dans l'appli du fabricant : l'API ne sait ni les créer ni les redessiner.
+// A mower's zones, in ONE list: first the whole terrain and the cables, then the work
+// zones, finally the exclusions and the rewilding. Each row does what the robot allows —
+// mow the zone for an hour (Husqvarna requires a duration), open or close an exclusion. The zones are
+// DRAWN in the vendor's app: the API can neither create nor redraw them.
 //
-// Dans la vue Maison (`sceneDeviceId`), la liste porte aussi la carte PEINTE sur le terrain : un
-// interrupteur « Sur la scène » pour tout, et la pastille de chaque ligne qui la montre ou la masque
-// (pleine = montrée). Choix propre au poste (`stores/sceneZones`).
+// In the House view (`sceneDeviceId`), the list also carries the map PAINTED on the terrain: a
+// "On the scene" switch for everything, and each row's pill that shows or hides it
+// (filled = shown). A choice specific to the workstation (`stores/sceneZones`).
 
 const props = defineProps<{
   state: StateFor<'mower'>
   workAreas: boolean
   stayOutZones: boolean
   busy: boolean
-  /** Le robot dans la vue Maison : sa carte peinte se règle ici. */
+  /** The robot in the House view: its painted map is adjusted here. */
   sceneDeviceId?: string | undefined
 }>()
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
@@ -31,7 +31,7 @@ const zones = useSceneZonesStore()
 onMounted(() => { if (props.sceneDeviceId) void zones.load(props.sceneDeviceId) })
 const map = computed(() => (props.sceneDeviceId ? zones.maps[props.sceneDeviceId] : undefined))
 const rows = computed(() => zoneRows(props.state, map.value).filter((r) =>
-  // une ligne n'existe que si elle sert à quelque chose ici : tondre, basculer, ou se peindre
+  // a row only exists if it serves a purpose here: mow, toggle, or be painted
   (r.workAreaId !== undefined && props.workAreas) || (!!r.stayOut && props.stayOutZones) || (!!r.sceneKey && !!props.sceneDeviceId)))
 const groups = computed(() => (['base', 'work', 'stayOut'] as const)
   .map((g) => ({ g, rows: rows.value.filter((r) => r.group === g) }))
@@ -52,7 +52,7 @@ const GROUP_TITLES = { base: '', work: 'mower.workAreas', stayOut: 'mower.stayOu
 
 <template>
   <div class="card card--soft zones">
-    <!-- la carte peinte sur le terrain : tout d'un coup, puis ligne par ligne par la pastille -->
+    <!-- the map painted on the terrain: everything at once, then row by row through the pill -->
     <label v-if="hasScene" class="zones__row zones__scene">
       <span class="zones__name">{{ $t('mower.onScene') }}</span>
       <v-switch :model-value="shown" color="primary" density="compact" hide-details inset :aria-label="$t('mower.onScene')"
@@ -61,7 +61,7 @@ const GROUP_TITLES = { base: '', work: 'mower.workAreas', stayOut: 'mower.stayOu
     <template v-for="grp in groups" :key="grp.g">
       <div v-if="GROUP_TITLES[grp.g]" class="muted zones__k">{{ $t(GROUP_TITLES[grp.g]) }}</div>
       <div v-for="r in grp.rows" :key="r.key" class="zones__row">
-        <!-- la pastille : la teinte de la zone sur la carte ; dans la vue Maison, elle la montre ou la masque -->
+        <!-- the pill: the zone's tint on the map; in the House view, it shows or hides it -->
         <button v-if="sceneDeviceId && r.sceneKey" type="button" class="zones__swatch zones__swatch--toggle"
                 :data-on="visible(r) ? '1' : '0'" :data-dim="shown ? '0' : '1'" :style="{ '--swatch': r.color }"
                 :aria-pressed="visible(r)" :title="$t(visible(r) ? 'mower.hideOnScene' : 'mower.showOnScene', { name: label(r) })"
@@ -86,15 +86,15 @@ const GROUP_TITLES = { base: '', work: 'mower.workAreas', stayOut: 'mower.stayOu
 <style scoped>
 .zones { padding: 10px 12px; display: grid; gap: 6px; }
 .zones__k { font-size: 11px; margin-top: 6px; }
-/* une ligne = une zone, même hauteur pour toutes : celle de l'interrupteur compact (40 px) */
+/* one row = one zone, same height for all: that of the compact switch (40 px) */
 .zones__row { display: flex; align-items: center; gap: 10px; min-height: 40px; min-width: 0; }
 .zones__scene { border-bottom: 1px solid var(--line); padding-bottom: 4px; cursor: pointer; }
 .zones__name { flex: 1 1 auto; min-width: 0; font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .zones__note { font-size: 12px; }
 .zones__row .zones__note { flex: none; }
 .zones__swatch { flex: none; width: 12px; height: 12px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .25); }
-/* pastille-bascule : 24 px à toucher, pleine quand la zone est peinte, cerclée seulement sinon ;
-   pâlie tant que la carte n'est pas montrée — le choix reste, il attend l'interrupteur */
+/* toggle pill: 24 px to touch, filled when the zone is painted, ringed only otherwise;
+   faded as long as the map is not shown — the choice remains, it waits for the switch */
 .zones__swatch--toggle {
   width: 24px; height: 24px; padding: 0; border: 0; border-radius: 8px; cursor: pointer;
   background: transparent; box-shadow: inset 0 0 0 2px var(--swatch);

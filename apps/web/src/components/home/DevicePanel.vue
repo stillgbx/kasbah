@@ -29,8 +29,8 @@ import { journalPoints } from '../../lib/journal'
 import PanelArraysCard from './PanelArraysCard.vue'
 import PlacementControl from './PlacementControl.vue'
 
-// Panneau « appareil » : fil d'Ariane vers son parent, en-tête (icône, nom, fabricant, bascule),
-// grande valeur, puis le contrôle propre au type.
+// "Device" panel: breadcrumb to its parent, header (icon, name, vendor, toggle), big value, then
+// the control specific to the type.
 const emit = defineEmits<{ back: [] }>()
 const house = useHouseStore()
 const devices = useDevicesStore()
@@ -39,10 +39,10 @@ const { t, locale } = useI18n()
 const resolved = useDeviceResolver(computed(() => house.selectedKey))
 
 /**
- * Les RÉGLAGES d'un véhicule, repliés derrière leur bouton comme « Emplacement » l'est derrière
- * « Déplacer » : ce qu'on vient faire ici, c'est piloter la voiture, pas la régler. Ouverts, ils
- * s'écrivent au fil de la saisie et chaque choix manuel se rend par sa croix (cf. `VehicleTuning`).
- * Un véhicule qui n'a rien à régler ne montre même pas le bouton.
+ * A vehicle's SETTINGS, folded behind their button like "Location" is behind "Move": what one
+ * comes to do here is drive the car, not adjust it. Open, they are written as you type and each
+ * manual choice is reset by its cross (see `VehicleTuning`). A vehicle with nothing to adjust does
+ * not even show the button.
  */
 const tuningOpen = ref(false)
 const tunableCar = computed(() => {
@@ -50,10 +50,10 @@ const tunableCar = computed(() => {
   return d?.kind === 'vehicle' && tunableVehicle(d, resolved.value?.houseDevice) ? d : null
 })
 /**
- * Le robot tondeuse a les siens : le DÉCALAGE de sa place GPS (`MowerTuning`, le même bloc que sur
- * la vue Robots — ici on le voit s'appliquer dans la scène) et son JOURNAL. Le journal se déplie
- * derrière son bouton et, déplié, pose ses incidents positionnés SUR LE TERRAIN de la scène ; une
- * ligne choisie cadre la caméra dessus. C'est ainsi qu'on localise une panne depuis la maison.
+ * The mower robot has its own: the OFFSET of its GPS position (`MowerTuning`, the same block as on
+ * the Robots view — here you see it applied in the scene) and its LOG. The log unfolds behind its
+ * button and, unfolded, puts its incidents positioned ON THE GROUND of the scene; a chosen row
+ * frames the camera on it. That is how a failure is located from the house.
  */
 const tunableMower = computed(() => {
   const d = resolved.value?.descriptor
@@ -61,17 +61,17 @@ const tunableMower = computed(() => {
   return d?.kind === 'mower' && s?.kind === 'mower' && !!s.location && resolved.value?.houseDevice?.position === undefined ? d : null
 })
 /**
- * L'ouvrant a les siens : vantaux, matière, couleur (`CoverTuning`). Ils ne concernent que ce qui est
- * DESSINÉ, et un ouvrant absent de la maison n'est dessiné nulle part — rien à régler tant qu'il
- * n'est pas posé (ou lié à une ouverture, ce qui le pose aussi).
+ * The cover has its own: leaves, material, color (`CoverTuning`). They only concern what is
+ * DRAWN, and a cover absent from the house is drawn nowhere — nothing to adjust until it is
+ * placed (or linked to an opening, which places it too).
  */
 const tunableCover = computed(() => {
   const d = resolved.value?.descriptor
   return d?.kind === 'cover' && resolved.value?.houseDevice ? d : null
 })
 /**
- * Les ZONES de la tondeuse : tondre l'une d'elles, ouvrir ou fermer une zone d'exclusion — le même
- * panneau que sur la vue Robots, robot sous les yeux. Replié derrière son bouton, comme le journal.
+ * The mower's ZONES: mow one of them, open or close an exclusion zone — the same panel as on the
+ * Robots view, robot in sight. Folded behind its button, like the log.
  */
 const zonable = computed(() => {
   const d = resolved.value?.descriptor, s = resolved.value?.state
@@ -88,31 +88,31 @@ const journalIds = computed(() => (journalable.value ? [journalable.value.id] : 
 const { journals } = useJournals(journalIds)
 const journalEntries = computed(() => (journalable.value ? journals.value[journalable.value.id] ?? [] : []))
 const journalOpen = ref(false)
-/** L'incident actif est PARTAGÉ avec la scène : une épingle touchée surligne sa ligne ici, et fait défiler la liste jusqu'à elle. */
+/** The active incident is SHARED with the scene: a touched pin highlights its row here, and scrolls the list to it. */
 const journalActive = computed(() => house.journalActive ?? undefined)
 function toggleJournal(): void {
   journalOpen.value = !journalOpen.value
   if (journalOpen.value && journalable.value) house.showJournal(journalable.value.id, journalPoints(journalEntries.value))
   else house.hideJournal()
 }
-// le journal se rafraîchit pendant qu'il est ouvert : les épingles suivent
+// the log refreshes while it is open: the pins follow
 watch(journalEntries, (entries) => { if (journalOpen.value && journalable.value) house.showJournal(journalable.value.id, journalPoints(entries)) })
 function pickEntry(e: { at: number }): void {
   if (journalable.value) house.focusJournalPoint(journalable.value.id, e.at)
 }
-// changé d'appareil, les réglages et le journal se referment : le panneau suivant s'ouvre sur ses commandes
+// device changed, the settings and the log fold back: the next panel opens on its controls
 watch(() => house.selectedKey, () => { tuningOpen.value = false; zonesOpen.value = false; journalOpen.value = false; house.hideJournal() })
 onBeforeUnmount(() => house.hideJournal())
 
 /**
- * Le PARENT dont on est descendu, et où le retour ramène : la pièce, la zone du jardin, ou à défaut
- * le niveau qui porte l'appareil (une caméra posée sur le toit, hors de toute pièce). « Maison »
- * ne reste que pour un appareil qui n'est nulle part.
+ * The PARENT we came down from, and where the back button leads: the room, the garden zone, or
+ * failing that the level that carries the device (a camera placed on the roof, outside any room).
+ * "Home" remains only for a device that is nowhere.
  */
 const crumb = computed(() => {
   const hd = resolved.value?.houseDevice
   if (!hd) return t('nav.home')
-  // un module de champ appartient à son INSTALLATION : c'est elle qu'on nomme, et où le retour ramène
+  // a field module belongs to its INSTALLATION: that is the one we name, and where back leads
   if (site.value) return site.value.name
   const idx = house.index
   return (hd.roomId ? idx?.roomsById.get(hd.roomId)?.name
@@ -120,17 +120,17 @@ const crumb = computed(() => {
     : hd.levelId ? idx?.levelsById.get(hd.levelId)?.name : null) ?? t('nav.home')
 })
 /**
- * Ce que l'appareil EST, dit au plus près : la nature déclarée par le fabricant quand il y en a une
- * (« Portail », « Store banne », « Téléviseur »), le kind sinon. Un portail annoncé « Volet » se
- * lisait comme une erreur de liaison — et le mot générique du kind (« Ouvrant ») ne sert plus que de
- * repli, pour un ouvrant dont le fabricant ne dit pas la nature.
+ * What the device IS, said as closely as possible: the kind declared by the vendor when there is
+ * one ("Gate", "Awning", "TV"), the kind otherwise. A gate announced as "Shutter" read as a
+ * linking error — and the kind's generic word ("Cover") is only a fallback, for a cover whose
+ * vendor does not say the kind.
  */
 const kindLabel = computed(() => {
   const d = resolved.value?.descriptor
   if (!d) return ''
   if (d.kind === 'media_player') return t(`media.classes.${d.meta.mediaPlayer?.deviceClass ?? 'speaker'}`)
   if (d.kind === 'cover' && d.meta.cover?.deviceClass) return t(`cover.classes.${d.meta.cover.deviceClass}`)
-  // Plafonnier lié à un ventilateur (ou l'inverse) : les deux fonctions du même objet.
+  // Ceiling light linked to a fan (or the reverse): the two functions of the same object.
   if (d.kind === 'light' && fanLinkedTo(d.id, devices.list)) return t('kinds.lightFan')
   if (d.kind === 'fan' && d.meta.linkedTo) return t('kinds.lightFan')
   return t(`kinds.${d.kind}`)
@@ -143,38 +143,38 @@ const headIcon = computed(() => {
   return kindIcon(kind, d, { linkedFan })
 })
 
-/** Lecteur dont cet appareil joue le son (barre de son d'une TV en lecture) — voir `lib/audioRouting.ts`. */
+/** Player whose sound this device plays (soundbar of a TV that is playing) — see `lib/audioRouting.ts`. */
 const relay = computed(() => (resolved.value?.deviceId ? house.relaySource(resolved.value.deviceId) : undefined))
 const on = computed(() => !!resolved.value?.state && (isDeviceOn(resolved.value.state, resolved.value.descriptor) || !!relay.value))
 const pending = computed(() => !!resolved.value?.deviceId && devices.isPending(resolved.value.deviceId))
-/** Position visée quand le store en tient une : elle gouverne TOUT ce qui affiche cet ouvrant. */
+/** Targeted position when the store holds one: it governs EVERYTHING that displays this cover. */
 const aimed = computed(() => (resolved.value?.deviceId ? devices.targetPosition(resolved.value.deviceId) : undefined))
 
-/** Requête en vol OU appareil encore occupé (une course de volet dure ~20 s, voir `isDeviceBusy`). */
+/** Request in flight OR device still busy (a shutter travel lasts ~20 s, see `isDeviceBusy`). */
 const busy = computed(() => pending.value
   || (!!resolved.value?.state && isDeviceBusy(resolved.value.state, aimed.value !== undefined)))
-/** Valeur de l'interrupteur : pour un ouvrant, coché = FERMÉ (cf. `lib/cover.ts`), cible comprise ; coché aussi quand l'appareil relaie. */
+/** Switch value: for a cover, checked = CLOSED (see `lib/cover.ts`), target included; also checked when the device relays. */
 const checked = computed(() => !!resolved.value?.state && (toggleChecked(resolved.value.state, aimed.value) || !!relay.value))
 /**
- * Commande d'un clic sur l'interrupteur : dérivée de la cible, donc capable d'INVERSER une course. Pour une
- * barre qui relaie, c'est la TV qu'on met en pause (`toggleTarget`) : c'est elle qu'on entend.
+ * Command of a click on the switch: derived from the target, hence able to REVERSE a travel. For a
+ * bar that relays, it is the TV that gets paused (`toggleTarget`): it is the one we hear.
  */
 const toggle = computed(() => (relay.value ? toggleCommand(relay.value.state) : resolved.value?.state ? toggleCommand(resolved.value.state, aimed.value) : null))
 const toggleTarget = computed(() => relay.value?.descriptor.id ?? resolved.value?.deviceId)
 const headline = computed(() => {
   const r = resolved.value
   if (!r?.descriptor || !r.state) return ''
-  // pour un ouvrant, la grande valeur suit la POSITION VISÉE, comme le curseur juste en dessous :
-  // les deux se contrediraient sinon pendant toute la course
+  // for a cover, the big value follows the TARGETED POSITION, like the slider just below:
+  // otherwise the two would contradict each other during the whole travel
   const state = r.state
-  // un véhicule : la carte du dessous (`VehicleCard`) dit déjà la batterie, avec sa jauge
+  // a vehicle: the card below (`VehicleCard`) already says the battery, with its gauge
   if (state.kind === 'vehicle') return ''
   if (state.kind === 'cover' && r.deviceId) {
     const target = devices.targetPosition(r.deviceId)
     if (target !== undefined) return headlineValue(r.descriptor, { ...state, position: target }, t, locale.value)
   }
-  // ce qu'on ENTEND chez une barre de son qui relaie : le morceau de la TV, pas « Au repos » — le
-  // contrôle, dessous, dit d'où il vient (« Son de TV Salon »)
+  // what one HEARS on a soundbar that relays: the TV's track, not "Idle" — the control, below,
+  // says where it comes from ("Sound from TV Living room")
   if (relay.value) {
     const src = relay.value.state
     return (src.kind === 'media_player' && src.nowPlaying?.title) || relayLabel(relay.value.name, src, t)
@@ -182,24 +182,24 @@ const headline = computed(() => {
   return headlineValue(r.descriptor, state, t, locale.value)
 })
 /**
- * Déplaçable : dans le JSON ou auto-placé, hors volets (ancrés à une ouverture), tondeuse (position
- * publiée) et modules d'un champ de panneaux (ils bougent avec leur champ, pas un par un).
+ * Movable: in the JSON or auto-placed, excluding shutters (anchored to an opening), mower (published
+ * position) and modules of a panel array (they move with their array, not one by one).
  */
-/** L'appareil à placer, ou `null` : un appareil NON PLACÉ (un véhicule) n'a pas de poignée dans la scène. */
+/** The device to place, or `null`: an UNPLACED device (a vehicle) has no handle in the scene. */
 const placeable = computed<PlacedHouseDevice | null>(() => {
   const hd = resolved.value?.houseDevice
   if (!hd || !isPlaced(hd) || hd.openingId || panelOf(hd)) return null
-  // ni une tondeuse (elle se gare a sa base), ni un vehicule : la place d'une voiture vient de son
-  // GPS, pas d'un geste — la proposer a placer serait un bouton sans effet
+  // neither a mower (it parks at its base), nor a vehicle: a car's place comes from its
+  // GPS, not from a gesture — offering to place it would be a button with no effect
   const kind = resolved.value?.descriptor?.kind ?? hd.kind
   return kind !== 'mower' && kind !== 'vehicle' ? hd : null
 })
-/** Le champ dont cet appareil est un module, quand il en est un (il suit son champ, cf. `panels.ts`). */
+/** The array this device is a module of, when it is one (it follows its array, see `panels.ts`). */
 const panelCell = computed(() => (resolved.value?.houseDevice ? panelOf(resolved.value.houseDevice) : undefined))
 const array = computed(() => (panelCell.value ? house.arrays.find((a) => a.id === panelCell.value!.arrayId) : undefined))
 /**
- * L'installation qui porte ce champ : le parent du module dans le fil d'Ariane, et le panneau où son
- * réglage vit. Nommée par son entrée de maison si elle est posée, par le fabricant sinon.
+ * The installation that carries this array: the module's parent in the breadcrumb, and the panel where its
+ * setting lives. Named by its house entry if it is placed, by the vendor otherwise.
  */
 const site = computed(() => {
   const id = array.value ? house.siteOf(array.value) : undefined
@@ -209,23 +209,23 @@ const site = computed(() => {
 })
 
 /**
- * Installation solaire : le site d'une installation qui PRODUIT (et non une batterie, ni un simple
- * compteur). C'est sur son panneau que se déclarent les champs de panneaux — les modules, eux, sont
- * dérivés de leur champ et n'ont rien à régler.
+ * Solar installation: the site of an installation that PRODUCES (and not a battery, nor a mere
+ * meter). It is on its panel that the panel arrays are declared — the modules, for their part, are
+ * derived from their array and have nothing to adjust.
  */
 const solarSite = computed(() => {
   const d = resolved.value?.descriptor
   return d && isEnergySite(d) && d.capabilities.includes('production') ? d.id : null
 })
-// Pochette du morceau (ou visuel de la radio) en fond du haut du panneau, fondue en haut et en bas.
-// Couche absolue derrière le contenu : rien ne se décale quand elle apparaît, change ou disparaît.
-// L'image est PRÉCHARGÉE : la couche n'est posée qu'une fois l'image décodée (sinon elle apparaissait
-// d'un coup au chargement, ou restait vide si le serveur d'images refusait), et une URL qui échoue ne
-// laisse rien. Une réponse tardive d'une URL déjà remplacée est ignorée.
+// Track cover (or radio visual) in the background of the top of the panel, faded at top and bottom.
+// Absolute layer behind the content: nothing shifts when it appears, changes or disappears.
+// The image is PRELOADED: the layer is only put in place once the image is decoded (otherwise it
+// appeared all at once on load, or stayed empty if the image server refused), and a URL that fails
+// leaves nothing. A late response from an already replaced URL is ignored.
 const artUrl = computed(() => {
   const own = resolved.value?.state
   if (!own?.available) return undefined
-  const s = relay.value?.state ?? own                                  // barre qui relaie : la pochette de la TV
+  const s = relay.value?.state ?? own                                  // relaying bar: the TV's cover art
   return s.kind === 'media_player' && s.nowPlaying?.artUrl ? s.nowPlaying.artUrl : undefined
 })
 const art = ref<string | undefined>(undefined)
@@ -240,10 +240,10 @@ watch(artUrl, (url) => {
 const brand = computed(() => resolved.value?.descriptor?.meta.manufacturer ?? (resolved.value?.deviceId?.split(':')[0] ?? ''))
 
 /**
- * « Oublier l'appareil » : proposé aux appareils que le plugin RETIENT (`meta.forgettable` — un Cast
- * éteint ne s'annonce plus et resterait listé pour toujours) qui ne répondent pas et ne sont PAS dans
- * la maison. Un appareil placé se retire d'abord de la maison (« Emplacement »), sinon son entrée
- * pointerait vers un id que plus aucun plugin ne remonte.
+ * "Forget device": offered to devices that the plugin REMEMBERS (`meta.forgettable` — a switched-off
+ * Cast no longer announces itself and would stay listed forever) that do not answer and are NOT in
+ * the house. A placed device is first removed from the house ("Location"), otherwise its entry
+ * would point to an id that no plugin reports anymore.
  */
 const forgettable = computed(() => {
   const r = resolved.value
@@ -253,9 +253,9 @@ const forgettable = computed(() => {
 function send(cmd: CommandInput) {
   const id = resolved.value?.deviceId
   if (!id) return
-  // Réécrire la position favorite d'un moteur ne se voit presque pas — l'ouvrant ne bouge pas, et
-  // seule la petite valeur du bouton change. Or ce réglage vit DANS le moteur et sert aussi aux
-  // télécommandes murales : il mérite un accusé de réception explicite, pas un changement muet.
+  // Rewriting a motor's favorite position is barely visible — the cover does not move, and
+  // only the button's small value changes. Yet this setting lives IN the motor and is also used by
+  // wall remotes: it deserves an explicit acknowledgment, not a silent change.
   if (cmd.type === 'cover.set_preset') {
     const pct = formatPercent(toClosure(cmd.position), locale.value)
     void devices.sendCommand(id, cmd).then((ok) => { if (ok) notifications.success(t('cover.presetSaved', { pct })) })
@@ -267,30 +267,30 @@ function send(cmd: CommandInput) {
 
 <template>
   <template v-if="resolved">
-    <!-- fondu croisé entre deux pochettes : les deux couches coexistent le temps de la transition -->
+    <!-- cross-fade between two covers: both layers coexist for the duration of the transition -->
     <Transition name="art">
       <div v-if="art" :key="art" class="art" :style="{ backgroundImage: `url(${JSON.stringify(art)})` }" aria-hidden="true" />
     </Transition>
-    <!-- collant : fil d'Ariane et en-tête restent en vue quand le contrôle défile (styles/app.css) -->
+    <!-- sticky: breadcrumb and header stay in view when the control scrolls (styles/app.css) -->
     <div class="panel-head">
     <button type="button" class="crumb" @click="emit('back')"><StrokeIcon name="back" :size="14" /> {{ crumb }}</button>
     <div class="head">
       <span class="icon-square icon-square--lg" :data-on="on ? '1' : '0'"><StrokeIcon :name="headIcon" :size="22" /></span>
       <div class="head__main">
-        <!-- nom trop long pour les 340 px du panneau (un id d'appareil non lié fait 50 caractères) :
-             il défile avec un fondu plutôt que de déborder, comme le titre d'un morceau -->
+        <!-- name too long for the panel's 340 px (an unlinked device id is 50 characters):
+             it scrolls with a fade rather than overflowing, like a track title -->
         <MarqueeText class="head__name" :text="resolved.name" />
         <div class="muted head__sub">
-          <!-- chacun dit SA nature (téléviseur, portail, store banne) plutôt que le mot du kind -->
+          <!-- each says ITS kind (TV, gate, awning) rather than the kind's word -->
           <span v-if="resolved.descriptor">{{ kindLabel }}</span>
-          <!-- « Indisponible » AVANT le fabricant : la ligne tient sur 340 px, et si elle est coupée
-               c'est la marque qui part, pas l'information qui compte -->
+          <!-- "Unavailable" BEFORE the vendor: the line fits in 340 px, and if it is cut
+               it is the brand that goes, not the information that matters -->
           <span v-if="resolved.state && !resolved.state.available" class="text-error"> · {{ $t('common.unavailable') }}</span><span v-if="brand"> · {{ brand }}</span>
         </div>
       </div>
-      <!-- empreinte FIXE : le spinner (20 px) remplace l'interrupteur (52 x 56) le temps de
-           l'aller-retour serveur, et sans cette réserve l'en-tête se retracte et pousse tout
-           le panneau vers le haut -->
+      <!-- FIXED footprint: the spinner (20 px) replaces the switch (52 x 56) for the duration of the
+           server round trip, and without this reserve the header retracts and pushes the whole
+           panel up -->
       <div v-if="toggle || busy" class="head__toggle">
         <v-progress-circular v-if="busy" indeterminate size="20" width="2" color="primary" />
         <v-switch v-else-if="toggle" :model-value="checked" :disabled="!resolved.state?.available" @update:model-value="devices.sendCommand(toggleTarget!, toggle!)" />
@@ -298,13 +298,13 @@ function send(cmd: CommandInput) {
     </div>
     </div>
     <MarqueeText v-if="headline" class="big-value" :text="headline" />
-    <!-- `relay-from` traverse l'aiguillage (attribut non déclaré) jusqu'au contrôle du lecteur, seul à le lire -->
+    <!-- `relay-from` goes through the switch (undeclared attribute) down to the player's control, the only one to read it -->
     <DeviceControl v-if="resolved.descriptor && resolved.state" :descriptor="resolved.descriptor" :state="resolved.state"
                    :pending="devices.isPending(resolved.deviceId!)" :relay-from="relay?.name" @command="send" />
     <div v-else class="card card--soft unbound muted">{{ $t('device.unbound', { id: resolved.houseDevice?.deviceId ?? resolved.key }) }}</div>
-    <!-- un véhicule ne se place pas (son GPS le fait) : ce qu'il a à régler, c'est la correction de
-         cette place et de son cap — et on les voit s'appliquer dans la scène, voiture sous les yeux.
-         Replié derrière « Régler », pied en bas comme « Emplacement ». -->
+    <!-- a vehicle is not placed (its GPS does it): what it has to adjust is the correction of
+         that place and of its heading — and we see them applied in the scene, car in sight.
+         Folded behind "Adjust", foot at the bottom like "Location". -->
     <div v-if="tunableCar" class="card card--soft tuning">
       <div v-if="tuningOpen" class="tuning__body"><VehicleTuning :descriptor="tunableCar" /></div>
       <div class="tuning__foot">
@@ -315,9 +315,9 @@ function send(cmd: CommandInput) {
         </button>
       </div>
     </div>
-    <!-- l'ouvrant : ce que la maison sait de lui et que le fabricant ignore — ses vantaux, sa
-         matière, sa couleur. Replié derrière « Régler », comme les réglages d'un véhicule : ce qu'on
-         vient faire ici, c'est manœuvrer le volet, pas le décrire. -->
+    <!-- the cover: what the house knows about it and the vendor does not — its leaves, its
+         material, its color. Folded behind "Adjust", like a vehicle's settings: what one
+         comes to do here is operate the shutter, not describe it. -->
     <div v-if="tunableCover" class="card card--soft tuning">
       <div v-if="tuningOpen" class="tuning__body"><CoverTuning :descriptor="tunableCover" /></div>
       <div class="tuning__foot">
@@ -328,7 +328,7 @@ function send(cmd: CommandInput) {
         </button>
       </div>
     </div>
-    <!-- les zones du robot : tondre l'une d'elles, ouvrir ou fermer une exclusion -->
+    <!-- the robot's zones: mow one of them, open or close an exclusion -->
     <div v-if="zonable" class="card card--soft tuning">
       <div v-if="zonesOpen" class="tuning__body">
         <MowerZones :state="zonable.state" :work-areas="zonable.workAreas" :stay-out-zones="zonable.stayOutZones"
@@ -341,8 +341,8 @@ function send(cmd: CommandInput) {
         </button>
       </div>
     </div>
-    <!-- le journal du robot : replié derrière son bouton (le nombre de lignes le signale), déplié il
-         pose ses incidents sur le terrain de la scène, et une ligne choisie cadre la caméra dessus -->
+    <!-- the robot's log: folded behind its button (the number of lines flags it), unfolded it
+         puts its incidents on the scene's ground, and a chosen row frames the camera on it -->
     <div v-if="journalable" class="card card--soft tuning">
       <div v-if="journalOpen" class="tuning__body"><JournalList :entries="journalEntries" :active="journalActive" @pick="pickEntry" /></div>
       <div class="tuning__foot">
@@ -353,7 +353,7 @@ function send(cmd: CommandInput) {
         </button>
       </div>
     </div>
-    <!-- le décalage GPS de la tondeuse : le même bloc que sur la vue Robots, robot sous les yeux -->
+    <!-- the mower's GPS offset: the same block as on the Robots view, robot in sight -->
     <div v-if="tunableMower" class="card card--soft tuning">
       <div v-if="tuningOpen" class="tuning__body"><MowerTuning :descriptor="tunableMower" /></div>
       <div class="tuning__foot">
@@ -364,11 +364,11 @@ function send(cmd: CommandInput) {
         </button>
       </div>
     </div>
-    <!-- les champs de panneaux se déclarent ici, juste au-dessus de l'emplacement de l'installation -->
+    <!-- the panel arrays are declared here, right above the installation's location -->
     <PanelArraysCard v-if="solarSite" class="arrays" :site-device-id="solarSite" />
-    <!-- rarement utilisé : calé au fond du panneau, sous tout le reste -->
+    <!-- rarely used: wedged at the bottom of the panel, under everything else -->
     <PlacementControl v-if="placeable" class="placement" :device="placeable" />
-    <!-- module d'un champ : il ne se place pas seul, mais il mène au réglage de son champ -->
+    <!-- array module: it is not placed on its own, but it leads to the setting of its array -->
     <div v-else-if="array" class="card card--soft placement place-new">
       <div class="place-new__row">
         <span class="muted">{{ $t('arrays.single') }}</span>
@@ -378,8 +378,8 @@ function send(cmd: CommandInput) {
       </div>
       <div class="muted place-new__hint">{{ array.name ?? array.id }} · {{ $t('arrays.cell', { r: panelCell!.row + 1, c: panelCell!.col + 1 }) }}</div>
     </div>
-    <!-- appareil connu du plugin mais absent de la maison : le poser depuis ici, sans repasser par la
-         liste. Sauf un VEHICULE : sa place vient de son GPS, la poser a la main n'aurait pas de sens -->
+    <!-- device known to the plugin but absent from the house: place it from here, without going back through the
+         list. Except a VEHICLE: its place comes from its GPS, placing it by hand would make no sense -->
     <div v-else-if="resolved.descriptor && !resolved.houseDevice && resolved.descriptor.kind !== 'vehicle'" class="card card--soft placement place-new">
       <div class="place-new__row">
         <span class="muted">{{ $t('place.title') }}</span>
@@ -387,8 +387,8 @@ function send(cmd: CommandInput) {
           <StrokeIcon name="pin" :size="16" /> {{ $t('rooms.origins.place') }}
         </button>
       </div>
-      <!-- appareil retenu par le plugin et qui ne répond plus : s'il a disparu pour de bon, l'oublier
-           (voir `forgettable`) ; il quitte l'inventaire, le panneau n'a plus de sujet -->
+      <!-- device remembered by the plugin that no longer answers: if it has disappeared for good, forget it
+           (see `forgettable`); it leaves the inventory, the panel no longer has a subject -->
       <div v-if="forgettable" class="place-new__row">
         <span class="muted place-new__hint">{{ $t('device.gone') }}</span>
         <ForgetDeviceButton :device-id="resolved.deviceId!" @forgotten="house.clearSelection()" />
@@ -411,35 +411,35 @@ function send(cmd: CommandInput) {
 .crumb:hover { color: var(--text); }
 .head { display: flex; align-items: center; gap: 12px; }
 .placement { margin-top: auto; }
-/* le réglage d'un véhicule ferme son panneau, comme « Emplacement » ferme celui d'un appareil posé */
+/* a vehicle's settings close its panel, like "Location" closes that of a placed device */
 .tuning { margin-top: auto; padding: 12px 14px; font-size: 13px; }
-/* plusieurs blocs repliés (zones, journal, réglages d'un robot) : seul le PREMIER prend la marge
-   automatique, les suivants se rangent sous lui à l'écart ordinaire — sinon chaque marge auto prend
-   sa part de la hauteur libre et les blocs s'éparpillent sur tout le panneau */
+/* several folded blocks (zones, log, a robot's settings): only the FIRST takes the automatic
+   margin, the following ones line up under it at the ordinary spacing — otherwise each auto margin
+   takes its share of the free height and the blocks scatter over the whole panel */
 .tuning ~ .tuning, .tuning ~ .arrays, .tuning ~ .placement { margin-top: 0; }
-/* le pied porte le titre et l'unique bouton, qui garde sa place et sa largeur dans les deux états */
+/* the foot carries the title and the single button, which keeps its place and width in both states */
 .tuning__foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .tuning__cta { min-width: 124px; justify-content: center; }
 .tuning__body { padding-bottom: 12px; }
-/* la carte des réglages vit DANS celle-ci : sans ça, deux fonds et deux marges intérieures */
+/* the settings card lives INSIDE this one: without that, two backgrounds and two inner margins */
 .tuning__body :deep(.tune) { padding: 0; background: none; }
-/* les zones du robot : même règle, une seule carte autour */
+/* the robot's zones: same rule, a single card around */
 .tuning__body :deep(.zones) { padding-left: 0; padding-right: 0; background: none; }
 .tuning__count { min-width: 20px; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--surface2); color: var(--text); }
-/* la carte des champs se colle au bloc « Emplacement » qui ferme le panneau */
+/* the arrays card sticks to the "Location" block that closes the panel */
 .arrays { margin-top: auto; }
 .arrays + .placement { margin-top: 0; }
 .place-new { padding: 12px 14px; font-size: 13px; display: grid; gap: 10px; }
 .place-new__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-/* même largeur que le bouton « Oublier l'appareil » de la ligne d'en dessous : les deux s'alignent */
+/* same width as the "Forget device" button on the line below: the two line up */
 .place-new__cta { flex: 0 0 auto; min-width: 150px; justify-content: center; font-size: 12px; }
 .place-new__hint { min-width: 0; font-size: 12px; }
 .head__main { flex: 1 1 0; min-width: 0; }
 .head__name { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
-/* nature · fabricant · disponibilité : jamais sur deux lignes, coupé aux points de suspension */
+/* kind · vendor · availability: never on two lines, cut with ellipsis */
 .head__sub { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .icon-square--lg { width: 44px; height: 44px; border-radius: 12px; }
 .head__toggle { flex: 0 0 52px; height: 56px; display: grid; place-items: center; }
-/* la phrase porte un id de plugin, d'un seul tenant : il se coupe n'importe où plutôt que de sortir du panneau */
+/* the sentence carries a plugin id, in one piece: it breaks anywhere rather than leaving the panel */
 .unbound { padding: 12px 14px; font-size: 13px; overflow-wrap: anywhere; }
 </style>

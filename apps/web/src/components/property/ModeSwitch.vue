@@ -5,12 +5,12 @@ import type { PropertyMode } from '@kasbah/shared'
 import { usePropertiesStore } from '../../stores/properties'
 import Segmented from '../ui/Segmented.vue'
 
-// Démo ou réel, dans la carte « Propriété » des Réglages. Changer recharge l'application sur une autre
-// maison : on le confirme (une tablette murale ne doit pas basculer sur un doigt qui passe). La ligne
-// du dessous est réservée — consigne au repos, confirmation armée — : rien ne bouge.
+// Demo or real, in the "Property" card of Settings. Switching reloads the application onto another
+// house: it is confirmed (a wall-mounted tablet must not switch on a passing finger). The line
+// below is reserved — instruction at rest, armed confirmation —: nothing moves.
 const properties = usePropertiesStore()
 const { t } = useI18n()
-/** Le mode demandé, en attente de confirmation. */
+/** The requested mode, awaiting confirmation. */
 const pending = ref<PropertyMode | null>(null)
 const options = computed(() => [
   { value: 'demo' as const, label: t('properties.modeDemo') },
@@ -43,7 +43,7 @@ function go() { if (pending.value) void properties.setMode(pending.value) }
 .ms { display: grid; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .ms__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .ms__seg { flex: 0 1 220px; min-width: 0; }
-/* deux lignes réservées : la consigne et la confirmation se remplacent sans rien pousser */
+/* two reserved lines: the instruction and the confirmation replace each other without pushing anything */
 .ms__line { display: flex; align-items: center; gap: 8px; height: 40px; line-height: 1.5; font-size: 12px; }
 .ms__ask { flex: 1 1 auto; min-width: 0; }
 .ms__go { gap: 6px; border-color: var(--accent); color: var(--accent); }

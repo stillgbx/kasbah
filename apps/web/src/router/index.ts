@@ -1,8 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getTransport } from '../api'
 
-// Historique HTML5 (pas de `#`) : le serveur Fastify renvoie index.html pour tout GET hors /api et
-// /ws (repli SPA), Vite fait de même en dev. Un ancien lien `/#/music` est réécrit en `/music`.
+// HTML5 history (no `#`): the Fastify server returns index.html for any GET outside /api and
+// /ws (SPA fallback), Vite does the same in dev. An old `/#/music` link is rewritten to `/music`.
 if (location.hash.startsWith('#/')) history.replaceState(history.state, '', location.hash.slice(1))
 
 export const router = createRouter({
@@ -14,7 +14,7 @@ export const router = createRouter({
     { path: '/cameras', name: 'cameras', component: () => import('../views/CamerasView.vue') },
     { path: '/media', name: 'media', component: () => import('../views/MediaView.vue') },
     { path: '/music', name: 'music', component: () => import('../views/MusicView.vue') },
-    // ancien nom de la vue (une seule source à l'époque) : un signet y mène encore
+    // old name of the view (a single source at the time): a bookmark still leads there
     { path: '/ytmusic', redirect: '/music' },
     { path: '/energy', name: 'energy', component: () => import('../views/EnergyView.vue') },
     { path: '/water', name: 'water', component: () => import('../views/WaterView.vue') },
@@ -28,29 +28,29 @@ export const router = createRouter({
     { path: '/school', name: 'school', component: () => import('../views/SchoolView.vue') },
     { path: '/shopping', name: 'shopping', component: () => import('../views/ShoppingView.vue') },
     { path: '/automations', name: 'automations', component: () => import('../views/AutomationsView.vue') },
-    // l'édition a sa page : « Sauf si » et « Alors » s'allongent, un panneau de 340 px n'y suffit pas.
-    // `:id` = id de l'automatisation, ou `new`. `meta.nav` garde l'entrée du rail allumée.
+    // editing has its own page: "Unless" and "Then" grow longer, a 340 px panel is not enough.
+    // `:id` = the automation's id, or `new`. `meta.nav` keeps the rail entry lit.
     { path: '/automations/:id', name: 'automation-edit', component: () => import('../views/AutomationEditView.vue'), props: true, meta: { nav: 'automations' } },
     { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
 
-// Une vue qui ne se charge pas, sous l'adresse publique, c'est souvent une session finie (le serveur
-// refuse alors ses fichiers) : on le demande à l'API, qui renvoie à la connexion s'il le faut.
-// Session valide, c'est un build remplacé (l'écran est resté ouvert pendant une mise à jour, sa vue
-// n'existe plus) : on recharge la page sur la vue demandée, UNE fois — une vue toujours introuvable
-// après le rechargement ne doit pas boucler.
+// A view that fails to load, under the public address, is often an ended session (the server
+// then refuses its files): we ask the API, which redirects to login if needed.
+// Valid session, it is a replaced build (the screen stayed open during an update, its view
+// no longer exists): we reload the page on the requested view, ONCE — a view still not found
+// after the reload must not loop.
 const CHUNK_RELOAD_KEY = 'kasbah.chunkReloadAt'
 const CHUNK_RELOAD_WINDOW_MS = 10_000
 
 router.onError((err, to) => {
   getTransport().session().then(() => {
-    if (!(err instanceof TypeError)) return // un import qui échoue est une TypeError dans tous les navigateurs
+    if (!(err instanceof TypeError)) return // a failing import is a TypeError in all browsers
     try {
       if (Date.now() - Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) ?? 0) < CHUNK_RELOAD_WINDOW_MS) return
       sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()))
-    } catch { return } // sans stockage, pas de garde : pas de rechargement automatique
+    } catch { return } // without storage, no guard: no automatic reload
     window.location.assign(router.resolve(to).href)
   }).catch(() => {})
 })

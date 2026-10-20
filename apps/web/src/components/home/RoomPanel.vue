@@ -21,9 +21,9 @@ import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import PulseDot from '../ui/PulseDot.vue'
 
-// Panneau « pièce » (ou zone du jardin, ou NIVEAU) : fil d'Ariane, titre, appareils avec bascule
-// rapide. Un niveau n'y entre que par ce qu'il porte lui-même, hors de toute pièce — un toit et sa
-// caméra ; ses pièces, elles, se listent dans le panneau maison.
+// "Room" panel (or garden zone, or LEVEL): breadcrumb, title, devices with quick
+// toggle. A level only enters it through what it carries itself, outside any room — a roof and its
+// camera; its rooms, for their part, are listed in the house panel.
 const emit = defineEmits<{ back: [] }>()
 const house = useHouseStore()
 const devices = useDevicesStore()
@@ -31,13 +31,13 @@ const scenes = useScenesStore()
 const settings = useSettingsStore()
 const { t, locale } = useI18n()
 
-// Mode édition seulement : la liste des ouvertures de LA PIÈCE (une zone de jardin n'en a pas), chemin
-// de secours pour en atteindre une qu'on ne voit pas sous l'angle courant — le geste principal reste
-// de la glisser dans la 3D.
+// Edit mode only: the list of THE ROOM's openings (a garden zone has none), a fallback
+// way to reach one that is not visible from the current angle — the main gesture stays
+// dragging it in the 3D.
 const roomOpenings = computed(() => (settings.houseEditing ? house.selectedRoom?.openings ?? [] : []))
-// `openingLabel` est LA règle d'affichage d'une ouverture (nom si elle en a un, sinon son id de
-// relevé) : la même que le titre du panneau de réglage et que l'étiquette 3D, jamais trois noms
-// différents pour la même fenêtre. La nature et les cotes restent en sous-ligne.
+// `openingLabel` is THE display rule for an opening (name if it has one, otherwise its survey
+// id): the same as the settings panel's title and the 3D label, never three different names
+// for the same window. The kind and the measurements stay in the sub-line.
 function openingRow(o: Opening) {
   return { id: o.id, label: openingLabel(o), sub: `${t(`opening.types.${o.type}`)} · ${o.width.toFixed(2)} × ${o.height.toFixed(2)} m` }
 }
@@ -63,36 +63,36 @@ const levelTarget = computed(() => {
     rooms: rooms.map((r) => ({ id: r.id, name: r.name, deviceIds: (idx!.devicesByRoom.get(r.id) ?? []).map((d) => d.deviceId) })),
   }
 })
-/** Le parent où le retour ramène : le NIVEAU d'une pièce ; la maison pour une zone ou un niveau. */
+/** The parent where back leads: the LEVEL of a room; the house for a zone or a level. */
 const crumb = computed(() => (house.selectedRoom ? house.index?.levelsById.get(house.selectedRoom.levelId)?.name ?? t('nav.home') : t('nav.home')))
 
 function row(d: HouseDevice) {
   const descriptor = d.deviceId ? devices.descriptors[d.deviceId] : undefined
   const state = d.deviceId ? devices.states[d.deviceId] : undefined
   const aimed = d.deviceId ? devices.targetPosition(d.deviceId) : undefined
-  // Barre de son qui joue le son d'une TV en lecture : active, cochée et pulsante comme elle, le statut le
-  // dit, la pochette de la TV lui sert de fond — et son interrupteur agit sur la TV (mettre en pause ce
-  // qu'on entend), la barre n'ayant pas de lecture propre.
+  // Soundbar playing the sound of a TV that is playing: active, checked and pulsing like it, the status says
+  // so, the TV's cover art serves as its background — and its switch acts on the TV (pausing what
+  // one hears), the bar having no playback of its own.
   const relay = d.deviceId ? house.relaySource(d.deviceId) : undefined
   const toggle = relay ? toggleCommand(relay.state) : state ? toggleCommand(state, aimed) : null
   return {
     key: d.id, name: d.name ?? descriptor?.name ?? d.id, icon: kindIcon(descriptor?.kind ?? d.kind, descriptor),
     cat: roomFilterCategory(descriptor?.kind ?? d.kind, descriptor),
     on: !!state && (isDeviceOn(state, descriptor) || !!relay),
-    // `on` teinte l'icône (un volet OUVERT est l'actif), `checked` est la valeur de
-    // l'interrupteur (un volet FERMÉ est coché) — voir `lib/cover.ts`. La cible tenue par le store
-    // entre dans `checked` : l'interrupteur bascule au geste, pas à la fin de la course.
+    // `on` tints the icon (an OPEN shutter is the active one), `checked` is the value of
+    // the switch (a CLOSED shutter is checked) — see `lib/cover.ts`. The target held by the store
+    // enters `checked`: the switch toggles at the gesture, not at the end of the travel.
     checked: !!state && (toggleChecked(state, aimed) || !!relay),
     busy: !!state && (isDevicePulsing(state, aimed !== undefined) || !!relay),
     status: relay ? relayLabel(relay.name, relay.state, t)
       : descriptor && state ? statusLabel(descriptor, state, t, locale.value) : t('device.unbound', { id: d.deviceId ?? '—' }),
-    // `target` : qui reçoit la commande de l'interrupteur (la TV pour une barre qui relaie)
+    // `target`: who receives the switch's command (the TV for a bar that relays)
     toggle, target: relay ? relay.descriptor.id : d.deviceId, available: state?.available ?? false,
-    // fond de ligne : pochette du morceau (lecteur en lecture, ou celui qu'il relaie) ou teinte de la lampe allumée
+    // row background: cover art of the track (player playing, or the one it relays) or tint of the lit light
     ...backdrop(state, relay?.state),
   }
 }
-/** Style du fond et sa clé (la pochette change au morceau ; la teinte suit la lampe sans fondu croisé). */
+/** Background style and its key (the cover art changes with the track; the tint follows the light without cross-fade). */
 function backdrop(state: DeviceState | undefined, heard?: DeviceState): { backdrop?: Record<string, string>; backdropKey?: string } {
   if (!state || !state.available) return {}
   const media = heard ?? state
@@ -102,13 +102,13 @@ function backdrop(state: DeviceState | undefined, heard?: DeviceState): { backdr
 }
 const target = computed(() => roomTarget.value ?? levelTarget.value)
 const rows = computed(() => (target.value?.list ?? []).map(row))
-/** Appareils liés de la pièce : l'interrupteur maître y cherche les lampes. */
+/** Linked devices of the room: the master switch looks for the lights there. */
 const deviceIds = computed(() => (target.value?.list ?? []).map((d) => d.deviceId))
-/** Ambiances du fabricant rattachées à cette pièce (rapprochement par nom) — un niveau n'en a pas. */
+/** Vendor light scenes attached to this room (matched by name) — a level has none. */
 const roomScenes = computed(() => (roomTarget.value ? scenes.forRoom(roomTarget.value.name) : []))
 
-// Filtre de la liste : « Tout » plus les catégories réellement présentes. Une seule catégorie
-// n'affiche pas la barre (le geste ne ferait rien). On revient à « Tout » en changeant de pièce.
+// List filter: "All" plus the categories actually present. A single category
+// does not show the bar (the gesture would do nothing). We go back to "All" when changing room.
 type RoomFilter = 'all' | RoomFilterCat
 const filter = ref<RoomFilter>('all')
 const filterCats = computed(() => presentRoomFilters(rows.value.map((r) => r.cat)))
@@ -123,7 +123,7 @@ watch(filterCats, (cats) => { if (filter.value !== 'all' && !cats.includes(filte
 
 <template>
   <template v-if="target">
-    <!-- collant : le fil d'Ariane et le titre restent en vue quand la liste défile (styles/app.css) -->
+    <!-- sticky: the breadcrumb and the title stay in view when the list scrolls (styles/app.css) -->
     <div class="panel-head">
       <button type="button" class="crumb" @click="emit('back')"><StrokeIcon name="back" :size="14" /> {{ crumb }}</button>
       <div class="head">
@@ -131,14 +131,14 @@ watch(filterCats, (cats) => { if (filter.value !== 'all' && !cats.includes(filte
           <div class="title">{{ target.name }}</div>
           <div class="muted sub">{{ target.where }} · {{ $t('home.devicesCount', { n: rows.length }, rows.length) }}</div>
         </div>
-        <!-- éteindre (ou allumer) la pièce d'un geste, sans parcourir la liste -->
+        <!-- turn the room off (or on) in one gesture, without going through the list -->
         <RoomLightsToggle :device-ids="deviceIds" />
       </div>
     </div>
-    <!-- luminosité de toute la pièce : sur sa propre ligne, sous l'interrupteur qu'elle prolonge -->
+    <!-- brightness of the whole room: on its own row, under the switch it extends -->
     <RoomBrightness :device-ids="deviceIds" />
     <SceneChips v-if="roomTarget" :scenes="roomScenes" :label="$t('scenes.title')" :add-to="target.name" />
-    <!-- un niveau porte d'abord ses pièces, puis ce qui est posé dessus hors de toute pièce -->
+    <!-- a level carries its rooms first, then what is placed on it outside any room -->
     <section v-if="target.rooms.length" class="block">
       <div class="section-label">{{ $t('home.rooms') }}</div>
       <RoomRows :rows="target.rooms" />
@@ -148,14 +148,14 @@ watch(filterCats, (cats) => { if (filter.value !== 'all' && !cats.includes(filte
                  :label="$t('home.filter.aria')" @update:model-value="filter = $event" />
       <div class="rows">
         <div v-for="r in visibleRows" :key="r.key" class="dev-row" role="button" tabindex="0" @click="house.selectDevice(r.key)" @keydown.enter="house.selectDevice(r.key)">
-          <!-- fond sous le contenu (pochette ou teinte), fondu vers l'interrupteur ; absolu, il ne décale rien -->
+          <!-- background under the content (cover art or tint), fading toward the switch; absolute, it shifts nothing -->
           <Transition name="rowart">
             <div v-if="r.backdrop" :key="r.backdropKey" class="dev-row__art" :style="r.backdrop" aria-hidden="true" />
           </Transition>
           <span class="icon-square" :data-on="r.on ? '1' : '0'"><StrokeIcon :name="r.icon" :size="18" /></span>
           <div class="dev-row__main">
             <div class="dev-row__name">{{ r.name }}</div>
-            <!-- statut trop long (titre d'un morceau) : il défile avec un fondu plutôt que d'être coupé -->
+            <!-- status too long (a track title): it scrolls with a fade rather than being cut -->
             <div class="dev-row__status"><PulseDot :on="r.busy" class="dev-row__dot" /><MarqueeText class="dev-row__statustext" :text="r.status" /></div>
           </div>
           <v-switch v-if="r.toggle && r.target" :model-value="r.checked" :disabled="!r.available" class="dev-row__switch"
@@ -164,8 +164,8 @@ watch(filterCats, (cats) => { if (filter.value !== 'all' && !cats.includes(filte
         </div>
       </div>
     </div>
-    <!-- mode édition : chemin de secours vers une ouverture qu'on ne voit pas sous l'angle courant —
-         le geste principal reste de la glisser dans la 3D une fois sélectionnée -->
+    <!-- edit mode: fallback way to an opening that is not visible from the current angle —
+         the main gesture stays dragging it in the 3D once selected -->
     <section v-if="roomOpenings.length" class="block">
       <div class="section-label">{{ $t('opening.list') }}</div>
       <div class="rows">
@@ -185,7 +185,7 @@ watch(filterCats, (cats) => { if (filter.value !== 'all' && !cats.includes(filte
 <style scoped>
 .crumb { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--muted); font-size: 13px; padding: 0; align-self: flex-start; }
 .crumb:hover { color: var(--text); }
-/* titre à gauche, interrupteur maître collé à droite (il ne bouge pas quand le nom s'allonge) */
+/* title on the left, master switch stuck to the right (it does not move when the name gets longer) */
 .head { display: flex; align-items: center; gap: 12px; }
 .min0 { flex: 1 1 0; min-width: 0; }
 .title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
@@ -195,7 +195,7 @@ watch(filterCats, (cats) => { if (filter.value !== 'all' && !cats.includes(filte
 .dev-row {
   display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius);
   background: var(--surface2); cursor: pointer; transition: filter .15s;
-  /* repère, contexte d'empilement et découpe de la pochette de fond */
+  /* reference, stacking context and clipping of the background cover art */
   position: relative; isolation: isolate; overflow: hidden;
 }
 .dev-row__art {
@@ -208,10 +208,10 @@ watch(filterCats, (cats) => { if (filter.value !== 'all' && !cats.includes(filte
 .rowart-enter-from, .rowart-leave-to { opacity: 0; }
 @media (prefers-reduced-motion: reduce) { .rowart-enter-active, .rowart-leave-active { transition: none; } }
 .dev-row:hover { filter: brightness(1.03); }
-/* la ligne d'ouverture est un <button> (pas de bascule à sa place) : on lui reprend les styles par défaut */
+/* the opening row is a <button> (no toggle in its place): we take back the default styles from it */
 .opening-row { border: 0; width: 100%; text-align: left; font: inherit; color: inherit; }
 .dev-row__main { flex: 1 1 0; min-width: 0; }
-/* nom trop long (id d'un appareil non lié) : coupé aux points de suspension, comme dans les vues en bandes */
+/* name too long (id of an unlinked device): cut with ellipsis, as in the banded views */
 .dev-row__name { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dev-row__status { font-size: 12px; color: var(--muted); display: flex; align-items: center; min-width: 0; }
 .dev-row__statustext { flex: 1 1 auto; min-width: 0; }

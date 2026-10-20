@@ -5,35 +5,35 @@ import { useRoomLights } from '../../composables/useRoomLights'
 import { useDevicesStore } from '../../stores/devices'
 import Segmented from '../ui/Segmented.vue'
 
-// Commande d'ensemble des lampes, en haut de la vue Lumières : DEUX gestes nommés (« Tout
-// éteindre », « Tout allumer ») plutôt qu'un interrupteur.
+// Master control of the lights, at the top of the Lights view: TWO named gestures ("Turn all
+// off", "Turn all on") rather than a switch.
 //
-// L'interrupteur n'offrait qu'un geste à la fois, et il le déduisait de l'état : sur quinze lampes
-// dont trois sont allumées, il fallait deviner ce que l'appui allait faire — et rallumer la maison
-// demandait deux appuis. Ici les deux gestes sont toujours à portée, quel que soit l'état du parc.
+// The switch offered only one gesture at a time, and deduced it from the state: with fifteen lights
+// of which three are on, one had to guess what the press would do — and turning the house back on
+// took two presses. Here both gestures are always within reach, whatever the state of the device set.
 //
-// Le segment allumé montre l'ÉTAT, pas le dernier appui : rien de sélectionné tant que les lampes
-// sont partagées. Comme le store applique la commande à l'état sans attendre le serveur (mise à
-// jour optimiste), le segment prend quand même sa valeur CIBLE au doigt — et revient tout seul si
-// le serveur refuse, puisque le store remet alors l'état d'avant.
+// The lit segment shows the STATE, not the last press: nothing is selected while the lights are
+// mixed. Since the store applies the command to the state without waiting for the server
+// (optimistic update), the segment still takes its TARGET value under the finger — and comes back
+// by itself if the server refuses, since the store then restores the previous state.
 //
-// L'interrupteur par pièce (`RoomLightsToggle`) n'a pas changé : dans une ligne de pièce il n'y a
-// pas la place pour deux mots, et une pièce est un petit lot où l'ambiguïté coûte moins cher.
+// The per-room switch (`RoomLightsToggle`) has not changed: in a room row there is no room for two
+// words, and a room is a small batch where the ambiguity costs less.
 type Choice = 'off' | 'on' | ''
 
 const props = defineProps<{ deviceIds: (string | undefined)[]; label: string }>()
 const devices = useDevicesStore()
 const { t } = useI18n()
 
-// Même lecture que les contrôles de pièce, pour que rien ne se contredise d'un écran à l'autre.
+// Same reading as the room controls, so that nothing contradicts itself from one screen to another.
 const { lights, reachable, on } = useRoomLights(() => props.deviceIds)
 
 const value = computed<Choice>(() =>
   on.value.length === 0 ? 'off' : on.value.length === reachable.value.length ? 'on' : '')
 
 const options = computed(() => {
-  // l'INVENTAIRE décide de la présence des segments, la joignabilité de leur activité (règle
-  // « rien ne bouge ») : un pont muet grise les deux gestes, il ne les fait pas disparaître
+  // the INVENTORY decides whether the segments are present, reachability whether they are active
+  // ("nothing moves" rule): a silent bridge grays out both gestures, it does not make them disappear
   const disabled = reachable.value.length === 0
   return [
     { value: 'off' as Choice, label: t('lights.allOff'), disabled },
@@ -44,7 +44,7 @@ const options = computed(() => {
 function apply(choice: Choice) {
   if (!choice) return
   const next = choice === 'on'
-  // n'écrire que sur les lampes qui doivent changer : le pont limite le débit des commandes
+  // only write to the lights that must change: the bridge rate-limits commands
   const targets = reachable.value.filter((l) => l.state.on !== next)
   void devices.runScene(targets.map((l) => ({ deviceId: l.id, command: { type: 'light.set' as const, on: next } })))
 }

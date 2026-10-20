@@ -3,18 +3,18 @@ import { createVuetify, type ThemeDefinition } from 'vuetify'
 import { aliases, strokeIcons } from './icons'
 import { DEFAULT_THEME_ID, onAccent, THEME_LIST, type Palette } from '../themes'
 
-// Thèmes Vuetify dérivés des palettes de `src/themes/` (une par variante clair/sombre d'un thème).
+// Vuetify themes derived from the palettes of `src/themes/` (one per light/dark variant of a theme).
 //
-// Les couleurs de MATIÈRE de la scène 3D (murs, sols, verre, toit, terrain, zones) ne vivent plus
-// ici : elles appartiennent au STYLE DE RENDU choisi (`src/three/styles/`), qui n'a rien à voir avec
-// le thème ni avec l'apparence claire/sombre. Seule `sceneMedia` reste — c'est un repère POSÉ sur la
-// maison, pas une matière — et Three la lit toujours via `--v-theme-sceneMedia` (`readUiTheme`).
+// The MATERIAL colors of the 3D scene (walls, floors, glass, roof, terrain, zones) no longer live
+// here: they belong to the chosen RENDER STYLE (`src/three/styles/`), which has nothing to do with
+// the theme nor with the light/dark appearance. Only `sceneMedia` remains — it is a reference mark PLACED on the
+// house, not a material — and Three still reads it through `--v-theme-sceneMedia` (`readUiTheme`).
 
 export function themeName(themeId: string, isDark: boolean): string {
   return `${themeId}${isDark ? 'Dark' : 'Light'}`
 }
 
-/** Un thème Vuetify par variante existante : les thèmes sombre-uniquement n'en produisent qu'un. */
+/** One Vuetify theme per existing variant: dark-only themes produce just one. */
 function definition(p: Palette, isDark: boolean): ThemeDefinition {
   return {
     dark: isDark,
@@ -23,8 +23,8 @@ function definition(p: Palette, isDark: boolean): ThemeDefinition {
       background: p.bg, surface: p.surface, 'surface-variant': p.surface2, 'on-surface': p.text, 'on-surface-variant': p.muted,
       'surface-bright': p.bright, 'surface-light': p.surface2,
       error: p.error, warning: p.warning, info: p.info, success: p.success,
-      // Seule couleur de scène qui suit le thème : l'onde du lecteur dit la même chose que la
-      // pastille Médias, les deux viennent donc de `catMedia`.
+      // Only scene color that follows the theme: the player's wave says the same thing as the
+      // Media pill, so both come from `catMedia`.
       sceneMedia: p.catMedia,
     },
   }
@@ -40,8 +40,8 @@ export const THEMES: Record<string, ThemeDefinition> = Object.fromEntries(
 export const vuetify = createVuetify({
   theme: { defaultTheme: themeName(DEFAULT_THEME_ID, false), themes: THEMES },
   icons: { defaultSet: 'stroke', aliases, sets: { stroke: strokeIcons } },
-  // Les couleurs passent par les props (les jetons CSS sont acceptés tels quels) plutôt que par des
-  // surcharges CSS visant les classes internes de Vuetify : voir styles/app.css.
+  // Colors go through props (CSS tokens are accepted as is) rather than through CSS
+  // overrides targeting Vuetify's internal classes: see styles/app.css.
   defaults: {
     VBtn: { rounded: 'pill' },
     VCard: { rounded: 'xl', flat: true },

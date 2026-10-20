@@ -3,16 +3,16 @@ import { defineStore } from 'pinia'
 import { getTransport } from '../api'
 import type { SchoolData, SchoolFilters } from '../api/transport'
 
-// L'école (plugin `toutemonannee`) : partagée entre la vue École et la carte de liaison des
-// Réglages. Le serveur rend toujours l'ensemble à jour, adopté tel quel ; seuls les filtres et la
-// case « fait » s'affichent avant sa réponse (et reviennent en arrière s'il refuse).
+// School (`toutemonannee` plugin): shared between the School view and the linking card of
+// Settings. The server always returns the up-to-date whole, adopted as is; only the filters and the
+// "done" checkbox are displayed before its response (and roll back if it refuses).
 
 export const useSchoolStore = defineStore('school', () => {
   const data = shallowRef<SchoolData | null>(null)
   const loaded = ref(false)
-  /** Le plugin ne répond pas (inactif, ou serveur injoignable). */
+  /** The plugin does not answer (inactive, or server unreachable). */
   const unavailable = ref(false)
-  /** Devoirs dont la case attend la réponse du serveur (celle du site peut prendre une seconde). */
+  /** Homework whose checkbox awaits the server's response (the site's may take a second). */
   const pending = ref<Set<number>>(new Set())
 
   const adopt = (d: SchoolData) => { data.value = d; unavailable.value = false }

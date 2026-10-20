@@ -4,13 +4,13 @@ import { useLocalStorage } from '@vueuse/core'
 import type { SiteMap } from '@kasbah/shared'
 import { getTransport } from '../api'
 
-// La carte du terrain d'une tondeuse PEINTE dans la scène 3D, quand on le souhaite. Ce qui se choisit
-// est propre au poste — la tablette du salon peut la montrer, le téléphone non — : `localStorage`.
-// Par robot : peinte ou non, et les éléments masqués (le terrain, une zone, les câbles…, voir
-// `sceneEntryKey`). On garde les MASQUÉS : une zone tracée plus tard se montre d'elle-même.
+// A mower's terrain map PAINTED in the 3D scene, when wanted. What is chosen
+// is specific to the workstation — the living room tablet can show it, the phone not —: `localStorage`.
+// Per robot: painted or not, and the hidden elements (the terrain, a zone, the cables…, see
+// `sceneEntryKey`). We keep the HIDDEN ones: a zone drawn later shows up by itself.
 //
-// Les cartes elles-mêmes sont gardées ici, partagées entre la scène et le panneau qui liste les
-// zones ; le serveur sert son cache, les redemander ne coûte pas de quota chez le fabricant.
+// The maps themselves are kept here, shared between the scene and the panel that lists the
+// zones; the server serves its cache, asking for them again costs no quota with the vendor.
 
 export const useSceneZonesStore = defineStore('sceneZones', () => {
   const shown = useLocalStorage<string[]>('kasbah.sceneZones.shown', [])
@@ -29,12 +29,12 @@ export const useSceneZonesStore = defineStore('sceneZones', () => {
     hidden.value = { ...hidden.value, [deviceId]: [...set] }
   }
 
-  /** (Re)demande la carte d'un robot ; remplacée seulement si elle a changé. Échec = elle manque, sans plus. */
+  /** (Re)requests a robot's map; replaced only if it changed. Failure = it is missing, nothing more. */
   async function load(deviceId: string): Promise<void> {
     try {
       const map = await getTransport().getSiteMap(deviceId)
       if (JSON.stringify(map) !== JSON.stringify(maps.value[deviceId])) maps.value = { ...maps.value, [deviceId]: map }
-    } catch { /* pas de carte : rien à peindre ni à lister */ }
+    } catch { /* no map: nothing to paint nor to list */ }
   }
 
   return { shown, hidden, maps, isShown, setShown, hiddenFor, toggleEntry, load }

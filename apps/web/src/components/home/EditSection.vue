@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Une section repliable du panneau de la maison en mode édition. On travaille par thème : une seule
-// section ouverte à la fois (le parent tient laquelle), elle a tout le panneau pour elle.
+// A collapsible section of the house panel in edit mode. We work by theme: only one section open
+// at a time (the parent holds which), it has the whole panel to itself.
 defineProps<{ title: string; meta?: string; open: boolean }>()
 defineEmits<{ toggle: [] }>()
 </script>

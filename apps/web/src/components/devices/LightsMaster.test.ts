@@ -16,7 +16,7 @@ const cover: DeviceEntry = {
 }
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
-/** Le segment allumé, c'est-à-dire l'état montré ; chaîne vide quand les lampes sont partagées. */
+/** The lit segment, that is the state shown; empty string when the lights are mixed. */
 const selected = (w: VueWrapper) => w.findAll('button').find((b) => b.attributes('data-on') === '1')?.text() ?? ''
 const key = (w: VueWrapper, label: string) => w.findAll('button').find((b) => b.text() === label)!
 
@@ -31,18 +31,18 @@ function setup(entries: DeviceEntry[]) {
 describe('LightsMaster', () => {
   beforeEach(() => { setActivePinia(createPinia()); setTransport(null) })
 
-  it('reste en dehors d\'une vue sans lampes', () => {
+  it('stays out of a view without lights', () => {
     expect(setup([cover]).w.findAll('button')).toHaveLength(0)
   })
 
-  it('montre l\'état, et rien du tout quand les lampes sont partagées', () => {
+  it('shows the state, and nothing at all when the lights are mixed', () => {
     expect(selected(setup([light('a', false), light('b', false), cover]).w)).toBe('Tout éteindre')
     expect(selected(setup([light('a', true), light('b', true)]).w)).toBe('Tout allumer')
     expect(selected(setup([light('a', true), light('b', false)]).w)).toBe('')
   })
 
-  // ce que l'interrupteur ne savait pas faire : rallumer une pièce à moitié allumée d'un seul appui
-  it('les deux gestes restent à portée, et n\'écrivent que sur les lampes qui doivent changer', async () => {
+  // what the switch could not do: turn a half-lit room back on with a single press
+  it('both gestures stay within reach, and only write to the lights that must change', async () => {
     const { w, runScene } = setup([light('a', true), light('b', false), light('c', false, false)])
     await key(w, 'Tout allumer').trigger('click')
     expect(runScene).toHaveBeenCalledWith([{ deviceId: 'b', command: { type: 'light.set', on: true } }])
@@ -50,9 +50,9 @@ describe('LightsMaster', () => {
     expect(runScene).toHaveBeenLastCalledWith([{ deviceId: 'a', command: { type: 'light.set', on: false } }])
   })
 
-  it('prend sa valeur cible au doigt, et revient si le serveur refuse', async () => {
-    // le serveur ne répond pas tout de suite : c'est entre l'appui et sa réponse que le segment
-    // doit déjà montrer la cible — avec un refus immédiat, il n'y aurait rien à observer
+  it('takes its target value under the finger, and reverts if the server refuses', async () => {
+    // the server does not answer right away: it is between the press and its answer that the
+    // segment must already show the target — with an immediate refusal, there would be nothing to observe
     const refus: ((err: unknown) => void)[] = []
     setTransport({ sendCommand: vi.fn(() => new Promise((_, rj) => refus.push(rj))) } as unknown as Transport)
     const devices = useDevicesStore()
@@ -60,15 +60,15 @@ describe('LightsMaster', () => {
     const w = mount(LightsMaster, { props: { deviceIds: ['a', 'b'], label: 'Toutes les lumières' } })
     expect(selected(w)).toBe('Tout éteindre')
     await key(w, 'Tout allumer').trigger('click')
-    expect(selected(w)).toBe('Tout allumer')        // mise à jour optimiste : la cible, au doigt
+    expect(selected(w)).toBe('Tout allumer')        // optimistic update: the target, under the finger
     for (const rj of refus) rj(new ApiRequestError(502, 'UPSTREAM_ERROR', 'boom'))
     await flush()
     await w.vm.$nextTick()
-    expect(selected(w)).toBe('Tout éteindre')       // refus du serveur : retour arrière
+    expect(selected(w)).toBe('Tout éteindre')       // server refusal: roll back
   })
 
-  // règle « rien ne doit bouger » : un pont muet ne doit pas faire disparaître la commande
-  it('garde sa place, inactive, quand aucune lampe ne répond', () => {
+  // "nothing must move" rule: a silent bridge must not make the control disappear
+  it('keeps its place, inactive, when no light answers', () => {
     const { w } = setup([light('a', false, false)])
     const keys = w.findAll('button')
     expect(keys).toHaveLength(2)

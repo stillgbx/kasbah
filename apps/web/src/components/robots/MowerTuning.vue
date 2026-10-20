@@ -5,18 +5,18 @@ import { useI18n } from 'vue-i18n'
 import { useHouseStore } from '../../stores/house'
 
 /**
- * Ce que seul l'utilisateur peut savoir d'un robot tondeuse : le DÉCALAGE de sa place calculée par
- * GPS. Ni le récepteur du robot (sous un débord de toit, contre un mur) ni l'origine de la maison ne
- * sont exacts au mètre, et l'écart se voit d'un coup d'œil sur la photo aérienne : on le corrige ici
- * une fois pour toutes, en mètres dans le repère de la maison. La valeur vit dans la MAISON
- * (`house.devices[].gpsOffset`), comme pour un véhicule, et s'applique à la carte ET à la scène 3D.
+ * What only the user can know about a mower robot: the OFFSET of its position computed by
+ * GPS. Neither the robot's receiver (under a roof overhang, against a wall) nor the house's origin
+ * are exact to the meter, and the gap shows at a glance on the aerial photo: it is corrected here
+ * once and for all, in meters in the house's reference frame. The value lives in the HOUSE
+ * (`house.devices[].gpsOffset`), as for a vehicle, and applies to the map AND to the 3D scene.
  *
- * Un robot qui publie la carte de son terrain (capacité `site_map`) a une seconde ligne : le décalage
- * de cette CARTE (`mapOffset`), posée par sa station sur la base du robot et qu'on recale à part sur
- * la photo — déplacer le robot ne la déplace pas, et inversement.
+ * A robot that publishes its terrain map (`site_map` capability) has a second row: the offset
+ * of that MAP (`mapOffset`), placed by its station on the robot's base and which is re-aligned separately on
+ * the photo — moving the robot does not move it, and vice versa.
  *
- * Même gabarit que `VehicleTuning`, réduit à ce qui a un sens pour une tondeuse : pas de rotation
- * (elle ne dit pas son cap, et son marqueur s'oriente sur son mouvement), pas de batterie à saisir.
+ * Same layout as `VehicleTuning`, reduced to what makes sense for a mower: no rotation
+ * (it does not report its heading, and its marker orients on its movement), no battery to enter.
  */
 const props = defineProps<{ descriptor: DeviceDescriptor }>()
 const house = useHouseStore()
@@ -27,7 +27,7 @@ const houseDevice = computed(() => house.houseDeviceFor(props.descriptor.id))
 const hasMap = computed(() => props.descriptor.capabilities.includes('site_map'))
 const offsetOf = (field: Field, axis: 0 | 1) => houseDevice.value?.[field]?.[axis] ?? 0
 
-/** Un champ vidé vaut 0, et `[0, 0]` EFFACE le réglage — c'est ce que dit le contrat d'écriture. */
+/** An emptied field is worth 0, and `[0, 0]` CLEARS the setting — that is what the write contract says. */
 const typed = (raw: string) => (raw.trim() === '' ? 0 : Number(raw.replace(',', '.')))
 function setOffset(field: Field, axis: 0 | 1, raw: string): void {
   const value = typed(raw)
@@ -36,7 +36,7 @@ function setOffset(field: Field, axis: 0 | 1, raw: string): void {
   void house.setDeviceTuning(props.descriptor.id, { [field]: next })
 }
 
-/** « Rétablir » : les décalages tels qu'ils étaient à l'OUVERTURE de la section (montée en `v-if`). */
+/** "Revert": the offsets as they were when the section was OPENED (mounted with `v-if`). */
 const opened = {
   gpsOffset: [offsetOf('gpsOffset', 0), offsetOf('gpsOffset', 1)] as [number, number],
   mapOffset: [offsetOf('mapOffset', 0), offsetOf('mapOffset', 1)] as [number, number],
@@ -57,7 +57,7 @@ const rows = computed(() => [
 
 <template>
   <div class="card card--soft tune">
-    <!-- place RÉSERVÉE : invisible tant qu'il n'y a rien à rétablir, la ligne ne bouge pas -->
+    <!-- RESERVED place: invisible as long as there is nothing to revert, the row does not move -->
     <div class="tune__top">
       <button type="button" class="pill tune__revert" :class="{ 'tune__revert--off': !changed }"
               :disabled="!changed" :tabindex="changed ? 0 : -1" @click="revert">{{ $t('place.revert') }}</button>

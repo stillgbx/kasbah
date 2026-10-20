@@ -2,11 +2,11 @@
 import { computed } from 'vue'
 import { useHouseStore } from '../../stores/house'
 
-// Dimensions d'une pièce (mode édition) : ses COTES, côté par côté. Chaque longueur se tape — le
-// mur suivant recule ou avance — et la 3D montre les mêmes côtés, qu'on pousse au doigt (poignée au
-// milieu d'un mur) ou dont on déplace un sommet. Tout passe par le brouillon de la séance : rien
-// n'est écrit avant « Valider ». La ligne d'actions est toujours là : ses boutons se grisent selon
-// ce qui est choisi, ils n'apparaissent pas.
+// Dimensions of a room (edit mode): its SIDES, side by side. Each length is typed — the
+// next wall moves back or forward — and the 3D shows the same sides, whether one pushes them with a finger (handle in the
+// middle of a wall) or moves a vertex. Everything goes through the session's draft: nothing
+// is written before "Apply". The actions row is always there: its buttons gray out depending on
+// what is chosen, they do not appear.
 const props = defineProps<{ roomId: string }>()
 const house = useHouseStore()
 
@@ -15,7 +15,7 @@ const sides = computed(() => shape.value.map((a, k) => {
   const b = shape.value[(k + 1) % shape.value.length]!
   return { k, length: Math.hypot(b[0] - a[0], b[1] - a[1]) }
 }))
-/** Surface des cotes (au milieu des cloisons), pas la surface habitable. */
+/** Area of the sides (at the middle of the partitions), not the living area. */
 const area = computed(() => Math.abs(shape.value.reduce((s, a, i) => {
   const b = shape.value[(i + 1) % shape.value.length]!
   return s + a[0] * b[1] - a[1] * b[0]
@@ -60,7 +60,7 @@ function removeCorner() { if (cornerSel.value !== null) { house.removeCorner(pro
     <div class="rs__actions">
       <button type="button" class="pill rs__btn" :disabled="wallSel === null || house.savingEdit" @click="addCorner()">{{ $t('shape.addCorner') }}</button>
       <button type="button" class="pill rs__btn" :disabled="cornerSel === null || shape.length <= 3 || house.savingEdit" @click="removeCorner()">{{ $t('shape.removeCorner') }}</button>
-      <!-- la pièce voisine naît de l'autre côté du mur choisi, sur la même cloison -->
+      <!-- the neighboring room is born on the other side of the chosen wall, on the same partition -->
       <button type="button" class="pill rs__btn rs__wide" :disabled="wallSel === null || house.savingEdit" @click="house.addRoomAgainstWall(roomId, wallSel!)">{{ $t('structure.roomAgainstWall') }}</button>
     </div>
   </div>

@@ -6,16 +6,16 @@ import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// La section « Places de stationnement » : la liste, et le bouton qui arme une pose. Elle vit à DEUX
-// endroits — le panneau de la maison en mode édition (toutes les places) et le panneau d'une pièce
-// (celles de cette pièce, posées dans SON niveau) — et c'est la même section, pas deux copies :
-// l'utilisateur doit retrouver le même geste là où il pense à une place.
+// The "Parking spots" section: the list, and the button that arms a placement. It lives in TWO
+// places — the house panel in edit mode (all the spots) and a room's panel
+// (those of this room, placed in ITS level) — and it is the same section, not two copies:
+// the user must find the same gesture wherever they think of a spot.
 const props = defineProps<{
-  /** Les places à lister. */
+  /** The spots to list. */
   list: Parking[]
-  /** Pièce d'où l'on pose : son niveau est imposé à la place créée. Absent = la surface touchée décide. */
+  /** Room from which we place: its level is imposed on the created spot. Absent = the touched surface decides. */
   levelId?: string
-  /** Le titre est déjà porté par l'en-tête qui l'enveloppe (section repliable du panneau de la maison). */
+  /** The title is already carried by the header that wraps it (collapsible section of the house panel). */
   hideLabel?: boolean
 }>()
 const house = useHouseStore()
@@ -35,9 +35,9 @@ function row(p: Parking) {
 }
 
 /**
- * Ce qu'on peut poser : une place de voiture partagée, et la base de chaque robot QUI N'EN A PAS.
- * Un robot n'a qu'une base — en proposer une seconde ne fait que créer une place que personne ne
- * viendra occuper, la plus proche gagnant (`assignParkings`). La sienne se règle depuis sa ligne.
+ * What can be placed: a shared car spot, and the base of each robot THAT HAS NONE.
+ * A robot has only one base — offering a second one only creates a spot that nobody will
+ * come to occupy, the nearest winning (`assignParkings`). Its own is adjusted from its row.
  */
 const choices = computed(() => {
   const robots = Object.values(devices.descriptors)
@@ -67,8 +67,8 @@ const armed = computed(() => house.placingParking)
     </div>
     <p v-else class="muted empty">{{ $t('parking.none') }}</p>
 
-    <!-- Ajouter : le menu donne ce qui s'y range, le tap au sol donne la place. Le bouton garde la
-         même boîte une fois armé (il devient « Annuler ») : rien ne bouge sous le doigt. -->
+    <!-- Add: the menu gives what goes in, the tap on the ground gives the place. The button keeps the
+         same box once armed (it becomes "Cancel"): nothing moves under the finger. -->
     <v-menu v-if="!armed" location="bottom start">
       <template #activator="{ props: menu }">
         <button v-bind="menu" type="button" class="pill add" :disabled="house.savingParking">
@@ -86,7 +86,7 @@ const armed = computed(() => house.placingParking)
     <button v-else type="button" class="pill add add--armed" @click="house.cancelPlacingParking()">
       {{ $t('parking.cancel') }}
     </button>
-    <!-- place réservée : la consigne apparaît sans pousser la liste (hauteur fixe, deux lignes) -->
+    <!-- reserved place: the instruction appears without pushing the list (fixed height, two lines) -->
     <p class="muted hint">{{ armed ? $t('parking.placeHint') : '' }}</p>
   </section>
 </template>
@@ -94,20 +94,20 @@ const armed = computed(() => house.placingParking)
 <style scoped>
 .block { display: grid; gap: 8px; }
 .rows { display: grid; gap: 8px; }
-/* même ligne que celle d'une ouverture dans le panneau d'une pièce */
+/* same row as that of an opening in a room's panel */
 .park-row {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius);
   background: var(--surface2); border: 0; width: 100%; text-align: left; font: inherit; color: inherit;
   cursor: pointer; transition: filter .15s; min-width: 0;
 }
 .park-row:hover { filter: brightness(1.03); }
-/* `min-width: 0` sur le bloc ET sur ses lignes : sans lui, un nom long POUSSE la ligne hors du
-   panneau au lieu d'être coupé (la largeur intrinsèque d'un flex enfant fait loi par défaut). */
+/* `min-width: 0` on the block AND on its rows: without it, a long name PUSHES the row out of the
+   panel instead of being cut (the intrinsic width of a flex child rules by default). */
 .park-row__main { flex: 1 1 0; min-width: 0; }
 .park-row__name, .park-row__sub { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .park-row__name { font-weight: 500; font-size: 14px; }
 .park-row__sub { font-size: 12px; }
-/* les cotes restent lisibles et ne se coupent jamais : c'est la ligne de gauche qui cède */
+/* the measurements stay readable and are never cut: it is the left row that yields */
 .park-row__size { flex: none; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .park-row__chevron { flex: none; }
 .empty { font-size: 13px; margin: 0; }

@@ -5,24 +5,24 @@ import { coverLeaves, hasLeaves } from '../../lib/orientation'
 import { useHouseStore } from '../../stores/house'
 
 /**
- * Ce que seule la MAISON sait d'un ouvrant : ses vantaux, sa matière, sa couleur. Le fabricant ne
- * dit rien de tout cela — un moteur Somfy publie une course en pourcents, pas un volet bois blanc à
- * deux battants —, et ces trois-là vivent donc dans `house.devices[]`, exactement comme les mêmes
- * réglages vivent dans l'ouverture pour une menuiserie (`OpeningPanel`).
+ * What only the HOUSE knows about a cover: its leaves, its material, its color. The vendor says
+ * nothing of all this — a Somfy motor publishes a travel in percent, not a white wooden shutter
+ * with two leaves —, so these three live in `house.devices[]`, exactly as the same settings live
+ * in the opening for a joinery (`OpeningPanel`).
  *
- * Les trois sont FACULTATIFS et le panneau le montre : « Automatique » pour la matière, une croix
- * pour rendre la couleur. Un ouvrant qui n'en dit rien garde ce que le style de rendu lui donne, et
- * une maison relevée hier ne change pas d'aspect parce que ces réglages existent.
+ * All three are OPTIONAL and the panel shows it: "Automatic" for the material, a cross to clear
+ * the color. A cover that says nothing about them keeps what the render style gives it, and a
+ * house surveyed yesterday does not change look because these settings exist.
  *
- * Les vantaux ne changent pas la COURSE, seulement le dessin : un tablier d'un seul tenant, ou deux
- * panneaux séparés d'un refend — c'est ainsi qu'on lit un volet battant. La course, elle, reste
- * celle que l'état publie.
+ * The leaves do not change the TRAVEL, only the drawing: a single-piece apron, or two panels
+ * separated by a split — that is how a casement shutter reads. The travel stays the one the state
+ * publishes.
  */
 const props = defineProps<{ descriptor: DeviceDescriptor }>()
 const house = useHouseStore()
 
 const houseDevice = computed(() => house.houseDeviceFor(props.descriptor.id))
-/** Un store banne se déploie : il n'a pas de vantaux à compter (`hasLeaves`). */
+/** An awning unfolds: it has no leaves to count (`hasLeaves`). */
 const leavesShown = computed(() => !!houseDevice.value && hasLeaves(houseDevice.value, props.descriptor))
 const leaves = computed(() => (houseDevice.value ? coverLeaves(houseDevice.value, props.descriptor) : 1))
 function setLeaves(raw: string): void {
@@ -31,11 +31,11 @@ function setLeaves(raw: string): void {
   void house.setDeviceTuning(props.descriptor.id, { leaves: next })
 }
 
-/** `''` = automatique : la clé quitte le fichier et le style de rendu reprend la main. */
+/** `''` = automatic: the key leaves the file and the render style takes over again. */
 const material = computed(() => houseDevice.value?.coverMaterial ?? '')
 function setMaterial(raw: string): void {
-  // `find` plutôt qu'une conversion : ce que le sélecteur rend est une chaîne, et une valeur
-  // inconnue retombe sur l'automatique au lieu d'entrer dans le fichier
+  // `find` rather than a cast: what the selector returns is a string, and an unknown value
+  // falls back to automatic instead of entering the file
   const next: OpeningMaterial | '' = OPENING_MATERIALS.find((m) => m === raw) ?? ''
   if (next === material.value) return
   void house.setDeviceTuning(props.descriptor.id, { coverMaterial: next })
@@ -43,9 +43,9 @@ function setMaterial(raw: string): void {
 
 const color = computed(() => houseDevice.value?.coverColor ?? '')
 /**
- * Ce que le sélecteur natif montre quand rien n'est choisi : un gris d'aluminium, pas un noir. La
- * vraie teinte vit dans la palette du style de rendu et ne se lit pas d'ici — mais on peut partir
- * d'une valeur qui ressemble à ce qu'on voit (même convention que `OpeningPanel`).
+ * What the native picker shows when nothing is chosen: an aluminum gray, not a black. The real
+ * tint lives in the render style palette and cannot be read from here — but we can start from
+ * a value that looks like what is seen (same convention as `OpeningPanel`).
  */
 const DEFAULT_SWATCH = '#b8bcc0'
 function setColor(value: string): void {
@@ -53,9 +53,10 @@ function setColor(value: string): void {
   void house.setDeviceTuning(props.descriptor.id, { coverColor: value })
 }
 /**
- * La teinte se voit PENDANT qu'on la choisit : le sélecteur natif annonce chaque nuance survolée et
- * la scène la pose tout de suite sur le tablier — c'est comme ça qu'on juge une couleur, volet sous
- * les yeux. Seul le choix validé (`change`) est écrit ; un choix abandonné rend la teinte d'avant.
+ * The tint is seen WHILE it is being chosen: the native picker announces each shade hovered and
+ * the scene puts it on the apron right away — that is how a color is judged, shutter in front
+ * of the eyes. Only the validated choice (`change`) is written; an abandoned choice gives back
+ * the previous tint.
  */
 const preview = (value: string | null) => house.previewBodyColor(props.descriptor.id, value)
 onBeforeUnmount(() => preview(null))
@@ -81,12 +82,12 @@ onBeforeUnmount(() => preview(null))
         </select>
       </span>
     </label>
-    <!-- `for` EXPLICITE : un label sans `for` active son premier descendant étiquetable, et la croix
-         vient avant le champ — cliquer la ligne effacerait le choix qu'on vient de faire. -->
+    <!-- EXPLICIT `for`: a label without `for` activates its first labelable descendant, and the
+         cross comes before the field — clicking the row would clear the choice just made. -->
     <label class="tune__row" :for="`cover-color-${descriptor.id}`">
       <span class="muted tune__k">{{ $t('opening.color') }}</span>
       <span class="tune__fields">
-        <!-- place RÉSERVÉE : la croix s'efface sans que le sélecteur bouge, elle n'apparaît pas -->
+        <!-- RESERVED slot: the cross fades out without the picker moving, it does not appear -->
         <button type="button" class="tune__reset" :class="{ 'tune__reset--off': !color }"
                 :disabled="!color" :tabindex="color ? 0 : -1"
                 :title="$t('opening.colorReset')" :aria-label="$t('opening.colorReset')" @click="setColor('')">×</button>
@@ -99,7 +100,7 @@ onBeforeUnmount(() => preview(null))
 </template>
 
 <style scoped>
-/* même gabarit que les réglages d'un véhicule : les deux vivent dans la carte pliante du panneau */
+/* same layout as the vehicle settings: both live in the collapsible card of the panel */
 .tune { padding: 10px 12px; display: grid; gap: 10px; }
 .tune__row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
 .tune__k { flex: 1 1 auto; min-width: 0; }
@@ -109,7 +110,7 @@ onBeforeUnmount(() => preview(null))
   border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
   font: inherit; font-size: 13px;
 }
-/* même gabarit que les sélecteurs : la ligne ne change pas de hauteur d'une section à l'autre */
+/* same layout as the selectors: the row does not change height from one section to another */
 .tune input[type='color'] { width: 96px; height: 28px; padding: 2px; cursor: pointer; }
 .tune__reset {
   width: 22px; height: 22px; padding: 0; line-height: 1;

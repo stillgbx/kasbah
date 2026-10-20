@@ -8,31 +8,31 @@ import {
 } from '../lib/tens/protocol'
 import { favoriteKey, INTENSITY_MAX, TENS_FAVORITES, tensProgram, type TensFavorite } from '../lib/tens/programs'
 
-// Le TENS (actiTENS mini) piloté depuis CE navigateur, en Web Bluetooth. Rien ne passe par le
-// serveur : ni automatisation, ni scène, ni assistant ne peuvent l'atteindre, et la tablette du
-// palier n'en sait rien. C'est voulu — on envoie du courant dans un corps.
+// The TENS (actiTENS mini) driven from THIS browser, over Web Bluetooth. Nothing goes through the
+// server: no automation, no scene, no assistant can reach it, and the landing
+// tablet knows nothing about it. That is deliberate — we send current into a body.
 //
-// L'intensité a DEUX valeurs par canal : la CONSIGNE (ce que l'utilisateur demande, qui bouge au
-// clic ou au curseur) et la valeur ACQUISE (la dernière que le TENS a acceptée). Une seule file
-// rapproche l'acquise de la consigne, un pas à la fois, tous canaux confondus :
-// - la montée se fait par paliers de 0,5 mA ; la descente va droit à la consigne ;
-// - une commande au plus toutes les 300 ms — plus vite, le TENS répond « trop tôt » (0x33) ;
-// - un refus « trop tôt » ne perd rien : la consigne reste, la file retente au créneau suivant ;
-// - jamais au-delà de INTENSITY_MAX ; pause et arrêt vident la file avant de partir.
+// The intensity has TWO values per channel: the SETPOINT (what the user asks for, which moves on
+// click or on the slider) and the ACQUIRED value (the last one the TENS accepted). A single queue
+// brings the acquired value closer to the setpoint, one step at a time, all channels combined:
+// - the rise goes in steps of 0.5 mA; the descent goes straight to the setpoint;
+// - one command at most every 300 ms — faster, the TENS answers "too soon" (0x33);
+// - a "too soon" refusal loses nothing: the setpoint stays, the queue retries at the next slot;
+// - never beyond INTENSITY_MAX; pause and stop empty the queue before leaving.
 
-/** Espacement minimal entre deux commandes d'intensité, tous canaux confondus. */
+/** Minimum spacing between two intensity commands, all channels combined. */
 export const RAMP_INTERVAL_MS = 300
 /**
- * Codes de refus relevés en direct (`1b c0 7f 02 <commande> <code>`) : 0x11 sur le programme quand
- * le TENS n'est pas posé (électrodes sans contact), 0x33 sur une intensité envoyée trop tôt après
- * la précédente — la même valeur repasse juste après.
+ * Refusal codes observed live (`1b c0 7f 02 <command> <code>`): 0x11 on the program when
+ * the TENS is not applied (electrodes with no contact), 0x33 on an intensity sent too soon after
+ * the previous one — the same value goes through right after.
  */
 export const REFUSED_ELECTRODES = 0x11
 export const REFUSED_TOO_SOON = 0x33
-/** Refus « trop tôt » d'affilée avant d'abandonner la consigne (≈ 3 s de refus continus). */
+/** Consecutive "too soon" refusals before giving up the setpoint (≈ 3 s of continuous refusals). */
 const TOO_SOON_LIMIT = 10
 const refusalCode = (e: unknown) => { const m = /^refused:(\d+)$/.exec((e as Error)?.message ?? ''); return m ? Number(m[1]) : null }
-/** La clé i18n d'une erreur de commande, et son détail brut pour les refus qu'on ne sait pas nommer. */
+/** The i18n key of a command error, and its raw detail for the refusals we cannot name. */
 function describe(e: unknown): { key: string; detail: string | null } {
   const code = refusalCode(e)
   if (code === REFUSED_ELECTRODES) return { key: 'tens.errors.electrodes', detail: null }
@@ -40,7 +40,7 @@ function describe(e: unknown): { key: string; detail: string | null } {
   return { key: 'tens.errors.command', detail: null }
 }
 
-/** Laisse au TENS le temps de vérifier les électrodes avant d'envoyer le programme. */
+/** Gives the TENS time to check the electrodes before sending the program. */
 export const CHECK_SETTLE_MS = 1500
 
 export type TensLinkStatus = 'disconnected' | 'connecting' | 'connected'
@@ -53,51 +53,51 @@ const readJson = { read: (v: string) => { try { return JSON.parse(v) } catch { r
 export const useTensStore = defineStore('tens', () => {
   const link = shallowRef<TensLink | null>(null)
   const status = ref<TensLinkStatus>('disconnected')
-  /** Clé i18n de la dernière erreur, effacée à l'action suivante. */
+  /** i18n key of the last error, cleared at the next action. */
   const error = ref<string | null>(null)
-  /** Le message brut qui accompagne l'erreur (diagnostic : étape, raison, code de refus). */
+  /** The raw message that goes with the error (diagnostic: step, reason, refusal code). */
   const errorDetail = ref<string | null>(null)
   const battery = ref<TensBattery | null>(null)
   const session = ref<TensSession | null>(null)
-  /** Quand `session` a été reçue : le compte à rebours s'estime entre deux notifications (4 s). */
+  /** When `session` was received: the countdown is estimated between two notifications (4 s). */
   const sessionAt = ref(0)
   const now = ref(Date.now())
   const busy = ref(false)
   const deviceName = ref<string | null>(null)
   /**
-   * Le dernier lancement fait D'ICI : l'appareil ne dit pas quel programme tourne, seulement
-   * l'identifiant de séance qu'on lui a donné. Persisté pour retrouver le nom après un rechargement.
+   * The last launch made FROM HERE: the device does not say which program is running, only
+   * the session identifier we gave it. Persisted to find the name again after a reload.
    */
   const lastLaunch = useLocalStorage<{ tag: number; program: string; minutes: number; key?: string } | null>('kasbah.tens.lastLaunch', null, { serializer: readJson })
   /**
-   * L'identifiant Web Bluetooth du TENS, retenu à la première connexion : le TENS n'annonce pas son
-   * nom, aucun filtre du sélecteur ne le trouve. Avec lui, Connecter le rejoint sans sélecteur.
+   * The Web Bluetooth identifier of the TENS, kept at the first connection: the TENS does not announce its
+   * name, no picker filter finds it. With it, Connect reaches it without a picker.
    */
   const knownDeviceId = useLocalStorage<string | null>('kasbah.tens.deviceId', null, { serializer: readJson })
 
-  /** Les favoris de CE poste, dans l'ordre d'ajout ; un programme y revient autant de fois qu'il a de réglages différents. */
+  /** The favorites of THIS workstation, in the order of addition; a program comes back there as many times as it has different settings. */
   const favorites = useLocalStorage<TensFavorite[]>('kasbah.tens.favorites', TENS_FAVORITES.map((f) => ({ ...f })), {
     serializer: { read: (v) => { try { const a = JSON.parse(v); return Array.isArray(a) ? a : [] } catch { return [] } }, write: (v) => JSON.stringify(v) },
   })
-  /** Ce lancement exact (programme, durée, canaux, intensités) est-il déjà un favori ? */
+  /** Is this exact launch (program, duration, channels, intensities) already a favorite? */
   const isFavorite = (fav: TensFavorite) => favorites.value.some((f) => favoriteKey(f) === favoriteKey(fav))
-  /** Ajoute ce lancement aux favoris, ou l'en retire s'il y est déjà à l'identique. */
+  /** Adds this launch to the favorites, or removes it if it is already there identically. */
   function toggleFavorite(fav: TensFavorite) {
     favorites.value = isFavorite(fav)
       ? favorites.value.filter((f) => favoriteKey(f) !== favoriteKey(fav))
       : [...favorites.value, { ...fav }]
   }
 
-  /** Consigne par canal (dixièmes de mA). */
+  /** Setpoint per channel (tenths of mA). */
   const target = reactive<Record<Channel, number>>({ 1: 0, 2: 0 })
-  /** Dernière valeur ACCEPTÉE par le TENS, par canal. */
+  /** Last value ACCEPTED by the TENS, per channel. */
   const acquired = reactive<Record<Channel, number>>({ 1: 0, 2: 0 })
-  /** Consignes à retrouver après une pause (l'appareil remet les canaux à 0). */
+  /** Setpoints to restore after a pause (the device resets the channels to 0). */
   let resumeTargets: Record<Channel, number> = { 1: 0, 2: 0 }
-  /** Génération de la file : l'incrémenter la vide (pause, arrêt, déconnexion). */
+  /** Queue generation: incrementing it empties it (pause, stop, disconnection). */
   let queueGen = 0
   let draining = false
-  /** Génération de lancement : l'arrêt l'incrémente, et un lancement en cours s'interrompt avant d'envoyer la suite. */
+  /** Launch generation: stop increments it, and a launch in progress is interrupted before sending the rest. */
   let launchGen = 0
   let nextSlotAt = 0
 
@@ -112,12 +112,12 @@ export const useTensStore = defineStore('tens', () => {
     const elapsed = s.state === 'running' && connected.value ? Math.floor((now.value - sessionAt.value) / 1000) : 0
     return Math.max(0, s.remainingS - elapsed)
   })
-  /** Le programme en cours, s'il a été lancé d'ici (sinon on sait seulement qu'une séance tourne). */
+  /** The program in progress, if it was launched from here (otherwise we only know that a session is running). */
   const currentProgram = computed(() => {
     const s = session.value, l = lastLaunch.value
     return s && l && active.value && l.tag === s.sessionTag ? l.program : null
   })
-  /** Le lancement en cours sous la forme d'une clé de favori (`favoriteKey`), s'il a été lancé d'ici. */
+  /** The launch in progress as a favorite key (`favoriteKey`), if it was launched from here. */
   const currentKey = computed(() => (currentProgram.value ? lastLaunch.value?.key ?? null : null))
 
   useIntervalFn(() => { now.value = Date.now() }, 1000)
@@ -127,7 +127,7 @@ export const useTensStore = defineStore('tens', () => {
     sessionAt.value = Date.now()
     now.value = sessionAt.value
   }
-  /** Change l'état tout de suite après l'accusé du TENS, sans attendre sa notification. */
+  /** Changes the state right after the TENS's acknowledgment, without waiting for its notification. */
   function markState(state: TensSession['state']) {
     if (session.value) setSession({ ...session.value, remainingS: remainingS.value, state })
   }
@@ -142,7 +142,7 @@ export const useTensStore = defineStore('tens', () => {
     return new TensLink(device, {
       onBattery: (b) => { battery.value = b },
       onSession,
-      // déconnecté, on ne sait plus rien de la batterie : pas de dernière valeur périmée à l'écran
+      // disconnected, we no longer know anything about the battery: no stale last value on screen
       onDisconnect: () => { queueGen++; link.value = null; battery.value = null; status.value = 'disconnected' },
     })
   }
@@ -154,10 +154,10 @@ export const useTensStore = defineStore('tens', () => {
       await l.open()
       link.value = l
       knownDeviceId.value = device.id
-      console.info(`[tens] appareil « ${device.name ?? '(sans nom)'} » id ${device.id}`)
-      // le système nomme un appareil inconnu « Bluetooth 00:30:… » : on garde alors notre libellé
+      console.info(`[tens] device "${device.name ?? '(sans nom)'}" id ${device.id}`)
+      // the system names an unknown device "Bluetooth 00:30:…": we then keep our own label
       deviceName.value = device.name && !device.name.startsWith('Bluetooth') ? device.name : null
-      // une séance déjà en cours (reprise de connexion) : consigne et acquis partent de ce qu'il dit
+      // a session already in progress (connection resumed): setpoint and acquired start from what it says
       const s = session.value
       if (s && s.state !== 'idle') { acquired[1] = target[1] = s.ch1; acquired[2] = target[2] = s.ch2 } else zero()
       status.value = 'connected'
@@ -171,10 +171,10 @@ export const useTensStore = defineStore('tens', () => {
   function connectFailed(e: unknown) {
     error.value = 'tens.errors.connect'
     errorDetail.value = (e as Error)?.message ?? String(e)
-    console.error('[tens] connexion', e)
+    console.error('[tens] connection', e)
   }
 
-  /** L'appareil déjà autorisé, si le navigateur sait les lister (`getDevices`). */
+  /** The already authorized device, if the browser can list them (`getDevices`). */
   async function known(): Promise<BleDevice | null> {
     const bt = browserBluetooth()
     if (!bt?.getDevices || !knownDeviceId.value) return null
@@ -182,8 +182,8 @@ export const useTensStore = defineStore('tens', () => {
   }
 
   /**
-   * Le TENS retenu s'il y en a un (et si le navigateur sait le retrouver), sinon le sélecteur filtré
-   * sur « acTENS ». `all` ouvre la liste complète. Il exige un geste de l'utilisateur (un clic).
+   * The remembered TENS if there is one (and if the browser can find it again), otherwise the picker filtered
+   * on "acTENS". `all` opens the full list. It requires a user gesture (a click).
    */
   async function connect(all = false) {
     const bt = browserBluetooth()
@@ -197,7 +197,7 @@ export const useTensStore = defineStore('tens', () => {
       try {
         device = await requestTens(bt, all)
       } catch (e) {
-        // sélecteur fermé (NotFoundError) : pas une erreur ; le reste se dit
+        // picker closed (NotFoundError): not an error; the rest is reported
         if ((e as Error)?.name !== 'NotFoundError') connectFailed(e)
         return
       }
@@ -205,11 +205,11 @@ export const useTensStore = defineStore('tens', () => {
     try { await open(device) } catch (e) { connectFailed(e) }
   }
 
-  /** Sans geste, à l'ouverture de la page : le TENS retenu, s'il est là. Silencieux s'il échoue. */
+  /** Without a gesture, on opening the page: the remembered TENS, if it is there. Silent if it fails. */
   async function reconnect() {
     if (status.value !== 'disconnected') return
     const d = await known()
-    if (d) { try { await open(d) } catch { /* on reste sur le bouton Connecter */ } }
+    if (d) { try { await open(d) } catch { /* we stay on the Connect button */ } }
   }
 
   function disconnect() {
@@ -231,7 +231,7 @@ export const useTensStore = defineStore('tens', () => {
     errorDetail.value = d.detail
   }
 
-  /** Une action utilisateur : une seule à la fois, et toute erreur devient un message. */
+  /** A user action: only one at a time, and any error becomes a message. */
   async function act(fn: () => Promise<void>) {
     if (busy.value || !link.value) return
     busy.value = true
@@ -243,9 +243,9 @@ export const useTensStore = defineStore('tens', () => {
   }
 
   /**
-   * `targets` : l'intensité à atteindre par canal une fois le programme parti (dixièmes de mA). La
-   * file y monte par paliers comme pour un clic sur + ; tout geste la remplace, pause et arrêt la vident.
-   * Un canal hors de `channels` reste à 0.
+   * `targets`: the intensity to reach per channel once the program has started (tenths of mA). The
+   * queue climbs there in steps as for a click on +; any gesture replaces it, pause and stop empty it.
+   * A channel outside `channels` stays at 0.
    */
   function startProgram(programId: string, minutes: number, channels: TensChannels = 3, targets: Record<Channel, number> = { 1: 0, 2: 0 }) {
     const program = tensProgram(programId)
@@ -253,7 +253,7 @@ export const useTensStore = defineStore('tens', () => {
     return act(async () => {
       const gen = ++launchGen
       const tag = Math.floor(Math.random() * 0x100)
-      // un arrêt pressé pendant le lancement ne doit pas être suivi d'un démarrage
+      // a stop pressed during the launch must not be followed by a start
       const step = async (frame: Uint8Array) => { if (gen !== launchGen) throw new Error('aborted'); await send(frame) }
       await step(checkFrame(channels))
       await sleep(CHECK_SETTLE_MS)
@@ -269,18 +269,18 @@ export const useTensStore = defineStore('tens', () => {
     })
   }
 
-  // ---- la file des intensités ----
+  // ---- the intensity queue ----
 
-  /** Attend le prochain créneau libre (300 ms après le précédent), réservé avant d'attendre. */
+  /** Waits for the next free slot (300 ms after the previous one), reserved before waiting. */
   async function slot() {
     const at = Math.max(Date.now(), nextSlotAt)
     nextSlotAt = at + RAMP_INTERVAL_MS
     if (at > Date.now()) await sleep(at - Date.now())
   }
 
-  /** Le prochain pas à envoyer, en alternant les canaux pour que les deux avancent ensemble. */
+  /** The next step to send, alternating channels so that both advance together. */
   let turn: Channel = 1
-  /** `take` passe la main à l'autre canal ; sans lui, on regarde seulement s'il reste du travail. */
+  /** `take` hands over to the other channel; without it, we only check whether work remains. */
   function nextStep(take = false): { ch: Channel; value: number } | null {
     for (const ch of [turn, turn === 1 ? 2 : 1] as Channel[]) {
       const value = rampSteps(acquired[ch], target[ch])[0]
@@ -302,7 +302,7 @@ export const useTensStore = defineStore('tens', () => {
         if (!nextStep()) break
         await slot()
         if (gen !== queueGen || !link.value) break
-        // la consigne a pu bouger pendant l'attente : le pas se calcule au dernier moment
+        // the setpoint may have moved during the wait: the step is computed at the last moment
         const step = nextStep(true)
         if (!step) break
         try {
@@ -312,7 +312,7 @@ export const useTensStore = defineStore('tens', () => {
         } catch (e) {
           if (gen !== queueGen) break
           if (refusalCode(e) === REFUSED_TOO_SOON && ++tooSoon < TOO_SOON_LIMIT) continue
-          // refus persistant ou autre erreur : la consigne revient à ce que le TENS a vraiment
+          // persistent refusal or other error: the setpoint goes back to what the TENS really
           fail(e)
           target[1] = acquired[1]; target[2] = acquired[2]
           break
@@ -321,11 +321,11 @@ export const useTensStore = defineStore('tens', () => {
     } finally {
       draining = false
     }
-    // la file a été vidée pendant un envoi : une nouvelle consigne a pu arriver entre-temps
+    // the queue was emptied during a send: a new setpoint may have arrived in the meantime
     if (gen !== queueGen && nextStep() && running.value) void drain()
   }
 
-  /** Nouvelle consigne pour un canal (dixièmes de mA) ; la file s'en charge. */
+  /** New setpoint for a channel (tenths of mA); the queue takes care of it. */
   function setIntensity(channel: Channel, value: number) {
     if (!link.value || !running.value) return
     error.value = null
@@ -333,12 +333,12 @@ export const useTensStore = defineStore('tens', () => {
     target[channel] = clampIntensity(value)
     void drain()
   }
-  /** +/− : la consigne bouge d'un pas à chaque clic, même si le TENS n'a pas encore suivi. */
+  /** +/−: the setpoint moves by one step at each click, even if the TENS has not followed yet. */
   function nudge(channel: Channel, dir: 1 | -1) { setIntensity(channel, target[channel] + dir * INTENSITY_STEP) }
 
-  /** La consigne affichée ; hors connexion, ce que dit l'appareil. */
+  /** The displayed setpoint; when disconnected, what the device says. */
   const targetOf = (ch: Channel) => (link.value ? target[ch] : acquiredOf(ch))
-  /** Où en est le TENS ; hors connexion, sa dernière notification. */
+  /** Where the TENS stands; when disconnected, its last notification. */
   const acquiredOf = (ch: Channel) => (link.value ? acquired[ch] : ch === 1 ? session.value?.ch1 ?? 0 : session.value?.ch2 ?? 0)
 
   function pause() {
@@ -357,12 +357,12 @@ export const useTensStore = defineStore('tens', () => {
       markState('running')
     })
     if (error.value) return
-    // l'appareil repart à 0 : la file remonte chaque canal vers sa consigne d'avant la pause
+    // the device restarts at 0: the queue climbs each channel back toward its pre-pause setpoint
     target[1] = resumeTargets[1]; target[2] = resumeTargets[2]
     void drain()
   }
 
-  /** L'arrêt passe même si une autre action est en cours : c'est le bouton qu'on doit pouvoir presser. */
+  /** Stop goes through even if another action is in progress: it is the button that must be pressable. */
   async function stop() {
     if (!link.value) return
     queueGen++

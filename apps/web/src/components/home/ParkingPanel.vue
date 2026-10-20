@@ -7,16 +7,16 @@ import { useHouseStore } from '../../stores/house'
 import MarqueeText from '../ui/MarqueeText.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Panneau « place de stationnement » : ses deux cotes d'encombrement, son cap, et surtout les QUATRE
-// cotes qui la situent dans son hôte — ce qui la sépare du contour du garage ou de l'allée devant,
-// derrière et de chaque côté. C'est ainsi qu'on pose une place au mètre ruban, et c'est le même
-// geste que les deux cotes d'une ouverture, au sol.
+// "Parking spot" panel: its two footprint measurements, its heading, and above all the FOUR
+// measurements that locate it within its host — what separates it from the outline of the garage or of the driveway in
+// front, behind and on each side. That is how one places a spot with a tape measure, and it is the same
+// gesture as the two measurements of an opening, on the ground.
 //
-// Mêmes idiomes que `OpeningPanel` : touches −/+, saisie qui ne commite qu'à la validation, virgule
-// décimale acceptée, chiffres à chasse fixe pour que rien ne bouge à la frappe.
+// Same idioms as `OpeningPanel`: −/+ keys, input that only commits on validation, decimal
+// comma accepted, fixed-width digits so that nothing moves while typing.
 //
-// Règle commune aux quatre cotes de place : ON GARDE ce qui a été tapé et la place GLISSE de ce qui
-// manque (`fitParkingGap`), la cote opposée suivant d'elle-même.
+// Rule common to the four spot measurements: we KEEP what was typed and the spot SLIDES by what
+// is missing (`fitParkingGap`), the opposite measurement following by itself.
 const emit = defineEmits<{ back: [] }>()
 const house = useHouseStore()
 const devices = useDevicesStore()
@@ -29,13 +29,13 @@ const hostName = computed(() => {
   return h && h.kind !== 'terrain' ? h.name : ''
 })
 
-/** Ce que la place accepte, dit en clair : une place de voiture, ou la base de tel robot. */
+/** What the spot accepts, said plainly: a car spot, or the base of such a robot. */
 const kindLabel = computed(() => {
   const p = parking.value
   if (!p) return ''
   return isParkingBay(p) ? t('parking.bay') : t('parking.dock')
 })
-/** Partagée, ou réservée à un appareil — c'est `deviceId` qui tranche (une base ne se partage pas). */
+/** Shared, or reserved for a device — `deviceId` decides (a base is not shared). */
 const ownerLabel = computed(() => {
   const p = parking.value
   if (!p?.deviceId) return t('parking.shared')
@@ -53,7 +53,7 @@ const fields = computed(() => (parking.value
   ]
   : []))
 
-/** `null` sur une cote que rien ne mesure (place hors de tout hôte) : le champ affiche « — ». */
+/** `null` on a measurement that nothing measures (spot outside any host): the field shows "—". */
 function fieldValue(field: Field): number | null {
   const p = parking.value
   if (!p) return null
@@ -101,18 +101,18 @@ function commitEdit(field: Field) {
 }
 
 /**
- * Le cap, exactement comme celui d'un appareil orienté (`PlacementControl`) : deux touches de
- * rotation et la SAISIE DIRECTE de l'angle entre elles. Trois raisons de copier cette ligne plutôt
- * que d'en inventer une :
+ * The heading, exactly like that of an oriented device (`PlacementControl`): two rotation
+ * keys and DIRECT INPUT of the angle between them. Three reasons to copy that line rather than
+ * invent another:
  *
- *  - le `yaw` tourne dans le sens TRIGONOMÉTRIQUE, donc l'augmenter fait pivoter vers la gauche vu
- *    de dessus. Des touches marquées « −5° » et « +5° » mentaient : appuyer sur « +5° » affichait
- *    « -5° ». Une icône de rotation ne peut pas mentir — ce qu'on voit tourner suit la touche ;
- *  - aligner une place sur un garage au degré près demandait autrement des dizaines d'appuis ;
- *  - et l'angle se lit dans la même boîte que partout ailleurs, dans `[0, 360[`.
+ *  - the `yaw` turns COUNTERCLOCKWISE, so increasing it pivots to the left seen
+ *    from above. Keys marked "−5°" and "+5°" lied: pressing "+5°" displayed
+ *    "-5°". A rotation icon cannot lie — what one sees turning follows the key;
+ *  - aligning a spot on a garage to the degree otherwise took dozens of presses;
+ *  - and the angle reads in the same box as everywhere else, in `[0, 360[`.
  *
- * Le pas reste de 5° (et non les 45° d'un appareil) : une place se cale sur un mur, pas sur une
- * direction cardinale.
+ * The step stays 5° (and not the 45° of a device): a spot is aligned on a wall, not on a
+ * cardinal direction.
  */
 const YAW_STEP = 5
 const norm = (deg: number) => ((Math.round(deg) % 360) + 360) % 360
@@ -130,14 +130,14 @@ function startYaw(ev?: FocusEvent) {
   if (el) void nextTick(() => el.select())
 }
 function commitYaw() {
-  if (!editingYaw.value) return                // sortie par Échap : rien à écrire
+  if (!editingYaw.value) return                // exit via Escape: nothing to write
   editingYaw.value = false
   const raw = Number(yawDraft.value.replace(',', '.').trim())
   if (!Number.isFinite(raw) || norm(raw) === yaw.value) return
   void house.saveParking({ yaw: norm(raw) })
 }
 
-/** Rayon d'accroche propre à la place. Vide = la marge commune ; `0` l'efface (règle du contrat). */
+/** Snap radius specific to the spot. Empty = the common margin; `0` clears it (contract rule). */
 const margin = computed(() => parking.value?.margin ?? null)
 const marginDraft = ref('')
 const editingMargin = ref(false)
@@ -155,7 +155,7 @@ function commitMargin() {
   void house.saveParking({ margin: Math.max(0, Math.round(next * 100) / 100) })
 }
 
-// --- nom : facultatif. Vide = effacer et revenir à l'id, comme pour une ouverture.
+// --- name: optional. Empty = clear and go back to the id, as for an opening.
 const displayName = computed(() => (parking.value ? parkingLabel(parking.value) : ''))
 const renamingName = ref(false)
 const nameDraft = ref('')
@@ -172,7 +172,7 @@ function commitRename() {
   void house.saveParking({ name: wanted })
 }
 
-// --- supprimer : geste en DEUX TEMPS (armer, puis confirmer dans les 4 s), comme une ouverture.
+// --- delete: TWO-STEP gesture (arm, then confirm within 4 s), like an opening.
 const removeArmed = ref(false)
 let disarm: ReturnType<typeof setTimeout> | undefined
 function clickRemove() {
@@ -232,7 +232,7 @@ onBeforeUnmount(() => clearTimeout(disarm))
         </span>
       </div>
 
-      <!-- deux lignes réservées : la carte garde sa hauteur, que la place soit posée sur un hôte ou non -->
+      <!-- two reserved lines: the card keeps its height, whether the spot is placed on a host or not -->
       <p class="muted park__hint">{{ gaps ? $t('parking.gaps', { host: hostName || $t('floors.garden') }) : $t('parking.noHost') }}</p>
 
       <div class="park__row">
@@ -292,7 +292,7 @@ onBeforeUnmount(() => clearTimeout(disarm))
 .head { display: flex; align-items: center; gap: 12px; }
 .head__main { flex: 1 1 0; min-width: 0; }
 .head__name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-/* `flex: 1 1 0` : `MarqueeText` n'a pas de largeur intrinsèque (voir `OpeningPanel`) */
+/* `flex: 1 1 0`: `MarqueeText` has no intrinsic width (see `OpeningPanel`) */
 .head__name { flex: 1 1 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; min-width: 0; }
 .head__pencil {
   flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0;
@@ -310,13 +310,13 @@ onBeforeUnmount(() => clearTimeout(disarm))
 .park { padding: 12px 14px; font-size: 13px; display: grid; gap: 10px; }
 .park__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .park__turn { display: inline-flex; align-items: center; gap: 6px; }
-/* deux lignes réservées : le texte change (hôte nommé, ou aucun) sans déplacer ce qui suit */
+/* two reserved lines: the text changes (named host, or none) without moving what follows */
 .park__hint { margin: 0; font-size: 12px; min-height: 32px; line-height: 16px; }
 .park__hint--one { min-height: 16px; }
 .park__bottom { min-height: 34px; }
 .park__remove { flex: 0 0 auto; min-width: 175px; justify-content: center; font-size: 12px; }
 .park__remove--armed { border-color: var(--error, #e5484d); color: var(--error, #e5484d); }
-/* largeur fixe (« 12.34 ») : la valeur change sans déplacer les touches */
+/* fixed width ("12.34"): the value changes without moving the keys */
 .park__num {
   width: 5ch; min-width: 0; height: 30px; padding: 0; border: 0; background: transparent;
   color: inherit; font: inherit; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums;
@@ -324,7 +324,7 @@ onBeforeUnmount(() => clearTimeout(disarm))
 }
 .park__num:focus { outline: none; background: var(--accent-soft); box-shadow: inset 0 -1px 0 var(--accent); }
 .park__num:disabled { opacity: .4; box-shadow: none; }
-/* le degré colle à son nombre, comme dans le panneau de placement d'un appareil */
+/* the degree sticks to its number, as in a device's placement panel */
 .park__deg { display: inline-flex; align-items: baseline; gap: 1px; }
 .park__num--deg { width: 4ch; }
 .park__unit { font-size: 12px; color: var(--muted); }

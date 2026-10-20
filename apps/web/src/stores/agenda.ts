@@ -3,8 +3,8 @@ import { defineStore } from 'pinia'
 import { getTransport } from '../api'
 import type { AgendaCalendar } from '../api/transport'
 
-// Les agendas de la maison (plugin `agenda`) : partagés entre la vue Agenda et sa carte des
-// Réglages, qui les ajoute, les ordonne et les retire. Chaque écriture rend la liste à jour, adoptée telle quelle.
+// The house's calendars (`agenda` plugin): shared between the Calendar view and its Settings
+// card, which adds, orders and removes them. Each write returns the up-to-date list, adopted as is.
 
 export const useAgendaStore = defineStore('agenda', () => {
   const calendars = shallowRef<AgendaCalendar[]>([])

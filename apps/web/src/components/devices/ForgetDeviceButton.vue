@@ -2,13 +2,13 @@
 import { onBeforeUnmount, ref } from 'vue'
 import { useDevicesStore } from '../../stores/devices'
 
-// « Oublier l'appareil » : un plugin peut RETENIR un appareil qu'il a découvert sur le réseau
-// (`descriptor.meta.forgettable` — un Cast éteint ne s'annonce plus, et sans mémoire son entrée
-// dans la maison perdrait son nom et son état). Celui qui a disparu pour de bon s'oublie d'ici,
-// sinon il resterait listé pour toujours.
+// "Forget device": a plugin can REMEMBER a device it discovered on the network
+// (`descriptor.meta.forgettable` — a switched-off Cast no longer announces itself, and without
+// memory its entry in the house would lose its name and state). One that has disappeared for good
+// is forgotten from here, otherwise it would stay listed forever.
 //
-// Geste en DEUX TEMPS (armer, puis confirmer dans les 4 s), comme « Retirer de la maison » : la
-// place du bouton et sa largeur ne changent pas entre les deux états, seul le libellé change.
+// A TWO-STEP gesture (arm, then confirm within 4 s), like "Remove from house": the position of the
+// button and its width do not change between the two states, only the label changes.
 const props = defineProps<{ deviceId: string }>()
 const emit = defineEmits<{ forgotten: [] }>()
 const devices = useDevicesStore()
@@ -31,7 +31,7 @@ onBeforeUnmount(() => clearTimeout(disarm))
 </template>
 
 <style scoped>
-/* largeur commune aux deux libellés (« Oublier l'appareil » / « Confirmer l'oubli ») : rien ne bouge */
+/* width shared by both labels ("Forget device" / "Confirm removal"): nothing moves */
 .forget { flex: 0 0 auto; min-width: 150px; justify-content: center; font-size: 12px; }
 .forget--armed { border-color: var(--error, #e5484d); color: var(--error, #e5484d); }
 </style>

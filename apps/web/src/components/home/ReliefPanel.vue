@@ -11,16 +11,16 @@ import { useSettingsStore } from '../../stores/settings'
 import { fetchIgnRelief, type IgnSource } from '../../lib/ignRelief'
 import { fetchIgnParcel, IgnParcelError, type IgnParcel } from '../../lib/ignParcel'
 
-// L'ÉDITEUR DU TERRAIN (Réglages → Rendu 3D → « Modeler le terrain », ou « Modifier le contour du
-// terrain » depuis le réglage de la maison). Il flotte sur la vue Maison comme le banc de lumière.
-// Deux onglets : le RELIEF (on tire un point, le sol suit) et le CONTOUR (la forme de la parcelle :
-// sommets à glisser, ajouter, retirer).
+// THE TERRAIN EDITOR (Settings → 3D rendering → "Shape the terrain", or "Edit the terrain
+// outline" from the house setting). It floats over the House view like the light bench.
+// Two tabs: the RELIEF (one pulls a point, the ground follows) and the OUTLINE (the shape of the parcel:
+// vertices to drag, add, remove).
 //
-// Trois sorties, parce que modeler est long : « Valider » écrit sans quitter (on garde ce qu'on a
-// et on continue), « Terminer » écrit puis quitte, « Annuler » quitte en revenant au dernier terrain
-// validé. L'import du cadastre, comme celui de l'IGN, remplace le BROUILLON du contour seulement.
-// Valider écrit ce qui a changé des deux onglets, le contour d'abord (le serveur agrandit
-// alors le relief s'il ne le couvre plus). L'import IGN remplace le BROUILLON seulement.
+// Three exits, because shaping takes long: "Save" writes without leaving (we keep what we have
+// and carry on), "Done" writes then leaves, "Cancel" leaves going back to the last saved
+// terrain. The land registry import, like the IGN one, replaces the outline's DRAFT only.
+// Save writes what changed in both tabs, the outline first (the server then enlarges
+// the relief if it no longer covers it). The IGN import replaces the DRAFT only.
 
 const props = defineProps<{ scene: () => HouseScene | null; state: ReliefEditState | null }>()
 const settings = useSettingsStore()
@@ -31,30 +31,30 @@ const tab = computed(() => settings.terrainTab)
 const TABS = computed(() => (['relief', 'outline'] as const).map((value) => ({ value, label: t(`relief.tabs.${value}`) })))
 const outline = computed(() => props.state?.outline ?? null)
 
-/** Le brouillon du relief diffère-t-il de ce que la maison porte. */
+/** Whether the relief draft differs from what the house carries. */
 const reliefDirty = computed(() => JSON.stringify(props.state?.draft ?? null) !== JSON.stringify(house.house?.site.relief ?? null))
-/** Le brouillon du contour diffère-t-il de ce que la maison porte. */
+/** Whether the outline draft differs from what the house carries. */
 const outlineDirty = computed(() => !!outline.value && JSON.stringify(outline.value.draft) !== JSON.stringify(house.house?.site.terrain ?? null))
-/** « Valider » a-t-il quelque chose à écrire. */
+/** Whether "Save" has anything to write. */
 const dirty = computed(() => reliefDirty.value || outlineDirty.value)
-/** Hauteur du point choisi (m, par rapport au terrain de la maison), telle que le champ l'affiche. */
+/** Height of the chosen point (m, relative to the house's terrain), as the field displays it. */
 const pointM = computed(() => {
   const cm = props.state?.pointCm
   return cm === null || cm === undefined ? '' : (cm / 100).toFixed(2)
 })
-/** Position du sommet choisi (m), telle que les champs l'affichent. */
+/** Position of the chosen vertex (m), as the fields display it. */
 const vertexM = computed(() => {
   const p = outline.value?.point
   return p ? [p[0].toFixed(2), p[1].toFixed(2)] as const : ['', ''] as const
 })
-// Un point choisi à la SOURIS (ou au stylet) donne la main au champ, valeur sélectionnée : on tape la
-// hauteur et Entrée, puis on clique le point suivant — en série, sans aller chercher le champ. Au
-// DOIGT, non : le clavier virtuel s'ouvrirait à chaque tap et couvrirait la scène.
+// A point chosen with the MOUSE (or stylus) hands over to the field, value selected: one types the
+// height and Enter, then clicks the next point — in series, without going to look for the field. With a
+// FINGER, no: the virtual keyboard would open on each tap and cover the scene.
 const pointInput = ref<HTMLInputElement | null>(null)
 const vertexInput = ref<HTMLInputElement | null>(null)
 async function focusOnPick(pick: { by: string } | undefined, input: () => HTMLInputElement | null, chosen: boolean) {
   if (!pick || pick.by === 'touch') return
-  await nextTick()                               // le champ vient peut-être de sortir de son état grisé
+  await nextTick()                               // the field may have just left its grayed-out state
   const el = input()
   if (!el) return
   if (!chosen) { el.blur(); return }
@@ -64,7 +64,7 @@ async function focusOnPick(pick: { by: string } | undefined, input: () => HTMLIn
 watch(() => props.state?.pick.seq, () => { void focusOnPick(props.state?.pick, () => pointInput.value, props.state?.pointCm != null) })
 watch(() => outline.value?.pick.seq, () => { void focusOnPick(outline.value?.pick, () => vertexInput.value, !!outline.value?.point) })
 
-/** Saisie validée (Entrée, sortie du champ, flèches) : le point prend la hauteur tapée, au centimètre. */
+/** Validated input (Enter, leaving the field, arrows): the point takes the typed height, to the centimeter. */
 function setPoint(e: Event) { commit(e.target as HTMLInputElement) }
 function commit(input: HTMLInputElement) {
   if (input.value === pointM.value) return
@@ -72,7 +72,7 @@ function commit(input: HTMLInputElement) {
   if (input.value.trim() === '' || !Number.isFinite(v)) { input.value = pointM.value; return }
   props.scene()?.setReliefPoint(Math.round(Math.max(-50, Math.min(50, v)) * 100))
 }
-/** Saisie d'une coordonnée du sommet choisi ; refusée (contour qui se croise), le champ reprend la valeur gardée. */
+/** Input of a coordinate of the chosen vertex; refused (outline that crosses itself), the field takes back the kept value. */
 function setVertex(axis: 0 | 1, e: Event) {
   const input = e.target as HTMLInputElement
   const p = outline.value?.point
@@ -99,7 +99,7 @@ async function save(): Promise<boolean> {
   saving.value = true
   let ok = true
   if (outlineDirty.value && outline.value) ok = await house.saveTerrain(outline.value.draft)
-  // relu APRÈS le contour : le serveur a pu agrandir le relief comme le brouillon l'a fait
+  // reread AFTER the outline: the server may have enlarged the relief as the draft did
   if (ok && reliefDirty.value) ok = await house.saveRelief(props.state?.draft ?? null)
   saving.value = false
   if (ok) { saved.value = true; cadastre.value = null; setTimeout(() => { saved.value = false }, 1500) }
@@ -110,15 +110,15 @@ function redo() { if (tab.value === 'outline') props.scene()?.redoOutline(); els
 const canUndo = computed(() => (tab.value === 'outline' ? outline.value?.canUndo : props.state?.canUndo) ?? false)
 const canRedo = computed(() => (tab.value === 'outline' ? outline.value?.canRedo : props.state?.canRedo) ?? false)
 
-// Ctrl+Z / Ctrl+Y (ou Ctrl+Maj+Z) — sauf dans un champ de saisie, qui garde son annulation à lui
-// Le champ vient d'être armé par un clic (valeur sélectionnée, rien tapé) : Ctrl+Z y annule encore le
-// TERRAIN. Dès qu'on tape, il retrouve son annulation à lui.
-// Les FLÈCHES passent au point voisin du relief (dans le sens de l'écran), y compris depuis le
-// champ : ce qui y était tapé est d'abord validé, puis le champ reprend la main sur le nouveau point.
-// Suppr (hors d'un champ) retire le sommet choisi du contour.
+// Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z) — except in an input field, which keeps its own undo
+// The field has just been armed by a click (value selected, nothing typed): Ctrl+Z still undoes the
+// TERRAIN there. As soon as one types, it gets its own undo back.
+// The ARROWS move to the neighboring relief point (in the screen's direction), including from the
+// field: what was typed there is validated first, then the field takes over again on the new point.
+// Del (outside a field) removes the chosen vertex from the outline.
 const ARROWS: Record<string, [number, number]> = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }
 useEventListener(window, 'keydown', (e: KeyboardEvent) => {
-  // le remplissage automatique de Chrome émet des `keydown` sans `key` (`undefined`, malgré le type)
+  // Chrome's autofill emits `keydown` events without `key` (`undefined`, despite the type)
   if (typeof e.key !== 'string') return
   const field = e.target instanceof Element ? e.target.closest('input, textarea') : null
   const arrow = ARROWS[e.key]
@@ -165,8 +165,8 @@ const ignText = computed(() => {
   return t('relief.ignError', { message: s.message })
 })
 
-/** Un point est DEHORS s'il n'est ni dans le polygone ni sur son bord (à 5 cm près : une zone qui
- *  partage un coin avec le terrain n'est pas dehors). */
+/** A point is OUTSIDE if it is neither in the polygon nor on its edge (to within 5 cm: a zone that
+ *  shares a corner with the terrain is not outside). */
 function outside(p: readonly number[], poly: readonly Vec2[]): boolean {
   const x = p[0]!, y = p[1]!
   if (pointInPolygon([x, y], poly)) return false
@@ -180,9 +180,9 @@ function outside(p: readonly number[], poly: readonly Vec2[]): boolean {
 }
 
 /**
- * Ce que le nouveau contour met DEHORS — et qui était dedans : rien n'est retiré, on le dit
- * seulement. Un élément du jardin, une place au sol ou un appareil extérieur par son point ; une
- * zone ou la maison dès qu'un de leurs sommets sort.
+ * What the new outline puts OUTSIDE — and that was inside: nothing is removed, we only say
+ * so. A garden item, a ground spot or an outdoor device by its point; a
+ * zone or the house as soon as one of their vertices goes out.
  */
 const outsideText = computed(() => {
   const h = house.house, poly = outline.value?.draft
@@ -201,8 +201,8 @@ const outsideText = computed(() => {
   return parts.length ? t('relief.outline.outside', { list: parts.join(', ') }) : ''
 })
 /**
- * Import du contour cadastral : il remplace le brouillon (un pas d'historique). Le message dit quelle
- * parcelle est chargée tant que le brouillon EST celui de l'import ; une retouche ou un Valider l'efface.
+ * Import of the cadastral outline: it replaces the draft (one history step). The message says which
+ * parcel is loaded as long as the draft IS that of the import; an edit or a Save clears it.
  */
 const cadastre = ref<{ kind: 'loading' } | { kind: 'done'; parcels: IgnParcel[]; merged: boolean; key: string } | { kind: 'error'; message: string; code?: 'none' | 'shape' } | null>(null)
 async function importCadastre() {
@@ -244,7 +244,7 @@ function setTab(v: TerrainTab) { settings.setTerrainTab(v) }
   <section class="relief" :aria-label="t('relief.title')">
     <header class="relief__head">
       <div class="relief__title">{{ t('relief.title') }}</div>
-      <!-- toujours là, grisés quand il n'y a rien à annuler ou rétablir : l'en-tête ne bouge pas -->
+      <!-- always there, grayed out when there is nothing to undo or redo: the header does not move -->
       <button type="button" class="relief__close" :disabled="!canUndo" :title="t('relief.undo')" :aria-label="t('relief.undo')" @click="undo()">
         <StrokeIcon name="undo" :size="16" />
       </button>
@@ -260,14 +260,14 @@ function setTab(v: TerrainTab) { settings.setTerrainTab(v) }
       <Segmented :model-value="tab" :options="TABS" dense fill :label="t('relief.tabs.label')" @update:model-value="setTab" />
     </div>
 
-    <!-- les deux onglets dans la MÊME cellule, l'inactif caché sans sortir du flux : le panneau garde
-         la hauteur du plus grand, rien ne bouge en changeant d'onglet -->
+    <!-- the two tabs in the SAME cell, the inactive one hidden without leaving the flow: the panel keeps
+         the height of the larger one, nothing moves when switching tabs -->
     <div class="relief__stack">
       <div class="relief__body" :data-on="tab === 'relief' ? '1' : '0'" :inert="tab !== 'relief'">
         <div class="muted small">{{ t('relief.help') }}</div>
         <div class="row">
           <label class="row__label" for="relief-point">{{ t('relief.point') }}</label>
-          <!-- toujours là, grisé sans point choisi : le panneau ne change pas de forme à la sélection -->
+          <!-- always there, grayed out with no point chosen: the panel does not change shape on selection -->
           <div class="point">
             <input id="relief-point" ref="pointInput" class="point__input" type="number" step="0.05" inputmode="decimal"
                    :value="pointM" :disabled="state?.pointCm === null || state?.pointCm === undefined" :placeholder="t('relief.none')"
@@ -276,7 +276,7 @@ function setTab(v: TerrainTab) { settings.setTerrainTab(v) }
             <span class="point__unit">m</span>
           </div>
         </div>
-        <!-- remettre à zéro passe par l'historique : Ctrl+Z la défait, aucune confirmation à demander -->
+        <!-- resetting to zero goes through the history: Ctrl+Z undoes it, no confirmation to ask for -->
         <div class="relief__actions">
           <button type="button" class="chip chip--wide" :disabled="ign?.kind === 'loading'" @click="importIgn()">{{ t('relief.ign') }}</button>
           <button type="button" class="chip chip--wide" :disabled="!state?.draft" @click="scene()?.setReliefDraft(null)">{{ t('relief.reset') }}</button>
@@ -286,7 +286,7 @@ function setTab(v: TerrainTab) { settings.setTerrainTab(v) }
           <button v-for="v in VIEWS" :key="v" type="button" class="chip chip--wide" :title="t(`relief.views.${v}.hint`)"
                   @click="scene()?.viewTerrainFrom(v)">{{ t(`relief.views.${v}.short`) }}</button>
         </div>
-        <!-- une ligne réservée : le message de l'import n'écarte rien en apparaissant -->
+        <!-- a reserved line: the import message pushes nothing aside when it appears -->
         <div class="relief__status muted small" :data-error="ign?.kind === 'error' ? '1' : '0'">{{ ignText }}</div>
       </div>
 
@@ -294,7 +294,7 @@ function setTab(v: TerrainTab) { settings.setTerrainTab(v) }
         <div class="muted small">{{ t('relief.outline.help') }}</div>
         <div class="row row--xy">
           <span class="row__label">{{ t('relief.outline.point') }}</span>
-          <!-- toujours là, grisés sans sommet choisi -->
+          <!-- always there, grayed out with no vertex chosen -->
           <div class="point">
             <input ref="vertexInput" class="point__input point__input--xy" type="number" step="0.1" inputmode="decimal" aria-label="X"
                    :value="vertexM[0]" :disabled="!outline?.point" placeholder="x"
@@ -317,7 +317,7 @@ function setTab(v: TerrainTab) { settings.setTerrainTab(v) }
           <button v-for="v in VIEWS" :key="v" type="button" class="chip chip--wide" :title="t(`relief.views.${v}.hint`)"
                   @click="scene()?.viewTerrainFrom(v)">{{ t(`relief.views.${v}.short`) }}</button>
         </div>
-        <!-- trois lignes réservées : l'avertissement n'écarte rien en apparaissant -->
+        <!-- three reserved lines: the warning pushes nothing aside when it appears -->
         <div class="relief__status relief__status--tall muted small" :data-error="cadastre?.kind === 'error' ? '1' : '0'" :title="outlineStatus">
           <template v-if="cadastreText || outsideText">{{ cadastreText }} <span class="relief__warn">{{ outsideText }}</span></template>
           <template v-else>{{ outlineStatus }}</template>
@@ -336,12 +336,12 @@ function setTab(v: TerrainTab) { settings.setTerrainTab(v) }
 </template>
 
 <style scoped>
-/* Même place et même gabarit que le banc de lumière : colle au rail, laisse la maison au centre.
-   Largeur fixe et cellules de valeur fixes : rien ne bouge quand un nombre change. */
+/* Same place and same layout as the light bench: sticks to the rail, leaves the house in the center.
+   Fixed width and fixed value cells: nothing moves when a number changes. */
 .relief {
   position: absolute; left: calc(var(--rail-w) + 12px); top: 96px; z-index: 4;
   width: 300px;
-  /* une fenêtre basse (ou zoomée) garde l'en-tête et les boutons de sortie : c'est le corps qui défile */
+  /* a low (or zoomed) window keeps the header and the exit buttons: it is the body that scrolls */
   max-height: calc(100% - 96px - 12px);
   display: flex; flex-direction: column;
   border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--surface);

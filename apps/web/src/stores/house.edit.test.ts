@@ -6,15 +6,15 @@ import { setTransport } from '../api'
 import { createMockTransport } from '../api/mockTransport'
 import { useHouseStore } from './house'
 
-// Brouillon d'apparence : chaque choix se voit dans la maison donnée à la scène, rien n'est écrit
-// avant « Valider », et la séance s'annule, se rétablit et s'abandonne.
+// Appearance draft: each choice shows in the house given to the scene, nothing is written
+// before "Apply", and the session can be undone, redone and abandoned.
 
-describe('house store — séance d’édition : apparence', () => {
+describe('house store — editing session: appearance', () => {
   beforeEach(() => { setActivePinia(createPinia()); setTransport(createMockTransport()) })
 
   const salonOf = (h: ReturnType<typeof useHouseStore>['effective']) => h!.rooms.find((r) => r.id === 'salon')!
 
-  it('le brouillon se voit dans la scène, sans toucher à la maison écrite', () => {
+  it('the draft shows in the scene, without touching the written house', () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
     store.setRoomFinish('salon', 'floor', { id: 'walnut' })
@@ -25,7 +25,7 @@ describe('house store — séance d’édition : apparence', () => {
     expect(store.editDirty).toBe(true)
   })
 
-  it('annuler, rétablir, et un choix neuf coupe ce qu’on pouvait rétablir', () => {
+  it('undo, redo, and a new choice cuts off what could be redone', () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
     store.setRoomFinish('salon', 'floor', { id: 'walnut' })
@@ -39,14 +39,14 @@ describe('house store — séance d’édition : apparence', () => {
     expect(store.roomFinish('salon', 'floor')).toEqual({ id: 'walnut' })
     store.setRoomFinish('salon', 'walls', { id: 'matte-paint', tint: '#336699' })
     expect(store.canRedoEdit).toBe(false)
-    // revenir au fichier à la main n'est pas une modification à écrire
+    // going back to the file by hand is not a change to write
     store.discardEdit()
     store.setRoomFinish('salon', 'floor', { id: 'walnut' })
     store.setRoomFinish('salon', 'floor', null)
     expect(store.editDirty).toBe(false)
   })
 
-  it('« Valider » écrit toute la séance d’un coup et vide le brouillon', async () => {
+  it('"Apply" writes the whole session at once and empties the draft', async () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
     store.setRoomFinish('salon', 'walls', { id: 'red-brick' })
@@ -59,15 +59,15 @@ describe('house store — séance d’édition : apparence', () => {
   })
 })
 
-describe('house store — séance d’édition : formes', () => {
+describe('house store — editing session: shapes', () => {
   beforeEach(() => { setActivePinia(createPinia()); setTransport(createMockTransport()) })
   const poly = (h: ReturnType<typeof useHouseStore>['effective'], id: string) => h!.rooms.find((r) => r.id === id)!.polygon
 
-  it('pousser une cloison : la voisine suit, annuler revient, rien n’est écrit', () => {
+  it('pushing a partition: the neighbor follows, undo goes back, nothing is written', () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
     store.pushRoomWall('entree', 1, 0.2)
-    expect(poly(store.effective, 'entree')[1]![0]).toBeCloseTo(3.2, 4)       // face finie : 3,30 − demi-cloison
+    expect(poly(store.effective, 'entree')[1]![0]).toBeCloseTo(3.2, 4)       // finished face: 3.30 − half partition
     expect(poly(store.effective, 'salon')[0]![0]).toBeCloseTo(3.4, 4)
     expect(store.editBlocking).toEqual([])
     expect(store.editDirty).toBe(true)
@@ -77,7 +77,7 @@ describe('house store — séance d’édition : formes', () => {
     expect(store.shapeOf('entree')![1]).toEqual([3.1, 0])
   })
 
-  it('détachée, la cloison bloque « Valider » ; un glissement ne fait qu’un pas d’historique', async () => {
+  it('detached, the partition blocks "Apply"; a drag makes only one history step', async () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
     store.coupleWalls = false
@@ -94,7 +94,7 @@ describe('house store — séance d’édition : formes', () => {
     expect(store.canUndoEdit).toBe(false)
   })
 
-  it('une ouverture qui ne tient plus est nommée, et la scène garde la dernière forme dessinable', () => {
+  it('an opening that no longer fits is named, and the scene keeps the last drawable shape', () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
     store.setSideLength('salon', 0, 5)
@@ -104,19 +104,19 @@ describe('house store — séance d’édition : formes', () => {
     expect(poly(store.effective, 'salon')).toEqual(good)
   })
 
-  it('un sommet ajouté au travers d’une ouverture : bloqué, mais visible pour qu’on le déplace', () => {
+  it('a vertex added across an opening: blocked, but visible so that it can be moved', () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
-    store.addCorner('salon', 0)                                  // le milieu de la façade sud coupe la baie
+    store.addCorner('salon', 0)                                  // the middle of the south facade cuts the bay window
     expect(store.editBlocking.length).toBeGreaterThan(0)
-    expect(store.shapeOf('salon')).toHaveLength(5)               // les cotes du brouillon…
-    expect(poly(store.effective, 'salon')).toHaveLength(4)       // …la 3D garde la dernière forme dessinable
+    expect(store.shapeOf('salon')).toHaveLength(5)               // the draft's dimensions…
+    expect(poly(store.effective, 'salon')).toHaveLength(4)       // …the 3D keeps the last drawable shape
     store.removeCorner('salon', 1)
     expect(store.editBlocking).toEqual([])
     expect(store.editDirty).toBe(false)
   })
 
-  it('« Valider » écrit les cotes', async () => {
+  it('"Apply" writes the dimensions', async () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
     store.pushRoomWall('salon', 0, 0.5)

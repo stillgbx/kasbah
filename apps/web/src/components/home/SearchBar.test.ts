@@ -9,13 +9,13 @@ import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import SearchBar from './SearchBar.vue'
 
-// Ce que la recherche doit tenir : la PIÈCE avant les appareils qui la nomment, les accents
-// ignorés, un appareil qu'aucune pièce ne réclame quand même trouvable (dit « Non placé »), et
-// choisir une ligne déplace la sélection du store — c'est elle qui cadre la scène.
+// What the search must hold: the ROOM before the devices that name it, accents
+// ignored, a device that no room claims still findable (says "Not placed"), and
+// choosing a row moves the store's selection — it is what frames the scene.
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
-/** Un appareil de plugin dont la pièce n'existe pas dans la maison : l'auto-placement le laisse dehors. */
+/** A plugin device whose room does not exist in the house: auto-placement leaves it outside. */
 const stray = (): DeviceEntry => ({
   descriptor: {
     id: 'mock:lampe-atelier', pluginId: 'mock', externalId: 'lampe-atelier', kind: 'light',
@@ -24,7 +24,7 @@ const stray = (): DeviceEntry => ({
   state: { kind: 'light', updatedAt: 0, available: true, on: false } as DeviceEntry['state'],
 })
 
-/** Deux appareils qu'on ne cherchera jamais par leur nom : on tape la marque ou le modèle. */
+/** Two devices one will never look up by name: one types the brand or the model. */
 const station = (): DeviceEntry => ({
   descriptor: {
     id: 'comap:station', pluginId: 'comap', externalId: 'station', kind: 'water',
@@ -48,7 +48,7 @@ async function setup() {
   const input = w.find('input')
   await input.trigger('focus')
   const type = async (text: string) => { await input.setValue(text) }
-  // les résultats ; la ligne de l'assistant, toujours la dernière, a ses propres tests
+  // the results; the assistant's row, always the last one, has its own tests
   const rows = () => w.findAll('.search__row:not(.search__row--ask)').map((r) => ({
     label: r.find('.search__label').exists() ? r.find('.search__label').text() : '',
     sub: r.find('.search__sub').exists() ? r.find('.search__sub').text() : '',
@@ -60,7 +60,7 @@ async function setup() {
 describe('SearchBar', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
 
-  it('donne la pièce avant les appareils qui la nomment', async () => {
+  it('puts the room before the devices that name it', async () => {
     const { type, rows } = await setup()
     await type('salon')
     const found = rows()
@@ -68,25 +68,25 @@ describe('SearchBar', () => {
     expect(found.slice(1).map((r) => r.label)).toContain('Plafonnier salon')
   })
 
-  it('ignore les accents', async () => {
+  it('ignores accents', async () => {
     const { type, rows } = await setup()
     await type('entree')
     expect(rows()[0]!.label).toBe('Entrée')
   })
 
-  it('trouve un appareil par un mot au milieu de son nom', async () => {
+  it('finds a device by a word in the middle of its name', async () => {
     const { type, rows } = await setup()
     await type('filtration')
     expect(rows().map((r) => r.label)).toContain('Pression filtration')
   })
 
-  it('montre les appareils non placés, et le dit', async () => {
+  it('shows unplaced devices, and says so', async () => {
     const { type, rows } = await setup()
     await type('atelier')
     expect(rows()[0]).toMatchObject({ label: 'Néon atelier', sub: 'Non placé' })
   })
 
-  it('se laisse trouver par la marque ou le modèle, et le dit à la place du lieu', async () => {
+  it('can be found by brand or model, and says so in place of the location', async () => {
     const { type, rows } = await setup()
     await type('proteo')
     expect(rows()[0]).toMatchObject({ label: "Traitement de l'eau", sub: 'COMAP Proteo V3' })
@@ -94,23 +94,23 @@ describe('SearchBar', () => {
     expect(rows()[0]!.label).toBe("Traitement de l'eau")
   })
 
-  it('classe le nom avant la marque', async () => {
+  it('ranks the name before the brand', async () => {
     const { type, rows } = await setup()
     await type('tesla')
-    // « Tesla » est le NOM d'une voiture de la maison ; la batterie n'est qu'une Tesla de marque
+    // "Tesla" is the NAME of a car in the house; the battery is only a Tesla by brand
     expect(rows().map((r) => r.label)).toEqual(['Tesla', 'Batterie maison'])
   })
 
-  it("focalise le NIVEAU de l'appareil, sinon l'étage au-dessus le cacherait", async () => {
+  it("focuses the device's LEVEL, otherwise the floor above would hide it", async () => {
     const { w, house, type } = await setup()
-    expect(house.floorTab).toBe('all')                 // « Tout » : rien n'est masqué, le toit est posé dessus
+    expect(house.floorTab).toBe('all')                 // "All": nothing is hidden, the roof is placed on top
     await type('plafonnier salon')
     await w.findAll('.search__row')[0]!.trigger('click')
     expect(house.selectedKey).toBe('light.salon')
-    expect(house.focusedLevelId).toBe('rdc')           // la scène masque alors étage et toit
+    expect(house.focusedLevelId).toBe('rdc')           // the scene then hides the floor and the roof
   })
 
-  it("focalise le jardin pour un appareil de zone", async () => {
+  it("focuses the garden for a zone device", async () => {
     const { w, house, type } = await setup()
     await type('piscine')
     const i = w.findAll('.search__label').findIndex((l) => l.text() === 'Température piscine')
@@ -118,7 +118,7 @@ describe('SearchBar', () => {
     expect(house.gardenFocus).toBe(true)
   })
 
-  it('attend le deuxième caractère, puis répond même quand rien ne correspond', async () => {
+  it('waits for the second character, then answers even when nothing matches', async () => {
     const { w, type, rows } = await setup()
     await type('s')
     expect(w.find('.search__list').exists()).toBe(false)
@@ -127,7 +127,7 @@ describe('SearchBar', () => {
     expect(rows()[0]!.text).toBe('Aucun résultat')
   })
 
-  it('choisir une ligne sélectionne dans le store et rend le champ vide', async () => {
+  it('choosing a row selects in the store and empties the field', async () => {
     const { w, house, type } = await setup()
     await type('cuisine')
     await w.findAll('.search__row')[0]!.trigger('click')
@@ -137,11 +137,11 @@ describe('SearchBar', () => {
   })
 })
 
-describe('SearchBar — Demander à Kasbah', () => {
+describe('SearchBar — Ask Kasbah', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
   afterEach(() => { setTransport(null) })
 
-  /** Un assistant factice : relève l'instruction et rejoue les événements donnés. */
+  /** A fake assistant: records the instruction and replays the given events. */
   function fakeAssistant(events: AssistantEvent[] | Error) {
     const asked: string[] = []
     setTransport({
@@ -154,7 +154,7 @@ describe('SearchBar — Demander à Kasbah', () => {
     return asked
   }
 
-  it('propose de passer la saisie à l’assistant, en dernière ligne', async () => {
+  it('offers to pass the input to the assistant, as the last row', async () => {
     const { w, type } = await setup()
     await type('allume le salon')
     const last = w.findAll('.search__row').at(-1)!
@@ -162,7 +162,7 @@ describe('SearchBar — Demander à Kasbah', () => {
     expect(last.text()).toBe('Demander à Kasbahallume le salon')
   })
 
-  it('Entrée sans résultat demande à Kasbah, et montre ce qu’il a fait puis sa réponse', async () => {
+  it('Enter with no result asks Kasbah, and shows what it did then its answer', async () => {
     const asked = fakeAssistant([
       { type: 'tool', id: 't1', name: 'send_command', input: { deviceId: 'mock:lampe-atelier', command: { type: 'light.set', on: true } } },
       { type: 'tool_result', id: 't1', ok: true },
@@ -179,13 +179,13 @@ describe('SearchBar — Demander à Kasbah', () => {
     expect(reply.find('.reply__action').text()).toContain('Commande')
     expect(reply.find('.reply__target').text()).toBe('Néon atelier')
     expect(reply.find('.reply__answer').text()).toBe('Le néon de l’atelier est allumé.')
-    // la croix efface la réponse et la saisie
+    // the cross clears the answer and the input
     await w.find('.search__clear').trigger('click')
     expect(w.find('.search__reply').exists()).toBe(false)
     expect(w.find('input').element.value).toBe('')
   })
 
-  it('Échap ferme la réponse et efface l’instruction du champ', async () => {
+  it('Escape closes the answer and clears the instruction from the field', async () => {
     fakeAssistant([{ type: 'text', text: 'Fait.' }, { type: 'done', ms: 1 }])
     const { w, type } = await setup()
     await type('zzz fais un truc')
@@ -197,7 +197,7 @@ describe('SearchBar — Demander à Kasbah', () => {
     expect(w.find('input').element.value).toBe('')
   })
 
-  it('la croix de la réponse la ferme et efface l’instruction du champ', async () => {
+  it('the cross of the answer closes it and clears the instruction from the field', async () => {
     fakeAssistant([{ type: 'text', text: 'Fait.' }, { type: 'done', ms: 1 }])
     const { w, type } = await setup()
     await type('zzz fais un truc')
@@ -208,7 +208,7 @@ describe('SearchBar — Demander à Kasbah', () => {
     expect(w.find('input').element.value).toBe('')
   })
 
-  it('dit en clair une instruction refusée', async () => {
+  it('plainly states a refused instruction', async () => {
     fakeAssistant(new ApiRequestError(409, 'BUSY', 'an instruction is already running'))
     const { w, type } = await setup()
     await type('zzz éteins tout')
@@ -217,7 +217,7 @@ describe('SearchBar — Demander à Kasbah', () => {
     expect(w.find('.reply__error').text()).toBe('Une instruction est déjà en cours.')
   })
 
-  it('revient à la recherche quand on retouche l’instruction après la réponse', async () => {
+  it('goes back to search when the instruction is edited after the answer', async () => {
     fakeAssistant([{ type: 'text', text: 'Fait.' }, { type: 'done', ms: 1 }])
     const { w, type } = await setup()
     await type('zzz fais un truc')

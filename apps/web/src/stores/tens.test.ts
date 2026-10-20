@@ -6,8 +6,8 @@ import { CMD, programFrame } from '../lib/tens/protocol'
 import { INTENSITY_MAX } from '../lib/tens/programs'
 import { TensLink } from '../lib/tens/link'
 
-// Le store TENS contre un faux appareil qui refuse comme le vrai : ordre des trames d'un lancement,
-// file des intensités (consigne / acquis), plafond, pause / reprise, et l'arrêt qui l'emporte sur tout.
+// The TENS store against a fake device that refuses like the real one: order of the frames of a launch,
+// intensity queue (setpoint / acquired), ceiling, pause / resume, and the stop that overrides everything.
 
 let dev: FakeTens
 
@@ -31,7 +31,7 @@ async function running() {
   return tens
 }
 
-/** Laisse la file travailler `n` créneaux. */
+/** Lets the queue work `n` slots. */
 const slots = (n: number) => vi.advanceTimersByTimeAsync(RAMP_INTERVAL_MS * n + 10)
 const intensities = (ch?: 1 | 2) => dev.frames(CMD.intensity).filter((f) => !ch || f[4] === ch).map((f) => f[5]! | (f[6]! << 8))
 
@@ -126,7 +126,7 @@ describe('launch', () => {
   it('launches a program in the order the phone app does', async () => {
     const tens = await running()
     expect(dev.written.map((f) => f[2])).toEqual([CMD.hello, CMD.check, CMD.program, CMD.start, CMD.register])
-    expect(dev.frames(CMD.check)[0]![4]).toBe(3)                                     // les deux canaux
+    expect(dev.frames(CMD.check)[0]![4]).toBe(3)                                     // both channels
     expect(dev.frames(CMD.start)[0]!.slice(4, 6)).toEqual(Uint8Array.of(0x58, 0x02)) // 600 s
     expect(tens.currentProgram).toBe('p3')
     expect(tens.remainingS).toBe(600)
@@ -148,8 +148,8 @@ describe('launch', () => {
     await vi.advanceTimersByTimeAsync(CHECK_SETTLE_MS + 100)
     await p
     await slots(6)
-    expect(intensities(1)).toEqual([5, 10, 15, 20])         // par paliers de 0,5 mA, pas d'un coup
-    expect(intensities(2)).toEqual([])                     // canal 2 hors séance : rien
+    expect(intensities(1)).toEqual([5, 10, 15, 20])         // in steps of 0.5 mA, not all at once
+    expect(intensities(2)).toEqual([])                     // channel 2 outside the session: nothing
     expect(tens.targetOf(2)).toBe(0)
   })
 
@@ -185,7 +185,7 @@ describe('launch', () => {
   it('stop pressed during a launch prevents the start', async () => {
     const tens = await connected()
     const p = tens.startProgram('p6', 60)
-    await vi.advanceTimersByTimeAsync(100)   // vérification des électrodes envoyée, on attend
+    await vi.advanceTimersByTimeAsync(100)   // electrode check sent, we wait
     await tens.stop()
     await vi.advanceTimersByTimeAsync(CHECK_SETTLE_MS)
     await p
@@ -197,7 +197,7 @@ describe('launch', () => {
   it('counts down between two session notifications', async () => {
     const tens = await running()
     await vi.advanceTimersByTimeAsync(5000)
-    // l'horloge de la page bat à la seconde, sans être calée sur la notification : ±1 s
+    // the page clock ticks every second, without being aligned on the notification: ±1 s
     expect(tens.remainingS).toBeGreaterThanOrEqual(595)
     expect(tens.remainingS).toBeLessThanOrEqual(596)
   })
@@ -218,7 +218,7 @@ describe('intensity queue', () => {
 
   it('adds up fast clicks on the target, and the TENS catches up', async () => {
     const tens = await running()
-    for (let i = 0; i < 6; i++) tens.nudge(1, 1)     // six clics d'affilée
+    for (let i = 0; i < 6; i++) tens.nudge(1, 1)     // six clicks in a row
     expect(tens.targetOf(1)).toBe(30)
     await slots(8)
     expect(intensities()).toEqual([5, 10, 15, 20, 25, 30])

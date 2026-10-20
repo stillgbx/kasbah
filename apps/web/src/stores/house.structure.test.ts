@@ -7,18 +7,18 @@ import { setTransport } from '../api'
 import { createMockTransport } from '../api/mockTransport'
 import { useHouseStore } from './house'
 
-// Structure dans la séance : une pièce ou un niveau qui naît entre dans le brouillon (annuler,
-// rétablir, rien d'écrit avant « Valider ») et devient tout de suite la sélection.
+// Structure in the session: a room or a level that is born enters the draft (undo,
+// redo, nothing written before "Apply") and immediately becomes the selection.
 
-describe('house store — séance d’édition : structure', () => {
+describe('house store — editing session: structure', () => {
   beforeEach(() => { setActivePinia(createPinia()); setTransport(createMockTransport()) })
 
-  it('une pièce contre un mur : sélectionnée, nommée, annulable', () => {
+  it('a room against a wall: selected, named, undoable', () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
     store.addRoomAgainstWall('salon', 0)
     const id = store.selectedRoomId!
-    expect(store.selectedRoom?.name).toBe('Room 8')   // les tests tournent en anglais
+    expect(store.selectedRoom?.name).toBe('Room 8')   // the tests run in English
     expect(store.selectedRoom?.levelId).toBe('rdc')
     expect(store.editBlocking).toEqual([])
     expect(store.editDirty).toBe(true)
@@ -30,7 +30,7 @@ describe('house store — séance d’édition : structure', () => {
     expect(store.editDirty).toBe(false)
   })
 
-  it('annuler une pièce ou un niveau né remonte à la maison : ni panneau ni onglet vides', async () => {
+  it('undoing a born room or level goes back up to the house: no empty panel or tab', async () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
     store.addRoomAgainstWall('salon', 0)
@@ -47,7 +47,7 @@ describe('house store — séance d’édition : structure', () => {
     expect(store.editDirty).toBe(false)
   })
 
-  it('renommer un niveau et la propriété : dans le brouillon, annulable', () => {
+  it('renaming a level and the property: in the draft, undoable', () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
     store.setLevelIdentity('etage', { name: 'Premier' })
@@ -60,7 +60,7 @@ describe('house store — séance d’édition : structure', () => {
     expect(store.effective!.name).toBe(parseHouse(demo).name)
   })
 
-  it('poser au tap : le niveau de l’onglet, puis l’arme retombe', () => {
+  it('placing on tap: the level of the tab, then the arming drops', () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
     store.focusLevel('etage')
@@ -71,7 +71,7 @@ describe('house store — séance d’édition : structure', () => {
     expect(store.selectedRoom?.levelId).toBe('etage')
   })
 
-  it('« Valider » écrit les pièces nées et retirées d’un coup', async () => {
+  it('"Apply" writes the born and removed rooms at once', async () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
     store.addRoomAgainstWall('salon', 0)
@@ -83,7 +83,7 @@ describe('house store — séance d’édition : structure', () => {
     expect(store.canUndoEdit).toBe(false)
   })
 
-  it('un étage au-dessus : « Floor 2 », onglet ouvert, et seul un niveau vide se retire', () => {
+  it('a floor above: "Floor 2", tab open, and only an empty level can be removed', () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
     store.addLevel('above')

@@ -9,15 +9,15 @@ import { useSettingsStore } from '../../stores/settings'
 import Segmented from '../ui/Segmented.vue'
 import { AXIS_COLORS } from './axes'
 
-// Le POINT 0 d'une propriété neuve, posé sur la carte : un coin de la maison, d'où partent toutes les
-// cotes. On le pose d'un tap (ou en glissant le repère), on tourne le cap jusqu'à ce que la première
-// pièce dessinée (5 × 4 m, coin sur le point 0) s'aligne sur une façade de la photo. Le terrain, quand
-// il est donné, se dessine aussi : on voit ce que l'assistant va écrire avant de l'écrire.
+// POINT 0 of a new property, placed on the map: a corner of the house, from which all the
+// measurements start. It is placed by a tap (or by dragging the marker), the heading is turned until the first
+// room drawn (5 × 4 m, corner on point 0) aligns with a facade of the photo. The land, when
+// given, is drawn too: one sees what the assistant will write before it writes it.
 const props = defineProps<{
   lat: number | null
   lon: number | null
   heading: number
-  /** Terrain centré sur la première pièce (m), dessiné s'il est donné. */
+  /** Land centered on the first room (m), drawn if given. */
   terrain?: { width: number; depth: number } | null
 }>()
 const emit = defineEmits<{ pick: [lat: number, lon: number] }>()
@@ -29,15 +29,15 @@ let map: MlMap | null = null
 let marker: Marker | null = null
 let observer: ResizeObserver | null = null
 
-/** Vue de départ : la France entière (les orthophotos IGN ne couvrent qu'elle ; le plan, le monde). */
+/** Starting view: the whole of France (the IGN orthophotos only cover it; the plan, the world). */
 const START = { center: [2.4, 46.6] as [number, number], zoom: 5 }
-const ROOM_ZOOM = IGN_MAX_ZOOM + 1   // la pièce de 5 m y fait une soixantaine de pixels
+const ROOM_ZOOM = IGN_MAX_ZOOM + 1   // the 5 m room is about sixty pixels there
 
 const origin = (): GeoOrigin | null => (props.lat === null || props.lon === null ? null : { lat: props.lat, lon: props.lon, alt: 0, heading: props.heading })
 const ll = (o: GeoOrigin, p: Vec2): [number, number] => { const g = localToGeo(o, [p[0], p[1], 0]); return [g.lon, g.lat] }
 
 type OverlayData = Parameters<GeoJSONSource['setData']>[0]
-/** La pièce, les deux axes et le terrain, en GeoJSON : ce que la carte superpose à la photo. */
+/** The room, the two axes and the land, as GeoJSON: what the map overlays on the photo. */
 function overlay(): OverlayData {
   const o = origin()
   if (!o) return { type: 'FeatureCollection', features: [] }
@@ -54,7 +54,7 @@ function overlay(): OverlayData {
   return { type: 'FeatureCollection', features } as OverlayData
 }
 
-/** Les calques maison, reposés après chaque changement de style (un `setStyle` les efface). */
+/** The house layers, put back after each style change (a `setStyle` clears them). */
 function addOverlay(): void {
   if (!map || map.getSource('origin')) return
   map.addSource('origin', { type: 'geojson', data: overlay() })
@@ -66,9 +66,9 @@ function addOverlay(): void {
 function refresh(): void { (map?.getSource('origin') as GeoJSONSource | undefined)?.setData(overlay()) }
 
 const planStyles = new Map<string, Promise<StyleSpecification>>()
-// `diff: false` : un changement de style « en différence » retire nos calques SANS émettre
-// `style.load`, qui les repose — la pièce, les axes et le terrain disparaissaient selon que le style
-// des étiquettes arrivait avant ou après le premier chargement.
+// `diff: false`: a style change "by difference" removes our layers WITHOUT emitting
+// `style.load`, which puts them back — the room, the axes and the land disappeared depending on whether the style
+// of the labels arrived before or after the first load.
 const FULL = { diff: false } as const
 async function applyStyle(): Promise<void> {
   if (!map) return
@@ -93,7 +93,7 @@ function placeMarker(): void {
   marker.setLngLat([o.lon, o.lat])
 }
 
-/** Aller voir un lieu (recherche, position de l'appareil) : la carte s'y pose au niveau de la pièce. */
+/** Go and see a place (search, device position): the map settles there at the room's level. */
 function flyTo(lat: number, lon: number): void { map?.flyTo({ center: [lon, lat], zoom: ROOM_ZOOM }) }
 defineExpose({ flyTo })
 
@@ -117,7 +117,7 @@ onMounted(() => {
 onBeforeUnmount(() => { observer?.disconnect(); map?.remove(); map = null; marker = null })
 
 watch(() => [props.lat, props.lon, props.heading, props.terrain?.width, props.terrain?.depth], () => { placeMarker(); refresh() })
-// le terrain apparaît (étape 3) : la carte recule pour le montrer en entier
+// the land appears (step 3): the map zooms out to show it in full
 watch(() => !!props.terrain, (on) => {
   const o = origin()
   if (!on || !o || !map || !props.terrain) return

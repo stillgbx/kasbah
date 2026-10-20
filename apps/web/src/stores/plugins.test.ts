@@ -39,7 +39,7 @@ describe('plugins store', () => {
 
     expect(await store.setPart('mock', 'light', false)).toBe(false)
     expect(failing).toHaveBeenCalledWith('mock', { parts: { light: false } })
-    expect(store.byId.mock!.parts[0]!.enabled).toBe(true)                 // retour arrière
+    expect(store.byId.mock!.parts[0]!.enabled).toBe(true)                 // rollback
     expect(useNotificationsStore().queue).toHaveLength(1)
   })
 })

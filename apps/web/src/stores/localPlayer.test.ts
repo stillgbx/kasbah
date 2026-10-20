@@ -5,8 +5,8 @@ import { setTransport } from '../api'
 import type { Transport } from '../api/transport'
 import { useLocalPlayerStore } from './localPlayer'
 
-// La dernière écoute de « Ce navigateur » survit au rechargement de la page : la file et la position
-// sont gardées ici, le titre revient en pause à sa position, lecture le relance de là.
+// The last listening on "This browser" survives the page reload: the queue and the position
+// are kept here, the track comes back paused at its position, play restarts it from there.
 
 const queue = {
   items: [
@@ -28,7 +28,7 @@ describe('local player last listening', () => {
   it('keeps the queue and the position as they change', async () => {
     const local = useLocalPlayerStore()
     local.adopt({ streamUrl: 'data:,', session: { deviceId: local.id, source: 'mixcloud', id: '/a/mix-1/', sid: 's', durationS: 3600, title: 'Mix 1', artist: 'A', artUrl: null }, positionS: 0, queue })
-      .catch(() => { /* pas de son dans les tests */ })
+      .catch(() => { /* no sound in the tests */ })
     await nextTick()
     local.seek(125)
     await nextTick()
@@ -50,7 +50,7 @@ describe('local player last listening', () => {
     expect(st).toMatchObject({ kind: 'media_player', playback: 'paused', nowPlaying: { title: 'Mix 1', positionS: 1834, durationS: 3600 } })
     expect(local.barSession).toMatchObject({ title: 'Mix 1', queue: { length: 2, index: 0 } })
 
-    // rien de chargé : le curseur choisit seulement d'où ça repartira
+    // nothing loaded: the slider only chooses where it will restart from
     local.seek(1900)
     expect(local.entry.state).toMatchObject({ nowPlaying: { positionS: 1900 } })
     expect(musicLocalPlay).not.toHaveBeenCalled()

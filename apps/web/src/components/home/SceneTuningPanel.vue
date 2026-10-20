@@ -6,18 +6,18 @@ import type { HouseScene } from '../../three/HouseScene'
 import { TUNING_PRESETS, TUNING_RANGES, type SceneTuning } from '../../three/styles/tuning'
 import { useSettingsStore } from '../../stores/settings'
 
-// Le BANC DE RÉGLAGE de la lumière (Réglages → Rendu 3D → « Régler la lumière »). Il flotte sur la
-// vue Maison parce qu'un réglage de lumière ne se juge que devant la maison, à l'heure qu'elle a :
-// on tire un curseur, l'image change sous les doigts, on garde ce qui plaît.
+// The light TUNING BENCH (Settings → 3D rendering → "Tune the light"). It floats over the
+// House view because a light setting can only be judged in front of the house, at the time of day it has:
+// one drags a slider, the image changes under the fingers, we keep what pleases.
 //
-// Trois façons d'arriver à une image : un PRÉRÉGLAGE (quatre partis pris écrits dans
-// `three/styles/tuning.ts`), les curseurs, ou les deux — un préréglage est un point de départ, pas
-// un verrou. « Enregistrer » écrit le réglage dans la maison, d'où tous les écrans le lisent ;
-// « Réinitialiser » revient à ce que le style calcule, sans toucher à ce qui est enregistré.
+// Three ways to arrive at an image: a PRESET (four stances written in
+// `three/styles/tuning.ts`), the sliders, or both — a preset is a starting point, not
+// a lock. "Save" writes the setting into the house, from where all screens read it;
+// "Reset" goes back to what the style computes, without touching what is saved.
 //
-// Les curseurs sont des MULTIPLICATEURS du style (voir `three/styles/tuning.ts`) : régler la nuit
-// ne casse pas le jour, et changer de style garde le réglage. Les cinq derniers, eux, sont les
-// nombres mêmes du trait de la pièce sélectionnée — il ne vient d'aucun style.
+// The sliders are style MULTIPLIERS (see `three/styles/tuning.ts`): tuning the night
+// does not break the day, and changing style keeps the setting. The last five, for their part, are
+// the very numbers of the selected room's outline — it comes from no style.
 
 const props = defineProps<{ scene: () => HouseScene | null }>()
 const settings = useSettingsStore()
@@ -32,7 +32,7 @@ const GROUPS: readonly { titleKey: string; keys: readonly SliderKey[] }[] = [
 ]
 const CURVES: readonly SceneTuning['toneMapping'][] = ['style', 'aces', 'agx', 'neutral', 'linear']
 
-/** Un multiplicateur se lit « × 0,60 » ; les cinq réglages du trait sont des grandeurs, pas des facteurs. */
+/** A multiplier reads "× 0.60"; the five outline settings are magnitudes, not factors. */
 const PERCENT: readonly SliderKey[] = ['ringWhite', 'ringOpacity', 'fillOpacity', 'tiltShift', 'tiltCenter', 'tiltWidth', 'tiltPills']
 function format(key: SliderKey, v: number): string {
   if (key === 'ringWidth') return `${Math.round(v * 100)} cm`
@@ -43,10 +43,10 @@ function format(key: SliderKey, v: number): string {
 const tuning = computed(() => settings.sceneTuning)
 function set(key: keyof SceneTuning, value: number | string | boolean) { settings.setSceneTuning({ [key]: value } as Partial<SceneTuning>) }
 
-// Ce que la chaîne applique VRAIMENT, style et réglage confondus : le chiffre qu'on ira écrire dans
-// le style. Relu à chaque changement de curseur, jamais en boucle — la scène ne rend qu'à la demande.
+// What the chain REALLY applies, style and setting combined: the figure one will go and write into
+// the style. Reread on each slider change, never in a loop — the scene only renders on demand.
 const effective = computed(() => {
-  void tuning.value                         // relu dès qu'un curseur bouge
+  void tuning.value                         // reread as soon as a slider moves
   const look = props.scene()?.tunedLook()
   if (!look) return null
   const r = (v: number) => Math.round(v * 100) / 100
@@ -65,7 +65,7 @@ async function save() {
   saving.value = true
   const ok = await settings.saveSceneTuning()
   saving.value = false
-  if (!ok) return                            // l'erreur est dite par une notification (store maison)
+  if (!ok) return                            // the error is reported by a notification (house store)
   saved.value = true
   setTimeout(() => { saved.value = false }, 1500)
 }
@@ -115,8 +115,8 @@ async function save() {
       </div>
     </div>
 
-    <!-- « Réinitialiser » ne disparaît jamais : c'est la sortie de secours d'un réglage qu'on ne
-         retrouve plus. « Enregistrer » ne s'éteint que lorsqu'il n'a rien à écrire. -->
+    <!-- "Reset" never disappears: it is the escape hatch of a setting one can no longer
+         find. "Save" only turns off when it has nothing to write. -->
     <footer class="tune__foot">
       <button type="button" class="chip" @click="settings.resetSceneTuning()">{{ t('render.tuning.reset') }}</button>
       <button type="button" class="chip chip--go" :disabled="!settings.sceneTuningDirty || saving" @click="save()">
@@ -127,9 +127,9 @@ async function save() {
 </template>
 
 <style scoped>
-/* Colle au rail, sous l'en-tête de la vue Maison, et laisse le centre de l'image libre : c'est la
-   maison qu'on regarde pendant qu'on règle. Largeur FIXE et cellule de valeur de largeur fixe : rien
-   ne bouge quand un nombre passe de « × 1,00 » à « × 0,75 ». */
+/* Sticks to the rail, under the House view header, and leaves the center of the image free: it is the
+   house one looks at while tuning. FIXED width and value cell of fixed width: nothing
+   moves when a number goes from "× 1.00" to "× 0.75". */
 .tune {
   position: absolute; left: calc(var(--rail-w) + 12px); top: 96px; z-index: 4;
   width: 320px; max-height: min(640px, calc(100% - 220px));
@@ -162,11 +162,11 @@ async function save() {
 }
 .tune__foot { display: flex; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--line); }
 .tune__foot .chip { flex: 1; text-align: center; padding: 5px 8px; }
-/* le bouton qui ÉCRIT : teinté d'accent tant qu'il a quelque chose à écrire, éteint sinon — mais
-   toujours là, à la même place, comme son voisin (rien ne bouge) */
+/* the button that WRITES: tinted with the accent as long as it has something to write, off otherwise — but
+   always there, at the same place, like its neighbor (nothing moves) */
 .chip--go[data-on='0'], .chip--go { border-color: var(--accent); color: var(--text); }
 .chip--go:disabled { border-color: var(--line); color: var(--muted); cursor: default; opacity: .6; }
-/* le curseur Vuetify tient dans une ligne de 24 px : le panneau reste dense */
+/* the Vuetify slider fits in a 24 px row: the panel stays dense */
 .row :deep(.v-slider) { margin-inline: 0; }
 .row :deep(.v-input__control) { min-height: 24px; }
 </style>

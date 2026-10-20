@@ -47,7 +47,7 @@ describe('RoomBrightness', () => {
     expect(w.find('.room-bright__pct').text()).toBe('25 %')
   })
 
-  // règle « rien ne doit bouger » : la place du curseur est réservée même pièce éteinte
+  // "nothing must move" rule: the slider's place is reserved even when the room is dark
   it('keeps the slider in place, disabled, when the room is dark', () => {
     const { w } = setup([light('a', false, 30)])
     expect(w.find('input').exists()).toBe(true)

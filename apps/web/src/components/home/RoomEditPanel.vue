@@ -12,15 +12,15 @@ import ParkingRows from './ParkingRows.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import MarqueeText from '../ui/MarqueeText.vue'
 
-// Panneau d'une pièce en MODE ÉDITION : ce qu'on peut modifier DE LA PIÈCE, à la place des appareils
-// qu'on pilote le reste du temps. Le mode est armé dans Réglages, donc le geste est déjà décidé : on
-// relève la maison, on ne l'allume pas — et le même tap sur la même pièce donne toujours la même
-// chose, sans onglet à retenir dans le panneau.
+// Room panel in EDIT MODE: what can be modified ABOUT THE ROOM, in place of the devices
+// one commands the rest of the time. The mode is armed in Settings, so the gesture is already decided: we
+// survey the house, we do not turn it on — and the same tap on the same room always gives the same
+// thing, with no tab to remember in the panel.
 //
-// Quatre matières : son nom et son type, les ouvertures de la pièce, son apparence (finitions du sol
-// et des murs, en brouillon jusqu'à « Valider »), et les places de stationnement qu'elle porte — on
-// ajoute la place d'un garage DEPUIS le garage, et la place créée prend son niveau. En pied, la
-// retirer (dans le brouillon aussi : annulable jusqu'à « Valider »).
+// Four subjects: its name and its type, the room's openings, its appearance (floor and wall
+// finishes, in draft until "Apply"), and the parking spots it carries — one
+// adds a garage's spot FROM the garage, and the created spot takes its level. At the foot,
+// removing it (in the draft too: cancelable until "Apply").
 const emit = defineEmits<{ back: [] }>()
 const house = useHouseStore()
 const { t } = useI18n()
@@ -28,7 +28,7 @@ const { t } = useI18n()
 const room = computed(() => house.selectedRoom)
 const levelName = computed(() => (room.value ? house.index?.levelsById.get(room.value.levelId)?.name ?? '' : ''))
 const openings = computed(() => room.value?.openings ?? [])
-/** `openingLabel` est LA règle d'affichage d'une ouverture ; la nature et les cotes restent en sous-ligne. */
+/** `openingLabel` is THE display rule for an opening; the kind and the measurements stay in the sub-line. */
 function row(o: Opening) {
   const dims = o.type === 'roof-window' || o.type === 'skylight'
     ? `${o.height.toFixed(2)} × ${o.width.toFixed(2)} m`
@@ -36,21 +36,21 @@ function row(o: Opening) {
   return { id: o.id, label: openingLabel(o), sub: `${t(`opening.types.${o.type}`)} · ${dims}` }
 }
 
-/** Nature armée, en attente du mur qu'on va taper dans la 3D (`house.placeOpeningAt`). */
+/** Armed kind, waiting for the wall that will be tapped in the 3D (`house.placeOpeningAt`). */
 const armed = computed(() => house.placingOpening)
-/** Les places posées dans cette pièce : elles se règlent là où on les pense. */
+/** The spots placed in this room: they are adjusted where one thinks of them. */
 const parkings = computed(() => (room.value ? house.parkingsInRoom(room.value.id) : []))
 
-/** Sol ou murs : un seul sélecteur à la fois, il a la largeur du panneau. */
+/** Floor or walls: a single selector at a time, it has the width of the panel. */
 const surface = ref<'floor' | 'walls' | 'shape'>('floor')
-// l'onglet Dimensions allume les poignées de la pièce dans la 3D ; quitter le panneau les éteint
+// the Dimensions tab lights up the room's handles in the 3D; leaving the panel turns them off
 watch(surface, (s) => { house.shapeEditing = s === 'shape' }, { immediate: true })
 onBeforeUnmount(() => { house.shapeEditing = false; house.shapeSelection = null })
 const settings = useSettingsStore()
-/** Un style « costume » garde sa palette : les finitions ne s'y voient pas, on le dit. */
+/** A "costume" style keeps its palette: the finishes are not visible in it, and we say so. */
 const costume = computed(() => !styleById(settings.sceneStyle).assets)
 
-/** Un nom vide ne s'écrit pas : le champ reprend celui de la pièce. */
+/** An empty name is not written: the field takes the room's one back. */
 function rename(ev: Event) {
   const input = ev.target as HTMLInputElement
   const name = input.value.trim()
@@ -64,12 +64,12 @@ function setKind(ev: Event) {
 
 <template>
   <template v-if="room">
-    <!-- collant : le fil d'Ariane et le titre restent en vue quand la liste défile (styles/app.css) -->
+    <!-- sticky: the breadcrumb and the title stay in view when the list scrolls (styles/app.css) -->
     <div class="panel-head">
       <button type="button" class="crumb" @click="emit('back')"><StrokeIcon name="back" :size="14" /> {{ levelName }}</button>
       <div class="head">
         <div class="min0">
-          <!-- le nom se modifie ici : un nom long défile sur une ligne au lieu de pousser le panneau -->
+          <!-- the name is edited here: a long name scrolls on one line instead of pushing the panel -->
           <MarqueeText class="title" :text="room.name" />
           <div class="muted sub">{{ levelName }} · {{ $t('opening.count', { n: openings.length }, openings.length) }}</div>
         </div>
@@ -101,8 +101,8 @@ function setKind(ev: Event) {
       </div>
       <p v-else class="muted empty">{{ $t('opening.none') }}</p>
 
-      <!-- Ajouter : le menu donne la NATURE, le tap sur le mur donne la place. Le bouton garde la
-           même boîte une fois armé (il devient « Annuler ») : rien ne bouge sous le doigt. -->
+      <!-- Add: the menu gives the KIND, the tap on the wall gives the place. The button keeps the
+           same box once armed (it becomes "Cancel"): nothing moves under the finger. -->
       <v-menu v-if="!armed" location="bottom start">
         <template #activator="{ props: menu }">
           <button v-bind="menu" type="button" class="pill add" :disabled="house.savingOpening">
@@ -119,7 +119,7 @@ function setKind(ev: Event) {
       <button v-else type="button" class="pill add add--armed" @click="house.cancelPlacingOpening()">
         {{ $t('opening.cancel') }}
       </button>
-      <!-- place réservée : la consigne apparaît sans pousser la liste (hauteur fixe, deux lignes) -->
+      <!-- reserved place: the instruction appears without pushing the list (fixed height, two lines) -->
       <p class="muted hint">{{ armed ? $t(armed.type === 'roof-window' ? 'opening.placeHintRoof' : armed.type === 'skylight' ? 'opening.placeHintFloor' : 'opening.placeHint') : '' }}</p>
     </section>
 
@@ -131,7 +131,7 @@ function setKind(ev: Event) {
         <button type="button" role="tab" class="seg__btn" :aria-selected="surface === 'shape'" :data-on="surface === 'shape' ? '1' : '0'" @click="surface = 'shape'">{{ $t('shape.section') }}</button>
       </div>
       <p class="muted hint">{{ costume && surface !== 'shape' ? $t('finish.costumeHint') : '' }}</p>
-      <!-- la barre AVANT la grille : Sol et Murs n'ont pas le même nombre de vignettes, elle ne bouge pas -->
+      <!-- the bar BEFORE the grid: Floor and Walls do not have the same number of thumbnails, it does not move -->
       <EditBar />
       <RoomShapeSection v-if="surface === 'shape'" :room-id="room.id" />
       <FinishPicker v-else :surface="surface === 'floor' ? 'floor' : 'wall'" :value="house.roomFinish(room.id, surface)"
@@ -164,7 +164,7 @@ function setKind(ev: Event) {
 }
 .field:focus { outline: none; border-color: var(--accent); }
 .rows { display: grid; gap: 8px; }
-/* même ligne que dans le panneau des appareils, sans interrupteur : c'est un <button> */
+/* same row as in the devices panel, without a switch: it is a <button> */
 .op-row {
   display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius);
   background: var(--surface2); border: 0; width: 100%; text-align: left; font: inherit; color: inherit;
@@ -175,10 +175,10 @@ function setKind(ev: Event) {
 .op-row__name { font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .op-row__sub { font-size: 12px; font-variant-numeric: tabular-nums; }
 .empty { font-size: 13px; margin: 0; }
-/* pleine largeur dans les deux états : « Ajouter une ouverture » et « Annuler » occupent la même boîte */
+/* full width in both states: "Add an opening" and "Cancel" occupy the same box */
 .add { width: 100%; justify-content: center; gap: 8px; }
 .add--armed { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
-/* deux lignes réservées, occupées ou non : la liste ne remonte pas quand la consigne disparaît */
+/* two reserved lines, occupied or not: the list does not move up when the instruction disappears */
 .hint { margin: 0; font-size: 12px; min-height: 32px; }
 .add-list { padding: 8px; display: grid; gap: 2px; min-width: 200px; }
 .add-list__title { padding: 2px 8px 4px; }

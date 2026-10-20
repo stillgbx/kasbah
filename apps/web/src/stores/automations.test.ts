@@ -24,7 +24,7 @@ describe('automations store', () => {
   it('replaces the map on snapshot and automations messages, in the server order', () => {
     const store = useAutomationsStore()
     store.apply({ type: 'snapshot', serverTime: 0, devices: [], scenes: [], automations: [entry('b', 'Volets'), entry('12', 'Arrosage')] })
-    expect(store.list.map((e) => e.automation.name)).toEqual(['Volets', 'Arrosage'])   // « 12 » ne passe pas devant
+    expect(store.list.map((e) => e.automation.name)).toEqual(['Volets', 'Arrosage'])   // "12" does not come first
     store.apply({ type: 'automations', automations: [entry('c', 'Portail')] })
     expect(store.list.map((e) => e.automation.id)).toEqual(['c'])
   })
@@ -52,7 +52,7 @@ describe('automations store', () => {
     const store = useAutomationsStore()
     store.apply({ type: 'automations', automations: [entry('a', 'Arrosage')] })
     const pending = store.setEnabled('a', false)
-    expect(store.entries.a!.automation.enabled).toBe(false)            // tout de suite
+    expect(store.entries.a!.automation.enabled).toBe(false)            // right away
     expect(await pending).toBe(false)
     expect(store.entries.a!.automation.enabled).toBe(true)              // rendu
     expect(useNotificationsStore().queue.length).toBeGreaterThan(0)

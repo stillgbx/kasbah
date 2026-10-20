@@ -3,13 +3,13 @@ import { onBeforeUnmount, onMounted } from 'vue'
 import { useHouseStore } from '../../stores/house'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Barre du brouillon d'apparence : annuler / rétablir un choix, abandonner la séance, ou la valider
-// — seul « Valider » écrit dans house.json, et il écrit tout d'un coup (plusieurs pièces, la façade).
-// Ctrl+Z / Ctrl+Y (ou Ctrl+Maj+Z) font la même chose que les deux flèches, hors d'un champ de saisie.
+// Appearance draft bar: undo / redo a choice, abandon the session, or apply it
+// — only "Apply" writes to house.json, and it writes everything at once (several rooms, the facade).
+// Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z) do the same as the two arrows, outside an input field.
 const house = useHouseStore()
 
 function onKey(e: KeyboardEvent) {
-  // le remplissage automatique de Chrome émet des `keydown` sans `key` (`undefined`, malgré le type)
+  // Chrome's autofill emits `keydown` events without `key` (`undefined`, despite the type)
   if (typeof e.key !== 'string' || !(e.ctrlKey || e.metaKey) || e.altKey) return
   const el = e.target as HTMLElement | null
   if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
@@ -32,14 +32,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               :title="$t('finish.redo')" :aria-label="$t('finish.redo')" @click="house.redoEdit()">
         <StrokeIcon name="redo" :size="18" />
       </button>
-      <!-- l'état du brouillon, dans la place qui reste : il change sans rien pousser. Ce qui empêche
-           d'écrire s'y dit aussi (le premier motif ; tous dans l'info-bulle) -->
+      <!-- the draft's state, in the remaining space: it changes without pushing anything. What prevents
+           writing is said there too (the first reason; all of them in the tooltip) -->
       <span v-if="house.editBlocking.length" class="ab__status ab__status--block" :title="house.editBlocking.join('\n')">
         {{ $t('shape.blocking') }} : {{ house.editBlocking[0] }}
       </span>
       <span v-else class="muted ab__status">{{ house.editDirty ? $t('finish.pending') : $t('finish.clean') }}</span>
     </div>
-    <!-- deux moitiés égales : « Abandonner » ne tenait pas sur la même ligne que les flèches -->
+    <!-- two equal halves: "Discard" did not fit on the same line as the arrows -->
     <div class="ab__actions">
       <button type="button" class="pill ab__btn" :disabled="!house.canUndoEdit || house.savingEdit" @click="house.discardEdit()">
         {{ $t('finish.discard') }}

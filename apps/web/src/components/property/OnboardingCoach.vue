@@ -5,20 +5,20 @@ import { useSettingsStore } from '../../stores/settings'
 import { useHouseStore } from '../../stores/house'
 import { readOnboarding, writeOnboarding, type Onboarding } from '../../lib/onboarding'
 
-// Le guide qui suit la création d'une propriété, posé sur la vue Maison : d'abord le contour du
-// terrain (son éditeur s'ouvre tout seul), puis la première pièce, ouverte dans le mode édition pour
-// en taper les vraies cotes. « Terminer » du terrain fait passer à la pièce ; « C'est fait » ou
-// « Passer » rangent le guide. Un appartement commence directement à la pièce.
-/** Panneau latéral ancré à droite (fenêtre large) : le guide s'arrête avant lui. */
+// The guide that follows the creation of a property, placed over the House view: first the land
+// outline (its editor opens by itself), then the first room, opened in edit mode to
+// type in its real measurements. "Done" of the land moves on to the room; "Done" or
+// "Skip" put the guide away. An apartment starts directly at the room.
+/** Side panel anchored to the right (wide window): the guide stops before it. */
 defineProps<{ wide: boolean }>()
-/** La pièce est ouverte : sur un écran étroit, le panneau (un tiroir) doit s'ouvrir pour qu'on la voie. */
+/** The room is open: on a narrow screen, the panel (a drawer) must open so that it can be seen. */
 const emit = defineEmits<{ room: [] }>()
 const properties = usePropertiesStore()
 const settings = useSettingsStore()
 const house = useHouseStore()
 
 const guide = ref<Onboarding | null>(readOnboarding())
-/** Le guide ne vaut que sur SA propriété, une fois qu'on sait laquelle est montrée. */
+/** The guide only applies to ITS property, once we know which one is shown. */
 const here = computed(() => !!guide.value && properties.active?.id === guide.value.propertyId && !!house.house)
 
 function set(o: Onboarding | null) { guide.value = o; writeOnboarding(o) }
@@ -28,19 +28,19 @@ function startRoom() {
   emit('room')
 }
 
-// la liste chargée sans la propriété du guide (supprimée, autre serveur) : on l'oublie
+// the list loaded without the guide's property (deleted, other server): we forget it
 watch(() => properties.info, (info) => {
   if (info && guide.value && !info.properties.some((p) => p.id === guide.value!.propertyId)) set(null)
 }, { immediate: true })
 
-// arrivée sur la maison neuve : l'étape en cours s'ouvre d'elle-même
+// arrival on the new house: the current step opens by itself
 watch(here, (on) => {
   if (!on || !guide.value) return
   if (guide.value.step === 'terrain') settings.setReliefEditing(true, 'outline')
   else startRoom()
 }, { immediate: true })
 
-// « Terminer » dans l'éditeur du terrain : place à la première pièce
+// "Done" in the land editor: make way for the first room
 watch(() => settings.reliefEditing, (on, was) => {
   if (!here.value || guide.value?.step !== 'terrain' || on || !was) return
   set({ ...guide.value, step: 'room' })
@@ -49,7 +49,7 @@ watch(() => settings.reliefEditing, (on, was) => {
 </script>
 
 <template>
-  <!-- la bande libre entre le panneau du terrain (à gauche, s'il est ouvert) et le panneau latéral -->
+  <!-- the free band between the land panel (on the left, if open) and the side panel -->
   <div v-if="here && guide" class="coach-band" :data-relief="settings.reliefEditing ? '1' : '0'" :data-wide="wide ? '1' : '0'">
     <div class="card coach" role="status">
       <div class="section-label">{{ $t('property.coach.step', { n: guide.step === 'terrain' ? 1 : 2 }) }}</div>
@@ -64,8 +64,8 @@ watch(() => settings.reliefEditing, (on, was) => {
 </template>
 
 <style scoped>
-/* en haut de la scène, centré dans la bande libre : à droite du panneau du terrain (300 px, cf.
-   ReliefPanel), à gauche du panneau latéral quand il est ancré */
+/* at the top of the scene, centered in the free band: to the right of the land panel (300 px, see
+   ReliefPanel), to the left of the side panel when it is anchored */
 .coach-band {
   position: absolute; z-index: 5; top: 96px; left: calc(var(--rail-w) + 12px); right: 12px;
   display: flex; justify-content: center; pointer-events: none;

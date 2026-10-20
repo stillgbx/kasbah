@@ -5,22 +5,22 @@ import type { JournalEntry } from '@kasbah/shared'
 import { journalLabel, journalWhen } from '../../lib/journal'
 
 /**
- * Le journal d'un appareil, en liste : pastille de gravité, jour et heure, texte du fabricant et
- * code. Une ligne qui SAIT où elle s'est produite est un bouton (`pick`) : la surface qui l'affiche
- * y emmène la carte ou la scène ; une ligne sans position ne mène nulle part et le dit.
+ * A device's log, as a list: severity pill, day and time, vendor text and
+ * code. A row that KNOWS where it happened is a button (`pick`): the surface that displays it
+ * takes the map or the scene there; a row without a position leads nowhere and says so.
  *
- * La liste a une hauteur BORNÉE (huit lignes) et défile au-delà : la carte qui la porte ne s'étire
- * pas au gré du journal — c'est ce qui la faisait sauter avant. Elle est en MONOSPACE, date à
- * largeur constante : un journal se lit en colonnes, comme un terminal (demande de l'utilisateur).
+ * The list has a BOUNDED height (eight rows) and scrolls beyond: the card that carries it does not
+ * stretch with the log — that is what made it jump before. It is in MONOSPACE, date at
+ * constant width: a log is read in columns, like a terminal (user request).
  */
 const props = defineProps<{ entries: readonly JournalEntry[]; active?: number | undefined }>()
 const emit = defineEmits<{ pick: [entry: JournalEntry] }>()
 const { t, locale } = useI18n()
 
-/** L'infobulle dit TOUT : le texte que la ligne coupe, et ce qu'un clic fera (ou pourquoi il ne fera rien). */
+/** The tooltip says EVERYTHING: the text that the row cuts off, and what a click will do (or why it will do nothing). */
 const titleOf = (e: JournalEntry) => `${journalLabel(e)}\n${t(e.location ? 'mower.journalLocate' : 'mower.journalNoLocation')}`
 
-/** La ligne active — choisie ici, ou par une épingle touchée dans la scène — se met à portée de vue. */
+/** The active row — chosen here, or by a pin touched in the scene — comes into view. */
 const rows: Record<number, HTMLElement | null> = {}
 watch(() => props.active, (at) => {
   if (at === undefined) return
@@ -44,7 +44,7 @@ watch(() => props.active, (at) => {
 </template>
 
 <style scoped>
-/* huit lignes de 24 px, puis défilement : la hauteur ne dépend pas du journal ; monospace, comme un terminal */
+/* eight rows of 24 px, then scrolling: the height does not depend on the log; monospace, like a terminal */
 .jl { max-height: 192px; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .jl__list { margin: 0; padding: 0; list-style: none; display: grid; }
 .jl__row { display: grid; grid-template-columns: 10px auto 1fr; align-items: center; gap: 8px; height: 24px; font-size: 12px; min-width: 0; padding: 0 4px; border-radius: 6px; }
@@ -55,7 +55,7 @@ watch(() => props.active, (at) => {
 .jl__dot[data-severity='fatal'] { background: #d24a43; box-shadow: 0 0 0 2px rgb(210 74 67 / .35); }
 .jl__when { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .jl__text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; min-width: 0; }
-/* une ligne positionnée est un bouton, mais un bouton discret : le texte, souligné au survol */
+/* a positioned row is a button, but a discreet button: the text, underlined on hover */
 .jl__pick { padding: 0; border: 0; background: none; color: var(--text); font: inherit; cursor: pointer; }
 .jl__pick:hover, .jl__pick:focus-visible { text-decoration: underline; outline: none; }
 .jl__empty { margin: 0; font-size: 12px; height: 24px; display: flex; align-items: center; }

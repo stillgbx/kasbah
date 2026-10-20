@@ -5,24 +5,24 @@ import type { StateFor } from '@kasbah/shared'
 import { formatKm, formatPercent } from '../../lib/format'
 
 /**
- * L'AUTONOMIE d'un véhicule, partagée par la carte de la vue Véhicules et le panneau d'un véhicule
- * dans la vue Maison (comme `ChargeLimitCard`) : la batterie en grand, les kilomètres, la jauge et
- * ses repères — la cible de charge, et le plancher voulu quand le fabricant a cette notion (la R5 ;
- * Tesla ne l'a pas, et un seul repère se dessine alors).
+ * A vehicle's RANGE, shared by the Vehicles view card and a vehicle's panel
+ * in the House view (like `ChargeLimitCard`): the battery in large, the kilometers, the gauge and
+ * its marks — the charge target, and the desired floor when the vendor has that notion (the R5;
+ * Tesla does not, and a single mark is then drawn).
  *
- * `limit` : la cible MONTRÉE, que le parent fait suivre au curseur pendant qu'on le glisse ; à
- * défaut, celle du véhicule. Le repère n'existe que si le véhicule a une cible.
+ * `limit`: the SHOWN target, which the parent makes follow the slider while it is dragged; by
+ * default, the vehicle's. The mark only exists if the vehicle has a target.
  */
 const props = defineProps<{ state: StateFor<'vehicle'>; limit?: number }>()
 const { t, locale } = useI18n()
 const EMPTY = '—'
-/** Sous ce niveau, la jauge passe au rouge (hors charge : une batterie qui remonte n'alarme pas). */
+/** Below this level, the gauge turns red (outside charging: a battery that is going up does not alarm). */
 const LOW_SOC = 20
 
 /**
- * Jamais lu : un véhicule découvert ENDORMI n'a encore livré que sa veille, et son état porte les
- * défauts du contrat (0 %, 0 km). Les afficher se lirait comme une batterie vide ; « — » dit vrai.
- * Un vrai véhicule à 0 % aurait au moins un kilométrage ou une position.
+ * Never read: a vehicle discovered ASLEEP has only delivered its standby so far, and its state carries the
+ * contract's defaults (0 %, 0 km). Displaying them would read as an empty battery; "—" tells the truth.
+ * A real vehicle at 0 % would at least have a mileage or a position.
  */
 const unread = computed(() => {
   const s = props.state
@@ -41,7 +41,7 @@ const target = computed(() => props.limit ?? props.state.chargeLimit)
       </div>
     </div>
     <div class="battery__bar">
-      <!-- en charge, un reflet parcourt le remplissage : on voit la charge active d'un coup d'œil -->
+      <!-- while charging, a glint runs along the fill: active charging is seen at a glance -->
       <div class="battery__fill" :data-charging="state.charging ? '1' : '0'"
            :data-low="!state.charging && state.soc < LOW_SOC ? '1' : '0'" :style="{ width: `${state.soc}%` }" />
       <span v-if="state.socMin !== undefined" class="soc__tick" :style="{ left: `${state.socMin}%` }"
@@ -59,12 +59,12 @@ const target = computed(() => props.limit ?? props.state.chargeLimit)
 .battery__range { text-align: right; }
 .battery__km { font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .battery__k { font-size: 11px; }
-/* pas d'`overflow: hidden` : les repères DÉBORDENT de la jauge, c'est ce qui les rend lisibles.
-   Le remplissage a son propre arrondi, il n'a jamais eu besoin d'être rogné. */
+/* no `overflow: hidden`: the marks OVERFLOW the gauge, that is what makes them readable.
+   The fill has its own rounding, it never needed to be cropped. */
 .battery__bar { position: relative; height: 8px; border-radius: 999px; background: var(--line); }
 .battery__fill { position: relative; height: 100%; background: var(--accent); border-radius: 999px; transition: width .4s, background .2s; }
 .battery__fill[data-low='1'] { background: rgb(var(--v-theme-error)); }
-/* le reflet est rogné au remplissage, pas à la jauge : les repères débordent toujours */
+/* the glint is cropped to the fill, not to the gauge: the marks always overflow */
 .battery__fill[data-charging='1'] { overflow: hidden; }
 .battery__fill[data-charging='1']::after {
   content: ''; position: absolute; inset: 0; transform: translateX(-100%);
@@ -73,8 +73,8 @@ const target = computed(() => props.limit ?? props.state.chargeLimit)
 }
 @keyframes battery-flow { to { transform: translateX(100%); } }
 @media (prefers-reduced-motion: reduce) { .battery__fill[data-charging='1']::after { animation: none; } }
-/* Repères de limites : le trait de la POSITION FAVORITE d'un ouvrant (cf. `.cover-slider` dans
-   app.css), en plus court — mais posé PAR-DESSUS la jauge, qui n'a pas de pouce pour le cacher. */
+/* Limit marks: the line of a cover's FAVORITE POSITION (see `.cover-slider` in
+   app.css), but shorter — and placed OVER the gauge, which has no thumb to hide it. */
 .soc__tick {
   position: absolute; top: 50%; width: 3px; height: 16px; border-radius: 2px;
   transform: translate(-50%, -50%); background: rgb(var(--v-theme-warning));

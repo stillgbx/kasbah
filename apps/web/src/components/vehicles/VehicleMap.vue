@@ -10,54 +10,54 @@ import { LAWN_COLOR, REWILDING_COLOR, SITE_MAP_LAYERS, WORK_AREA_COLORS, layerOf
 import { useSettingsStore } from '../../stores/settings'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Carte d'un véhicule : sa position (et son cap), la maison, plan ou satellite, plein écran.
+// Map of a vehicle: its position (and heading), the house, plan or satellite, full screen.
 //
-// Le plein écran est un état du COMPOSANT (position fixe sur toute la fenêtre), pas l'API
-// Fullscreen du navigateur : l'app a déjà son propre plein écran, iOS ne l'offre pas aux
-// éléments, et un même canvas MapLibre suit sans se reconstruire — il suffit de le redimensionner.
+// Full screen is a state of the COMPONENT (fixed position over the whole window), not the browser's
+// Fullscreen API: the app already has its own full screen, iOS does not offer it for
+// elements, and the same MapLibre canvas follows without being rebuilt — it just has to be resized.
 //
-// Le style change avec le mode (plan ↔ satellite) et avec le thème (plan clair ↔ sombre) ; les
-// marqueurs sont des éléments DOM, ils survivent au changement de style.
+// The style changes with the mode (plan ↔ satellite) and with the theme (light ↔ dark plan); the
+// markers are DOM elements, they survive the style change.
 
 const props = defineProps<{
   location?: LatLon | undefined
   headingDeg?: number | undefined
   home?: LatLon | undefined
-  /** Ligne posée en bas de la carte (distance, kilométrage). */
+  /** Line placed at the bottom of the map (distance, mileage). */
   caption?: string | undefined
-  /** Ce qu'on suit : une voiture (flèche tournée selon son cap) ou une tondeuse (disque, pas de cap). */
+  /** What is followed: a car (arrow turned according to its heading) or a mower (disc, no heading). */
   subject?: 'car' | 'mower' | undefined
-  /** Les incidents du journal qui savent où ils se sont produits : petites pastilles de gravité. */
+  /** The log's incidents that know where they happened: small severity pills. */
   points?: readonly JournalPoint[] | undefined
-  /** Un point à AMENER au centre (une ligne du journal choisie) : la carte y va, et cesse de se recadrer seule. */
+  /** A point to BRING to the center (a chosen log row): the map goes there, and stops reframing itself. */
   focus?: LatLon | undefined
-  /** L'incident ACTIF (sa date) : sa pastille grossit et passe devant. */
+  /** The ACTIVE incident (its date): its pill grows and comes to the front. */
   activeAt?: number | undefined
   /**
-   * La carte du terrain d'une tondeuse, déjà posée sur le monde (`lib/siteMap.ts`) : zones, obstacles,
-   * câbles. Présente = un bouton la montre ou la masque, choix gardé pour toutes les cartes.
+   * The map of a mower's terrain, already placed on the world (`lib/siteMap.ts`): zones, obstacles,
+   * cables. Present = a button shows or hides it, choice kept for all maps.
    */
   overlay?: FeatureCollection<Geometry, SiteMapFeatureProps> | undefined
 }>()
 const emit = defineEmits<{ pointTap: [at: number] }>()
 
 const settings = useSettingsStore()
-// Clé VOLONTAIREMENT nouvelle : sous l'ancien nom traînent des valeurs écrites par un watcher trop
-// large (cf. plus bas), que l'utilisateur n'a jamais choisies. Les ignorer est le seul moyen que le
-// défaut « satellite » s'applique vraiment.
+// DELIBERATELY new key: under the old name linger values written by an overly broad watcher
+// (see below), which the user never chose. Ignoring them is the only way for the
+// "satellite" default to really apply.
 const MODE_KEY = 'kasbah.mapMode.v2'
 
 const container = ref<HTMLDivElement | null>(null)
 const full = ref(false)
-// Satellite PAR DÉFAUT : sur une carte de véhicule, reconnaître son allée, son parking ou le
-// bâtiment devant lequel la voiture est garée se fait d'un coup d'œil sur la photo, pas sur un plan.
-// Le choix de l'utilisateur, lui, prime et survit (`localStorage`).
+// Satellite BY DEFAULT: on a vehicle map, recognizing one's driveway, parking lot or the
+// building in front of which the car is parked is done at a glance on the photo, not on a plan.
+// The user's choice, for its part, takes precedence and survives (`localStorage`).
 const mode = ref<MapMode>((() => { try { return localStorage.getItem(MODE_KEY) === 'plan' ? 'plan' : 'satellite' } catch { return 'satellite' } })())
-/** L'utilisateur a bougé la carte : on ne la recadre plus sous ses doigts, un bouton le propose. */
+/** The user moved the map: we no longer reframe it under their fingers, a button offers it. */
 const moved = ref(false)
-// La carte du terrain se montre par CALQUES (terrain, zones de travail, zones d'exclusion, câbles) :
-// tous visibles par défaut, ceux qu'on masque survivent, comme le mode. On garde les MASQUÉS, pas les
-// visibles : un calque qui apparaît plus tard (une première zone d'exclusion) se montre de lui-même.
+// The terrain map is shown by LAYERS (terrain, work zones, exclusion zones, cables):
+// all visible by default, those that are hidden survive, like the mode. We keep the HIDDEN ones, not the
+// visible ones: a layer that appears later (a first exclusion zone) shows up by itself.
 const LAYERS_KEY = 'kasbah.mapLayers.v1'
 const hiddenLayers = ref<ReadonlySet<SiteMapLayer>>((() => {
   try {
@@ -65,7 +65,7 @@ const hiddenLayers = ref<ReadonlySet<SiteMapLayer>>((() => {
     return new Set(Array.isArray(raw) ? raw.filter((l): l is SiteMapLayer => (SITE_MAP_LAYERS as readonly unknown[]).includes(l)) : [])
   } catch { return new Set<SiteMapLayer>() }
 })())
-/** Les calques que cette carte a vraiment : le menu ne propose que ceux-là. */
+/** The layers this map really has: the menu only offers those. */
 const presentLayers = computed(() => SITE_MAP_LAYERS.filter((l) => props.overlay?.features.some((f) => layerOf(f.properties.kind) === l)))
 const anyLayerShown = computed(() => presentLayers.value.some((l) => !hiddenLayers.value.has(l)))
 function toggleLayer(l: SiteMapLayer): void {
@@ -74,10 +74,10 @@ function toggleLayer(l: SiteMapLayer): void {
   else next.add(l)
   hiddenLayers.value = next
 }
-/** La teinte de la pastille de chaque calque dans le menu : celle qu'il a sur la carte. */
+/** The tint of each layer's pill in the menu: the one it has on the map. */
 const LAYER_COLORS: Record<SiteMapLayer, string> = { lawn: LAWN_COLOR, work_areas: WORK_AREA_COLORS[0], stay_out: '#e53935', rewilding: REWILDING_COLOR, guides: '#42a5f5' }
 const LAYER_LABELS: Record<SiteMapLayer, string> = { lawn: 'vehicle.map.layerLawn', work_areas: 'vehicle.map.layerWorkAreas', stay_out: 'vehicle.map.layerStayOut', rewilding: 'vehicle.map.layerRewilding', guides: 'vehicle.map.layerGuides' }
-/** Le menu des calques : un panneau posé SUR la carte, sous les boutons — rien ne bouge en l'ouvrant. */
+/** The layers menu: a panel placed ON the map, under the buttons — nothing moves when opening it. */
 const layersOpen = ref(false)
 const layersEl = ref<HTMLElement | null>(null)
 function onOutside(e: PointerEvent): void { if (layersEl.value && !layersEl.value.contains(e.target as Node)) layersOpen.value = false }
@@ -97,8 +97,8 @@ let observer: ResizeObserver | null = null
 const hasPosition = computed(() => !!props.location)
 
 /**
- * Le style du plan, en cache par thème : c'est lui qui fournit les étiquettes du satellite, et il
- * ne sert à rien de le retélécharger à chaque bascule.
+ * The plan's style, cached per theme: it is what provides the satellite's labels, and there is
+ * no point downloading it again on each toggle.
  */
 const planStyles = new Map<string, Promise<StyleSpecification>>()
 function planStyle(dark: boolean): Promise<StyleSpecification> {
@@ -112,9 +112,9 @@ function planStyle(dark: boolean): Promise<StyleSpecification> {
 }
 
 /**
- * Applique le style courant. Le satellite attend les étiquettes du plan ; si elles ne viennent pas
- * (réseau, service indisponible), la photo NUE est posée quand même — mieux qu'une carte vide.
- * La garde sur `mode` évite qu'une réponse en retard écrase une bascule entre-temps.
+ * Applies the current style. The satellite waits for the plan's labels; if they do not come
+ * (network, service unavailable), the BARE photo is put in place anyway — better than an empty map.
+ * The guard on `mode` prevents a late response from overwriting a toggle in the meantime.
  */
 async function applyStyle(): Promise<void> {
   if (!map) return
@@ -131,8 +131,8 @@ async function applyStyle(): Promise<void> {
 function markerEl(kind: 'car' | 'mower' | 'home'): HTMLElement {
   const el = document.createElement('div')
   el.className = `vmap__marker vmap__marker--${kind}`
-  // flèche de cap pour la voiture (tourne avec `setRotation`), disque pour la tondeuse (elle ne dit
-  // pas son cap), maison fixe
+  // heading arrow for the car (turns with `setRotation`), disc for the mower (it does not report
+  // its heading), fixed house
   el.innerHTML = kind === 'car'
     ? '<svg viewBox="0 0 24 24" width="30" height="30"><path d="M12 2 L19 20 L12 16 L5 20 Z" fill="currentColor" stroke="var(--surface)" stroke-width="1.5" stroke-linejoin="round"/></svg>'
     : kind === 'mower'
@@ -142,11 +142,11 @@ function markerEl(kind: 'car' | 'mower' | 'home'): HTMLElement {
 }
 
 /**
- * MapLibre DÉPLIE l'attribution une demi-seconde après le montage (au premier calcul des mentions),
- * même en mode `compact` : 300 px de large sur une carte de 320, par-dessus la légende. On la referme,
- * en touchant aux DEUX choses qui la commandent, sans quoi il faut deux taps sur le ⓘ pour la rouvrir :
- * `open` du `<details>` (le repli natif) ET la classe `maplibregl-compact-show` (l'affichage du texte,
- * que MapLibre bascule de son côté au clic). Une seule fois : passé là, le panneau est à l'utilisateur.
+ * MapLibre UNFOLDS the attribution half a second after mounting (on the first computation of the credits),
+ * even in `compact` mode: 300 px wide on a 320 map, over the legend. We close it again,
+ * by touching the TWO things that control it, without which it takes two taps on the ⓘ to reopen it:
+ * `open` of the `<details>` (the native fold) AND the class `maplibregl-compact-show` (the display of the text,
+ * which MapLibre toggles on its own on click). Only once: past that, the panel belongs to the user.
  */
 let attributionClosed = false
 function collapseAttribution(): void {
@@ -169,7 +169,7 @@ function fit(animate: boolean): void {
   moved.value = false
 }
 
-/** Les incidents : une pastille par point, teintée de sa gravité, refaite à chaque changement de liste. */
+/** The incidents: one pill per point, tinted with its severity, redone on each list change. */
 function placePoints(): void {
   if (!map) return
   for (const m of pointMarkers) m.remove()
@@ -181,7 +181,7 @@ function placePoints(): void {
     el.title = p.label
     el.dataset.active = p.at === props.activeAt ? '1' : '0'
     el.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14"><circle cx="8" cy="8" r="5" fill="${JOURNAL_COLORS[p.severity]}" stroke="var(--surface)" stroke-width="2"/></svg>`
-    // toucher une pastille désigne l'incident : la liste le surligne et le raconte
+    // touching a pill designates the incident: the list highlights it and tells it
     el.addEventListener('click', (ev) => { ev.stopPropagation(); emit('pointTap', p.at) })
     pointEls.set(p.at, el)
     pointMarkers.push(new Marker({ element: el }).setLngLat([p.lon, p.lat]).addTo(map))
@@ -189,11 +189,11 @@ function placePoints(): void {
 }
 
 /**
- * La carte du terrain : une source GeoJSON et trois couches, SOUS les marqueurs (qui sont du DOM).
- * Les couleurs sont celles de l'appli du fabricant (vert du terrain, rouge, bleu, jaune), plus une
- * teinte par zone de travail tracée (`color`, celle de sa pastille dans le panneau Zones) : elles se
- * lisent sur la photo comme sur le plan, quel que soit le thème. Un changement de style efface sources et couches ;
- * `style.load` les repose. Masquée = une source vide, les couches restent.
+ * The terrain map: a GeoJSON source and three layers, UNDER the markers (which are DOM).
+ * The colors are those of the vendor's app (terrain green, red, blue, yellow), plus a
+ * tint per drawn work zone (`color`, that of its pill in the Zones panel): they
+ * read on the photo as on the plan, whatever the theme. A style change clears sources and layers;
+ * `style.load` puts them back. Hidden = an empty source, the layers remain.
  */
 const EMPTY_OVERLAY: FeatureCollection = { type: 'FeatureCollection', features: [] }
 function applyOverlay(): void {
@@ -230,7 +230,7 @@ function applyOverlay(): void {
 
 function placeMarkers(): void {
   if (!map) return
-  // la position AVANT `addTo` : MapLibre projette le marqueur en l'ajoutant, sans position il plante
+  // the position BEFORE `addTo`: MapLibre projects the marker when adding it, without a position it crashes
   if (props.location) {
     const at: [number, number] = [props.location.lon, props.location.lat]
     carMarker ??= new Marker({ element: markerEl(props.subject ?? 'car'), rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat(at).addTo(map)
@@ -247,20 +247,20 @@ function placeMarkers(): void {
 onMounted(() => {
   if (!container.value) return
   const m = new MlMap({
-    // style de départ : la photo nue, remplacée dès que les étiquettes du plan sont là
+    // starting style: the bare photo, replaced as soon as the plan's labels are there
     container: container.value, style: mode.value === 'satellite' ? satelliteStyle() : planStyleUrl(settings.isDark),
     attributionControl: { compact: true },
     maxZoom: IGN_MAX_ZOOM + 1, dragRotate: true, pitchWithRotate: true,
   })
   map = m
-  // le panneau n'est déplié qu'après le premier calcul des mentions : on guette les trois moments
+  // the panel is only unfolded after the first computation of the credits: we watch for the three moments
   for (const ev of ['load', 'styledata', 'idle'] as const) m.on(ev, collapseAttribution)
   m.on('style.load', applyOverlay)
-  // en développement seulement : la carte est interrogeable depuis la console (`el.__map`), ce qui
-  // permet de vérifier qu'elle rend bien des entités quand rien ne se voit à l'écran
+  // in development only: the map can be queried from the console (`el.__map`), which
+  // makes it possible to check that it does render features when nothing shows on screen
   if (import.meta.env.DEV) (container.value as HTMLDivElement & { __map?: MlMap }).__map = m
   m.addControl(new NavigationControl({ showCompass: true, visualizePitch: true }), 'top-left')
-  // un geste de l'utilisateur (pas un `jumpTo` du composant) : la carte est à lui
+  // a user gesture (not a `jumpTo` of the component): the map is theirs
   for (const ev of ['dragstart', 'zoomstart', 'rotatestart', 'pitchstart'] as const) {
     m.on(ev, (e: { originalEvent?: unknown }) => { if (e.originalEvent) moved.value = true })
   }
@@ -268,7 +268,7 @@ onMounted(() => {
   placeMarkers()
   placePoints()
   fit(false)
-  // la carte du véhicule vit dans une grille qui se redimensionne : MapLibre ne suit que la fenêtre
+  // the vehicle map lives in a grid that resizes: MapLibre only follows the window
   observer = new ResizeObserver(() => m.resize())
   observer.observe(container.value)
 })
@@ -279,16 +279,16 @@ onBeforeUnmount(() => {
   map = null
 })
 
-// position ou cap qui changent : les marqueurs suivent ; la vue aussi, tant que l'utilisateur n'y a pas touché
+// position or heading that change: the markers follow; the view too, as long as the user has not touched it
 watch(() => [props.location?.lat, props.location?.lon, props.headingDeg, props.home?.lat, props.home?.lon], () => {
   placeMarkers()
   if (!moved.value) fit(true)
 })
 watch(() => props.points, placePoints)
-// l'actif change : seules deux pastilles changent d'état, rien n'est refait
+// the active one changes: only two pills change state, nothing is redone
 watch(() => props.activeAt, (at) => { for (const [k, el] of pointEls) el.dataset.active = k === at ? '1' : '0' })
-// un point choisi : la carte y va (assez près pour lire le jardin), et c'est comme si l'utilisateur
-// l'avait déplacée — elle ne se recadre plus seule, « Recentrer » le propose
+// a chosen point: the map goes there (close enough to read the garden), and it is as if the user
+// had moved it — it no longer reframes itself, "Recenter" offers it
 watch(() => props.focus, (f) => {
   if (!f || !map) return
   map.easeTo({ center: [f.lon, f.lat], zoom: Math.max(map.getZoom(), 18), duration: 500 })
@@ -297,20 +297,20 @@ watch(() => props.focus, (f) => {
 watch([mode, () => settings.isDark], () => { void applyStyle() })
 watch([() => props.overlay, hiddenLayers], applyOverlay)
 watch(hiddenLayers, (h) => {
-  try { localStorage.setItem(LAYERS_KEY, JSON.stringify([...h])) } catch { /* stockage indisponible : le choix ne survit pas */ }
+  try { localStorage.setItem(LAYERS_KEY, JSON.stringify([...h])) } catch { /* storage unavailable: the choice does not survive */ }
 })
 onBeforeUnmount(() => { layersOpen.value = false })
-// Le choix n'est écrit QUE lorsque le mode change. Il était auparavant réécrit à chaque changement
-// de thème, ce qui rangeait comme « choix de l'utilisateur » un mode qu'il n'avait jamais touché —
-// et le défaut n'avait alors plus jamais l'occasion de s'appliquer.
+// The choice is written ONLY when the mode changes. It used to be rewritten on each theme
+// change, which filed as "the user's choice" a mode they had never touched —
+// and the default then never again had the opportunity to apply.
 watch(mode, (m) => {
-  try { localStorage.setItem(MODE_KEY, m) } catch { /* stockage indisponible : le choix ne survit pas, sans plus */ }
+  try { localStorage.setItem(MODE_KEY, m) } catch { /* storage unavailable: the choice does not survive, no more */ }
 })
 
 function toggleFull(): void {
   full.value = !full.value
-  // le conteneur change de taille au prochain rendu : redimensionner après, et recadrer si
-  // l'utilisateur n'avait pas pris la main (la vignette et le plein écran n'ont pas le même cadre)
+  // the container changes size at the next render: resize after, and reframe if
+  // the user had not taken control (the thumbnail and the full screen do not have the same frame)
   requestAnimationFrame(() => { map?.resize(); if (!moved.value) fit(false) })
 }
 function onKey(e: KeyboardEvent): void { if (e.key === 'Escape' && full.value) toggleFull() }
@@ -320,7 +320,7 @@ watch(full, (f) => { if (f) window.addEventListener('keydown', onKey); else wind
 <template>
   <div class="vmap" :class="{ 'vmap--full': full }">
     <div ref="container" class="vmap__canvas" />
-    <!-- nos boutons à droite ; les boutons natifs de MapLibre (zoom, boussole) sont à gauche -->
+    <!-- our buttons on the right; MapLibre's native buttons (zoom, compass) are on the left -->
     <div class="vmap__tools">
       <div v-if="presentLayers.length" ref="layersEl" class="vmap__layers-wrap">
         <button type="button" class="vmap__btn" :data-on="anyLayerShown ? '1' : '0'" :aria-expanded="layersOpen" aria-haspopup="true"
@@ -346,7 +346,7 @@ watch(full, (f) => { if (f) window.addEventListener('keydown', onKey); else wind
         <StrokeIcon :name="full ? 'close' : 'fullscreen'" :size="16" />
       </button>
     </div>
-    <!-- sans position : la carte reste (la maison s'y voit), un voile le dit -->
+    <!-- without a position: the map stays (the house shows on it), a veil says so -->
     <div v-if="!hasPosition" class="vmap__empty muted">{{ $t('vehicle.map.noPosition') }}</div>
     <div v-if="caption" class="vmap__caption">{{ caption }}</div>
   </div>
@@ -354,8 +354,8 @@ watch(full, (f) => { if (f) window.addEventListener('keydown', onKey); else wind
 
 <style scoped>
 .vmap { position: relative; border-radius: var(--radius); overflow: hidden; background: var(--surface2); min-height: 220px; }
-/* `!important` : le parent pose la hauteur de la vignette par sa propre classe (`.vcard__map`), et en
-   plein écran c'est la fenêtre qui doit la donner — sans quoi la carte s'étirait en largeur sur 220 px */
+/* `!important`: the parent sets the thumbnail's height through its own class (`.vcard__map`), and in
+   full screen it is the window that must give it — otherwise the map stretched in width over 220 px */
 .vmap--full { position: fixed; inset: 0; z-index: 2000; border-radius: 0; min-height: 0; width: auto !important; height: auto !important; }
 .vmap__canvas { position: absolute; inset: 0; }
 .vmap__tools { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; z-index: 2; }
@@ -365,13 +365,13 @@ watch(full, (f) => { if (f) window.addEventListener('keydown', onKey); else wind
   box-shadow: 0 1px 4px rgb(0 0 0 / .15);
 }
 .vmap__btn[data-on='1'] { background: var(--accent); color: var(--on-accent); border-color: transparent; }
-/* le menu des calques : posé sous la rangée de boutons, calé sur SON bord droit (celui de la carte) et
-   non sur le bouton, le plus à gauche de la rangée — sur un téléphone il sortait de la carte, coupé.
-   PAR-DESSUS la carte : rien ne bouge en l'ouvrant. */
+/* the layers menu: placed under the row of buttons, aligned on ITS right edge (the map's) and
+   not on the button, the leftmost of the row — on a phone it went out of the map, cut off.
+   OVER the map: nothing moves when opening it. */
 .vmap__layers-wrap { position: static; }
 .vmap__layers {
   position: absolute; top: calc(100% + 6px); right: 0; min-width: 200px; padding: 4px; display: grid; gap: 1px;
-  /* cinq calques tiennent dans la carte la plus basse (220 px, boutons compris) ; au-delà, il défile */
+  /* five layers fit in the lowest map (220 px, buttons included); beyond that, it scrolls */
   max-height: 164px; overflow-y: auto;
   background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 4px 16px rgb(0 0 0 / .25);
 }
@@ -381,45 +381,45 @@ watch(full, (f) => { if (f) window.addEventListener('keydown', onKey); else wind
 .vmap__swatch { flex: none; width: 12px; height: 12px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .25); }
 .vmap__layer-name { flex: 1 1 auto; }
 .vmap__caption {
-  /* s'arrête avant le ⓘ de l'attribution (26 px + ses marges), qui occupe le coin bas droit */
+  /* stops before the attribution's ⓘ (26 px + its margins), which occupies the bottom right corner */
   position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 66px); padding: 4px 10px; border-radius: 999px; z-index: 2;
   background: var(--surface); color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   box-shadow: 0 1px 4px rgb(0 0 0 / .15);
 }
 .vmap__empty { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; z-index: 1; pointer-events: none; }
-/* marqueurs : couleur de l'accent pour la voiture, du texte pour la maison ; l'ombre les détache du satellite */
+/* markers: accent color for the car, text color for the house; the shadow detaches them from the satellite */
 :global(.vmap__marker) { display: grid; place-items: center; filter: drop-shadow(0 1px 2px rgb(0 0 0 / .4)); }
 :global(.vmap__marker--car), :global(.vmap__marker--mower) { color: var(--accent); }
-/* les incidents passent SOUS le robot et la maison : ce sont eux qu'on cherche, pas eux qu'on suit ;
-   l'ACTIF grossit et passe devant — c'est lui qu'on regarde */
+/* the incidents go UNDER the robot and the house: they are what one looks for, not what one follows;
+   the ACTIVE one grows and comes to the front — it is the one being looked at */
 :global(.vmap__marker--point) { z-index: 0; cursor: pointer; }
 :global(.vmap__marker--point svg) { transition: transform .15s; }
 :global(.vmap__marker--point[data-active='1']) { z-index: 1; }
 :global(.vmap__marker--point[data-active='1'] svg) { transform: scale(1.7); }
 :global(.vmap__marker--home) { color: var(--text); }
-/* les boutons natifs de MapLibre suivent les jetons du thème */
+/* MapLibre's native buttons follow the theme tokens */
 :global(.vmap .maplibregl-ctrl-group) { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 4px rgb(0 0 0 / .15); }
 :global(.vmap .maplibregl-ctrl-group button) { width: 32px; height: 32px; }
 :global(.vmap .maplibregl-ctrl-group button + button) { border-top-color: var(--line); }
-/* Attribution : repliée elle tient dans une pastille ⓘ comme les autres boutons ; dépliée, elle
-   s'ouvre en petit panneau lisible, borné à la largeur de la carte. */
+/* Attribution: folded it fits in a ⓘ pill like the other buttons; unfolded, it
+   opens as a small readable panel, bounded to the map's width. */
 :global(.vmap .maplibregl-ctrl-attrib.maplibregl-compact) {
   box-sizing: border-box; min-height: 26px; padding: 3px 26px 3px 0; margin: 10px;
   background: var(--surface); color: var(--muted); border-radius: 999px; box-shadow: 0 1px 4px rgb(0 0 0 / .15);
 }
-/* déplié, le panneau MONTE d'une ligne : il passerait sinon derrière la pilule de distance, qui
-   occupe le bas de la carte (10 px de fond + 26 px de haut, plus un jour de 8 px) */
+/* unfolded, the panel RISES by one line: it would otherwise pass behind the distance pill, which
+   occupies the bottom of the map (10 px of bottom + 26 px of height, plus a gap of 8 px) */
 :global(.vmap .maplibregl-ctrl-attrib.maplibregl-compact-show) { padding: 3px 30px 3px 12px; max-width: calc(100% - 20px); }
 :global(.vmap:has(.vmap__caption) .maplibregl-ctrl-attrib.maplibregl-compact-show) { margin-bottom: 44px; }
 :global(.vmap .maplibregl-ctrl-attrib-inner) { font-size: 10px; line-height: 1.5; }
 :global(.vmap .maplibregl-ctrl-attrib a) { color: var(--text); }
-/* `background-position: center` : le ⓘ de MapLibre est calé en haut à gauche par défaut, et se
-   retrouvait décentré dès qu'on change la taille du bouton ou de l'image */
+/* `background-position: center`: MapLibre's ⓘ is set at the top left by default, and ended up
+   off-center as soon as the size of the button or of the image changes */
 :global(.vmap .maplibregl-ctrl-attrib-button),
 :global(.vmap .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-button) {
   width: 26px; height: 26px; border-radius: 999px; background-color: transparent;
   background-size: 18px 18px; background-position: center; background-repeat: no-repeat;
 }
-/* le ⓘ de MapLibre est une image SOMBRE : sur une surface sombre il disparaîtrait */
+/* MapLibre's ⓘ is a DARK image: on a dark surface it would disappear */
 :global(html[data-theme='dark'] .vmap .maplibregl-ctrl-attrib-button) { filter: invert(1); }
 </style>

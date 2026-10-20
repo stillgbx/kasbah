@@ -9,9 +9,9 @@ import type * as Wav from '../../lib/wav'
 import { useHouseStore } from '../../stores/house'
 import SearchBar from './SearchBar.vue'
 
-// Une instruction dictée part sans passer par le champ : il reste vide, le micro au bout, pour
-// enchaîner une autre commande vocale ; l'instruction se lit en tête de la réponse. Fichier à part :
-// le statut du plugin de transcription n'est demandé qu'une fois par chargement de page (de module).
+// A dictated instruction goes out without passing through the field: it stays empty, the mic at the end, to
+// chain another voice command; the instruction reads at the top of the answer. Separate file:
+// the transcription plugin's status is only requested once per page load (per module).
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('../../lib/wav', async (orig) => ({ ...(await orig<typeof Wav>()), toMono16k: vi.fn(async () => new Float32Array(16_000)) }))
@@ -45,7 +45,7 @@ beforeEach(() => {
 })
 afterEach(() => { setTransport(null); vi.unstubAllGlobals() })
 
-it('après une commande vocale, le champ reste vide et le micro prêt pour la suivante', async () => {
+it('after a voice command, the field stays empty and the mic is ready for the next one', async () => {
   useHouseStore().house = parseHouse(demo)
   const w = mount(SearchBar)
   await flushPromises()
@@ -56,7 +56,7 @@ it('après une commande vocale, le champ reste vide et le micro prêt pour la su
   expect(w.find('.reply__answer').text()).toBe('Les volets sont ouverts.')
   expect(w.find('input').element.value).toBe('')
   expect(w.find('.search__clear').exists()).toBe(false)
-  // le micro enchaîne : la réponse précédente s'efface, l'écoute reprend
+  // the mic chains: the previous answer clears, listening resumes
   await w.find('.search__mic').trigger('click'); await flushPromises()
   expect(w.find('.search__reply').exists()).toBe(false)
   expect(w.find('.search__mic').attributes('data-phase')).toBe('recording')

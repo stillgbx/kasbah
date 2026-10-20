@@ -43,7 +43,7 @@ const names = (w: ReturnType<typeof mount>) => w.findAll('.dev-row__name').map((
 describe('RoomPanel filtre', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
 
-  it('montre Tout puis les catégories présentes, et filtre la liste', async () => {
+  it('shows All then the categories present, and filters the list', async () => {
     const { house, w } = setup()
     house.selectRoom('salon')
     await w.vm.$nextTick()
@@ -59,7 +59,7 @@ describe('RoomPanel filtre', () => {
     expect(names(w)).toEqual(['Plafonnier salon', 'Volet baie', 'Enceinte salon'])
   })
 
-  it('revient à Tout en changeant de pièce, et se tait s il n y a qu une catégorie', async () => {
+  it('goes back to All when changing room, and stays silent if there is only one category', async () => {
     const { house, w } = setup()
     house.selectRoom('salon')
     await w.vm.$nextTick()

@@ -6,11 +6,11 @@ import { setTransport } from '../api'
 import { createMockTransport } from '../api/mockTransport'
 import { useHouseStore } from './house'
 
-// Fil d'Ariane de la maison : appareil → son parent → maison. Le parent d'un appareil posé hors de
-// toute pièce est le NIVEAU qui le porte (une caméra sur le toit) ; celui d'un appareil de pièce
-// reste sa pièce.
+// House breadcrumb: device → its parent → house. The parent of a device placed outside
+// any room is the LEVEL that carries it (a camera on the roof); that of a room device
+// remains its room.
 
-/** La maison de démonstration, plus une caméra posée sur le niveau du toit (hors de toute pièce). */
+/** The demo house, plus a camera placed on the roof level (outside any room). */
 function houseWithRoofDevice() {
   return parseHouse({
     ...demo,
@@ -21,29 +21,29 @@ function houseWithRoofDevice() {
 describe('house store', () => {
   beforeEach(() => { setActivePinia(createPinia()); setTransport(null) })
 
-  it("en mode « Déplacer », l'onglet ne fait que naviguer ; le sélecteur de niveau emmène l'appareil", async () => {
+  it("in Move mode, the tab only navigates; the level selector takes the device along", async () => {
     setTransport(createMockTransport())
     const store = useHouseStore()
     store.house = parseHouse(demo)
-    store.selectDevice('light.salon')                 // plafonnier du salon : rdc (0,2), z 2,5
+    store.selectDevice('light.salon')                 // living room ceiling light: ground floor (0,2), z 2.5
     store.startPlacing()
     expect(store.placementLevelId).toBe('rdc')
 
-    // aller regarder l'étage ne déplace RIEN (c'est ce qui avait ancré une lampe au toit)
+    // going to look at the upper floor moves NOTHING (that is what had anchored a light to the roof)
     store.focusLevel('etage')
     expect(store.placementLevelId).toBe('rdc')
     expect(store.house.devices.find((d) => d.id === 'light.salon')!.position).toEqual([6.6, 2.5, 2.5])
 
-    // le sélecteur, lui, ré-ancre : pièce sous le point, même hauteur DANS L'ESPACE, et la vue suit
+    // the selector, for its part, re-anchors: room under the point, same height IN SPACE, and the view follows
     await store.setPlacementLevel('etage')
     const moved = store.house!.devices.find((d) => d.id === 'light.salon')!
-    expect(moved.roomId).toBe('chambre2')            // (6,6 ; 2,5) tombe dans la chambre 2
+    expect(moved.roomId).toBe('chambre2')            // (6,6 ; 2,5) falls in bedroom 2
     expect(moved.position?.[2]).toBeCloseTo(2.5 + 0.2 - 3.05)
     expect(store.placementLevelId).toBe('etage')
     expect(store.focusedLevelId).toBe('etage')
   })
 
-  it("remonte au niveau pour un appareil hors pièce, à la pièce sinon", () => {
+  it("goes up to the level for a device outside a room, to the room otherwise", () => {
     const store = useHouseStore()
     store.house = houseWithRoofDevice()
 
@@ -53,7 +53,7 @@ describe('house store', () => {
     expect(store.selectedKey).toBeNull()
     expect(store.selectedLevelId).toBe('toit')
 
-    // un appareil DANS une pièce remonte à sa pièce : le niveau ne s'en mêle pas
+    // a device INSIDE a room goes up to its room: the level does not get involved
     store.selectDevice('light.salon')
     expect(store.selectedLevelId).toBeNull()
     store.backFromDevice()
@@ -61,7 +61,7 @@ describe('house store', () => {
     expect(store.selectedLevelId).toBeNull()
   })
 
-  it('remonte une pièce à son niveau', () => {
+  it('goes up from a room to its level', () => {
     const store = useHouseStore()
     store.house = houseWithRoofDevice()
 
@@ -69,19 +69,19 @@ describe('house store', () => {
     store.backFromRoom()
     expect(store.selectedRoomId).toBeNull()
     expect(store.selectedLevelId).toBe('rdc')
-    // depuis un niveau, le même retour ramène à la maison
+    // from a level, the same back goes to the house
     store.backFromRoom()
     expect(store.selectedLevelId).toBeNull()
   })
 
-  it("ferme le niveau sélectionné dès qu'un autre onglet ou une pièce prend la main", () => {
+  it("closes the selected level as soon as another tab or a room takes over", () => {
     const store = useHouseStore()
     store.house = houseWithRoofDevice()
 
     store.selectLevel('toit')
     expect(store.floorTab).toBe('toit')
     expect(store.selectedLevelId).toBe('toit')
-    store.setFloorTab('toit')             // le même onglet ne referme rien
+    store.setFloorTab('toit')             // the same tab closes nothing
     expect(store.selectedLevelId).toBe('toit')
 
     store.setFloorTab('etage')
@@ -92,7 +92,7 @@ describe('house store', () => {
     expect(store.selectedLevelId).toBeNull()
   })
 
-  it("un onglet de niveau désélectionne l'appareil pour ne pas se faire recadrer", () => {
+  it("a level tab deselects the device so as not to be reframed", () => {
     const store = useHouseStore()
     store.house = parseHouse(demo)
     store.selectDevice('light.salon')

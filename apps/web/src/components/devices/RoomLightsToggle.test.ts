@@ -33,7 +33,7 @@ describe('RoomLightsToggle', () => {
   it('is on as soon as one light is on, and switches off only those that are on', async () => {
     const { w, runScene } = setup([light('a', true), light('b', false), cover])
     expect((w.find('input').element as HTMLInputElement).checked).toBe(true)
-    // l'ampoule est DANS le pouce : c'est elle qui dit sur quoi agit un interrupteur sans nom à côté
+    // the bulb is INSIDE the thumb: it is what says what a switch with no name next to it acts on
     expect(w.find('.v-switch__thumb svg').exists()).toBe(true)
     await w.find('input').setValue(false)
     expect(runScene).toHaveBeenCalledWith([{ deviceId: 'a', command: { type: 'light.set', on: false } }])
@@ -49,7 +49,7 @@ describe('RoomLightsToggle', () => {
     ])
   })
 
-  // règle « rien ne doit bouger » : un pont muet ne doit pas faire disparaître l'interrupteur
+  // "nothing must move" rule: a silent bridge must not make the switch disappear
   it('keeps the switch in place, disabled, when no light is reachable', () => {
     const { w } = setup([light('a', false, false)])
     expect(w.find('input').exists()).toBe(true)

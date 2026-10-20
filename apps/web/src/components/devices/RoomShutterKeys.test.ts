@@ -27,16 +27,16 @@ function setup(entries: DeviceEntry[]) {
 describe('RoomShutterKeys', () => {
   beforeEach(() => { setActivePinia(createPinia()); setTransport(null) })
 
-  it("n'agit que sur les volets : ni store, ni portail, ni porte de garage", async () => {
+  it("only acts on shutters: no awning, no gate, no garage door", async () => {
     const { w, runScene } = setup([cover('v', 0), cover('nu', 0, undefined), cover('s', 0, 'awning'), cover('p', 0, 'gate'), cover('g', 0, 'garage')])
     await key(w, 'Ouvrir les volets de la pièce').trigger('click')
     expect(runScene).toHaveBeenCalledWith([
       { deviceId: 'v', command: { type: 'cover.open' } },
-      { deviceId: 'nu', command: { type: 'cover.open' } },   // sans nature déclarée : un volet
+      { deviceId: 'nu', command: { type: 'cover.open' } },   // no declared kind: a shutter
     ])
   })
 
-  it("n'écrit qu'aux volets qui doivent bouger, et à ceux dont on ignore la position", async () => {
+  it("only writes to the shutters that must move, and to those whose position is unknown", async () => {
     const { w, runScene } = setup([cover('ouvert', 100), cover('ferme', 0), cover('muet', undefined)])
     await key(w, 'Fermer les volets de la pièce').trigger('click')
     expect(runScene).toHaveBeenLastCalledWith([
@@ -50,8 +50,8 @@ describe('RoomShutterKeys', () => {
     ])
   })
 
-  // un arrêt sur un moteur immobile efface la position d'une radio sans retour : on ne l'envoie pas
-  it('stop : seulement aux volets EN MOUVEMENT, joignables et qui savent s’arrêter', async () => {
+  // a stop on a motionless motor erases the position of a radio with no feedback: we do not send it
+  it('stop: only to shutters that are MOVING, reachable and able to stop', async () => {
     const { w, runScene } = setup([
       cover('monte', 50, 'shutter', { motion: 'opening' }), cover('descend', 50, 'shutter', { motion: 'closing' }),
       cover('immobile', 50), cover('sansStop', 50, 'shutter', { stop: false, motion: 'closing' }),
@@ -64,7 +64,7 @@ describe('RoomShutterKeys', () => {
     ])
   })
 
-  it('stop grisé quand rien ne bouge, actif dès le geste qui lance un volet', async () => {
+  it('stop grayed out when nothing is moving, active from the gesture that starts a shutter', async () => {
     setTransport({ sendCommand: vi.fn(async () => {}) } as unknown as Transport)
     const devices = useDevicesStore()
     const entries = [cover('a', 100)]
@@ -77,13 +77,13 @@ describe('RoomShutterKeys', () => {
     expect(stopKey().disabled).toBe(false)
   })
 
-  it('sans volet, pas de touches ; aucun volet ne sait s’arrêter, pas de stop', () => {
+  it('without a shutter, no keys; no shutter able to stop, no stop', () => {
     expect(setup([cover('s', 0, 'awning')]).w.findAll('button')).toHaveLength(0)
     expect(setup([cover('rts', 0, 'shutter', { stop: false })]).w.findAll('button')).toHaveLength(2)
   })
 
-  // règle « rien ne doit bouger » : un pont muet ne fait pas disparaître les touches
-  it('garde ses touches, inactives, quand aucun volet ne répond', () => {
+  // "nothing must move" rule: a silent bridge does not make the keys disappear
+  it('keeps its keys, inactive, when no shutter answers', () => {
     const { w } = setup([cover('a', 0, 'shutter', { available: false })])
     expect(w.findAll('button')).toHaveLength(3)
     expect(w.findAll('button').every((b) => (b.element as HTMLButtonElement).disabled)).toBe(true)

@@ -16,32 +16,32 @@ import { NEUTRAL_TUNING, resolveTuning, sameTuning, TUNING_PRESETS, type SceneTu
 import { SEASON_MODES, type SeasonMode } from '../three/garden/season'
 import { WEATHER_CONDITIONS, type WeatherCondition } from '@kasbah/shared'
 
-/** Une condition forcée dans la scène, ou `real` : la météo telle qu'elle est. */
+/** A condition forced in the scene, or `real`: the weather as it is. */
 export type SceneWeatherChoice = WeatherCondition | 'real'
 
-// Préférences persistées (localStorage, préfixe kasbah.) : apparence clair/sombre/système/auto,
-// thème, langue. `applyToVuetify`/`applyLocale` sont appelées AVANT le mount (aucun flash de thème/langue).
+// Persisted preferences (localStorage, prefix kasbah.): light/dark/system/auto appearance,
+// theme, language. `applyToVuetify`/`applyLocale` are called BEFORE the mount (no flash of theme/language).
 //
-// Les trois réglages de la SCÈNE 3D sont délibérément séparés du thème de l'app : le style dit le
-// goût du rendu, l'ambiance l'heure qu'il fait au-dessus de la maison, la qualité le budget de la
-// machine. Aucun des trois ne suit clair/sombre (voir `three/core/ambience.ts`).
+// The three settings of the 3D SCENE are deliberately separate from the app's theme: the style says
+// the taste of the rendering, the ambience the time of day above the house, the quality the machine's
+// budget. None of the three follows light/dark (see `three/core/ambience.ts`).
 
-// `system` suit L'APPAREIL qui regarde (`prefers-color-scheme`), `auto` suit le SOLEIL au-dessus de la maison
-// (`lib/daylight.ts`) : deux automatismes, deux sources, d'où deux entrées dans la liste.
+// `system` follows THE DEVICE that is looking (`prefers-color-scheme`), `auto` follows the SUN above the house
+// (`lib/daylight.ts`): two automatisms, two sources, hence two entries in the list.
 export const APPEARANCES = ['light', 'dark', 'system', 'auto'] as const
 export type Appearance = (typeof APPEARANCES)[number]
 
-/** Bornes du foyer déclaré (vue Eau, repère de consommation moyenne française) : 1 personne au minimum, 10 au maximum. */
+/** Bounds of the declared household (Water view, French average consumption benchmark): 1 person minimum, 10 maximum. */
 /**
- * Combien pèse une « tasse » de croquettes, en grammes. C'est un RÉGLAGE et pas une constante :
- * une mangeoire PetKit compte en volume (elle déclare `settings.factor`, jamais un poids), et le
- * poids dépend des croquettes — leur taille, leur densité. Le seul moyen honnête de l'obtenir est
- * que l'utilisateur pèse une ration une fois.
+ * How much a "cup" of kibble weighs, in grams. It is a SETTING and not a constant:
+ * a PetKit feeder counts in volume (it declares `settings.factor`, never a weight), and the
+ * weight depends on the kibble — its size, its density. The only honest way to get it is
+ * for the user to weigh a portion once.
  *
- * 100 g par défaut, et ce n'est pas une supposition : l'appli du fabricant écrit elle-même
- * « 1/2 (environ 50 g) » pour une demi-tasse. Elle applique donc 10 g par dixième — exactement ce
- * défaut. La valeur affichée garde un « ~ » parce qu'elle dépend des croquettes : c'est
- * l'estimation du fabricant, pas une pesée.
+ * 100 g by default, and that is not a guess: the vendor's app itself writes
+ * "1/2 (environ 50 g)" for half a cup. It therefore applies 10 g per tenth — exactly this
+ * default. The displayed value keeps a "~" because it depends on the kibble: it is
+ * the vendor's estimate, not a weighing.
  */
 export const CUP_GRAMS_MIN = 20
 export const CUP_GRAMS_MAX = 300
@@ -54,77 +54,77 @@ export const HOUSEHOLD_SIZE_MAX = 10
 export const useSettingsStore = defineStore('settings', () => {
   const appearance = useLocalStorage<Appearance>('kasbah.appearance', 'system')
   const theme = useLocalStorage<string>('kasbah.theme', DEFAULT_THEME_ID)
-  /** '' = automatique (langues du navigateur). */
+  /** '' = automatic (browser languages). */
   const locale = useLocalStorage<string>('kasbah.locale', '')
   const sceneStyle = useLocalStorage<string>('kasbah.sceneStyle', DEFAULT_STYLE_ID)
   const sceneAmbience = useLocalStorage<AmbienceMode>('kasbah.sceneAmbience', 'auto')
-  /** Saison du jardin de la vue Maison ; `auto` suit la date. */
+  /** Season of the House view garden; `auto` follows the date. */
   const sceneSeason = useLocalStorage<SeasonMode>('kasbah.sceneSeason', 'auto')
   const sceneQuality = useLocalStorage<RenderQuality>('kasbah.sceneQuality', 'auto')
   /**
-   * Comment la maison est PROJETÉE : en perspective, à plat (orthographique, on tourne encore), ou
-   * en isométrie (à plat, angles verrouillés, quarts de tour). Un réglage de goût comme le style,
-   * pas un budget : il ne suit ni le thème ni la machine.
+   * How the house is PROJECTED: in perspective, flat (orthographic, one can still rotate), or
+   * in isometry (flat, locked angles, quarter turns). A matter of taste like the style,
+   * not a budget: it follows neither the theme nor the machine.
    */
   const sceneProjection = useLocalStorage<SceneProjection>('kasbah.sceneProjection', 'perspective')
-  /** Matières en images (pack photo du style) plutôt que procédurales, pour les styles qui en ont. */
+  /** Materials as images (the style's photo pack) rather than procedural, for the styles that have them. */
   const sceneAssets = useLocalStorage<boolean>('kasbah.sceneAssets', true)
-  /** Voile de mesure posé sur la scène (images/s, appels de dessin, passes, ombres). */
+  /** Measurement veil placed over the scene (frames/s, draw calls, passes, shadows). */
   const sceneDebug = useLocalStorage<boolean>('kasbah.sceneDebug', false)
   /**
-   * Mode ÉDITION de la maison : la vue Maison montre les ouvertures, qu'on peut alors régler et
-   * glisser sur les murs. Armé ici et non par un bouton de la scène — sur une tablette posée dans
-   * l'entrée, un doigt qui glisse ne doit pas pouvoir déplacer une fenêtre.
+   * House EDIT mode: the House view shows the openings, which can then be adjusted and
+   * dragged on the walls. Armed here and not by a button of the scene — on a tablet placed in
+   * the entrance, a sliding finger must not be able to move a window.
    */
   const houseEditing = useLocalStorage<boolean>('kasbah.houseEditing', false)
   /**
-   * Météo FORCÉE dans la scène, pour la regarder sous la pluie sans attendre qu'il pleuve. Ne vaut
-   * qu'en débogage (`sceneDebug`) et ne touche que la scène : widget et vue Météo restent sur la
-   * vraie météo. `real` = suivre la météo.
+   * Weather FORCED in the scene, to watch it under the rain without waiting for it to rain. Only applies
+   * in debug (`sceneDebug`) and only touches the scene: widget and Weather view stay on the
+   * real weather. `real` = follow the weather.
    */
   const sceneWeather = useLocalStorage<SceneWeatherChoice>('kasbah.sceneWeather', 'real')
   const sceneCloudCover = useLocalStorage<number>('kasbah.sceneCloudCover', 60)
   const sceneVisibilityM = useLocalStorage<number>('kasbah.sceneVisibilityM', 25_000)
-  /** Foyer déclaré (vue Eau) : compare la consommation à la moyenne française — préférence d'affichage, jamais écrite dans house.json. */
+  /** Declared household (Water view): compares consumption to the French average — a display preference, never written to house.json. */
   const householdSize = useLocalStorage<number>('kasbah.householdSize', 3)
   const cupGrams = useLocalStorage<number>('kasbah.cupGrams', CUP_GRAMS_DEFAULT)
   const preferredDark = usePreferredDark()
   const weather = useWeather()
   const house = useHouseStore()
   /**
-   * Banc de réglage de la lumière. Deux étages, et c'est voulu :
-   *  - ce qui est ENREGISTRÉ vit dans la maison (`house.render.tuning`), parce qu'une lumière se
-   *    règle une fois pour tous les écrans qui regardent cette maison ;
-   *  - ce qui est EN COURS de réglage vit ici, dans un brouillon local, pour qu'on puisse tirer les
-   *    curseurs une soirée entière sans rien écrire dans le fichier de la maison.
-   * `null` = aucun brouillon, la maison fait foi. C'est ce que rend « Réinitialiser » une fois
-   * enregistré, et c'est l'état d'un écran qui n'a jamais ouvert le banc.
+   * Light tuning bench. Two tiers, and it is deliberate:
+   *  - what is SAVED lives in the house (`house.render.tuning`), because a light is
+   *    tuned once for all the screens that look at this house;
+   *  - what is BEING tuned lives here, in a local draft, so that one can drag the
+   *    sliders a whole evening without writing anything into the house file.
+   * `null` = no draft, the house is authoritative. It is what "Reset" gives back once
+   * saved, and it is the state of a screen that never opened the bench.
    */
-  // Le sérialiseur est DIT : `useLocalStorage` le devine de la valeur par défaut, et une valeur par
-  // défaut `null` ne dit rien — le brouillon partait en `[object Object]` et ne survivait pas au
-  // rechargement (constaté). `null` reste ici le seul moyen de distinguer « pas de brouillon » d'un
-  // brouillon neutre, qui lui est un choix.
+  // The serializer is SPELLED OUT: `useLocalStorage` guesses it from the default value, and a
+  // default value of `null` says nothing — the draft went out as `[object Object]` and did not survive
+  // the reload (observed). `null` remains here the only way to tell "no draft" from a
+  // neutral draft, which is a choice.
   const sceneTuningDraft = useLocalStorage<Partial<SceneTuning> | null>('kasbah.sceneTuning', null, { serializer: StorageSerializers.object })
-  /** Ce que la maison porte, ou le neutre : le réglage auquel « Réinitialiser » ne touche pas. */
+  /** What the house carries, or the neutral: the setting that "Reset" does not touch. */
   const savedSceneTuning = computed(() => resolveTuning(house.house?.render?.tuning))
-  /** Ce que la scène applique : le brouillon s'il y en a un, sinon la maison. */
+  /** What the scene applies: the draft if there is one, otherwise the house. */
   const sceneTuning = computed(() => (sceneTuningDraft.value ? resolveTuning(sceneTuningDraft.value) : savedSceneTuning.value))
-  /** Le brouillon diffère-t-il de ce qui est enregistré (le bouton « Enregistrer » a-t-il quelque chose à dire). */
+  /** Whether the draft differs from what is saved (whether the "Save" button has something to say). */
   const sceneTuningDirty = computed(() => !sameTuning(sceneTuning.value, savedSceneTuning.value))
-  /** Le préréglage dont le réglage courant est la copie conforme, s'il y en a un. */
+  /** The preset of which the current setting is the exact copy, if there is one. */
   const sceneTuningPreset = computed(() => TUNING_PRESETS.find((p) => sameTuning(p.tuning, sceneTuning.value))?.id ?? null)
-  /** Le banc est-il ouvert sur la vue Maison. Jamais persisté : il s'ouvre depuis les Réglages. */
+  /** Whether the bench is open on the House view. Never persisted: it opens from Settings. */
   const sceneTuningOpen = ref(false)
-  /** L'éditeur du relief est-il ouvert sur la vue Maison. Jamais persisté, comme le banc. */
+  /** Whether the relief editor is open on the House view. Never persisted, like the bench. */
   const reliefEditing = ref(false)
-  /** L'onglet de l'éditeur du terrain : le relief (hauteurs) ou le contour (la forme de la parcelle). */
+  /** The terrain editor's tab: the relief (heights) or the outline (the shape of the parcel). */
   const terrainTab = ref<'relief' | 'outline'>('relief')
-  /** Horloge de l'apparence « Auto ». Les autres modes ne la lisent pas : rien ne recalcule. */
+  /** Clock of the "Auto" appearance. The other modes do not read it: nothing recomputes. */
   const clock = ref(new Date())
   useIntervalFn(() => { clock.value = new Date() }, 60_000)
 
   const themeId = computed<ThemeId>(() => (THEME_LIST.some((t) => t.id === theme.value) ? (theme.value as ThemeId) : DEFAULT_THEME_ID))
-  /** Apparence demandée par ce navigateur ; un thème qui n'a pas cette variante impose la sienne. */
+  /** Appearance requested by this browser; a theme that does not have this variant imposes its own. */
   const wantDark = computed(() => {
     if (appearance.value === 'light' || appearance.value === 'dark') return appearance.value === 'dark'
     if (appearance.value === 'system') return preferredDark.value
@@ -143,7 +143,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const fullscreen = useFullscreen()
 
   function setAppearance(v: Appearance) { appearance.value = v }
-  /** Le bouton du rail parcourt la liste dans l'ordre des Réglages : clair → sombre → système → auto. */
+  /** The rail button goes through the list in the order of Settings: light → dark → system → auto. */
   function cycleAppearance() { appearance.value = APPEARANCES[(APPEARANCES.indexOf(appearance.value) + 1) % APPEARANCES.length]! }
   function setTheme(v: string) { theme.value = v }
   function setLocale(v: string) { if (v === '' || isLocale(v)) locale.value = v }
@@ -155,20 +155,20 @@ export const useSettingsStore = defineStore('settings', () => {
   function setSceneAssets(v: boolean) { sceneAssets.value = v }
   function setSceneDebug(v: boolean) { sceneDebug.value = v }
   function setSceneTuning(patch: Partial<SceneTuning>) { sceneTuningDraft.value = resolveTuning({ ...sceneTuning.value, ...patch }) }
-  /** « Réinitialiser » : retour à ce que le style calcule, sans retouche. Ce qui est enregistré dans la maison reste, jusqu'à un « Enregistrer ». */
+  /** "Reset": back to what the style computes, with no tweak. What is saved in the house stays, until a "Save". */
   function resetSceneTuning() { sceneTuningDraft.value = { ...NEUTRAL_TUNING } }
   function applySceneTuningPreset(id: string) {
     const p = TUNING_PRESETS.find((x) => x.id === id)
     if (p) sceneTuningDraft.value = { ...p.tuning }
   }
-  /** Écrit le réglage courant dans la maison ; le brouillon s'efface, la maison devient la source. */
+  /** Writes the current setting into the house; the draft is cleared, the house becomes the source. */
   async function saveSceneTuning(): Promise<boolean> {
     const ok = await house.saveRenderTuning(sceneTuning.value)
     if (ok) sceneTuningDraft.value = null
     return ok
   }
   function setSceneTuningOpen(v: boolean) { sceneTuningOpen.value = v }
-  /** Ouvre (ou ferme) l'éditeur du terrain ; `tab` choisit l'onglet à l'ouverture. */
+  /** Opens (or closes) the terrain editor; `tab` chooses the tab on opening. */
   function setReliefEditing(v: boolean, tab?: 'relief' | 'outline') { if (tab) terrainTab.value = tab; reliefEditing.value = v }
   function setTerrainTab(v: 'relief' | 'outline') { terrainTab.value = v }
   function setHouseEditing(v: boolean) { houseEditing.value = v }
@@ -181,7 +181,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function setHouseholdSize(v: number) { if (Number.isFinite(v)) householdSize.value = Math.min(HOUSEHOLD_SIZE_MAX, Math.max(HOUSEHOLD_SIZE_MIN, Math.round(v))) }
   function toggleLocale() { locale.value = resolvedLocale.value === 'fr' ? 'en' : 'fr' }
 
-  /** Applique le thème Vuetify + les jetons CSS de la palette (data-theme, --bg, --accent…) sur <html>. */
+  /** Applies the Vuetify theme + the palette's CSS tokens (data-theme, --bg, --accent…) on <html>. */
   function applyToVuetify(vuetifyTheme: ThemeInstance) {
     const apply = () => {
       vuetifyTheme.change(currentTheme.value)

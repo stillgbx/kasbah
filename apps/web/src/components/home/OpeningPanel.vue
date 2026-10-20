@@ -8,19 +8,19 @@ import { useHouseStore } from '../../stores/house'
 import MarqueeText from '../ui/MarqueeText.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Panneau « ouverture » : nature, cotes (largeur, hauteur, hauteur d'allège, position sur le mur) et
-// lien vers un ouvrant. La place se lisait seule au début ; elle se règle maintenant ici aussi, au
-// mètre ruban depuis les coins — le glissement au doigt ne pose pas une fenêtre à 3,56 m d'un coin.
+// "Opening" panel: kind, measurements (width, height, sill height, position on the wall) and
+// link to a cover. The place used to be read-only at first; it is now also adjusted here, by
+// tape measure from the corners — dragging with a finger does not place a window at 3.56 m from a corner.
 //
-// Mêmes idiomes que `PlacementControl` : touches −/+, saisie directe qui ne commite qu'à la
-// validation, virgule décimale acceptée, chiffres à chasse fixe pour que rien ne bouge à la frappe.
+// Same idioms as `PlacementControl`: −/+ keys, direct input that only commits on
+// validation, decimal comma accepted, fixed-width digits so that nothing moves while typing.
 //
-// Règle commune aux cinq cotes (largeur, hauteur, allège, gauche, droite) : ON GARDE ce que
-// l'utilisateur a tapé et on déplace ce qui peut l'être, plutôt que de rogner en silence. Taper 3 m
-// de large dans un vide de 3 m qui n'a qu'1 m à droite fait GLISSER l'ouverture (`fitWidth`) ; une
-// hauteur qui ne tient plus fait DESCENDRE l'allège (`fitHeight`) ; une des deux cotes de position
-// déplace l'ouverture le long de son mur et l'autre cote suit (`fitGap`). Chaque geste est une seule
-// écriture : les deux valeurs qui changent ensemble partent dans la même requête.
+// Rule common to the five measurements (width, height, sill, left, right): we KEEP what the
+// user typed and move what can be moved, rather than trimming silently. Typing 3 m
+// wide into a gap of 3 m that has only 1 m to the right makes the opening SLIDE (`fitWidth`); a
+// height that no longer fits makes the sill GO DOWN (`fitHeight`); one of the two position
+// measurements moves the opening along its wall and the other measurement follows (`fitGap`). Each gesture is a single
+// write: the two values that change together go out in the same request.
 const emit = defineEmits<{ back: [] }>()
 const house = useHouseStore()
 const devices = useDevicesStore()
@@ -29,7 +29,7 @@ const { t } = useI18n()
 const sel = computed(() => house.selectedOpening)
 const opening = computed(() => sel.value?.opening ?? null)
 const room = computed(() => sel.value?.room ?? null)
-/** Les pièces du même niveau : `fitWidth`/`fitGap` en ont besoin pour voir les murs mitoyens. */
+/** The rooms of the same level: `fitWidth`/`fitGap` need them to see the party walls. */
 const roomsOnLevel = computed<Room[]>(() => {
   const r = room.value
   return r ? house.index?.roomsByLevel.get(r.levelId) ?? [r] : []
@@ -43,12 +43,12 @@ const typeOptions = computed(() => {
     .map((v) => ({ value: v, label: t(`opening.types.${v}`) }))
 })
 /**
- * Changer de nature écrit aussi l'allège, DANS LA MÊME requête, pour tout ce qui touche le sol
- * (porte, passage, porte de garage, baie vitrée, porte vitrée) : `openingSill` ne rend 0 par défaut
- * que si `sill` est ABSENT du JSON, donc une fenêtre retypée en baie sans ce geste gardait son muret
- * (mesuré : 20 cm). Un seul geste pour l'utilisateur (choisir « Baie vitrée »), une seule écriture.
- * `window`, seule à prendre une allège par défaut, ne devine rien : la valeur existante reste,
- * l'utilisateur la règle lui-même. Les natures de surface restent entre elles (pas de mur ↔ sol).
+ * Changing kind also writes the sill, IN THE SAME request, for everything that touches the floor
+ * (door, passage, garage door, bay window, glazed door): `openingSill` returns 0 by default
+ * only if `sill` is ABSENT from the JSON, so a window retyped as a bay without this gesture kept its low wall
+ * (measured: 20 cm). A single gesture for the user (choosing "Bay window"), a single write.
+ * `window`, the only one to take a default sill, guesses nothing: the existing value stays,
+ * the user adjusts it themselves. The surface kinds stay among themselves (no wall ↔ floor).
  */
 function setType(v: OpeningType) {
   if (v === opening.value?.type) return
@@ -56,47 +56,47 @@ function setType(v: OpeningType) {
   void house.saveOpening(v === 'window' ? { type: v } : { type: v, sill: 0 })
 }
 
-// --- menuiserie : ce que le relevé ne sait pas mesurer au mètre ruban. Les trois réglages sont
-// FACULTATIFS dans le fichier, et le panneau le montre — « Automatique » pour la matière, une
-// couleur qu'on peut rendre. L'ouverture qui n'en dit rien garde ce que la scène en déduit, et une
-// maison relevée hier ne change pas d'aspect parce que ces réglages existent.
+// --- joinery: what the survey cannot measure with a tape measure. The three settings are
+// OPTIONAL in the file, and the panel shows it — "Automatic" for the material, a
+// color that can be cleared. An opening that says nothing keeps what the scene deduces from it, and a
+// house surveyed yesterday does not change look because these settings exist.
 const leafOptions = Array.from(
   { length: MAX_OPENING_LEAVES - MIN_OPENING_LEAVES + 1 },
   (_, i) => ({ value: MIN_OPENING_LEAVES + i, label: String(MIN_OPENING_LEAVES + i) }),
 )
-/** Les vantaux EFFECTIFS : le nombre du fichier, sinon celui que la scène déduit (une baie large). */
+/** The EFFECTIVE leaves: the number from the file, otherwise the one the scene deduces (a wide bay). */
 const leaves = computed(() => (opening.value ? openingLeaves(opening.value) : 1))
 function setLeaves(v: number) { if (v !== leaves.value) void house.saveOpening({ leaves: v }) }
 
-/** `''` = automatique : la clé quitte le fichier et la nature de l'ouverture reprend la main. */
+/** `''` = automatic: the key leaves the file and the opening's kind takes over again. */
 const materialOptions = computed(() => [
   { value: '', label: t('opening.materials.auto') },
   ...OPENING_MATERIALS.map((v) => ({ value: v, label: t(`opening.materials.${v}`) })),
 ])
 function setMaterial(v: string) {
-  // `find` plutôt qu'une conversion : ce que le sélecteur rend est une chaîne, et une valeur
-  // inconnue retombe sur l'automatique au lieu d'entrer dans le fichier
+  // `find` rather than a cast: what the selector returns is a string, and an unknown value
+  // falls back to automatic instead of entering the file
   const next = OPENING_MATERIALS.find((m) => m === v) ?? ''
   if (next !== (opening.value?.material ?? '')) void house.saveOpening({ material: next })
 }
 
 const color = computed(() => opening.value?.color ?? '')
 /**
- * Ce que le sélecteur natif montre quand rien n'est choisi : un anthracite de menuiserie, pas un
- * noir. On ne peut pas afficher la vraie teinte du style ici — elle vit dans la palette de la
- * scène — mais on peut partir d'une valeur qui ressemble à ce qu'on voit.
+ * What the native picker shows when nothing is chosen: a joinery anthracite, not a
+ * black. We cannot display the style's real tint here — it lives in the scene's
+ * palette — but we can start from a value that looks like what is seen.
  */
 const DEFAULT_SWATCH = '#3a3f45'
 function setColor(v: string) { if (v !== color.value) void house.saveOpening({ color: v }) }
 
-/** Hauteur d'allège EFFECTIVE (le défaut de la maison si le JSON n'en donne pas). */
+/** EFFECTIVE sill height (the house's default if the JSON gives none). */
 const sill = computed(() => {
   const o = opening.value
   return o && house.house ? openingSill(o, resolveDefaults(house.house.defaults)) : 0
 })
 /**
- * Emprise vue du ciel (`surfaceFootprint`) : un Velux sur un versant prend le cap de la descente et sa
- * longueur raccourcie par la pente, pour que ses cotes partent du bord de son trou. `null` hors surface.
+ * Footprint seen from above (`surfaceFootprint`): a Velux on a roof slope takes the heading of the descent and its
+ * length shortened by the slope, so that its measurements start from the edge of its hole. `null` off a surface.
  */
 const footprint = computed(() => {
   const o = opening.value, h = house.house
@@ -104,14 +104,14 @@ const footprint = computed(() => {
   const roof = o.type === 'roof-window' ? computeRoof(h, resolveDefaults(h.defaults)) : undefined
   return surfaceFootprint({ type: o.type, x: o.x, y: o.y, yaw: o.yaw, width: o.width, height: o.height }, roof)
 })
-/** L'ouverture telle que les cotes la voient en plan (cap et longueur de son emprise). */
+/** The opening as the measurements see it in plan (heading and length of its footprint). */
 const planOpening = computed(() => {
   const o = opening.value, fp = footprint.value
   return o && fp ? { ...o, yaw: fp.yaw, height: fp.height } : o
 })
-/** Cap imposé par le versant : le champ garde sa place, grisé, et montre le cap réel. */
+/** Heading imposed by the roof slope: the field keeps its place, grayed out, and shows the real heading. */
 const yawLocked = computed(() => (footprint.value?.slope ?? 0) > 0)
-/** Les deux cotes murales, ou les quatre cotes de surface. */
+/** The two wall measurements, or the four surface measurements. */
 const gaps = computed(() => (opening.value && room.value ? openingGaps(room.value, opening.value) : { left: 0, right: 0 }))
 const surfaceGapMap = computed(() => (
   planOpening.value && room.value && isSurfaceOpening(planOpening.value.type)
@@ -128,7 +128,7 @@ const fields = computed(() => {
   if (!o) return []
   if (isSurfaceOpening(o.type)) {
     return [
-      // Longueur = axe du cap (`height` JSON), largeur = travers (`width` JSON) — comme une place.
+      // Length = axis of the heading (`height` JSON), width = across (`width` JSON) — like a place.
       { key: 'height' as const, label: t('opening.length') },
       { key: 'width' as const, label: t('opening.width') },
       { key: 'yaw' as const, label: t('opening.yaw') },
@@ -173,16 +173,16 @@ function cancelEdit() { editing.value = null }
 const shownValue = (field: Field, value: string) => (editing.value === field ? draft.value : value)
 
 /**
- * Applique une cote VOULUE : garde ce qui a été tapé, déplace ce qui peut l'être, une seule écriture.
- * `width`/`height` peuvent faire bouger une seconde valeur (`offset`/`sill`) — les deux partent dans
- * le même `saveOpening`, sinon la carte montrerait un instant deux nombres incohérents.
+ * Applies a WANTED measurement: keeps what was typed, moves what can be moved, a single write.
+ * `width`/`height` can make a second value move (`offset`/`sill`) — both go out in the
+ * same `saveOpening`, otherwise the card would briefly show two inconsistent numbers.
  */
 function apply(field: Field, wanted: number) {
   const o = opening.value
   if (!o || !house.house) return
   const defaults = resolveDefaults(house.house.defaults)
   if (field === 'yaw') {
-    if (yawLocked.value) return                     // le versant décide du cap
+    if (yawLocked.value) return                     // the roof slope decides the heading
     const next = Math.round((((wanted % 360) + 360) % 360) * 10) / 10
     if (next !== (o.yaw ?? 0)) void house.saveOpening({ yaw: next })
     return
@@ -215,14 +215,14 @@ function apply(field: Field, wanted: number) {
     return
   }
   if (!room.value) return
-  // Surface : les quatre cotes font GLISSER le centre (`fitSurfaceGap`), comme une place.
+  // Surface: the four measurements make the center SLIDE (`fitSurfaceGap`), like a place.
   if (isSurfaceOpening(o.type) && (field === 'front' || field === 'back' || field === 'left' || field === 'right')) {
     if (surfaceGapMap.value[field] === null) return
     const next = fitSurfaceGap(room.value, planOpening.value ?? o, field, wanted)
     if (next && (next.x !== o.x || next.y !== o.y)) void house.saveOpening({ x: next.x, y: next.y })
     return
   }
-  // Mur : 'right' / 'left' — cotes depuis les coins, vues DE L'INTÉRIEUR (`fitGap`).
+  // Wall: 'right' / 'left' — measurements from the corners, seen FROM THE INSIDE (`fitGap`).
   if (field !== 'left' && field !== 'right') return
   const next = fitGap(room.value, roomsOnLevel.value, defaults, o, field, wanted)
   if (next !== null && next !== o.offset) void house.saveOpening({ offset: next })
@@ -235,12 +235,12 @@ function commitEdit(field: Field) {
   editing.value = null
   const raw = Number(draft.value.replace(',', '.').trim())
   if (!Number.isFinite(raw)) return
-  // plancher de saisie : `width`/`height` ne descendent jamais sous `MIN_OPENING_DIM` (une ouverture
-  // de 0 disparaîtrait) ; `sill`/`left`/`right` peuvent valoir 0 (une porte, un coin du mur)
+  // input floor: `width`/`height` never go below `MIN_OPENING_DIM` (an opening
+  // of 0 would disappear); `sill`/`left`/`right` can be 0 (a door, a corner of the wall)
   apply(field, Math.max(field === 'width' || field === 'height' ? MIN_OPENING_DIM : 0, raw))
 }
 
-/** Lecture seule : le mur qui porte l'ouverture — sa place, elle, se règle juste en dessous. */
+/** Read-only: the wall that carries the opening — its place, for its part, is adjusted just below. */
 const wallLabel = computed(() => {
   const o = opening.value
   if (!o) return ''
@@ -248,9 +248,9 @@ const wallLabel = computed(() => {
   return t('opening.wall', { segment: (o.segment ?? 0) + 1 })
 })
 
-// --- nom : facultatif, saisi ici. Vide = effacer et revenir à l'id du relevé (même convention que
-// `house.renameDevice`). `openingLabel` est LA règle d'affichage, partagée avec la liste de la pièce
-// et l'étiquette 3D : jamais une fenêtre nommée de trois façons différentes.
+// --- name: optional, entered here. Empty = clear and go back to the survey's id (same convention as
+// `house.renameDevice`). `openingLabel` is THE display rule, shared with the room's list
+// and the 3D label: never a window named three different ways.
 const displayName = computed(() => (opening.value ? openingLabel(opening.value) : ''))
 const renamingName = ref(false)
 const nameDraft = ref('')
@@ -267,8 +267,8 @@ function commitRename() {
   void house.saveOpening({ name: wanted })
 }
 
-/** Le libellé d'une ouverture, retrouvée par son id à travers les pièces (pour dire à qui appartient
- * l'ouverture qui occupe déjà un ouvrant candidat). */
+/** The label of an opening, found by its id across the rooms (to say who owns
+ * the opening that already holds a candidate cover). */
 function openingLabelById(id: string): string {
   for (const r of house.effective?.rooms ?? []) {
     const o = r.openings.find((x) => x.id === id)
@@ -277,17 +277,17 @@ function openingLabelById(id: string): string {
   return id
 }
 
-/** Ouvrants candidats : les appareils qu'on a le DROIT d'affecter à une ouverture (`canTakeOpening` —
- * tout sauf portail et porte de garage, une seule règle avec la vue Ouvrants).
+/** Candidate covers: the devices we have the RIGHT to assign to an opening (`canTakeOpening` —
+ * everything except gate and garage door, a single rule with the Covers view).
  *
- * `d.kind` seul ne suffit pas : un appareil du JSON brut (relié par `deviceId` seulement, jamais
- * auto-placé) ne le porte pas — c'est le descripteur du plugin qui tranche, comme partout ailleurs
- * dans l'app (`RoomPanel#row`, `DevicePanel`). Sans ce détour, la liste restait vide et le sélecteur
- * retombait sur l'id brut de l'ouvrant déjà lié, faute d'options où le retrouver.
- * Le NOM, lui, suit la même règle que partout : celui de la maison s'il y en a un, sinon celui que
- * le fabricant déclare — jamais l'id. Un ouvrant déjà posé sur une AUTRE ouverture se distingue
- * (« déjà posé sur… ») sans disparaître : le reprendre est un geste voulu, `setOpeningDevice` libère
- * l'ancien lien tout seul. */
+ * `d.kind` alone is not enough: a device of the raw JSON (linked by `deviceId` only, never
+ * auto-placed) does not carry it — it is the plugin's descriptor that decides, as everywhere else
+ * in the app (`RoomPanel#row`, `DevicePanel`). Without this detour, the list stayed empty and the selector
+ * fell back to the raw id of the already linked cover, for lack of options in which to find it.
+ * The NAME, for its part, follows the same rule as everywhere: the house's if there is one, otherwise the one the
+ * vendor declares — never the id. A cover already placed on ANOTHER opening is told apart
+ * ("already placed on…") without disappearing: taking it over is a deliberate gesture, `setOpeningDevice` releases
+ * the old link by itself. */
 const deviceOptions = computed(() => {
   const list = (house.effective?.devices ?? [])
     .map((d) => ({ d, descriptor: d.deviceId ? devices.descriptors[d.deviceId] : undefined }))
@@ -302,9 +302,9 @@ const deviceOptions = computed(() => {
 const linkedDeviceId = computed(() => house.openingDevices[0]?.id ?? '')
 function setDevice(id: string) { void house.setOpeningDevice(id || null) }
 
-// --- supprimer : geste en DEUX TEMPS (armer, puis confirmer dans les 4 s), comme « Oublier
-// l'appareil » et « Retirer de la maison ». Une ouverture relevée au mètre ruban ne doit pas partir
-// d'un doigt posé de travers sur une tablette, et il n'y a rien à rétablir après coup.
+// --- delete: TWO-STEP gesture (arm, then confirm within 4 s), like "Forget
+// device" and "Remove from house". An opening surveyed with a tape measure must not go away
+// from a finger put down crookedly on a tablet, and there is nothing to restore afterwards.
 const removeArmed = ref(false)
 let disarm: ReturnType<typeof setTimeout> | undefined
 function clickRemove() {
@@ -314,7 +314,7 @@ function clickRemove() {
   void house.removeOpening()
 }
 onBeforeUnmount(() => clearTimeout(disarm))
-/** L'ouvrant que la suppression libérerait : on le DIT avant, c'est le moment où l'on décide. */
+/** The cover that the deletion would release: we SAY it beforehand, it is the moment when one decides. */
 const freedName = computed(() => {
   const d = house.openingDevices[0]
   return d ? d.name ?? (d.deviceId ? devices.descriptors[d.deviceId]?.name : undefined) ?? d.id : null
@@ -328,8 +328,8 @@ const freedName = computed(() => {
       <div class="head">
         <span class="icon-square icon-square--lg"><StrokeIcon name="room" :size="22" /></span>
         <div class="head__main">
-          <!-- nom, ou saisie : le champ occupe la MÊME ligne que le titre, comme le renommage d'un
-               véhicule (`VehiclesView`) — vide efface et rend la main à `openingLabel` (l'id du relevé) -->
+          <!-- name, or input: the field takes the SAME line as the title, like renaming a
+               vehicle (`VehiclesView`) — empty clears and hands back to `openingLabel` (the survey's id) -->
           <div class="head__name-row">
             <input v-if="renamingName" ref="nameInput" v-model="nameDraft" class="head__name head__name-input"
                    maxlength="60" :aria-label="$t('opening.rename')" :placeholder="opening.id"
@@ -347,9 +347,9 @@ const freedName = computed(() => {
     </div>
 
     <div class="card card--soft opening">
-      <!-- `Segmented` a été essayé ici : ses quatre libellés (« Porte de garage » compris) imposent
-           393 px de min-content, largeur que le panneau (294 px utiles) ne peut pas offrir — toute la
-           carte débordait. Un `v-select`, comme le niveau de `PlacementControl`, se serre à sa place. -->
+      <!-- `Segmented` was tried here: its four labels ("Garage door" included) impose
+           393 px of min-content, a width that the panel (294 px usable) cannot offer — the whole
+           card overflowed. A `v-select`, like the level of `PlacementControl`, squeezes into its place. -->
       <div class="opening__row">
         <span class="muted">{{ $t('opening.type') }}</span>
         <v-select class="opening__select" :model-value="opening.type" :items="typeOptions" item-title="label" item-value="value"
@@ -383,8 +383,8 @@ const freedName = computed(() => {
 
       <p class="muted opening__hint">{{ isSurface ? $t('opening.whereHintSurface') : $t('opening.whereHint') }}</p>
 
-      <!-- la menuiserie : ce qu'on ne relève pas au mètre ruban. Trois lignes au même gabarit que
-           la nature, pour qu'on lise la carte d'un trait. -->
+      <!-- the joinery: what is not measured with a tape measure. Three rows with the same layout as
+           the kind, so that the card reads at a glance. -->
       <div class="opening__row">
         <span class="muted">{{ $t('opening.leaves') }}</span>
         <v-select class="opening__select" :model-value="leaves" :items="leafOptions" item-title="label" item-value="value"
@@ -400,7 +400,7 @@ const freedName = computed(() => {
       <div class="opening__row">
         <span class="muted">{{ $t('opening.color') }}</span>
         <span class="opening__turn">
-          <!-- place RÉSERVÉE : le bouton s'efface sans que le sélecteur bouge, il n'apparaît pas -->
+          <!-- RESERVED place: the button fades out without the picker moving, it does not appear -->
           <button type="button" class="opening__reset" :class="{ 'opening__reset--off': !color }"
                   :disabled="house.savingOpening || !color" :tabindex="color ? 0 : -1"
                   :title="$t('opening.colorReset')" :aria-label="$t('opening.colorReset')" @click="setColor('')">×</button>
@@ -421,14 +421,14 @@ const freedName = computed(() => {
                 :disabled="house.savingOpening" @click="clickRemove">
           {{ removeArmed ? $t('opening.removeConfirm') : $t('opening.remove') }}
         </button>
-        <!-- place réservée : invisible tant qu'il n'y a rien à rétablir, la ligne ne bouge pas -->
+        <!-- reserved place: invisible as long as there is nothing to revert, the row does not move -->
         <button type="button" class="pill opening__revert" :class="{ 'opening__revert--off': !house.canRevertOpening }"
                 :disabled="house.savingOpening || !house.canRevertOpening" :tabindex="house.canRevertOpening ? 0 : -1"
                 @click="house.revertOpening()">
           {{ $t('opening.revert') }}
         </button>
       </div>
-      <!-- place réservée : ce que la suppression emporterait, dit une fois armée, sans rien décaler -->
+      <!-- reserved place: what the deletion would take with it, said once armed, without shifting anything -->
       <p class="muted opening__frees">{{ removeArmed && freedName ? $t('opening.removeFrees', { name: freedName }) : '' }}</p>
     </div>
   </template>
@@ -440,13 +440,13 @@ const freedName = computed(() => {
 .head { display: flex; align-items: center; gap: 12px; }
 .head__main { flex: 1 1 0; min-width: 0; }
 .head__name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-/* `flex: 1 1 0` et non `1 1 auto` : `MarqueeText` porte `contain: inline-size` (voir son commentaire),
-   qui annule sa largeur intrinsèque — dans un conteneur FLEX, un `flex-basis: auto` se rabat alors
-   sur cette largeur nulle et le nom n'a plus aucune place (mesuré : 0 px). Un flex-basis à 0 lui
-   donne toute la place restante quel que soit son contenu, comme `.head__main` (bloc) le fait déjà
-   pour `DevicePanel`. */
+/* `flex: 1 1 0` and not `1 1 auto`: `MarqueeText` carries `contain: inline-size` (see its comment),
+   which cancels its intrinsic width — in a FLEX container, a `flex-basis: auto` then falls back
+   on this zero width and the name has no room left (measured: 0 px). A flex-basis of 0 gives it
+   all the remaining room whatever its content, as `.head__main` (block) already does
+   for `DevicePanel`. */
 .head__name { flex: 1 1 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; min-width: 0; }
-/* le crayon ne prend pas de place tant qu'on ne le survole pas : toujours au même point, discret */
+/* the pencil takes no room until it is hovered: always at the same point, discreet */
 .head__pencil {
   flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0;
   border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; opacity: .55;
@@ -457,8 +457,8 @@ const freedName = computed(() => {
   border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text);
   font: inherit; font-size: inherit; font-weight: inherit;
 }
-/* une seule ligne, toujours : filet de sécurité si la fonte ou la traduction dépasse quand même le
-   pire cas prévu (voir `whereLabel`) — l'ellipse coupe plutôt que de pousser la carte de 17 px */
+/* a single line, always: safety net if the font or the translation exceeds the planned
+   worst case anyway (see `whereLabel`) — the ellipsis cuts rather than pushing the card by 17 px */
 .head__sub { font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .icon-square--lg { width: 44px; height: 44px; border-radius: 12px; flex: none; }
 
@@ -466,24 +466,24 @@ const freedName = computed(() => {
 .opening__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .opening__turn { display: inline-flex; align-items: center; gap: 6px; }
 .opening__hint { margin: 0; font-size: 12px; }
-/* largeur FIXE, au bout de la ligne : même patron que le sélecteur de niveau de `PlacementControl`
-   (`place__level`, 150 px) — un segmenté imposait 393 px de min-content (« Porte de garage » compris)
-   et faisait déborder toute la carte, un `v-select` se serre à la largeur qu'on lui donne */
+/* FIXED width, at the end of the row: same pattern as the level selector of `PlacementControl`
+   (`place__level`, 150 px) — a segmented control imposed 393 px of min-content ("Garage door" included)
+   and made the whole card overflow, a `v-select` squeezes into the width it is given */
 .opening__select, .opening__device { flex: 0 0 auto; width: 150px; }
 .opening__bottom { min-height: 34px; }
-/* largeur commune aux deux libellés : rien ne bouge en s'armant. 175 px et non 150 comme « Oublier
-   l'appareil » — « Confirmer la suppression » mesure 170 px, et le bouton grandissait sous le doigt. */
+/* width shared by both labels: nothing moves when arming. 175 px and not 150 like "Forget
+   device" — "Confirm deletion" measures 170 px, and the button grew under the finger. */
 .opening__remove { flex: 0 0 auto; min-width: 175px; justify-content: center; font-size: 12px; }
 .opening__remove--armed { border-color: var(--error, #e5484d); color: var(--error, #e5484d); }
-/* Deux lignes, réservées et jamais dépassées : la carte garde sa hauteur que l'avertissement soit
-   là ou non, et un nom d'ouvrant long (60 signes permis) est coupé plutôt que de la faire grandir. */
+/* Two lines, reserved and never exceeded: the card keeps its height whether the warning
+   is there or not, and a long cover name (60 characters allowed) is cut rather than making it grow. */
 .opening__frees {
   margin: 0; font-size: 12px; min-height: 36px; line-height: 18px;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
 }
-/* place réservée pour « Rétablir » : rien ne bouge quand elle apparaît */
+/* reserved place for "Revert": nothing moves when it appears */
 .opening__revert--off { visibility: hidden; }
-/* le sélecteur de couleur au gabarit des touches −/+ : la ligne garde la hauteur des autres */
+/* the color picker at the layout of the −/+ keys: the row keeps the height of the others */
 .opening__color { width: 72px; height: 30px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
 .opening__color:disabled { opacity: .4; cursor: default; }
 .opening__reset {
@@ -493,7 +493,7 @@ const freedName = computed(() => {
 }
 .opening__reset:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .opening__reset--off { visibility: hidden; }
-/* largeur fixe (« 1.20 ») : la valeur change sans déplacer les touches */
+/* fixed width ("1.20"): the value changes without moving the keys */
 .opening__num {
   width: 5ch; min-width: 0; height: 30px; padding: 0; border: 0; background: transparent;
   color: inherit; font: inherit; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums;

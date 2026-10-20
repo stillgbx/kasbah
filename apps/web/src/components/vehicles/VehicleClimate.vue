@@ -7,16 +7,16 @@ import { formatTemp } from '../../lib/format'
 import { useDevicesStore } from '../../stores/devices'
 
 /**
- * La climatisation d'un véhicule, COMMUNE à tous : marche, consigne, sièges et volant chauffants.
- * Le panneau montre TOUJOURS le maximum — cinq places et le volant — et grise ce que ce véhicule ne
- * sait pas faire (`meta.vehicle.climate`) : rien n'apparaît ni ne disparaît d'une voiture à l'autre,
- * et l'utilisateur voit ce qui manque au lieu de le chercher.
+ * A vehicle's air conditioning, COMMON to all: start, setpoint, heated seats and steering wheel.
+ * The panel ALWAYS shows the maximum — five seats and the steering wheel — and grays out what this vehicle
+ * cannot do (`meta.vehicle.climate`): nothing appears or disappears from one car to another,
+ * and the user sees what is missing instead of looking for it.
  *
- * Deux règles viennent du plugin, pas d'ici :
- *  - la MARCHE réveille la voiture s'il le faut (`vehicle.climate_start`) — l'accusé arrive en une
- *    seconde, la clim une vingtaine plus tard : le bouton tient l'attente jusqu'à voir `climateOn` ;
- *  - un RÉGLAGE ne réveille jamais (`vehicle.climate_set`). Endormie, la consigne choisie est donc
- *    RETENUE ici et part avec la marche ; sièges et volant attendent que la clim tourne.
+ * Two rules come from the plugin, not from here:
+ *  - the START wakes the car if needed (`vehicle.climate_start`) — the acknowledgment arrives in one
+ *    second, the A/C some twenty later: the button holds the wait until `climateOn` is seen;
+ *  - a SETTING never wakes (`vehicle.climate_set`). Asleep, the chosen setpoint is therefore
+ *    HELD here and goes out with the start; seats and steering wheel wait for the A/C to run.
  */
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'vehicle'> }>()
 const devices = useDevicesStore()
@@ -26,7 +26,7 @@ const features = computed(() => props.descriptor.meta.vehicle?.climate)
 const asleep = computed(() => props.state.sleepState === 'asleep' || props.state.sleepState === 'offline')
 const on = computed(() => props.state.climateOn === true)
 
-/** Même plafond que le réveil de la vue : une voiture hors de portée ne bloque pas le bouton. */
+/** Same ceiling as the view's wake-up: a car out of range does not block the button. */
 const WARM_MAX_MS = 90_000
 const warming = ref(false)
 let warmTimer: ReturnType<typeof setTimeout> | null = null
@@ -38,9 +38,9 @@ function stopWarming(): void {
 watch(on, (v) => { if (v) stopWarming() })
 const busy = computed(() => warming.value || devices.isPending(id.value))
 
-// ── consigne ──────────────────────────────────────────────────────────────────────────────────
+// ── setpoint ───────────────────────────────────────────────────────────────────────────────────
 
-/** La consigne choisie et pas encore confirmée par la voiture ; `null` = celle de la voiture. */
+/** The setpoint chosen and not yet confirmed by the car; `null` = the car's. */
 const wanted = ref<number | null>(null)
 const SEND_AFTER_MS = 800
 let sendTimer: ReturnType<typeof setTimeout> | null = null
@@ -55,7 +55,7 @@ function step(dir: 1 | -1): void {
   if (next === target.value) return
   wanted.value = next
   if (sendTimer) clearTimeout(sendTimer)
-  // endormie : retenue, elle partira avec la marche ; éveillée : envoyée une fois les clics finis
+  // asleep: held, it will go out with the start; awake: sent once the clicks are over
   if (asleep.value) return
   sendTimer = setTimeout(() => {
     sendTimer = null
@@ -65,29 +65,29 @@ function step(dir: 1 | -1): void {
   }, SEND_AFTER_MS)
 }
 
-// ── marche ────────────────────────────────────────────────────────────────────────────────────
+// ── start ──────────────────────────────────────────────────────────────────────────────────────
 
 async function toggle(): Promise<void> {
   if (on.value) { await devices.sendCommand(id.value, { type: 'vehicle.climate_stop' }); return }
   if (sendTimer) { clearTimeout(sendTimer); sendTimer = null }
   const targetTempC = wanted.value ?? undefined
   warming.value = true
-  // batterie trop faible : le plugin refuse (`LOW_BATTERY`) et la notification le dit
+  // battery too low: the plugin refuses (`LOW_BATTERY`) and the notification says so
   const ok = await devices.sendCommand(id.value, { type: 'vehicle.climate_start', ...(targetTempC !== undefined ? { targetTempC } : {}) })
   if (ok) warmTimer = setTimeout(stopWarming, WARM_MAX_MS)
   else stopWarming()
 }
 onBeforeUnmount(() => { stopWarming(); if (sendTimer) clearTimeout(sendTimer) })
 
-// ── sièges et volant ──────────────────────────────────────────────────────────────────────────
+// ── seats and steering wheel ──────────────────────────────────────────────────────────────────
 
-/** Vue de dessus : la rangée avant porte le volant entre les deux sièges. */
+/** Top view: the front row carries the steering wheel between the two seats. */
 const FRONT: (VehicleSeat | 'wheel')[] = ['fl', 'wheel', 'fr']
 const REAR: VehicleSeat[] = ['rl', 'rc', 'rr']
 const hasSeat = (s: VehicleSeat) => features.value?.seats.includes(s) === true
 const levels = computed(() => features.value?.seatLevels ?? 3)
 const levelOf = (s: VehicleSeat) => props.state.seatHeat?.[s] ?? 0
-/** Chauffer suppose la clim en marche (Tesla), sauf là où ce sont des options du préconditionnement (R5). */
+/** Heating assumes the A/C is running (Tesla), except where these are preconditioning options (R5). */
 const heatable = computed(() => props.state.available && (features.value?.heatWhileOff === true || (on.value && !asleep.value)))
 function cycleSeat(s: VehicleSeat): void {
   const next = (levelOf(s) + 1) % (levels.value + 1)
@@ -96,10 +96,10 @@ function cycleSeat(s: VehicleSeat): void {
 function toggleWheel(): void {
   void devices.sendCommand(id.value, { type: 'vehicle.climate_set', steeringWheelHeat: props.state.steeringWheelHeat !== true })
 }
-/** Barres allumées : à un seul cran (marche / arrêt), allumé = les trois, pour un gabarit identique. */
+/** Bars lit: with a single level (on / off), on = all three, for an identical layout. */
 const lit = (s: VehicleSeat) => (levels.value === 1 ? (levelOf(s) > 0 ? 3 : 0) : levelOf(s))
 
-/** Une seule ligne d'aide, toujours présente : la raison de ce qui est grisé, ou l'attente en cours. */
+/** A single help line, always present: the reason for what is grayed out, or the wait in progress. */
 const hint = computed(() => {
   if (!props.state.available) return t('vehicle.climatePanel.unavailable')
   if (warming.value) return t('vehicle.climatePanel.warming')
@@ -115,7 +115,7 @@ const unsupported = t('vehicle.climatePanel.unsupported')
     <div class="clim__head">
       <button type="button" class="pill clim__power" :data-on="on ? '1' : '0'" :disabled="!state.available || busy"
               :aria-busy="busy" :aria-pressed="on" @click="toggle">
-        <!-- le spinner prend la PLACE de l'icône, même taille : le bouton ne change pas de largeur -->
+        <!-- the spinner takes the icon's PLACE, same size: the button does not change width -->
         <v-progress-circular v-if="busy" indeterminate size="16" width="2" />
         <StrokeIcon v-else name="thermostat" :size="16" />{{ $t('vehicle.climate') }}
       </button>
@@ -134,7 +134,7 @@ const unsupported = t('vehicle.climatePanel.unsupported')
         </button>
       </div>
     </div>
-    <!-- la cabine vue de dessus : avant (siège, volant, siège), puis la banquette -->
+    <!-- the cabin seen from above: front (seat, steering wheel, seat), then the bench -->
     <div class="clim__cabin" role="group" :aria-label="$t('vehicle.climatePanel.cabin')">
       <template v-for="slot in FRONT" :key="slot">
         <button v-if="slot === 'wheel'" type="button" class="clim__seat" :data-on="state.steeringWheelHeat ? '1' : '0'"
@@ -162,14 +162,14 @@ const unsupported = t('vehicle.climatePanel.unsupported')
 </template>
 
 <style scoped>
-/* `min-width: 0` : le panneau est un élément de la grille de la carte ; sans lui, sa largeur
-   minimale élargit la colonne et pousse TOUT le contenu de la carte hors de son cadre (vu à 828 px) */
+/* `min-width: 0`: the panel is an element of the card's grid; without it, its minimum width
+   widens the column and pushes ALL the card's content out of its frame (seen at 828 px) */
 .clim { min-width: 0; padding: 8px; display: grid; gap: 12px; }
-/* Plus haut que son contenu (le panneau posé sur la carte de la vue Véhicules, en grand écran) :
-   les sièges prennent toute la place, et l'aide descend en bas. À sa hauteur naturelle
-   (panneau de la vue Maison, téléphone), `1fr` vaut le contenu : rien ne change. */
+/* Taller than its content (the panel placed on the Vehicles view card, on a large screen):
+   the seats take all the room, and the help goes down to the bottom. At its natural height
+   (House view panel, phone), `1fr` is worth the content: nothing changes. */
 .clim { grid-template-rows: auto 1fr auto; }
-/* trop étroit pour une ligne : la consigne passe dessous. Ne dépend que de la largeur, jamais de l'état */
+/* too narrow for one line: the setpoint goes below. Depends only on the width, never on the state */
 .clim__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .clim__power { flex: 0 0 auto; padding: 0 10px; }
 .clim__temp { display: flex; align-items: center; gap: 4px; margin-left: auto; }
@@ -178,13 +178,13 @@ const unsupported = t('vehicle.climatePanel.unsupported')
   border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); cursor: pointer;
 }
 .clim__step:disabled { opacity: .45; cursor: default; }
-/* largeur FIXE : « 20,5 °C » et « — » occupent la même place, les boutons ± ne bougent pas */
+/* FIXED width: "20,5 °C" and "—" occupy the same place, the ± buttons do not move */
 .clim__target { width: 84px; display: grid; justify-items: center; }
 .clim__value { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .clim__inside { font-size: 11px; white-space: nowrap; }
-/* Rangées `minmax(52px, 1fr)` : à hauteur naturelle, 52 px ; étirée, les sièges se partagent toute
-   la place (un plafond fixe en `minmax` s'imposait PARTOUT : la grille sans hauteur donnée monte ses
-   rangées à leur maximum) */
+/* `minmax(52px, 1fr)` rows: at natural height, 52 px; stretched, the seats share all
+   the room (a fixed ceiling in `minmax` applied EVERYWHERE: the grid with no given height raises
+   its rows to their maximum) */
 .clim__cabin { display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: minmax(52px, 1fr); gap: 8px; }
 .clim__seat {
   min-width: 0; height: 100%; display: grid; place-content: center; justify-items: center; gap: 4px; padding: 6px 4px;
@@ -197,6 +197,6 @@ const unsupported = t('vehicle.climatePanel.unsupported')
 .clim__bars { display: flex; gap: 3px; }
 .clim__bars i { width: 12px; height: 3px; border-radius: 2px; background: var(--line); }
 .clim__bars i[data-lit='1'] { background: var(--accent); }
-/* une ligne réservée : le panneau ne change pas de hauteur quand la raison change */
+/* a reserved line: the panel does not change height when the reason changes */
 .clim__hint { margin: 0; font-size: 11px; min-height: 2lh; align-self: end; }
 </style>

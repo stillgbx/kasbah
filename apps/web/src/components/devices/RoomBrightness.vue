@@ -3,17 +3,16 @@ import { computed, ref } from 'vue'
 import { useRoomLights } from '../../composables/useRoomLights'
 import { useDevicesStore } from '../../stores/devices'
 
-// Luminosité de TOUTE la pièce, à côté de son interrupteur maître (`RoomLightsToggle`) : baisser le
-// salon d'un geste, sans parcourir ses cinq lampes. Comme l'interrupteur, le protocole n'a rien de
-// tel — c'est un LOT de commandes (`runScene`), une par lampe.
+// Brightness of the WHOLE room, next to its master switch (`RoomLightsToggle`): dim the living
+// room in one gesture, without going through its five lights. Like the switch, the protocol has
+// nothing of the kind — it is a BATCH of commands (`runScene`), one per light.
 //
-// Valeur ABSOLUE : toutes les lampes allumées reçoivent le même pourcentage, donc les écarts qu'on
-// aurait réglés lampe par lampe sont écrasés. C'est le geste qu'on vient chercher ici (« mets le
-// salon à 30 % ») et ce que font les applis du marché pour un groupe ; le réglage fin reste à la
-// ligne de chaque lampe.
+// ABSOLUTE value: all the lit lights receive the same percentage, so the differences one would have
+// set light by light are flattened. That is the gesture one comes here for ("set the living room
+// to 30 %") and what the market apps do for a group; fine adjustment stays on each light's row.
 //
-// N'écrit QUE sur les lampes déjà allumées : poser une luminosité sur une lampe éteinte l'allumerait
-// chez la plupart des fabricants, et le curseur deviendrait un second interrupteur.
+// Writes ONLY to lights that are already on: setting a brightness on an unlit light would turn it
+// on with most vendors, and the slider would become a second switch.
 const props = defineProps<{ deviceIds: (string | undefined)[] }>()
 const devices = useDevicesStore()
 const { lights, on } = useRoomLights(() => props.deviceIds)
@@ -21,9 +20,9 @@ const { lights, on } = useRoomLights(() => props.deviceIds)
 const dimmable = computed(() => lights.value.filter((l) => l.descriptor?.capabilities.includes('brightness')))
 const lit = computed(() => on.value.filter((l) => l.descriptor?.capabilities.includes('brightness')))
 
-/** Valeur locale pendant le glissement, effacée dès que la commande est partie (l'état reprend la main). */
+/** Local value during the drag, cleared as soon as the command is sent (the state takes over again). */
 const draft = ref<number | null>(null)
-/** Moyenne des lampes allumées : une valeur unique pour un curseur unique. 100 % par défaut (une lampe qui ne dit pas sa luminosité est à fond). */
+/** Average of the lit lights: a single value for a single slider. 100 % by default (a light that does not report its brightness is at full). */
 const average = computed(() => {
   if (!lit.value.length) return 100
   return Math.round(lit.value.reduce((sum, l) => sum + (l.state.brightness ?? 100), 0) / lit.value.length)
@@ -38,27 +37,27 @@ function commit(v: number) {
 </script>
 
 <template>
-  <!-- Place RÉSERVÉE : pièce éteinte, le curseur reste là, invisible et inactif — allumer une pièce
-       ne doit pas faire descendre ce qui la suit (règle « rien ne doit bouger »), exactement comme
-       le curseur de gradation d'une ligne de la vue Lumières. -->
+  <!-- RESERVED place: room off, the slider stays there, invisible and inactive — turning a room on
+       must not push down what follows it ("nothing must move" rule), exactly like the dimming
+       slider of a row in the Lights view. -->
   <v-slider v-if="dimmable.length" :model-value="shown" :min="1" :max="100" :step="1"
             :disabled="lit.length === 0" :class="{ 'room-bright--off': lit.length === 0 }"
             :aria-hidden="lit.length === 0 ? 'true' : 'false'" :aria-label="$t('rooms.brightness')"
             density="compact" hide-details class="room-bright"
             @update:model-value="(v: number) => { draft = v }" @end="commit">
-    <!-- La valeur au bout de la piste : sans elle on vise 50 % à l'oeil, et la moyenne d'une pièce
-         ne se devine pas depuis la poignée. Elle suit le glissement (`shown` porte le brouillon).
-         Largeur FIXE et chiffres tabulaires : la piste ne doit pas se raccourcir en passant de
-         « 9 % » à « 100 % », sinon la poignée bougerait sous le doigt. -->
+    <!-- The value at the end of the track: without it one aims at 50 % by eye, and the average of a room
+         cannot be guessed from the handle. It follows the drag (`shown` carries the draft).
+         FIXED width and tabular digits: the track must not shorten when going from
+         "9 %" to "100 %", otherwise the handle would move under the finger. -->
     <template #append><span class="room-bright__pct">{{ shown }} %</span></template>
   </v-slider>
 </template>
 
 <style scoped>
-/* `flex: 0 0 auto` : le panneau latéral est une colonne flex, et Vuetify pose `flex: 1 1 auto` sur
-   `.v-input` — sans cela le curseur s'étire sur toute la hauteur libre et pousse les appareils au fond. */
+/* `flex: 0 0 auto`: the side panel is a flex column, and Vuetify sets `flex: 1 1 auto` on
+   `.v-input` — without it the slider stretches over the whole free height and pushes the devices to the bottom. */
 .room-bright { flex: 0 0 auto; margin: 0 4px; transition: opacity .2s ease; }
 .room-bright--off { visibility: hidden; }
-/* `min-width` plutôt que `width` : à gros zoom le texte ne doit pas se faire couper. */
+/* `min-width` rather than `width`: at high zoom the text must not get cut off. */
 .room-bright__pct { min-width: 5ch; text-align: right; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 </style>

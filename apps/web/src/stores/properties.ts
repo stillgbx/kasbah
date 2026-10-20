@@ -7,48 +7,48 @@ import { t } from '../i18n'
 import { writeOnboarding } from '../lib/onboarding'
 import { useSettingsStore } from './settings'
 
-// Les PROPRIÉTÉS que l'application sait montrer (maison, appartement). Seul le serveur de
-// démonstration en offre plusieurs : les démos (en lecture seule) et celles créées ou dupliquées sur
-// ce poste. Basculer recharge l'application entière sur l'autre maison, son parc simulé, ses
-// ambiances — rien d'une propriété ne doit survivre dans l'autre.
+// The PROPERTIES that the application can show (house, apartment). Only the demo server
+// offers several: the demos (read-only) and those created or duplicated on
+// this workstation. Switching reloads the whole application onto the other house, its simulated device set, its
+// light scenes — nothing of one property must survive in the other.
 
 const SWITCH_TIMEOUT_MS = 30_000
 const POLL_MS = 500
 
 export const usePropertiesStore = defineStore('properties', () => {
   const info = ref<PropertiesResponse | null>(null)
-  /** Propriété en cours de bascule : le sélecteur l'annonce et refuse un second choix. */
+  /** Property being switched: the selector announces it and refuses a second choice. */
   const switching = ref<string | null>(null)
-  /** Propriété du premier snapshot : un snapshot qui en nomme une autre veut dire qu'un écran a basculé. */
+  /** Property of the first snapshot: a snapshot that names another one means a screen switched. */
   let seen: string | null = null
 
   const switchable = computed(() => !!info.value?.switchable && info.value.properties.length > 1)
   const active = computed(() => info.value?.properties.find((p) => p.id === info.value?.activeId) ?? null)
-  /** La propriété montrée est une démo : elle se regarde, on la duplique pour la modifier. */
+  /** The shown property is a demo: it is looked at, it is duplicated to be modified. */
   const isDemo = computed(() => !!active.value?.demo)
-  /** Le serveur sait créer et dupliquer (serveur sans maison imposée). */
+  /** The server knows how to create and duplicate (server without an imposed house). */
   const canCreate = computed(() => !!info.value?.canCreate)
-  /** Démo ou réel ; `null` = maison imposée (`KASBAH_HOUSE_FILE`) ou maquette sans serveur. */
+  /** Demo or real; `null` = imposed house (`KASBAH_HOUSE_FILE`) or mockup without a server. */
   const mode = computed<PropertyMode | null>(() => info.value?.mode ?? null)
-  /** Le menu des propriétés a quelque chose à offrir : en changer, ou en créer une. */
+  /** The properties menu has something to offer: switching, or creating one. */
   const hasMenu = computed(() => switchable.value || canCreate.value)
-  /** L'assistant « Créer une propriété » est ouvert (une seule boîte, montée par l'application). */
+  /** The "Create a property" assistant is open (a single dialog, mounted by the application). */
   const creating = ref(false)
   const busy = ref(false)
 
   async function load() {
     try { info.value = await getTransport().getProperties() }
-    catch { info.value = null }   // serveur d'avant la fonction : pas de sélecteur, rien d'autre ne change
-    // une démo ne se modifie pas : le mode édition retenu par ce poste n'y a pas cours
+    catch { info.value = null }   // server predating the feature: no selector, nothing else changes
+    // a demo cannot be modified: the edit mode kept by this workstation does not apply there
     if (isDemo.value) { const settings = useSettingsStore(); settings.setHouseEditing(false); settings.setReliefEditing(false) }
   }
 
-  /** Le serveur redémarre sur l'autre maison : attendre qu'il dise l'avoir ouverte, puis tout recharger. */
+  /** The server restarts on the other house: wait for it to say it opened it, then reload everything. */
   async function reloadWhen(done: (r: PropertiesResponse) => boolean) {
     const deadline = Date.now() + SWITCH_TIMEOUT_MS
     while (Date.now() < deadline) {
       try { if (done(await getTransport().getProperties())) break }
-      catch { /* serveur en cours de redémarrage */ }
+      catch { /* server restarting */ }
       await new Promise((r) => setTimeout(r, POLL_MS))
     }
     window.location.reload()
@@ -66,7 +66,7 @@ export const usePropertiesStore = defineStore('properties', () => {
     }
   }
 
-  /** Passe en démo ou en réel : le serveur rouvre la propriété retenue de ce mode, l'app se recharge. */
+  /** Switches to demo or real: the server reopens the property kept for this mode, the app reloads. */
   async function setMode(next: PropertyMode) {
     if (switching.value || next === mode.value) return
     switching.value = next
@@ -79,7 +79,7 @@ export const usePropertiesStore = defineStore('properties', () => {
     }
   }
 
-  /** Crée la propriété, puis bascule dessus ; le guide reprend après le rechargement. */
+  /** Creates the property, then switches to it; the guide resumes after the reload. */
   async function create(body: NewPropertyBody): Promise<boolean> {
     if (busy.value) return false
     busy.value = true
@@ -95,7 +95,7 @@ export const usePropertiesStore = defineStore('properties', () => {
     } finally { busy.value = false }
   }
 
-  /** Duplique la propriété montrée (une démo) sous « … (copie) », puis bascule sur la copie. */
+  /** Duplicates the shown property (a demo) as "… (copy)", then switches to the copy. */
   async function duplicateActive(): Promise<void> {
     const src = active.value
     if (!src || busy.value) return

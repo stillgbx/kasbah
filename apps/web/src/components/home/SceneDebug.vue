@@ -3,31 +3,31 @@ import { onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import Stats from 'three/addons/libs/stats.module.js'
 import type { HouseScene, SceneDebugStats } from '../../three/HouseScene'
 
-// Voile de débogage du rendu 3D (Réglages → Rendu 3D → Débogage). Deux étages :
+// Debug overlay of the 3D rendering (Settings → 3D rendering → Debug). Two tiers:
 //
-//  - les courbes de `stats.js` (FPS, ms, mémoire) — celles de three, telles quelles. Elles sont
-//    branchées en SONDE autour de chaque image rendue (`HouseScene.setProbe`) et non sur une boucle
-//    à part : le rendu est à la demande, une boucle indépendante compterait des images qui n'existent
-//    pas. Les trois panneaux sont montrés ensemble plutôt qu'à tour de rôle au clic ;
-//  - un relevé chiffré que la scène tient déjà pendant qu'elle dessine, relu deux fois par seconde.
-//    Un panneau qui se redessine à chaque image fausserait ce qu'il prétend mesurer.
+//  - the `stats.js` graphs (FPS, ms, memory) — three's own, as they are. They are
+//    wired as a PROBE around each rendered frame (`HouseScene.setProbe`) and not on a separate
+//    loop: rendering is on demand, an independent loop would count frames that do not
+//    exist. The three panels are shown together rather than one at a time on click;
+//  - a numeric readout that the scene already keeps while it draws, reread twice a second.
+//    A panel that redraws on every frame would skew what it claims to measure.
 //
-// Ce qu'il faut savoir lire :
-//  - « img/s » (et la courbe FPS) à 0 au repos est NORMAL : le rendu est à la demande
-//    (`three/core/renderLoop.ts`). Le chiffre qui compte se lit pendant qu'on tourne autour de la maison.
-//  - « hors rendu » est ce qui sépare deux images SANS être passé à dessiner : style, disposition,
-//    peinture, composition, présentation. S'il gonfle pendant qu'on tourne alors que « rendu » reste
-//    stable, le retard ne vient pas de notre dessin — c'est là qu'il faut chercher.
-//  - « rendu » est le temps passé DANS `render()`. Ce n'est pas du CPU pur : quand la file de
-//    commandes du GPU est pleine, le pilote bloque à l'envoi et cette attente s'y retrouve. À lire
-//    avec « img/s » : à 60 Hz, une image qui dépasse 16,7 ms tombe mécaniquement à 30 — autrement
-//    dit, entre 28 et 30 images par seconde, il ne manque souvent que deux ou trois millisecondes.
-//  - « appels » et « triangles » sont des totaux d'IMAGE, tous rendus compris.
-//  - « animations » : tant qu'il y en a une (l'onde d'un lecteur, le souffle d'une batterie), la
-//    boucle tourne SANS qu'on touche à rien. Elle est alors bridée à 20 images par seconde : le
-//    « img/s » au repos n'est donc ni 0 ni 60, et c'est voulu.
-//  - « ombres ✓ » signifie que la carte d'ombre vient d'être refaite. Pendant une orbite, elle doit
-//    rester à ✗ : rien de ce qui porte une ombre n'a bougé.
+// What you need to know how to read:
+//  - "img/s" (and the FPS graph) at 0 at rest is NORMAL: rendering is on demand
+//    (`three/core/renderLoop.ts`). The figure that matters is read while orbiting the house.
+//  - "hors rendu" is what separates two frames WITHOUT having gone through drawing: style, layout,
+//    paint, compositing, presentation. If it swells while orbiting whereas "rendu" stays
+//    stable, the delay does not come from our drawing — that is where to look.
+//  - "rendu" is the time spent INSIDE `render()`. It is not pure CPU: when the GPU's command
+//    queue is full, the driver blocks on submission and that wait shows up there. To be read
+//    with "img/s": at 60 Hz, a frame that exceeds 16.7 ms mechanically falls to 30 — in other
+//    words, between 28 and 30 frames per second, only two or three milliseconds are often missing.
+//  - "appels" and "triangles" are FRAME totals, all renders included.
+//  - "animations": as long as there is one (a player's wave, a battery's breath), the
+//    loop runs WITHOUT anyone touching anything. It is then throttled to 20 frames per second: the
+//    "img/s" at rest is therefore neither 0 nor 60, and that is intended.
+//  - "ombres ✓" means the shadow map has just been redone. During an orbit, it must
+//    stay at ✗: nothing that casts a shadow has moved.
 
 const props = defineProps<{ scene: () => HouseScene | null }>()
 
@@ -38,16 +38,16 @@ let probe: InstanceType<typeof Stats> | null = null
 let attached = false
 
 onMounted(() => {
-  // `stats.module.js` est une fabrique qui rend son objet ; `new` la satisfait comme son appel nu,
-  // et c'est la forme que ses types déclarent.
+  // `stats.module.js` is a factory that returns its object; `new` satisfies it as well as its bare call,
+  // and it is the form its types declare.
   probe = new Stats()
   probe.dom.style.cssText = 'position:static;display:flex;gap:2px;cursor:default'
   for (const child of probe.dom.children) (child as HTMLElement).style.display = 'block'
   graphs.value?.append(probe.dom)
-  // La sonde se pose au PREMIER relevé où la scène existe, pas au montage : Vue monte les enfants
-  // avant d'exécuter le `onMounted` du parent, et c'est là que `useHouseScene` construit la scène.
-  // Posée au montage, elle l'était sur `null` — les courbes restaient figées pendant que les
-  // chiffres, eux, se mettaient à jour (ils relisent la scène à chaque fois).
+  // The probe is attached at the FIRST readout where the scene exists, not at mount: Vue mounts the children
+  // before running the parent's `onMounted`, and that is where `useHouseScene` builds the scene.
+  // Attached at mount, it was attached to `null` — the graphs stayed frozen while the
+  // figures, for their part, updated (they reread the scene each time).
   timer = setInterval(() => {
     const scene = props.scene()
     if (scene && !attached) { scene.setProbe(probe); attached = true }
@@ -63,15 +63,15 @@ onBeforeUnmount(() => {
 
 const n = (v: number) => (v >= 10000 ? `${Math.round(v / 1000)}k` : String(v))
 
-// Les pilules s'éteignent d'un clic : leur coût se paie en partie hors de `render()`, dans le style
-// et le compositeur, là où aucun compteur ne va. Les couper et regarder « img/s » est la seule façon
-// de le chiffrer — sur la machine qui a le problème, pas sur une autre.
+// The pills switch off on a click: their cost is paid partly outside `render()`, in style
+// and the compositor, where no counter goes. Cutting them and watching "img/s" is the only way
+// to quantify it — on the machine that has the problem, not on another one.
 const labels = ref(true)
 function toggleLabels() { labels.value = !labels.value; props.scene()?.setLabelsVisible(labels.value) }
 
-// Combien d'étiquettes BOUGENT vraiment. Ce n'est pas le nombre d'appareils : le `CSS2DRenderer`
-// saute celles qui sont cachées (niveau non focalisé, hors champ) et ne touche au style que des
-// autres. C'est ce nombre-là, pas le total, qui décide du coût.
+// How many labels actually MOVE. It is not the number of devices: the `CSS2DRenderer`
+// skips the hidden ones (unfocused level, out of view) and only touches the style of the
+// others. It is that number, not the total, that decides the cost.
 const moving = ref(0)
 function countMoving(): number {
   const layer = document.querySelector('.scene-labels')
@@ -104,10 +104,10 @@ function countMoving(): number {
 
 <style scoped>
 .dbg {
-  /* au-dessus du widget météo, qui tient le coin bas gauche (`HomeView.vue`) */
+  /* above the weather widget, which holds the bottom left corner (`HomeView.vue`) */
   position: absolute; left: calc(var(--rail-w) + 12px); bottom: calc(var(--safe-bottom) + var(--panel-gap) + 148px); z-index: 3;
   display: grid; gap: 1px; padding: 8px 10px; border-radius: var(--radius-sm);
-  /* Opaque et sans filtre de fond : un instrument de mesure ne doit rien coûter à ce qu'il mesure. */
+  /* Opaque and without backdrop filter: a measuring instrument must cost nothing to what it measures. */
   background: var(--surface); border: 1px solid var(--line);
   font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text);
   pointer-events: none; min-width: 168px;
@@ -116,7 +116,7 @@ function countMoving(): number {
 .dbg__row { display: flex; justify-content: space-between; gap: 12px; }
 .dbg__row span { color: var(--muted); }
 .dbg__row--dim { opacity: .7; }
-/* la seule ligne cliquable : couper les pilules pour chiffrer ce qu'elles coûtent hors du rendu */
+/* the only clickable row: cut the pills to quantify what they cost outside rendering */
 .dbg__row--tap {
   pointer-events: auto; cursor: pointer; border: 0; padding: 2px 4px; margin: 2px -4px;
   color: inherit; font: inherit; width: calc(100% + 8px); border-radius: 6px;

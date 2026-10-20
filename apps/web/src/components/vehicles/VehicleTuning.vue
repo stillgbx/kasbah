@@ -10,25 +10,25 @@ import { VEHICLE_FINISHES, type VehicleFinish } from '@kasbah/shared'
 import { modelsFor, NO_MODEL, resolveModel } from '../../three/models/catalog'
 
 /**
- * Ce que seul l'utilisateur peut savoir d'un véhicule : le décalage de sa place calculée, la
- * correction de son cap, la capacité de sa batterie. Ces valeurs vivent dans la MAISON
- * (`house.devices[]`) et non dans l'état, qui est la vérité du fabricant, réécrite à chaque lecture.
+ * What only the user can know about a vehicle: the offset of its computed place, the
+ * correction of its heading, the capacity of its battery. These values live in the HOUSE
+ * (`house.devices[]`) and not in the state, which is the vendor's truth, rewritten on each read.
  *
- * Le décalage (m, repère maison) : ni le GPS de la voiture ni l'origine de la maison ne sont exacts
- * au mètre, et l'écart qu'on mesure à l'œil dans la scène se saisit ici une fois pour toutes.
- * La rotation (°) : elle s'AJOUTE au cap que la scène déduit (celui du fabricant, ou l'axe de la
- * pièce) — aucun des deux ne dit de quel côté la voiture s'est garée ; un demi-tour se saisit ici.
- * La capacité (kWh) : AUCUN fabricant ne la donne — ni Tesla, ni Renault — et sans elle on ne peut
- * pas estimer la puissance de charge d'un véhicule qui ne la dit pas.
+ * The offset (m, house reference frame): neither the car's GPS nor the house's origin is exact
+ * to the meter, and the gap measured by eye in the scene is entered here once and for all.
+ * The rotation (°): it is ADDED to the heading the scene deduces (the vendor's, or the axis of the
+ * room) — neither says which way the car parked; a U-turn is entered here.
+ * The capacity (kWh): NO vendor gives it — neither Tesla nor Renault — and without it one cannot
+ * estimate the charging power of a vehicle that does not say it.
  *
- * La carrosserie 3D et sa couleur relèvent de la même règle : le catalogue sait quelles formes sont
- * livrées, mais pas laquelle est garée là — un plugin de marque peut couvrir plusieurs modèles — et
- * AUCUN fabricant ne publie la teinte d'un véhicule. Le select ne propose que les carrosseries du
- * plugin du véhicule — on ne gare pas une Model S dans le garage d'une R5 —, à défaut celles de sa
- * marque, pour la voiture qu'un plugin générique publie (la simulation, par exemple).
+ * The 3D body and its color fall under the same rule: the catalog knows which shapes are
+ * shipped, but not which one is parked there — a brand plugin can cover several models — and
+ * NO vendor publishes a vehicle's tint. The select only offers the bodies of the
+ * vehicle's plugin — one does not park a Model S in an R5's garage —, failing that those of its
+ * brand, for the car that a generic plugin publishes (the simulation, for example).
  *
- * Deux surfaces l'affichent : la carte de la vue Véhicules (repliée derrière « Régler ») et le
- * panneau de l'appareil sélectionné, où l'on voit la voiture BOUGER dans la scène en la réglant.
+ * Two surfaces display it: the Vehicles view card (folded behind "Adjust") and the
+ * selected device's panel, where one sees the car MOVE in the scene while adjusting it.
  */
 const props = defineProps<{ descriptor: DeviceDescriptor }>()
 const house = useHouseStore()
@@ -36,14 +36,14 @@ const { locale } = useI18n()
 
 const houseDevice = computed(() => house.houseDeviceFor(props.descriptor.id))
 const tunable = computed(() => tunableVehicle(props.descriptor, houseDevice.value))
-/** Rien à corriger pour un véhicule qu'on a PLACÉ à la main dans la maison : son entrée fait déjà foi. */
+/** Nothing to correct for a vehicle that was PLACED by hand in the house: its entry already is authoritative. */
 const gpsPlaced = computed(() => houseDevice.value?.position === undefined)
 const capacityNeeded = computed(() => needsCapacity(props.descriptor))
 const rotation = computed(() => houseDevice.value?.yawOffset ?? 0)
 const capacity = computed(() => houseDevice.value?.batteryKwh ?? 0)
 const offsetOf = (axis: 0 | 1) => houseDevice.value?.gpsOffset?.[axis] ?? 0
 
-/** Un champ vidé vaut 0, et 0 EFFACE le réglage — c'est ce que dit le contrat d'écriture. */
+/** An emptied field is worth 0, and 0 CLEARS the setting — that is what the write contract says. */
 const typed = (raw: string) => (raw.trim() === '' ? 0 : Number(raw.replace(',', '.')))
 function setOffset(axis: 0 | 1, raw: string): void {
   const value = typed(raw)
@@ -51,7 +51,7 @@ function setOffset(axis: 0 | 1, raw: string): void {
   const next: [number, number] = axis === 0 ? [value, offsetOf(1)] : [offsetOf(0), value]
   void house.setDeviceTuning(props.descriptor.id, { gpsOffset: next })
 }
-/** Ramené dans [-180, 180[ : 200° et -160° sont la même rotation, et le contrat refuse le premier. */
+/** Brought back into [-180, 180[: 200° and -160° are the same rotation, and the contract refuses the first. */
 function setRotation(raw: string): void {
   const typedValue = typed(raw)
   if (!Number.isFinite(typedValue)) return
@@ -66,9 +66,9 @@ function setCapacity(raw: string): void {
 }
 
 /**
- * La LOA se saisit en BROUILLON : début, fin et forfait n'ont de sens qu'ensemble, et le contrat
- * d'écriture la prend d'un bloc. Chaque champ modifié écrit dès que le tout est valable ; tout vider
- * l'efface. Le brouillon suit la maison (« Rétablir », l'autre surface) tant qu'on n'y touche pas.
+ * The LEASE is entered as a DRAFT: start, end and package only make sense together, and the write
+ * contract takes it as a block. Each modified field writes as soon as the whole is valid; clearing everything
+ * clears it. The draft follows the house ("Revert", the other surface) as long as it is not touched.
  */
 const lease = computed(() => houseDevice.value?.lease)
 const draft = reactive({ start: '', end: '', km: '', startKm: '' })
@@ -88,7 +88,7 @@ function writeLease(): void {
   const parsed = vehicleLeaseSchema.safeParse({
     start: draft.start, end: draft.end, km: typed(draft.km), ...(startKm ? { startKm } : {}),
   })
-  // incomplet : le brouillon attend la suite, rien n'est écrit
+  // incomplete: the draft awaits the rest, nothing is written
   if (!parsed.success || JSON.stringify(parsed.data) === JSON.stringify(lease.value)) return
   void house.setDeviceTuning(props.descriptor.id, { lease: parsed.data })
 }
@@ -102,8 +102,8 @@ function clearLease(): void {
 }
 
 /**
- * « Chercher chez Renault » : un contrat d'entretien plafonné en km est souvent calé sur la LOA,
- * mais rien ne le garantit — il est PROPOSÉ, jamais écrit d'office. Lu au clic seulement.
+ * "Look up at Renault": a maintenance contract capped in km is often aligned with the lease,
+ * but nothing guarantees it — it is PROPOSED, never written automatically. Read on click only.
  */
 const renaultVin = computed(() => (props.descriptor.pluginId === 'renault' ? props.descriptor.externalId : null))
 const contracts = ref<RenaultContract[] | null>(null)
@@ -126,27 +126,27 @@ function useContract(c: RenaultContract): void {
 const day = (iso: string | null) => (iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString(locale.value) : '—')
 const km = (n: number) => new Intl.NumberFormat(locale.value).format(n)
 
-/** Rien à proposer quand aucune carrosserie ne correspond : les deux lignes disparaissent. */
+/** Nothing to offer when no body matches: both rows disappear. */
 const models = computed(() => modelsFor(props.descriptor.pluginId, props.descriptor.meta.manufacturer))
-/** Ce que la scène dessine AUJOURD'HUI, y compris quand l'utilisateur n'a rien choisi. */
+/** What the scene draws TODAY, including when the user has chosen nothing. */
 const model3d = computed(() => resolveModel(houseDevice.value?.model3d, props.descriptor.pluginId, props.descriptor.meta.manufacturer)?.id ?? NO_MODEL)
 function setModel3d(value: string): void {
   if (value === model3d.value) return
   void house.setDeviceTuning(props.descriptor.id, { model3d: value })
 }
 
-/** Le réglage manuel, seul : c'est lui qu'on écrit, et lui seul que la croix efface. */
+/** The manual setting, alone: it is what we write, and what the cross alone clears. */
 /**
- * L'aspect de la peinture, dans le vocabulaire de la voiture elle-même (le « Coloriseur » d'une
- * Tesla dit Unie / Métallique / Mate). Le select montre ce qui est PEINT aujourd'hui — le choix
- * manuel, sinon ce que le fabricant dit — et écrire rend ce choix explicite.
+ * The paint finish, in the vocabulary of the car itself (a Tesla's "Colorizer"
+ * says Solid / Metallic / Matte). The select shows what is PAINTED today — the manual
+ * choice, otherwise what the vendor says — and writing makes that choice explicit.
  */
 const bodyFinish = computed(() => bodyFinishOf(props.descriptor, houseDevice.value))
-/** Le choix manuel SEUL — le select, lui, montre ce qui est peint, d'où qu'il vienne. */
+/** The manual choice ALONE — the select, for its part, shows what is painted, wherever it comes from. */
 const chosenFinish = computed(() => houseDevice.value?.bodyFinish)
 function setBodyFinish(value: string): void {
-  // `''` efface, comme pour la couleur ; sinon un aspect identique à l'affiché n'écrit rien... SAUF
-  // s'il vient du fabricant : le choisir explicitement le FIGE, et c'est un geste utile.
+  // `''` clears, as for the color; otherwise a finish identical to the displayed one writes nothing... EXCEPT
+  // if it comes from the vendor: choosing it explicitly FREEZES it, and that is a useful gesture.
   const finish = value as VehicleFinish | ''
   if (finish && finish === chosenFinish.value) return
   void house.setDeviceTuning(props.descriptor.id, { bodyFinish: finish })
@@ -154,9 +154,9 @@ function setBodyFinish(value: string): void {
 
 const bodyColor = computed(() => houseDevice.value?.bodyColor)
 /**
- * Ce que la scène peint AUJOURD'HUI. Sans réglage manuel, c'est la teinte que le plugin a déduite —
- * le sélecteur part donc de la vraie couleur du véhicule, pas d'un gris arbitraire — et à défaut un
- * gris neutre, faute de savoir quoi montrer.
+ * What the scene paints TODAY. Without a manual setting, it is the tint the plugin deduced —
+ * the picker therefore starts from the vehicle's real color, not from an arbitrary gray — and failing that a
+ * neutral gray, for lack of knowing what to show.
  */
 const painted = computed(() => bodyColorOf(props.descriptor, houseDevice.value) ?? '#9aa4b2')
 function setBodyColor(value: string): void {
@@ -164,22 +164,22 @@ function setBodyColor(value: string): void {
   void house.setDeviceTuning(props.descriptor.id, { bodyColor: value })
 }
 /**
- * La teinte se voit PENDANT qu'on la choisit : le sélecteur natif annonce chaque nuance survolée, et
- * la scène la peint tout de suite — c'est comme ça qu'on juge une couleur, sur la voiture. Seul le
- * choix validé (`change`) est écrit ; un choix abandonné rend la teinte d'avant, comme la fermeture
- * du panneau.
+ * The tint is seen WHILE it is being chosen: the native picker announces each shade hovered, and
+ * the scene paints it right away — that is how a color is judged, on the car. Only the
+ * validated choice (`change`) is written; an abandoned choice gives back the previous tint, like closing
+ * the panel.
  */
 const preview = (value: string | null) => house.previewBodyColor(props.descriptor.id, value)
 onBeforeUnmount(() => preview(null))
 
 /**
- * « RÉTABLIR » : les réglages tels qu'ils étaient à l'OUVERTURE de la section — le composant naît
- * avec elle (les deux surfaces le montent en `v-if`), d'où l'instantané pris ici. Chaque champ
- * s'écrit au fil de la saisie, sans bouton « Enregistrer » : c'est ce retour en arrière qui tient
- * lieu d'annulation, comme « Rétablir » le fait pour l'emplacement d'un appareil.
+ * "REVERT": the settings as they were when the section was OPENED — the component is born
+ * with it (both surfaces mount it with `v-if`), hence the snapshot taken here. Each field
+ * is written as you type, with no "Save" button: it is this rollback that stands
+ * in for undo, as "Revert" does for a device's location.
  *
- * Un seul appel rend les six d'un coup, y compris ceux qu'on vient d'ajouter : `[0, 0]`, `0` et la
- * chaîne vide EFFACENT, c'est ce que dit le contrat d'écriture.
+ * A single call gives back all six at once, including those just added: `[0, 0]`, `0` and the
+ * empty string CLEAR, that is what the write contract says.
  */
 const tuned = () => {
   const hd = houseDevice.value
@@ -202,13 +202,13 @@ function revert(): void {
 
 <template>
   <div v-if="tunable" class="card card--soft tune">
-    <!-- place RÉSERVÉE : invisible tant qu'il n'y a rien à rétablir, la ligne ne bouge pas -->
+    <!-- RESERVED place: invisible as long as there is nothing to revert, the row does not move -->
     <div class="tune__top">
       <button type="button" class="pill tune__revert" :class="{ 'tune__revert--off': !changed }"
               :disabled="!changed" :tabindex="changed ? 0 : -1" @click="revert">{{ $t('place.revert') }}</button>
     </div>
-    <!-- décalage et rotation ne concernent qu'une voiture posée par son GPS : celle qu'on a placée à
-         la main dans la maison tient déjà sa place et son cap du JSON -->
+    <!-- offset and rotation only concern a car placed by its GPS: the one placed by
+         hand in the house already holds its place and heading from the JSON -->
     <label v-if="gpsPlaced" class="tune__row">
       <span class="muted tune__k">{{ $t('vehicle.offset') }}</span>
       <span class="tune__fields">
@@ -234,7 +234,7 @@ function revert(): void {
       </span>
     </label>
     <p v-if="capacityNeeded" class="muted tune__hint">{{ $t('vehicle.capacityHint') }}</p>
-    <!-- carrosserie : les modèles de CE véhicule (son plugin, à défaut sa marque), plus la silhouette -->
+    <!-- body: the models of THIS vehicle (its plugin, failing that its brand), plus the silhouette -->
     <label v-if="models.length" class="tune__row">
       <span class="muted tune__k">{{ $t('vehicle.model3d') }}</span>
       <span class="tune__fields">
@@ -244,14 +244,14 @@ function revert(): void {
         </select>
       </span>
     </label>
-    <!-- `for` EXPLICITE sur les deux lignes qui portent une croix : un label sans `for` active son
-         premier descendant étiquetable, et la croix vient avant le champ — cliquer la ligne pour
-         sortir du sélecteur de couleur effaçait donc le choix qu'on venait de faire. -->
+    <!-- EXPLICIT `for` on the two rows that carry a cross: a label without `for` activates its
+         first labelable descendant, and the cross comes before the field — clicking the row to
+         leave the color picker therefore cleared the choice just made. -->
     <label v-if="models.length" class="tune__row" :for="`tune-finish-${descriptor.id}`">
       <span class="muted tune__k">{{ $t('vehicle.bodyFinish') }}</span>
       <span class="tune__fields">
-        <!-- même règle que la couleur : la croix n'efface QUE le choix manuel, et rend la main à
-             ce que le plugin a déduit — pas à un défaut arbitraire -->
+        <!-- same rule as the color: the cross only clears the MANUAL choice, and hands back to
+             what the plugin deduced — not to an arbitrary default -->
         <button v-if="chosenFinish" type="button" class="tune__reset" :title="$t('vehicle.bodyFinishReset')"
                 @click="setBodyFinish('')">×</button>
         <select :id="`tune-finish-${descriptor.id}`" :value="bodyFinish" @change="setBodyFinish(($event.target as HTMLSelectElement).value)">
@@ -262,7 +262,7 @@ function revert(): void {
     <label v-if="models.length" class="tune__row" :for="`tune-color-${descriptor.id}`">
       <span class="muted tune__k">{{ $t('vehicle.bodyColor') }}</span>
       <span class="tune__fields">
-        <!-- sans couleur choisie, la scène applique la sienne, qui suit le thème : le bouton rend la main -->
+        <!-- with no color chosen, the scene applies its own, which follows the theme: the button hands back -->
         <button v-if="bodyColor" type="button" class="tune__reset" :title="$t('vehicle.bodyColorReset')"
                 @click="setBodyColor('')">×</button>
         <input :id="`tune-color-${descriptor.id}`" type="color" :value="painted"
@@ -270,7 +270,7 @@ function revert(): void {
                @change="setBodyColor(($event.target as HTMLInputElement).value)" />
       </span>
     </label>
-    <!-- LOA : saisie à la main, le constructeur ne publie pas le contrat de financement -->
+    <!-- lease: entered by hand, the manufacturer does not publish the financing contract -->
     <div class="tune__section">
       <span class="tune__title">{{ $t('vehicle.lease.title') }}</span>
       <button v-if="lease" type="button" class="tune__reset" :title="$t('vehicle.lease.clear')"
@@ -318,7 +318,7 @@ function revert(): void {
 }
 .tune__hint { margin: 0; font-size: 11px; }
 .tune__top { display: flex; justify-content: flex-end; }
-/* à l'échelle de la carte (champs de 28 px), et non des 40 px d'une pilule de pleine taille */
+/* at the card's scale (28 px fields), and not the 40 px of a full-size pill */
 .tune__revert { height: 28px; padding: 0 12px; font-size: 12px; }
 .tune__revert--off { visibility: hidden; }
 .tune select {
@@ -326,7 +326,7 @@ function revert(): void {
   border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
   font: inherit; font-size: 13px;
 }
-/* la LOA : un intertitre, puis des lignes au gabarit des autres réglages */
+/* the lease: a subheading, then rows with the same layout as the other settings */
 .tune__section { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line); }
 .tune__title { font-size: 12px; font-weight: 600; }
 .tune input.tune__date { width: 140px; }
@@ -335,7 +335,7 @@ function revert(): void {
 .tune__found { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft); font-size: 12px; }
 .tune__found-text { flex: 1 1 auto; min-width: 0; }
 .tune__use { flex: none; height: 28px; padding: 0 12px; font-size: 12px; }
-/* même gabarit que les champs nombre : la ligne ne change pas de hauteur d'une section à l'autre */
+/* same layout as the number fields: the row does not change height from one section to another */
 .tune input[type='color'] { width: 72px; height: 28px; padding: 2px; cursor: pointer; }
 .tune__reset {
   width: 22px; height: 22px; padding: 0; line-height: 1;

@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 
 export interface Notification { id: number; text: string; color: 'error' | 'warning' | 'success' | 'info'; timeout: number }
 
-/** File de toasts (rendue par App.vue). Une erreur de commande, un appairage réussi, etc. */
+/** Toast queue (rendered by App.vue). A command error, a successful pairing, etc. */
 export const useNotificationsStore = defineStore('notifications', () => {
   const queue = ref<Notification[]>([])
   let seq = 0

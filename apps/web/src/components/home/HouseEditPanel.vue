@@ -12,17 +12,17 @@ import EditBar from './EditBar.vue'
 import { styleById } from '../../three/styles'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Panneau « maison » en MODE ÉDITION : ce qu'on modifie DE LA MAISON entière, à la place des tuiles
-// et des pièces qu'on pilote le reste du temps. Même arbitrage que `RoomEditPanel` pour une pièce —
-// le mode est armé dans Réglages, donc le geste est déjà décidé : on relève la maison, on ne
-// l'allume pas.
+// "House" panel in EDIT MODE: what one modifies ABOUT THE WHOLE HOUSE, in place of the tiles
+// and rooms one commands the rest of the time. Same trade-off as `RoomEditPanel` for a room —
+// the mode is armed in Settings, so the gesture is already decided: we survey the house, we do not
+// turn it on.
 //
-// Deux matières ici : les places de stationnement (visibles sans défiler), et les fenêtres de toit —
-// elles n'appartiennent à aucun mur, et l'onglet Toit n'ouvre aucune pièce : sans cette section,
-// on ne pouvait pas les poser depuis la vue où le toit est visible.
+// Two subjects here: the parking places (visible without scrolling), and the roof windows —
+// they belong to no wall, and the Roof tab opens no room: without this section,
+// they could not be placed from the view where the roof is visible.
 //
-// En tête, la STRUCTURE : ajouter une pièce (au tap, sur le niveau de l'onglet), un étage ou un
-// sous-sol, retirer le niveau de l'onglet s'il est vide. Tout entre dans le brouillon de la séance.
+// At the top, the STRUCTURE: add a room (by tap, on the tab's level), a floor or a
+// basement, remove the tab's level if it is empty. Everything goes into the session's draft.
 const house = useHouseStore()
 const settings = useSettingsStore()
 const { t } = useI18n()
@@ -48,9 +48,9 @@ const armedRoof = computed(() => house.placingOpening?.type === 'roof-window')
 function selectRoof(id: string) { house.selectOpening(id) }
 
 /**
- * Le contour du terrain se règle dans l'éditeur du terrain, pas ici : ses poignées prendraient les
- * mêmes taps et glissements que le jardin et les places. On ferme donc ce qui est en cours, puis on
- * l'ouvre sur son onglet Contour ; « Terminer » y ramène au réglage de la maison.
+ * The land outline is adjusted in the land editor, not here: its handles would take the
+ * same taps and drags as the garden and the places. So we close whatever is in progress, then
+ * open it on its Outline tab; "Done" brings back to the house setting from there.
  */
 function openOutline() {
   if (house.placingOpening) house.cancelPlacingOpening()
@@ -62,17 +62,17 @@ function openOutline() {
   settings.setSceneTuningOpen(false)
   settings.setReliefEditing(true, 'outline')
 }
-/** Un style « costume » garde sa palette : la façade choisie ne s'y voit pas, on le dit. */
+/** A "costume" style keeps its palette: the chosen facade is not visible in it, and we say so. */
 const costume = computed(() => !styleById(settings.sceneStyle).assets)
 function startRoof() { house.startPlacingOpening('roof-window') }
 
 const levelName = (id: string | null) => (id ? house.index?.levelsById.get(id)?.name ?? '' : '')
 const targetLevel = computed(() => levelName(house.roomTargetLevelId))
-/** Le niveau de l'onglet, celui qu'on retirerait ou renommerait ; aucun sur « Tout ». */
+/** The tab's level, the one we would remove or rename; none on "All". */
 const tabLevel = computed(() => house.focusedLevelId)
 const tabLevelObj = computed(() => (tabLevel.value ? house.index?.levelsById.get(tabLevel.value) ?? null : null))
 
-/** Un nom vide ne s'écrit pas : le champ reprend l'ancien. Le nom court, lui, peut se vider. */
+/** An empty name is not written: the field takes back the old one. The short name, however, can be emptied. */
 function renameProperty(ev: Event) {
   const input = ev.target as HTMLInputElement
   const name = input.value.trim()
@@ -89,7 +89,7 @@ function renameLevel(ev: Event, field: 'name' | 'shortName') {
   house.setLevelIdentity(lvl.id, { [field]: v })
 }
 
-// Une section ouverte à la fois, retenue d'une visite à l'autre (confort de ce poste seulement).
+// One section open at a time, remembered from one visit to the next (a convenience of this workstation only).
 type Section = 'structure' | 'roof' | 'parking' | 'garden' | 'facade'
 const STORE_KEY = 'kasbah.houseEdit.section'
 function remembered(): Section | null {
@@ -99,14 +99,14 @@ function remembered(): Section | null {
   } catch { return null }
 }
 const open = ref<Section | null>(remembered())
-/** Replier une section désarme la pose qu'elle a lancée : son « Annuler » / « Terminé » disparaît avec elle. */
+/** Folding a section disarms the placement it started: its "Cancel" / "Done" disappears with it. */
 function toggle(s: Section) {
   if (house.placingOpening) house.cancelPlacingOpening()
   if (house.placingParking) house.cancelPlacingParking()
   if (house.placingGarden) house.cancelPlacingGarden()
   if (house.placingRoom) house.cancelPlacingRoom()
   open.value = open.value === s ? null : s
-  try { localStorage.setItem(STORE_KEY, open.value ?? '') } catch { /* stockage indisponible : on oublie */ }
+  try { localStorage.setItem(STORE_KEY, open.value ?? '') } catch { /* storage unavailable: we forget */ }
 }
 </script>
 
@@ -116,7 +116,7 @@ function toggle(s: Section) {
       <div class="min0">
         <div class="title">{{ house.house?.name ?? $t('nav.home') }}</div>
       </div>
-      <!-- le même geste que l'interrupteur des Réglages, sans y retourner -->
+      <!-- the same gesture as the Settings switch, without going back there -->
       <button type="button" class="pill done" @click="settings.setHouseEditing(false)">
         <StrokeIcon name="check" :size="16" /> {{ $t('render.houseEditingDone') }}
       </button>
@@ -126,7 +126,7 @@ function toggle(s: Section) {
   <EditSection :title="$t('structure.section')" :meta="String(house.effective?.rooms.length ?? 0)" :open="open === 'structure'" @toggle="toggle('structure')">
     <div class="block">
       <EditBar />
-      <!-- les noms : la propriété, puis le niveau de l'onglet (champs grisés sur « Tout », jamais retirés) -->
+      <!-- the names: the property, then the tab's level (fields grayed out on "All", never removed) -->
       <label class="names">
         <span class="section-label">{{ $t('structure.propertyName') }}</span>
         <input class="field" type="text" maxlength="60" :value="house.effective?.name ?? ''" :disabled="house.savingEdit"
@@ -143,7 +143,7 @@ function toggle(s: Section) {
                  @change="renameLevel($event, 'shortName')" @keydown.enter="($event.target as HTMLInputElement).blur()">
         </div>
       </div>
-      <!-- même boîte armée ou non (« Annuler ») ; la consigne a sa place réservée -->
+      <!-- same box armed or not ("Cancel"); the instruction has its reserved place -->
       <button v-if="!house.placingRoom" type="button" class="pill add" :disabled="house.savingEdit || !house.roomTargetLevelId" @click="house.startPlacingRoom()">
         <StrokeIcon name="plus" :size="16" /> {{ $t('structure.addRoom') }}
       </button>
@@ -223,7 +223,7 @@ function toggle(s: Section) {
 .done { flex: none; gap: 6px; }
 .title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
 .hint { font-size: 12px; margin: 0; min-height: 32px; }
-/* lignes réservées : armé ou non, niveau choisi ou non, la consigne garde sa hauteur */
+/* reserved lines: armed or not, level chosen or not, the instruction keeps its height */
 .hint--2, .hint--3 { line-height: 1.5; }
 .hint--2 { min-height: 3em; }
 .hint--3 { min-height: 4.5em; }

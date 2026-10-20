@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-// La phase de la lune dessinée : la moitié éclairée côté soleil, fermée par le terminateur, une
-// demi-ellipse de rayon r·|1 − 2f|. Miroir quand la lune décroît, et encore dans l'hémisphère sud,
-// où on la voit à l'envers.
+// The drawn moon phase: the half lit on the sun's side, closed by the terminator, a
+// half-ellipse of radius r·|1 − 2f|. Mirrored when the moon is waning, and again in the southern hemisphere,
+// where it is seen upside down.
 const props = defineProps<{
-  /** Part éclairée, 0 à 1. */
+  /** Lit share, 0 to 1. */
   fraction: number
-  /** Âge dans le cycle, 0 à 1 (0,5 = pleine lune). */
+  /** Age in the cycle, 0 to 1 (0.5 = full moon). */
   phase: number
-  /** Vue de l'hémisphère sud. */
+  /** View from the southern hemisphere. */
   south?: boolean
 }>()
 
@@ -31,8 +31,8 @@ const mirror = computed(() => (props.phase > 0.5) !== !!props.south)
 <style scoped>
 .moon-disc { display: block; }
 .moon-disc__dark { fill: var(--line); }
-/* la part éclairée garde une teinte de lune quel que soit le thème (la couleur du texte la noircirait
-   en clair) ; un liseré la détache d'un fond de carte blanc */
+/* the lit part keeps a moon tint whatever the theme (the text color would blacken it
+   in light mode); a fine edge detaches it from a white map background */
 .moon-disc__lit { fill: color-mix(in oklab, var(--cat-light) 18%, #f3efe4); }
 .moon-disc__rim { fill: none; stroke: var(--muted); stroke-opacity: .35; stroke-width: 1; vector-effect: non-scaling-stroke; }
 </style>

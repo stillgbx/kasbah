@@ -8,19 +8,19 @@ import { normalize } from '../../lib/search'
 import AssistantReply from '../layout/AssistantReply.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Barre de recherche de la vue Maison, ancrée en bas entre la carte météo et les boutons de vue.
-// La liste s'ouvre AU-DESSUS du champ : le champ ne bouge donc jamais, quel que soit le nombre de
-// résultats, et rien d'autre à l'écran ne se décale. Valider un résultat ne fait rien d'autre que
-// déplacer la sélection (voir `useSearch`) — le cadrage 3D et le panneau suivent tout seuls.
+// Search bar of the House view, anchored at the bottom between the weather card and the view buttons.
+// The list opens ABOVE the field: the field therefore never moves, whatever the number of
+// results, and nothing else on screen shifts. Validating a result does nothing more than
+// move the selection (see `useSearch`) — the 3D framing and the panel follow by themselves.
 //
-// La dernière ligne passe la saisie à l'assistant, qui AGIT. Sa réponse s'ouvre à la place de la
-// liste et y reste sans le focus (sur téléphone, le clavier se ferme) jusqu'à la croix ou à Échap,
-// qui effacent aussi l'instruction du champ.
+// The last row passes the input to the assistant, which ACTS. Its answer opens in place of the
+// list and stays there without focus (on a phone, the keyboard closes) until the cross or Escape,
+// which also clear the instruction from the field.
 //
-// Le micro (plugin `transcription` allumé) : appuyer pour parler, appuyer pour finir ; le texte
-// entendu part aussitôt à l'assistant, sans passer par le champ, qui reste vide avec le micro au bout :
-// on enchaîne une autre commande vocale sans rien effacer. Le toucher du micro rend le focus :
-// sur téléphone, le clavier ne monte pas (ni à la fin de l'écoute, quand le champ redevient éditable).
+// The mic (`transcription` plugin enabled): press to speak, press to finish; the text
+// heard goes straight to the assistant, without passing through the field, which stays empty with the mic at the end:
+// one chains another voice command without clearing anything. Touching the mic gives focus back:
+// on a phone, the keyboard does not come up (nor at the end of listening, when the field becomes editable again).
 
 const emit = defineEmits<{ picked: [hit: SearchHit] }>()
 
@@ -34,32 +34,32 @@ const assistant = useAssistant()
 const { phase } = assistant
 const { t } = useI18n()
 const { ready: voiceReady, speech, phase: voicePhase, heardNothing, toggle: toggleVoice, replay, forgetSpoken } = useVoiceInput(async (text) => {
-  // le champ reste vide (l'instruction est en tête de la réponse) : le micro y reste, prêt pour la suivante
+  // the field stays empty (the instruction is at the top of the answer): the mic stays there, ready for the next one
   await assistant.ask(text)
-  // la réponse, à dire à voix haute si les réponses parlées sont allumées
+  // the answer, to be spoken aloud if spoken answers are on
   return assistant.phase.value === 'done' ? assistant.answer.value : null
 })
-/** La place du bout du champ : le micro pendant l'écoute, ou quand le champ est vide (la réponse a sa propre croix). */
+/** The slot at the end of the field: the mic while listening, or when the field is empty (the answer has its own cross). */
 const micSlot = computed(() => voiceReady.value === true && (voicePhase.value !== 'idle' || !query.value))
-/** Parler, terminer l'écoute, ou arrêter la réponse dite à voix haute. */
+/** Speak, end listening, or stop the answer spoken aloud. */
 const micLabel = computed(() => t(voicePhase.value === 'recording' ? 'voice.stop' : voicePhase.value === 'speaking' ? 'voice.stopSpeaking' : 'voice.start'))
-/** Les résultats, plus la ligne de l'assistant. */
+/** The results, plus the assistant's row. */
 const total = computed(() => results.value.length + 1)
 
-/** La liste s'ouvre dès que la requête est assez longue, même vide : « Aucun résultat » est une réponse. */
+/** The list opens as soon as the query is long enough, even empty: "No result" is an answer. */
 const isOpen = () => phase.value === 'idle' && focused.value && normalize(query.value).length >= MIN_QUERY
 
-// La frappe rebat les cartes : le curseur revient en tête, sinon Entrée validerait la 4e ligne
-// d'une liste qui n'a plus rien à voir avec celle qu'on regardait.
+// Typing reshuffles the cards: the cursor goes back to the top, otherwise Enter would validate the 4th row
+// of a list that has nothing to do with the one one was looking at.
 watch(results, () => { active.value = 0 })
-// la réponse fermée (ou remplacée par une autre question), son audio gardé pour la réécoute part avec elle
+// the answer closed (or replaced by another question), its audio kept for replay goes away with it
 watch(phase, (p) => { if (p === 'idle') forgetSpoken() })
-// Retoucher l'instruction après la réponse revient à la recherche.
+// Editing the instruction after the answer goes back to search.
 watch(query, (q) => {
   if ((phase.value === 'done' || phase.value === 'error') && q.trim() !== assistant.asked.value) assistant.reset()
 })
 
-/** Revenir au champ après une réponse sélectionne l'instruction : la frappe suivante la remplace. */
+/** Going back to the field after an answer selects the instruction: the next keystroke replaces it. */
 function onFocus() {
   focused.value = true
   if (phase.value === 'done' || phase.value === 'error') input.value?.select()
@@ -84,22 +84,22 @@ function onEnter() {
   else askNow()
 }
 
-/** Le micro : la saisie s'efface pour laisser lire « J'écoute… », la réponse précédente avec elle. */
+/** The mic: the input clears to let "Listening…" be read, the previous answer with it. */
 function talk() {
-  // en `http://` le micro sera refusé : on garde la saisie
+  // over `http://` the mic will be refused: we keep the input
   if (voicePhase.value === 'idle' && window.isSecureContext) { assistant.reset(); query.value = '' }
   input.value?.blur()
   toggleVoice()
 }
 
-/** Fermer la réponse : elle se tait, et l'instruction quitte le champ. */
+/** Close the answer: it goes quiet, and the instruction leaves the field. */
 function closeReply() {
   if (voicePhase.value === 'speaking') toggleVoice()
   assistant.reset()
   query.value = ''
 }
 
-/** La croix : arrête ou efface la réponse, et la saisie. */
+/** The cross: stops or clears the answer, and the input. */
 function clear() {
   closeReply()
   input.value?.focus()
@@ -111,7 +111,7 @@ function move(delta: number) {
   void nextTick(() => listEl.value?.children[active.value]?.scrollIntoView({ block: 'nearest' }))
 }
 
-/** Échap arrête ou efface la réponse (et l'instruction), puis la saisie, puis rend la main : on corrige sans perdre le champ. */
+/** Escape stops or clears the answer (and the instruction), then the input, then hands back control: one corrects without losing the field. */
 function onEscape() {
   if (phase.value !== 'idle') closeReply()
   else if (query.value) query.value = ''
@@ -121,8 +121,8 @@ function onEscape() {
 
 <template>
   <div class="search">
-    <!-- `mousedown.prevent` : sans lui, le champ perd le focus AVANT le clic, la liste se ferme et
-         le résultat n'est jamais choisi (le doigt passe par la même séquence que la souris). -->
+    <!-- `mousedown.prevent`: without it, the field loses focus BEFORE the click, the list closes and
+         the result is never chosen (a finger goes through the same sequence as the mouse). -->
     <div v-if="isOpen()" ref="listEl" class="search__list" role="listbox" @mousedown.prevent>
       <button v-for="(hit, i) in results" :key="hit.key" type="button" class="search__row" role="option"
               :data-on="i === active ? '1' : '0'" :aria-selected="i === active" @click="pick(hit)" @mouseenter="active = i">
@@ -151,9 +151,9 @@ function onEscape() {
              @focus="onFocus()" @blur="focused = false"
              @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)"
              @keydown.enter.prevent="onEnter()" @keydown.esc.prevent="onEscape()">
-      <!-- UNE place, TOUJOURS réservée, pour le micro et la croix : un bouton qui apparaît rétrécirait
-           le champ sous les doigts, et deux ne laissaient que 31 px de saisie sur téléphone. Le micro
-           quand il n'y a rien à effacer (ou pendant l'écoute), la croix sinon. -->
+      <!-- ONE place, ALWAYS reserved, for the mic and the cross: a button that appears would shrink
+           the field under the fingers, and two left only 31 px of input on a phone. The mic
+           when there is nothing to clear (or while listening), the cross otherwise. -->
       <button v-if="micSlot" type="button" class="search__mic" :data-phase="voicePhase"
               :aria-label="micLabel" :title="micLabel"
               :disabled="voicePhase === 'transcribing'" @mousedown.prevent @click="talk()">
@@ -170,7 +170,7 @@ function onEscape() {
 
 <style scoped>
 .search { position: relative; width: min(380px, 100%); }
-/* annonce du nombre de résultats aux lecteurs d'écran, invisible à l'œil */
+/* announcement of the number of results to screen readers, invisible to the eye */
 .search__sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .search__field {
   display: flex; align-items: center; gap: 8px; height: var(--ctl-w); padding: 0 6px 0 14px;
@@ -182,13 +182,13 @@ function onEscape() {
 .search__input {
   flex: 1 1 0; min-width: 0; border: 0; background: transparent; color: var(--text);
   font: inherit; font-size: 14px; outline: none;
-  /* en fenêtre étroite le texte indicatif ne tient plus : points de suspension plutôt qu'une coupe
-     en plein mot (« Rechercher une pièce, un a ») — la propriété se pose sur le champ, pas sur
-     `::placeholder`, qui ne l'accepte pas */
+  /* in a narrow window the placeholder text no longer fits: ellipsis rather than a cut
+     mid-word ("Search a room, a de") — the property is set on the field, not on
+     `::placeholder`, which does not accept it */
   text-overflow: ellipsis;
 }
 .search__input::placeholder { color: var(--muted); }
-/* la croix native de `type=search` ferait doublon avec la nôtre, et elle n'existe pas partout */
+/* the native cross of `type=search` would duplicate ours, and it does not exist everywhere */
 .search__input::-webkit-search-cancel-button { display: none; }
 .search__clear {
   flex: none; width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent;
@@ -196,7 +196,7 @@ function onEscape() {
 }
 .search__clear[data-show='0'] { visibility: hidden; }
 .search__clear:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
-/* même gabarit que la croix ; rouge pendant l'écoute, qui pulse pendant la transcription */
+/* same layout as the cross; red while listening, pulsing during transcription */
 .search__mic {
   flex: none; width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent;
   color: var(--muted); display: grid; place-items: center;
@@ -208,8 +208,8 @@ function onEscape() {
 @keyframes mic-wait { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .search__mic { animation: none; } }
 
-/* Au-dessus du champ, et vers le haut : la liste grandit dans le vide de la scène, jamais vers le
-   bord bas où le champ est posé. Cinq lignes visibles, le reste au défilement. */
+/* Above the field, and upward: the list grows into the emptiness of the scene, never toward the
+   bottom edge where the field sits. Five visible rows, the rest scrolls. */
 .search__list {
   position: absolute; left: 0; right: 0; bottom: calc(100% + 8px);
   max-height: calc(5 * 46px); overflow-y: auto; overscroll-behavior: contain;
@@ -222,20 +222,20 @@ function onEscape() {
   border: 0; background: transparent; color: var(--text); text-align: left;
 }
 .search__row + .search__row { border-top: 1px solid var(--line); }
-/* Ligne active : le liseré de l'app (même geste que la pièce sélectionnée dans RoomRows), pas
-   seulement la teinte — mesurée à 1,26:1, elle ne disait pas assez où le clavier se trouve.
-   `outline` et non `border` : il se pose SUR la ligne sans en changer la hauteur. */
+/* Active row: the app's outline (same gesture as the selected room in RoomRows), not
+   just the tint — measured at 1.26:1, it did not say enough where the keyboard is.
+   `outline` and not `border`: it sits ON the row without changing its height. */
 .search__row[data-on='1'] { background: color-mix(in srgb, var(--accent) 14%, transparent); outline: 2px solid var(--accent); outline-offset: -2px; }
-/* le gris seul tombe à 4,07:1 sur la teinte de la ligne active (thème clair) : un quart de texte
-   le remonte au-dessus de 4,5:1, dans le sens du texte, donc dans tous les thèmes */
+/* gray alone falls to 4.07:1 on the active row's tint (light theme): a quarter of text
+   lifts it above 4.5:1, in the direction of the text, hence in all themes */
 .search__row[data-on='1'] .search__sub { color: color-mix(in srgb, var(--muted) 75%, var(--text)); }
 .search__row--empty { justify-content: center; }
 .search__icon--ask { color: var(--accent); }
-/* la saisie vaut instruction : elle prend la place du lieu, le libellé ne s'étire pas */
+/* the input counts as an instruction: it takes the place of the location, the label does not stretch */
 .search__label--ask { flex: none; }
 .search__sub--ask { flex: 1 1 0; text-align: right; }
-/* la réponse, au même endroit que la liste et du même verre, grandit vers le haut ; au-delà de la
-   hauteur, son en-tête reste et le dessous défile (AssistantReply) */
+/* the answer, in the same place as the list and with the same glass, grows upward; beyond the
+   height, its header stays and the underneath scrolls (AssistantReply) */
 .search__reply {
   position: absolute; left: 0; right: 0; bottom: calc(100% + 8px);
   max-height: min(50vh, 360px); overflow: hidden;
@@ -244,7 +244,7 @@ function onEscape() {
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
 }
 .search__icon { color: var(--muted); flex: none; }
-/* une ligne chacun, coupés aux points de suspension : toutes les lignes ont la même hauteur */
+/* one line each, cut with ellipsis: all rows have the same height */
 .search__label { flex: 1 1 auto; min-width: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .search__sub { flex: 0 1 auto; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>

@@ -3,10 +3,10 @@ import { computed } from 'vue'
 import { FINISH_FAMILIES, FINISHES, finishesFor, type Finish, type FinishFamily, type FinishId, type FinishSurface } from '@kasbah/shared'
 import { textureUrl } from '../../three/textures/assets'
 
-// Sélecteur de FINITION d'une surface (sol, murs d'une pièce, façade) : la vignette de chaque
-// matière du catalogue, rangée par famille, plus « celle du style » en tête. Le choix part tout de
-// suite dans le brouillon de la maison (la scène le montre) ; c'est la barre d'apparence qui
-// l'écrit. Rien ne bouge : la ligne du nom et celle de la teinte ont leur place, remplies ou non.
+// FINISH picker for a surface (floor, a room's walls, facade): the thumbnail of each material of
+// the catalog, arranged by family, plus "the style's own" at the top. The choice goes straight into
+// the house draft (the scene shows it); it is the appearance bar that writes it. Nothing moves:
+// the name line and the tint line have their place, filled or not.
 const props = defineProps<{ surface: FinishSurface; value: Finish | undefined; disabled?: boolean }>()
 const emit = defineEmits<{ change: [finish: Finish | null] }>()
 
@@ -18,7 +18,7 @@ const groups = computed(() => {
 })
 const thumb = (id: FinishId) => `url("${textureUrl(FINISHES[id].dir, 'thumb')}")`
 const tintable = computed(() => !!props.value && !!FINISHES[props.value.id].tintable)
-/** Une peinture garde sa teinte quand on passe à une autre peinture : on change de grain, pas de couleur. */
+/** A paint keeps its tint when switching to another paint: we change the grain, not the color. */
 function pick(id: FinishId) {
   if (props.value?.id === id) return
   const tint = props.value?.tint && FINISHES[id].tintable ? props.value.tint : undefined
@@ -32,7 +32,7 @@ function setTint(tint: string | undefined) {
 
 <template>
   <div class="fp">
-    <!-- le nom de la finition choisie : une ligne réservée, toujours là -->
+    <!-- the name of the chosen finish: a reserved line, always there -->
     <div class="fp__current">
       <span class="fp__name">{{ value ? $t(`finish.names.${value.id}`) : $t('finish.styleDefault') }}</span>
       <span class="muted fp__family">{{ value ? $t(`finish.families.${FINISHES[value.id].family}`) : '' }}</span>
@@ -41,7 +41,7 @@ function setTint(tint: string | undefined) {
     <div class="fp__row">
       <span class="muted">{{ $t('finish.tint') }}</span>
       <span class="fp__tint">
-        <!-- places RÉSERVÉES : grisées hors peinture, jamais retirées -->
+        <!-- RESERVED places: grayed out outside paint, never removed -->
         <button type="button" class="fp__reset" :class="{ 'fp__reset--off': !value?.tint }"
                 :disabled="disabled || !value?.tint" :tabindex="value?.tint ? 0 : -1"
                 :title="$t('finish.tintNone')" :aria-label="$t('finish.tintNone')" @click="setTint(undefined)">×</button>

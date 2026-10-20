@@ -5,18 +5,18 @@ import { ApiRequestError, getTransport } from '../api'
 import { t } from '../i18n'
 import { useNotificationsStore } from './notifications'
 
-// Scènes des fabricants (scènes Hue…). Même invariant que le store des appareils : la carte est
-// REMPLACÉE à chaque changement. Le rapprochement avec la maison se fait par NOM de pièce, comme
-// l'auto-placement des appareils (`roomKey`) : une scène de zone n'appartient à aucune pièce et
-// remonte au niveau maison.
+// Vendor scenes (Hue scenes…). Same invariant as the devices store: the map is
+// REPLACED on each change. The matching with the house is done by room NAME, like
+// the auto-placement of devices (`roomKey`): a zone scene belongs to no room and
+// goes up to the house level.
 
 type Entries = Record<string, PluginSceneEntry>
 
 /**
- * Active une scène et éteint ses sœurs du même groupe (règle miroir de celle du serveur).
- * ATTENTION : ÉTEINDRE une scène n'éteint rien d'autre — sans ce garde-fou, le message
- * « l'ancienne scène est inactive » que le pont envoie juste après un changement d'ambiance
- * effaçait l'activation de la NOUVELLE, arrivée dans le même lot.
+ * Activates a scene and turns off its siblings of the same group (mirror of the server's rule).
+ * WARNING: TURNING OFF a scene turns nothing else off — without this safeguard, the message
+ * "the old scene is inactive" that the bridge sends right after a light scene change
+ * erased the activation of the NEW one, arrived in the same batch.
  */
 function withActive(entries: Entries, sceneId: string, active: SceneActivation, now: number): Entries {
   const target = entries[sceneId]
@@ -31,13 +31,13 @@ function withActive(entries: Entries, sceneId: string, active: SceneActivation, 
   return next
 }
 
-/** Activation attendue d'un rappel : `off` éteint, les deux autres modes portent leur nom. */
+/** Expected activation of a recall: `off` turns off, the two other modes carry their name. */
 const activationFor = (mode: SceneRecallMode): SceneActivation => (mode === 'off' ? 'inactive' : mode)
 
 export const useScenesStore = defineStore('scenes', () => {
   const entries = shallowRef<Entries>({})
   const pending = ref<Record<string, number>>({})
-  /** Création d'ambiance en cours, par groupe. */
+  /** Light scene creation in progress, per group. */
   const creating = ref<Record<string, boolean>>({})
 
   const list = computed<PluginSceneEntry[]>(() =>
@@ -63,12 +63,12 @@ export const useScenesStore = defineStore('scenes', () => {
     }
   }
 
-  /** Scènes d'une pièce de la maison (rapprochement par nom). */
+  /** Scenes of a room of the house (matched by name). */
   const forRoom = (roomName: string) => list.value.filter(
     (e) => e.scene.group?.kind === 'room' && roomKey(e.scene.group.name) === roomKey(roomName),
   )
 
-  /** Scènes qu'aucune pièce de la maison ne réclame : zones du fabricant et pièces inconnues. */
+  /** Scenes that no room of the house claims: vendor zones and unknown rooms. */
   const forHouse = (roomNames: string[]) => {
     const known = new Set(roomNames.map(roomKey))
     return list.value.filter((e) => !e.scene.group || e.scene.group.kind === 'zone' || !known.has(roomKey(e.scene.group.name)))
@@ -77,18 +77,18 @@ export const useScenesStore = defineStore('scenes', () => {
   const isPending = (sceneId: string) => (pending.value[sceneId] ?? 0) > 0
 
   /**
-   * Mode joué quand on touche une ambiance éteinte : animé si le fabricant l'a réglée ainsi
-   * (`autoDynamic`, lu sur le pont), fixe sinon. Le bouton d'animation reste toujours explicite.
+   * Mode played when an off light scene is touched: animated if the vendor set it that way
+   * (`autoDynamic`, read from the bridge), static otherwise. The animation button always stays explicit.
    */
   function tapMode(entry: PluginSceneEntry): 'static' | 'dynamic' {
     return entry.scene.dynamic && entry.scene.autoDynamic ? 'dynamic' : 'static'
   }
 
   /**
-   * Ambiances présentes AILLEURS mais absentes de ce groupe : de quoi en ajouter une. Les
-   * fabricants ne publient pas leur galerie de préréglages (vérifié sur un pont Hue : aucune
-   * ressource catalogue), donc la matière est ce que le pont porte déjà. Une seule source par nom,
-   * en préférant celle qui a une palette animée : elle porte plus d'information à recopier.
+   * Light scenes present ELSEWHERE but absent from this group: something to add one from. The
+   * vendors do not publish their preset gallery (checked on a Hue bridge: no
+   * catalog resource), so the material is what the bridge already carries. A single source per name,
+   * preferring the one that has an animated palette: it carries more information to copy.
    */
   const clonableFor = (groupName: string): PluginSceneEntry[] => {
     const key = roomKey(groupName)
@@ -102,7 +102,7 @@ export const useScenesStore = defineStore('scenes', () => {
     return [...byName.values()].sort((a, b) => a.scene.name.localeCompare(b.scene.name))
   }
 
-  /** Crée l'ambiance chez le fabricant ; elle arrive ensuite par le message `scenes`. */
+  /** Creates the light scene at the vendor; it then arrives through the `scenes` message. */
   async function createScene(fromSceneId: string, groupName: string): Promise<boolean> {
     const name = entries.value[fromSceneId]?.scene.name ?? fromSceneId
     creating.value = { ...creating.value, [groupName]: true }
@@ -124,8 +124,8 @@ export const useScenesStore = defineStore('scenes', () => {
   const isCreating = (groupName: string) => creating.value[groupName] === true
 
   /**
-   * Supprime l'ambiance CHEZ le fabricant : elle disparaît donc aussi de son app. On l'enlève tout
-   * de suite de l'affichage et on la remet si le fabricant refuse.
+   * Deletes the light scene AT the vendor: it therefore disappears from its app too. It is removed right
+   * away from the display and put back if the vendor refuses.
    */
   async function deleteScene(sceneId: string): Promise<boolean> {
     const entry = entries.value[sceneId]
@@ -148,9 +148,9 @@ export const useScenesStore = defineStore('scenes', () => {
   }
 
   /**
-   * TOUTES les ambiances, regroupées PAR PLUGIN et rangées par groupe : c'est l'écran de gestion
-   * (réglage « démarrer animée », suppression). Le concept est commun aux plugins, les réglages non
-   * — on peut vouloir les palettes animées sur les lampes et pas sur un autre parc d'appareils.
+   * ALL the light scenes, grouped BY PLUGIN and arranged by group: it is the management screen
+   * ("start animated" setting, deletion). The concept is common to the plugins, the settings are not
+   * — one may want animated palettes on the lights and not on another set of devices.
    */
   const scenesByPlugin = computed(() => {
     const acc = new Map<string, PluginSceneEntry[]>()
@@ -169,8 +169,8 @@ export const useScenesStore = defineStore('scenes', () => {
   })
 
   /**
-   * Écrit « démarrer animée » CHEZ le fabricant : le réglage vaut alors pour toutes les apps.
-   * Optimiste, avec retour arrière ; la valeur confirmée revient par le message `scenes`.
+   * Writes "start animated" AT the vendor: the setting then applies to all apps.
+   * Optimistic, with rollback; the confirmed value comes back through the `scenes` message.
    */
   async function setAutoDynamic(sceneId: string, value: boolean): Promise<boolean> {
     const entry = entries.value[sceneId]
@@ -191,7 +191,7 @@ export const useScenesStore = defineStore('scenes', () => {
     }
   }
 
-  /** Rappelle une scène. Active tout de suite l'affichage, revient en arrière si le pont refuse. */
+  /** Recalls a scene. Activates the display right away, rolls back if the bridge refuses. */
   async function recall(sceneId: string, mode: SceneRecallMode = 'static'): Promise<boolean> {
     const entry = entries.value[sceneId]
     if (!entry) return false
@@ -203,7 +203,7 @@ export const useScenesStore = defineStore('scenes', () => {
       await getTransport().recallScene(sceneId, { mode })
       return true
     } catch (err) {
-      if (entries.value === optimistic) entries.value = before   // rien de plus récent n'est arrivé
+      if (entries.value === optimistic) entries.value = before   // nothing more recent has arrived
       const n = useNotificationsStore()
       const name = entry.scene.name
       if (err instanceof ApiRequestError) n.error(t(`errors.${err.code}`, { name, message: err.message }))

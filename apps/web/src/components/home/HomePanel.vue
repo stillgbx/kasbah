@@ -13,8 +13,8 @@ import MarqueeText from '../ui/MarqueeText.vue'
 import StatTile from '../ui/StatTile.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Panneau « maison » : tuiles de synthèse, et au fond la liste des alertes en cours.
-// Chaque tuile mène à la vue qui en donne le détail (`to` : nom de route du rail).
+// "House" panel: summary tiles, and at the bottom the list of ongoing alerts.
+// Each tile leads to the view that gives its detail (`to`: route name of the rail).
 const house = useHouseStore()
 const devices = useDevicesStore()
 const alerts = useAlertsStore()
@@ -23,8 +23,8 @@ const summary = useHomeSummary()
 const { t, locale } = useI18n()
 
 /**
- * Jamais lu : un véhicule découvert ENDORMI porte les défauts du contrat (0 %, 0 km), qui se
- * liraient ici comme une batterie vide. Même arbitrage que la vue Véhicules : « — » dit vrai.
+ * Never read: a vehicle discovered ASLEEP carries the contract's defaults (0 %, 0 km), which would
+ * read here as an empty battery. Same trade-off as the Vehicles view: "—" tells the truth.
  */
 const unreadVehicle = (s: StateFor<'vehicle'>) =>
   s.soc === 0 && s.rangeKm === 0 && s.odometerKm === undefined && s.location === undefined
@@ -32,19 +32,19 @@ const unreadVehicle = (s: StateFor<'vehicle'>) =>
 const stats = computed(() => {
   const out: { key: string; value: string; label: string; to: string }[] = []
   if (summary.lights.value.length) out.push({ key: 'lights', value: String(summary.lightsOn.value), label: t('home.lightsOn'), to: 'lights' })
-  // volets et stores ont leur propre tuile : « ouverts » et « baissés » ne sont pas la même mesure
+  // shutters and awnings have their own tile: "open" and "lowered" are not the same measure
   if (summary.shutters.value.length) out.push({ key: 'shutters', value: `${summary.shuttersOpen.value}/${summary.shutters.value.length}`, label: t('home.shuttersOpen'), to: 'covers' })
   if (summary.awnings.value.length) out.push({ key: 'awnings', value: `${summary.awningsDown.value}/${summary.awnings.value.length}`, label: t('home.awningsDown'), to: 'covers' })
-  // caméras et lecteurs : ces deux compteurs manquaient d'un endroit où se voir d'un coup d'œil.
+  // cameras and players: these two counters lacked a place where they could be seen at a glance.
   if (summary.cameras.value.length) out.push({ key: 'cameras', value: String(summary.cameras.value.length), label: t('home.cameras'), to: 'cameras' })
   if (summary.players.value.length) out.push({ key: 'players', value: `${summary.playing.value}/${summary.players.value.length}`, label: t('home.players'), to: 'media' })
-  // énergie : la production de l'instant, et la charge de la batterie du site quand il y en a une —
-  // deux mesures distinctes, donc deux tuiles. Le détail reste dans la vue Énergie.
+  // energy: the instantaneous production, and the site's battery charge when there is one —
+  // two distinct measures, hence two tiles. The detail stays in the Energy view.
   const site = summary.energy.value
   if (site) out.push({ key: 'solar', value: formatPower(site.productionW, locale.value), label: t('home.solarNow'), to: 'energy' })
   if (site?.batterySoc !== undefined) out.push({ key: 'battery', value: formatPercent(site.batterySoc, locale.value), label: t('home.battery'), to: 'energy' })
-  // une tuile PAR voiture : deux voitures ne se résument pas en un chiffre, et c'est leur charge
-  // qu'on vient regarder. Le nom sert d'étiquette ; `devices.list` est trié par nom, l'ordre tient.
+  // one tile PER car: two cars do not boil down to one figure, and it is their charge
+  // that one comes to look at. The name serves as the label; `devices.list` is sorted by name, the order holds.
   for (const v of summary.vehicles.value) {
     const s = v.state as StateFor<'vehicle'>
     out.push({
@@ -54,12 +54,12 @@ const stats = computed(() => {
       to: 'vehicles',
     })
   }
-  // grille à 2 colonnes : les tuiles passent à la ligne. Le plafond laisse la place aux 5 compteurs
-  // de la maison, aux 2 tuiles d'énergie et à trois voitures — aucune n'est jamais tronquée ici.
+  // 2-column grid: the tiles wrap. The cap leaves room for the 5 counters
+  // of the house, the 2 energy tiles and three cars — none is ever truncated here.
   return out.slice(0, 10)
 })
 
-/** Le texte d'une alerte : ce qu'il y a à faire, dans les mots de la carte de l'appareil. */
+/** An alert's text: what there is to do, in the words of the device's card. */
 function alertText(a: DeviceAlert): string {
   switch (a.type) {
     case 'software_update': return a.detail ? t('alerts.updateVersion', { version: a.detail }) : t('alerts.update')
@@ -74,11 +74,11 @@ function alertText(a: DeviceAlert): string {
 }
 
 /**
- * Une ligne par APPAREIL, ses alertes à la suite : c'est l'appareil qu'on va voir, et un
- * distributeur à la fois vide et sans dessiccant n'a pas à occuper deux lignes. `active` est trié
- * du plus grave au moins grave : la première alerte d'un appareil donne la couleur de sa ligne, et
- * l'appareil le plus grave passe en tête. Les `info` déjà vues restent : la liste dit ce qui est
- * en cours, la pastille du rail ce qui est nouveau ou à régler.
+ * One row per DEVICE, its alerts following: it is the device one goes to see, and a
+ * dispenser that is both empty and out of desiccant does not need to take two rows. `active` is sorted
+ * from most to least serious: the first alert of a device gives the color of its row, and
+ * the most serious device comes first. The `info` already seen stay: the list says what is
+ * ongoing, the rail's badge what is new or needs adjusting.
  */
 const alertRows = computed(() => {
   const byDevice = new Map<string, RailAlert[]>()
@@ -97,7 +97,7 @@ const alertRows = computed(() => {
   })
 })
 
-/** Un appareil de la maison : on le sélectionne dans la scène (sa pièce se cadre, son panneau s'ouvre). Sinon, sa vue. */
+/** A device of the house: we select it in the scene (its room is framed, its panel opens). Otherwise, its view. */
 function openAlert(deviceId: string, view: string) {
   const hd = house.houseDeviceFor(deviceId)
   if (hd) house.selectDevice(hd.id)
@@ -111,7 +111,7 @@ function openAlert(deviceId: string, view: string) {
       <StatTile :value="s.value" :label="s.label" />
     </router-link>
   </div>
-  <!-- calée au FOND du panneau (margin-top: auto) : elle paraît et part sans rien déplacer au-dessus -->
+  <!-- wedged at the BOTTOM of the panel (margin-top: auto): it appears and leaves without moving anything above -->
   <section v-if="alertRows.length" class="alerts" :aria-label="$t('alerts.title')">
     <div class="section-label">{{ $t('alerts.title') }}</div>
     <button v-for="r in alertRows" :key="r.deviceId" type="button" class="alert-row" :data-severity="r.severity"
@@ -128,13 +128,13 @@ function openAlert(deviceId: string, view: string) {
 
 <style scoped>
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-/* la tuile reste une tuile : ni soulignement ni couleur de lien, seul le fond répond au survol */
+/* the tile stays a tile: no underline nor link color, only the background responds to hover */
 .tile-link { display: block; min-width: 0; color: inherit; text-decoration: none; border-radius: var(--radius); }
 .tile-link:hover .stat-tile { background: var(--accent-soft); }
 .tile-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .alerts { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
-/* même ligne que celles des pièces (`RoomRows`) : deux lignes de texte de hauteur fixe */
+/* same line as the rooms' (`RoomRows`): two text lines of fixed height */
 .alert-row {
   display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius); border: 0;
   background: var(--surface2); color: var(--text); text-align: left; width: 100%; font: inherit; cursor: pointer;
@@ -146,7 +146,7 @@ function openAlert(deviceId: string, view: string) {
 .alert-row__text { font-size: 12px; color: var(--muted); }
 .alert-row[data-severity='problem'] .alert-row__text { color: rgb(var(--v-theme-warning)); }
 .alert-row[data-severity='critical'] .alert-row__text { color: rgb(var(--v-theme-error)); }
-/* même correction de contraste que les cartes des animaux : le jeton `warning` brut passe sous AA en clair */
+/* same contrast fix as the pet cards: the raw `warning` token falls below AA in light mode */
 html[data-theme='light'] .alert-row[data-severity='problem'] .alert-row__text { color: color-mix(in srgb, rgb(var(--v-theme-warning)) 70%, black); }
 .alert-row__go { flex: none; color: var(--muted); }
 </style>

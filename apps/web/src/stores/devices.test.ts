@@ -21,7 +21,7 @@ describe('devices store', () => {
     expect(before).toMatchObject({ position: 100, motion: 'stopped' })
     const ok = await store.sendCommand('mock:cover-living', { type: 'cover.close' })
     expect(ok).toBe(true)
-    // l'état optimiste puis réel remplace l'objet (nouvelle référence)
+    // the optimistic then real state replaces the object (new reference)
     const after = store.states['mock:cover-living'] as StateFor<'cover'>
     expect(after).not.toBe(before)
     expect(after.motion).toBe('closing')
@@ -39,20 +39,20 @@ describe('devices store', () => {
     const before = store.states['mock:light-living'] as StateFor<'light'>
     expect(before.on).toBe(false)
     const p = store.sendCommand('mock:light-living', { type: 'light.set', on: true })
-    expect((store.states['mock:light-living'] as StateFor<'light'>).on).toBe(true)   // optimiste
+    expect((store.states['mock:light-living'] as StateFor<'light'>).on).toBe(true)   // optimistic
     expect(store.isPending('mock:light-living')).toBe(true)
     expect(await p).toBe(false)
-    expect(store.states['mock:light-living']).toBe(before)                           // retour arrière
+    expect(store.states['mock:light-living']).toBe(before)                           // rollback
     expect(notifications.queue).toHaveLength(1)
     expect(notifications.queue[0]!.color).toBe('error')
     store.stop()
   })
 
-  // ---- position visee d'un ouvrant ------------------------------------------------------------
-  // Le besoin : une box qui ne publie la position qu'a la FIN de la course reemet l'ancienne
-  // valeur pendant tout le mouvement. Le curseur doit rester sur la cible, et n'y renoncer que si
-  // l'ouvrant s'arrete ailleurs.
-  describe('charge demandée', () => {
+  // ---- targeted position of a cover -----------------------------------------------------------
+  // The need: a box that only publishes the position at the END of the travel re-emits the old
+  // value during the whole movement. The slider must stay on the target, and only give up if
+  // the cover stops elsewhere.
+  describe('requested charge', () => {
     const ID = 'tesla:v'
     const DESC: DeviceDescriptor = { id: ID, pluginId: 'tesla', externalId: 'v', kind: 'vehicle', name: 'Voiture', capabilities: ['soc', 'charging'], meta: {} }
     const car = (charging: boolean, updatedAt = 1, pluggedIn = true): StateFor<'vehicle'> =>
@@ -64,7 +64,7 @@ describe('devices store', () => {
       return store
     }
 
-    it("tenue après l'accusé, jusqu'à ce que la voiture se DISE en charge", async () => {
+    it("held after the acknowledgment, until the car SAYS it is charging", async () => {
       const store = seeded()
       await store.sendCommand(ID, { type: 'vehicle.start_charge' })
       expect(store.isPending(ID)).toBe(false)
@@ -75,7 +75,7 @@ describe('devices store', () => {
       expect(store.isChargeRequested(ID)).toBe(false)
     })
 
-    it('levée sur un refus, sur un débranchement, ou au bout de trois minutes', async () => {
+    it('released on a refusal, on an unplugging, or after three minutes', async () => {
       const refused = seeded(vi.fn(async () => { throw new ApiRequestError(409, 'DEVICE_UNAVAILABLE', 'not plugged') }))
       await refused.sendCommand(ID, { type: 'vehicle.start_charge' })
       expect(refused.isChargeRequested(ID)).toBe(false)
@@ -99,7 +99,7 @@ describe('devices store', () => {
     })
   })
 
-  describe('cible dun ouvrant', () => {
+  describe('target of a cover', () => {
     const ID = 'tahoma:v'
     const DESC: DeviceDescriptor = {
       id: ID, pluginId: 'tahoma', externalId: 'v', kind: 'cover', name: 'Volet',
@@ -108,7 +108,7 @@ describe('devices store', () => {
     const cover = (position: number, motion: StateFor<'cover'>['motion'], updatedAt = 1): StateFor<'cover'> =>
       ({ kind: 'cover', updatedAt, available: true, position, motion })
 
-    /** Transport muet : c'est le test qui decide de CHAQUE etat, pas la simulation. */
+    /** Silent transport: the test decides EVERY state, not the simulation. */
     const seeded = (send: Transport['sendCommand'] = vi.fn(async () => {})) => {
       setTransport({ ...createMockTransport({ seed: 1 }), sendCommand: send })
       const store = useDevicesStore()
@@ -118,15 +118,15 @@ describe('devices store', () => {
     const push = (store: ReturnType<typeof useDevicesStore>, state: StateFor<'cover'>) =>
       store.applyMessage({ type: 'state', deviceId: ID, state })
 
-    it('pose la cible a la commande et la tient malgre une position perimee', async () => {
+    it('sets the target on the command and holds it despite a stale position', async () => {
       const store = seeded()
       await store.sendCommand(ID, { type: 'cover.set_position', position: 40 })
       expect(store.targetPosition(ID)).toBe(40)
-      push(store, cover(100, 'closing', 2))   // la box bouge sans publier de position
+      push(store, cover(100, 'closing', 2))   // the box moves without publishing a position
       expect(store.targetPosition(ID)).toBe(40)
     })
 
-    it('abandonne la cible quand la position est atteinte', async () => {
+    it('drops the target when the position is reached', async () => {
       const store = seeded()
       await store.sendCommand(ID, { type: 'cover.close' })
       expect(store.targetPosition(ID)).toBe(0)
@@ -136,100 +136,100 @@ describe('devices store', () => {
       expect(store.targetPosition(ID)).toBeUndefined()
     })
 
-    it('rend la main quand louvrant sarrete ailleurs (obstacle, stop, refus du moteur)', async () => {
+    it('gives control back when the cover stops elsewhere (obstacle, stop, motor refusal)', async () => {
       const store = seeded()
       await store.sendCommand(ID, { type: 'cover.close' })
-      push(store, cover(80, 'closing', 2))    // le mouvement a bien demarre
-      push(store, cover(55, 'stopped', 3))    // puis il sarrete a mi-chemin
+      push(store, cover(80, 'closing', 2))    // the movement did start
+      push(store, cover(55, 'stopped', 3))    // then it stops halfway
       expect(store.targetPosition(ID)).toBeUndefined()
     })
 
-    it('un stopped recu AVANT le demarrage neffacé pas la cible', async () => {
+    it('a stopped received BEFORE the start does not erase the target', async () => {
       const store = seeded()
       await store.sendCommand(ID, { type: 'cover.close' })
-      // trame typique dune box TaHoma : la cible arrive seule, le moteur na pas encore demarre
+      // typical frame from a TaHoma box: the target arrives alone, the motor has not started yet
       push(store, cover(100, 'stopped', 2))
       expect(store.targetPosition(ID)).toBe(0)
     })
 
-    it('viser la position deja atteinte ne pose aucune cible', async () => {
-      const store = seeded()                       // volet ouvert (position 100)
+    it('aiming at the already reached position sets no target', async () => {
+      const store = seeded()                       // open shutter (position 100)
       await store.sendCommand(ID, { type: 'cover.open' })
       expect(store.targetPosition(ID)).toBeUndefined()
     })
 
-    // Sequence rapportee par l'utilisateur : le curseur revenait a sa position d'AVANT le geste
-    // avant de se poser sur la vraie. Le stop gele donc l'affichage jusqu'a la premiere trame.
-    it('stop en pleine course : le curseur ne revient jamais en arriere', async () => {
+    // Sequence reported by the user: the slider went back to its position from BEFORE the gesture
+    // before settling on the real one. The stop therefore freezes the display until the first frame.
+    it('stop mid-travel: the slider never goes backward', async () => {
       const store = seeded()
-      // position de depart : 40 (soit 60 % de fermeture a l'ecran)
+      // starting position: 40 (that is 60 % closure on screen)
       push(store, cover(40, 'stopped', 1))
       expect(store.targetPosition(ID)).toBeUndefined()
 
-      // on vise 70 (30 % de fermeture)
+      // we aim at 70 (30 % closure)
       await store.sendCommand(ID, { type: 'cover.set_position', position: 70 })
       expect(store.targetPosition(ID)).toBe(70)
-      push(store, cover(40, 'closing', 2))       // la box bouge, sans publier de position
+      push(store, cover(40, 'closing', 2))       // the box moves, without publishing a position
       expect(store.targetPosition(ID)).toBe(70)
 
-      // stop : la valeur MONTREE (70) est gelee, pas remplacee par la position perimee (40)
+      // stop: the SHOWN value (70) is frozen, not replaced by the stale position (40)
       await store.sendCommand(ID, { type: 'cover.stop' })
       expect(store.targetPosition(ID)).toBe(70)
 
-      // la premiere trame leve le gel, quoi qu'elle dise
+      // the first frame lifts the freeze, whatever it says
       push(store, cover(53, 'stopped', 3))
       expect(store.targetPosition(ID)).toBeUndefined()
       expect((store.states[ID] as StateFor<'cover'>).position).toBe(53)
     })
 
-    it('stop leve le gel meme si la trame dit encore que ca bouge', async () => {
+    it('stop lifts the freeze even if the frame still says it is moving', async () => {
       const store = seeded()
       await store.sendCommand(ID, { type: 'cover.close' })
       push(store, cover(80, 'closing', 2))
       await store.sendCommand(ID, { type: 'cover.stop' })
-      push(store, cover(61, 'closing', 3))       // la box n'a pas encore dit `stopped`
+      push(store, cover(61, 'closing', 3))       // the box has not yet said `stopped`
       expect(store.targetPosition(ID)).toBeUndefined()
     })
 
-    // Signale par l'utilisateur : le curseur ne rejoignait la position perso qu'a la FIN de la
-    // course. Le rappel vise la memoire du moteur comme n'importe quelle position.
-    it('le rappel de la position perso pose la cible tout de suite', async () => {
+    // Reported by the user: the slider only reached the custom position at the END of the
+    // travel. The recall aims at the motor's memory like any other position.
+    it('recalling the custom position sets the target right away', async () => {
       const store = seeded()
       push(store, { ...cover(100, 'stopped', 1), presetPosition: 35 })
       await store.sendCommand(ID, { type: 'cover.preset' })
       expect(store.targetPosition(ID)).toBe(35)
-      push(store, { ...cover(100, 'closing', 2), presetPosition: 35 })   // position encore perimee
+      push(store, { ...cover(100, 'closing', 2), presetPosition: 35 })   // position still stale
       expect(store.targetPosition(ID)).toBe(35)
       push(store, { ...cover(35, 'stopped', 3), presetPosition: 35 })
       expect(store.targetPosition(ID)).toBeUndefined()
     })
 
-    it('rappel sans valeur publiee : aucune cible a viser', async () => {
+    it('recall without a published value: no target to aim at', async () => {
       const store = seeded()
       await store.sendCommand(ID, { type: 'cover.preset' })
       expect(store.targetPosition(ID)).toBeUndefined()
     })
 
-    it('une commande refusee efface la cible', async () => {
+    it('a refused command clears the target', async () => {
       const store = seeded(vi.fn(async () => { throw new ApiRequestError(502, 'UPSTREAM_ERROR', 'boom') }))
       expect(await store.sendCommand(ID, { type: 'cover.open' })).toBe(false)
       expect(store.targetPosition(ID)).toBeUndefined()
     })
 
-    it('perdre la disponibilite efface la cible', async () => {
+    it('losing availability clears the target', async () => {
       const store = seeded()
       await store.sendCommand(ID, { type: 'cover.close' })
       store.applyMessage({ type: 'availability', deviceIds: [ID], available: false })
       expect(store.targetPosition(ID)).toBeUndefined()
     })
 
-    it('une cible trop vieille est laissee tomber', async () => {
+    it('a target that is too old is dropped', async () => {
       vi.useFakeTimers()
       try {
         const store = seeded()
         await store.sendCommand(ID, { type: 'cover.close' })
         expect(store.targetPosition(ID)).toBe(0)
-        vi.advanceTimersByTime(120_000)          // horloge du CLIENT, pas `updatedAt`
+        vi.advanceTimersByTime(120_000)          // CLIENT clock, not `updatedAt`
         push(store, cover(90, 'closing', 2))
         expect(store.targetPosition(ID)).toBeUndefined()
       } finally { vi.useRealTimers() }
