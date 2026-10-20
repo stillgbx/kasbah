@@ -10,6 +10,7 @@ import VehicleBattery from '../components/vehicles/VehicleBattery.vue'
 import VehicleMap from '../components/vehicles/VehicleMap.vue'
 import VehicleClimate from '../components/vehicles/VehicleClimate.vue'
 import VehicleSoftware from '../components/vehicles/VehicleSoftware.vue'
+import VehicleTires from '../components/vehicles/VehicleTires.vue'
 import VehicleTuning from '../components/vehicles/VehicleTuning.vue'
 import { formatAgo, formatDistance, formatKm, formatMinutes, formatPercent, formatPower, formatTemp } from '../lib/format'
 import { QUOTA_TENSE_PCT, quotaPercent } from '../lib/map'
@@ -31,7 +32,6 @@ const house = useHouseStore()
 const router = useRouter()
 const { t, locale } = useI18n()
 const EMPTY = '—'
-const TIRES = ['fl', 'fr', 'rl', 'rr'] as const
 
 /**
  * Renaming a vehicle. The chosen name lives in the HOUSE (`house.devices[].name`), not in the
@@ -129,10 +129,6 @@ const temps = (s: StateFor<'vehicle'>) =>
   s.insideTempC === undefined && s.outsideTempC === undefined
     ? EMPTY
     : `${s.insideTempC === undefined ? EMPTY : formatTemp(s.insideTempC, locale.value)} · ${s.outsideTempC === undefined ? EMPTY : formatTemp(s.outsideTempC, locale.value)}`
-const tire = (s: StateFor<'vehicle'>, k: (typeof TIRES)[number]) => {
-  const v = s.tirePressureBar?.[k]
-  return v === undefined ? EMPTY : `${new Intl.NumberFormat(locale.value, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)} bar`
-}
 /**
  * What only the user can know, folded behind "Adjust": the 3D offset, the rotation and
  * the battery capacity (see `VehicleTuning`). A vehicle with nothing to adjust — placed by
@@ -369,14 +365,8 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
               <div class="card card--soft stat"><StrokeIcon class="wm" name="hotCold" :size="48" />
                 <div class="muted stat__k">{{ $t('vehicle.temps') }}</div><div class="stat__v">{{ temps(v.state) }}</div></div>
             </div>
-            <!-- four wheels, four fixed cells, in the order you look at a car from above -->
-            <div class="card card--soft tires">
-              <StrokeIcon class="wm" name="tire" :size="56" />
-              <div class="muted stat__k">{{ $t('vehicle.tires') }}</div>
-              <div class="tires__grid">
-                <div v-for="k in TIRES" :key="k" class="tire"><span class="muted tire__k">{{ $t(`vehicle.tire.${k}`) }}</span><span class="tire__v" :data-warn="v.state.tireWarning?.[k]">{{ tire(v.state, k) }}</span></div>
-              </div>
-            </div>
+            <!-- four wheels, four fixed cells: the component shared with the 3D panel -->
+            <VehicleTires :state="v.state" />
             <!-- software: installed version and pending update, always there; opens the release notes -->
             <VehicleSoftware :descriptor="v.descriptor" :state="v.state" />
           </div>
@@ -590,21 +580,10 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
    quarter of its area. UNDER the text: `isolation` makes the section a stacking context, the
    `z-index: -1` stays in it (above the section's background, under its content). Absolute: it
    takes no space. */
-.stat, .tires { position: relative; overflow: hidden; isolation: isolate; }
+.stat { position: relative; overflow: hidden; isolation: isolate; }
 .wm { position: absolute; right: -6px; bottom: -6px; z-index: -1; color: var(--text); opacity: .07; pointer-events: none; }
-.tires .wm { right: -8px; bottom: -8px; }
 .stat__k { font-size: 11px; }
 .stat__v { font-weight: 500; font-size: 14px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tires { padding: 10px 12px; display: grid; gap: 6px; }
-.tires__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.tire { display: grid; gap: 2px; font-variant-numeric: tabular-nums; }
-.tire__k { font-size: 11px; }
-.tire__v { font-weight: 500; font-size: 13px; white-space: nowrap; }
-/* the car's tire warning (the `tire_low` alert): the warning orange, darkened in light theme for
-   contrast like the pet cards; red when much lower */
-.tire__v[data-warn='soft'] { color: rgb(var(--v-theme-warning)); }
-html[data-theme='light'] .tire__v[data-warn='soft'] { color: color-mix(in srgb, rgb(var(--v-theme-warning)) 70%, black); }
-.tire__v[data-warn='hard'] { color: rgb(var(--v-theme-error)); }
 .vcard__map { height: var(--vmap-min); }
 /* the charge row holds its height even when empty: the card does not move when the charge
    starts. A HEIGHT equal to the row, not a minimum: `min-height: 16px` under an 18 px row let the

@@ -9,6 +9,7 @@ import ChargeLimitCard from '../vehicles/ChargeLimitCard.vue'
 import VehicleBattery from '../vehicles/VehicleBattery.vue'
 import VehicleClimate from '../vehicles/VehicleClimate.vue'
 import VehicleSoftware from '../vehicles/VehicleSoftware.vue'
+import VehicleTires from '../vehicles/VehicleTires.vue'
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'vehicle'>; pending?: boolean; disabled?: boolean }>()
 /** Charge requested, not yet observed: the same wait as the Vehicles view (held by the store). */
@@ -72,6 +73,8 @@ watch(() => [props.state.chargeLimit, props.pending], () => { dragged.value = nu
     <VehicleClimate v-if="has('climate_precondition')" class="card card--soft mb-3" :descriptor="descriptor" :state="state" />
     <!-- the software: the Vehicles view's line and its dialog (notes, installation). Always there, greyed out
          for a vehicle that says nothing about it; wrapped because the component has several roots -->
+    <!-- the tyre pressures and the car's warning: the Vehicles view's section -->
+    <VehicleTires class="mb-3" :state="state" />
     <div class="mb-3"><VehicleSoftware :descriptor="descriptor" :state="state" /></div>
     <div v-if="state.odometerKm" class="text-caption text-medium-emphasis">{{ $t('vehicle.odometer') }} · {{ formatKm(state.odometerKm, $i18n.locale) }}</div>
   </div>

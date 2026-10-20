@@ -716,5 +716,11 @@ pneu regonflé efface son alerte au relevé suivant. La règle partagée en tire
 (assombri en thème clair, comme les cartes animaux), rouge pour `hard`. La pression recommandée n'est
 pas publiée (voir `../1_architecture/1_1_contrat-appareils.md`, même date, pour le seuil écarté).
 
+Le bloc des pneus est un composant partagé (`components/vehicles/VehicleTires.vue`) : la vue
+Véhicules et le panneau de détail de la vue 3D (`VehicleCard.vue`, qui n'affichait pas les
+pressions) montrent les mêmes cases. Une roue en alerte met une icône à côté du titre « Pneus »
+(titre de hauteur fixe : rien ne bouge), son texte au survol (« Pneu sous-gonflé (AR D) »).
+
 Sources : `apps/server/src/plugins/tesla/{mapping,types}.ts` (+ `mapping.test.ts`),
-`apps/web/src/views/VehiclesView.vue`, relevé `GET /api/plugins/tesla/raw` du 2026-10-20.
+`apps/web/src/views/VehiclesView.vue`, `apps/web/src/components/vehicles/VehicleTires.vue`,
+`apps/web/src/components/controls/VehicleCard.vue`, relevé `GET /api/plugins/tesla/raw` du 2026-10-20.

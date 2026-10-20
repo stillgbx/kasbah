@@ -16,6 +16,8 @@ Entrées les plus récentes en haut. Une session = une entrée.
 - `3_plugins/3_8_tesla.md` - section datée : indicateurs `tpms_soft_warning_*` / `tpms_hard_warning_*`, relevé brut de vérification, couleurs de la vue Véhicules.
 - `index.md` - dates des deux pages.
 
+Complément du même jour : le panneau de détail de la vue 3D n'avait pas les pneus ; bloc partagé `VehicleTires.vue` et icône d'alerte près du titre, ajoutés à la section datée de `3_plugins/3_8_tesla.md`.
+
 ## [2026-10-20] update | Code : commentaires, noms de tests et journaux en anglais
 
 **Trigger** : demande de l'utilisateur, suite de la bascule de langue du dépôt public ; passe unique par workflow (9 lots), contrôlée par un garde-fou de comparaison à `HEAD`.
