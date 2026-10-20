@@ -10,18 +10,18 @@ import {
   pubsubPullResponseSchema,
 } from './types'
 
-// Client de l'API Google Smart Device Management. Tout passe par le cloud Google (les appareils
-// Nest n'ont pas d'API locale) et par OAuth : un jeton de rafraîchissement, obtenu une fois à la
-// liaison du compte, donne des jetons d'accès d'une heure renouvelés ici à la demande. Le jeton de
-// rafraîchissement est le seul secret durable ; il ne sort jamais de cette classe sauf par
-// `exchangeCode`, qui le rend à l'utilisateur pour qu'il le colle dans `.env`.
+// Client for the Google Smart Device Management API. Everything goes through the Google cloud (Nest
+// devices have no local API) and through OAuth: a refresh token, obtained once when linking the
+// account, gives one-hour access tokens renewed here on demand. The refresh token is the only
+// lasting secret; it never leaves this class except through `exchangeCode`, which returns it to the
+// user so they can paste it into `.env`.
 
 export const SDM_BASE_URL = 'https://smartdevicemanagement.googleapis.com/v1'
 export const PUBSUB_BASE_URL = 'https://pubsub.googleapis.com/v1'
 export const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token'
-/** Google répond en général sous la seconde ; au-delà de ce délai on abandonne (cf. TaHoma). */
+/** Google usually answers within a second; beyond this delay we give up (cf. TaHoma). */
 export const REQUEST_TIMEOUT_MS = 15_000
-/** On renouvelle le jeton d'accès un peu avant son expiration réelle. */
+/** We renew the access token a little before its actual expiry. */
 const EXPIRY_MARGIN_MS = 60_000
 
 export interface NestClientOptions {
@@ -33,11 +33,11 @@ export interface NestClientOptions {
   clock: Clock
   fetchImpl?: FetchLike
   logger?: Logger
-  /** Abrégé dans les tests ; en production c'est `REQUEST_TIMEOUT_MS`. */
+  /** Shortened in tests; in production it is `REQUEST_TIMEOUT_MS`. */
   requestTimeoutMs?: number
 }
 
-/** La même URL de flux avec un autre jeton `auth` (celui rendu par `ExtendRtspStream`). */
+/** The same stream URL with another `auth` token (the one returned by `ExtendRtspStream`). */
 export function rtspUrlWithToken(rtspUrl: string, streamToken: string): string {
   const u = new URL(rtspUrl)
   u.searchParams.set('auth', streamToken)
@@ -56,7 +56,7 @@ export class NestClient {
       ?? ((url, init) => undiciFetch(url, init as Parameters<typeof undiciFetch>[1]) as unknown as ReturnType<FetchLike>)
   }
 
-  /** Un compte Google est lié (jeton de rafraîchissement connu). */
+  /** A Google account is linked (refresh token known). */
   get linked(): boolean { return this.refreshToken !== undefined }
 
   authorizationUrl(state: string): string {
@@ -80,8 +80,8 @@ export class NestClient {
   }
 
   /**
-   * Échange le code d'autorisation reçu sur la redirection contre un jeton de rafraîchissement,
-   * adopté immédiatement. Le rend aussi à l'appelant : le serveur n'écrit pas `.env`.
+   * Exchanges the authorization code received on the redirect for a refresh token, adopted right
+   * away. Also returns it to the caller: the server does not write `.env`.
    */
   async exchangeCode(code: string, signal?: AbortSignal): Promise<{ refreshToken: string }> {
     const token = await this.tokenRequest({ grant_type: 'authorization_code', code, redirect_uri: this.opts.redirectUri }, signal)
@@ -102,8 +102,8 @@ export class NestClient {
       const e = oauthErrorSchema.safeParse(json)
       const code = e.success ? e.data.error : undefined
       const detail = e.success && e.data.error_description ? ` (${e.data.error_description})` : ''
-      // `invalid_grant` : code déjà consommé, ou jeton de rafraîchissement révoqué / expiré →
-      // il faut refaire la liaison. Le reste (client_id / secret faux) est une erreur de config.
+      // `invalid_grant`: code already used, or refresh token revoked / expired → the account must
+      // be linked again. The rest (wrong client_id / secret) is a config error.
       if (code === 'invalid_grant') throw new PluginError('NEEDS_PAIRING', `Google refused the grant${detail}: link the account again`)
       throw new PluginError('UPSTREAM_ERROR', `Google OAuth HTTP ${res.status}${code ? ` ${code}` : ''}${detail}`)
     }
@@ -114,7 +114,7 @@ export class NestClient {
     return parsed.data
   }
 
-  /** Jeton d'accès valide, renouvelé si besoin. */
+  /** Valid access token, renewed if needed. */
   private async accessTokenFor(signal?: AbortSignal): Promise<string> {
     if (!this.refreshToken) throw new PluginError('NEEDS_PAIRING', 'no Google account linked (NEST_REFRESH_TOKEN)')
     if (this.accessToken && this.opts.clock.now() < this.accessTokenExpiresAt - EXPIRY_MARGIN_MS) return this.accessToken
@@ -123,10 +123,10 @@ export class NestClient {
   }
 
   /**
-   * Requête SDM authentifiée. Les statuts de Google sont traduits en erreurs de plugin : 400 vient
-   * d'une commande que l'appareil refuse dans son état (`FAILED_PRECONDITION` : consigne en éco…),
-   * 404 d'un appareil qui n'est plus partagé, 403 d'un projet mal configuré — son message est
-   * remonté tel quel, il dit exactement ce qui manque.
+   * Authenticated SDM request. Google's statuses are translated into plugin errors: 400 comes from a
+   * command the device refuses in its state (`FAILED_PRECONDITION`: setpoint while in eco…), 404
+   * from a device no longer shared, 403 from a badly configured project — its message is passed up
+   * as is, it says exactly what is missing.
    */
   private async request(method: 'GET' | 'POST', path: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
     const token = await this.accessTokenFor(signal)
@@ -141,7 +141,7 @@ export class NestClient {
     const message = e.success ? e.data.error?.message : undefined
     const suffix = message ? ` (${message})` : ''
     if (res.status === 401) {
-      this.accessToken = undefined                     // on retentera avec un jeton neuf au prochain appel
+      this.accessToken = undefined                     // we will retry with a fresh token on the next call
       throw new PluginError('NEEDS_PAIRING', `Google rejected the access token${suffix}`)
     }
     if (res.status === 400) throw new PluginError('UNSUPPORTED_COMMAND', `Google refused the command${suffix}`)
@@ -153,9 +153,9 @@ export class NestClient {
   private devicesPath(): string { return `/enterprises/${encodeURIComponent(this.opts.projectId)}/devices` }
 
   /**
-   * Tous les appareils partagés avec le projet. Validés un par un : un appareil d'une forme
-   * inattendue ne prive pas la maison des autres. `raw` est la réponse telle que reçue, pour
-   * relever une fixture réelle (`GET /api/plugins/nest/devices/raw`).
+   * All devices shared with the project. Validated one by one: a device with an unexpected shape
+   * does not deprive the house of the others. `raw` is the response as received, to capture a real
+   * fixture (`GET /api/plugins/nest/devices/raw`).
    */
   async listDevices(signal?: AbortSignal): Promise<{ raw: unknown; devices: SdmDevice[] }> {
     const raw = await this.request('GET', this.devicesPath(), undefined, signal)
@@ -170,7 +170,7 @@ export class NestClient {
     return { raw, devices }
   }
 
-  /** Un appareil, relu après une commande pour publier l'état que Google a réellement retenu. */
+  /** One device, read again after a command to publish the state Google actually kept. */
   async getDevice(externalId: string, signal?: AbortSignal): Promise<SdmDevice> {
     const raw = await this.request('GET', `${this.devicesPath()}/${encodeURIComponent(externalId)}`, undefined, signal)
     const r = sdmDeviceSchema.safeParse(raw)
@@ -178,17 +178,17 @@ export class NestClient {
     return r.data
   }
 
-  /** `POST …/devices/<id>:executeCommand`. Résout à l'accusé de Google (200) avec ses `results`, s'il y en a. */
+  /** `POST …/devices/<id>:executeCommand`. Resolves on Google's ack (200) with its `results`, if any. */
   async executeCommand(externalId: string, command: string, params: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     const raw = await this.request('POST', `${this.devicesPath()}/${encodeURIComponent(externalId)}:executeCommand`, { command, params }, signal)
     const r = sdmCommandResponseSchema.safeParse(raw)
     return r.success ? r.data.results : undefined
   }
 
-  // ---- flux RTSP (caméras de 1re génération) -----------------------------------------------
-  // Google ouvre une session RTSP à la demande : l'URL vaut cinq minutes, et c'est le jeton de
-  // prolongation qui la maintient — l'appelant doit prolonger AVANT l'échéance, puis arrêter la
-  // session quand plus personne ne regarde (sinon elle court jusqu'à son expiration).
+  // ---- RTSP stream (1st-generation cameras) ------------------------------------------------
+  // Google opens an RTSP session on demand: the URL lasts five minutes, and it is the extension
+  // token that keeps it alive — the caller must extend BEFORE the deadline, then stop the session
+  // when nobody is watching anymore (otherwise it runs until it expires).
 
   async generateRtspStream(externalId: string, signal?: AbortSignal): Promise<SdmRtspStream> {
     const results = await this.executeCommand(externalId, 'sdm.devices.commands.CameraLiveStream.GenerateRtspStream', {}, signal)
@@ -201,9 +201,9 @@ export class NestClient {
   }
 
   /**
-   * Prolonge la session : nouveau jeton de prolongation ET nouveau `streamToken`. Ce dernier n'est pas
-   * décoratif — la connexion RTSP en cours est coupée à l'échéance initiale (constaté), il faut se
-   * reconnecter sur l'URL portant le nouveau jeton (`?auth=`), voir `rtspUrlWithToken`.
+   * Extends the session: new extension token AND new `streamToken`. The latter is not decorative —
+   * the current RTSP connection is cut at the initial deadline (observed), one must reconnect on the
+   * URL carrying the new token (`?auth=`), see `rtspUrlWithToken`.
    */
   async extendRtspStream(externalId: string, streamExtensionToken: string, signal?: AbortSignal): Promise<{ streamExtensionToken: string; streamToken?: string; expiresAt?: string }> {
     const results = await this.executeCommand(externalId, 'sdm.devices.commands.CameraLiveStream.ExtendRtspStream', { streamExtensionToken }, signal)
@@ -221,22 +221,22 @@ export class NestClient {
   }
 
   /**
-   * Tire les événements en attente d'un abonnement Pub/Sub (sonnerie, mouvement…), avec le MÊME jeton
-   * OAuth que SDM (portée `pubsub`). L'abonnement est du type « pull » : c'est le serveur qui va
-   * chercher, aucun endpoint public à exposer. Rend les messages non acquittés ; l'appelant décode et
-   * `acknowledge` ceux qu'il a traités, sinon Google les redonnera.
+   * Pulls the pending events of a Pub/Sub subscription (ring, motion…), with the SAME OAuth token as
+   * SDM (`pubsub` scope). The subscription is of the "pull" type: the server goes and fetches, no
+   * public endpoint to expose. Returns the unacknowledged messages; the caller decodes and
+   * `acknowledge`s those it has handled, otherwise Google will deliver them again.
    */
   async pullEvents(subscription: string, maxMessages: number, signal?: AbortSignal): Promise<{ ackId: string; data?: string }[]> {
-    // `returnImmediately` : Google rend tout de suite (liste vide si rien) au lieu de RETENIR la requête
-    // en attendant un message (long-polling) — sans quoi un abonnement vide tient jusqu'à notre délai et
-    // journalise un TIMEOUT en boucle. On repasse toutes les NEST_PUBSUB_POLL_MS, une sonnerie arrive vite.
+    // `returnImmediately`: Google answers right away (empty list if nothing) instead of HOLDING the
+    // request while waiting for a message (long-polling) — otherwise an empty subscription hangs until
+    // our timeout and logs a TIMEOUT in a loop. We come back every NEST_PUBSUB_POLL_MS, a ring arrives fast.
     const json = await this.pubsub('POST', `/${subscription}:pull`, { maxMessages, returnImmediately: true }, signal)
     const r = pubsubPullResponseSchema.safeParse(json)
     if (!r.success) throw new PluginError('UPSTREAM_ERROR', 'unexpected Pub/Sub pull response from Google')
     return (r.data.receivedMessages ?? []).map((m) => ({ ackId: m.ackId, ...(m.message?.data !== undefined ? { data: m.message.data } : {}) }))
   }
 
-  /** Acquitte les messages traités : sans ça, Google les redonne au bout du délai de rétention. */
+  /** Acknowledges the handled messages: without it, Google redelivers them after the retention delay. */
   async acknowledge(subscription: string, ackIds: string[], signal?: AbortSignal): Promise<void> {
     if (ackIds.length === 0) return
     await this.pubsub('POST', `/${subscription}:acknowledge`, { ackIds }, signal)

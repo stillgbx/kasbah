@@ -1,14 +1,14 @@
-// Trame Cast v2 : un entier 32 bits big-endian (longueur) puis un message protobuf `CastMessage`.
-// Le message n'a que sept champs et on n'en écrit que six : encoder et décoder à la main tient en
-// moins de cent lignes, sans dépendre d'un compilateur protobuf. Schéma (cast_channel.proto) :
+// Cast v2 frame: a big-endian 32-bit integer (length) then a `CastMessage` protobuf message.
+// The message has only seven fields and we only write six: encoding and decoding by hand fits in
+// under a hundred lines, without depending on a protobuf compiler. Schema (cast_channel.proto):
 //
 //   1 protocol_version : enum   (CASTV2_1_0 = 0)
-//   2 source_id        : string ('sender-0' côté Kasbah)
-//   3 destination_id   : string ('receiver-0' pour le récepteur, ou le transportId d'une appli)
+//   2 source_id        : string ('sender-0' on the Kasbah side)
+//   3 destination_id   : string ('receiver-0' for the receiver, or an app's transportId)
 //   4 namespace        : string (urn:x-cast:…)
 //   5 payload_type     : enum   (STRING = 0, BINARY = 1)
 //   6 payload_utf8     : string (JSON)
-//   7 payload_binary   : bytes  (jamais émis, ignoré en lecture)
+//   7 payload_binary   : bytes  (never sent, ignored when reading)
 
 export const NS_CONNECTION = 'urn:x-cast:com.google.cast.tp.connection'
 export const NS_HEARTBEAT = 'urn:x-cast:com.google.cast.tp.heartbeat'
@@ -22,16 +22,16 @@ export interface CastMessage {
   sourceId: string
   destinationId: string
   namespace: string
-  /** Charge utile JSON déjà sérialisée (`payload_type = STRING`). */
+  /** JSON payload already serialized (`payload_type = STRING`). */
   payload: string
 }
 
-/** Un message JSON prêt à partir : `payload` est sérialisé ici, une seule fois. */
+/** A JSON message ready to go: `payload` is serialized here, once. */
 export function jsonMessage(sourceId: string, destinationId: string, namespace: string, body: Record<string, unknown>): CastMessage {
   return { sourceId, destinationId, namespace, payload: JSON.stringify(body) }
 }
 
-// ---- protobuf minimal ------------------------------------------------------------------------
+// ---- minimal protobuf ------------------------------------------------------------------------
 
 function varint(n: number): Buffer {
   const out: number[] = []
@@ -45,7 +45,7 @@ function stringField(field: number, value: string): Buffer {
   return Buffer.concat([varint((field << 3) | 2), varint(bytes.length), bytes])
 }
 
-/** Encode un message et sa longueur : ce qu'on écrit tel quel sur la socket TLS. */
+/** Encodes a message and its length: what we write as is on the TLS socket. */
 export function encodeFrame(msg: CastMessage): Buffer {
   const body = Buffer.concat([
     Buffer.from([0x08, 0x00]),                 // 1 protocol_version = CASTV2_1_0
@@ -73,7 +73,7 @@ function readVarint(buf: Buffer, at: number): { value: number; next: number } {
   }
 }
 
-/** Décode le corps d'un message (sans son préfixe de longueur). Champs inconnus ignorés. */
+/** Decodes a message body (without its length prefix). Unknown fields ignored. */
 export function decodeMessage(body: Buffer): CastMessage {
   const out: CastMessage = { sourceId: '', destinationId: '', namespace: '', payload: '' }
   let payloadType = 0
@@ -100,14 +100,14 @@ export function decodeMessage(body: Buffer): CastMessage {
     else if (wire === 5) at += 4
     else throw new Error(`unsupported wire type ${wire}`)
   }
-  if (payloadType !== 0) out.payload = ''             // charge binaire : on ne la lit pas
+  if (payloadType !== 0) out.payload = ''             // binary payload: we do not read it
   return out
 }
 
 /**
- * Découpe un flux d'octets en messages : TCP ne respecte pas les frontières de trame, un `data`
- * peut porter une demi-trame ou trois. À appeler sur chaque morceau reçu ; rend les messages
- * complets et garde le reste.
+ * Splits a byte stream into messages: TCP does not respect frame boundaries, a `data` event may
+ * carry half a frame or three. To be called on each chunk received; returns the complete messages
+ * and keeps the rest.
  */
 export class FrameDecoder {
   private pending: Buffer = Buffer.alloc(0)

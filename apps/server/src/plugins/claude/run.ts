@@ -6,17 +6,17 @@ import { createInterface } from 'node:readline'
 import type { AssistantRun, AssistantUsage } from '../../assistant/engines'
 import type { SpawnFn } from '../../music/proxy'
 
-// `claude -p` pour une instruction de l'assistant, verrouillé :
-// - aucun outil intégré (`--tools ""`), le seul MCP Kasbah (`--strict-mcp-config`), joint par le
-//   jeton de course que le cœur a tiré au nom du compte ;
-// - aucun réglage (`--setting-sources ""`), un dossier courant vide (pas de `CLAUDE.md`), et rien de
-//   l'environnement du serveur qui commence par CLAUDE / ANTHROPIC (clé d'API, plugins, config) ;
-// - pas de session gardée, sauf `CLAUDE_KEEP_SESSIONS` (pour déboguer).
-// `--safe-mode` n'est PAS une option : il coupe aussi les serveurs MCP (`mcp_servers: []`, vu le 2026-10-07).
+// `claude -p` for one assistant instruction, locked down:
+// - no built-in tool (`--tools ""`), the Kasbah MCP only (`--strict-mcp-config`), reached with the
+//   run token the core drew on behalf of the account;
+// - no settings (`--setting-sources ""`), an empty working directory (no `CLAUDE.md`), and nothing
+//   from the server environment starting with CLAUDE / ANTHROPIC (API key, plugins, config);
+// - no kept session, except with `CLAUDE_KEEP_SESSIONS` (for debugging).
+// `--safe-mode` is NOT an option: it also cuts the MCP servers (`mcp_servers: []`, seen 2026-10-07).
 
 const TOOL_PREFIX = 'mcp__kasbah__'
 
-/** Le `result` de claude porte le coût (prix catalogue, `costBasis: "list"`, même avec un forfait) et les jetons. */
+/** claude's `result` carries the cost (list price, `costBasis: "list"`, even with a subscription) and the tokens. */
 interface ClaudeResult {
   is_error?: boolean
   result?: string
@@ -38,23 +38,23 @@ function usageOf(r: ClaudeResult): AssistantUsage | null {
 
 export interface ClaudeRunOptions {
   bin: string
-  /** `CLAUDE_MODEL` : Haiku par défaut, le plus rapide, et une commande de maison n'a pas besoin de plus (décision 2026-10-07). */
+  /** `CLAUDE_MODEL`: Haiku by default, the fastest, and a house command needs no more (decision 2026-10-07). */
   model: string
-  /** Dossier de travail : `cwd` vide, `config` isolée quand un jeton est employé, fichiers MCP. */
+  /** Working directory: empty `cwd`, `config` isolated when a token is used, MCP files. */
   dir: string
-  /** Jeton de `claude setup-token` ; `null` = la connexion `claude` de la machine serveur. */
+  /** Token from `claude setup-token`; `null` = the server machine's `claude` sign-in. */
   oauthToken: string | null
   keepSessions: boolean
   spawnImpl?: SpawnFn
 }
 
-/** Lance `claude -p` et traduit sa sortie `stream-json` en événements de l'assistant. */
+/** Runs `claude -p` and turns its `stream-json` output into assistant events. */
 export async function runClaude(opts: ClaudeRunOptions, run: AssistantRun): Promise<void> {
   const cwd = join(opts.dir, 'cwd')
   const configDir = join(opts.dir, 'config')
   await mkdir(cwd, { recursive: true })
   await mkdir(configDir, { recursive: true })
-  // Le jeton de course dans un fichier 0600, pas sur la ligne de commande (visible des autres processus).
+  // The run token in a 0600 file, not on the command line (visible to other processes).
   const mcpFile = join(opts.dir, `mcp-${randomUUID()}.json`)
   await writeFile(mcpFile, JSON.stringify({
     mcpServers: { kasbah: { type: 'http', url: run.mcp.url, headers: { Authorization: `Bearer ${run.mcp.token}` } } },
@@ -79,10 +79,10 @@ export async function runClaude(opts: ClaudeRunOptions, run: AssistantRun): Prom
   try {
     await new Promise<void>((resolve) => {
       const child = (opts.spawnImpl ?? (spawn as unknown as SpawnFn))(opts.bin, args, { cwd, env, windowsHide: true })
-      // annulé (client parti, délai passé) : on arrête sans dernier mot, le cœur dit pourquoi
+      // aborted (client gone, timeout passed): we stop without a last word, the core says why
       const onAbort = () => { finished = true; child.kill() }
       run.signal.addEventListener('abort', onAbort, { once: true })
-      // parti pendant la préparation (fichiers) : l'événement est déjà passé
+      // gone during preparation (files): the event has already fired
       if (run.signal.aborted) onAbort()
       const fail = (code: string, message: string) => { finish({ type: 'error', code, message }); child.kill() }
       let stderr = ''
@@ -96,7 +96,7 @@ export async function runClaude(opts: ClaudeRunOptions, run: AssistantRun): Prom
           const kasbah = (msg.mcp_servers as { name: string; status: string }[] | undefined)?.find((s) => s.name === 'kasbah')
           if (kasbah?.status !== 'connected') fail('MCP_UNAVAILABLE', `Kasbah MCP ${kasbah?.status ?? 'missing'}`)
         } else if (msg.type === 'assistant') {
-          // un message « synthétique » (échec d'authentification…) porte `error` : le `result` le dira
+          // a "synthetic" message (authentication failure…) carries `error`: the `result` will say it
           const m = msg as { error?: unknown; message?: { content?: { type: string; text?: string; id?: string; name?: string; input?: unknown }[] } }
           if (m.error) return
           for (const block of m.message?.content ?? []) {

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { comapHistorySchema, EMPTY_HISTORY } from './state'
 
-describe('comap state: schéma de persistance', () => {
-  it('un historique vide (jamais sondé) se relit', () => {
+describe('comap state: persistence schema', () => {
+  it('an empty history (never polled) reads back', () => {
     expect(comapHistorySchema.safeParse(EMPTY_HISTORY).success).toBe(true)
   })
 
-  it('un fichier bien formé se relit avec ses points', () => {
+  it('a well-formed file reads back with its points', () => {
     const parsed = comapHistorySchema.safeParse({
       hourly: [{ t: 1_000, litres: 4 }],
       daily: [{ t: 2_000, litres: 68 }],
@@ -15,9 +15,9 @@ describe('comap state: schéma de persistance', () => {
     expect(parsed.data).toEqual({ hourly: [{ t: 1_000, litres: 4 }], daily: [{ t: 2_000, litres: 68 }] })
   })
 
-  it('une forme inattendue est rejetée proprement (fichier corrompu ou d\'une autre version)', () => {
-    expect(comapHistorySchema.safeParse({}).success).toBe(false)          // hourly/daily obligatoires
+  it('an unexpected shape is rejected cleanly (corrupted file or from another version)', () => {
+    expect(comapHistorySchema.safeParse({}).success).toBe(false)          // hourly/daily required
     expect(comapHistorySchema.safeParse({ hourly: 'non', daily: [] }).success).toBe(false)
-    expect(comapHistorySchema.safeParse({ hourly: [{ t: 1, litres: -1 }], daily: [] }).success).toBe(false) // jamais un volume négatif
+    expect(comapHistorySchema.safeParse({ hourly: [{ t: 1, litres: -1 }], daily: [] }).success).toBe(false) // never a negative volume
   })
 })

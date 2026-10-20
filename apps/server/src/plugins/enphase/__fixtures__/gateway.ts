@@ -1,18 +1,18 @@
-// Reponses CAPTUREES sur une vraie passerelle IQ Gateway Metered (logiciel D8.3, installation
-// TRIPHASEE : 20 micro-onduleurs, 2 batteries IQ de 5 kWh, CT production + CT net-consumption).
-// Ecrites depuis les reponses reelles et non depuis la documentation du fabricant : c'est la lecon
-// de TaHoma, ou deux bugs ont survecu a 19 tests verts parce que les fixtures suivaient la spec.
+// Responses CAPTURED from a real IQ Gateway Metered (software D8.3, THREE-PHASE installation:
+// 20 microinverters, 2 IQ batteries of 5 kWh, production CT + net-consumption CT).
+// Written from the real responses and not from the vendor's documentation: that is the lesson of
+// TaHoma, where two bugs survived 19 green tests because the fixtures followed the spec.
 //
-// Les numeros de serie sont remplaces par de faux, stables. Tout le reste est tel que la passerelle
-// l'a envoye, quirks compris :
-//   - `/ivp/ensemble/power` porte sa liste sous la cle `"devices:"`, avec un DEUX-POINTS final ;
-//   - les puissances de `livedata` et de `ensemble/power` sont en MILLIWATTS, celles de
-//     `production.json` en watts ;
-//   - `production.json` donne DEUX entrees de production : `inverters` (somme des derniers rapports
-//     des onduleurs, en retard de quelques minutes) et `eim` (le CT, temps reel) ;
-//   - `storage` de `production.json` decrit l'AC Battery (`acb`), absente ici : ce sont les
-//     batteries IQ de `/ivp/ensemble/` qui comptent, et elles n'y apparaissent pas ;
-//   - `livedata.connection.sc_stream` vaut "disabled" et les valeurs sont pourtant fraiches.
+// Serial numbers are replaced by fake, stable ones. Everything else is as the gateway sent it,
+// quirks included:
+//   - `/ivp/ensemble/power` carries its list under the key `"devices:"`, with a trailing COLON;
+//   - powers in `livedata` and `ensemble/power` are in MILLIWATTS, those in `production.json` in
+//     watts;
+//   - `production.json` gives TWO production entries: `inverters` (sum of the inverters' last
+//     reports, a few minutes behind) and `eim` (the CT, real time);
+//   - `storage` in `production.json` describes the AC Battery (`acb`), absent here: the IQ
+//     batteries of `/ivp/ensemble/` are what count, and they do not appear there;
+//   - `livedata.connection.sc_stream` is "disabled" and yet the values are fresh.
 
 
 export const INFO_XML = `<?xml version="1.0" encoding="UTF-8"?>

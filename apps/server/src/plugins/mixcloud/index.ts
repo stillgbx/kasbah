@@ -11,16 +11,16 @@ import { buildHome, type HomeSection } from './home'
 import { resolveMixcloud } from './resolve'
 import { createMixcloudFile, memoryMixcloud, noteProgress, resumePoint, type MixcloudState, type MixcloudStore } from './store'
 
-// Plugin Mixcloud (NON OFFICIEL pour la lecture) : catalogue par l'API publique (un nom d'utilisateur
-// suffit, aucun mot de passe), flux par yt-dlp. Aucun appareil publié : c'est une SOURCE du lecteur
-// commun (`music/player.ts`), qui sert le m4a aux enceintes, tient la file et le transfert. Ce que ce
-// plugin ajoute : la REPRISE — la position atteinte dans chaque mix écouté d'ici est retenue, par compte
-// (la maison, et chaque utilisateur connecté qui a donné son nom Mixcloud).
+// Mixcloud plugin (UNOFFICIAL for playback): catalog through the public API (a username is enough,
+// no password), stream through yt-dlp. No device published: it is a SOURCE of the shared player
+// (`music/player.ts`), which serves the m4a to the speakers, holds the queue and the transfer. What
+// this plugin adds: RESUME — the position reached in each mix listened to from here is remembered,
+// per account (the house, and each signed-in user who gave their Mixcloud name).
 
 export const mixcloudConfigSchema = z.object({
   MIXCLOUD_API_URL: z.string().trim().url().default('https://api.mixcloud.com'),
   MIXCLOUD_STATE_FILE: z.string().trim().default(stateFile('mixcloud.json')),
-  /** yt-dlp : le même binaire que YouTube Music, sauf s'il est donné ici. */
+  /** yt-dlp: the same binary as YouTube Music, unless it is given here. */
   MIXCLOUD_YTDLP_PATH: z.string().trim().min(1).optional(),
   YTM_YTDLP_PATH: z.string().trim().min(1).optional(),
 })
@@ -29,17 +29,17 @@ export type MixcloudConfig = z.infer<typeof mixcloudConfigSchema>
 export interface MixcloudPluginDeps {
   api?: MixcloudApi
   store?: MixcloudStore
-  /** L'état d'un utilisateur connecté (tests) ; sinon un fichier de son dossier d'état. */
+  /** A signed-in user's state (tests); otherwise a file in their state folder. */
   userStore?: (user: string) => MixcloudStore
   spawnImpl?: SpawnFn
   fetchImpl?: typeof fetch
-  /** Résolution du flux (tests) ; sinon yt-dlp. */
+  /** Stream resolution (tests); otherwise yt-dlp. */
   resolve?: (key: string) => Promise<ResolvedStream>
 }
 
-/** Le fil « nouveautés des suivis » coûte une requête par compte suivi : gardé une demi-heure. */
+/** The "new from follows" feed costs one request per followed account: kept for half an hour. */
 const FEED_TTL_MS = 30 * 60_000
-/** La position d'un mix n'est écrite sur disque qu'au plus toutes les 15 s. */
+/** A mix's position is written to disk at most every 15 s. */
 const SAVE_EVERY_MS = 15_000
 
 export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugin {
@@ -47,15 +47,15 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
   let config: MixcloudConfig | null = null
   let api: MixcloudApi | null = null
   let lastError: string | null = null
-  /** Par nom Mixcloud : ce sont des données publiques, deux comptes qui suivent le même nom les partagent. */
+  /** By Mixcloud name: it is public data, two accounts following the same name share it. */
   const feeds = new Map<string, { at: number; items: MixcloudMix[] }>()
   const homes = new Map<string, { at: number; sections: HomeSection[] }>()
   let unregister: (() => void) | null = null
 
   /**
-   * Un compte Kasbah côté Mixcloud : celui de la maison (`user: null`, réglé dans le plugin) ou celui
-   * d'un utilisateur connecté (son dossier d'état). Chacun a son nom Mixcloud et SES positions de
-   * reprise : un mix écouté par l'un ne se « reprend » pas chez l'autre.
+   * A Kasbah account on the Mixcloud side: the house's (`user: null`, set in the plugin) or a
+   * signed-in user's (their state folder). Each has its Mixcloud name and ITS resume positions: a
+   * mix listened to by one does not get "resumed" for the other.
    */
   interface Account {
     user: MusicUser
@@ -85,7 +85,7 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
     if (!a) {
       const store = storeOf(user)
       a = store.load().then((state) => ({ user, store, state, saveTimer: null }))
-      // une lecture ratée ne reste pas en cache : la suivante réessaie
+      // a failed read does not stay cached: the next one retries
       a.catch(() => { if (accounts.get(key) === a) accounts.delete(key) })
       accounts.set(key, a)
     }
@@ -93,7 +93,7 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
   }
   const accountFor = (req: FastifyRequest) => accountOf(musicUserOf(req))
 
-  /** Un appel à Mixcloud : l'échec est retenu pour la santé, puis relevé tel quel. */
+  /** A call to Mixcloud: the failure is kept for the health, then rethrown as is. */
   async function ask<T>(call: (a: MixcloudApi) => Promise<T>): Promise<T> {
     try {
       const out = await call(needApi())
@@ -115,7 +115,7 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
     if (a.saveTimer) { clearTimeout(a.saveTimer); a.saveTimer = null }
     await a.store.save(a.state)
   }
-  /** Le fil des suivis, gardé une demi-heure (une requête par compte suivi). */
+  /** The follows feed, kept for half an hour (one request per followed account). */
   async function followingFeed(username: string): Promise<MixcloudMix[]> {
     let hit = feeds.get(username)
     if (!hit || now() - hit.at > FEED_TTL_MS) {
@@ -124,7 +124,7 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
     }
     return hit.items
   }
-  /** Chaque mix rendu à l'UI porte la position de reprise du compte, s'il en a une. */
+  /** Each mix returned to the UI carries the account's resume position, if it has one. */
   const withResume = (a: Account, items: MixcloudMix[]) => items.map((m) => {
     const r = resumePoint(a.state.resume[m.key])
     return r === null ? m : { ...m, resumeS: r }
@@ -158,18 +158,18 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
     },
     onProgress(key, positionS, durationS, ended, user) {
       void accountOf(user).then((a) => {
-        // un utilisateur connecté sans compte Mixcloud écoute en anonyme : rien n'est retenu
+        // a signed-in user without a Mixcloud account listens anonymously: nothing is remembered
         if (a.user !== null && !a.state.username) return
         const before = resumePoint(a.state.resume[key])
         a.state = { ...a.state, resume: noteProgress(a.state.resume, key, positionS, durationS ?? null, ended, now()) }
-        // fin ou oubli : tout de suite (l'UI relira) ; une progression : sans presse
+        // end or forgetting: right away (the UI will read again); a progress: no hurry
         if (ended || (before !== null && resumePoint(a.state.resume[key]) === null)) void persistNow(a).catch(() => {})
         else persistSoon(a)
       }).catch((err) => ctx?.logger.warn({ err }, 'Mixcloud state unreadable, progress not kept'))
     },
   }
 
-  /** Le compte de la maison, déjà lu (pour la santé, synchrone). */
+  /** The house account, already read (for the health, synchronous). */
   let home: Account | null = null
 
   return {
@@ -204,15 +204,15 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
     },
 
     registerRoutes(app: FastifyInstance) {
-      // Chaque route agit sur le compte de qui la demande (`accountFor`) : le sien s'il est connecté,
-      // celui de la maison sinon. Sans nom Mixcloud, un utilisateur connecté cherche et écoute en anonyme.
+      // Each route acts on the account of whoever calls it (`accountFor`): their own if signed in,
+      // the house's otherwise. Without a Mixcloud name, a signed-in user searches and listens anonymously.
       app.get('/status', async (req) => {
         const a = await accountFor(req)
         const user = a.state.username ? await ask((x) => x.user(a.state.username!)).catch(() => null) : null
         return { username: a.state.username, user, lastError, account: a.user }
       })
 
-      // Relier = donner son nom d'utilisateur (celui de l'URL du profil) ; il doit exister chez Mixcloud.
+      // Linking = giving one's username (the one in the profile URL); it must exist at Mixcloud.
       app.put<{ Body: unknown }>('/account', async (req, reply) => {
         const body = z.object({ username: z.string().trim().regex(USERNAME_RE) }).safeParse(req.body)
         if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'a Mixcloud username (letters, digits, - and _) is required')
@@ -234,8 +234,8 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
         return { username: null, user: null, lastError, account: a.user }
       })
 
-      // Les listes du compte. `feed` : les nouveautés des comptes suivis (recomposées, en cache) ;
-      // les autres se lisent page par page (`next` = curseur rendu par la page précédente).
+      // The account's lists. `feed`: what is new from followed accounts (rebuilt, cached); the others
+      // are read page by page (`next` = cursor returned by the previous page).
       app.get<{ Params: { list: string }; Querystring: { next?: string } }>('/library/:list', async (req, reply) => {
         const a = await accountFor(req)
         const username = needUser(a)
@@ -251,9 +251,9 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
         return { items: withResume(a, page.items), next: page.next }
       })
 
-      // L'accueil, façon site : tes créateurs, tes suivis, réécouter, plus de tes créateurs, les
-      // populaires de tes genres — recomposé de tes écoutes publiques, gardé une demi-heure. Les
-      // positions de reprise, elles, sont relues à chaque appel.
+      // The home view, the site's way: your creators, your follows, listen again, more from your
+      // creators, the popular ones of your genres — rebuilt from your public listens, kept for half an
+      // hour. The resume positions, however, are read again on every call.
       app.get('/home', async (req) => {
         const a = await accountFor(req)
         const username = needUser(a)
@@ -298,7 +298,7 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
         return { items: withResume(a, page.items), next: page.next }
       })
 
-      /** Repartir du début : oublier la position retenue d'un mix. */
+      /** Start over: forget a mix's remembered position. */
       app.delete<{ Querystring: { key?: string } }>('/resume', async (req, reply) => {
         const key = req.query.key ?? ''
         if (!KEY_RE.test(key)) return sendError(reply, 400, 'INVALID_QUERY', 'a mix key is required')
@@ -311,7 +311,7 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
       })
     },
 
-    // `health` : le compte de la maison ; `healthFor` : celui d'un utilisateur connecté, qui ne voit que le sien.
+    // `health`: the house account; `healthFor`: a signed-in user's, who only sees their own.
     health(): PluginHealth {
       const keys = Object.keys(mixcloudConfigSchema.shape)
       const state = home?.state
@@ -323,7 +323,7 @@ export function createMixcloudPlugin(deps: MixcloudPluginDeps = {}): DevicePlugi
     async healthFor(user: string): Promise<PluginHealth> {
       const keys = Object.keys(mixcloudConfigSchema.shape)
       const { state } = await accountOf(user)
-      // sans nom Mixcloud l'utilisateur cherche et écoute en anonyme : ça marche, rien n'est retenu
+      // without a Mixcloud name the user searches and listens anonymously: it works, nothing is remembered
       const detail = state.username
         ? `Mixcloud: ${state.username}, ${Object.keys(state.resume).length} mix(es) to resume`
         : 'Mixcloud: anonymous — search only; set your username for your home, favorites and resume points'

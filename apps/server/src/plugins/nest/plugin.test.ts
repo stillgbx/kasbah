@@ -14,9 +14,9 @@ import { DEVICES_RESPONSE, SDM_403, THERMOSTAT, TOKEN_INVALID_GRANT, TOKEN_OK, T
 import { createNestPlugin, nestConfigSchema } from './index'
 
 const flush = async () => { for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0)) }
-/** Comme `flush`, mais laisse aussi passer les `fs.stat` des vignettes (vrai système de fichiers). */
+/** Like `flush`, but also lets the thumbnails' `fs.stat` calls through (real file system). */
 const settle = () => new Promise((r) => setTimeout(r, 25))
-/** Grâce du relais sans abonné (STREAM_IDLE_MS du plugin). */
+/** Grace period of a relay without subscribers (the plugin's STREAM_IDLE_MS). */
 const GRID_GRACE = 8000
 const json = (data: unknown, status = 200) =>
   ({ ok: status < 400, status, body: null, json: async () => data, text: async () => JSON.stringify(data) })
@@ -24,8 +24,8 @@ const json = (data: unknown, status = 200) =>
 type Traits = Record<string, Record<string, unknown>>
 
 /**
- * Faux Google : échange / rafraîchit les jetons, sert la liste des appareils, exécute les commandes
- * du thermostat en mutant sa copie (comme le vrai : la relecture qui suit reflète la commande).
+ * Fake Google: exchanges / refreshes tokens, serves the device list, executes the thermostat
+ * commands by mutating its copy (like the real one: the following read reflects the command).
  */
 function fakeGoogle(opts: { devices?: unknown; devicesStatus?: number; refreshStatus?: number; commandStatus?: number } = {}) {
   const calls: { url: string; init?: RequestInit & { dispatcher?: unknown } }[] = []
@@ -37,7 +37,7 @@ function fakeGoogle(opts: { devices?: unknown; devicesStatus?: number; refreshSt
   let heldSetpoint: Traits[string] | undefined
   const devices = () => {
     const base = (opts.devices ?? DEVICES_RESPONSE) as { devices?: { name: string }[] }
-    if (!Array.isArray(base.devices)) return base as { devices: { name: string }[] }   // corps d'erreur servi tel quel
+    if (!Array.isArray(base.devices)) return base as { devices: { name: string }[] }   // error body served as is
     return { ...base, devices: base.devices.map((d) => (d.name === THERMOSTAT.name ? thermostat : d)) }
   }
   const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
@@ -65,7 +65,7 @@ function fakeGoogle(opts: { devices?: unknown; devicesStatus?: number; refreshSt
       const t = thermostat.traits
       if (body.command.endsWith('ThermostatTemperatureSetpoint.SetHeat')) t['sdm.devices.traits.ThermostatTemperatureSetpoint'] = { heatCelsius: body.params.heatCelsius }
       if (body.command.endsWith('ThermostatMode.SetMode')) {
-        // comme le vrai : à l'arrêt la consigne disparaît de l'API, et revient à la remise en chauffe
+        // like the real one: when off the setpoint disappears from the API, and comes back when heating resumes
         if (body.params.mode === 'OFF') { heldSetpoint = t['sdm.devices.traits.ThermostatTemperatureSetpoint']; t['sdm.devices.traits.ThermostatTemperatureSetpoint'] = {} }
         else if (heldSetpoint) { t['sdm.devices.traits.ThermostatTemperatureSetpoint'] = heldSetpoint; heldSetpoint = undefined }
         t['sdm.devices.traits.ThermostatMode'] = { ...t['sdm.devices.traits.ThermostatMode'], mode: body.params.mode }
@@ -88,7 +88,7 @@ function fakeGoogle(opts: { devices?: unknown; devicesStatus?: number; refreshSt
   return { fetchImpl, calls, tokenBodies, commands, listCalls, pushEvent, acks }
 }
 
-/** Faux ffmpeg : on ne fait que compter les lancements et les arrêts. */
+/** Fake ffmpeg: we only count the launches and the stops. */
 function fakeSpawn() {
   const procs: { kill: ReturnType<typeof vi.fn> }[] = []
   const spawnImpl = vi.fn(() => {
@@ -121,7 +121,7 @@ async function routes(plugin: ReturnType<typeof createNestPlugin>) {
   return app
 }
 
-/** Plugin déjà lié par .env, découvert et démarré (le premier tick du poller est passé). */
+/** Plugin already linked through .env, discovered and started (the poller's first tick has run). */
 async function linked(google: ReturnType<typeof fakeGoogle>, extra: Record<string, string> = {}, ffmpeg?: ReturnType<typeof fakeSpawn>) {
   const clock = new ManualClock(0)
   const { ctx, ctrl } = fakeContext(config({ NEST_REFRESH_TOKEN: '1//saved', ...extra }), clock)
@@ -159,7 +159,7 @@ describe('nest plugin', () => {
     expect(await plugin.discover()).toEqual([])
     await plugin.start()
     expect(plugin.health!()).toMatchObject({ status: 'needs_pairing' })
-    expect(google.calls).toEqual([])                     // rien n'est appelé tant que le compte n'est pas lié
+    expect(google.calls).toEqual([])                     // nothing is called as long as the account is not linked
 
     const app = await routes(plugin)
     const r1 = await app.inject({ method: 'GET', url: '/api/plugins/nest/auth/url' })
@@ -168,7 +168,7 @@ describe('nest plugin', () => {
     expect(url.searchParams.get('state')).toBe('state-1')
     expect(url.pathname).toBe('/partnerconnections/proj-1/auth')
 
-    // un retour avec un state qu'on n'a pas émis est refusé
+    // a return with a state we did not issue is refused
     const bad = await app.inject({ method: 'GET', url: '/api/plugins/nest/auth/callback?code=abc&state=forged' })
     expect(bad.statusCode).toBe(400)
     expect(google.calls).toEqual([])
@@ -180,7 +180,7 @@ describe('nest plugin', () => {
     expect(google.tokenBodies[0]!.get('grant_type')).toBe('authorization_code')
     expect(google.tokenBodies[0]!.get('code')).toBe('abc')
     expect(google.tokenBodies[0]!.get('redirect_uri')).toBe('http://localhost:8787/api/plugins/nest/auth/callback')
-    // la liste est lue avec le jeton d'accès reçu, sans second appel au jeton
+    // the list is read with the access token received, without a second token call
     const list = google.calls.find((c) => c.url.endsWith('/devices'))!
     expect(list.url).toBe('https://smartdevicemanagement.googleapis.com/v1/enterprises/proj-1/devices')
     expect((list.init!.headers as Record<string, string>).authorization).toBe('Bearer ya29.access')
@@ -192,9 +192,9 @@ describe('nest plugin', () => {
     expect(ctx.emitState).toHaveBeenCalledWith('DEVICE3', THERMOSTAT_STATE)
     expect(plugin.health!()).toMatchObject({ status: 'ok', detail: '4 camera(s), 1 thermostat(s)' })
 
-    // le state est à usage unique
+    // the state is single-use
     expect((await app.inject({ method: 'GET', url: '/api/plugins/nest/auth/callback?code=abc&state=state-1' })).statusCode).toBe(400)
-    // la réponse brute est relevable pour écrire une fixture réelle
+    // the raw response can be captured to write a real fixture
     const raw = await app.inject({ method: 'GET', url: '/api/plugins/nest/devices/raw' })
     expect((raw.json() as { devices: unknown[] }).devices).toHaveLength(5)
     await plugin.stop()
@@ -212,7 +212,7 @@ describe('nest plugin', () => {
     expect(ctx.emitState).toHaveBeenCalledWith('DEVICE3', THERMOSTAT_STATE)
     expect(ctx.setAvailable).toHaveBeenCalledWith('DEVICE3', true)
     expect(plugin.health!()).toMatchObject({ status: 'ok', detail: '4 camera(s), 1 thermostat(s)' })
-    // le jeton d'accès est réutilisé tant qu'il est valide : un seul appel au jeton pour tout ça
+    // the access token is reused as long as it is valid: a single token call for all of this
     expect(google.tokenBodies).toHaveLength(1)
     await expect(plugin.execute('DEVICE8', { type: 'light.set', on: true })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
     await plugin.stop()
@@ -221,9 +221,9 @@ describe('nest plugin', () => {
   it('polls the device list at NEST_POLL_MS and republishes the inventory only when it changes', async () => {
     const google = fakeGoogle()
     const { plugin, ctx, clock } = await linked(google, { NEST_POLL_MS: '60000' })
-    // découverte + premier tick du poller
+    // discovery + the poller's first tick
     expect(google.listCalls()).toBe(2)
-    expect(ctx.emitDevices).not.toHaveBeenCalled()      // l'inventaire n'a pas changé : pas de republication
+    expect(ctx.emitDevices).not.toHaveBeenCalled()      // the inventory has not changed: no republishing
     clock.advance(60_000)
     await flush()
     expect(google.listCalls()).toBe(3)
@@ -238,7 +238,7 @@ describe('nest plugin', () => {
 
     await plugin.execute('DEVICE3', { type: 'climate.set_target_temp', targetTempC: 21 })
     expect(google.commands).toEqual([{ id: 'DEVICE3', command: 'sdm.devices.commands.ThermostatTemperatureSetpoint.SetHeat', params: { heatCelsius: 21 } }])
-    // l'état publié vient de la RELECTURE de l'appareil, pas de la commande
+    // the published state comes from RE-READING the device, not from the command
     expect(ctx.emitState).toHaveBeenLastCalledWith('DEVICE3', { ...THERMOSTAT_STATE, targetTempC: 21 })
     const post = google.calls.find((c) => c.url.endsWith(':executeCommand'))!
     expect(post.url).toBe('https://smartdevicemanagement.googleapis.com/v1/enterprises/proj-1/devices/DEVICE3:executeCommand')
@@ -248,7 +248,7 @@ describe('nest plugin', () => {
     expect(google.commands.at(-1)).toEqual({ id: 'DEVICE3', command: 'sdm.devices.commands.ThermostatEco.SetMode', params: { mode: 'MANUAL_ECO' } })
     expect(ctx.emitState).toHaveBeenLastCalledWith('DEVICE3', { ...THERMOSTAT_STATE, mode: 'eco', targetTempC: 13.9 })
 
-    // en éco : la consigne est refusée AVANT d'appeler Google, et « cool » n'est pas déclaré
+    // in eco: the setpoint is refused BEFORE calling Google, and "cool" is not declared
     await expect(plugin.execute('DEVICE3', { type: 'climate.set_target_temp', targetTempC: 20 })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND', message: expect.stringContaining('"eco"') })
     await expect(plugin.execute('DEVICE3', { type: 'climate.set_mode', mode: 'cool' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
     expect(google.commands).toHaveLength(2)
@@ -279,8 +279,8 @@ describe('nest plugin', () => {
     const { plugin, clock } = await linked(google, {}, ffmpeg)
     const app = await routes(plugin)
     const rtsp = (c: { command: string }) => c.command.split('.').pop()
-    // trois caméras RTSP dans la fixture (la WebRTC est ignorée), budget 10 : trois sessions, mais
-    // UNE ouverture par tick de 8 s (quota Google), donc trois ticks
+    // three RTSP cameras in the fixture (the WebRTC one is ignored), budget 10: three sessions, but
+    // ONE opening per 8 s tick (Google quota), hence three ticks
     const r1 = await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' })
     expect(r1.statusCode).toBe(200)
     await settle()
@@ -291,18 +291,18 @@ describe('nest plugin', () => {
     const args = (ffmpeg.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1] as string[]
     expect(args).toEqual(expect.arrayContaining(['-update', '1', '-f', 'image2']))
     expect(plugin.health!().detail).toContain('3 live stream(s)')
-    // sans vignette écrite (pas de vrai ffmpeg), la liste est vide mais la route répond
+    // without a written thumbnail (no real ffmpeg), the list is empty but the route answers
     expect(await (await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots' })).json()).toMatchObject({ snapshots: {}, budget: 10, sessions: 3 })
     expect((await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/DEVICE8/snapshot.jpg' })).statusCode).toBe(404)
-    // plus personne ne regarde : 15 s sans signal (constaté au tick suivant), puis la grâce du
-    // relais (8 s), et les sessions sont rendues
+    // nobody watching anymore: 15 s without a signal (noticed at the next tick), then the relay's
+    // grace period (8 s), and the sessions are released
     clock.advance(24_000)
     await settle()
     clock.advance(16_000)
     await settle()
     expect(ffmpeg.procs.every((p) => p.kill.mock.calls.length === 1)).toBe(true)
-    // le faux ffmpeg n'a jamais livré d'entête : ces sessions n'ont pas démarré, on ne dépense pas
-    // une commande Google pour les rendre (elles expirent seules)
+    // the fake ffmpeg never delivered a header: these sessions did not start, we do not spend a
+    // Google command to release them (they expire on their own)
     expect(google.commands.filter((c) => rtsp(c) === 'StopRtspStream')).toHaveLength(0)
     expect(plugin.health!().detail).not.toContain('live stream')
     await plugin.stop()
@@ -311,7 +311,7 @@ describe('nest plugin', () => {
   it('pub/sub: a doorbell chime pulled from the subscription is pushed to clients and acknowledged', async () => {
     const google = fakeGoogle()
     const { plugin, ctx, clock } = await linked(google, { NEST_PUBSUB_SUBSCRIPTION: 'projects/p/subscriptions/s' })
-    // le premier tirage (au démarrage) ne trouve rien ; on dépose ensuite une sonnerie sur DEVICE2 (la sonnette)
+    // the first pull (at startup) finds nothing; we then drop a ring on DEVICE2 (the doorbell)
     google.pushEvent('DEVICE2', 'sdm.devices.events.DoorbellChime.Chime')
     clock.advance(5000)
     await settle()
@@ -323,12 +323,12 @@ describe('nest plugin', () => {
   it('pub/sub: motion/person events are acknowledged but not pushed yet, unknown devices are skipped', async () => {
     const google = fakeGoogle()
     const { plugin, ctx, clock } = await linked(google, { NEST_PUBSUB_SUBSCRIPTION: 'projects/p/subscriptions/s' })
-    google.pushEvent('DEVICE8', 'sdm.devices.events.CameraMotion.Motion')   // caméra connue, mais mouvement non exposé
-    google.pushEvent('GHOST', 'sdm.devices.events.DoorbellChime.Chime')     // appareil inconnu
+    google.pushEvent('DEVICE8', 'sdm.devices.events.CameraMotion.Motion')   // known camera, but motion not exposed
+    google.pushEvent('GHOST', 'sdm.devices.events.DoorbellChime.Chime')     // unknown device
     clock.advance(5000)
     await settle()
     expect(ctx.emitEvent).not.toHaveBeenCalled()
-    expect(google.acks).toHaveLength(2)                                     // tout est acquitté, sinon Google boucle
+    expect(google.acks).toHaveLength(2)                                     // everything is acknowledged, otherwise Google loops
     await plugin.stop()
   })
 
@@ -337,14 +337,14 @@ describe('nest plugin', () => {
     const ffmpeg = fakeSpawn()
     const { plugin, clock } = await linked(google, {}, ffmpeg)
     const app = await routes(plugin)
-    // budget 10 pour trois caméras : aucune rotation, les sessions durent (ouvertes à 0, 8 et 16 s)
+    // budget 10 for three cameras: no rotation, the sessions last (opened at 0, 8 and 16 s)
     await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' })
     await settle()
     expect(ffmpeg.procs).toHaveLength(1)
     for (let t = 0; t < 4 * 60_000; t += 8000) { clock.advance(8000); await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' }); await settle() }
-    // à 4 min, seule la première session est prolongée
+    // at 4 min, only the first session is extended
     expect(google.commands.filter((c) => c.command.endsWith('ExtendRtspStream')).map((c) => c.id)).toEqual([google.commands[0]!.id])
-    // un second ffmpeg est lancé sur l'URL portant le nouveau jeton ; l'ancien reste jusqu'à la relève
+    // a second ffmpeg is launched on the URL carrying the new token; the old one stays until the handover
     expect(ffmpeg.procs).toHaveLength(4)
     const args = (ffmpeg.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[3]![1] as string[]
     expect(args.find((a) => a.startsWith('rtsps://'))).toBe(`rtsps://stream.google/${google.commands[0]!.id}?auth=tok2`)
@@ -361,8 +361,8 @@ describe('nest plugin', () => {
     await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' })
     await flush()
     expect(opened()).toHaveLength(1)
-    // la caméra tenue cède sa place après 20 s de présence ; sa session se ferme 8 s plus tard et
-    // libère le budget ; la suivante prend le relais au tick d'après
+    // the held camera gives up its slot after 20 s; its session closes 8 s later and frees the
+    // budget; the next one takes over at the following tick
     for (let t = 0; t < 56_000; t += 8000) { clock.advance(8000); await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' }); await settle() }
     expect(opened().length).toBeGreaterThanOrEqual(2)
     expect(new Set(opened()).size).toBeGreaterThanOrEqual(2)
@@ -378,18 +378,18 @@ describe('nest plugin', () => {
     await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' })
     await settle()
     const [first] = opened()
-    // arrêt : la prise est rendue, la session se ferme après la grâce, la caméra est annoncée « paused »
+    // stop: the hold is released, the session closes after the grace period, the camera is reported "paused"
     expect((await app.inject({ method: 'PUT', url: `/api/plugins/nest/cameras/${first}/snapshots`, payload: { enabled: false } })).json()).toEqual({ enabled: false })
     clock.advance(GRID_GRACE)
     await settle()
     expect(ffmpeg.procs[0]!.kill).toHaveBeenCalledTimes(1)
     const r = await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' })
     expect(r.json().snapshots[first!]).toMatchObject({ paused: true, live: false })
-    // les ticks suivants ouvrent les autres caméras, jamais celle-là
+    // the following ticks open the other cameras, never that one
     for (let i = 0; i < 4; i++) { clock.advance(8000); await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' }); await settle() }
     expect(opened().filter((id) => id === first)).toHaveLength(1)
     expect(new Set(opened()).size).toBe(3)
-    // reprise : elle est rouverte au tick suivant
+    // resume: it is reopened at the next tick
     await app.inject({ method: 'PUT', url: `/api/plugins/nest/cameras/${first}/snapshots`, payload: { enabled: true } })
     clock.advance(8000)
     await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' })
@@ -400,7 +400,7 @@ describe('nest plugin', () => {
   })
 
   it('cameras view: after a restart, a camera that gave an image last time is reopened before the others', async () => {
-    // vignette laissée par l'exécution précédente (le dossier survit au serveur)
+    // thumbnail left by the previous run (the folder outlives the server)
     const dir = join(tmpdir(), 'kasbah-nest-snapshots')
     mkdirSync(dir, { recursive: true })
     const stale = join(dir, 'DEVICE5.jpg')
@@ -428,13 +428,13 @@ describe('nest plugin', () => {
     await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' })
     await settle()
     expect(opened()).toEqual(['DEVICE8'])
-    // la caméra est éteinte : Google a donné l'URL mais son serveur répond 404, ffmpeg sort
+    // the camera is off: Google gave the URL but its server answers 404, ffmpeg exits
     const proc = ffmpeg.procs[0] as unknown as EventEmitter & { stderr: PassThrough; exitCode: number | null }
     proc.stderr.write('rtsps://stream/x?auth=t: Server returned 404 Not Found\n')
     proc.exitCode = 1
     proc.emit('exit', 1, null)
     await settle()
-    // la place libérée va aux AUTRES caméras ; DEVICE8 attend au moins une minute avant un nouvel essai
+    // the freed slot goes to the OTHER cameras; DEVICE8 waits at least a minute before another attempt
     for (let t = 0; t < 40_000; t += 8000) { clock.advance(8000); await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' }); await settle() }
     expect(opened().filter((id) => id === 'DEVICE8')).toHaveLength(1)
     expect(opened().length).toBeGreaterThanOrEqual(2)
@@ -456,7 +456,7 @@ describe('nest plugin', () => {
     const { ctx } = fakeContext(config({ NEST_REFRESH_TOKEN: '1//old' }), new ManualClock(0))
     const plugin = createNestPlugin({ fetchImpl: revoked.fetchImpl })
     await plugin.init(ctx)
-    // la découverte ne condamne pas le plugin : liste vide, et `health` dit pourquoi
+    // discovery does not doom the plugin: empty list, and `health` says why
     expect(await plugin.discover()).toEqual([])
     expect(plugin.health!()).toMatchObject({ status: 'error', detail: expect.stringContaining('link the account again') })
 

@@ -11,57 +11,56 @@ import { netSocketFactory, readOnce, type SocketFactory } from './socket'
 import { createHistoryFile, EMPTY_HISTORY, type ComapHistoryState, type HistoryStore } from './state'
 
 
-// Plugin COMAP Proteo 2 : station de filtration d'eau lue en JSON clair sur TCP/23, sans
-// authentification, LAN pur, adresse fixe dans `COMAP_HOST` (aucun défaut). UN SEUL appareil
-// `water` publié — la station reste un objet unique, pas un capteur par consommable. Lecture
-// seule : le protocole sait écrire (réglages de la lampe UVc), mais une fausse manœuvre à distance
-// sur l'eau potable coûterait plus cher que le confort gagné ; ce plugin n'envoie jamais de trame
-// `write`.
+// COMAP Proteo 2 plugin: a water filtration station read as plain JSON over TCP/23, no
+// authentication, LAN only, fixed address in `COMAP_HOST` (no default). ONE SINGLE `water` device
+// published — the station stays a single object, not one sensor per consumable. Read-only: the
+// protocol can write (UVc lamp settings), but a remote mistake on drinking water would cost more
+// than the comfort gained; this plugin never sends a `write` frame.
 //
-// La station n'accepte qu'UNE connexion TCP à la fois (vérifiée le 2026-09-16 : une lecture faite
-// pendant que l'appli mobile du fabricant tenait la connexion est restée sans réponse, la connexion
-// ayant pourtant été acceptée). Deux conséquences :
-//  - chaque sondage ouvre une connexion COURTE, lit, referme (`socket.ts`) — jamais de connexion
-//    permanente, qui monopoliserait la station et casserait l'appli du propriétaire ;
-//  - une lecture muette est un événement NORMAL (quelqu'un d'autre parle à la station), pas une
-//    panne : l'appareil ne passe indisponible qu'après plusieurs échecs DE SUITE
-//    (`AVAILABILITY_FAILURE_THRESHOLD`), jamais sur un seul silence.
+// The station accepts only ONE TCP connection at a time (verified 2026-09-16: a read made while the
+// vendor's mobile app held the connection got no answer, even though the connection was accepted).
+// Two consequences:
+//  - each poll opens a SHORT connection, reads, closes (`socket.ts`) — never a permanent
+//    connection, which would hog the station and break the owner's app;
+//  - a silent read is a NORMAL event (someone else is talking to the station), not a failure: the
+//    device only goes unavailable after several failures IN A ROW
+//    (`AVAILABILITY_FAILURE_THRESHOLD`), never on a single silence.
 
 export const comapConfigSchema = z.object({
   /**
-   * Adresse de la station. Pas de défaut : la station ne se découvre pas, et une adresse d'exemple
-   * ferait sonder une machine au hasard. Absente, le plugin ne déclare rien et le dit dans sa santé
-   * (comme `TAHOMA_HOST`), au lieu de bloquer la configuration de tous les plugins au démarrage.
+   * Station address. No default: the station cannot be discovered, and an example address would
+   * probe a random machine. When missing, the plugin declares nothing and says so in its health
+   * (like `TAHOMA_HOST`), instead of blocking the configuration of every plugin at startup.
    */
   COMAP_HOST: z.string().trim().min(1).optional(),
   COMAP_PORT: z.coerce.number().int().min(1).max(65535).default(23),
   /**
-   * Cadence de sondage. La station est sur le LAN, sans quota ni cloud, mais rien ne justifie de la
-   * marteler : l'usure des consommables et les compteurs de consommation évoluent lentement, et un
-   * sondage plus rapproché augmenterait surtout le risque de tomber pendant une session de l'appli
-   * du fabricant (une seule connexion TCP à la fois). Trente secondes suit le débit instantané d'assez
-   * près pour l'affichage sans jamais serrer la station.
+   * Polling rate. The station is on the LAN, with no quota or cloud, but nothing justifies hammering
+   * it: consumable wear and consumption counters change slowly, and closer polling would mostly
+   * raise the risk of landing during a session of the vendor's app (only one TCP connection at a
+   * time). Thirty seconds tracks the instantaneous flow closely enough for display without ever
+   * squeezing the station.
    */
   COMAP_POLL_MS: z.coerce.number().int().min(5_000).max(600_000).default(30_000),
-  /** La station accepte la connexion même quand elle est déjà occupée, et ne répond alors jamais. */
+  /** The station accepts the connection even when it is already busy, and then never answers. */
   COMAP_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(5_000),
-  /** Où garder l'historique de consommation déjà calculé (voir `history.ts`). Chaîne vide = ne rien garder. */
+  /** Where to keep the consumption history already computed (see `history.ts`). Empty string = keep nothing. */
   COMAP_HISTORY_FILE: z.string().trim().default(stateFile('comap-consumption.json')),
 })
 export type ComapConfig = z.infer<typeof comapConfigSchema>
 
 export interface ComapPluginDeps {
-  /** Injectée par les tests : fabrique de socket TCP (voir `socket.ts`). */
+  /** Injected by tests: TCP socket factory (see `socket.ts`). */
   connect?: SocketFactory
-  /** Injecté par les tests : fichier de l'historique de consommation (voir `state.ts`). */
+  /** Injected by tests: consumption history file (see `state.ts`). */
   historyStore?: HistoryStore
 }
 
 /**
- * Échecs de lecture consécutifs tolérés avant de déclarer la station indisponible. Trois sondages
- * ratés de suite, à la cadence par défaut, couvrent 90 s de silence — largement plus que la session
- * de l'appli du fabricant observée (23:09:34-23:10:24, 50 s) — avant de conclure à une vraie panne
- * plutôt qu'à une connexion occupée ailleurs.
+ * Consecutive read failures tolerated before declaring the station unavailable. Three polls missed
+ * in a row, at the default rate, cover 90 s of silence — well beyond the observed session of the
+ * vendor's app (23:09:34-23:10:24, 50 s) — before concluding to a real failure rather than a
+ * connection busy elsewhere.
  */
 const AVAILABILITY_FAILURE_THRESHOLD = 3
 
@@ -75,14 +74,14 @@ export function createComapPlugin(deps: ComapPluginDeps = {}): DevicePlugin {
   let lastError: string | null = null
   let poller: { stop(): void } | null = null
   let historyStore: HistoryStore | null = null
-  /** Historique déjà calculé : SURVIT au redémarrage (relu du fichier dans `init`). */
+  /** History already computed: SURVIVES a restart (re-read from the file in `init`). */
   let history: ComapHistoryState = EMPTY_HISTORY
   /**
-   * Ce qu'il faut pour dater et chiffrer le PROCHAIN delta. Contrairement à `history`, ne survit PAS
-   * au redémarrage : un sondage qui suit un redémarrage n'a pas de précédent (voir `history.ts`).
+   * What is needed to date and quantify the NEXT delta. Unlike `history`, does NOT survive a restart:
+   * a poll following a restart has no previous reading (see `history.ts`).
    */
   let cursor: ComapHistoryCursor | undefined
-  /** Mensuel : jamais persisté, dérivé de la dernière lecture réussie (`year` + `month`). */
+  /** Monthly: never persisted, derived from the last successful reading (`year` + `month`). */
   let monthly: ConsumptionPoint[] = []
 
   async function read(): Promise<unknown> {
@@ -99,10 +98,10 @@ export function createComapPlugin(deps: ComapPluginDeps = {}): DevicePlugin {
     const raw = await read()
     const parsed = parseRead(raw)
     if (!parsed) throw new Error('unexpected COMAP response shape')
-    ctx!.emitState(STATION_ID, toStatePatch(parsed))                 // `available: true` implicite
+    ctx!.emitState(STATION_ID, toStatePatch(parsed))                 // implicit `available: true`
     const next = modelOf(parsed)
     if (next && next !== model) { model = next; ctx!.emitDevices([toDescriptor(model)]) }
-    // `day`/`rtc` datent et chiffrent l'historique ; sans l'un des deux, rien à en tirer cette fois.
+    // `day`/`rtc` date and quantify the history; without either, nothing to get out of it this time.
     if (parsed.consumption?.day !== undefined && parsed.rtc) {
       const applied = applyReading(history, cursor, { day: parsed.consumption.day, at: readingAt(parsed.rtc) })
       history = applied.state
@@ -122,21 +121,21 @@ export function createComapPlugin(deps: ComapPluginDeps = {}): DevicePlugin {
       ctx = context
       config = context.config as ComapConfig
       connect = deps.connect ?? netSocketFactory
-      // Un plugin est une fermeture qui SURVIT à `stop()` : tout ce qui décide « déjà publié » ou
-      // « en panne » se remet à zéro ici, pas seulement à la déclaration du module.
+      // A plugin is a closure that SURVIVES `stop()`: everything that decides "already published" or
+      // "failing" is reset here, not only at module declaration.
       model = undefined
       msgId = 0
       failures = 0
       lastError = null
-      // `history`, lui, ne se remet PAS à zéro ici : c'est justement ce qui doit survivre au
-      // redémarrage (voir `state.ts`). Seul `cursor` (le précédent du prochain delta) repart de rien.
+      // `history`, however, is NOT reset here: it is precisely what must survive a restart (see
+      // `state.ts`). Only `cursor` (the previous reading for the next delta) starts from nothing.
       cursor = undefined
       monthly = []
       historyStore = deps.historyStore ?? (config.COMAP_HISTORY_FILE ? createHistoryFile(config.COMAP_HISTORY_FILE, context.logger) : null)
       history = await historyStore?.load() ?? EMPTY_HISTORY
     },
 
-    /** Aucun appel réseau ici : l'appareil se déclare avec ses capacités, la première lecture du poller le remplit. */
+    /** No network call here: the device declares itself with its capabilities, the poller's first reading fills it in. */
     async discover(): Promise<DeviceDescriptor[]> {
       if (!config?.COMAP_HOST) return []
       return [toDescriptor(model)]
@@ -165,7 +164,7 @@ export function createComapPlugin(deps: ComapPluginDeps = {}): DevicePlugin {
       throw new PluginError('UNSUPPORTED_COMMAND', `COMAP station is read-only (${command.type})`)
     },
 
-    /** L'historique tenu au fil des sondages (`history.ts`) : jamais un nouveau relevé à la demande. */
+    /** The history kept poll after poll (`history.ts`): never a fresh reading on demand. */
     async consumption(externalId: string): Promise<PluginConsumption> {
       if (externalId !== STATION_ID) throw new PluginError('DEVICE_UNAVAILABLE', `unknown water device "${externalId}"`)
       return { hourly: history.hourly, daily: history.daily, monthly }
@@ -178,7 +177,7 @@ export function createComapPlugin(deps: ComapPluginDeps = {}): DevicePlugin {
     },
 
     registerRoutes(app: FastifyInstance) {
-      /** Relevé brut, pour capturer une fixture depuis une vraie réponse plutôt que la notice. */
+      /** Raw reading, to capture a fixture from a real response rather than the manual. */
       app.get('/raw', async (_req, reply) => {
         if (!ctx) return sendError(reply, 409, 'DEVICE_UNAVAILABLE', 'plugin not started')
         if (!config?.COMAP_HOST) return sendError(reply, 409, 'DEVICE_UNAVAILABLE', 'COMAP_HOST is not set')

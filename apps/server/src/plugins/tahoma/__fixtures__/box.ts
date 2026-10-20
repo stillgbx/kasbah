@@ -1,16 +1,16 @@
-// Extraits ANONYMISÉS de `GET /setup` d'une TaHoma Switch : un volet io positionnable, un BSO io
-// avec lames, un store banne io (fermeture exprimée en déploiement), un volet RTS et un portail RTS
-// (aucun retour d'état), plus une passerelle et un thermostat qui doivent être ignorés.
-// Formes RELEVÉES sur une vraie TaHoma Switch (firmware 2026.3.3-7), d'où deux traits qui ont
-// l'air d'erreurs mais n'en sont pas : `definition.states` est TOUJOURS vide (les états
-// exploitables sont dans `states`), et un appareil RTS a un tableau `states` STRICTEMENT vide.
-// L'API locale ne renvoie ni pièces ni `placeOID` : c'est `house.json` qui rattache un appareil.
-// Les vrais deviceURL portent souvent un index de sous-appareil (`#1`).
+// ANONYMIZED excerpts of `GET /setup` from a TaHoma Switch: a positionable io shutter, an io
+// exterior venetian blind with slats, an io awning (closure expressed as deployment), an RTS
+// shutter and an RTS gate (no state feedback), plus a gateway and a thermostat that must be ignored.
+// Shapes CAPTURED from a real TaHoma Switch (firmware 2026.3.3-7), hence two traits that look like
+// mistakes but are not: `definition.states` is ALWAYS empty (the usable states are in `states`), and
+// an RTS device has a STRICTLY empty `states` array.
+// The local API returns neither rooms nor `placeOID`: it is `house.json` that attaches a device.
+// Real deviceURLs often carry a sub-device index (`#1`).
 
 const PID = '1234-5678-9012'
 
 
-/** io positionnable : `setClosure`, position et mouvement remontés. */
+/** Positionable io: `setClosure`, position and movement reported. */
 export const IO_SHUTTER = {
   deviceURL: `io://${PID}/11110001`,
   label: 'Volet salon',
@@ -23,24 +23,24 @@ export const IO_SHUTTER = {
     commands: [
       { commandName: 'open' }, { commandName: 'close' }, { commandName: 'stop' },
       { commandName: 'my' }, { commandName: 'setClosure' }, { commandName: 'identify' },
-      // la memoire du « my » est reinscriptible sur un moteur io : parametre en FERMETURE (paramsSig p1)
+      // the "my" memory can be rewritten on an io motor: parameter as a CLOSURE (paramsSig p1)
       { commandName: 'setMemorized1Position' }, { commandName: 'refreshMemorized1Position' },
     ],
   },
   states: [
     { name: 'core:ClosureState', type: 1, value: 30 },
-    // position favorite mémorisée DANS le moteur (le « my ») : une FERMETURE, comme `ClosureState`
+    // favorite position stored IN the motor (the "my"): a CLOSURE, like `ClosureState`
     { name: 'core:Memorized1PositionState', type: 1, value: 73 },
     { name: 'core:MovingState', type: 6, value: false },
     { name: 'core:OpenClosedState', type: 3, value: 'open' },
     { name: 'core:StatusState', type: 3, value: 'available' },
-    // valeur TABLEAU : un schema qui contraint `value` fait echouer le parse de tout le setup
+    // ARRAY value: a schema that constrains `value` fails the parse of the whole setup
     { name: 'core:CommandLockLevelsState', type: 10, value: [] },
     { name: 'core:BatteryState', type: 3, value: 'full' },
   ],
 }
 
-/** BSO io : lames orientables (`setOrientation`). */
+/** io exterior venetian blind: tiltable slats (`setOrientation`). */
 export const IO_VENETIAN = {
   deviceURL: `io://${PID}/11110002`,
   label: 'BSO chambre',
@@ -61,7 +61,7 @@ export const IO_VENETIAN = {
   ],
 }
 
-/** Store banne io : `deploy`/`undeploy` et fermeture en `core:DeploymentState`. */
+/** io awning: `deploy`/`undeploy` and closure as `core:DeploymentState`. */
 export const IO_AWNING = {
   deviceURL: `io://${PID}/11110003#1`,
   label: 'Store terrasse',
@@ -80,7 +80,7 @@ export const IO_AWNING = {
   ],
 }
 
-/** RTS : `up`/`down`/`my`/`stop`, aucun état de position. */
+/** RTS: `up`/`down`/`my`/`stop`, no position state. */
 export const RTS_SHUTTER = {
   deviceURL: `rts://${PID}/22220001`,
   label: 'Volet cuisine',
@@ -95,7 +95,7 @@ export const RTS_SHUTTER = {
   states: [],
 }
 
-/** RTS sans commande d'arrêt : `stop` ne doit alors pas être annoncé. */
+/** RTS without a stop command: `stop` must then not be announced. */
 export const RTS_GATE = {
   deviceURL: `rts://${PID}/22220002`,
   label: 'Portail',
@@ -110,8 +110,8 @@ export const RTS_GATE = {
 }
 
 /**
- * Volet SOLAIRE (relevé 2026-09-24, 11 sur 16 volets io) : batterie, et vitesse lente
- * (`setClosureAndLinearSpeed`, signature `p1,*p2`) — le « mode discret » de l'appli.
+ * SOLAR shutter (captured 2026-09-24, 11 out of 16 io shutters): battery, and slow speed
+ * (`setClosureAndLinearSpeed`, signature `p1,*p2`) — the app's "quiet mode".
  */
 export const SOLAR_SHUTTER = {
   deviceURL: `io://${PID}/44440001#1`,
@@ -137,8 +137,8 @@ export const SOLAR_SHUTTER = {
 }
 
 /**
- * Son panneau, que la box présente comme un capteur de lumière : même nœud radio (`#2`), MÊME
- * libellé que le volet, aucune commande.
+ * Its solar panel, which the box presents as a light sensor: same radio node (`#2`), SAME label as
+ * the shutter, no command.
  */
 export const SUN_SENSOR = {
   deviceURL: `io://${PID}/44440001#2`,
@@ -178,10 +178,10 @@ export const DEVICES = [IO_SHUTTER, IO_VENETIAN, IO_AWNING, RTS_SHUTTER, RTS_GAT
 export const SETUP = { devices: DEVICES }
 
 /**
- * Séquence RELEVÉE sur la box au début d'une fermeture. Le point important : la box envoie des
- * DELTAS d'une seule clé par trame — la cible arrive seule, puis `core:MovingState` arrive seul,
- * et aucune position n'est émise pendant la course. Une trame prise isolément ne dit donc jamais
- * dans quel sens l'ouvrant part : il faut les fusionner dans l'état connu de l'appareil.
+ * Sequence CAPTURED on the box at the start of a closing. The key point: the box sends DELTAS of a
+ * single key per frame — the target arrives alone, then `core:MovingState` arrives alone, and no
+ * position is emitted during the travel. A frame taken on its own therefore never says which way
+ * the cover is going: they must be merged into the device's known state.
  */
 export const EVENTS = [
   {
@@ -199,7 +199,7 @@ export const EVENTS = [
   { name: 'ExecutionStateChangedEvent', newState: 'IN_PROGRESS' },
 ]
 
-/** Fin de course après un `stop` : la position réelle n'arrive qu'à ce moment. */
+/** End of travel after a `stop`: the real position only arrives at that moment. */
 export const EVENTS_STOPPED = [
   {
     name: 'DeviceStateChangedEvent',

@@ -16,7 +16,7 @@ import { createMixcloudPlugin } from './index'
 import { resolveMixcloud } from './resolve'
 import { memoryMixcloud, noteProgress, resumePoint, type MixcloudStore } from './store'
 
-// Formes relevées sur api.mixcloud.com et yt-dlp 2026.08.19 le 2026-09-23 (raccourcies).
+// Shapes observed on api.mixcloud.com and yt-dlp 2026.08.19 on 2026-09-23 (shortened).
 const RAW_CLOUDCAST = {
   key: '/NTSRadio/btwn-earthsky-lara-sarkissian-23rd-september-2026/',
   name: 'Btwn Earth+Sky: Lara Sarkissian - 23rd September 2026',
@@ -49,7 +49,7 @@ function fakeYtdlp(json: unknown = YTDLP_JSON) {
   })
   return { spawnImpl: spawnImpl as unknown as SpawnFn, calls }
 }
-/** Le HEAD sur le m4a : sa taille et ses plages. */
+/** The HEAD on the m4a: its size and its ranges. */
 const headOk = (async (_url: string, init?: RequestInit) => {
   expect(init?.method).toBe('HEAD')
   return new Response(null, { status: 200, headers: { 'content-length': String(SIZE), 'accept-ranges': 'bytes', 'content-type': 'audio/mpeg' } })
@@ -111,9 +111,9 @@ async function boot(opts: { api?: MixcloudApi; username?: string | null; execute
     onState: () => () => {},
   })
   const app = Fastify()
-  // le gestionnaire d'erreurs du vrai serveur (`http/routes.ts`) : une PluginError y devient 4xx/5xx
+  // the real server's error handler (`http/routes.ts`): a PluginError becomes 4xx/5xx there
   app.setErrorHandler((err, _req, reply) => { const d = describeError(err); return sendError(reply, d.status, d.code, d.message) })
-  // ce que fait la porte à session sous l'adresse publique : le compte de la requête
+  // what the session gate does under the public address: the request's account
   app.decorateRequest('sessionUser', null)
   app.addHook('onRequest', async (req) => {
     const u = req.headers['x-test-user']
@@ -169,8 +169,8 @@ describe('mixcloud api', () => {
 })
 
 describe('mixcloud home', () => {
-  // la répartition relevée sur le compte de l'utilisateur le 2026-09-23 : The Boat Pod puis Worldwide FM,
-  // jazz puis soul ; `worldwide-fm` est aussi un genre chez Mixcloud, mais c'est déjà une rangée « Plus de »
+  // the distribution observed on the user's account on 2026-09-23: The Boat Pod then Worldwide FM,
+  // jazz then soul; `worldwide-fm` is also a genre at Mixcloud, but it is already a "More from" row
   const listen = (user: string, i: number, genres: string[]): MixcloudMix => ({
     ...MIX, key: `/${user}/mix-${i}/`, user: { username: user, name: user === 'worldwidefm' ? 'Worldwide FM' : user },
     genres: genres.map((g) => ({ slug: g, name: g[0]!.toUpperCase() + g.slice(1) })),
@@ -179,9 +179,9 @@ describe('mixcloud home', () => {
     ...[0, 1, 2].map((i) => listen('TheBoAtPod', i, ['jazz', 'soul'])),
     ...[0, 1].map((i) => listen('worldwidefm', i, ['worldwide-fm', 'jazz'])),
     listen('WeAreOneJazz', 0, ['jazz', 'acoustic-jazz']),
-    listen('TheBoAtPod', 0, ['jazz', 'soul']),                // réécouté : une seule fois dans « Réécouter »
-    listen('notfollowed', 0, ['house', 'notfollowed']),      // écouté mais pas suivi : ni créateur, ni « Plus de »
-    listen('notfollowed', 1, ['house', 'notfollowed']),      // … et son nom de compte n'est pas un genre
+    listen('TheBoAtPod', 0, ['jazz', 'soul']),                // listened again: only once in "Listen again"
+    listen('notfollowed', 0, ['house', 'notfollowed']),      // listened to but not followed: neither a creator, nor "More from"
+    listen('notfollowed', 1, ['house', 'notfollowed']),      // … and its account name is not a genre
   ]
   const followed = ['sohoradio', 'TheBoAtPod', 'worldwidefm', 'KioskRadio', 'WeAreOneJazz'].map((username) => ({ username, name: username, artUrl: null }))
 
@@ -195,10 +195,10 @@ describe('mixcloud home', () => {
     const feed = [listen('followed', 1, [])]
     const home = await buildHome(api, 'un_auditeur', async () => feed, { moreFrom: 2, genres: 3 })
     expect(api.listens).toHaveBeenCalledWith('un_auditeur', undefined, 100)
-    // les genres, eux, comptent toutes les écoutes (suivies ou non) : jazz, soul, puis house
+    // the genres, however, count all listens (followed or not): jazz, soul, then house
     expect(home.map((s) => s.id)).toEqual(['topCreators', 'following', 'listenAgain', 'moreFrom', 'moreFrom', 'popular', 'popular', 'popular'])
     const top = home[0]!
-    // les suivis écoutés, par écoutes, puis les autres suivis dans l'ordre de la liste
+    // the listened follows, by listens, then the other follows in list order
     expect(top.kind === 'users' && top.users.map((u) => u.username)).toEqual(['TheBoAtPod', 'worldwidefm', 'WeAreOneJazz', 'sohoradio', 'KioskRadio'])
     expect(home.filter((s) => s.id === 'moreFrom').map((s) => s.kind === 'mixes' && 'user' in s && s.user.username)).toEqual(['TheBoAtPod', 'worldwidefm'])
     expect(home.filter((s) => s.id === 'popular').map((s) => 'genre' in s && s.genre.slug)).toEqual(['jazz', 'soul', 'house'])
@@ -248,10 +248,10 @@ describe('mixcloud stream resolution', () => {
 describe('mixcloud resume', () => {
   it('remembers a position past the first minute, forgets a finished mix, keeps the most recent', () => {
     let resume = noteProgress({}, '/a/b/', 30, 3600, false, 1)
-    expect(resumePoint(resume['/a/b/'])).toBeNull()                       // trop tôt pour valoir une reprise
+    expect(resumePoint(resume['/a/b/'])).toBeNull()                       // too early to be worth resuming
     resume = noteProgress(resume, '/a/b/', 1234.6, 3600, false, 2)
     expect(resumePoint(resume['/a/b/'])).toBe(1234)
-    resume = noteProgress(resume, '/a/b/', 3550, 3600, false, 3)          // dans la dernière minute et demie
+    resume = noteProgress(resume, '/a/b/', 3550, 3600, false, 3)          // within the last minute and a half
     expect(resume['/a/b/']).toBeUndefined()
     resume = noteProgress({ '/a/b/': { positionS: 500, durationS: 3600, at: 1 } }, '/a/b/', 3600, 3600, true, 4)
     expect(resume).toEqual({})
@@ -284,7 +284,7 @@ describe('mixcloud plugin', () => {
     await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/library/feed' })
     expect(api.following).toHaveBeenCalledTimes(2)
     expect((await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/library/nope' })).statusCode).toBe(404)
-    // repartir du début
+    // start over
     await app.inject({ method: 'DELETE', url: `/api/plugins/mixcloud/resume?key=${encodeURIComponent(MIX.key)}` })
     expect((await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/library/favorites' })).json().items[0].resumeS).toBeUndefined()
     await plugin.stop()
@@ -303,11 +303,11 @@ describe('mixcloud plugin', () => {
     expect(sent[1]).toEqual({ type: 'media_player.seek', positionS: 1800 })
     const sessions = (await app.inject({ method: 'GET', url: '/api/music/sessions' })).json().sessions
     expect(sessions[0]).toMatchObject({ source: 'mixcloud', id: MIX.key, durationS: 5786, quality: { mime: 'audio/mp4', lengthBytes: SIZE } })
-    // une clé qui n'est pas celle d'un mix ne part pas à yt-dlp
+    // a key that is not a mix's does not go to yt-dlp
     const bad = await app.inject({ method: 'POST', url: '/api/music/play', payload: { source: 'mixcloud', id: 'https://evil.example/', deviceId: speaker.id } })
     expect(bad.statusCode).toBeGreaterThanOrEqual(400)
     await plugin.stop()
-    // plugin coupé : la source n'est plus là
+    // plugin stopped: the source is gone
     const off = await app.inject({ method: 'POST', url: '/api/music/play', payload: { source: 'mixcloud', id: MIX.key, deviceId: speaker.id } })
     expect(off.statusCode).toBe(400)
   })
@@ -323,7 +323,7 @@ describe('mixcloud accounts', () => {
   it('lets a signed-in user search anonymously, leaving no trace anywhere', async () => {
     const { app, store, userStore, plugin } = await boot()
     expect((await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/status', headers: alice })).json()).toMatchObject({ username: null, account: 'alice' })
-    // son badge : anonyme, ça marche — la maison, elle, a son propre compte
+    // their badge: anonymous, it works — the house, for its part, has its own account
     expect(await plugin.healthFor!('alice')).toMatchObject({ status: 'ok', detail: expect.stringContaining('anonymous') })
     expect((await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/search?q=nts', headers: alice })).statusCode).toBe(200)
     expect((await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/library/favorites', headers: alice })).statusCode).toBeGreaterThanOrEqual(400)
@@ -331,7 +331,7 @@ describe('mixcloud accounts', () => {
     const found = (await app.inject({ method: 'GET', url: '/api/plugins/mixcloud/search?q=nts', headers: alice })).json()
     expect(found.items[0].resumeS).toBeUndefined()
     expect((await favorites(app)).resumeS).toBeUndefined()
-    await plugin.stop() // écrit ce qui attendait
+    await plugin.stop() // writes what was pending
     expect((await store.load()).resume).toEqual({})
     expect((await userStore('alice').load()).resume).toEqual({})
   })
@@ -350,7 +350,7 @@ describe('mixcloud accounts', () => {
     await progress(app, 900)
     expect((await favorites(app, alice)).resumeS).toBe(1800)
     expect((await favorites(app)).resumeS).toBe(900)
-    // Alice repart du début : la maison garde sa position
+    // Alice starts over: the house keeps its position
     await app.inject({ method: 'DELETE', url: `/api/plugins/mixcloud/resume?key=${encodeURIComponent(MIX.key)}`, headers: alice })
     expect((await favorites(app, alice)).resumeS).toBeUndefined()
     expect((await favorites(app)).resumeS).toBe(900)

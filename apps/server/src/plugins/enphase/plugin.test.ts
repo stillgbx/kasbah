@@ -11,9 +11,9 @@ import { PANEL_STALE_MS } from './mapping'
 import type { TokenStore } from './token'
 import type { CloudStore, CloudSession } from './cloud'
 
-// Appairage de la passerelle IQ. Le point surveillé ici : les identifiants du compte Enphase
-// TRAVERSENT la route et disparaissent — ils ne sont ni conservés en cache, ni renvoyés à l'UI, ni
-// exigés en configuration. Aucune passerelle ni aucun compte réel n'est touché.
+// IQ Gateway pairing. The point watched here: the Enphase account credentials PASS THROUGH the route
+// and vanish — they are neither cached, nor sent back to the UI, nor required in the configuration.
+// No real gateway or account is touched.
 
 const NOW = Date.UTC(2026, 8, 11)
 const DAY = 86_400_000
@@ -24,7 +24,7 @@ const INFO_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <envoy_info><time>1789123472</time><device><sn>${SERIAL}</sn><pn>800-00654-r09</pn>
 <software>D8.3.5289</software><imeter>true</imeter></device><web-tokens>true</web-tokens></envoy_info>`
 
-/** Ce que la vraie passerelle renvoie sur chaque route (capture anonymisee). */
+/** What the real gateway returns on each route (anonymized capture). */
 const FIXTURES: Record<string, unknown> = {
   '/production.json?details=1': PRODUCTION,
   '/api/v1/production/inverters': INVERTERS,
@@ -48,7 +48,7 @@ const response = (text: string, status = 200) => ({
   text: async () => text,
 })
 
-/** Fausse passerelle : `/info` sans jeton, le reste en Bearer ; 401 si le jeton ne correspond pas. */
+/** Fake gateway: `/info` without a token, the rest with Bearer; 401 if the token does not match. */
 function fakeGateway(opts: { infoDown?: boolean; accept?: string; failing?: string[] } = {}) {
   const calls: { path: string; auth: string | undefined }[] = []
   const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
@@ -67,7 +67,7 @@ function fakeGateway(opts: { infoDown?: boolean; accept?: string; failing?: stri
   return { fetchImpl, calls }
 }
 
-/** Faux cloud Enphase : session puis échange, comme la note technique du fabricant les décrit. */
+/** Fake Enphase cloud: session then exchange, as the vendor's technical note describes them. */
 function fakeCloud(minted = token(365)) {
   const calls: { url: string; body: string; method: string }[] = []
   const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
@@ -136,7 +136,7 @@ async function started(over: {
   return { plugin, app, gateway, cloud, store, cloudStore, ctx, clock }
 }
 
-/** Laisse les promesses en vol se resoudre (les sondes tournent sur l'horloge injectee). */
+/** Lets in-flight promises resolve (the pollers run on the injected clock). */
 const settle = () => new Promise((r) => setTimeout(r, 0))
 
 const post = (app: Awaited<ReturnType<typeof started>>['app'], payload: unknown) =>
@@ -144,50 +144,50 @@ const post = (app: Awaited<ReturnType<typeof started>>['app'], payload: unknown)
 const get = (app: Awaited<ReturnType<typeof started>>['app'], url: string) =>
   app.inject({ method: 'GET', url: `/api/plugins/enphase${url}` })
 
-describe('passerelle non appairée', () => {
-  it('démarre quand même, se déclare needs_pairing, et a déjà lu le numéro de série sur /info', async () => {
+describe('unpaired gateway', () => {
+  it('starts anyway, declares itself needs_pairing, and has already read the serial number from /info', async () => {
     const { plugin, app, gateway } = await started()
     expect(plugin.health!()).toMatchObject({ status: 'needs_pairing' })
-    // /info ne porte AUCUN jeton : c'est ce qui permet de reconnaître la passerelle avant l'appairage
+    // /info carries NO token: it is what allows recognizing the gateway before pairing
     expect(gateway.calls).toEqual([{ path: '/info', auth: undefined }])
     expect(await get(app, '/token').then((r) => r.json())).toMatchObject({ paired: false, serial: SERIAL, software: 'D8.3.5289', stage: 'none', cloudLinked: false })
   })
 
-  it('dit OÙ le jeton sera gardé : c\'est ce qui répond « ai-je quelque chose à recopier ? »', async () => {
+  it('says WHERE the token will be kept: it is what answers "do I have something to copy?"', async () => {
     const withCache = await started()
     expect((await get(withCache.app, '/token').then((r) => r.json())).tokenFile).toMatch(/enphase-token\.json$/)
-    // cache désactivé : l'UI doit alors prévenir que l'appairage ne survivra pas au redémarrage
+    // cache disabled: the UI must then warn that the pairing will not survive a restart
     const without = await started({ env: { ENPHASE_TOKEN_FILE: '' } })
     expect((await get(without.app, '/token').then((r) => r.json())).tokenFile).toBeNull()
   })
 
-  it('les clés annoncées dans les Réglages ne contiennent aucun identifiant de compte', async () => {
+  it('the keys listed in Settings contain no account credential', async () => {
     const { plugin } = await started()
     expect(plugin.health!().keys).toEqual(['ENPHASE_HOST', 'ENPHASE_TOKEN', 'ENPHASE_TOKEN_FILE', 'ENPHASE_CLOUD_FILE'])
     expect(Object.keys(enphaseConfigSchema.shape)).not.toContain('ENPHASE_PASSWORD')
     expect(plugin.parts).toEqual([{ id: 'ev_charger', labelKey: 'kinds.ev_charger', enabledByDefault: true }])
   })
 
-  it('refuse le relevé brut tant qu\'aucun jeton n\'est en place', async () => {
+  it('refuses the raw reading as long as no token is in place', async () => {
     const { app } = await started()
     expect((await get(app, '/raw')).statusCode).toBe(409)
     expect((await get(app, '/ev/raw')).statusCode).toBe(409)
   })
 })
 
-describe('appairage par jeton collé', () => {
-  it('adopte un jeton valable, le met en cache, et passe à ok', async () => {
+describe('pairing with a pasted token', () => {
+  it('adopts a valid token, caches it, and switches to ok', async () => {
     const pasted = token(300)
     const { plugin, app, store, cloud } = await started({ gateway: fakeGateway({ accept: pasted }) })
     const r = await post(app, { token: `  ${pasted}\n` })
     expect(r.statusCode).toBe(200)
     expect(r.json()).toMatchObject({ paired: true, serial: SERIAL, stage: 'ok', daysLeft: 300, role: 'owner', source: 'minted' })
-    expect(store.value).toBe(pasted)                       // le cache garde le jeton, pas les identifiants
-    expect(cloud.calls).toHaveLength(0)                    // un jeton collé ne touche pas au cloud
+    expect(store.value).toBe(pasted)                       // the cache keeps the token, not the credentials
+    expect(cloud.calls).toHaveLength(0)                    // a pasted token does not touch the cloud
     expect(plugin.health!()).toMatchObject({ status: 'ok' })
   })
 
-  it('la réponse ne renvoie JAMAIS le jeton lui-même, seulement son échéance', async () => {
+  it('the response NEVER returns the token itself, only its expiry', async () => {
     const pasted = token(300)
     const { app } = await started()
     const body = await post(app, { token: pasted }).then((r) => r.body)
@@ -195,7 +195,7 @@ describe('appairage par jeton collé', () => {
     expect(JSON.parse(body)).toHaveProperty('expiresAt', NOW + 300 * DAY)
   })
 
-  it('refuse un jeton illisible, expiré, ou émis pour une AUTRE passerelle, en disant lequel', async () => {
+  it('refuses an unreadable or expired token, or one issued for ANOTHER gateway, saying which', async () => {
     const { app } = await started()
     for (const [bad, expected] of [
       ['tronque', /not a readable/],
@@ -208,7 +208,7 @@ describe('appairage par jeton collé', () => {
     }
   })
 
-  it('un corps qui n\'est ni un jeton ni des identifiants → 400 qui dit quoi envoyer', async () => {
+  it('a body that is neither a token nor credentials → 400 saying what to send', async () => {
     const { app } = await started()
     const r = await post(app, { user: 'seul' })
     expect(r.statusCode).toBe(400)
@@ -216,8 +216,8 @@ describe('appairage par jeton collé', () => {
   })
 })
 
-describe('appairage par identifiants', () => {
-  it('frappe un jeton au cloud pour CETTE passerelle, sans conserver le mot de passe', async () => {
+describe('pairing with credentials', () => {
+  it('mints a token with the cloud for THIS gateway, without keeping the password', async () => {
     const minted = token(365)
     const { app, cloud, store, cloudStore } = await started({ gateway: fakeGateway({ accept: minted }), cloud: fakeCloud(minted) })
     const r = await post(app, { user: 'toit@exemple.fr', password: 'motdepasse' })
@@ -234,7 +234,7 @@ describe('appairage par identifiants', () => {
     expect(JSON.stringify(cloudStore.value)).not.toContain('motdepasse')
   })
 
-  it('sans passerelle joignable, lie quand même le cloud : la borne n\'a pas besoin du numéro de série', async () => {
+  it('without a reachable gateway, still links the cloud: the charger does not need the serial number', async () => {
     const { app, cloud, cloudStore } = await started({ gateway: fakeGateway({ infoDown: true }) })
     const r = await post(app, { user: 'u', password: 'p' })
     expect(r.statusCode).toBe(502)
@@ -243,7 +243,7 @@ describe('appairage par identifiants', () => {
     expect(cloud.calls.some((c) => c.url.includes('/tokens'))).toBe(false)
   })
 
-  it('ne frappe pas quand le jeton en place est encore bon, mais lie le cloud (la borne)', async () => {
+  it('does not mint while the current token is still good, but links the cloud (the charger)', async () => {
     const { app, cloud, cloudStore } = await started({ env: { ENPHASE_TOKEN: token(200) } })
     const r = await post(app, { user: 'u', password: 'p' })
     expect(r.statusCode).toBe(200)
@@ -253,7 +253,7 @@ describe('appairage par identifiants', () => {
     expect(cloudStore.value).toMatchObject({ sessionId: 'sess-1' })
   })
 
-  it('`force` passe outre ce garde-fou, pour qui veut vraiment remplacer son jeton', async () => {
+  it('`force` overrides this safeguard, for whoever really wants to replace their token', async () => {
     const minted = token(365)
     const { app, cloud, store } = await started({ env: { ENPHASE_TOKEN: token(200) }, cloud: fakeCloud(minted) })
     const r = await post(app, { user: 'u', password: 'p', force: true })
@@ -262,13 +262,13 @@ describe('appairage par identifiants', () => {
     expect(store.value).toBe(minted)
   })
 
-  it('un jeton qui expire bientôt ne déclenche PAS le garde-fou : le renouveler est justement le but', async () => {
+  it('a token expiring soon does NOT trigger the safeguard: renewing it is precisely the goal', async () => {
     const { app, cloud } = await started({ env: { ENPHASE_TOKEN: token(5) } })
     expect((await post(app, { user: 'u', password: 'p' })).statusCode).toBe(200)
     expect(cloud.calls.some((c) => c.url.includes('/tokens'))).toBe(true)
   })
 
-  it('identifiants refusés par le cloud → 400, et rien n\'est mis en cache', async () => {
+  it('credentials refused by the cloud → 400, and nothing is cached', async () => {
     const cloud = { calls: [] as { url: string; body: string }[], fetchImpl: vi.fn<FetchLike>(async () => response('{"message":"bad"}', 401)) }
     const { app, store, cloudStore } = await started({ cloud: cloud as unknown as ReturnType<typeof fakeCloud> })
     const r = await post(app, { user: 'u', password: 'faux' })
@@ -279,14 +279,14 @@ describe('appairage par identifiants', () => {
   })
 })
 
-describe('jeton déjà connu au démarrage', () => {
-  it('prend celui de la configuration, et le dit dans son état', async () => {
+describe('token already known at startup', () => {
+  it("takes the configuration's one, and says so in its state", async () => {
     const configured = token(200)
     const { app } = await started({ env: { ENPHASE_TOKEN: configured }, gateway: fakeGateway({ accept: configured }) })
     expect(await get(app, '/token').then((r) => r.json())).toMatchObject({ paired: true, source: 'config', daysLeft: 200 })
   })
 
-  it('reprend celui du cache au démarrage suivant : plus rien à taper pendant un an', async () => {
+  it("picks up the cache's one at the next start: nothing more to type for a year", async () => {
     const cached = token(180)
     const store = memoryStore()
     store.value = cached
@@ -294,20 +294,20 @@ describe('jeton déjà connu au démarrage', () => {
     expect(plugin.health!()).toMatchObject({ status: 'ok' })
   })
 
-  it('passe en degraded sous 30 jours : la pastille des Réglages alerte AVANT la panne', async () => {
+  it('goes degraded under 30 days: the Settings badge warns BEFORE the failure', async () => {
     const { plugin, app } = await started({ env: { ENPHASE_TOKEN: token(12) } })
     expect(plugin.health!()).toMatchObject({ status: 'degraded', detail: expect.stringContaining('12 day(s)') as unknown as string })
     expect(await get(app, '/token').then((r) => r.json())).toMatchObject({ stage: 'expiring', daysLeft: 12, renewUnderDays: 30 })
   })
 
-  it('un jeton expiré en configuration laisse le plugin en needs_pairing, pas en erreur', async () => {
+  it('an expired token in the configuration leaves the plugin in needs_pairing, not in error', async () => {
     const { plugin } = await started({ env: { ENPHASE_TOKEN: token(-3) } })
     expect(plugin.health!()).toMatchObject({ status: 'needs_pairing' })
   })
 })
 
-describe('relevé brut (pour écrire les fixtures du mappage)', () => {
-  it('interroge toutes les routes locales avec le jeton, et porte l\'échec d\'une seule sans tomber', async () => {
+describe('raw reading (to write the mapping fixtures)', () => {
+  it('queries every local route with the token, and carries the failure of one without falling over', async () => {
     const pasted = token(300)
     const gateway = fakeGateway({ accept: pasted, failing: ['/ivp/ensemble/power'] })
     const { app } = await started({ gateway })
@@ -316,19 +316,19 @@ describe('relevé brut (pour écrire les fixtures du mappage)', () => {
     expect(raw.info).toMatchObject({ serial: SERIAL })
     expect(raw['/api/v1/production/inverters']).toHaveLength(20)
     expect(raw['/ivp/ensemble/power']).toMatchObject({ error: expect.stringContaining('404') as unknown as string })
-    // toutes les routes authentifiées portent le Bearer
+    // every authenticated route carries the Bearer
     const authed = gateway.calls.filter((c) => c.path !== '/info')
     expect(authed.every((c) => c.auth === `Bearer ${pasted}`)).toBe(true)
   })
 
-  it('le relevé EVSE refuse tant que le compte Enlighten n\'est pas lié — un jeton collé ne suffit pas', async () => {
+  it('the EVSE reading refuses as long as the Enlighten account is not linked — a pasted token is not enough', async () => {
     const pasted = token(300)
     const { app } = await started()
     await post(app, { token: pasted })
     expect((await get(app, '/ev/raw')).statusCode).toBe(409)
   })
 
-  it('le relevé EVSE sonde le cloud après un appairage par identifiants', async () => {
+  it('the EVSE reading probes the cloud after a pairing with credentials', async () => {
     const minted = token(365)
     const cloud = fakeCloud(minted)
     const { app } = await started({ gateway: fakeGateway({ accept: minted }), cloud })
@@ -339,14 +339,14 @@ describe('relevé brut (pour écrire les fixtures du mappage)', () => {
   })
 })
 
-describe('appareils', () => {
-  /** Plugin appairé sur la fausse passerelle, qui sert les réponses capturées sur la vraie. */
+describe('devices', () => {
+  /** Plugin paired on the fake gateway, which serves the responses captured from the real one. */
   const paired = async () => {
     const t = token(300)
     return started({ env: { ENPHASE_TOKEN: t }, gateway: fakeGateway({ accept: t }) })
   }
 
-  it('publie le site, un capteur par onduleur et un appareil par batterie', async () => {
+  it('publishes the site, a sensor per inverter and a device per battery', async () => {
     const { plugin } = await paired()
     const devices = await plugin.discover()
     expect(devices).toHaveLength(23)
@@ -354,12 +354,12 @@ describe('appareils', () => {
     expect(devices.filter((d) => d.kind === 'sensor')).toHaveLength(20)
   })
 
-  it('ne publie rien tant que la passerelle n\'est pas appairée', async () => {
+  it('publishes nothing as long as the gateway is not paired', async () => {
     const { plugin } = await started()
     expect(await plugin.discover()).toEqual([])
   })
 
-  it('sonde les compteurs et pousse l\'état du site', async () => {
+  it('polls the meters and pushes the site state', async () => {
     const { plugin, ctx } = await paired()
     await plugin.discover()
     await plugin.start()
@@ -369,7 +369,7 @@ describe('appareils', () => {
     await plugin.stop()
   })
 
-  it('pousse la puissance de chaque onduleur, et les batteries', async () => {
+  it('pushes the power of each inverter, and the batteries', async () => {
     const { plugin, ctx } = await paired()
     await plugin.discover()
     await plugin.start()
@@ -378,44 +378,44 @@ describe('appareils', () => {
     const panels = calls.filter(([, patch]) => (patch as { kind: string }).kind === 'sensor')
     expect(panels).toHaveLength(20)
     expect(panels[0]![1]).toMatchObject({ kind: 'sensor', value: INVERTERS[0]!.lastReportWatts })
-    // deux batteries, l'une au repos et l'autre en décharge de 16 W (signe du contrat : négatif)
+    // two batteries, one at rest and the other discharging 16 W (contract sign: negative)
     const batteries = calls.filter(([id]) => ENSEMBLE_INVENTORY[0]!.devices.some((d) => d.serial_num === id))
     expect(batteries).toHaveLength(2)
     expect(batteries.map(([, p]) => (p as { batteryW: number }).batteryW).sort()).toEqual([-16, 0])
     await plugin.stop()
   })
 
-  it('un onduleur muet depuis trop longtemps est declare indisponible, pas remis a zero', async () => {
+  it('an inverter silent for too long is declared unavailable, not reset to zero', async () => {
     const { plugin, ctx, clock } = await paired()
     await plugin.discover()
     await plugin.start()
     await settle()
     ;(ctx.setAvailable as ReturnType<typeof vi.fn>).mockClear()
     ;(ctx.emitState as ReturnType<typeof vi.fn>).mockClear()
-    // la capture date d'un après-midi ensoleillé : on avance au-delà du dernier rapport + la
-    // demi-heure de grâce, ce qui simule la nuit tombée
+    // the capture dates from a sunny afternoon: we advance past the last report + the half-hour
+    // grace period, which simulates nightfall
     const last = Math.max(...INVERTERS.map((i) => i.lastReportDate)) * 1000
     clock.advance(last + PANEL_STALE_MS + 60_000 - clock.now())
     await settle()
     const off = (ctx.setAvailable as ReturnType<typeof vi.fn>).mock.calls.filter(([, ok]) => ok === false)
     expect(off).toHaveLength(20)
-    // aucune valeur n'a ete republiee pour un panneau : on ne remplace pas une mesure par un zero
+    // no value was republished for a solar panel: we do not replace a measurement with a zero
     const panels = (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.filter(([, patch]) => (patch as { kind: string }).kind === 'sensor')
     expect(panels).toHaveLength(0)
     await plugin.stop()
   })
 
-  it('refuse toute commande : la passerelle est en lecture seule ici', async () => {
+  it('refuses every command: the gateway is read-only here', async () => {
     const { plugin } = await started()
     await expect(plugin.execute('x', { type: 'light.set', on: true })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
   })
 
-  it('un jeton collé n\'ouvre pas la borne', async () => {
+  it('a pasted token does not open the charger', async () => {
     const { plugin } = await paired()
     expect((await plugin.discover()).filter((d) => d.kind === 'ev_charger')).toHaveLength(0)
   })
 
-  it('publie la borne après un appairage par compte, démarrable et arrêtable', async () => {
+  it('publishes the charger after an account pairing, startable and stoppable', async () => {
     const minted = token(365)
     const { plugin, app, ctx } = await started({ gateway: fakeGateway({ accept: minted }), cloud: fakeCloud(minted) })
     expect((await post(app, { user: 'u', password: 'p' })).statusCode).toBe(200)
@@ -432,7 +432,7 @@ describe('appareils', () => {
     await plugin.stop()
   })
 
-  it('démarrer envoie l\'intensité PAR DÉFAUT de l\'appli (24 A), arrêter un PUT ; l\'état suit par une relecture', async () => {
+  it("starting sends the app's DEFAULT current (24 A), stopping a PUT; the state follows through a read", async () => {
     const minted = token(365)
     const { plugin, app, cloud, clock } = await started({ gateway: fakeGateway({ accept: minted }), cloud: fakeCloud(minted) })
     await post(app, { user: 'u', password: 'p' })
@@ -452,7 +452,7 @@ describe('appareils', () => {
     await plugin.stop()
   })
 
-  it('un refus sous HTTP 200 (`error` non vide) remonte ; une borne inconnue est indisponible', async () => {
+  it('a refusal under HTTP 200 (non-empty `error`) surfaces; an unknown charger is unavailable', async () => {
     const minted = token(365)
     const cloud = fakeCloud(minted)
     const base = cloud.fetchImpl.getMockImplementation()!
@@ -470,9 +470,9 @@ describe('appareils', () => {
   })
 
   /**
-   * Vu sur la vraie borne le 2026-10-02 : une charge forcée finie, la borne débranchée, elle tenait
-   * encore son annulation (`mode: 0`, préférence `GREEN_CHARGING`) et l'appli ne pouvait plus
-   * remettre le vert (« already enabled »). Passer en manuel puis revenir en vert l'a levée.
+   * Seen on the real charger on 2026-10-02: a forced charge finished, the charger unplugged, it still
+   * held its cancellation (`mode: 0`, preference `GREEN_CHARGING`) and the app could no longer switch
+   * green back on ("already enabled"). Switching to manual then back to green lifted it.
    */
   function overriddenCloud(minted: string, opts: { pluggedIn?: boolean; preference?: string; failRestore?: number } = {}) {
     const cloud = fakeCloud(minted)
@@ -515,7 +515,7 @@ describe('appareils', () => {
     for (let i = 0; i < 10; i++) await settle()
   }
 
-  it('débranchée sous annulation manuelle, la borne reprend sa préférence (le vert) : manuel PUIS vert', async () => {
+  it('unplugged under manual cancellation, the charger goes back to its preference (green): manual THEN green', async () => {
     const minted = token(365)
     const cloud = overriddenCloud(minted)
     const { plugin: p, clock } = await pollWithOverride(cloud, minted)
@@ -523,13 +523,13 @@ describe('appareils', () => {
     expect(modeWrites(cloud)).toEqual(['{"mode":"MANUAL_CHARGING"}', '{"mode":"GREEN_CHARGING"}'])
     expect(cloud.calls.find((c) => c.url.includes('/charging-mode/'))!.url)
       .toContain('/service/evse_scheduler/api/v1/iqevc/charging-mode/1000001/482000000001/preference')
-    // le cloud met un moment à refléter le mode : on ne recommence pas à chaque relecture
+    // the cloud takes a while to reflect the mode: we do not retry on every read
     await drain(clock, 60_000)
     expect(modeWrites(cloud)).toHaveLength(2)
     await p.stop()
   })
 
-  it('ne touche à rien tant qu\'une voiture est branchée, ni quand le manuel est le choix de l\'utilisateur', async () => {
+  it("touches nothing while a car is plugged in, nor when manual is the user's choice", async () => {
     const minted = token(365)
     for (const opts of [{ pluggedIn: true }, { preference: 'MANUAL_CHARGING' }, { preference: 'SCHEDULED_CHARGING' }]) {
       const cloud = overriddenCloud(minted, opts)
@@ -540,7 +540,7 @@ describe('appareils', () => {
     }
   })
 
-  it('après un forçage par Kasbah, c\'est le mode d\'AVANT qui revient, pas forcément le vert', async () => {
+  it('after a forcing by Kasbah, it is the PREVIOUS mode that comes back, not necessarily green', async () => {
     const minted = token(365)
     const cloud = overriddenCloud(minted, { preference: 'SCHEDULED_CHARGING' })
     const { plugin: p, clock } = await pollWithOverride(cloud, minted)
@@ -552,7 +552,7 @@ describe('appareils', () => {
     await p.stop()
   })
 
-  it('un retour au mode d\'avant refusé est retenté à la relecture suivante, sans repasser par le manuel', async () => {
+  it('a refused return to the previous mode is retried at the next read, without going through manual again', async () => {
     const minted = token(365)
     const cloud = overriddenCloud(minted, { failRestore: 1 })
     const { plugin: p, clock } = await pollWithOverride(cloud, minted)
@@ -563,7 +563,7 @@ describe('appareils', () => {
     await p.stop()
   })
 
-  it('« reprendre son mode » à la limite de charge, voiture encore branchée : manuel, puis le mode d\'avant 5 s plus tard', async () => {
+  it('"resume its mode" at the charge limit, car still plugged in: manual, then the previous mode 5 s later', async () => {
     const minted = token(365)
     const cloud = overriddenCloud(minted, { pluggedIn: true, preference: 'SCHEDULED_CHARGING' })
     const { plugin: p, clock } = await pollWithOverride(cloud, minted)
@@ -575,9 +575,9 @@ describe('appareils', () => {
     await p.stop()
   })
 
-  it('« reprendre son mode » ne fait rien quand la borne y est déjà revenue, ni quand le manuel est le choix de l\'utilisateur', async () => {
+  it('"resume its mode" does nothing when the charger has already gone back to it, nor when manual is the user\'s choice', async () => {
     const minted = token(365)
-    const back = await pollWithOverride(fakeCloud(minted), minted) // fixture : `mode` 1, charge verte
+    const back = await pollWithOverride(fakeCloud(minted), minted) // fixture: `mode` 1, green charging
     await back.plugin.execute('482000000001', { type: 'ev_charger.resume_mode' })
     expect(modeWrites(back.cloud)).toEqual([])
     await back.plugin.stop()
@@ -592,7 +592,7 @@ describe('appareils', () => {
   const lastPatch = (ctx: { emitState: unknown }) =>
     (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.filter(([id]) => id === '482000000001').at(-1)?.[1]
 
-  it('choisir le manuel depuis le vert : un seul PUT, le mode publié suit sans attendre la relecture', async () => {
+  it('choosing manual from green: a single PUT, the published mode follows without waiting for the read', async () => {
     const minted = token(365)
     const { plugin: p, cloud, ctx } = await pollWithOverride(fakeCloud(minted), minted)
     await p.execute('482000000001', { type: 'ev_charger.set_mode', mode: 'manual' })
@@ -601,9 +601,9 @@ describe('appareils', () => {
     await p.stop()
   })
 
-  it('choisir le mode en cours ne réécrit rien (le cloud le refuse) ; sous annulation, c\'est « reprendre »', async () => {
+  it('choosing the current mode rewrites nothing (the cloud refuses it); under cancellation, it is "resume"', async () => {
     const minted = token(365)
-    const same = await pollWithOverride(fakeCloud(minted), minted) // fixture : charge verte, `mode` 1
+    const same = await pollWithOverride(fakeCloud(minted), minted) // fixture: green charging, `mode` 1
     await same.plugin.execute('482000000001', { type: 'ev_charger.set_mode', mode: 'green' })
     expect(modeWrites(same.cloud)).toEqual([])
     await same.plugin.stop()
@@ -615,7 +615,7 @@ describe('appareils', () => {
     await p.stop()
   })
 
-  it('revenir au vert depuis le manuel : un seul PUT, sans repasser par le manuel', async () => {
+  it('going back to green from manual: a single PUT, without going through manual again', async () => {
     const minted = token(365)
     const cloud = overriddenCloud(minted, { pluggedIn: true, preference: 'MANUAL_CHARGING' })
     const { plugin: p, clock } = await pollWithOverride(cloud, minted)
@@ -625,7 +625,7 @@ describe('appareils', () => {
     await p.stop()
   })
 
-  it('en mode manuel, `mode` 0 n\'est pas une annulation à lever : rien à « reprendre »', async () => {
+  it('in manual mode, `mode` 0 is not a cancellation to lift: nothing to "resume"', async () => {
     const minted = token(365)
     const cloud = overriddenCloud(minted, { pluggedIn: true, preference: 'MANUAL_CHARGING' })
     const { plugin: p, ctx } = await pollWithOverride(cloud, minted)
@@ -636,7 +636,7 @@ describe('appareils', () => {
     await green.plugin.stop()
   })
 
-  it('le mode se relit au plus toutes les dix minutes, pas à chaque relecture de la borne', async () => {
+  it('the mode is read at most every ten minutes, not on every charger read', async () => {
     const minted = token(365)
     const { plugin: p, cloud, clock } = await pollWithOverride(fakeCloud(minted), minted)
     const reads = () => cloud.calls.filter((c) => c.url.includes('/charging-mode/') && c.method === 'GET').length
@@ -649,7 +649,7 @@ describe('appareils', () => {
     await p.stop()
   })
 
-  it('le sous-item décoché retire la borne sans toucher au solaire', async () => {
+  it('the unchecked sub-item removes the charger without touching the solar side', async () => {
     const minted = token(365)
     const { plugin, app } = await started({
       gateway: fakeGateway({ accept: minted }), cloud: fakeCloud(minted), parts: { ev_charger: false },

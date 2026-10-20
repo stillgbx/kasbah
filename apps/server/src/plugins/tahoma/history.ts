@@ -3,26 +3,26 @@ import type { Logger } from 'pino'
 import { z } from 'zod'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// Historique de LUMINOSITÉ des volets solaires : le maximum atteint par heure et par jour, le mois
-// se déduisant des jours. L'API locale n'en sert aucun (le graphe heure / jour / mois de l'appli
-// Somfy vient du cloud) : il est donc construit ICI, au fil des événements de la box.
+// LIGHT history of the solar shutters: the maximum reached per hour and per day, the month being
+// derived from the days. The local API serves none (the Somfy app's hour / day / month graph comes
+// from the cloud): so it is built HERE, as the box's events come in.
 //
-// Le MAXIMUM et pas une moyenne : c'est ce que montre l'appli (« 4 000 lx hier »), et c'est exact
-// sans échantillonnage — la box n'émet `core:LuminanceState` que quand la valeur change, donc entre
-// deux trames la luminance est celle de la précédente. D'où le report : une heure sans trame (la
-// nuit, un ciel constant) vaut la dernière valeur connue, à condition que CE processus l'ait vue
-// pendant tout ce temps. Une heure où le serveur ne tournait pas reste ABSENTE, jamais à zéro.
+// The MAXIMUM and not an average: it is what the app shows ("4,000 lx yesterday"), and it is exact
+// without sampling — the box only emits `core:LuminanceState` when the value changes, so between two
+// frames the luminance is the previous one's. Hence the carry-over: an hour without a frame (night,
+// a steady sky) is worth the last known value, provided THIS process saw it the whole time. An hour
+// when the server was not running stays ABSENT, never at zero.
 
 const HOUR_MS = 3_600_000
-/** Deux jours d'heures : de quoi afficher « les dernières 24 h » à toute heure. */
+/** Two days of hours: enough to show "the last 24 h" at any hour. */
 export const HOURLY_POINTS_MAX = 48
-/** Treize mois de jours : la vue mensuelle couvre l'année écoulée, mois en cours compris. */
+/** Thirteen months of days: the monthly view covers the past year, current month included. */
 export const DAILY_POINTS_MAX = 400
 
 export const lightPointSchema = z.object({
-  /** Début du pas (ms epoch) : heure pleine, ou minuit local. */
+  /** Start of the step (ms epoch): full hour, or local midnight. */
   t: z.number().int(),
-  /** Plus forte luminance vue dans ce pas, en lux. */
+  /** Highest luminance seen in this step, in lux. */
   maxLux: z.number().min(0),
 })
 export type LightPoint = z.infer<typeof lightPointSchema>
@@ -31,7 +31,7 @@ const seriesSchema = z.object({ hourly: z.array(lightPointSchema), daily: z.arra
 type Series = z.infer<typeof seriesSchema>
 
 export const lightHistorySchema = z.object({
-  /** Par `externalId` de capteur. */
+  /** By sensor `externalId`. */
   sensors: z.record(z.string(), seriesSchema),
 })
 export type LightHistoryState = z.infer<typeof lightHistorySchema>
@@ -53,17 +53,17 @@ function monthStart(at: number): number {
   return new Date(d.getFullYear(), d.getMonth(), 1).getTime()
 }
 
-/** Porte le maximum du pas `t` à au moins `lux` (en ouvrant le pas au besoin). @returns pas ouvert. */
+/** Raises the maximum of step `t` to at least `lux` (opening the step if needed). @returns step opened. */
 function bump(points: LightPoint[], t: number, lux: number, max: number): boolean {
   const last = points[points.length - 1]
   if (last && last.t === t) { if (lux > last.maxLux) last.maxLux = lux; return false }
-  if (last && last.t > t) return false                      // horloge qui recule : on n'écrit pas le passé
+  if (last && last.t > t) return false                      // clock going backwards: we do not write the past
   points.push({ t, maxLux: lux })
   if (points.length > max) points.splice(0, points.length - max)
   return true
 }
 
-/** Reporte `lux` sur chaque pas de `from` à `to` inclus — la valeur n'a pas changé entre-temps. */
+/** Carries `lux` over each step from `from` to `to` inclusive — the value has not changed in between. */
 function carry(points: LightPoint[], from: number, to: number, next: (t: number) => number, lux: number, max: number): boolean {
   let opened = false
   for (let t = from; t <= to; t = next(t)) opened = bump(points, t, lux, max) || opened
@@ -72,7 +72,7 @@ function carry(points: LightPoint[], from: number, to: number, next: (t: number)
 
 export class LightHistory {
   private readonly series = new Map<string, Series>()
-  /** Dernière valeur vue PAR CE PROCESSUS, et depuis quand : seule base honnête d'un report. */
+  /** Last value seen BY THIS PROCESS, and since when: the only honest basis for a carry-over. */
   private readonly live = new Map<string, { lux: number; since: number }>()
 
   constructor(initial?: LightHistoryState | null) {
@@ -81,7 +81,7 @@ export class LightHistory {
     }
   }
 
-  /** Une luminance lue (setup ou trame). @returns `true` quand une nouvelle heure s'est ouverte. */
+  /** A luminance read (setup or frame). @returns `true` when a new hour has opened. */
   record(id: string, lux: number, at: number): boolean {
     let s = this.series.get(id)
     if (!s) { s = { hourly: [], daily: [] }; this.series.set(id, s) }
@@ -92,7 +92,7 @@ export class LightHistory {
     return opened || h
   }
 
-  /** Reporte la dernière valeur connue jusqu'à `at`, pour tous les capteurs. @returns heure ouverte. */
+  /** Carries the last known value over up to `at`, for all sensors. @returns hour opened. */
   advance(at: number): boolean {
     let opened = false
     for (const [id, s] of this.series) opened = this.advanceOne(id, s, at) || opened
@@ -135,7 +135,7 @@ export interface LightHistoryStore {
   save(h: LightHistoryState): Promise<void>
 }
 
-/** Écriture atomique (fichier temporaire puis renommage) ; une lecture illisible vaut « rien ». */
+/** Atomic write (temporary file then rename); an unreadable read counts as "nothing". */
 export function createLightHistoryFile(path: string, logger?: Logger): LightHistoryStore {
   return {
     async load() {

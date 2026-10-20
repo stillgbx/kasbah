@@ -25,62 +25,62 @@ import {
   EnlightenClient, createCloudFile, openCloudSession, probeEvRaw, type CloudStore,
 } from './cloud'
 
-// Plugin Enphase : production solaire, micro-onduleurs et batteries lus sur l'API LOCALE de la
-// passerelle IQ (aucun quota cloud, aucune dépendance à Internet une fois le jeton en place).
+// Enphase plugin: solar production, microinverters and batteries read from the IQ Gateway's LOCAL
+// API (no cloud quota, no dependency on the Internet once the token is in place).
 //
-// Publie un site `energy`, un `sensor` de puissance par micro-onduleur et un `energy` de stockage
-// par batterie IQ (voir `mapping.ts`). Deux cadences : les compteurs mesurent en temps réel, les
-// onduleurs ne rapportent que toutes les cinq minutes.
+// Publishes an `energy` site, a power `sensor` per microinverter and a storage `energy` per IQ
+// battery (see `mapping.ts`). Two rates: the meters measure in real time, the inverters only report
+// every five minutes.
 //
-// Le mappage a été écrit APRÈS la capture de vraies réponses (`GET /api/plugins/enphase/raw`, dont
-// `__fixtures__/gateway.ts` est tiré) : la leçon TaHoma est que des fixtures écrites d'après la
-// documentation laissent passer des bugs que le vrai matériel trouve tout de suite. Elle a resservi
-// ici, le signe du stockage étant l'inverse de celui que le contrat attend.
+// The mapping was written AFTER capturing real responses (`GET /api/plugins/enphase/raw`, from
+// which `__fixtures__/gateway.ts` is drawn): the TaHoma lesson is that fixtures written from the
+// documentation let through bugs the real hardware finds straight away. It paid off again here, the
+// storage sign being the opposite of what the contract expects.
 //
-// La borne IQ EV Charger 2 n'est PAS sur la passerelle : elle parle au cloud Enphase (API privée
-// de l'appli). Un sous-item `ev_charger` et une session Enlighten distincte du jeton local.
-// Mappage d'après `GET /api/plugins/enphase/ev/raw` du 20/09 : lecture seule (aucune commande
-// capturée), `SUSPENDED_EVSE` / `INSUFFICIENT_SOLAR` lu comme `connected`.
+// The IQ EV Charger 2 is NOT on the gateway: it talks to the Enphase cloud (the app's private
+// API). An `ev_charger` sub-item and an Enlighten session separate from the local token.
+// Mapping from `GET /api/plugins/enphase/ev/raw` of 09/20: read-only (no command captured),
+// `SUSPENDED_EVSE` / `INSUFFICIENT_SOLAR` read as `connected`.
 
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
 
 export const enphaseConfigSchema = z.object({
-  /** Nom ou IP de la passerelle. `envoy.local` est le nom que le fabricant lui donne sur le LAN. */
+  /** Gateway name or IP. `envoy.local` is the name the vendor gives it on the LAN. */
   ENPHASE_HOST: z.string().trim().min(1).default('envoy.local'),
   /**
-   * Jeton d'amorçage, facultatif : celui qu'on obtient à la main sur entrez.enphaseenergy.com.
-   * Sans lui, le plugin démarre en `needs_pairing` et l'appairage se fait depuis les Réglages.
-   * Le mot de passe du compte Enphase n'est VOLONTAIREMENT pas une clé de configuration : il est
-   * demandé au moment de frapper un jeton, et jamais conservé.
+   * Bootstrap token, optional: the one obtained by hand on entrez.enphaseenergy.com. Without it,
+   * the plugin starts in `needs_pairing` and pairing is done from Settings. The Enphase account
+   * password is DELIBERATELY not a config key: it is asked for when minting a token, and never kept.
    */
   ENPHASE_TOKEN: optionalKey,
-  /** Où garder le jeton entre deux démarrages (il vaut un an). Chaîne vide = ne rien garder. */
+  /** Where to keep the token between two starts (it lasts a year). Empty string = keep nothing. */
   ENPHASE_TOKEN_FILE: z.string().trim().default(stateFile('enphase-token.json')),
   /**
-   * Session Enlighten (borne). Distincte du jeton local : coller un JWT de passerelle n'ouvre pas
-   * le cloud. Chaîne vide = ne pas garder la session, donc retaper le compte pour relire la borne.
+   * Enlighten session (charger). Separate from the local token: pasting a gateway JWT does not open
+   * the cloud. Empty string = do not keep the session, so retype the account to read the charger
+   * again.
    */
   ENPHASE_CLOUD_FILE: z.string().trim().default(stateFile('enphase-cloud.json')),
-  /** Cadence des compteurs : ils mesurent en temps réel, c'est ce que la vue Énergie montre. */
+  /** Meter rate: they measure in real time, it is what the Energy view shows. */
   ENPHASE_POLL_MS: z.coerce.number().int().min(2000).max(300_000).default(10_000),
   /**
-   * Cadence des micro-onduleurs et des batteries. Inutile de descendre : un onduleur ne rapporte
-   * QUE toutes les cinq minutes environ, sonder plus vite ne ferait que relire la même valeur.
+   * Rate for the microinverters and batteries. No point going lower: an inverter ONLY reports about
+   * every five minutes, polling faster would just re-read the same value.
    */
   ENPHASE_SLOW_POLL_MS: z.coerce.number().int().min(30_000).max(900_000).default(60_000),
 })
 export type EnphaseConfig = z.infer<typeof enphaseConfigSchema>
 
-/** Après une commande de la borne, délai avant de relire : le courant arrive en 20 s à 1 min. */
+/** After a charger command, delay before reading again: the current arrives in 20 s to 1 min. */
 const EV_FOLLOW_UP_MS = 45_000
-/** Entre le passage en manuel et le retour au mode d'avant : essayé à la main avec ~20 s, pas plus vite. */
+/** Between switching to manual and going back to the previous mode: tried by hand with ~20 s, not faster. */
 const MODE_RESTORE_GAP_MS = 5_000
-/** Le cloud met un moment à refléter le mode rendu : on ne recommence pas avant. */
+/** The cloud takes a while to reflect the restored mode: we do not retry before that. */
 const MODE_RESTORE_RETRY_MS = 15 * 60_000
-/** Le mode de l'appli ne bouge qu'à la main : relu toutes les dix minutes, pas à chaque relecture. */
+/** The app's mode only changes by hand: read every ten minutes, not on every read. */
 const PREFERENCE_TTL_MS = 10 * 60_000
 
-/** Relevé brut : ce qu'il faut capturer une fois pour écrire les fixtures du mappage. */
+/** Raw reading: what needs capturing once to write the mapping fixtures. */
 const RAW_PATHS = [
   '/production.json?details=1',
   '/api/v1/production/inverters',
@@ -93,16 +93,16 @@ const RAW_PATHS = [
 ] as const
 
 /**
- * Corps de l'appairage : un jeton déjà obtenu, OU les identifiants du compte pour en frapper un.
- * `force` sert à passer outre le garde-fou qui refuse de frapper un jeton quand celui en place est
- * encore bon : chaque frappe crée un jeton CHEZ Enphase, et en accumuler d'inutilisés n'a pas de sens.
+ * Pairing body: a token already obtained, OR the account credentials to mint one. `force` overrides
+ * the safeguard that refuses to mint a token while the current one is still good: each mint creates
+ * a token AT Enphase, and piling up unused ones makes no sense.
  */
 const pairingSchema = z.union([
   z.object({ token: z.string().min(1) }),
   z.object({ user: z.string().min(1), password: z.string().min(1), force: z.boolean().default(false) }),
 ])
 
-/** Ce que l'UI affiche de l'appairage. Ne porte JAMAIS le jeton lui-même. */
+/** What the UI shows of the pairing. NEVER carries the token itself. */
 export interface TokenStatus {
   paired: boolean
   host: string
@@ -114,28 +114,28 @@ export interface TokenStatus {
   role: string | undefined
   username: string | undefined
   source: 'config' | 'cache' | 'minted' | undefined
-  /** Seuil (jours) sous lequel l'UI réclame un renouvellement. */
+  /** Threshold (days) below which the UI asks for a renewal. */
   renewUnderDays: number
   /**
-   * Où le serveur garde le jeton, ou `null` si `ENPHASE_TOKEN_FILE` est vide. C'est ce qui dit à
-   * l'UI s'il y a quelque chose à recopier à la main : avec un cache, non, l'appairage depuis
-   * l'interface suffit et survit aux redémarrages. Sans cache, il faudra le poser dans `.env`.
+   * Where the server keeps the token, or `null` if `ENPHASE_TOKEN_FILE` is empty. It is what tells
+   * the UI whether there is something to copy by hand: with a cache, no, pairing from the UI is
+   * enough and survives restarts. Without a cache, it will have to go into `.env`.
    */
   tokenFile: string | null
-  /** Session Enlighten en cache : indispensable pour la borne, inutile à la passerelle. */
+  /** Cached Enlighten session: required for the charger, useless to the gateway. */
   cloudLinked: boolean
   cloudFile: string | null
   siteId: string | undefined
 }
 
 export interface EnphasePluginDeps {
-  /** Injecté par les tests : requêtes vers la passerelle. */
+  /** Injected by tests: requests to the gateway. */
   gatewayFetch?: FetchLike
-  /** Injecté par les tests : requêtes vers le cloud Enphase (frappe du jeton). */
+  /** Injected by tests: requests to the Enphase cloud (token minting). */
   cloudFetch?: FetchLike
-  /** Injecté par les tests : cache du jeton (sinon un fichier sous `.state/`). */
+  /** Injected by tests: token cache (otherwise a file under `.state/`). */
   store?: TokenStore
-  /** Injecté par les tests : session Enlighten (borne). */
+  /** Injected by tests: Enlighten session (charger). */
   cloudStore?: CloudStore
 }
 
@@ -146,26 +146,26 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   let store: TokenStore | null = null
   let cloudStore: CloudStore | null = null
   let enlighten: EnlightenClient | null = null
-  /** Identité de la passerelle (`/info`, sans jeton). Absente si elle n'a pas encore répondu. */
+  /** Gateway identity (`/info`, no token). Absent if it has not answered yet. */
   let gateway: { serial: string; software?: string } | null = null
   let token: (CheckedToken & { source: TokenSource }) | null = null
   let lastError: string | null = null
-  /** Dernier inventaire connu (compteurs, onduleurs, batteries) : source des descripteurs. */
+  /** Last known inventory (meters, inverters, batteries): source of the descriptors. */
   let inventory: Inventory | null = null
   let chargers: EvCharger[] | null = null
   let chargerSummaries: EvChargerSummary[] = []
-  /** Bornes démarrées ou arrêtées par Kasbah depuis le dernier retour à leur mode. */
+  /** Chargers started or stopped by Kasbah since the last return to their mode. */
   const forced = new Set<string>()
-  /** Mode à rendre après un passage en manuel dont le retour a échoué : on ne repasse pas par le manuel. */
+  /** Mode to restore after a switch to manual whose return failed: we do not go through manual again. */
   const owed = new Map<string, string>()
   const lastRestore = new Map<string, number>()
-  /** Mode de l'appli par borne, et quand il a été lu (`preferenceOf`). */
+  /** The app's mode per charger, and when it was read (`preferenceOf`). */
   const preferences = new Map<string, { mode: string | undefined; at: number }>()
   let pollers: { stop(): void }[] = []
 
   const log = () => ctx!.logger
 
-  /** Relit `/info` : donne le numéro de série, qui sert à valider tout jeton proposé. */
+  /** Reads `/info` again: gives the serial number, used to validate any proposed token. */
   async function readGateway(): Promise<void> {
     try {
       gateway = await client!.info(ctx!.signal)
@@ -196,7 +196,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     }
   }
 
-  /** Vérifie un jeton pour CETTE passerelle, puis l'adopte : client, cache, état courant. */
+  /** Checks a token for THIS gateway, then adopts it: client, cache, current state. */
   async function adopt(candidate: string): Promise<void> {
     const result = checkToken(candidate, { serial: gateway?.serial, now: ctx!.clock.now() })
     if (!result.ok) {
@@ -211,8 +211,8 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     parse(await client!.getJson(path, ctx!.signal))
 
   /**
-   * Les batteries sont facultatives : une passerelle sans stockage ne sert pas `/ivp/ensemble/`.
-   * Un échec ici ne doit donc pas priver l'utilisateur de sa production.
+   * Batteries are optional: a gateway without storage does not serve `/ivp/ensemble/`. A failure
+   * here must therefore not deprive the user of their production.
    */
   async function readBatteries(): Promise<EnsembleDevice[]> {
     try { return batteriesOf(await get('/ivp/ensemble/inventory', (j) => ensembleInventorySchema.parse(j))) }
@@ -220,8 +220,8 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   }
 
 /**
-   * Relit ce qui compose l'installation. Les requêtes s'enchaînent au lieu de partir ensemble : la
-   * passerelle est un petit boîtier, et les lancer en parallèle la faisait dépasser le délai.
+   * Reads what makes up the installation again. Requests are chained instead of sent together: the
+   * gateway is a small box, and running them in parallel pushed it past the timeout.
    */
   async function readInventory(): Promise<Inventory> {
     const report = await get('/production.json?details=1', (j) => productionSchema.parse(j))
@@ -230,13 +230,14 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     return { report, inverters, batteries }
   }
 
-  /** Signature de l'inventaire : change quand un onduleur ou une batterie apparaît ou disparaît. */
+  /** Inventory signature: changes when an inverter or a battery appears or disappears. */
   const deviceIds = (inv: Inventory) =>
     [...inv.inverters.map((i) => i.serialNumber), ...inv.batteries.map((b) => b.serial_num)].sort().join(',')
 
 /**
-   * Mesure temps réel du site, ce que la vue Énergie affiche. UNE seule requête, à `livedata` :
-   * elle porte les mêmes compteurs que `production.json` et répond en 0,2 s contre 1,5 à 11 s.
+   * Real-time measurement of the site, what the Energy view shows. ONE single request, to
+   * `livedata`: it carries the same meters as `production.json` and answers in 0.2 s versus 1.5 to
+   * 11 s.
    */
   async function pollMeters(): Promise<void> {
     const live = await get('/ivp/livedata/status', (j) => livedataSchema.parse(j))
@@ -245,8 +246,8 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   }
 
   /**
-   * Onduleurs et batteries. Un onduleur muet depuis une demi-heure (la nuit, ou en panne) devient
-   * indisponible plutôt que de se voir attribuer un zéro qu'on n'a pas mesuré.
+   * Inverters and batteries. An inverter silent for half an hour (at night, or failed) becomes
+   * unavailable rather than being assigned a zero we did not measure.
    */
   async function pollDevices(): Promise<void> {
     const inverters = await get('/api/v1/production/inverters', (j) => invertersSchema.parse(j))
@@ -261,13 +262,13 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       if (!isBatteryAvailable(b)) { ctx!.setAvailable(b.serial_num, false); continue }
       ctx!.emitState(b.serial_num, toBatteryPatch(b, power))
     }
-    // les totaux du jour ne sont QUE dans `production.json`, lent : c'est ici qu'on le paie, une
-    // fois par minute, et non à chaque mesure temps réel
+    // the day's totals are ONLY in `production.json`, which is slow: this is where we pay for it,
+    // once a minute, and not on every real-time measurement
     const report = await get('/production.json?details=1', (j) => productionSchema.parse(j))
     ctx!.emitState(SITE_ID, toDailyPatch(report))
 
-    // un onduleur ajouté ou déposé change la liste : on republie, sinon son état partirait vers un
-    // appareil que le registre ne connaît pas
+    // an inverter added or removed changes the list: we republish, otherwise its state would go to
+    // a device the registry does not know
     const next: Inventory = { report, inverters, batteries }
     if (!inventory || deviceIds(inventory) !== deviceIds(next)) {
       log().info({ inverters: inverters.length, batteries: batteries.length }, 'Enphase inventory changed')
@@ -309,9 +310,9 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   }
 
   /**
-   * Le mode de l'appli ne change que par l'appli ou par Kasbah : on le relit toutes les dix minutes
-   * (`PREFERENCE_TTL_MS`), et tout de suite après l'avoir écrit, plutôt qu'à chaque relecture de la
-   * borne (une par minute). Une lecture ratée garde l'ancien.
+   * The app's mode only changes through the app or through Kasbah: we read it every ten minutes
+   * (`PREFERENCE_TTL_MS`), and right after writing it, rather than on every charger read (one per
+   * minute). A failed read keeps the old one.
    */
   async function preferenceOf(sn: string): Promise<string | undefined> {
     const known = preferences.get(sn)
@@ -349,16 +350,16 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   }
 
   /**
-   * Rendre à la borne débranchée le mode d'avant le forçage. Vu sur la vraie borne le 2026-10-02 :
-   * une charge forcée finie et la voiture débranchée, l'annulation tenait encore (`mode` 0) et
-   * l'appli refusait de remettre le vert (« Charging mode is already enabled »). Le mode d'avant est
-   * la préférence de l'appli, qu'un forçage ne change pas ; passer en manuel puis la réécrire lève
-   * l'annulation (essayé ce jour-là).
+   * Give the unplugged charger back its mode from before the forcing. Seen on the real charger on
+   * 2026-10-02: a forced charge finished and the car unplugged, the cancellation still held
+   * (`mode` 0) and the app refused to switch green back on ("Charging mode is already enabled").
+   * The previous mode is the app's preference, which forcing does not change; switching to manual
+   * then writing it back lifts the cancellation (tried that day).
    *
-   * Sans forçage connu (redémarrage du serveur, geste dans l'appli), on ne le fait qu'en charge
-   * verte, où `mode` 0 débranchée est sûrement une annulation oubliée. Une préférence manuelle est le
-   * choix de l'utilisateur : rien à rendre. La voiture encore branchée, c'est le serveur qui le
-   * demande, à sa limite de charge (`ev_charger.resume_mode`).
+   * Without a known forcing (server restart, action in the app), we only do it in green charging,
+   * where `mode` 0 while unplugged is surely a forgotten cancellation. A manual preference is the
+   * user's choice: nothing to give back. With the car still plugged in, it is the server that asks
+   * for it, at its charge limit (`ev_charger.resume_mode`).
    */
   async function restoreModes(): Promise<void> {
     const siteId = enlighten?.current?.siteId
@@ -380,8 +381,9 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     `/service/evse_scheduler/api/v1/iqevc/charging-mode/${siteId}/${encodeURIComponent(sn)}/preference`
 
   /**
-   * Premier temps : lire la préférence (le mode d'avant) et passer en manuel. `known` : Kasbah a forcé
-   * cette borne, sinon seul le vert est rendu. Vrai quand le mode d'avant reste à réécrire (`owed`).
+   * First step: read the preference (the previous mode) and switch to manual. `known`: Kasbah forced
+   * this charger, otherwise only green is given back. True when the previous mode is still to be
+   * written back (`owed`).
    */
   async function leaveOverride(siteId: string | number, sn: string, known: boolean): Promise<boolean> {
     const path = modePath(siteId, sn)
@@ -394,7 +396,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     return true
   }
 
-  /** Second temps : réécrire le mode d'avant. Un échec le laisse dû : la relecture suivante le retente. */
+  /** Second step: write the previous mode back. A failure leaves it owed: the next read retries it. */
   async function giveModeBack(siteId: string | number, sn: string): Promise<void> {
     const mode = owed.get(sn)
     if (!mode) return
@@ -405,9 +407,10 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   }
 
   /**
-   * `ev_charger.resume_mode` : le serveur la demande quand la voiture forcée atteint sa limite,
-   * encore branchée. Rien si la borne n'est plus sous annulation (`mode` 1 relu). Le retour au mode
-   * d'avant part 5 s plus tard, hors du délai de la commande (`KASBAH_COMMAND_TIMEOUT_MS`, 10 s).
+   * `ev_charger.resume_mode`: the server asks for it when the forced car reaches its limit, still
+   * plugged in. Nothing if the charger is no longer under cancellation (`mode` 1 read back). The
+   * return to the previous mode goes out 5 s later, outside the command timeout
+   * (`KASBAH_COMMAND_TIMEOUT_MS`, 10 s).
    */
   async function resumeMode(sn: string): Promise<void> {
     if (!chargersOn() || !enlighten?.hasSession) throw new PluginError('NEEDS_PAIRING', 'no Enlighten session: pair with the Enphase account')
@@ -426,11 +429,11 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   }
 
   /**
-   * `ev_charger.set_mode` : le mode de l'appli, vert ou manuel. Réécrire le mode en cours est refusé
-   * (`iqevc_sch_10028`, « already enabled ») : le même mode sous annulation, c'est `resumeMode` ;
-   * sans annulation, rien. Un autre mode : un seul PUT, qui lève aussi une annulation (c'est le
-   * second temps de `resumeMode`, essayé le 2026-10-02). Ce que Kasbah devait rendre ne l'est plus :
-   * le choix de l'utilisateur passe avant.
+   * `ev_charger.set_mode`: the app's mode, green or manual. Rewriting the current mode is refused
+   * (`iqevc_sch_10028`, "already enabled"): the same mode under cancellation is `resumeMode`;
+   * without cancellation, nothing. Another mode: a single PUT, which also lifts a cancellation (it
+   * is the second step of `resumeMode`, tried on 2026-10-02). What Kasbah owed is no longer owed:
+   * the user's choice comes first.
    */
   async function setMode(sn: string, mode: SettableChargeMode): Promise<void> {
     if (!chargersOn() || !enlighten?.hasSession) throw new PluginError('NEEDS_PAIRING', 'no Enlighten session: pair with the Enphase account')
@@ -450,13 +453,13 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     forced.delete(sn)
     lastRestore.delete(sn)
     preferences.set(sn, { mode: target, at: ctx!.clock.now() })
-    // la borne ne suit plus une annulation : un autre mode la lève
+    // the charger no longer follows a cancellation: another mode lifts it
     emitCharger({ ...charger, manualOverride: false })
     log().info({ mode: target }, 'Enphase charger mode set')
     followUp()
   }
 
-  /** Relire la borne `EV_FOLLOW_UP_MS` après une commande : le courant met de 20 s à 1 min à venir. */
+  /** Read the charger `EV_FOLLOW_UP_MS` after a command: the current takes 20 s to 1 min to come. */
   function followUp(): void {
     void (async () => {
       await sleep(ctx!.clock, EV_FOLLOW_UP_MS, ctx!.signal)
@@ -467,15 +470,15 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   }
 
   /**
-   * Démarrer ou arrêter la borne. Essayé sur la vraie borne le 2026-10-01 : en charge verte, l'un
-   * comme l'autre pose une ANNULATION MANUELLE « jusqu'au prochain débranchement » (le `mode` de
-   * l'état passe de 1 à 0, la préférence reste `GREEN_CHARGING`), puis la borne reprend seule son
-   * mode au débranchement. Un `stop` ne rend donc PAS la charge verte : il coupe la charge jusqu'au
-   * débranchement, soleil ou pas.
+   * Start or stop the charger. Tried on the real charger on 2026-10-01: in green charging, either
+   * one sets a MANUAL CANCELLATION "until the next unplug" (the state's `mode` goes from 1 to 0, the
+   * preference stays `GREEN_CHARGING`), then the charger resumes its mode by itself on unplug. A
+   * `stop` therefore does NOT restore green charging: it cuts charging until the unplug, sun or not.
    *
-   * L'intensité est celle de l'appli : son « Charger maintenant » envoie le `defaultChargeLevel` du
-   * résumé (24 A ici). Sans intensité, le cloud prenait 32 A et la borne n'avait rien donné en 90 s.
-   * L'état suit par une relecture `EV_FOLLOW_UP_MS` plus tard : le courant arrive en 20 s à 1 min.
+   * The current is the app's: its "Charger maintenant" sends the summary's `defaultChargeLevel`
+   * (24 A here). Without a current, the cloud took 32 A and the charger had delivered nothing in
+   * 90 s. The state follows through a read `EV_FOLLOW_UP_MS` later: the current arrives in 20 s to
+   * 1 min.
    */
   async function chargerCommand(sn: string, start: boolean): Promise<void> {
     if (!chargersOn() || !enlighten?.hasSession) throw new PluginError('NEEDS_PAIRING', 'no Enlighten session: pair with the Enphase account')
@@ -523,8 +526,8 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
         logger: context.logger,
       })
 
-      // `/info` d'abord : il ne demande aucun jeton et donne le numéro de série, donc on sait à
-      // quelle passerelle un jeton doit correspondre avant de l'accepter.
+      // `/info` first: it needs no token and gives the serial number, so we know which gateway a
+      // token must match before accepting it.
       await readGateway()
 
       const resolved = await resolveEnphaseToken({
@@ -546,7 +549,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       }
     },
 
-    /** Sans jeton local ET sans session cloud, rien à publier. */
+    /** Without a local token AND without a cloud session, nothing to publish. */
     async discover(): Promise<DeviceDescriptor[]> {
       const list: DeviceDescriptor[] = []
       if (client?.hasToken) {
@@ -611,16 +614,16 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     },
 
     registerRoutes(app: FastifyInstance) {
-      // État de l'appairage, pour la carte des Réglages. Jamais le jeton, seulement son échéance.
+      // Pairing state, for the Settings card. Never the token, only its expiry.
       app.get('/token', async () => status())
 
       /**
-       * Appairage. Deux corps acceptés :
-       *  - `{ token }` : un jeton obtenu à la main sur entrez.enphaseenergy.com — ouvre la
-       *    passerelle, PAS le cloud de la borne ;
-       *  - `{ user, password }` : identifiants du compte. Ils ouvrent d'abord une session
-       *    Enlighten (gardée, c'est elle qui lit la borne), puis frappent un jeton local s'il
-       *    manque ou expire. Le mot de passe est OUBLIÉ — ni journalisé, ni écrit, ni renvoyé.
+       * Pairing. Two bodies accepted:
+       *  - `{ token }`: a token obtained by hand on entrez.enphaseenergy.com — opens the gateway,
+       *    NOT the charger's cloud;
+       *  - `{ user, password }`: account credentials. They first open an Enlighten session (kept,
+       *    it is what reads the charger), then mint a local token if it is missing or expiring.
+       *    The password is FORGOTTEN — never logged, written or sent back.
        */
       app.post('/token', async (req, reply) => {
         if (!client || !ctx) return sendError(reply, 409, 'NEEDS_PAIRING', 'plugin not started')
@@ -628,8 +631,8 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
         if (!parsed.success) {
           return sendError(reply, 400, 'INVALID_BODY', 'send either { token } or { user, password }')
         }
-        // la passerelle a pu être injoignable au démarrage : on retente, son numéro de série est
-        // ce qui permet de refuser un jeton émis pour une autre passerelle
+        // the gateway may have been unreachable at startup: we retry, its serial number is what
+        // lets us refuse a token issued for another gateway
         if (!gateway) await readGateway()
 
         try {
@@ -646,11 +649,11 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
             if (!gateway) {
               return sendError(reply, 502, 'UPSTREAM_ERROR', `cannot reach the gateway at ${config!.ENPHASE_HOST}: its serial number is needed to mint a token`)
             }
-            // garde-fou : un jeton encore confortablement valable n'a pas à être remplacé. Sans
-            // cela, chaque validation du compte pourrait créer un jeton de plus chez Enphase,
-            // tous valables un an et tous inutilisés sauf le dernier. La session cloud, elle,
-            // EST déjà enregistrée : on répond 200 (compte lié, JWT intact). `force` reste le
-            // seul moyen de le remplacer avant l'avertissement des 30 jours.
+            // safeguard: a token still comfortably valid does not need replacing. Without this,
+            // each account submission could create one more token at Enphase, all valid for a year
+            // and all unused but the last. The cloud session, however, IS already saved: we answer
+            // 200 (account linked, JWT intact). `force` remains the only way to replace it before
+            // the 30-day warning.
             if (token && token.stage === 'ok' && !parsed.data.force) {
               log().info({ daysLeft: token.daysLeft, cloud: true }, 'Enphase Enlighten session linked, gateway token kept')
               return status()
@@ -673,9 +676,9 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       })
 
       /**
-       * Relevé BRUT des routes locales, pour écrire les fixtures du mappage depuis de vraies
-       * réponses (et non depuis la documentation). Lecture seule ; une route en échec est rendue
-       * avec son erreur au lieu de faire échouer tout le relevé.
+       * RAW reading of the local routes, to write the mapping fixtures from real responses (and
+       * not from the documentation). Read-only; a failing route is returned with its error instead
+       * of failing the whole reading.
        */
       app.get('/raw', async (_req, reply) => {
         if (!client?.hasToken) return sendError(reply, 409, 'NEEDS_PAIRING', 'pair the gateway first')
@@ -688,9 +691,9 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       })
 
       /**
-       * Relevé BRUT du cloud EVSE, pour écrire les fixtures de la borne depuis de vraies réponses.
-       * Indépendant du jeton local : coller un JWT de passerelle ne suffit pas, il faut le compte.
-       * Une route en échec est rendue avec son erreur au lieu de faire tomber tout le relevé.
+       * RAW reading of the EVSE cloud, to write the charger fixtures from real responses.
+       * Independent of the local token: pasting a gateway JWT is not enough, the account is needed.
+       * A failing route is returned with its error instead of bringing down the whole reading.
        */
       app.get('/ev/raw', async (_req, reply) => {
         if (!enlighten?.hasSession) return sendError(reply, 409, 'NEEDS_PAIRING', 'pair with the Enphase account first (a pasted gateway token is not enough)')
@@ -704,8 +707,8 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
         return { status: 'needs_pairing', detail: lastError ?? 'no Enphase token: pair the gateway from Settings', keys }
       }
       if (token.stage === 'expiring') {
-        // `degraded` et non `ok` : c'est ce qui fait passer la pastille des Réglages à l'orange
-        // AVANT la panne. Un jeton d'installateur (12 h) naît dans cet état, et c'est voulu.
+        // `degraded` and not `ok`: it is what turns the Settings badge orange BEFORE the failure.
+        // An installer token (12 h) is born in this state, and that is intended.
         return { status: 'degraded', detail: `Enphase token expires in ${token.daysLeft} day(s): renew it`, keys, deviceCount: (inventory ? toDescriptors(inventory).length : 0) + (chargers?.length ?? 0) }
       }
       const chargerCount = chargers?.length ?? 0

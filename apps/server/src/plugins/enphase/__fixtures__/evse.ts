@@ -1,8 +1,7 @@
-// Reponses CAPTUREES sur le cloud Enlighten d'un compte reel (IQ EV Charger 2 EU 32 A).
-// Ecrites depuis GET /api/plugins/enphase/ev/raw, pas depuis la documentation : meme lecon
-// que la passerelle (signe du stockage) et TaHoma. Numeros de serie, site, SSID, MAC et
-// adresses LAN remplaces par des valeurs stables. `error: {}` est dans la reponse 200
-// du fabricant, ce n'est pas un echec.
+// Responses CAPTURED from the Enlighten cloud of a real account (IQ EV Charger 2 EU 32 A).
+// Written from GET /api/plugins/enphase/ev/raw, not from the documentation: same lesson as the
+// gateway (storage sign) and TaHoma. Serial numbers, site, SSID, MAC and LAN addresses replaced
+// by stable values. `error: {}` is part of the vendor's 200 response, it is not a failure.
 
 export const EVSE_STATUS = {
   "meta": {
@@ -182,8 +181,8 @@ export const EVSE_SUMMARY = {
 } as const
 
 /**
- * `GET /service/evse_scheduler/api/v1/iqevc/charging-mode/{site}/{sn}/preference`, capturé le
- * 2026-10-02 sur la borne débranchée qui tenait encore son annulation (`mode: 0` dans l'état).
+ * `GET /service/evse_scheduler/api/v1/iqevc/charging-mode/{site}/{sn}/preference`, captured on
+ * 2026-10-02 from the unplugged charger that still held its cancellation (`mode: 0` in the state).
  */
 export const EVSE_PREFERENCE = {
   "meta": { "serverTimeStamp": "2026-10-02T10:00:49.981+00:00" },

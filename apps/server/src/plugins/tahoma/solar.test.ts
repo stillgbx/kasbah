@@ -9,7 +9,7 @@ import { createTahomaPlugin, tahomaConfigSchema } from './index'
 import { isLightSensor, readStates, toAction, toCoverPatch, toDescriptor, toLightSensorDescriptor, coverCommands } from './mapping'
 import { overkizDeviceSchema } from './types'
 
-// Volets solaires : leur capteur de luminosité, son historique, et le mode discret (vitesse lente).
+// Solar shutters: their light sensor, its history, and quiet mode (low speed).
 
 const H = 3_600_000
 const shutter = overkizDeviceSchema.parse(SOLAR_SHUTTER)
@@ -43,10 +43,10 @@ describe('tahoma solar mapping', () => {
     expect(toAction(url, { type: 'cover.open' }, cmds, true)).toEqual(slow(0))
     expect(toAction(url, { type: 'cover.close' }, cmds, true)).toEqual(slow(100))
     expect(toAction(url, { type: 'cover.set_position', position: 30 }, cmds, true)).toEqual(slow(70))
-    // pas d'équivalent lent : l'arrêt et le rappel « my » gardent leur commande
+    // no slow equivalent: the stop and the "my" recall keep their command
     expect(toAction(url, { type: 'cover.stop' }, cmds, true)?.commands[0]?.name).toBe('stop')
     expect(toAction(url, { type: 'cover.preset' }, cmds, true)?.commands[0]?.name).toBe('my')
-    // hors mode discret, rien ne change
+    // outside quiet mode, nothing changes
     expect(toAction(url, { type: 'cover.open' }, cmds, false)?.commands[0]?.name).toBe('open')
   })
 })
@@ -66,15 +66,15 @@ describe('light history', () => {
   it('carries the last value over hours without a frame, as long as this process saw them', () => {
     const h = new LightHistory()
     const t0 = new Date(2026, 8, 24, 20, 0).getTime()
-    h.record('s', 0, t0)                                    // la nuit tombe : plus aucune trame
-    expect(h.advance(t0 + 3 * H + 5)).toBe(true)            // trois heures ouvertes sans trame
+    h.record('s', 0, t0)                                    // night falls: no more frames
+    expect(h.advance(t0 + 3 * H + 5)).toBe(true)            // three hours opened without a frame
     expect(h.snapshot('s', t0 + 3 * H + 5)!.hourly.map((p) => p.t)).toEqual([t0, t0 + H, t0 + 2 * H, t0 + 3 * H])
   })
 
   it('leaves the hours before a restart ABSENT rather than at zero', () => {
     const t0 = new Date(2026, 8, 24, 8, 0).getTime()
     const before: LightHistoryState = { sensors: { s: { hourly: [{ t: t0, maxLux: 900 }], daily: [] } } }
-    const h = new LightHistory(before)                      // serveur redémarré trois heures plus tard
+    const h = new LightHistory(before)                      // server restarted three hours later
     h.record('s', 3000, t0 + 3 * H)
     expect(h.snapshot('s', t0 + 3 * H)!.hourly).toEqual([{ t: t0, maxLux: 900 }, { t: t0 + 3 * H, maxLux: 3000 }])
   })
@@ -138,7 +138,7 @@ describe('tahoma plugin with solar shutters', () => {
     const { plugin, ctx, applied } = await started()
     expect(ctx.emitState).toHaveBeenCalledWith(SHUTTER_ID, { quiet: false })
     await plugin.execute(SHUTTER_ID, { type: 'cover.set_quiet', on: true })
-    expect(applied).toHaveLength(0)                         // basculer le mode ne bouge rien
+    expect(applied).toHaveLength(0)                         // toggling the mode moves nothing
     expect(ctx.emitState).toHaveBeenCalledWith(SHUTTER_ID, { quiet: true })
     await plugin.execute(SHUTTER_ID, { type: 'cover.close' })
     expect(applied[0]?.actions).toEqual([{ deviceURL: SOLAR_SHUTTER.deviceURL, commands: [{ name: 'setClosureAndLinearSpeed', parameters: [100, 'lowspeed'] }] }])
@@ -161,13 +161,13 @@ describe('tahoma plugin with solar shutters', () => {
     const { plugin, saved } = await started([], { devices: [...SETUP.devices, ...more] }, slowSave)
     await plugin.stop()
     expect(overlap).toBe(false)
-    // quatre capteurs ouvrent leur heure dans la même passe : une écriture, plus une de rattrapage
+    // four sensors open their hour in the same pass: one write, plus a catch-up one
     expect(saved.length).toBeLessThanOrEqual(3)
   })
 
   it('recovers from a startup probe that fell during a box restart', async () => {
-    // relevé le 2026-09-24 : la box coupe toutes ses connexions (ECONNRESET) le temps de redémarrer ;
-    // une sonde `/apiVersion` tombée à ce moment ne doit pas laisser « activez le mode développeur »
+    // observed 2026-09-24: the box cuts all its connections (ECONNRESET) while it restarts; an
+    // `/apiVersion` probe landing at that moment must not leave "activate developer mode"
     let probes = 0
     const fetchImpl = vi.fn<FetchLike>(async (url) => {
       const path = url.replace(/^https:\/\/[^/]+\/enduser-mobile-web\/1\/enduserAPI/, '')
@@ -185,7 +185,7 @@ describe('tahoma plugin with solar shutters', () => {
     const plugin = createTahomaPlugin({ fetchImpl, lightHistoryStore: { load: async () => null, save: async () => {} } })
     await plugin.init(ctx)
     expect(plugin.health!()).toMatchObject({ status: 'error', detail: expect.stringContaining('developer mode') })
-    await plugin.discover()                                 // la box est revenue
+    await plugin.discover()                                 // the box is back
     await plugin.start()
     expect(plugin.health!()).toMatchObject({ status: 'ok' })
     await plugin.stop()

@@ -29,7 +29,7 @@ describe('google_cast mapping', () => {
 
   it('classes a Chromecast as a TV, a Nest Hub as a display, the rest as speakers', () => {
     expect(mediaPlayerClass(TXT_CHROMECAST)).toBe('tv')
-    expect(mediaPlayerClass({ md: 'BRAVIA 4K VH2', ca: '465413' })).toBe('tv')       // TV Android à Chromecast intégré
+    expect(mediaPlayerClass({ md: 'BRAVIA 4K VH2', ca: '465413' })).toBe('tv')       // Android TV with built-in Chromecast
     expect(mediaPlayerClass(TXT_NEST_HUB)).toBe('display')
     expect(mediaPlayerClass(TXT_NEST_MINI)).toBe('speaker')
     expect(mediaPlayerClass(TXT_LENOVO_CLOCK)).toBe('speaker')
@@ -54,7 +54,7 @@ describe('google_cast mapping', () => {
     const tv = toDescriptor(SERVICE_CHROMECAST, receiver(RECEIVER_STATUS_CHROMECAST_FIXED).volume)
     expect(tv.capabilities).not.toContain('volume')
     expect(tv.capabilities).not.toContain('mute')
-    // avant la première connexion, on suppose réglable
+    // before the first connection, we assume adjustable
     expect(toDescriptor(SERVICE_CHROMECAST).capabilities).toContain('volume')
   })
 
@@ -69,7 +69,7 @@ describe('google_cast mapping', () => {
     expect(activeApplication(receiver(RECEIVER_STATUS_NEST_HUB_IDLE))).toBeUndefined()
     expect(activeApplication(receiver(RECEIVER_STATUS_LENOVO_IDLE))).toBeUndefined()
     expect(activeApplication(receiver(RECEIVER_STATUS_PLAYING))).toMatchObject({ displayName: 'Spotify', transportId: '7a1b2c3d-0000-4000-8000-000000000002' })
-    // une appli à la forme inattendue ne cache pas les autres
+    // an app with an unexpected shape does not hide the others
     expect(activeApplication(receiver({ applications: [{ appId: 'X' }, RECEIVER_STATUS_PLAYING.applications[0]] }))).toMatchObject({ displayName: 'Spotify' })
   })
 
@@ -77,7 +77,7 @@ describe('google_cast mapping', () => {
     const app = activeApplication(receiver(RECEIVER_STATUS_PLAYING))
     expect(toMediaPatch(media(MEDIA_STATUS_PLAYING), app)).toEqual({
       playback: 'playing',
-      // la pochette passe par le serveur : URL relative de la route, l'originale encodée en paramètre
+      // the cover goes through the server: relative URL of the route, the original encoded as a parameter
       nowPlaying: { title: 'Terracotta', artist: 'Mira Solano', album: 'Ochre', artUrl: artProxyUrl('https://i.scdn.co/image/ab67616d0000b273aaaaaaaaaaaaaaaaaaaaaaaa'), durationS: 187.2, positionS: 42.5, source: 'Spotify' },
     })
     expect(toMediaPatch(media(MEDIA_STATUS_PAUSED), app)).toMatchObject({ playback: 'paused', nowPlaying: { positionS: 61 } })
@@ -94,28 +94,28 @@ describe('google_cast mapping', () => {
   })
 
   it('accepts the real radio capture: null duration, empty content id, live stream', () => {
-    // capture réelle : `duration: null` faisait rejeter tout le message par le premier schéma
+    // real capture: `duration: null` made the first schema reject the whole message
     expect(mediaStatusSchema.safeParse(MEDIA_STATUS_RADIO).success).toBe(true)
     const app = activeApplication(receiver(RECEIVER_STATUS_RADIO))
     expect(app).toMatchObject({ displayName: 'Radio France', statusText: 'Diffusion: franceinfo' })
     expect(toMediaPatch(media(MEDIA_STATUS_RADIO), app)).toEqual({
       playback: 'playing',
-      // `live` : l'appareil dit `streamType: LIVE` — l'UI grise alors précédent / suivant / se placer
+      // `live`: the device says `streamType: LIVE` — the UI then grays out previous / next / seek
       nowPlaying: { title: 'franceinfo', artUrl: expect.stringContaining('radiofrance'), positionS: 38.243996, source: 'Radio France', live: true },
     })
     expect(isLive(media(MEDIA_STATUS_RADIO))).toBe(true)
-    // un morceau ordinaire n'est pas un direct, et une durée absente ne suffit pas à en faire un
+    // an ordinary track is not a live stream, and a missing duration is not enough to make it one
     expect(isLive(media(MEDIA_STATUS_PLAYING))).toBe(false)
     expect(isLive(media(MEDIA_STATUS_PRIME_VIDEO))).toBe(false)
     expect(isLive(undefined)).toBe(false)
-    // sans métadonnées, le titre reste vide : la source (« Radio France ») suffit à l'UI
+    // without metadata, the title stays empty: the source ("Radio France") is enough for the UI
     const untitled = media({ ...MEDIA_STATUS_RADIO, media: { ...MEDIA_STATUS_RADIO.media, metadata: null } })
     expect(toMediaPatch(untitled, app)!.nowPlaying).toMatchObject({ title: '', source: 'Radio France' })
   })
 
   it('leaves the title EMPTY while the metadata are missing: never a content id, never the app name', () => {
     const app = activeApplication(receiver(RECEIVER_STATUS_PLAYING))
-    // changement de morceau : le récepteur envoie l'id de la vidéo avant ses métadonnées
+    // track change: the receiver sends the video id before its metadata
     const changing = media({ mediaSessionId: 2, playerState: 'BUFFERING', media: { contentId: 'NxHNlQsUooM' } })
     expect(toMediaPatch(changing, app)!.nowPlaying).toEqual({ title: '', source: 'Spotify' })
     const thin = media({ mediaSessionId: 2, playerState: 'BUFFERING', media: { contentId: 'https://radio.example/stream', metadata: { subtitle: 'Radio Nova' } } })
@@ -136,15 +136,15 @@ describe('google_cast mapping', () => {
   })
 
   it('accepts the real Prime Video capture: negative duration means unknown, the position stays', () => {
-    // capture réelle sur une TV Android : `duration: -0.001` s'affichait « -1:-1 » de chaque côté du
-    // curseur et écrasait la position (le curseur bornait la position à la durée)
+    // real capture on an Android TV: `duration: -0.001` showed "-1:-1" on each side of the slider and
+    // overwrote the position (the slider clamped the position to the duration)
     const app = activeApplication(receiver(RECEIVER_STATUS_PRIME_VIDEO))
     expect(app).toMatchObject({ displayName: 'Prime Video', appId: 'AndroidNativeApp' })
     const patch = toMediaPatch(media(MEDIA_STATUS_PRIME_VIDEO), app)
-    // titre vide (l'appli n'en publie aucun) : c'est l'UI qui nomme l'appli, on n'invente rien ici
+    // empty title (the app publishes none): the UI names the app, we invent nothing here
     expect(patch).toEqual({ playback: 'playing', nowPlaying: { title: '', positionS: 141.89, source: 'Prime Video' } })
     expect(patch!.nowPlaying).not.toHaveProperty('durationS')
-    // une position négative n'existe pas non plus
+    // a negative position does not exist either
     const backwards = media({ ...MEDIA_STATUS_PRIME_VIDEO, currentTime: -1 })
     expect(toMediaPatch(backwards, app)!.nowPlaying).not.toHaveProperty('positionS')
   })
@@ -164,7 +164,7 @@ describe('google_cast mapping', () => {
       streamType: 'LIVE',
     })
     expect(mediaFromUrl('https://cdn.example/clip.mp4')).toMatchObject({ contentType: 'video/mp4', streamType: 'BUFFERED' })
-    // un Icecast .aac ressemble à un fichier : seul le service sait que c'est un direct
+    // an Icecast .aac looks like a file: only the service knows it is a live stream
     expect(mediaFromUrl('http://icecast.radiofrance.fr/franceinfo-hifi.aac', { live: true })).toMatchObject({
       contentType: 'audio/mp4',
       streamType: 'LIVE',

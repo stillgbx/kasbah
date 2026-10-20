@@ -26,15 +26,15 @@ describe('tahoma mapping', () => {
       preset: 'my', presetSet: 'setMemorized1Position',
     })
     expect(coverCommands(ioVenetian)).toMatchObject({ position: 'setClosure', tilt: 'setOrientation' })
-    // store banne : déployer = fermer
+    // awning: deploy = close
     expect(coverCommands(ioAwning)).toEqual({ open: 'undeploy', close: 'deploy', stop: 'stop', position: 'setDeployment' })
-    // `my` sans `setClosure` : le moteur rejoint sa position favorite sans savoir en viser une autre
+    // `my` without `setClosure`: the motor reaches its favorite position without being able to target another
     expect(coverCommands(rtsShutter)).toEqual({ open: 'up', close: 'down', stop: 'stop', preset: 'my' })
     expect(coverCommands(rtsGate)).toEqual({ open: 'open', close: 'close' })
   })
 
   it('tells apart bidirectional io from one-way RTS, from the LIVE states', () => {
-    // piege : la box renvoie toujours `definition.states` vide, seul `states` est exploitable
+    // trap: the box always returns an empty `definition.states`, only `states` is usable
     expect((ioShutter.definition as { states?: unknown }).states).toBeUndefined()
     expect(hasPositionFeedback(ioShutter)).toBe(true)
     expect(hasPositionFeedback(ioAwning)).toBe(true)
@@ -48,13 +48,13 @@ describe('tahoma mapping', () => {
     expect(deviceUrlToExternalId(GATEWAY.deviceURL)).not.toMatch(/[:/#\s]/)
   })
 
-  it('classe l ouvrant d apres la uiClass de la box', () => {
+  it("classes the cover from the box's uiClass", () => {
     expect(coverClass(ioShutter)).toBe('shutter')
     expect(coverClass(ioVenetian)).toBe('blind')
     expect(coverClass(ioAwning)).toBe('awning')
     expect(coverClass(rtsGate)).toBe('gate')
     expect(coverClass(dev(THERMOSTAT))).toBeUndefined()
-    // la classe voyage dans le descripteur : c'est elle qui decide du vocabulaire affiche
+    // the class travels in the descriptor: it is what decides the displayed vocabulary
     expect(toDescriptor(ioAwning).meta.cover).toEqual({ deviceClass: 'awning' })
     expect(toDescriptor(rtsGate).meta.cover).toEqual({ deviceClass: 'gate' })
   })
@@ -65,19 +65,19 @@ describe('tahoma mapping', () => {
       capabilities: ['open_close', 'position', 'stop', 'preset', 'preset_set'],
       meta: { manufacturer: 'Somfy', model: 'io:RollerShutterGenericIOComponent' },
     })
-    // l'API locale n'expose aucune pièce : le rattachement vient de house.json
+    // the local API exposes no room: the attachment comes from house.json
     expect(toDescriptor(ioShutter).meta.room).toBeUndefined()
     expect(toDescriptor(ioVenetian).capabilities).toEqual(['open_close', 'position', 'tilt', 'stop'])
-    // RTS : pas de `position`, donc pas de curseur côté UI ; pas de `stop` pour le portail
+    // RTS: no `position`, so no slider on the UI side; no `stop` for the gate
     expect(toDescriptor(rtsShutter).capabilities).toEqual(['open_close', 'stop', 'preset'])
     expect(toDescriptor(rtsGate).capabilities).toEqual(['open_close'])
   })
 
   it('state patch: closure and deployment are inverted into an opening', () => {
-    // l'appareil porte aussi un etat a valeur tableau et des etats hors sujet : ignores sans bruit
+    // the device also carries an array-valued state and off-topic states: silently ignored
     expect(toCoverPatch(readStates(ioShutter.states))).toEqual({ position: 70, presetPosition: 27, motion: 'stopped' })
     expect(toCoverPatch(readStates(ioVenetian.states))).toEqual({ position: 0, tilt: 40, motion: 'stopped' })
-    // store rentré (déploiement 0) = ouvert
+    // retracted awning (deployment 0) = open
     expect(toCoverPatch(readStates(ioAwning.states))).toEqual({ position: 100, motion: 'stopped' })
     expect(toCoverPatch(readStates(rtsShutter.states))).toEqual({})
   })
@@ -89,11 +89,11 @@ describe('tahoma mapping', () => {
       { name: 'core:MovingState', value: 'true' },
     ])
     expect(toCoverPatch(closing)).toEqual({ position: 40, motion: 'closing' })
-    // sans cible annoncée, le sens vient de la position précédente
+    // without an announced target, the direction comes from the previous position
     const noTarget = readStates([{ name: 'core:ClosureState', value: 20 }, { name: 'core:MovingState', value: true }])
     expect(toCoverPatch(noTarget, 50).motion).toBe('opening')
     expect(toCoverPatch(noTarget, 90).motion).toBe('closing')
-    // fragment sans information de mouvement : la clé est omise (l'état précédent survit)
+    // fragment without movement information: the key is omitted (the previous state survives)
     expect(toCoverPatch(readStates([{ name: 'core:ClosureState', value: 20 }]))).toEqual({ position: 80 })
   })
 
@@ -114,18 +114,18 @@ describe('tahoma mapping', () => {
     expect(toAction(ioVenetian.deviceURL, { type: 'cover.set_tilt', tilt: 25 }, coverCommands(ioVenetian))?.commands)
       .toEqual([{ name: 'setOrientation', parameters: [25] }])
     expect(toAction(rtsShutter.deviceURL, { type: 'cover.up' } as never, coverCommands(rtsShutter))).toBeUndefined()
-    // position favorite : `my`, sans parametre — la valeur vit dans le moteur, pas dans la commande
+    // favorite position: `my`, without a parameter — the value lives in the motor, not in the command
     expect(toAction(ioShutter.deviceURL, { type: 'cover.preset' }, io)?.commands)
       .toEqual([{ name: 'my', parameters: [] }])
     expect(toAction(rtsShutter.deviceURL, { type: 'cover.preset' }, coverCommands(rtsShutter))?.commands)
       .toEqual([{ name: 'my', parameters: [] }])
-    // le BSO et le portail ne declarent pas `my` : la commande n'existe pas pour eux
+    // the exterior venetian blind and the gate do not declare `my`: the command does not exist for them
     expect(toAction(ioVenetian.deviceURL, { type: 'cover.preset' }, coverCommands(ioVenetian))).toBeUndefined()
     expect(toAction(rtsGate.deviceURL, { type: 'cover.preset' }, coverCommands(rtsGate))).toBeUndefined()
-    // reecrire la memoire : meme inversion que setClosure, la box stocke une FERMETURE
+    // rewriting the memory: same inversion as setClosure, the box stores a CLOSURE
     expect(toAction(ioShutter.deviceURL, { type: 'cover.set_preset', position: 27 }, io)?.commands)
       .toEqual([{ name: 'setMemorized1Position', parameters: [73] }])
-    // un RTS rappelle sa position favorite sans savoir la lire ni la reecrire : trois niveaux
+    // an RTS recalls its favorite position without being able to read or rewrite it: three levels
     expect(coverCommands(rtsShutter).presetSet).toBeUndefined()
     expect(toDescriptor(rtsShutter).capabilities).not.toContain('preset_set')
     expect(toAction(rtsShutter.deviceURL, { type: 'cover.set_preset', position: 50 }, coverCommands(rtsShutter))).toBeUndefined()

@@ -1,9 +1,9 @@
 import type { MixcloudApi, MixcloudMix, MixcloudUser } from './api'
 
-// L'accueil Mixcloud, à la façon du site, recomposé à partir de ce que le profil montre publiquement
-// (aucune connexion) : les écoutes disent qui et quel genre on écoute le plus. Vu le 2026-09-23 sur
-// le compte de l'utilisateur : The Boat Pod et Worldwide FM en tête, jazz et soul pour les genres —
-// exactement les « More from… » et « Popular … shows » du site.
+// The Mixcloud home view, the way the site does it, rebuilt from what the profile shows publicly (no
+// sign-in): the listens tell who and which genre is listened to most. Seen on 2026-09-23 on the
+// user's account: The Boat Pod and Worldwide FM on top, jazz and soul for the genres — exactly the
+// site's "More from…" and "Popular … shows".
 
 export type HomeSection =
   | { kind: 'users'; id: 'topCreators'; users: MixcloudUser[] }
@@ -12,17 +12,17 @@ export type HomeSection =
   | { kind: 'mixes'; id: 'popular'; genre: { slug: string; name: string }; items: MixcloudMix[] }
 
 export interface HomeOptions {
-  /** Créateurs montrés en tête. */
+  /** Creators shown at the top. */
   topCreators?: number
-  /** Créateurs qui ont chacun leur rangée « Plus de… ». */
+  /** Creators who each get their own "More from…" row. */
   moreFrom?: number
-  /** Genres qui ont leur rangée « populaires ». */
+  /** Genres that get their "popular" row. */
   genres?: number
-  /** Mix par rangée. */
+  /** Mixes per row. */
   perShelf?: number
 }
 
-/** Les plus fréquents d'abord ; à égalité, celui vu en premier (le plus récemment écouté). */
+/** Most frequent first; on a tie, the one seen first (the most recently listened). */
 function ranked<T>(values: T[], key: (v: T) => string): { value: T; n: number }[] {
   const seen = new Map<string, { value: T; n: number; first: number }>()
   values.forEach((v, i) => {
@@ -34,7 +34,7 @@ function ranked<T>(values: T[], key: (v: T) => string): { value: T; n: number }[
   return [...seen.values()].sort((a, b) => b.n - a.n || a.first - b.first)
 }
 
-/** Un genre qui n'est que le nom d'un créateur (`worldwide-fm`) ferait double emploi avec sa rangée. */
+/** A genre that is only a creator's name (`worldwide-fm`) would duplicate that creator's row. */
 const slugOf = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
 export async function buildHome(
@@ -48,22 +48,22 @@ export async function buildHome(
     api.listens(username, undefined, 100).then((p) => p.items),
     api.following(username).catch(() => null),
   ])
-  // Comme sur le site : « tes créateurs » sont des comptes SUIVIS, classés par écoutes — l'API publique
-  // rend aussi ceux qu'on a écoutés sans les suivre, on les écarte ici. Suivis illisibles : on garde tout.
+  // As on the site: "your creators" are FOLLOWED accounts, ranked by listens — the public API also
+  // returns those listened to without following them, we drop them here. Follows unreadable: we keep all.
   const followedNames = followed ? new Set(followed.map((u) => u.username.toLowerCase())) : null
   const listenedCreators = ranked(listens, (m) => m.user.username).filter((c) => c.value.user.username !== username)
   const creators = listenedCreators.filter((c) => !followedNames || followedNames.has(c.value.user.username.toLowerCase()))
-  // tous les créateurs ÉCOUTÉS, suivis ou non : un genre qui n'est que le nom de l'un d'eux n'est pas un genre
+  // all LISTENED creators, followed or not: a genre that is only the name of one of them is not a genre
   const creatorSlugs = new Set(listenedCreators.flatMap((c) => [slugOf(c.value.user.username), slugOf(c.value.user.name)]))
   const topGenres = ranked(listens.flatMap((m) => m.genres), (g) => g.slug)
     .filter((g) => !creatorSlugs.has(g.value.slug))
     .slice(0, genres)
     .map((g) => g.value)
 
-  // les appels suivants sont indépendants : en parallèle, chacun pouvant échouer seul
+  // the following calls are independent: in parallel, each one able to fail on its own
   const safe = <T>(p: Promise<T>, fallback: T) => p.catch(() => fallback)
   const top = creators.slice(0, topCreators)
-  // la rangée se complète de tes autres suivis, dans l'ordre de ta liste : ceux que tu écoutes d'abord
+  // the row is filled up with your other follows, in your list's order: the ones you listen to first
   const listened = new Set(top.map((c) => c.value.user.username.toLowerCase()))
   const others = (followed ?? []).filter((u) => !listened.has(u.username.toLowerCase())).slice(0, Math.max(0, topCreators - top.length))
   const [users, feed, more, popular] = await Promise.all([

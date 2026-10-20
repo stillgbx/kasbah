@@ -2,41 +2,41 @@ import type { Capability, DeviceDescriptor, MediaPlayerClass, StatePatch } from 
 import type { Enrichment } from './enrich/crunchyroll'
 import { receiverApplicationSchema, type CastService, type MediaStatus, type ReceiverApplication, type ReceiverStatus } from './types'
 
-// Mappage PUR : service mDNS et messages du récepteur ↔ descripteur / patch d'état `media_player`.
+// PURE mapping: mDNS service and receiver messages ↔ `media_player` descriptor / state patch.
 
 export const PLUGIN_ID = 'google_cast'
 
-/** Route (montée sous /api/plugins/google_cast) qui sert une pochette téléchargée et mise en cache par le serveur. */
+/** Route (mounted under /api/plugins/google_cast) serving a cover downloaded and cached by the server. */
 export const ART_ROUTE = '/api/plugins/google_cast/art'
 /**
- * La pochette passe par le serveur plutôt que d'être chargée par chaque écran directement chez
- * Google : ses serveurs d'images répondent `429 Too Many Requests` au bout de quelques affichages
- * (constaté), et une image qui échoue laissait le fond vide. Le serveur télécharge UNE fois, garde
- * en cache et réessaie avec un délai.
+ * The cover goes through the server rather than being loaded by each screen directly from Google:
+ * its image servers answer `429 Too Many Requests` after a few displays (observed), and an image
+ * that failed left the background empty. The server downloads ONCE, caches, and retries with a
+ * delay.
  */
 export function artProxyUrl(url: string): string {
   return `${ART_ROUTE}?url=${encodeURIComponent(url)}`
 }
 
-/** Bit 0 du masque `ca` : l'appareil a un écran (Nest Hub, Chromecast) ; sinon audio seul. */
+/** Bit 0 of the `ca` mask: the device has a screen (Nest Hub, Chromecast); otherwise audio only. */
 export function hasScreen(txt: { ca?: string }): boolean {
   const ca = Number(txt.ca)
   return Number.isFinite(ca) && (ca & 1) === 1
 }
 
 /**
- * Nature du lecteur, d'après ce que l'appareil annonce : une sortie vidéo dont l'écran est celui de
- * l'appareil (Nest Hub, Smart Display) est un `display` ; toute autre sortie vidéo est un téléviseur
- * ou un boîtier branché dessus (Chromecast, TV Android : `tv`) ; sans vidéo, une enceinte.
- * Le volume `fixed` d'un Chromecast confirme le branchement HDMI mais n'est connu qu'après
- * connexion ; le masque mDNS suffit et est disponible dès la découverte.
+ * Kind of player, from what the device announces: a video output whose screen is the device's own
+ * (Nest Hub, Smart Display) is a `display`; any other video output is a TV or a box plugged into
+ * one (Chromecast, Android TV: `tv`); without video, a speaker. A Chromecast's `fixed` volume
+ * confirms the HDMI connection but is only known after connecting; the mDNS mask is enough and is
+ * available from discovery onwards.
  */
 export function mediaPlayerClass(txt: { md?: string; ca?: string }): MediaPlayerClass {
   if (!hasScreen(txt)) return 'speaker'
   return /\b(Nest Hub|Home Hub|Smart Display)\b/i.test(txt.md ?? '') ? 'display' : 'tv'
 }
 
-/** Google ne signe que ses propres modèles ; « Chromecast built-in » chez les autres garde leur marque. */
+/** Google only brands its own models; "Chromecast built-in" on others keeps their brand. */
 export function manufacturerOf(model: string | undefined): string | undefined {
   if (!model) return undefined
   if (/^(Google|Chromecast|Nest)\b/i.test(model)) return 'Google'
@@ -44,10 +44,10 @@ export function manufacturerOf(model: string | undefined): string | undefined {
 }
 
 /**
- * Descripteur d'un appareil. Le volume est réglable sauf `controlType: fixed` (Chromecast branché sur
- * une TV : le niveau se règle sur la TV, le récepteur répond 1.00 quoi qu'on lui demande) : lui
- * proposer un curseur promettrait une commande sans effet. Avant la première connexion on ne
- * connaît pas ce type : on suppose réglable, le descripteur est republié si l'appareil dit non.
+ * A device's descriptor. The volume is adjustable except with `controlType: fixed` (Chromecast
+ * plugged into a TV: the level is set on the TV, the receiver answers 1.00 whatever it is asked):
+ * offering it a slider would promise a command with no effect. Before the first connection we do not
+ * know that type: we assume adjustable, and the descriptor is republished if the device says no.
  */
 export function toDescriptor(service: CastService, volume?: { controlType?: string }): DeviceDescriptor {
   const fixed = volume?.controlType === 'fixed'
@@ -64,17 +64,17 @@ export function toDescriptor(service: CastService, volume?: { controlType?: stri
       ...(manufacturerOf(model) ? { manufacturer: manufacturerOf(model) } : {}),
       ...(model ? { model } : {}),
       mediaPlayer: { deviceClass: mediaPlayerClass(service.txt) },
-      // le plugin retient les appareils déjà vus (`known.ts`) : celui qui a disparu pour de bon
-      // s'oublie depuis l'UI, sinon il resterait listé pour toujours
+      // the plugin remembers devices already seen (`known.ts`): one that has gone for good is
+      // forgotten from the UI, otherwise it would stay listed forever
       forgettable: true,
     },
   }
 }
 
 /**
- * Complète un morceau avec ce que l'API du service a appris (titre, série, saison, numéro, affiche) : la série
- * prend la place de l'artiste, « S1 · E10 » celle de l'album, l'affiche de la série celle de la pochette (relayée).
- * Ce que l'appareil a dit reste prioritaire quand il l'a dit.
+ * Completes a track with what the service's API has learned (title, series, season, number, poster): the series
+ * takes the artist's place, "S1 · E10" the album's, the series poster the cover's (relayed).
+ * What the device said takes priority when it said it.
  */
 export function applyEnrichment(patch: StatePatch<'media_player'>, e: Enrichment): StatePatch<'media_player'> {
   const n = patch.nowPlaying
@@ -84,7 +84,7 @@ export function applyEnrichment(patch: StatePatch<'media_player'>, e: Enrichment
     ...patch,
     nowPlaying: {
       ...n,
-      // titre absent côté appareil (vu en réel : métadonnées réduites à un artiste vide) → celui de l'API
+      // title missing on the device side (seen for real: metadata reduced to an empty artist) → the API's
       ...(!n.title && e.title ? { title: e.title } : {}),
       ...(!n.artist && e.series ? { artist: e.series } : {}),
       ...(!n.album && se ? { album: se } : {}),
@@ -93,13 +93,13 @@ export function applyEnrichment(patch: StatePatch<'media_player'>, e: Enrichment
   }
 }
 
-/** Pochette de repli (logo de l'appli, relayé) sur un morceau qui n'en a pas ; sans morceau, rien à décorer. */
+/** Fallback cover (app logo, relayed) on a track that has none; without a track, nothing to decorate. */
 export function withFallbackArt(patch: StatePatch<'media_player'>, url: string): StatePatch<'media_player'> {
   if (!patch.nowPlaying || patch.nowPlaying.artUrl) return patch
   return { ...patch, nowPlaying: { ...patch.nowPlaying, artUrl: artProxyUrl(url) } }
 }
 
-/** Volume et muet, tirés d'un RECEIVER_STATUS. */
+/** Volume and mute, taken from a RECEIVER_STATUS. */
 export function toReceiverPatch(status: ReceiverStatus): StatePatch<'media_player'> {
   const patch: StatePatch<'media_player'> = {}
   if (typeof status.volume?.level === 'number') patch.volume = Math.round(Math.min(1, Math.max(0, status.volume.level)) * 100)
@@ -108,8 +108,8 @@ export function toReceiverPatch(status: ReceiverStatus): StatePatch<'media_playe
 }
 
 /**
- * L'appli qui tourne, hors écran de veille (Backdrop sur un Nest Hub : c'est le fond d'écran, rien
- * ne joue). Validée à part : une appli à la forme inattendue ne doit pas cacher le volume.
+ * The running app, excluding the idle screen (Backdrop on a Nest Hub: it is the wallpaper, nothing is
+ * playing). Validated separately: an app with an unexpected shape must not hide the volume.
  */
 export function activeApplication(status: ReceiverStatus): ReceiverApplication | undefined {
   for (const raw of status.applications ?? []) {
@@ -120,19 +120,19 @@ export function activeApplication(status: ReceiverStatus): ReceiverApplication |
 }
 
 /**
- * Une durée n'a de sens que positive. Relevé sur une TV Android : Prime Video envoie `-0.001`, une
- * radio en direct `null` — deux façons de dire « inconnue », qu'on traite pareil (pas de curseur,
- * pas de temps total, la position reste affichée).
+ * A duration only makes sense when positive. Observed on an Android TV: Prime Video sends `-0.001`, a
+ * live radio `null` — two ways of saying "unknown", which we handle the same (no slider, no total
+ * time, the position stays displayed).
  */
 export const isDuration = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0
 
 /**
- * Flux en DIRECT, tel que l'appareil le déclare (`streamType: LIVE` — relevé sur la radio franceinfo).
- * C'est le seul signe fiable, et surtout PAS `supportedMediaCommands`, qui se trompe dans les deux
- * sens : l'appli Radio France annonce SEEK, piste précédente et suivante (12495) sur un direct où
- * aucune des trois n'a de sens, tandis que Crunchyroll (143) omet « piste suivante » alors qu'elle
- * marche en réel. S'en servir pour griser une touche casserait donc des commandes qui fonctionnent.
- * Une durée absente ne dit rien de plus que « inconnue » (Prime Video en dit autant d'un film).
+ * LIVE stream, as the device declares it (`streamType: LIVE` — observed on the franceinfo radio).
+ * It is the only reliable sign, and above all NOT `supportedMediaCommands`, which is wrong both ways:
+ * the Radio France app announces SEEK, previous and next track (12495) on a live stream where none
+ * of the three makes sense, while Crunchyroll (143) omits "next track" even though it works for real.
+ * Using it to gray out a button would therefore break commands that work.
+ * A missing duration says nothing more than "unknown" (Prime Video says as much of a movie).
  */
 export const isLive = (media: MediaStatus | undefined): boolean => media?.media?.streamType === 'LIVE'
 
@@ -145,10 +145,10 @@ export function toPlayback(playerState: string | undefined): 'playing' | 'paused
 }
 
 /**
- * Lecture et morceau en cours. Sans appli ou sans session média : `idle`, et `nowPlaying: null`
- * pour EFFACER le morceau précédent (un patch sans la clé le laisserait affiché). Une appli sans canal
- * média (Netflix natif) : `on`, avec l'appli pour seule information — pas de titre, pas de position,
- * et ni lecture ni pause qu'on puisse affirmer.
+ * Playback and current track. Without an app or without a media session: `idle`, and
+ * `nowPlaying: null` to CLEAR the previous track (a patch without the key would leave it displayed).
+ * An app without a media channel (native Netflix): `on`, with the app as the only information — no
+ * title, no position, and neither playing nor paused that we could assert.
  */
 export function toMediaPatch(media: MediaStatus | undefined, app: ReceiverApplication | undefined): StatePatch<'media_player'> {
   if (!app) return { playback: 'idle', nowPlaying: null }
@@ -157,12 +157,12 @@ export function toMediaPatch(media: MediaStatus | undefined, app: ReceiverApplic
   const playback = toPlayback(media.playerState)
   const m = media.media?.metadata
   if (playback === 'idle' || !media.media) return { playback, nowPlaying: null }
-  // `||` et non `??`, et `clean` : les champs vides, `null` ou faits d'espaces (Crunchyroll envoie
-  // `artist: " "`) valent « absent » — sinon une ligne blanche prenait la place de la source.
-  // Le titre est le titre des métadonnées, ou RIEN (`''`) : ni `contentId` (identifiant — id de vidéo
-  // YouTube, URI Spotify — qui arrive AVANT les métadonnées à chaque changement de morceau, on voyait
-  // « NxHNlQsUooM » une seconde), ni le nom de l'appli (il est déjà dans `source`, l'UI le répétait
-  // trois fois). Titre vide = « en attente » : l'UI affiche un repère discret le temps qu'il arrive.
+  // `||` and not `??`, and `clean`: empty fields, `null` or made of spaces (Crunchyroll sends
+  // `artist: " "`) count as "absent" — otherwise a blank line took the source's place.
+  // The title is the metadata title, or NOTHING (`''`): neither `contentId` (an identifier — YouTube
+  // video id, Spotify URI — that arrives BEFORE the metadata on every track change, we saw
+  // "NxHNlQsUooM" for a second), nor the app name (it is already in `source`, the UI repeated it
+  // three times). Empty title = "pending": the UI shows a discreet marker until it arrives.
   const clean = (v: string | null | undefined) => v?.trim() || undefined
   const artist = clean(m?.artist) || clean(m?.albumArtist) || clean(m?.subtitle)
   const album = clean(m?.albumName)
@@ -170,26 +170,26 @@ export function toMediaPatch(media: MediaStatus | undefined, app: ReceiverApplic
   return {
     playback,
     nowPlaying: {
-      // Titre vide = inconnu, et pour une appli NATIVE de TV Android (Prime Video : `AndroidNativeApp`,
-      // `title: ""` et un identifiant Amazon pour tout contenu) il ne viendra jamais. C'est l'UI qui
-      // décide quoi montrer à sa place (le nom de l'appli), sans inventer de titre ici.
+      // Empty title = unknown, and for a NATIVE Android TV app (Prime Video: `AndroidNativeApp`,
+      // `title: ""` and an Amazon id for every content) it will never come. The UI decides what to show
+      // in its place (the app name), without inventing a title here.
       title: clean(m?.title) ?? '',
       ...(artist ? { artist } : {}),
       ...(album ? { album } : {}),
       ...(art ? { artUrl: artProxyUrl(art) } : {}),
-      // Durée retenue seulement si POSITIVE : Prime Video annonce `duration: -0.001` pour dire
-      // « inconnue » (là où une radio en direct dit `null`), et une durée négative faisait afficher
-      // « -1:-1 » de chaque côté du curseur en écrasant la position. Idem pour une position négative.
+      // Duration kept only if POSITIVE: Prime Video announces `duration: -0.001` to say "unknown"
+      // (where a live radio says `null`), and a negative duration showed "-1:-1" on each side of the
+      // slider, overwriting the position. Same for a negative position.
       ...(isDuration(media.media.duration) ? { durationS: media.media.duration } : {}),
       ...(typeof media.currentTime === 'number' && media.currentTime >= 0 ? { positionS: media.currentTime } : {}),
       ...(app.displayName ? { source: app.displayName } : {}),
-      // un direct se dit : l'UI grise précédent / suivant / se placer, qui coupaient le flux
+      // a live stream says so: the UI grays out previous / next / seek, which cut the stream
       ...(isLive(media) ? { live: true } : {}),
     },
   }
 }
 
-/** Récepteur média par défaut Cast (`LOAD` d'une URL HTTP) — pas l'appli YouTube / Spotify. */
+/** Cast default media receiver (`LOAD` of an HTTP URL) — not the YouTube / Spotify app. */
 export const DEFAULT_MEDIA_RECEIVER = 'CC1AD845'
 
 export type CastLoadMedia = {
@@ -204,17 +204,17 @@ export type CastLoadMedia = {
   }
 }
 
-/** Métadonnées optionnelles pour `play_url` (titre / artiste / pochette). */
+/** Optional metadata for `play_url` (title / artist / cover). */
 export type PlayUrlMeta = { title?: string; artist?: string; artUrl?: string; explicit?: boolean; live?: boolean }
 
 /**
- * Ce que le récepteur média par défaut veut dans `LOAD.media` : type MIME et `LIVE` vs `BUFFERED`
- * d'après le chemin (HLS = direct). Une URL sans extension est un MP3 : c'est le cas des webradios
- * Icecast (franceinfo-midfi.mp3) comme d'un fichier nu. Sans `meta.title`, le hostname de l'URL.
+ * What the default media receiver wants in `LOAD.media`: MIME type and `LIVE` vs `BUFFERED` from the
+ * path (HLS = live). A URL without an extension is an MP3: that is the case of Icecast web radios
+ * (franceinfo-midfi.mp3) as well as of a bare file. Without `meta.title`, the URL's hostname.
  */
 export function mediaFromUrl(url: string, meta?: PlayUrlMeta): CastLoadMedia {
   let path = url
-  try { path = new URL(url).pathname } catch { /* garder la chaîne */ }
+  try { path = new URL(url).pathname } catch { /* keep the string */ }
   const lower = path.toLowerCase()
   const hls = lower.endsWith('.m3u8') || lower.endsWith('.m3u')
   const live = hls || meta?.live === true

@@ -4,14 +4,14 @@ import { z } from 'zod'
 import { castTxtSchema, type CastService } from './types'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// MÉMOIRE des récepteurs déjà vus. Un Cast éteint (téléviseur au repos, Chromecast débranché) ne
-// s'annonce plus en mDNS : sans mémoire, il quitte l'inventaire, et son entrée dans house.json perd
-// son nom, son icône et son état — l'UI n'a plus qu'un id brut et « lié à aucun plugin ». On garde
-// donc la dernière annonce de chaque appareil dans un petit JSON, rejouée au démarrage : l'appareil
-// reste listé, indisponible, jusqu'à ce qu'il se réannonce — ou que l'utilisateur l'oublie.
+// MEMORY of receivers already seen. A Cast device that is off (TV on standby, Chromecast unplugged)
+// no longer announces itself over mDNS: without memory, it leaves the inventory, and its entry in
+// house.json loses its name, its icon and its state — the UI only has a raw id and "linked to no
+// plugin". So we keep each device's last announcement in a small JSON, replayed at startup: the
+// device stays listed, unavailable, until it announces itself again — or the user forgets it.
 //
-// Fichier absent, illisible ou d'une autre forme : mémoire vide, jamais une erreur fatale (le plugin
-// doit démarrer même sans écriture possible sur le disque).
+// File missing, unreadable or of another shape: empty memory, never a fatal error (the plugin must
+// start even when nothing can be written to disk).
 
 const knownFileSchema = z.object({
   devices: z.array(z.object({
@@ -31,7 +31,7 @@ export function createKnownDevicesFile(path: string, logger: Logger): KnownDevic
     async load() {
       let raw: string
       try { raw = await readFile(path, 'utf8') }
-      catch { return [] }                                       // pas encore de fichier : premier démarrage
+      catch { return [] }                                       // no file yet: first start
       const parsed = knownFileSchema.safeParse(((): unknown => { try { return JSON.parse(raw) } catch { return null } })())
       if (!parsed.success) { logger.warn({ path }, 'unreadable Cast device memory, starting empty'); return [] }
       return parsed.data.devices

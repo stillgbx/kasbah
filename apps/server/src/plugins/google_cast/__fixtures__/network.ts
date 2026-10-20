@@ -1,9 +1,9 @@
 import type { CastService } from '../types'
 
-// Relevé du 2026-09-09 sur le réseau réel (11 appareils) : enregistrements TXT mDNS et réponses
-// RECEIVER_STATUS telles que reçues, identifiants et adresses anonymisés. Les bizarreries sont
-// gardées : `rs` absent partout, `stepInterval` en flottant approximatif, Backdrop déclaré comme
-// appli sur les Nest Hub au repos, volume `fixed` à 1.00 sur les Chromecast branchés à une TV.
+// Survey of 2026-09-09 on the real network (11 devices): mDNS TXT records and RECEIVER_STATUS
+// responses as received, ids and addresses anonymized. The quirks are kept: `rs` missing
+// everywhere, `stepInterval` as an approximate float, Backdrop declared as an app on idle Nest Hubs,
+// `fixed` volume at 1.00 on Chromecasts plugged into a TV.
 
 export const TXT_NEST_HUB = {
   id: 'dbd928f3aaaaaaaaaaaaaaaaaaaaaaaa', cd: 'C0FFEE', rm: '', ve: '05', md: 'Google Nest Hub',
@@ -31,14 +31,14 @@ export const SERVICE_NEST_MINI: CastService = { host: '192.168.1.93', port: 8009
 export const SERVICE_CHROMECAST: CastService = { host: '192.168.1.43', port: 8009, txt: TXT_CHROMECAST }
 export const SERVICE_LENOVO_CLOCK: CastService = { host: '192.168.1.96', port: 8009, txt: TXT_LENOVO_CLOCK }
 export const SERVICE_SOUNDBAR: CastService = { host: '192.168.1.14', port: 8009, txt: TXT_SOUNDBAR }
-/** TV Sony Android (relevé du 2026-09-10) : ne s'annonce qu'allumée ; son modèle ouvre la sonde `bravia.ts`. */
+/** Sony Android TV (survey of 2026-09-10): only announces itself when on; its model opens the `bravia.ts` probe. */
 export const TXT_BRAVIA = {
   id: 'abcd1234ffffffffffffffffffffffff', cd: 'C0FFEE', rm: '', ve: '05', md: 'BRAVIA 4K VH22',
   ic: '/setup/icon.png', fn: 'TV Salon', ca: '264709', st: '0', bs: 'FA8F85000005', nf: '1', ct: 'A266B8',
 }
 export const SERVICE_BRAVIA: CastService = { host: '192.168.1.87', port: 8009, txt: TXT_BRAVIA }
 
-/** Nest Hub au repos : Backdrop (fond d'écran) est déclaré comme appli, `isIdleScreen: true`. */
+/** Idle Nest Hub: Backdrop (wallpaper) is declared as an app, `isIdleScreen: true`. */
 export const RECEIVER_STATUS_NEST_HUB_IDLE = {
   applications: [{
     appId: 'E8C28D3C', appType: 'WEB', displayName: 'Backdrop', iconUrl: '', isIdleScreen: true,
@@ -49,26 +49,26 @@ export const RECEIVER_STATUS_NEST_HUB_IDLE = {
   userEq: {}, volume: { controlType: 'master', level: 0.20000000298023224, muted: false, stepInterval: 0.019999999552965164 },
 }
 
-/** Réveil Lenovo au repos : pas d'appli du tout, volume à zéro. */
+/** Idle Lenovo clock: no app at all, volume at zero. */
 export const RECEIVER_STATUS_LENOVO_IDLE = {
   userEq: {}, volume: { controlType: 'master', level: 0, muted: false, stepInterval: 0.019999999552965164 },
 }
 
-/** Chromecast sur une TV : volume `fixed`, toujours 1.00 — le niveau se règle sur la TV. */
+/** Chromecast on a TV: `fixed` volume, always 1.00 — the level is set on the TV. */
 export const RECEIVER_STATUS_CHROMECAST_FIXED = {
   userEq: {}, volume: { controlType: 'fixed', level: 1, muted: false, stepInterval: 0.03999999910593033 },
 }
 
-/** Barre de son au repos, en sourdine. */
+/** Idle soundbar, muted. */
 export const RECEIVER_STATUS_SOUNDBAR_MUTED = {
   userEq: {}, volume: { controlType: 'master', level: 0.1599999964237213, muted: true, stepInterval: 0.019999999552965164 },
 }
 
 /**
- * Enceinte en lecture depuis l'appli Spotify (RECEIVER_STATUS) puis MEDIA_STATUS de la session.
- * ATTENTION : forme DÉDUITE de la référence Cast (messages MediaStatus / MusicTrackMediaMetadata),
- * aucune lecture Spotify n'ayant été relevée. Une capture RÉELLE existe plus bas (`*_RADIO`) : à
- * remplacer celle-ci aussi dès qu'un morceau à durée joue (`GET /api/plugins/google_cast/raw`).
+ * Speaker playing from the Spotify app (RECEIVER_STATUS) then the session's MEDIA_STATUS.
+ * WARNING: shape INFERRED from the Cast reference (MediaStatus / MusicTrackMediaMetadata messages),
+ * no Spotify playback having been captured. A REAL capture exists below (`*_RADIO`): replace this
+ * one too as soon as a track with a duration plays (`GET /api/plugins/google_cast/raw`).
  */
 export const RECEIVER_STATUS_PLAYING = {
   applications: [{
@@ -96,11 +96,11 @@ export const MEDIA_STATUS_PLAYING = {
 export const MEDIA_STATUS_PAUSED = { ...MEDIA_STATUS_PLAYING, playerState: 'PAUSED', currentTime: 61 }
 
 /**
- * CAPTURE RÉELLE (2026-09-09, `GET /api/plugins/google_cast/raw`) : le Nest Mini de la cuisine joue une
- * radio lancée à la voix. À garder tel quel, bizarreries comprises : `duration: null` (direct),
- * `contentId: ""` (l'URL est dans `contentUrl`), une piste `VIDEO` sur un flux audio, un `items[]`
- * dont le média est presque vide. Le premier schéma exigeait un nombre pour `duration` : tout le
- * message était rejeté et l'enceinte restait « au repos ».
+ * REAL CAPTURE (2026-09-09, `GET /api/plugins/google_cast/raw`): the kitchen Nest Mini plays a radio
+ * started by voice. To keep as is, quirks included: `duration: null` (live), `contentId: ""` (the
+ * URL is in `contentUrl`), a `VIDEO` track on an audio stream, an `items[]` whose media is almost
+ * empty. The first schema required a number for `duration`: the whole message was rejected and the
+ * speaker stayed "idle".
  */
 export const RECEIVER_STATUS_RADIO = {
   volume: { level: 0.30000001192092896, muted: false, controlType: 'master', stepInterval: 0.019999999552965164 },
@@ -129,10 +129,10 @@ export const MEDIA_STATUS_RADIO = {
 }
 
 /**
- * CAPTURE RÉELLE (2026-09-09) : Crunchyroll sur un Chromecast (appli native, `appId: AndroidNativeApp`,
- * `statusText` = nom du paquet Android). Métadonnées GÉNÉRIQUES (`metadataType: 0`) : le titre de
- * l'épisode seulement, un `artist` fait d'un espace, ni série, ni saison, ni image. L'appli n'envoie
- * rien de plus : il n'y a rien à afficher d'autre.
+ * REAL CAPTURE (2026-09-09): Crunchyroll on a Chromecast (native app, `appId: AndroidNativeApp`,
+ * `statusText` = Android package name). GENERIC metadata (`metadataType: 0`): the episode title
+ * only, an `artist` made of a space, no series, no season, no image. The app sends nothing more:
+ * there is nothing else to show.
  */
 export const RECEIVER_STATUS_CRUNCHYROLL = {
   volume: { controlType: 'fixed', level: 1, muted: false, stepInterval: 0.03999999910593033 },
@@ -151,11 +151,10 @@ export const MEDIA_STATUS_CRUNCHYROLL = {
 }
 
 /**
- * CAPTURE RÉELLE (2026-09-10, `GET /api/plugins/google_cast/raw` sur « TV Salon », BRAVIA 4K VH22) :
- * Prime Video, appli NATIVE de la TV Android. Elle ouvre bien un canal média (position réelle,
- * commandes acceptées) mais ne publie AUCUNE métadonnée : titre vide, un identifiant Amazon en
- * `contentId`, et surtout `duration: -0.001` — sa façon de dire « inconnue », là où une radio en
- * direct envoie `null`.
+ * REAL CAPTURE (2026-09-10, `GET /api/plugins/google_cast/raw` on "TV Salon", BRAVIA 4K VH22):
+ * Prime Video, NATIVE app of the Android TV. It does open a media channel (real position, commands
+ * accepted) but publishes NO metadata: empty title, an Amazon id as `contentId`, and above all
+ * `duration: -0.001` — its way of saying "unknown", where a live radio sends `null`.
  */
 export const RECEIVER_STATUS_PRIME_VIDEO = {
   volume: { level: 0, muted: false, controlType: 'master', stepInterval: 0.009999999776482582 },
@@ -177,8 +176,8 @@ export const MEDIA_STATUS_PRIME_VIDEO = {
 }
 
 /**
- * CAPTURES RÉELLES (2026-09-10) de l'API interne Crunchyroll, en anonyme (`grant_type=client_id`) : le
- * jeton, puis l'objet de l'épisode ci-dessus. Champs non lus laissés tels quels, jeton et adresses raccourcis.
+ * REAL CAPTURES (2026-09-10) of the internal Crunchyroll API, anonymously (`grant_type=client_id`): the
+ * token, then the object of the episode above. Unread fields left as they are, token and URLs shortened.
  */
 export const CRUNCHYROLL_TOKEN = { access_token: 'eyJhbGciOi.anonymised.token', expires_in: 3600, token_type: 'Bearer', scope: 'account content mp offline_access', country: 'FR' }
 export const CRUNCHYROLL_OBJECT_EPISODE = {
@@ -205,7 +204,7 @@ export const CRUNCHYROLL_OBJECT_EPISODE = {
   meta: {},
 }
 
-/** Fiche de la série (`GET /content/v2/cms/series/GT00000000`, 2026-09-10) : affiche portrait en 9 tailles. */
+/** Series record (`GET /content/v2/cms/series/GT00000000`, 2026-09-10): portrait poster in 9 sizes. */
 export const CRUNCHYROLL_OBJECT_SERIES = {
   total: 1,
   data: [{
@@ -218,11 +217,11 @@ export const CRUNCHYROLL_OBJECT_SERIES = {
   meta: {},
 }
 
-/** Fin de file : la session existe encore mais plus rien à jouer. */
+/** End of queue: the session still exists but nothing left to play. */
 /**
- * CAPTURE RÉELLE (2026-09-10) : Netflix lancé en appli NATIVE sur un Chromecast (« Suite Parentale »).
- * L'appli est déclarée (`appType: WEB`, `isIdleScreen: false`) mais SANS `transportId` ni `namespaces` :
- * elle n'ouvre aucun canal média Cast. On sait qu'elle est à l'écran ; ni titre, ni lecture / pause.
+ * REAL CAPTURE (2026-09-10): Netflix launched as a NATIVE app on a Chromecast ("Suite Parentale").
+ * The app is declared (`appType: WEB`, `isIdleScreen: false`) but WITHOUT `transportId` or `namespaces`:
+ * it opens no Cast media channel. We know it is on screen; no title, no play / pause.
  */
 export const RECEIVER_STATUS_NETFLIX = {
   volume: { controlType: 'fixed', level: 1, muted: false, stepInterval: 0.03999999910593033 },
@@ -234,18 +233,18 @@ export const RECEIVER_STATUS_NETFLIX = {
 }
 
 /**
- * CAPTURE RÉELLE (2026-09-10) du registre public des applis Cast pour Netflix (`?a=CA5E8412`), réduite aux champs
- * lus, URL d'icône anonymisée. Le garde `)]}'` en tête est gardé tel quel : c'est lui qu'il faut retirer.
+ * REAL CAPTURE (2026-09-10) of the public Cast app registry for Netflix (`?a=CA5E8412`), reduced to the fields
+ * read, icon URL anonymized. The leading `)]}'` guard is kept as is: it is what must be stripped.
  */
 export const CAST_REGISTRY_NETFLIX = `)]}'
 {"resolution_height":0,"display_name":"Netflix","app_id":"CA5E8412","promo_assets":[{"icon_url":"https://lh3.googleusercontent.com/anonymised-netflix-icon","description":"Netflix is the leading subscription service for watching TV episodes and movies.","display_name":"Netflix"},{"description":"Accédez à toute l'offre Netflix directement sur votre télévision.","locale":"fr","display_name":"Netflix"}],"url":"https://www.netflix.com/cast"}`
 
 /**
- * CAPTURE RÉELLE (2026-09-10) : YouTube sur la TV Android du salon (une vidéo lancée depuis YouTube
- * Music). Deux enseignements gardés tels quels : l'appli tourne sous la variante Android TV
- * (`appId: 2C6A6E3D`) alors que ses visuels sont rangés sous son identifiant canonique
- * (`universalAppId: 233637DE`) ; et les métadonnées n'ont AUCUNE image — titre et artiste seulement,
- * donc le logo de l'appli est la seule pochette possible.
+ * REAL CAPTURE (2026-09-10): YouTube on the living room Android TV (a video started from YouTube
+ * Music). Two lessons kept as they are: the app runs under the Android TV variant
+ * (`appId: 2C6A6E3D`) while its visuals are filed under its canonical id
+ * (`universalAppId: 233637DE`); and the metadata has NO image — title and artist only, so the app
+ * logo is the only possible cover.
  */
 export const RECEIVER_STATUS_YOUTUBE_TV = {
   volume: { level: 0, muted: false, controlType: 'master', stepInterval: 0.009999999776482582 },
@@ -267,10 +266,10 @@ export const MEDIA_STATUS_YOUTUBE_TV = {
 }
 
 /**
- * CAPTURES RÉELLES (2026-09-10) des catalogues publics interrogés pour la pochette d'un morceau que
- * l'appareil n'illustre pas — ici « Horizon » de la lecture YouTube ci-dessus. Réduites aux champs lus.
- * iTunes NOMME les deux artistes (« & ») là où l'appareil dit « et », Deezer ne nomme que le premier :
- * c'est pour cela que la correspondance des artistes se fait par jeux de mots (`enrich/cover.ts`).
+ * REAL CAPTURES (2026-09-10) of the public catalogs queried for the cover of a track the device does
+ * not illustrate — here "Horizon" from the YouTube playback above. Reduced to the fields read.
+ * iTunes NAMES both artists ("&") where the device says "et", Deezer only names the first: that is
+ * why artists are matched by word sets (`enrich/cover.ts`).
  */
 export const ITUNES_SEARCH_BOUNDARY = {
   resultCount: 2,
@@ -291,9 +290,9 @@ export const DEEZER_SEARCH_BOUNDARY = {
   total: 1,
 }
 /**
- * CAPTURE RÉELLE : ce que iTunes répond pour un titre qui n'est PAS un morceau (« SLOW RIVERS - Live
- * Performance (Piano Set) »). Il ne rend jamais rien de vide : sans contrôle de correspondance, on
- * collait Tim McGraw sur un set piano. Deezer, lui, rend `{ data: [] }`.
+ * REAL CAPTURE: what iTunes answers for a title that is NOT a track ("SLOW RIVERS - Live
+ * Performance (Piano Set)"). It never returns anything empty: without a match check, we were
+ * slapping Tim McGraw on a piano set. Deezer, for its part, returns `{ data: [] }`.
  */
 export const ITUNES_SEARCH_NOT_A_TRACK = {
   resultCount: 2,
@@ -303,17 +302,17 @@ export const ITUNES_SEARCH_NOT_A_TRACK = {
   ],
 }
 
-/** CAPTURE RÉELLE (2026-09-10) du registre pour YouTube sous son identifiant canonique (`?a=233637DE`), réduite. */
+/** REAL CAPTURE (2026-09-10) of the registry for YouTube under its canonical id (`?a=233637DE`), reduced. */
 export const CAST_REGISTRY_YOUTUBE = `)]}'
 {"resolution_height":0,"display_name":"YouTube","app_id":"233637DE","promo_assets":[{"icon_url":"https://lh3.googleusercontent.com/anonymised-youtube-icon","description":"Watch the videos and playlists you love.","display_name":"YouTube"}],"url":"https://www.youtube.com/tv"}`
 
-/** La variante Android TV existe dans le registre, mais SANS visuel : c'est tout l'intérêt du relevé. */
+/** The Android TV variant exists in the registry, but WITHOUT a visual: that is the whole point of the survey. */
 export const CAST_REGISTRY_YOUTUBE_ANDROID_TV = `)]}'
 {"resolution_height":0,"display_name":"YouTube","app_id":"2C6A6E3D","android_tv_launch_deep_link":"https://www.youtube.com/tv?c2n=1","url":"https://www.youtube.com/tv"}`
 
 /**
- * CAPTURE RÉELLE (2026-09-10) du registre pour Prime Video : l'appli native `AndroidNativeApp` y est
- * connue sous `17608BC8` (la table `NATIVE_APP_IDS` fait le lien par son nom). URL de l'icône raccourcie.
+ * REAL CAPTURE (2026-09-10) of the registry for Prime Video: the native app `AndroidNativeApp` is
+ * known there as `17608BC8` (the `NATIVE_APP_IDS` table links it by name). Icon URL shortened.
  */
 export const CAST_REGISTRY_PRIME_VIDEO = `)]}'
 {"resolution_height":0,"whitelisting":{"trusted_cast_app":true},"uses_ipc":true,"background_mode_enabled":true,"display_name":"Prime Video","app_id":"17608BC8","promo_assets":[{"icon_url":"https://lh3.googleusercontent.com/anonymised-prime-video-icon","description":"Enjoy Amazon Originals, popular movies, and hit TV shows.","display_name":"Prime Video"}],"url":"https://cloudfront.xp-assets.aiv-cdn.net/packages/ATVGCastReceiver-1.0/prod/index.html"}`

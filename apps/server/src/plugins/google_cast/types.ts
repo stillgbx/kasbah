@@ -1,18 +1,18 @@
 import { z } from 'zod'
 
-// Schémas SOUPLES des messages reçus d'un récepteur Cast. Seuls les champs qu'on lit sont typés ;
-// tout le reste passe en `unknown` (un champ inutile contraint trop fort ferait rejeter un message
-// entier, voir 3_2_ecrire-un-plugin.md).
+// LENIENT schemas of the messages received from a Cast receiver. Only the fields we read are typed;
+// everything else goes through as `unknown` (a useless field constrained too tightly would get a
+// whole message rejected, see 3_2_ecrire-un-plugin.md).
 
-/** Enregistrement TXT du service mDNS `_googlecast._tcp` (clés relevées sur le parc réel). */
+/** TXT record of the `_googlecast._tcp` mDNS service (keys observed on the real device set). */
 export const castTxtSchema = z.looseObject({
-  /** Identifiant stable de l'appareil (32 hex) : notre externalId. */
+  /** Stable device id (32 hex): our externalId. */
   id: z.string().min(1),
-  /** Nom donné par l'utilisateur dans Google Home (« Cuisine », « Réveil parents »). */
+  /** Name given by the user in Google Home ("Cuisine", "Réveil parents"). */
   fn: z.string().min(1),
-  /** Modèle (« Google Nest Hub », « Chromecast », « Lenovo CD-4N341Y »). */
+  /** Model ("Google Nest Hub", "Chromecast", "Lenovo CD-4N341Y"). */
   md: z.string().optional(),
-  /** Masque de capacités : bit 0 = sortie vidéo (écran), bit 2 = sortie audio. */
+  /** Capability mask: bit 0 = video output (screen), bit 2 = audio output. */
   ca: z.string().optional(),
 })
 export type CastTxt = z.infer<typeof castTxtSchema>
@@ -26,29 +26,29 @@ export interface CastService {
 export const receiverVolumeSchema = z.looseObject({
   level: z.number().optional(),
   muted: z.boolean().optional(),
-  /** `attenuation` ou `master` : réglable ; `fixed` : le volume se règle sur la TV, pas ici. */
+  /** `attenuation` or `master`: adjustable; `fixed`: the volume is set on the TV, not here. */
   controlType: z.string().optional(),
 })
 
 export const receiverApplicationSchema = z.looseObject({
   appId: z.string(),
   /**
-   * Identifiant CANONIQUE de l'appli, quand il diffère de `appId` : une TV Android lance la variante
-   * de son écosystème (YouTube : `appId: 2C6A6E3D`, `universalAppId: 233637DE`). C'est lui qui porte
-   * les visuels dans le registre public (voir `enrich/appIcon.ts`).
+   * The app's CANONICAL id, when it differs from `appId`: an Android TV launches its ecosystem's
+   * variant (YouTube: `appId: 2C6A6E3D`, `universalAppId: 233637DE`). It is the one carrying the
+   * visuals in the public registry (see `enrich/appIcon.ts`).
    */
   universalAppId: z.string().nullish(),
   displayName: z.string().optional(),
   sessionId: z.string(),
   /**
-   * Adresse à laquelle parler à l'appli (namespace media). ABSENT pour une appli native qui n'ouvre pas de
-   * canal Cast (relevé : Netflix sur un Chromecast, `appType: WEB`, ni `transportId` ni `namespaces`) :
-   * on sait qu'elle est à l'écran, rien de plus.
+   * Address to talk to the app at (media namespace). ABSENT for a native app that opens no Cast channel
+   * (observed: Netflix on a Chromecast, `appType: WEB`, neither `transportId` nor `namespaces`): we know
+   * it is on screen, nothing more.
    */
   transportId: z.string().optional(),
   isIdleScreen: z.boolean().optional(),
   statusText: z.string().optional(),
-  /** Icône de l'appli, souvent vide (`""`) ; renseignée par certaines (Radio France). Pochette de repli. */
+  /** App icon, often empty (`""`); filled in by some (Radio France). Fallback cover. */
   iconUrl: z.string().nullish(),
   namespaces: z.unknown().optional(),
 })
@@ -60,9 +60,9 @@ export const receiverStatusSchema = z.looseObject({
 })
 export type ReceiverStatus = z.infer<typeof receiverStatusSchema>
 
-// Tout ce qu'on ne lit pas strictement est `nullish` : un vrai récepteur envoie `null` là où la
-// référence annonce un nombre (relevé : `duration: null` sur un flux radio en direct), et un seul
-// champ trop strict faisait rejeter le MEDIA_STATUS entier — l'enceinte restait « au repos ».
+// Everything we do not read strictly is `nullish`: a real receiver sends `null` where the reference
+// announces a number (observed: `duration: null` on a live radio stream), and a single field that
+// was too strict got the whole MEDIA_STATUS rejected — the speaker stayed "idle".
 export const mediaMetadataSchema = z.looseObject({
   metadataType: z.number().nullish(),
   title: z.string().nullish(),
@@ -79,19 +79,19 @@ export const mediaStatusSchema = z.looseObject({
   playerState: z.string(),
   currentTime: z.number().nullish(),
   media: z.looseObject({
-    /** Vide (`""`) sur un flux lancé par l'Assistant : l'URL est alors dans `contentUrl`. */
+    /** Empty (`""`) on a stream started by the Assistant: the URL is then in `contentUrl`. */
     contentId: z.string().nullish(),
     contentUrl: z.string().nullish(),
-    /** `BUFFERED` (morceau), `LIVE` (direct : radio, chaîne d'info), `NONE`. */
+    /** `BUFFERED` (track), `LIVE` (live: radio, news channel), `NONE`. */
     streamType: z.string().nullish(),
-    /** `null` sur un direct (radio), un nombre sur un morceau. */
+    /** `null` on a live stream (radio), a number on a track. */
     duration: z.number().nullish(),
     metadata: mediaMetadataSchema.nullish(),
   }).nullish(),
 })
 export type MediaStatus = z.infer<typeof mediaStatusSchema>
 
-/** Enveloppe d'un message JSON reçu, quel que soit le namespace. */
+/** Envelope of a received JSON message, whatever the namespace. */
 export const inboundSchema = z.looseObject({
   type: z.string(),
   requestId: z.number().optional(),

@@ -7,8 +7,8 @@ import type { SpawnFn } from '../../music/proxy'
 import { runClaude, type ClaudeRunOptions } from './run'
 import { FakeChild, fakeClaude, happy, init } from './test-claude'
 
-// `claude -p` pour une instruction : ce qu'on lui passe (verrouillage, jeton de course, compte
-// Claude) et comment sa sortie devient des événements de l'assistant.
+// `claude -p` for one instruction: what we pass it (lockdown, run token, Claude account) and how its
+// output becomes assistant events.
 
 let script: (child: FakeChild) => void
 let fake: ReturnType<typeof fakeClaude>
@@ -31,7 +31,7 @@ async function go(over: Partial<ClaudeRunOptions> = {}, signal = new AbortContro
   return events
 }
 
-it('traduit la sortie de claude en événements : outil, résultat, texte, fin', async () => {
+it('turns the claude output into events: tool, result, text, end', async () => {
   const events = await go()
   expect(events.map((e) => e.type)).toEqual(['tool', 'tool_result', 'text', 'done'])
   expect(events[0]).toEqual({ type: 'tool', id: 't1', name: 'send_command', input: { deviceId: 'mock:light-living' } })
@@ -40,18 +40,18 @@ it('traduit la sortie de claude en événements : outil, résultat, texte, fin',
   expect(fake.calls[0]!.stdin).toBe('Allume le salon')
 })
 
-it('rend ce que l’instruction a consommé : coût au prix de l’API et jetons, lus dans le result', async () => {
+it('returns what the instruction consumed: cost at API price and tokens, read from the result', async () => {
   const done = (await go()).at(-1)
   expect(done).toMatchObject({ type: 'done', usage: { costUsd: 0.0031, inputTokens: 12, outputTokens: 40, cacheReadTokens: 9000, cacheWriteTokens: 1500 } })
 })
 
-it('sans coût dans le result (autre version de claude), la fin n’en porte pas', async () => {
+it('with no cost in the result (another claude version), the end carries none', async () => {
   script = (child) => { child.line(init()); child.line({ type: 'result', subtype: 'success', is_error: false, result: 'Fait.' }); child.exit() }
   const done = (await go()).at(-1)
   expect(done).toEqual({ type: 'done', ms: expect.any(Number) as number })
 })
 
-it('verrouille claude : aucun outil intégré, le seul MCP Kasbah, aucun réglage, pas de session gardée', async () => {
+it('locks claude down: no built-in tool, the Kasbah MCP only, no settings, no kept session', async () => {
   await go()
   const { args } = fake.calls[0]!
   expect(args[args.indexOf('--tools') + 1]).toBe('')
@@ -63,12 +63,12 @@ it('verrouille claude : aucun outil intégré, le seul MCP Kasbah, aucun réglag
   expect(args[args.indexOf('--system-prompt') + 1]).toBe('Tu es l’assistant.')
 })
 
-it('garde les sessions seulement sur demande (CLAUDE_KEEP_SESSIONS)', async () => {
+it('keeps sessions only on request (CLAUDE_KEEP_SESSIONS)', async () => {
   await go({ keepSessions: true })
   expect(fake.calls[0]!.args).not.toContain('--no-session-persistence')
 })
 
-it('joint le MCP par le jeton de course dans un fichier, effacé à la fin, jamais en argument', async () => {
+it('reaches the MCP with the run token in a file, deleted at the end, never as an argument', async () => {
   await go()
   const { args, mcp } = fake.calls[0]!
   expect(mcp!.mcpServers.kasbah).toEqual({ type: 'http', url: 'http://127.0.0.1:8787/mcp', headers: { Authorization: 'Bearer run-1' } })
@@ -76,7 +76,7 @@ it('joint le MCP par le jeton de course dans un fichier, effacé à la fin, jama
   expect(existsSync(args[args.indexOf('--mcp-config') + 1]!)).toBe(false)
 })
 
-it('pose le forfait Claude du compte, sans rien hériter de l’environnement du serveur', async () => {
+it("sets the account's Claude subscription, inheriting nothing from the server environment", async () => {
   process.env.CLAUDE_CODE_OAUTH_TOKEN = 'sk-ant-herite'
   process.env.ANTHROPIC_API_KEY = 'sk-ant-api-herite'
   try {
@@ -93,13 +93,13 @@ it('pose le forfait Claude du compte, sans rien hériter de l’environnement du
   }
 })
 
-it('arrête tout si le MCP de Kasbah ne répond pas', async () => {
+it('stops everything if the Kasbah MCP does not answer', async () => {
   script = (child) => { child.line(init('failed')) }
   expect(await go()).toEqual([{ type: 'error', code: 'MCP_UNAVAILABLE', message: 'Kasbah MCP failed' }])
   expect(fake.calls[0]!.killed).toBe(true)
 })
 
-it('dit un forfait refusé (401) sans montrer le message synthétique comme une réponse', async () => {
+it('reports a rejected subscription (401) without showing the synthetic message as an answer', async () => {
   script = (child) => {
     child.line(init())
     child.line({ type: 'assistant', error: 'authentication_failed', message: { content: [{ type: 'text', text: 'Failed to authenticate.' }] } })
@@ -109,7 +109,7 @@ it('dit un forfait refusé (401) sans montrer le message synthétique comme une 
   expect(await go()).toEqual([{ type: 'error', code: 'CLAUDE_AUTH', message: 'Failed to authenticate. API Error: 401' }])
 })
 
-it('dit que claude manque sur le serveur', async () => {
+it('reports that claude is missing on the server', async () => {
   const missing = (() => {
     const child = new FakeChild({ args: [], env: {}, mcp: null, stdin: '', killed: false })
     setTimeout(() => child.emit('error', Object.assign(new Error('spawn claude ENOENT'), { code: 'ENOENT' })), 5)
@@ -118,12 +118,12 @@ it('dit que claude manque sur le serveur', async () => {
   expect(await go({ spawnImpl: missing })).toEqual([{ type: 'error', code: 'CLAUDE_MISSING', message: 'claude not found on the server' }])
 })
 
-it('rend une sortie interrompue en erreur, avec la fin de stderr', async () => {
+it('turns an interrupted output into an error, with the tail of stderr', async () => {
   script = (child) => { child.line(init()); child.stderr.write('boom'); child.exit(1) }
   expect(await go()).toEqual([{ type: 'error', code: 'CLAUDE_ERROR', message: 'boom' }])
 })
 
-it('annulé, tue claude et se tait : c’est le cœur qui dit pourquoi', async () => {
+it('when aborted, kills claude and stays silent: the core says why', async () => {
   script = (child) => { child.line(init()) }
   const abort = new AbortController()
   const done = go({}, abort.signal)
@@ -133,7 +133,7 @@ it('annulé, tue claude et se tait : c’est le cœur qui dit pourquoi', async (
   expect(fake.calls[0]!.killed).toBe(true)
 })
 
-it('annulé pendant la préparation, tue claude aussitôt lancé', async () => {
+it('when aborted during preparation, kills claude as soon as it is spawned', async () => {
   script = (child) => { child.line(init()) }
   const abort = new AbortController()
   abort.abort()

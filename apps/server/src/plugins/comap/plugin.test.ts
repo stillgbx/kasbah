@@ -13,9 +13,9 @@ const flush = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise((
 type Behavior = 'reply' | 'silent' | 'refuse'
 
 /**
- * Station simulée : chaque connexion est une paire de `PassThrough` en mémoire, comme le récepteur
- * Cast des tests google_cast. `silent` reproduit la panne réelle observée le 2026-09-16 : la station
- * ACCEPTE la connexion (déjà occupée par l'appli du fabricant) mais ne répond jamais.
+ * Simulated station: each connection is a pair of in-memory `PassThrough`s, like the Cast receiver
+ * in the google_cast tests. `silent` reproduces the real failure observed on 2026-09-16: the station
+ * ACCEPTS the connection (already held by the vendor's app) but never answers.
  */
 function fakeStation() {
   let behavior: Behavior = 'reply'
@@ -78,7 +78,7 @@ describe('comap plugin', () => {
       prefilterPct: 95, carbon1Pct: 95, carbon2Pct: 95, uvLampPct: 96,
       uvOn: true, flowLph: 0, todayL: 412, weekL: 1210, monthL: 6980, warning: false, defect: false,
     })
-    // le modèle, connu seulement après la première lecture, republie le descripteur
+    // the model, known only after the first read, republishes the descriptor
     expect(ctx.emitDevices).toHaveBeenCalledWith([expect.objectContaining({ meta: { manufacturer: 'COMAP', model: 'Proteo V3' } })])
     await plugin.stop()
   })
@@ -113,20 +113,20 @@ describe('comap plugin', () => {
     await plugin.discover()
     await plugin.start()
 
-    // trois échecs de suite : les deux premiers ne rendent pas la station indisponible
+    // three failures in a row: the first two do not make the station unavailable
     for (let i = 0; i < 3; i++) {
-      clock.advance(5000); await flush()                    // le timeout de lecture se déclenche
+      clock.advance(5000); await flush()                    // the read timeout fires
       expect(plugin.health!()).toMatchObject({ status: i < 2 ? 'ok' : 'degraded' })
       if (i < 2) {
         expect(ctx.setAvailable).not.toHaveBeenCalled()
-        clock.advance(10_000); await flush()                // laisse le backoff du poller relancer une tentative
+        clock.advance(10_000); await flush()                // lets the poller's backoff start another attempt
       }
     }
     expect(ctx.setAvailable).toHaveBeenCalledWith('station', false)
     expect(ctx.setAvailable).toHaveBeenCalledTimes(1)
-    expect(station.allClosed()).toBe(true)                  // même en échec, la connexion est refermée
+    expect(station.allClosed()).toBe(true)                  // even on failure, the connection is closed
 
-    // la station se libère : une lecture qui aboutit efface le compteur d'échecs
+    // the station frees up: a successful read clears the failure count
     station.setBehavior('reply')
     clock.advance(10_000)
     await flush()
@@ -155,11 +155,11 @@ describe('comap plugin', () => {
     expect(plugin.health!()).toMatchObject({ detail: 'Proteo (Proteo V3)' })
     await plugin.stop()
 
-    // redémarrage : un nouveau contexte, comme le ferait l'hôte après un changement de réglages
+    // restart: a new context, as the host would do after a settings change
     const { ctx: ctx2 } = fakeContext(clock)
     await plugin.init(ctx2)
     const descriptors = await plugin.discover()
-    expect(descriptors[0]!.meta.model).toBeUndefined()       // pas le modèle du tour précédent
+    expect(descriptors[0]!.meta.model).toBeUndefined()       // not the model from the previous round
     expect(plugin.health!()).toMatchObject({ status: 'ok', detail: 'Proteo' })
   })
 
@@ -183,7 +183,7 @@ describe('comap plugin', () => {
     for (let i = 0; i < 10; i++) { clock.advance(30_000); await flush() }
     expect(station.openCount()).toBe(0)
     expect(ctx.emitState).not.toHaveBeenCalled()
-    expect(ctx.setAvailable).not.toHaveBeenCalled()             // pas de poller qui échoue en boucle
+    expect(ctx.setAvailable).not.toHaveBeenCalled()             // no poller failing in a loop
     expect(plugin.health!()).toEqual({ status: 'error', detail: 'set COMAP_HOST to the station address' })
   })
 
@@ -197,11 +197,11 @@ describe('comap plugin', () => {
     await flush()
 
     const consumption = await plugin.consumption!('station')
-    // premier sondage : pose la référence, un seul point journalier (`day` est déjà un cumul), pas d'horaire
+    // first poll: sets the reference, a single daily point (`day` is already a total), no hourly one
     expect(consumption.hourly).toEqual([])
     expect(consumption.daily).toEqual([{ t: new Date(2026, 8, 16).getTime(), litres: 412 }])
-    // mensuel : dérivé de `year`/`month` de la fixture, jamais un nouvel appel à la station
-    expect(consumption.monthly).toHaveLength(9) // janvier à septembre (rtc.date = [16, 9, 2026])
+    // monthly: derived from the fixture's `year`/`month`, never a new call to the station
+    expect(consumption.monthly).toHaveLength(9) // January to September (rtc.date = [16, 9, 2026])
     expect(consumption.monthly.at(-1)).toEqual({ t: new Date(2026, 8, 1).getTime(), litres: 6980 })
     await plugin.stop()
   })
@@ -229,10 +229,10 @@ describe('comap plugin', () => {
     expect((await plugin.consumption!('station')).daily).toEqual([{ t: new Date(2026, 8, 16).getTime(), litres: 412 }])
     await plugin.stop()
 
-    // redémarrage : nouveau contexte, MÊME fichier d'historique (simulé par `historyStore`)
+    // restart: new context, SAME history file (simulated by `historyStore`)
     const ctx2 = fakeContext(clock).ctx
     await plugin.init(ctx2)
-    // l'historique déjà connu revient immédiatement, sans attendre un nouveau sondage
+    // the history already known comes back immediately, without waiting for a new poll
     expect((await plugin.consumption!('station')).daily).toEqual([{ t: new Date(2026, 8, 16).getTime(), litres: 412 }])
     await plugin.stop()
   })

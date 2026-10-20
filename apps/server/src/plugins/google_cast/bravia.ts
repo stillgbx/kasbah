@@ -1,14 +1,15 @@
 import { z } from 'zod'
 
-// Sonde d'une TV Sony BRAVIA par son API REST locale (« IP control », port 80, JSON-RPC sous /sony/).
-// Le protocole Cast ne sait pas où part le son : une TV branchée en HDMI ARC sur une barre de son joue
-// YouTube Music à l'image, mais c'est la barre qu'on entend — et la barre, côté Cast, est au repos
-// (relevé du 2026-09-10 : aucune appli, aucune session). La TV, elle, le dit sans clé ni appairage :
-//  - `audio.getSoundSettings(outputTerminal)` → `speaker` (ses haut-parleurs) ou `audioSystem` (ARC) ;
-//  - `avContent.getCurrentExternalInputsStatus` → l'entrée « HDMI 3 (eARC/ARC) » connectée, et le nom
-//    CEC de l'appareil branché dessus (« Flexus 300 »).
-// D'autres méthodes (`getPlayingContentInfo`, `getSystemInformation`) répondent 403 sans clé PSK ; on
-// n'en a pas besoin. Lecture seule, deux requêtes par relevé.
+// Probe of a Sony BRAVIA TV through its local REST API ("IP control", port 80, JSON-RPC under /sony/).
+// The Cast protocol does not know where the sound goes: a TV plugged over HDMI ARC into a soundbar
+// plays YouTube Music on screen, but it is the soundbar you hear — and the soundbar, on the Cast side,
+// is idle (survey of 2026-09-10: no app, no session). The TV, however, tells it without a key or
+// pairing:
+//  - `audio.getSoundSettings(outputTerminal)` → `speaker` (its speakers) or `audioSystem` (ARC);
+//  - `avContent.getCurrentExternalInputsStatus` → the connected "HDMI 3 (eARC/ARC)" input, and the
+//    CEC name of the device plugged into it ("Flexus 300").
+// Other methods (`getPlayingContentInfo`, `getSystemInformation`) answer 403 without a PSK key; we
+// do not need them. Read-only, two requests per reading.
 
 export type BraviaFetch = (url: string, init: { method: 'POST'; headers: Record<string, string>; body: string; signal?: AbortSignal }) => Promise<{
   ok: boolean
@@ -16,7 +17,7 @@ export type BraviaFetch = (url: string, init: { method: 'POST'; headers: Record<
   json(): Promise<unknown>
 }>
 
-/** Le modèle annoncé en mDNS (« BRAVIA 4K VH22 ») : seule une BRAVIA a cette API. */
+/** The model announced over mDNS ("BRAVIA 4K VH22"): only a BRAVIA has this API. */
 export const isBravia = (model: string | undefined): boolean => /^BRAVIA\b/i.test(model ?? '')
 
 export type AudioTerminal = 'internal' | 'external' | 'both'
@@ -28,8 +29,8 @@ const inputsReply = z.object({
 })
 
 /**
- * Sortie son d'après `outputTerminal` : `speaker` = la TV elle-même ; `audioSystem` et `hdmi` = le
- * système audio branché ; `speaker_hdmi` = les deux. Valeur inconnue ou réponse d'erreur : `undefined`.
+ * Sound output from `outputTerminal`: `speaker` = the TV itself; `audioSystem` and `hdmi` = the
+ * plugged-in audio system; `speaker_hdmi` = both. Unknown value or error response: `undefined`.
  */
 export function parseSoundOutput(reply: unknown): AudioTerminal | undefined {
   const r = settingsReply.safeParse(reply)
@@ -43,9 +44,9 @@ export function parseSoundOutput(reply: unknown): AudioTerminal | undefined {
 }
 
 /**
- * Nom de l'appareil branché sur l'entrée HDMI ARC : celui que la TV a appris par CEC (« Flexus 300 »,
- * entrée `extInput:cec?…&port=3`), à défaut l'étiquette donnée par l'utilisateur à cette entrée
- * (« Barre de son »). `undefined` si aucune entrée ARC n'est connectée.
+ * Name of the device plugged into the HDMI ARC input: the one the TV learned through CEC ("Flexus
+ * 300", input `extInput:cec?…&port=3`), failing that the label the user gave that input ("Barre de
+ * son"). `undefined` if no ARC input is connected.
  */
 export function parseArcDeviceName(reply: unknown): string | undefined {
   const r = inputsReply.safeParse(reply)
@@ -60,7 +61,7 @@ export function parseArcDeviceName(reply: unknown): string | undefined {
 
 const DEFAULT_TIMEOUT_MS = 4000
 
-/** Un relevé : où part le son, et le nom du système audio si une entrée ARC est branchée. `undefined` si la TV ne répond pas. */
+/** One reading: where the sound goes, and the audio system's name if an ARC input is plugged in. `undefined` if the TV does not answer. */
 export async function probeBravia(host: string, fetchImpl: BraviaFetch, signal?: AbortSignal, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<AudioOutput | undefined> {
   const call = async (service: string, method: string, params: unknown[], version: string): Promise<unknown> => {
     const res = await fetchImpl(`http://${host}/sony/${service}`, {

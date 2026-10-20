@@ -90,8 +90,8 @@ describe('nest thermostat mapping', () => {
   it('eco overrides the HVAC mode and brings its own setpoint; OFF means off; HEATING means heating', () => {
     const eco = withTraits({ 'sdm.devices.traits.ThermostatEco': { ...THERMOSTAT.traits['sdm.devices.traits.ThermostatEco'], mode: 'MANUAL_ECO' } })
     expect(toClimatePatch(eco)).toMatchObject({ mode: 'eco', action: 'idle', targetTempC: 13.9 })
-    // le vrai Google : à l'arrêt, le trait de consigne arrive VIDE. On rend la dernière consigne
-    // vue en chauffe, et l'ambiante seulement faute de mieux (serveur relancé pendant l'arrêt).
+    // the real Google: when off, the setpoint trait arrives EMPTY. We return the last setpoint seen
+    // while heating, and the ambient only for lack of better (server restarted while off).
     const off = withTraits({
       'sdm.devices.traits.ThermostatMode': { mode: 'OFF', availableModes: ['HEAT', 'OFF'] },
       'sdm.devices.traits.ThermostatTemperatureSetpoint': {},
@@ -100,7 +100,7 @@ describe('nest thermostat mapping', () => {
     expect(toClimatePatch(off)).toMatchObject({ mode: 'off', targetTempC: 24.2 })
     const heating = withTraits({ 'sdm.devices.traits.ThermostatHvac': { status: 'HEATING' } })
     expect(toClimatePatch(heating)).toMatchObject({ mode: 'heat', action: 'heating' })
-    // sans température ambiante il n'y a pas d'état à publier (le contrat l'exige)
+    // without an ambient temperature there is no state to publish (the contract requires it)
     expect(toClimatePatch(withTraits({ 'sdm.devices.traits.Temperature': {} }))).toBeUndefined()
   })
 
@@ -112,16 +112,16 @@ describe('nest thermostat mapping', () => {
       .toEqual([{ command: 'sdm.devices.commands.ThermostatMode.SetMode', params: { mode: 'OFF' } }])
     expect(toThermostatCommands(thermostat(), { type: 'climate.set_mode', mode: 'eco' }))
       .toEqual([{ command: 'sdm.devices.commands.ThermostatEco.SetMode', params: { mode: 'MANUAL_ECO' } }])
-    // ce thermostat ne refroidit pas
+    // this thermostat does not cool
     expect(toThermostatCommands(thermostat(), { type: 'climate.set_mode', mode: 'cool' })).toBeUndefined()
-    // en éco : pas de consigne, et sortir de l'éco vers HEAT prend deux commandes
+    // in eco: no setpoint, and leaving eco for HEAT takes two commands
     const eco = withTraits({ 'sdm.devices.traits.ThermostatEco': { ...THERMOSTAT.traits['sdm.devices.traits.ThermostatEco'], mode: 'MANUAL_ECO' } })
     expect(toThermostatCommands(eco, { type: 'climate.set_target_temp', targetTempC: 20 })).toBeUndefined()
     expect(toThermostatCommands(eco, { type: 'climate.set_mode', mode: 'heat' })).toEqual([
       { command: 'sdm.devices.commands.ThermostatEco.SetMode', params: { mode: 'OFF' } },
       { command: 'sdm.devices.commands.ThermostatMode.SetMode', params: { mode: 'HEAT' } },
     ])
-    // à l'arrêt : pas de consigne non plus ; en HEATCOOL la consigne de froid garde son écart
+    // when off: no setpoint either; in HEATCOOL the cooling setpoint keeps its gap
     const off = withTraits({ 'sdm.devices.traits.ThermostatMode': { mode: 'OFF', availableModes: ['HEAT', 'OFF'] } })
     expect(toThermostatCommands(off, { type: 'climate.set_target_temp', targetTempC: 20 })).toBeUndefined()
     const range = withTraits({

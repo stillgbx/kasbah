@@ -4,8 +4,8 @@ import type { Logger } from 'pino'
 import { stationSchema, type Station } from './directory'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// Les radios favorites de la MAISON (pas du navigateur) : la station entière est gardée, pour que la
-// liste s'affiche et se lance même quand l'annuaire ne répond pas.
+// The HOUSE's favorite radios (not the browser's): the whole station is kept, so that the list shows
+// and plays even when the directory does not answer.
 
 export interface FavoritesStore {
   load(): Promise<Station[]>

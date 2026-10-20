@@ -12,9 +12,9 @@ describe('cast app icon (registry)', () => {
     expect(registryAppId({ appId: 'Netflix', displayName: 'Netflix' })).toBe('CA5E8412')
     expect(registryAppId({ appId: 'AndroidNativeApp', displayName: 'Crunchyroll' })).toBeUndefined()
     expect(registryAppId({ appId: 'AndroidNativeApp', displayName: 'Prime Video' })).toBe('17608BC8')
-    // TV Android : l'appli tourne sous sa variante maison, ses visuels sont sous l'identifiant canonique
+    // Android TV: the app runs under its in-house variant, its visuals are under the canonical id
     expect(registryAppId({ appId: '2C6A6E3D', universalAppId: '233637DE', displayName: 'YouTube' })).toBe('233637DE')
-    // la variante répond bien au registre, mais sans aucun visuel : rien à afficher
+    // the variant does answer in the registry, but without any visual: nothing to show
     expect(parseRegistry(CAST_REGISTRY_YOUTUBE_ANDROID_TV)).toBeNull()
   })
 
@@ -36,7 +36,7 @@ describe('cast app icon (registry)', () => {
     expect(await icons.lookup('00000000')).toBeNull()
     expect(icons.cached('00000000')).toBeNull()
     clock.advance(3_600_001)
-    expect(icons.cached('00000000')).toBeUndefined()                      // l'échec est oublié, on réessaiera
-    expect(icons.cached('CA5E8412')).toBe(a)                              // le logo reste connu
+    expect(icons.cached('00000000')).toBeUndefined()                      // the failure is forgotten, we will retry
+    expect(icons.cached('CA5E8412')).toBe(a)                              // the logo stays known
   })
 })

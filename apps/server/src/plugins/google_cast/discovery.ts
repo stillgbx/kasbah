@@ -2,41 +2,41 @@ import { Bonjour, type Browser, type Service, type ServiceConfig } from 'bonjour
 import type { Logger } from 'pino'
 import { castTxtSchema, type CastService } from './types'
 
-// Découverte des récepteurs Cast : tous annoncent `_googlecast._tcp` en mDNS, avec leur identifiant
-// stable, leur nom Google Home et leur modèle dans l'enregistrement TXT. Rien d'autre à configurer.
+// Discovery of Cast receivers: they all announce `_googlecast._tcp` over mDNS, with their stable id,
+// their Google Home name and their model in the TXT record. Nothing else to configure.
 
 export interface CastDiscovery {
   /**
-   * Lance l'écoute ; `onUp` est appelé à CHAQUE annonce, y compris répétée. C'est l'appelant qui
-   * compare : une annonce identique ne dit rien de neuf, mais une adresse ou un nom qui changent
-   * (bail DHCP, renommage dans Google Home) doivent lui parvenir, et une annonce répétée prouve
-   * qu'un appareil qu'on croyait éteint est de retour.
+   * Starts listening; `onUp` is called on EVERY announcement, repeated ones included. The caller does
+   * the comparing: an identical announcement says nothing new, but a changing address or name (DHCP
+   * lease, rename in Google Home) must reach it, and a repeated announcement proves that a device we
+   * thought was off is back.
    */
   start(onUp: (service: CastService) => void): void
-  /** Relance une question mDNS (appareils rallumés, annonces perdues). */
+  /** Sends a new mDNS query (devices switched back on, lost announcements). */
   refresh(): void
   stop(): void
 }
 
-/** Traduit un service mDNS ; `undefined` si son TXT n'a pas la forme attendue (journalisé par l'appelant). */
+/** Translates an mDNS service; `undefined` if its TXT does not have the expected shape (logged by the caller). */
 export function toCastService(s: Pick<Service, 'txt' | 'addresses' | 'host' | 'port'>): CastService | undefined {
   const txt = castTxtSchema.safeParse(s.txt ?? {})
   if (!txt.success) return undefined
-  // IPv4 d'abord : les Nest Hub annoncent aussi des IPv6 globales et de lien, inutiles ici
+  // IPv4 first: Nest Hubs also announce global and link-local IPv6 addresses, useless here
   const host = s.addresses?.find((a) => a.includes('.')) ?? s.addresses?.[0] ?? s.host
   return { host, port: s.port, txt: txt.data }
 }
 
 /**
- * @param iface IPv4 de l'interface à utiliser pour le multicast. Une machine à plusieurs cartes
- * (VPN, machines virtuelles) peut envoyer la question mDNS sur la mauvaise : sans cette option,
- * l'annonce ne revient jamais et la liste reste vide.
+ * @param iface IPv4 of the interface to use for multicast. A machine with several network cards
+ * (VPN, virtual machines) may send the mDNS query on the wrong one: without this option, the
+ * announcement never comes back and the list stays empty.
  */
 export function createMdnsDiscovery(opts: { iface?: string; logger: Logger }): CastDiscovery {
   let bonjour: Bonjour | null = null
   let browser: Browser | null = null
   let listener: ((service: CastService) => void) | null = null
-  /** Une panne déjà signalée : les essais suivants ne la redisent qu'en `debug`. */
+  /** A failure already reported: the following attempts only repeat it at `debug`. */
   let failing = false
 
   function close(): void {
@@ -49,11 +49,12 @@ export function createMdnsDiscovery(opts: { iface?: string; logger: Logger }): C
   function open(): void {
     const onUp = listener
     if (!onUp) return
-    // les options vont telles quelles à multicast-dns, dont `interface` : le typage de bonjour-service ne la connaît pas
+    // the options go as is to multicast-dns, `interface` included: bonjour-service's typings do not know it
     const b = new Bonjour(opts.iface ? ({ interface: opts.iface } as unknown as Partial<ServiceConfig>) : undefined)
-    // bonjour-service n'écoute PAS les erreurs de son socket multicast : sans cet écouteur, une
-    // interface absente (`CAST_MDNS_INTERFACE` hors du réseau local : EADDRNOTAVAIL au bind) lève un
-    // `error` non géré qui fait tomber TOUT le serveur. On ferme, et le prochain `refresh` réessaie.
+    // bonjour-service does NOT listen to its multicast socket's errors: without this listener, a
+    // missing interface (`CAST_MDNS_INTERFACE` outside the local network: EADDRNOTAVAIL on bind)
+    // raises an unhandled `error` that brings down the WHOLE server. We close, and the next `refresh`
+    // retries.
     const mdns = (b as unknown as { server?: { mdns?: { on(ev: 'error', fn: (err: Error) => void): void } } }).server?.mdns
     mdns?.on('error', (err) => {
       if (bonjour !== b) return

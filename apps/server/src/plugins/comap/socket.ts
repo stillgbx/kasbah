@@ -3,20 +3,19 @@ import { createConnection } from 'node:net'
 import type { Clock } from '../../core/clock'
 import { PluginError } from '../../core/plugin'
 
-// Transport TCP texte de la station Proteo 2 : JSON en clair, UNE ligne par message, requête
-// terminée par `\r\n`, sans authentification. Ni HTTP ni Modbus — le seul précédent de socket brut
-// du projet est TLS (`google_cast/channel.ts`), dont ce fichier reprend le patron de fabrique
-// injectable pour rester testable sans vraie station.
+// Plain-text TCP transport of the Proteo 2 station: clear JSON, ONE line per message, request
+// terminated by `\r\n`, no authentication. Neither HTTP nor Modbus — the project's only raw-socket
+// precedent is TLS (`google_cast/channel.ts`), whose injectable factory pattern this file reuses to
+// stay testable without a real station.
 //
-// La station n'accepte qu'UNE connexion TCP à la fois (vérifié le 2026-09-16 : une lecture faite
-// pendant que l'appli mobile du fabricant tenait la connexion a été acceptée puis rendue muette,
-// sans réponse ni erreur). D'où le choix : une connexion COURTE par lecture, ouverte puis refermée
-// aussitôt la réponse reçue — jamais une connexion permanente, qui monopoliserait la station et
-// casserait l'appli du propriétaire.
+// The station accepts only ONE TCP connection at a time (verified 2026-09-16: a read made while the
+// vendor's mobile app held the connection was accepted then left silent, with no answer or error).
+// Hence the choice: one SHORT connection per read, opened then closed as soon as the response
+// arrives — never a permanent connection, which would hog the station and break the owner's app.
 
 export type SocketFactory = (host: string, port: number) => Promise<Duplex>
 
-/** Socket TCP réelle, résolue une fois la connexion établie. */
+/** Real TCP socket, resolved once the connection is established. */
 export const netSocketFactory: SocketFactory = (host, port) => new Promise((resolve, reject) => {
   const socket = createConnection({ host, port }, () => { socket.off('error', reject); resolve(socket) })
   socket.once('error', reject)
@@ -25,20 +24,20 @@ export const netSocketFactory: SocketFactory = (host, port) => new Promise((reso
 export interface ReadOnceOptions {
   host: string
   port: number
-  /** Corps de la requête `read`, tel qu'écrit sur le fil (voir `mapping.ts`). */
+  /** Body of the `read` request, as written on the wire (see `mapping.ts`). */
   request: Record<string, unknown>
   connect: SocketFactory
   clock: Clock
-  /** Annulé par `stop()` : une connexion en cours est détruite plutôt que laissée pendre. */
+  /** Aborted by `stop()`: a connection in progress is destroyed rather than left hanging. */
   signal: AbortSignal
   timeoutMs: number
 }
 
 /**
- * Une lecture : ouvre la connexion, écrit la requête, attend LA PREMIÈRE ligne de réponse, referme.
- * Bornée par `timeoutMs` ET par `signal` — la station ACCEPTE la connexion même quand elle est déjà
- * occupée par ailleurs, et ne répond alors jamais : sans cette double borne, le socket et le poller
- * resteraient pendus en silence.
+ * One read: opens the connection, writes the request, waits for THE FIRST response line, closes.
+ * Bounded by `timeoutMs` AND by `signal` — the station ACCEPTS the connection even when it is
+ * already busy elsewhere, and then never answers: without this double bound, the socket and the
+ * poller would hang silently.
  */
 export function readOnce(opts: ReadOnceOptions): Promise<unknown> {
   const { host, port, request, connect, clock, signal, timeoutMs } = opts
@@ -67,18 +66,18 @@ export function readOnce(opts: ReadOnceOptions): Promise<unknown> {
       socket = s
       s.on('data', (chunk: Buffer) => {
         buffer += chunk.toString('utf8')
-        // La vraie station ne termine PAS ses réponses par un saut de ligne (relevé le 2026-09-16 :
-        // `}}}}` sans rien derrière, contre `}}\r\n` côté requête) — seul le patron
-        // `google_cast/channel.ts` dont ce fichier s'inspire en attendait un. Une réponse complète se
-        // reconnaît donc au JSON valide qu'elle forme, `\n` ou pas. Le `\n` reste tenté en premier
-        // (gratuit, protège d'une variante de firmware qui en ajouterait un) ; sans lui, on retente le
-        // buffer entier — une fois par chunk, jamais par octet — et un JSON encore tronqué (chunk coupé
-        // en plein milieu) ne fait qu'attendre la suite au lieu de résoudre sur du partiel.
+        // The real station does NOT end its responses with a newline (observed 2026-09-16: `}}}}`
+        // with nothing after, versus `}}\r\n` on the request side) — only the
+        // `google_cast/channel.ts` pattern this file draws on expected one. A complete response is
+        // therefore recognized by the valid JSON it forms, `\n` or not. The `\n` is still tried first
+        // (free, guards against a firmware variant that would add one); without it, we retry the
+        // whole buffer — once per chunk, never per byte — and a still-truncated JSON (chunk cut in
+        // the middle) just waits for the rest instead of resolving on a partial.
         const nl = buffer.indexOf('\n')
         const candidate = nl === -1 ? buffer : buffer.slice(0, nl).replace(/\r$/, '')
         let parsed: unknown
         try { parsed = JSON.parse(candidate) } catch (err) {
-          if (nl === -1) return // pas de saut de ligne : trame potentiellement encore incomplète, on attend
+          if (nl === -1) return // no newline: frame possibly still incomplete, we wait
           finish(() => reject(err as Error))
           return
         }

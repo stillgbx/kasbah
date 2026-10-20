@@ -1,11 +1,11 @@
 import type { CameraClass, Capability, ClimateMode, Command, DeviceDescriptor, DeviceEventKind, StatePatch, StreamProtocol } from '@kasbah/shared'
 import { readTrait, sdmEventSchema, type SdmDevice } from './types'
 
-// Traductions PURES : appareils SDM → descripteurs Kasbah, patchs d'état, commandes, URL
-// d'autorisation. Ce plugin couvre les caméras (caméras, sonnettes, écrans à caméra) et les
-// thermostats ; le reste de l'API est ignoré et compté.
+// PURE translations: SDM devices → Kasbah descriptors, state patches, commands, authorization URL.
+// This plugin covers cameras (cameras, doorbells, displays with a camera) and thermostats; the rest
+// of the API is ignored and counted.
 
-/** Type SDM → nature de la caméra. Un type absent de cette table n'est pas une caméra. */
+/** SDM type → kind of camera. A type missing from this table is not a camera. */
 export const CAMERA_TYPES: Record<string, CameraClass> = {
   'sdm.devices.types.CAMERA': 'camera',
   'sdm.devices.types.DOORBELL': 'doorbell',
@@ -14,11 +14,11 @@ export const CAMERA_TYPES: Record<string, CameraClass> = {
 export const THERMOSTAT_TYPE = 'sdm.devices.types.THERMOSTAT'
 
 /**
- * Nom de repli par nature quand l'appareil n'a pas de nom (voir `toDescriptor`), en PRÉFIXE :
- * « Caméra Garage », comme on nomme les appareils dans cette maison (« Volet Salon », « Plafonnier
- * Cuisine »). En français, faute de mieux : le nom d'un descripteur est une seule chaîne, et le
- * traduire selon la langue d'affichage demanderait au client de reconnaître un nom de repli dans
- * les six endroits où il lit `descriptor.name` — trop pour ce que ça rapporte, l'utilisateur a tranché.
+ * Fallback name by kind when the device has no name (see `toDescriptor`), as a PREFIX: "Caméra
+ * Garage", the way devices are named in this house ("Volet Salon", "Plafonnier Cuisine"). In
+ * French, for lack of better: a descriptor's name is a single string, and translating it according
+ * to the display language would require the client to recognize a fallback name in the six places
+ * where it reads `descriptor.name` — too much for what it brings, the user has decided.
  */
 const CLASS_LABEL: Record<CameraClass, string> = { camera: 'Caméra', doorbell: 'Sonnette', display: 'Écran' }
 const THERMOSTAT_LABEL = 'Thermostat'
@@ -33,19 +33,19 @@ export function isThermostat(device: SdmDevice): boolean {
   return device.type === THERMOSTAT_TYPE
 }
 
-/** `enterprises/<projet>/devices/<id>` → `<id>` (opaque, stable, sans `:` ni espace). */
+/** `enterprises/<project>/devices/<id>` → `<id>` (opaque, stable, without `:` or spaces). */
 export function deviceNameToExternalId(name: string): string {
   const i = name.lastIndexOf('/')
   return i < 0 ? name : name.slice(i + 1)
 }
 
-/** Nom de la pièce Google Home qui contient l'appareil (première relation parent nommée). */
+/** Name of the Google Home room containing the device (first named parent relation). */
 export function roomOf(device: SdmDevice): string | undefined {
   const named = device.parentRelations.find((r) => r.displayName && r.displayName.trim())
   return named?.displayName?.trim()
 }
 
-/** `Info.customName` s'il est renseigné, sinon « <type> <pièce> » (voir `CLASS_LABEL`). */
+/** `Info.customName` if filled in, otherwise "<type> <room>" (see `CLASS_LABEL`). */
 function nameOf(device: SdmDevice, label: string): string {
   const custom = readTrait(device, 'Info')?.customName
   return (typeof custom === 'string' && custom.trim()) || [label, roomOf(device)].filter(Boolean).join(' ')
@@ -60,9 +60,9 @@ function baseMeta(device: SdmDevice) {
   }
 }
 
-// ---- caméras ----------------------------------------------------------------------------------
+// ---- cameras ----------------------------------------------------------------------------------
 
-/** Protocoles de flux déclarés par `CameraLiveStream.supportedProtocols`, dans l'ordre de Google. */
+/** Stream protocols declared by `CameraLiveStream.supportedProtocols`, in Google's order. */
 export function streamProtocols(device: SdmDevice): StreamProtocol[] {
   const raw = readTrait(device, 'CameraLiveStream')?.supportedProtocols
   if (!Array.isArray(raw)) return []
@@ -75,12 +75,12 @@ export function streamProtocols(device: SdmDevice): StreamProtocol[] {
 }
 
 /**
- * Descripteur d'une caméra. Le nom vient de `Info.customName` ; Google le laisse souvent VIDE (7
- * appareils sur 10 sur le compte réel — l'appli Google Home affiche alors « <pièce> <type> »), d'où
- * un repli « <type> <pièce> » ici, dans l'ordre des noms de cette maison. La
- * pièce part dans `meta.room` : c'est la clé de l'auto-placement dans la maison
- * (`packages/shared/src/house/autoplace.ts`), nommer la pièce de la maison comme celle de Google
- * Home suffit à faire apparaître la caméra dans la scène 3D.
+ * A camera's descriptor. The name comes from `Info.customName`; Google often leaves it EMPTY (7
+ * devices out of 10 on the real account — the Google Home app then shows "<room> <type>"), hence a
+ * "<type> <room>" fallback here, in the order of this house's names. The room goes into
+ * `meta.room`: it is the key to auto-placement in the house
+ * (`packages/shared/src/house/autoplace.ts`), naming the house's room like the Google Home one is
+ * enough to make the camera appear in the 3D scene.
  */
 export function toDescriptor(device: SdmDevice): DeviceDescriptor {
   const deviceClass = CAMERA_TYPES[device.type ?? ''] ?? 'camera'
@@ -101,25 +101,25 @@ export function toDescriptor(device: SdmDevice): DeviceDescriptor {
 }
 
 // ---- thermostats ------------------------------------------------------------------------------
-// Traits lus : `ThermostatMode` (HEAT / COOL / HEATCOOL / OFF et la liste disponible), `ThermostatEco`
-// (MANUAL_ECO / OFF, avec ses propres consignes), `ThermostatHvac` (ce que fait l'appareil À
-// L'INSTANT), `ThermostatTemperatureSetpoint`, `Temperature`, `Humidity`, `Connectivity`.
-// L'éco est un mode à part chez Google (il se superpose au mode HVAC) ; Kasbah n'a qu'un `mode`,
-// donc éco actif → `eco`, et en sortir remet le mode HVAC sous-jacent.
+// Traits read: `ThermostatMode` (HEAT / COOL / HEATCOOL / OFF and the available list),
+// `ThermostatEco` (MANUAL_ECO / OFF, with its own setpoints), `ThermostatHvac` (what the device is
+// doing RIGHT NOW), `ThermostatTemperatureSetpoint`, `Temperature`, `Humidity`, `Connectivity`.
+// Eco is a separate mode at Google (it overlays the HVAC mode); Kasbah has only one `mode`, so eco
+// active → `eco`, and leaving it restores the underlying HVAC mode.
 
 const MODE_FROM_SDM: Record<string, ClimateMode> = { HEAT: 'heat', COOL: 'cool', HEATCOOL: 'auto', OFF: 'off' }
 const MODE_TO_SDM: Partial<Record<ClimateMode, string>> = { heat: 'HEAT', cool: 'COOL', auto: 'HEATCOOL', off: 'OFF' }
-/** Plage de consigne acceptée par Google (°C). */
+/** Setpoint range accepted by Google (°C). */
 export const SETPOINT_RANGE: [number, number] = [9, 32]
-/** En mode HEATCOOL, Google exige un écart entre les deux consignes ; on garde au moins celui-ci. */
+/** In HEATCOOL mode, Google requires a gap between the two setpoints; we keep at least this one. */
 const RANGE_GAP_C = 2
 
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
-/** Google publie des flottants bruts (24.23999) : au dixième, l'état ne bouge que quand ça compte. */
+/** Google publishes raw floats (24.23999): to the tenth, the state only changes when it matters. */
 const round1 = (v: number) => Math.round(v * 10) / 10
 
-/** Modes que le thermostat déclare, dans l'ordre de Google, éco en dernier s'il est proposé. */
+/** Modes the thermostat declares, in Google's order, eco last if offered. */
 export function thermostatModes(device: SdmDevice): ClimateMode[] {
   const raw = readTrait(device, 'ThermostatMode')?.availableModes
   const out: ClimateMode[] = []
@@ -148,17 +148,17 @@ export function toThermostatDescriptor(device: SdmDevice): DeviceDescriptor {
   }
 }
 
-/** `Connectivity.status` : `OFFLINE` seul rend l'appareil indisponible (absent = on ne sait pas, donc disponible). */
+/** `Connectivity.status`: only `OFFLINE` makes the device unavailable (absent = we do not know, so available). */
 export function thermostatAvailable(device: SdmDevice): boolean {
   return readTrait(device, 'Connectivity')?.status !== 'OFFLINE'
 }
 
 /**
- * État complet d'un thermostat, ou `undefined` sans température ambiante (le contrat l'exige).
- * La consigne suit le mode : celle de l'éco quand il est actif, sinon celle du mode HVAC ; en
- * HEATCOOL Kasbah ne montre que la consigne de chauffe. À l'arrêt, Google ne publie AUCUNE
- * consigne (trait vide) : on rend `lastSetpointC`, la dernière vue en chauffe que le plugin a
- * retenue, sinon l'ambiante plutôt que d'inventer une valeur (le contrat exige un nombre).
+ * A thermostat's full state, or `undefined` without an ambient temperature (the contract requires
+ * it). The setpoint follows the mode: the eco one when it is active, otherwise the HVAC mode's; in
+ * HEATCOOL Kasbah only shows the heating setpoint. When off, Google publishes NO setpoint (empty
+ * trait): we return `lastSetpointC`, the last one seen while heating that the plugin kept,
+ * otherwise the ambient rather than inventing a value (the contract requires a number).
  */
 export function toClimatePatch(device: SdmDevice, lastSetpointC?: number): StatePatch<'climate'> | undefined {
   const current = num(readTrait(device, 'Temperature')?.ambientTemperatureCelsius)
@@ -182,9 +182,9 @@ export function toClimatePatch(device: SdmDevice, lastSetpointC?: number): State
 export interface SdmCommand { command: string; params: Record<string, unknown> }
 
 /**
- * Commande(s) SDM pour une commande Kasbah, ou `undefined` si l'appareil ne peut pas l'honorer
- * DANS SON ÉTAT COURANT — Google refuse une consigne en éco ou à l'arrêt, et un mode absent de la
- * liste déclarée. Sortir de l'éco pour un mode HVAC prend deux commandes : Google ne le fait pas seul.
+ * SDM command(s) for a Kasbah command, or `undefined` if the device cannot honor it IN ITS CURRENT
+ * STATE — Google refuses a setpoint in eco or when off, and a mode missing from the declared list.
+ * Leaving eco for an HVAC mode takes two commands: Google does not do it on its own.
  */
 export function toThermostatCommands(device: SdmDevice, cmd: Command): SdmCommand[] | undefined {
   const modes = thermostatModes(device)
@@ -218,16 +218,16 @@ export function toThermostatCommands(device: SdmDevice, cmd: Command): SdmComman
 // ---- OAuth ------------------------------------------------------------------------------------
 
 /**
- * Portées OAuth demandées à la liaison du compte. `pubsub` ne sert pas encore (les événements —
- * sonnerie, mouvement — passeront par un abonnement Pub/Sub tiré avec le même compte), mais la
- * demander maintenant évite de refaire la liaison plus tard.
+ * OAuth scopes requested when linking the account. `pubsub` is not used yet (events — ring, motion
+ * — will go through a Pub/Sub subscription pulled with the same account), but asking for it now
+ * avoids redoing the linking later.
  */
 export const OAUTH_SCOPES = ['https://www.googleapis.com/auth/sdm.service', 'https://www.googleapis.com/auth/pubsub']
 
 /**
- * URL du « Partner Connections Manager » de Google : c'est là que l'utilisateur choisit les
- * appareils qu'il partage avec le projet Device Access, PUIS s'authentifie. `access_type=offline`
- * et `prompt=consent` sont indispensables pour recevoir un jeton de rafraîchissement.
+ * URL of Google's "Partner Connections Manager": it is where the user chooses the devices they share
+ * with the Device Access project, THEN authenticates. `access_type=offline` and `prompt=consent` are
+ * required to receive a refresh token.
  */
 export function authorizationUrl(opts: { projectId: string; clientId: string; redirectUri: string; state: string }): string {
   const q = new URLSearchParams({
@@ -242,7 +242,7 @@ export function authorizationUrl(opts: { projectId: string; clientId: string; re
   return `https://nestservices.google.com/partnerconnections/${encodeURIComponent(opts.projectId)}/auth?${q.toString()}`
 }
 
-/** Nom d'événement SDM → notre kind d'événement d'appareil. Les autres sont ignorés. */
+/** SDM event name → our device event kind. The others are ignored. */
 const EVENT_KIND: Record<string, DeviceEventKind> = {
   'sdm.devices.events.DoorbellChime.Chime': 'chime',
   'sdm.devices.events.CameraMotion.Motion': 'motion',
@@ -251,8 +251,8 @@ const EVENT_KIND: Record<string, DeviceEventKind> = {
 }
 
 /**
- * Décode le corps base64 d'un message Pub/Sub SDM en (externalId, kinds d'événements). Rend `undefined`
- * si le corps est illisible ou ne porte aucun événement connu. Pur : aucune I/O.
+ * Decodes the base64 body of an SDM Pub/Sub message into (externalId, event kinds). Returns `undefined`
+ * if the body is unreadable or carries no known event. Pure: no I/O.
  */
 export function parseSdmEvent(dataBase64: string): { externalId: string; kinds: DeviceEventKind[] } | undefined {
   let json: unknown

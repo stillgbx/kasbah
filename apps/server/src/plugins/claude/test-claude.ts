@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs'
 import { PassThrough } from 'node:stream'
 import type { SpawnFn } from '../../music/proxy'
 
-// Un faux `claude` pour les tests : on relève ce qu'il reçoit (arguments, environnement, fichier MCP,
-// instruction) et on rejoue des lignes `stream-json` relevées sur le vrai (2026-10-07).
+// A fake `claude` for tests: we record what it receives (arguments, environment, MCP file,
+// instruction) and replay `stream-json` lines captured from the real one (2026-10-07).
 
 export interface ClaudeCall {
   args: string[]
@@ -26,7 +26,7 @@ export class FakeChild extends EventEmitter {
 
 export const init = (status = 'connected') => ({ type: 'system', subtype: 'init', mcp_servers: [{ name: 'kasbah', status, source: 'dynamic' }] })
 
-/** Une instruction qui allume le salon : un outil, son résultat, la réponse. */
+/** An instruction that turns on the living room: a tool, its result, the answer. */
 export const happy = (child: FakeChild) => {
   child.line(init())
   child.line({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: '' }] } })
@@ -40,7 +40,7 @@ export const happy = (child: FakeChild) => {
   child.exit()
 }
 
-/** `claude --version` répond, une instruction suit `script` (une fois l'entrée fermée). */
+/** `claude --version` answers, an instruction follows `script` (once stdin is closed). */
 export function fakeClaude(script: () => (child: FakeChild) => void) {
   const calls: ClaudeCall[] = []
   const spawnImpl = ((_cmd: string, args: readonly string[], opts?: { env?: NodeJS.ProcessEnv }) => {

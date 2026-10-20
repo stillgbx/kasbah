@@ -2,22 +2,22 @@ import type { Logger } from 'pino'
 import { z } from 'zod'
 import type { Clock } from '../../../core/clock'
 
-// Enrichissement Crunchyroll — NON OFFICIEL. L'appli Crunchyroll d'un Chromecast n'envoie au récepteur
-// que le titre de l'épisode (métadonnées génériques). Son identifiant de contenu (`GE…`) suffit pourtant
-// à retrouver, par l'API interne que le site utilise pour un visiteur NON connecté, la série, la saison,
-// le numéro et les vignettes. Essai du 2026-09-10 (voir le wiki, 3_6_google-cast) :
-//  - jeton anonyme : `POST /auth/v1/token`, `grant_type=client_id`, client web public (pas de secret),
-//    valable une heure, portée `content` ;
-//  - `GET /content/v2/cms/objects/<id>` : `episode_metadata` (série, saison, épisode) + `images.thumbnail` ;
-//  - `GET /content/v2/cms/series/<series_id>` : `images.poster_tall` (affiche portrait, 9 tailles) — c'est elle
-//    qu'on met en pochette (choix de l'utilisateur), une par série et non une capture par épisode ;
-//  - l'hôte `www.crunchyroll.com` répond 403 Cloudflare à Node (empreinte TLS), l'hôte des applis,
-//    `beta-api.crunchyroll.com`, accepte.
-// Aucun compte n'est nécessaire. Tout échec est avalé (journal en debug) et mémorisé un moment : l'UI
-// garde alors ce que l'appareil a donné. Peut casser quand Crunchyroll change son API.
+// Crunchyroll enrichment — UNOFFICIAL. The Crunchyroll app on a Chromecast only sends the receiver the
+// episode title (generic metadata). Its content id (`GE…`) is however enough to find, through the
+// internal API the site uses for a visitor who is NOT signed in, the series, the season, the number
+// and the thumbnails. Tried on 2026-09-10 (see the wiki, 3_6_google-cast):
+//  - anonymous token: `POST /auth/v1/token`, `grant_type=client_id`, public web client (no secret),
+//    valid for one hour, `content` scope;
+//  - `GET /content/v2/cms/objects/<id>`: `episode_metadata` (series, season, episode) + `images.thumbnail`;
+//  - `GET /content/v2/cms/series/<series_id>`: `images.poster_tall` (portrait poster, 9 sizes) — it is
+//    what we use as the cover (the user's choice), one per series and not a still per episode;
+//  - the `www.crunchyroll.com` host answers Node with a Cloudflare 403 (TLS fingerprint), the apps'
+//    host, `beta-api.crunchyroll.com`, accepts.
+// No account is needed. Every failure is swallowed (logged at debug) and remembered for a while: the UI
+// then keeps what the device gave. May break when Crunchyroll changes its API.
 
 const HOST = 'https://beta-api.crunchyroll.com'
-/** Identifiant du client web public de crunchyroll.com (celui que le site envoie à tout visiteur) ; pas de secret. */
+/** Id of crunchyroll.com's public web client (the one the site sends to every visitor); no secret. */
 const WEB_CLIENT_BASIC = Buffer.from('noaihdevm_6iyg0a8l0q:').toString('base64')
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36'
 
@@ -26,9 +26,9 @@ const HIT_TTL_MS = 24 * 3_600_000
 const MISS_TTL_MS = 10 * 60_000
 const CACHE_MAX = 128
 const REQUEST_TIMEOUT_MS = 8000
-/** Largeur de vignette visée pour la pochette de repli : la première au moins aussi large, sinon la plus grande. */
+/** Target thumbnail width for the fallback cover: the first at least as wide, otherwise the largest. */
 const THUMB_MIN_WIDTH = 640
-/** Largeur d'affiche portrait visée (480 × 720 : nette dans un panneau de 380 px, légère). */
+/** Target portrait poster width (480 × 720: sharp in a 380 px panel, lightweight). */
 const POSTER_MIN_WIDTH = 480
 
 const tokenSchema = z.looseObject({ access_token: z.string().min(1), expires_in: z.number().optional() })
@@ -55,16 +55,16 @@ const seriesSchema = z.looseObject({
 })
 
 export interface Enrichment {
-  /** Titre de l'épisode : l'appareil l'omet parfois complètement (constaté en réel). */
+  /** Episode title: the device sometimes omits it entirely (seen for real). */
   title?: string
   series?: string
   seasonNumber?: number
   episodeNumber?: number
-  /** Pochette : affiche portrait de la série, sinon vignette de l'épisode (URL Crunchyroll, à relayer). */
+  /** Cover: the series' portrait poster, otherwise the episode thumbnail (Crunchyroll URL, to be relayed). */
   artwork?: string
 }
 
-/** Le strict nécessaire de `fetch` (le `fetch` global convient). */
+/** The bare minimum of `fetch` (the global `fetch` will do). */
 export type EnrichFetch = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal }) =>
   Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>
 
@@ -77,7 +77,7 @@ export interface CrunchyrollEnricherOptions {
   signal: AbortSignal
 }
 
-/** Reconnaît l'appli Crunchyroll d'un récepteur Cast (appli native : `AndroidNativeApp` + nom du paquet). */
+/** Recognizes the Crunchyroll app on a Cast receiver (native app: `AndroidNativeApp` + package name). */
 export function isCrunchyrollApp(app: { displayName?: string | null; statusText?: string | null }): boolean {
   return /crunchyroll/i.test(app.displayName ?? '') || /crunchyroll/i.test(app.statusText ?? '')
 }
@@ -85,7 +85,7 @@ export function isCrunchyrollApp(app: { displayName?: string | null; statusText?
 export class CrunchyrollEnricher {
   private token: { value: string; until: number } | null = null
   private readonly cache = new Map<string, Cached>()
-  /** Affiche portrait par série : une seule requête par série, même durée de vie que les épisodes. */
+  /** Portrait poster per series: a single request per series, same lifetime as the episodes. */
   private readonly posters = new Map<string, { url: string | null; at: number }>()
   private readonly pending = new Map<string, Promise<Enrichment | null>>()
   private readonly fetchImpl: EnrichFetch
@@ -94,7 +94,7 @@ export class CrunchyrollEnricher {
     this.fetchImpl = opts.fetchImpl ?? ((url, init) => fetch(url, init))
   }
 
-  /** Résultat déjà connu (succès ou échec récent), sans requête ; `undefined` si jamais demandé ou périmé. */
+  /** Result already known (success or recent failure), without a request; `undefined` if never asked or stale. */
   cached(contentId: string): Enrichment | null | undefined {
     const hit = this.cache.get(contentId)
     if (!hit) return undefined
@@ -102,7 +102,7 @@ export class CrunchyrollEnricher {
     return this.opts.clock.now() - hit.at < ttl ? hit.value : undefined
   }
 
-  /** Enrichissement d'un contenu ; une seule requête en vol par identifiant, `null` si Crunchyroll ne sait pas ou ne répond pas. */
+  /** Enrichment of a content; a single request in flight per id, `null` if Crunchyroll does not know or does not answer. */
   lookup(contentId: string): Promise<Enrichment | null> {
     const known = this.cached(contentId)
     if (known !== undefined) return Promise.resolve(known)
@@ -166,7 +166,7 @@ export class CrunchyrollEnricher {
     return Object.keys(out).length ? out : null
   }
 
-  /** Affiche portrait de la série (≥ 480 px de large, sinon la plus grande) ; `null` si la fiche n'en a pas ou ne répond pas. */
+  /** The series' portrait poster (≥ 480 px wide, otherwise the largest); `null` if the record has none or does not answer. */
   private async seriesPoster(seriesId: string, token: string): Promise<string | null> {
     const hit = this.posters.get(seriesId)
     if (hit && this.opts.clock.now() - hit.at < (hit.url ? HIT_TTL_MS : MISS_TTL_MS)) return hit.url

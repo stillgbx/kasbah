@@ -8,7 +8,7 @@ import { createRadioDirectory, foldName, searchWords, toStation, type RadioDirec
 import { memoryFavorites } from './favorites'
 import { createRadioPlugin } from './index'
 
-// Entrée telle que radio-browser la rend (relevée le 2026-09-23, champs inutiles retirés).
+// Entry as radio-browser returns it (captured on 2026-09-23, useless fields removed).
 const RAW_FRANCEINFO = {
   stationuuid: '9617a958-0601-11e8-ae97-52543be04c81',
   name: 'franceinfo:',
@@ -116,7 +116,7 @@ describe('radio directory mapping', () => {
     const fetchImpl = vi.fn(async () => new Response(JSON.stringify([lille, dijon])))
     const dir = createRadioDirectory('https://x', fetchImpl as unknown as typeof fetch)
     expect((await dir.search('campus dijon')).map((s) => s.id)).toEqual(['dijon'])
-    // l'annuaire ne reçoit qu'un mot, le plus long : lui ne sait chercher qu'une suite exacte
+    // the directory only receives one word, the longest: it can only search for an exact sequence
     expect(new URL((fetchImpl.mock.calls[0] as unknown as [string])[0]).searchParams.get('name')).toBe('campus')
   })
 
@@ -166,7 +166,7 @@ describe('radio plugin', () => {
     const put = await app.inject({ method: 'PUT', url: `/api/plugins/radio/favorites/${FRANCEINFO.id}`, payload: FRANCEINFO })
     expect(put.json().stations).toHaveLength(1)
     await app.inject({ method: 'PUT', url: `/api/plugins/radio/favorites/${FRANCEINFO.id}`, payload: FRANCEINFO })
-    expect(await favorites.load()).toHaveLength(1)                 // pas de doublon
+    expect(await favorites.load()).toHaveLength(1)                 // no duplicate
     const play = await app.inject({ method: 'POST', url: '/api/plugins/radio/play', payload: { deviceId: 'sonos:bureau', stationId: FRANCEINFO.id } })
     expect(play.statusCode).toBe(200)
     expect(down.byId).not.toHaveBeenCalled()
@@ -183,7 +183,7 @@ describe('radio plugin', () => {
     expect(first.statusCode).toBe(200)
     const again = await app.inject({ method: 'POST', url: '/api/plugins/radio/favorites/custom', payload: { ...body, name: 'Campus 92.2' } })
     const stations = again.json().stations as Station[]
-    expect(stations).toHaveLength(1)                              // même flux = même station, renommée
+    expect(stations).toHaveLength(1)                              // same stream = same station, renamed
     expect(stations[0]).toMatchObject({ name: 'Campus 92.2', url: body.url, tags: [] })
     expect(stations[0]!.id).toMatch(/^custom-[0-9a-f]{12}$/)
     await app.inject({ method: 'POST', url: '/api/plugins/radio/play', payload: { deviceId: 'sonos:bureau', stationId: stations[0]!.id } })

@@ -6,22 +6,22 @@ import type { FetchLike } from '../../core/sse'
 import { CLOUD_TIMEOUT_MS, loginEnlighten, type LoginOptions } from './token'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// Session Enlighten (cloud) : ce dont la borne IQ EV Charger 2 a besoin. L'API LOCALE de la
-// passerelle ne la voit pas ; le Modbus est réservé aux partenaires. Reste l'API privée de
-// l'appli Enphase — même décision que Renault, faute de voie officielle utile à une interface
-// (le plan Watt d'Enlighten v4 est 1 000 appels/mois, télémétrie 15 min, commandes VPP).
+// Enlighten (cloud) session: what the IQ EV Charger 2 needs. The gateway's LOCAL API does not see
+// it; Modbus is reserved for partners. That leaves the Enphase app's private API — same decision as
+// Renault, for lack of an official route useful to a UI (Enlighten v4's Watt plan is 1,000
+// calls/month, 15 min telemetry, VPP commands).
 //
-// Le mot de passe n'est JAMAIS gardé : il ouvre une session, on conserve le `session_id` (et
-// éventuellement un jeton d'accès et l'id du site). Le mappage de la borne attend une capture
-// (`GET /api/plugins/enphase/ev/raw`) : les chemins ci-dessous sont des sondes, pas un contrat.
+// The password is NEVER kept: it opens a session, we keep the `session_id` (and possibly an access
+// token and the site id). The charger mapping awaits a capture (`GET /api/plugins/enphase/ev/raw`):
+// the paths below are probes, not a contract.
 
 export const ENLIGHTEN_ORIGIN = 'https://enlighten.enphaseenergy.com'
 const SESSION_COOKIE = '_enlighten_4_session'
 
 export interface CloudSession {
-  /** `session_id` JSON : échange contre le JWT local, inutilisable comme cookie Enlighten. */
+  /** JSON `session_id`: exchanged for the local JWT, unusable as an Enlighten cookie. */
   sessionId: string
-  /** Cookie `_enlighten_4_session` : c'est lui qui ouvre search_sites et l'API EVSE. */
+  /** `_enlighten_4_session` cookie: it is what opens search_sites and the EVSE API. */
   cookie?: string
   accessToken?: string
   siteId?: string
@@ -63,9 +63,9 @@ const TITLE_KEYS = ['title', 'name', 'site_name', 'siteName', 'displayName', 'di
 export interface EnlightenSite { id: string; title?: string }
 
 /**
- * Sites d'un compte, lus sans présumer l'emballage. L'appli a déjà montré quatre enveloppes
- * différentes (`sites` / `data` / `items` / `systems`) : on les accepte toutes, et on laisse
- * la capture dire laquelle CE compte rend vraiment.
+ * An account's sites, read without presuming the wrapper. The app has already shown four different
+ * envelopes (`sites` / `data` / `items` / `systems`): we accept them all, and let the capture say
+ * which one THIS account really returns.
  */
 export function sitesOf(json: unknown): EnlightenSite[] {
   if (json == null) return []
@@ -91,7 +91,7 @@ export function sitesOf(json: unknown): EnlightenSite[] {
 
 const accessTokenSchema = z.object({ token: z.string().min(1) })
 
-/** Chemins sondés pour écrire les fixtures de la borne. Lecture seule. `{site}` = id Enlighten. */
+/** Paths probed to write the charger fixtures. Read-only. `{site}` = Enlighten id. */
 export const EV_RAW_PATHS = [
   '/users/self/token',
   '/app-api/search_sites.json?searchText=&favourite=false',
@@ -143,9 +143,10 @@ export class EnlightenClient {
   }
 
   /**
-   * Lecture ou écriture. En écriture (commande de la borne), les routes EVSE rendent `{ data, error }` :
-   * un `error` non vide est un refus même sous HTTP 200, et un 409 / 422 dit la borne pas prête
-   * (`DEVICE_UNAVAILABLE`, pas branchée selon l'intégration Home Assistant qui les a relevés).
+   * Read or write. On a write (charger command), the EVSE routes return `{ data, error }`: a
+   * non-empty `error` is a refusal even under HTTP 200, and a 409 / 422 says the charger is not ready
+   * (`DEVICE_UNAVAILABLE`, not plugged in according to the Home Assistant integration that recorded
+   * them).
    */
   async send(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown, signal?: AbortSignal): Promise<unknown> {
     const doFetch = this.opts.fetchImpl ?? ((url, init) => fetch(url, init as RequestInit) as unknown as ReturnType<FetchLike>)
@@ -175,7 +176,7 @@ export class EnlightenClient {
     return json
   }
 
-  /** Jeton d'accès de l'appli, facultatif : beaucoup de lectures passent avec le cookie seul. */
+  /** The app's access token, optional: many reads go through with the cookie alone. */
   async readAccessToken(signal?: AbortSignal): Promise<string | undefined> {
     try {
       const parsed = accessTokenSchema.safeParse(await this.getJson('/users/self/token', signal))
@@ -192,8 +193,8 @@ export class EnlightenClient {
 }
 
 /**
- * Ouvre une session et, au mieux, la complète (jeton d'accès, id du site). Un échec sur ces
- * lectures n'invalide PAS la session : le relevé brut les reprendra.
+ * Opens a session and, at best, completes it (access token, site id). A failure on these reads
+ * does NOT invalidate the session: the raw reading will pick them up again.
  */
 export async function openCloudSession(o: LoginOptions & { logger?: Logger }): Promise<CloudSession> {
   const { sessionId, cookie } = await loginEnlighten(o)

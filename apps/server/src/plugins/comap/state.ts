@@ -4,12 +4,11 @@ import { z } from 'zod'
 import { consumptionPointSchema } from '@kasbah/shared'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// Ce que le plugin garde entre deux démarrages : l'historique de consommation DÉJÀ CALCULÉ (jamais
-// les relevés bruts de la station, ni le curseur qui sert à dater le prochain delta — voir
-// `history.ts` sur pourquoi ce curseur-là ne survit PAS à un redémarrage). Bornée par construction
-// (48 points horaires, 62 journaliers — voir `HOURLY_POINTS_MAX`/`DAILY_POINTS_MAX` dans
-// `history.ts`) : une centaine de nombres, quelques kilo-octets. Écriture atomique par `rename`,
-// sur le modèle de `automower/state.ts`.
+// What the plugin keeps between two starts: the consumption history ALREADY COMPUTED (never the
+// station's raw readings, nor the cursor used to date the next delta — see `history.ts` on why that
+// cursor does NOT survive a restart). Bounded by construction (48 hourly points, 62 daily — see
+// `HOURLY_POINTS_MAX`/`DAILY_POINTS_MAX` in `history.ts`): about a hundred numbers, a few kilobytes.
+// Atomic write via `rename`, modeled on `automower/state.ts`.
 
 export const comapHistorySchema = z.object({
   hourly: z.array(consumptionPointSchema),
@@ -24,7 +23,7 @@ export interface HistoryStore {
   save(h: ComapHistoryState): Promise<void>
 }
 
-/** Écriture atomique (fichier temporaire puis renommage) ; une lecture illisible vaut « rien ». */
+/** Atomic write (temporary file then rename); an unreadable read counts as "nothing". */
 export function createHistoryFile(path: string, logger?: Logger): HistoryStore {
   return {
     async load() {

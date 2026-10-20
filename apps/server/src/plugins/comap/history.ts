@@ -1,45 +1,45 @@
 import type { ConsumptionPoint } from '@kasbah/shared'
 import type { ComapHistoryState } from './state'
 
-// Construit l'historique de consommation à partir des lectures successives de `consumption` et de
-// `rtc` (l'horloge de la STATION, source de vérité pour dater chaque lecture — pas celle du
-// serveur). Fonctions PURES, sans horloge système ni I/O : un état avant, un état après.
+// Builds the consumption history from successive readings of `consumption` and `rtc` (the STATION's
+// clock, source of truth for dating each reading — not the server's). PURE functions, no system
+// clock or I/O: a state before, a state after.
 //
-// JOURNALIER : `consumption.day` est déjà un cumul absolu depuis minuit LOCAL, remis à zéro par la
-// station elle-même — un point journalier n'est jamais qu'une RELECTURE de `day`, jamais une somme
-// de deltas. La dernière valeur vue un jour donné EST le total de ce jour, qu'on l'ait lue juste
-// avant minuit ou pas : quand le jour change, on arrête simplement de mettre à jour son point et on
-// en ouvre un nouveau — aucun geste explicite de « clôture » n'est nécessaire.
+// DAILY: `consumption.day` is already an absolute total since LOCAL midnight, reset by the station
+// itself — a daily point is only ever a RE-READING of `day`, never a sum of deltas. The last value
+// seen on a given day IS that day's total, whether it was read just before midnight or not: when
+// the day changes, we simply stop updating its point and open a new one — no explicit "closing"
+// step is needed.
 //
-// HORAIRE : `day` ne se remet à zéro qu'à minuit, pas chaque heure — l'heure n'existe donc pas
-// côté station, elle s'accumule ici delta par delta. Un delta qui chevauche un changement d'heure
-// est crédité en entier à l'heure qui vient de s'ouvrir (l'écart réel, à une cadence de sondage de
-// l'ordre de la minute, est négligeable). Un trou de plus d'une heure entre deux lectures, en
-// revanche, est TROP LONG pour savoir dans quelle heure la consommation a eu lieu : l'heure ouverte
-// à la reprise repart de zéro plutôt que d'hériter d'un delta qui ne lui appartient peut-être pas
-// (pas de pic inventé) — les heures sautées restent ABSENTES, jamais à zéro.
+// HOURLY: `day` only resets at midnight, not every hour — so the hour does not exist on the station
+// side, it accumulates here delta by delta. A delta straddling an hour change is credited entirely
+// to the hour that has just opened (the real error, at a polling rate of about a minute, is
+// negligible). A gap of more than an hour between two readings, on the other hand, is TOO LONG to
+// know in which hour the consumption happened: the hour opened on resuming restarts from zero
+// rather than inheriting a delta that may not belong to it (no invented spike) — skipped hours stay
+// ABSENT, never at zero.
 //
-// MENSUEL : voir `monthlyOf`, plus bas — jamais persisté, la station le donne déjà tout fait.
+// MONTHLY: see `monthlyOf`, below — never persisted, the station already provides it ready-made.
 
 export const HOURLY_POINTS_MAX = 48
 export const DAILY_POINTS_MAX = 62
 
 const HOUR_MS = 3_600_000
-/** Au-delà, on ne sait plus dans quelle heure la consommation observée a eu lieu (voir plus haut). */
+/** Beyond this, we no longer know in which hour the observed consumption happened (see above). */
 const MAX_BRIDGE_GAP_MS = HOUR_MS
 
-/** Une lecture réussie, réduite à ce dont l'historique a besoin. */
+/** A successful reading, reduced to what the history needs. */
 export interface ComapReading {
-  /** `consumption.day` : litres consommés depuis minuit local, selon la station. */
+  /** `consumption.day`: liters consumed since local midnight, according to the station. */
   day: number
-  /** Instant de la lecture (ms epoch) — voir `readingAt`. */
+  /** Instant of the reading (ms epoch) — see `readingAt`. */
   at: number
 }
 
 /**
- * Ce qu'il faut garder d'une lecture pour dater et chiffrer la suivante. JAMAIS persisté : un
- * redémarrage n'a pas de précédent (voir `applyReading`), au même titre que `model`/`failures` dans
- * `index.ts` — seuls les points déjà calculés (`ComapHistoryState`) survivent au redémarrage.
+ * What to keep from a reading to date and quantify the next one. NEVER persisted: a restart has no
+ * previous reading (see `applyReading`), just like `model`/`failures` in `index.ts` — only the
+ * points already computed (`ComapHistoryState`) survive a restart.
  */
 export interface ComapHistoryCursor {
   at: number
@@ -47,9 +47,9 @@ export interface ComapHistoryCursor {
 }
 
 /**
- * `rtc.date`/`rtc.time` tels que la station les rend (`[jour, mois, année]`, `[heure, minute]`) →
- * l'instant qu'ils désignent, en heure LOCALE du serveur. Même hypothèse que le fuseau par défaut
- * d'Automower : la station est dans la même maison que le serveur qui la lit.
+ * `rtc.date`/`rtc.time` as the station returns them (`[day, month, year]`, `[hour, minute]`) → the
+ * instant they designate, in the server's LOCAL time. Same assumption as Automower's default time
+ * zone: the station is in the same house as the server reading it.
  */
 export function readingAt(rtc: { date: readonly [number, number, number]; time: readonly [number, number] }): number {
   const [d, m, y] = rtc.date
@@ -66,24 +66,24 @@ function localHourStart(at: number): number {
   return Math.floor(at / HOUR_MS) * HOUR_MS
 }
 
-/** Remplace le dernier point s'il porte déjà ce `t` (même pas de temps), sinon en ajoute un — borné à `max`. */
+/** Replaces the last point if it already has this `t` (same time step), otherwise appends one — capped at `max`. */
 function upsert(points: ConsumptionPoint[], t: number, litres: number, max: number): ConsumptionPoint[] {
   const last = points[points.length - 1]
   const next = last?.t === t ? [...points.slice(0, -1), { t, litres }] : [...points, { t, litres }]
   return next.length > max ? next.slice(next.length - max) : next
 }
 
-/** Ajoute `delta` au dernier point s'il porte déjà ce `t` (part de 0 sinon) — même bornage que `upsert`. */
+/** Adds `delta` to the last point if it already has this `t` (starts from 0 otherwise) — same cap as `upsert`. */
 function addTo(points: ConsumptionPoint[], t: number, delta: number, max: number): ConsumptionPoint[] {
   const last = points[points.length - 1]
   return upsert(points, t, (last?.t === t ? last.litres : 0) + delta, max)
 }
 
 /**
- * Intègre une lecture réussie. `cursor` absent = pas de précédent (premier sondage du plugin, ou
- * juste après un redémarrage) : cette lecture pose alors seulement la référence pour la suivante et
- * ne produit qu'un point journalier — `day` étant déjà un cumul, il n'a besoin d'aucun précédent ;
- * `hourly`, lui, reste inchangé (pas de delta calculable sans lecture antérieure).
+ * Integrates a successful reading. `cursor` missing = no previous reading (the plugin's first poll,
+ * or right after a restart): this reading then only sets the reference for the next one and yields
+ * just a daily point — `day` being already a total, it needs no previous reading; `hourly` stays
+ * unchanged (no delta can be computed without an earlier reading).
  */
 export function applyReading(
   state: ComapHistoryState,
@@ -97,9 +97,9 @@ export function applyReading(
 
   const gapMs = reading.at - cursor.at
   const sameDay = localDayStart(reading.at) === localDayStart(cursor.at)
-  // `day` est remis à zéro à minuit : passé le changement de jour, le delta EST le cumul du nouveau
-  // jour (rien à soustraire à un compteur qui n'existe plus). `Math.max(0, …)` protège d'une horloge
-  // ou d'un compteur qui reculerait sans que `rtc` l'ait vu — jamais un delta négatif publié.
+  // `day` resets at midnight: past the day change, the delta IS the new day's total (nothing to
+  // subtract from a counter that no longer exists). `Math.max(0, …)` guards against a clock or a
+  // counter going backwards without `rtc` noticing — never a negative delta published.
   const delta = Math.max(0, sameDay ? reading.day - cursor.day : reading.day)
   const hourStart = localHourStart(reading.at)
   const hourly = gapMs > MAX_BRIDGE_GAP_MS
@@ -110,11 +110,11 @@ export function applyReading(
 }
 
 /**
- * Historique mensuel : jamais persisté (voir `state.ts`), la station le donne déjà tout fait.
- * `year[i]` pour un mois CLOS, `month` (le cumul courant) pour le mois en cours — qui vaut 0 dans
- * `year` tant qu'il n'est pas terminé, ce que `month` seul sait dire. Les mois pas encore commencés
- * (indices après le mois courant) restent ABSENTS de la série : leur 0 dans `year` ne dit pas
- * « rien consommé », il dit « n'a pas encore eu lieu ».
+ * Monthly history: never persisted (see `state.ts`), the station already provides it ready-made.
+ * `year[i]` for a CLOSED month, `month` (the running total) for the current month — which is 0 in
+ * `year` until it is over, something only `month` can tell. Months not yet started (indexes after
+ * the current month) stay ABSENT from the series: their 0 in `year` does not say "nothing
+ * consumed", it says "has not happened yet".
  */
 export function monthlyOf(rtc: { date: readonly [number, number, number] }, month: number, year: readonly number[]): ConsumptionPoint[] {
   const [, rtcMonth, rtcYear] = rtc.date

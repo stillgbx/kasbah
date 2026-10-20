@@ -11,35 +11,35 @@ import { PluginError, type DevicePlugin, type PluginContext } from '../../core/p
 import type { SpawnFn } from '../../music/proxy'
 import { runClaude } from './run'
 
-// Plugin Claude : le moteur de l'assistant (« Demander à Kasbah ») par Claude Code en `claude -p`
-// sur le serveur. Aucun appareil : comme une source musicale, il s'inscrit auprès d'un cœur commun
-// (`assistant/engines.ts`) à son démarrage.
+// Claude plugin: the assistant's engine ("Ask Kasbah") through Claude Code as `claude -p` on the
+// server. No device: like a music source, it registers with a shared core (`assistant/engines.ts`)
+// when it starts.
 //
-// Forfait Claude du compte qui demande, pas de clé d'API : chacun colle le jeton de
-// `claude setup-token` (1 an) dans la carte du plugin ; sans lui, celui de la maison ; sans lui, la
-// connexion `claude` de la machine serveur. Le jeton ne repart jamais vers le navigateur.
+// The Claude subscription of the asking account, no API key: everyone pastes the token from
+// `claude setup-token` (1 year) into the plugin's card; without it, the house's one; without that,
+// the server machine's `claude` sign-in. The token never travels back to the browser.
 
 const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1')
 
 export const claudeConfigSchema = z.object({
-  /** Le binaire `claude` (dans le PATH du serveur par défaut). */
+  /** The `claude` binary (in the server's PATH by default). */
   CLAUDE_BIN: z.string().trim().min(1).default('claude'),
   /**
-   * Le modèle passé à `--model` : un ID complet (version figée) ou un alias de la CLI (`haiku`,
-   * `sonnet`), qui suit les mises à jour de la CLI mais en retard : en CLI 2.1.288, `haiku` donnait
-   * encore Haiku 4.5 alors que Haiku 5.5 était sorti (relevé le 2026-10-07).
+   * The model passed to `--model`: a full ID (pinned version) or a CLI alias (`haiku`, `sonnet`),
+   * which follows CLI updates but with a lag: in CLI 2.1.288, `haiku` still gave Haiku 4.5 while
+   * Haiku 5.5 was out (observed 2026-10-07).
    */
   CLAUDE_MODEL: z.string().trim().min(1).default('claude-haiku-5-5'),
   /**
-   * Garder les sessions de `claude -p` (transcriptions JSONL, réflexion comprise), pour déboguer :
-   * sous `.state/claude/config/projects/` avec un jeton, dans le `~/.claude` du serveur sinon.
+   * Keep the `claude -p` sessions (JSONL transcripts, thinking included), for debugging: under
+   * `.state/claude/config/projects/` with a token, in the server's `~/.claude` otherwise.
    */
   CLAUDE_KEEP_SESSIONS: bool.default(false),
 })
 export type ClaudeConfig = z.infer<typeof claudeConfigSchema>
 
 const tokenFileSchema = z.object({ token: z.string(), savedAt: z.number() })
-/** `claude setup-token` rend `sk-ant-oat01-…` : on vérifie la forme, pas la version. */
+/** `claude setup-token` returns `sk-ant-oat01-…`: we check the shape, not the version. */
 const tokenSchema = z.string().trim().regex(/^sk-ant-[\w-]{20,500}$/, 'expected the token printed by `claude setup-token` (sk-ant-…)')
 
 const tokenFile = (user: string | null) => (user === null ? stateFile('claude.json') : userStateFile(user, 'claude.json'))
@@ -50,7 +50,7 @@ async function readToken(user: string | null): Promise<z.infer<typeof tokenFileS
 
 export interface ClaudePluginDeps {
   spawnImpl?: SpawnFn
-  /** Dossier de travail (défaut `.state/claude`). */
+  /** Working directory (default `.state/claude`). */
   workDir?: string
 }
 
@@ -58,7 +58,7 @@ export function createClaudePlugin(deps: ClaudePluginDeps = {}): DevicePlugin {
   let ctx: PluginContext | null = null
   let config: ClaudeConfig | null = null
   let unregister: (() => void) | null = null
-  /** `claude --version` au démarrage : un binaire introuvable se voit dans Réglages, pas à la première instruction. */
+  /** `claude --version` at startup: a missing binary shows in Settings, not at the first instruction. */
   let version: string | null = null
   let versionError: string | null = null
   let houseToken = false
@@ -96,7 +96,7 @@ export function createClaudePlugin(deps: ClaudePluginDeps = {}): DevicePlugin {
 
     async init(context) {
       ctx = context
-      // déjà validée par l'hôte : la revalider refuserait `CLAUDE_KEEP_SESSIONS`, devenu un booléen
+      // already validated by the host: validating it again would reject `CLAUDE_KEEP_SESSIONS`, now a boolean
       config = context.config as ClaudeConfig
       houseToken = (await readToken(null)) !== null
     },
@@ -126,8 +126,8 @@ export function createClaudePlugin(deps: ClaudePluginDeps = {}): DevicePlugin {
     },
 
     registerRoutes(app: FastifyInstance) {
-      // Le forfait Claude du compte courant : celui de la session (adresse publique), la maison sur le
-      // réseau local. `house` : la maison a-t-elle un jeton, en repli.
+      // The current account's Claude subscription: the session's one (public address), the house's on
+      // the local network. `house`: whether the house has a token, as a fallback.
       app.get('/account', async (req) => {
         const own = await readToken(req.sessionUser)
         const house = req.sessionUser === null ? own : await readToken(null)

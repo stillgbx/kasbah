@@ -17,69 +17,71 @@ import { applyEnrichment, artProxyUrl, toDescriptor, toMediaPatch, toReceiverPat
 import type { CastService, MediaStatus, ReceiverApplication, ReceiverStatus } from './types'
 import type { StatePatch } from '@kasbah/shared'
 
-// Plugin Google Cast : enceintes et réveils Google / Nest, Chromecast, TV et barres de son
-// « Chromecast built-in ». Tout est LOCAL : découverte mDNS, une connexion TLS persistante par
-// appareil, aucun compte ni secret. Le récepteur pousse ses changements (volume, appli, lecture) ;
-// il n'y a pas de sondage, hors la relecture de la position pendant une lecture.
+// Google Cast plugin: Google / Nest speakers and clocks, Chromecasts, TVs and soundbars with
+// "Chromecast built-in". Everything is LOCAL: mDNS discovery, one persistent TLS connection per
+// device, no account or secret. The receiver pushes its changes (volume, app, playback); there is no
+// polling, apart from re-reading the position during playback.
 //
-// Ce que le protocole ne sait pas : lancer un titre d'un service à abonnement (YouTube Music,
-// Spotify) — il n'a pas de notion de compte. Il sait piloter ce qui joue déjà, et lire une URL
-// (récepteur média par défaut) : ce sera l'étape suivante.
+// What the protocol cannot do: start a title from a subscription service (YouTube Music, Spotify) —
+// it has no notion of account. It can control what is already playing, and play a URL (default
+// media receiver): that will be the next step.
 
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
 const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1')
 
 export const googleCastConfigSchema = z.object({
-  /** IPv4 de l'interface réseau qui porte le multicast mDNS (machine à plusieurs cartes : VPN, VM). */
+  /** IPv4 of the network interface carrying mDNS multicast (machine with several network cards: VPN, VM). */
   CAST_MDNS_INTERFACE: optionalKey,
-  /** Temps laissé aux appareils pour répondre à la première question mDNS avant de rendre la liste. */
+  /** Time given to devices to answer the first mDNS query before returning the list. */
   CAST_DISCOVERY_WAIT_MS: z.coerce.number().int().min(500).max(15_000).default(3000),
-  /** Cadence des questions mDNS suivantes (appareils rallumés, annonces perdues). */
+  /** Rate of the following mDNS queries (devices switched back on, lost announcements). */
   CAST_MDNS_REFRESH_MS: z.coerce.number().int().min(10_000).max(600_000).default(60_000),
   /**
-   * Où retenir les appareils déjà vus (voir `known.ts`) : un Cast éteint ne s'annonce plus, il reste
-   * listé grâce à ce fichier. Chaîne vide = ne rien retenir (l'appareil disparaît quand il s'éteint).
+   * Where to remember devices already seen (see `known.ts`): a Cast device that is off no longer
+   * announces itself, it stays listed thanks to this file. Empty string = remember nothing (the device
+   * disappears when it is switched off).
    */
   CAST_KNOWN_FILE: z.string().trim().default(stateFile('google-cast-devices.json')),
   /**
-   * Enrichir les lectures Crunchyroll (série, saison, épisode, vignette) par l'API interne du service,
-   * en anonyme, sans compte — NON OFFICIEL (voir `enrich/crunchyroll.ts`). `false` pour s'en passer.
+   * Enrich Crunchyroll playback (series, season, episode, thumbnail) through the service's internal
+   * API, anonymously, without an account — UNOFFICIAL (see `enrich/crunchyroll.ts`). `false` to do
+   * without.
    */
   CAST_CRUNCHYROLL_ENRICH: bool.default(true),
   /**
-   * Chercher la pochette d'un morceau que l'appareil nomme sans l'illustrer (une appli de TV Android
-   * n'envoie aucune image), dans les catalogues publics iTunes puis Deezer, sans clé ni compte — la
-   * correspondance titre + artiste est vérifiée avant d'accepter une image (`enrich/cover.ts`).
-   * `false` pour s'en passer : il reste le logo de l'appli.
+   * Look up the cover of a track the device names without illustrating it (an Android TV app sends
+   * no image), in the public iTunes then Deezer catalogs, without a key or account — the title +
+   * artist match is checked before accepting an image (`enrich/cover.ts`). `false` to do without:
+   * the app logo remains.
    */
   CAST_COVER_LOOKUP: bool.default(true),
   /**
-   * Demander à une TV Sony (modèle `BRAVIA…`) où part son son, par son API REST locale, sans clé
-   * (`bravia.ts`) : une TV en HDMI ARC fait jouer une barre de son que le protocole Cast voit au repos.
-   * Publié dans `audioOutput` ; l'UI y pose l'onde sonore avec le lien `meta.audioOutput` de house.json.
-   * `false` pour s'en passer.
+   * Ask a Sony TV (model `BRAVIA…`) where its sound goes, through its local REST API, without a key
+   * (`bravia.ts`): a TV on HDMI ARC plays through a soundbar that the Cast protocol sees as idle.
+   * Published in `audioOutput`; the UI puts the sound wave there using house.json's `meta.audioOutput`
+   * link. `false` to do without.
    */
   CAST_BRAVIA_PROBE: bool.default(true),
 })
 export type GoogleCastConfig = z.infer<typeof googleCastConfigSchema>
 
-/** Un récepteur qui ne répond plus est retenté à 5 s, 10 s… jusqu'à deux minutes. */
+/** A receiver that no longer answers is retried at 5 s, 10 s… up to two minutes. */
 const RECONNECT_INITIAL_MS = 5000
 const RECONNECT_MAX_MS = 120_000
-/** Cadence de la question « où part ton son ? » à une TV Sony connectée (deux requêtes HTTP locales). */
+/** Rate of the "where does your sound go?" question to a connected Sony TV (two local HTTP requests). */
 const BRAVIA_POLL_MS = 10_000
 
-/** Pochettes : combien d'URL récemment vues on accepte de servir, durée de cache d'une image, d'un échec. */
+/** Covers: how many recently seen URLs we agree to serve, cache lifetime of an image, of a failure. */
 const ART_KNOWN_MAX = 64
 const ART_CACHE_MAX = 32
 const ART_TTL_MS = 6 * 3_600_000
 const ART_FAIL_TTL_MS = 60_000
 const ART_FETCH_TIMEOUT_MS = 8000
-/** Google répond parfois 429 : on réessaie avec un délai croissant avant d'abandonner. */
+/** Google sometimes answers 429: we retry with an increasing delay before giving up. */
 const ART_ATTEMPTS = 3
 const ART_RETRY_MS = 800
 
-/** Le strict nécessaire de `fetch` pour télécharger une image (le `fetch` global convient). */
+/** The bare minimum of `fetch` to download an image (the global `fetch` will do). */
 export type ArtFetch = (url: string, init?: { signal?: AbortSignal }) => Promise<{
   ok: boolean
   status: number
@@ -92,33 +94,33 @@ interface ArtEntry { status: number; type: string; body: Buffer; at: number }
 interface Entry {
   service: CastService
   connection: CastConnection | null
-  /** `fixed` retire les capacités volume / muet du descripteur. */
+  /** `fixed` removes the volume / mute capabilities from the descriptor. */
   controlType: string | undefined
   backoff: Backoff
   reconnectTimer: unknown
-  /** Sortie son d'une TV Sony (dernier relevé de `bravia.ts`) ; `undefined` tant qu'elle n'a pas répondu. */
+  /** Sound output of a Sony TV (last reading from `bravia.ts`); `undefined` until it has answered. */
   audio: AudioOutput | undefined
   audioTimer: unknown
-  /** Métadonnées du dernier `play_url` tant que le contentId correspond. */
+  /** Metadata of the last `play_url` as long as the contentId matches. */
   stickyPlay?: PlayUrlMeta & { uri: string }
 }
 
 export interface GoogleCastPluginDeps {
-  /** Injection pour les tests : téléchargement des pochettes. */
+  /** Injection for tests: cover downloads. */
   fetchImpl?: ArtFetch
-  /** Injection pour les tests : appels à l'API Crunchyroll. */
+  /** Injection for tests: calls to the Crunchyroll API. */
   enrichFetch?: EnrichFetch
-  /** Injection pour les tests : appels aux catalogues de pochettes (iTunes, Deezer). */
+  /** Injection for tests: calls to the cover catalogs (iTunes, Deezer). */
   coverFetch?: CoverFetch
-  /** Injection pour les tests : registre public des applis Cast (logos). */
+  /** Injection for tests: public Cast app registry (logos). */
   registryFetch?: RegistryFetch
-  /** Injection pour les tests : API REST locale d'une TV Sony (sortie son). */
+  /** Injection for tests: local REST API of a Sony TV (sound output). */
   braviaFetch?: BraviaFetch
-  /** Injection pour les tests : fausse découverte. */
+  /** Injection for tests: fake discovery. */
   discovery?: CastDiscovery
-  /** Injection pour les tests : mémoire des appareils déjà vus (sinon un fichier JSON). */
+  /** Injection for tests: memory of devices already seen (otherwise a JSON file). */
   known?: KnownDevices
-  /** Injection pour les tests : fausse socket. */
+  /** Injection for tests: fake socket. */
   connect?: SocketFactory
   requestTimeoutMs?: number
   heartbeatMs?: number
@@ -128,22 +130,22 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   let ctx: PluginContext | null = null
   let config: GoogleCastConfig | null = null
   let discovery: CastDiscovery | null = null
-  /** Mémoire des appareils déjà vus (null si `CAST_KNOWN_FILE` est vide : rien n'est retenu). */
+  /** Memory of devices already seen (null if `CAST_KNOWN_FILE` is empty: nothing is remembered). */
   let known: KnownDevices | null = null
-  /** Enrichissement Crunchyroll (absent si désactivé). */
+  /** Crunchyroll enrichment (absent if disabled). */
   let crunchyroll: CrunchyrollEnricher | null = null
-  /** Recherche de pochette par titre + artiste (absente si désactivée). */
+  /** Cover lookup by title + artist (absent if disabled). */
   let covers: CoverFinder | null = null
-  /** Logos des applis, pochette de repli. */
+  /** App logos, fallback cover. */
   let appIcons: AppIconResolver | null = null
   let refreshTimer: unknown = null
   let stopping = false
-  /** URL de pochettes vues dans les états média (les seules que la route /art accepte de servir), les plus récentes en dernier. */
+  /** Cover URLs seen in media states (the only ones the /art route agrees to serve), most recent last. */
   const knownArt: string[] = []
   const artCache = new Map<string, ArtEntry>()
   const fetchArt: ArtFetch = deps.fetchImpl ?? ((url, init) => fetch(url, init))
   const braviaFetch: BraviaFetch = deps.braviaFetch ?? ((url, init) => fetch(url, init))
-  /** Faux jusqu'à « start » : un état émis pendant « discover » arriverait AVANT l'enregistrement des appareils et serait perdu. */
+  /** False until "start": a state emitted during "discover" would arrive BEFORE the devices are registered and be lost. */
   let started = false
   const entries = new Map<string, Entry>()
 
@@ -151,7 +153,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   const descriptors = (): DeviceDescriptor[] =>
     [...entries.values()].map((e) => toDescriptor(e.service, { controlType: e.controlType }))
 
-  /** Écrit la mémoire des appareils vus (voir `known.ts`) ; sans mémoire configurée, ne fait rien. */
+  /** Writes the memory of seen devices (see `known.ts`); without a configured memory, does nothing. */
   function remember(): void {
     void known?.save([...entries.values()].map((e) => e.service))
   }
@@ -170,14 +172,14 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     a.host === b.host && a.port === b.port && a.txt.fn === b.txt.fn && a.txt.md === b.txt.md && a.txt.ca === b.txt.ca
 
   /**
-   * Un appareil annoncé en mDNS : retenu, connecté ; s'il arrive après `discover`, la liste est
-   * republiée. L'annonce peut concerner un appareil DÉJÀ connu (réannonce périodique, appareil
-   * rallumé, appareil retrouvé dans la mémoire au démarrage) :
-   *  - annonce identique et connexion ouverte : rien à faire ;
-   *  - adresse ou nom changés (bail DHCP, renommage dans Google Home) : on retient la nouvelle
-   *    annonce, on republie les descripteurs et on rouvre la connexion, l'ancienne pointant dans le vide ;
-   *  - pas de connexion : l'annonce prouve qu'il est là, on retente TOUT DE SUITE plutôt que
-   *    d'attendre la fin du délai courant (qui peut aller à deux minutes).
+   * A device announced over mDNS: remembered, connected; if it arrives after `discover`, the list is
+   * republished. The announcement may concern an ALREADY known device (periodic re-announcement,
+   * device switched back on, device found in the memory at startup):
+   *  - identical announcement and open connection: nothing to do;
+   *  - address or name changed (DHCP lease, rename in Google Home): we keep the new announcement,
+   *    republish the descriptors and reopen the connection, the old one pointing into the void;
+   *  - no connection: the announcement proves it is there, we retry RIGHT AWAY rather than waiting
+   *    for the current delay to run out (which can go up to two minutes).
    */
   function onService(service: CastService, late: boolean): void {
     const prev = entries.get(service.txt.id)
@@ -189,7 +191,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
         remember()
         if (started) ctx!.emitDevices(descriptors())
       }
-      if (!late) return                                         // pendant `discover` : la connexion vient juste après
+      if (!late) return                                         // during `discover`: the connection comes right after
       if (prev.connection) { if (changed) prev.connection.close('announcement changed') }
       else reconnectNow(prev)
       return
@@ -203,7 +205,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     }
   }
 
-  /** Nouvelle tentative immédiate : le délai en cours ne vaut plus rien puisque l'appareil vient de parler. */
+  /** Immediate new attempt: the current delay is worthless since the device has just spoken. */
   function reconnectNow(entry: Entry): void {
     ctx!.clock.clearTimeout(entry.reconnectTimer)
     entry.reconnectTimer = null
@@ -211,7 +213,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     void connect(entry)
   }
 
-  /** Ouvre la connexion d'un appareil ; en cas d'échec, programme une nouvelle tentative. */
+  /** Opens a device's connection; on failure, schedules a new attempt. */
   async function connect(entry: Entry): Promise<void> {
     if (stopping || entry.connection) return
     const id = entry.service.txt.id
@@ -231,19 +233,19 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
       log().info({ externalId: id, name: entry.service.txt.fn }, 'cast device connected')
       startAudioProbe(entry)
     } catch {
-      // `open` échoué : `onClose` n'est pas forcément passé (connexion jamais établie)
+      // `open` failed: `onClose` has not necessarily run (connection never established)
       entry.connection = null
       connection.close('open failed')
-      // log désactivés car trop nombreux
+      // logs disabled because there are too many
       // log().warn({ externalId: id, host: entry.service.host, err }, 'cast connection failed')
       scheduleReconnect(entry)
     }
   }
 
   /**
-   * TV Sony connectée : lui demander où part son son, tout de suite puis à cadence lente, tant que la
-   * connexion Cast tient (elle tombe avec la TV). Publié seulement quand ça change ; une TV qui ne
-   * répond pas garde son dernier relevé — rien n'est inventé.
+   * Connected Sony TV: ask it where its sound goes, right away then at a slow rate, as long as the
+   * Cast connection holds (it drops with the TV). Published only when it changes; a TV that does not
+   * answer keeps its last reading — nothing is invented.
    */
   function startAudioProbe(entry: Entry): void {
     if (!config!.CAST_BRAVIA_PROBE || !isBravia(entry.service.txt.md) || entry.audioTimer) return
@@ -271,7 +273,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     if (controlType !== undefined && controlType !== entry.controlType) {
       const wasFixed = entry.controlType === 'fixed', isFixed = controlType === 'fixed'
       entry.controlType = controlType
-      if (wasFixed !== isFixed && started) ctx!.emitDevices(descriptors())      // les capacités ont changé
+      if (wasFixed !== isFixed && started) ctx!.emitDevices(descriptors())      // the capabilities have changed
     }
     if (started) ctx!.emitState(entry.service.txt.id, toReceiverPatch(status))
   }
@@ -288,9 +290,9 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   }
 
   /**
-   * Patch de lecture complet, du plus précis au plus général : ce que l'appareil dit, enrichi
-   * (Crunchyroll), puis la pochette du morceau cherchée par son nom, puis le logo de l'appli. Chaque
-   * étage ne parle que si l'image manque encore.
+   * Full playback patch, from the most precise to the most general: what the device says, enriched
+   * (Crunchyroll), then the track cover looked up by its name, then the app logo. Each stage only
+   * speaks up if the image is still missing.
    */
   function mediaPatch(entry: Entry, media: MediaStatus | undefined, app: ReceiverApplication | undefined): StatePatch<'media_player'> {
     const patch = withAppIcon(entry, app, withCover(entry, enrichedPatch(entry, media, app)))
@@ -321,17 +323,17 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     }
   }
 
-  /** Le morceau nommé par un patch, s'il a de quoi être cherché (titre ET artiste). */
+  /** The track named by a patch, if it has enough to be looked up (title AND artist). */
   function trackOf(patch: StatePatch<'media_player'>): Track | undefined {
     const n = patch.nowPlaying
     return n?.title && n.artist ? { title: n.title, artist: n.artist } : undefined
   }
 
   /**
-   * Pochette de l'album d'un morceau que l'appareil n'illustre pas (relevé : l'appli YouTube d'une TV
-   * Android donne titre et artiste, jamais d'image). Cherchée par son nom dans les catalogues publics
-   * (`enrich/cover.ts`), avec correspondance vérifiée. En cache : appliquée tout de suite ; sinon on
-   * publie ce qu'on a et on republie à la réponse — si le MÊME morceau joue encore.
+   * Album cover of a track the device does not illustrate (observed: the YouTube app on an Android
+   * TV gives title and artist, never an image). Looked up by its name in the public catalogs
+   * (`enrich/cover.ts`), with a checked match. Cached: applied right away; otherwise we publish what
+   * we have and republish on the answer — if the SAME track is still playing.
    */
   function withCover(entry: Entry, patch: StatePatch<'media_player'>): StatePatch<'media_player'> {
     if (!covers || !patch.nowPlaying || patch.nowPlaying.artUrl) return patch
@@ -353,9 +355,9 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   }
 
   /**
-   * Patch de lecture, enrichi si l'appli est pauvre et qu'on sait faire mieux (Crunchyroll). Un résultat
-   * déjà en cache s'applique tout de suite ; sinon on publie ce qu'on a et on republie quand la réponse
-   * arrive — si le même contenu joue encore (l'utilisateur a pu zapper entre-temps).
+   * Playback patch, enriched if the app is poor and we know how to do better (Crunchyroll). A result
+   * already cached applies right away; otherwise we publish what we have and republish when the
+   * answer arrives — if the same content is still playing (the user may have switched in between).
    */
   function enrichedPatch(entry: Entry, media: MediaStatus | undefined, app: ReceiverApplication | undefined): StatePatch<'media_player'> {
     const patch = toMediaPatch(media, app)
@@ -375,9 +377,9 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   }
 
   /**
-   * Pochette de repli : le logo de l'appli quand le morceau n'a pas d'image (Netflix natif, Crunchyroll avant
-   * enrichissement). L'icône que le récepteur donne lui-même d'abord ; sinon le registre public des applis
-   * Cast — en cache tout de suite, sinon publié après coup si la même appli est encore à l'écran.
+   * Fallback cover: the app logo when the track has no image (native Netflix, Crunchyroll before
+   * enrichment). The icon the receiver gives itself first; otherwise the public Cast app registry —
+   * right away if cached, otherwise published afterwards if the same app is still on screen.
    */
   function withAppIcon(entry: Entry, app: ReceiverApplication | undefined, patch: StatePatch<'media_player'>): StatePatch<'media_player'> {
     if (!app || !patch.nowPlaying || patch.nowPlaying.artUrl) return patch
@@ -397,7 +399,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     return patch
   }
 
-  /** Télécharge une pochette, avec quelques tentatives espacées quand le serveur d'images se plaint (429, 5xx). */
+  /** Downloads a cover, with a few spaced-out attempts when the image server complains (429, 5xx). */
   async function downloadArt(url: string): Promise<ArtEntry> {
     let status = 0
     for (let attempt = 0; attempt < ART_ATTEMPTS && !stopping; attempt++) {
@@ -430,7 +432,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     return fresh
   }
 
-  /** État courant d'un appareil connecté, publié d'un bloc (au « start », après le silence de « discover »). */
+  /** Current state of a connected device, published in one block (at "start", after the silence of "discover"). */
   function emitCurrent(entry: Entry): void {
     const c = entry.connection
     if (!c?.isOpen || !c.lastReceiverStatus) { ctx!.setAvailable(entry.service.txt.id, false); return }
@@ -439,7 +441,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
 
   function onClose(entry: Entry, reason: string): void {
     const id = entry.service.txt.id
-    if (!entry.connection) return                                   // échec d'ouverture déjà traité
+    if (!entry.connection) return                                   // open failure already handled
     entry.connection = null
     stopAudioProbe(entry)
     ctx!.setAvailable(id, false)
@@ -455,9 +457,9 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   }
 
   /**
-   * Oublie un appareil : connexion fermée, entrée sortie de la liste ET de la mémoire. Un appareil
-   * encore sur le réseau reviendra à sa prochaine annonce — c'est bien : on n'oublie que ce qui a
-   * disparu (appareil vendu, invité de passage), et l'UI ne le propose qu'aux appareils indisponibles.
+   * Forgets a device: connection closed, entry removed from the list AND the memory. A device still
+   * on the network will come back at its next announcement — that is fine: we only forget what has
+   * disappeared (device sold, passing guest), and the UI only offers it for unavailable devices.
    */
   function forget(externalId: string): boolean {
     const entry = entries.get(externalId)
@@ -466,7 +468,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     entry.reconnectTimer = null
     stopAudioProbe(entry)
     const c = entry.connection
-    entry.connection = null                                     // `onClose` ne doit pas reprogrammer de tentative
+    entry.connection = null                                     // `onClose` must not schedule another attempt
     c?.close('device forgotten')
     entries.delete(externalId)
     remember()
@@ -475,7 +477,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     return true
   }
 
-  /** Commande vers un appareil connecté ; résout quand le récepteur a répondu (son état suit par ses messages). */
+  /** Command to a connected device; resolves when the receiver has answered (its state follows through its messages). */
   async function run(externalId: string, command: Command): Promise<void> {
     const entry = entries.get(externalId)
     if (!entry) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Cast device ${externalId}`)
@@ -484,9 +486,9 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     switch (command.type) {
       case 'media_player.play': return c.mediaCommand('PLAY')
       case 'media_player.pause': return c.mediaCommand('PAUSE')
-      case 'media_player.stop': return c.stopApp()                        // ferme l'appli, pas seulement la lecture
+      case 'media_player.stop': return c.stopApp()                        // closes the app, not just the playback
       case 'media_player.next': return c.queueJump(1)
-      case 'media_player.previous': return c.previous()                 // début du morceau passé 3 s, sinon le précédent
+      case 'media_player.previous': return c.previous()                 // start of the track past 3 s, otherwise the previous one
       case 'media_player.seek': return c.seek(command.positionS)
       case 'media_player.play_url': {
         const meta: PlayUrlMeta = {
@@ -544,8 +546,8 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
         ? new CoverFinder({ ...(deps.coverFetch ? { fetchImpl: deps.coverFetch } : {}), clock: context.clock, logger: context.logger, signal: context.signal })
         : null
       appIcons = new AppIconResolver({ ...(deps.registryFetch ? { fetchImpl: deps.registryFetch } : {}), clock: context.clock, logger: context.logger, signal: context.signal })
-      // Appareils déjà vus : ils entrent dans la liste AVANT la découverte, donc un appareil éteint
-      // (qui ne s'annonce plus) reste là, indisponible. Une annonce mDNS mettra son adresse à jour.
+      // Devices already seen: they enter the list BEFORE discovery, so a device that is off (which no
+      // longer announces itself) stays there, unavailable. An mDNS announcement will update its address.
       known = deps.known ?? (config.CAST_KNOWN_FILE ? createKnownDevicesFile(config.CAST_KNOWN_FILE, context.logger) : null)
       const remembered = (await known?.load()) ?? []
       for (const service of remembered) addEntry(service)
@@ -553,9 +555,9 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     },
 
     /**
-     * Écoute le mDNS le temps configuré, puis connecte chaque appareil trouvé pour connaître son
-     * type de volume avant de rendre les descripteurs. Un appareil injoignable est listé quand même
-     * (indisponible) : il est sur le réseau, il reviendra.
+     * Listens to mDNS for the configured time, then connects each device found to learn its volume
+     * type before returning the descriptors. An unreachable device is listed anyway (unavailable): it
+     * is on the network, it will come back.
      */
     async discover() {
       let discovered = false
@@ -567,8 +569,8 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     },
 
     async start() {
-      // les appareils sont enregistrés : publier l'état de chacun (connecté, ou indisponible), puis
-      // laisser les connexions pousser la suite et relancer la question mDNS à cadence lente
+      // the devices are registered: publish each one's state (connected, or unavailable), then let
+      // the connections push what follows and repeat the mDNS query at a slow rate
       started = true
       for (const e of entries.values()) emitCurrent(e)
       refreshTimer = ctx!.clock.setInterval(() => discovery?.refresh(), config!.CAST_MDNS_REFRESH_MS)
@@ -591,8 +593,8 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     },
 
     registerRoutes(app: FastifyInstance) {
-      // Pochette d'un morceau, téléchargée par le serveur et mise en cache (voir `artProxyUrl`). Seules
-      // les URL vues dans un état média sont servies : ce n'est pas un relais ouvert.
+      // A track's cover, downloaded by the server and cached (see `artProxyUrl`). Only URLs seen in a
+      // media state are served: it is not an open relay.
       app.get<{ Querystring: { url?: string } }>('/art', async (req, reply) => {
         const url = req.query.url
         if (!url || !knownArt.includes(url)) return sendError(reply, 404, 'NOT_FOUND', 'unknown artwork')
@@ -601,14 +603,14 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
         return reply.header('content-type', art.type).header('cache-control', 'public, max-age=86400').send(art.body)
       })
 
-      // Oublier un appareil retenu (voir `forget`) : c'est le pendant de la mémoire, sans quoi un
-      // appareil vu une fois resterait listé pour toujours.
+      // Forget a remembered device (see `forget`): it is the counterpart of the memory, without which a
+      // device seen once would stay listed forever.
       app.delete<{ Params: { externalId: string } }>('/devices/:externalId', async (req, reply) => {
         if (!forget(req.params.externalId)) return sendError(reply, 404, 'NOT_FOUND', `unknown Cast device ${req.params.externalId}`)
         return { forgotten: req.params.externalId }
       })
 
-      // Dernier état brut reçu de chaque appareil : sert à relever des fixtures réelles (voir __fixtures__).
+      // Last raw state received from each device: used to capture real fixtures (see __fixtures__).
       app.get('/raw', async () => ({
         devices: [...entries.values()].map((e) => ({
           service: e.service, connected: e.connection?.isOpen ?? false,

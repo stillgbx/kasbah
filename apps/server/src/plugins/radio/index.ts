@@ -9,15 +9,15 @@ import { sendError } from '../../http/errors'
 import { createRadioDirectory, stationSchema, type RadioDirectory, type Station } from './directory'
 import { createFavoritesFile, type FavoritesStore } from './favorites'
 
-// Plugin Radios : l'annuaire libre radio-browser.info (toutes les webradios, dont Radio France) et
-// les favoris de la maison. Aucun appareil publié : comme YouTube Music, c'est une SOURCE, qui lance
-// `media_player.play_url` sur un lecteur Cast / Sonos. Le flux va de la radio à l'enceinte, sans
-// passer par le serveur — il n'y a rien à découper ni à mettre en file dans un direct.
+// Radio plugin: the free radio-browser.info directory (every web radio, Radio France included) and
+// the house's favorites. No device published: like YouTube Music, it is a SOURCE, which starts
+// `media_player.play_url` on a Cast / Sonos player. The stream goes from the radio to the speaker,
+// without going through the server — there is nothing to cut or queue in a live stream.
 
 export const radioConfigSchema = z.object({
   RADIO_BROWSER_URL: z.string().trim().url().default('https://de1.api.radio-browser.info'),
   RADIO_FAVORITES_FILE: z.string().trim().default(stateFile('radio-favorites.json')),
-  /** Le pays des « plus écoutées » quand l'UI n'en demande pas. */
+  /** The country of the "most listened" when the UI does not ask for one. */
   RADIO_COUNTRY: z.string().trim().length(2).default('FR'),
 })
 export type RadioConfig = z.infer<typeof radioConfigSchema>
@@ -25,7 +25,7 @@ export type RadioConfig = z.infer<typeof radioConfigSchema>
 export interface RadioPluginDeps {
   directory?: RadioDirectory
   favorites?: FavoritesStore
-  /** Commande à un lecteur d'un autre plugin (tests) ; sinon le pont `app.ts`. */
+  /** Command to a player from another plugin (tests); otherwise the `app.ts` bridge. */
   execute?: (deviceId: string, command: Command) => Promise<void>
   getDevice?: (deviceId: string) => { descriptor: { kind: string; capabilities: string[] } } | undefined
 }
@@ -38,9 +38,10 @@ export function createRadioPlugin(deps: RadioPluginDeps = {}): DevicePlugin {
   let favorites: Station[] = []
   let lastError: string | null = null
   /**
-   * La station lancée sur chaque lecteur : le flux va de la radio à l'enceinte, qui ne dit ni codec
-   * ni débit — l'UI tient la qualité de l'annuaire. Pas d'effacement : l'UI ne s'en sert que tant
-   * que le lecteur publie un direct au nom de la station (il a pu passer à autre chose depuis).
+   * The station started on each player: the stream goes from the radio to the speaker, which reports
+   * neither codec nor bitrate — the UI gets the quality from the directory. No clearing: the UI only
+   * uses it while the player publishes a live stream named after the station (it may have moved on
+   * to something else since).
    */
   const playing = new Map<string, Station>()
 
@@ -48,7 +49,7 @@ export function createRadioPlugin(deps: RadioPluginDeps = {}): DevicePlugin {
     if (!directory) throw new PluginError('DEVICE_UNAVAILABLE', 'radio plugin is not started')
     return directory
   }
-  /** Un appel à l'annuaire : l'échec est retenu pour la santé, puis relevé tel quel. */
+  /** A call to the directory: the failure is kept for the health, then rethrown as is. */
   async function ask<T>(call: (d: RadioDirectory) => Promise<T>): Promise<T> {
     try {
       const out = await call(dir())
@@ -108,8 +109,8 @@ export function createRadioPlugin(deps: RadioPluginDeps = {}): DevicePlugin {
         return { stations: favorites }
       })
 
-      // Une radio absente de l'annuaire, ou qu'il connaît sous une adresse morte : ajoutée à la main
-      // par son flux. L'id vient de l'URL — l'ajouter deux fois ne fait pas de doublon.
+      // A radio missing from the directory, or that it knows under a dead address: added by hand
+      // through its stream. The id comes from the URL — adding it twice makes no duplicate.
       app.post<{ Body: unknown }>('/favorites/custom', async (req, reply) => {
         const body = z.object({
           name: z.string().trim().min(1).max(200),
@@ -137,7 +138,7 @@ export function createRadioPlugin(deps: RadioPluginDeps = {}): DevicePlugin {
         if (entry.descriptor.kind !== 'media_player' || !entry.descriptor.capabilities.includes('play_url')) {
           return sendError(reply, 400, 'UNSUPPORTED_COMMAND', 'device does not support play_url')
         }
-        // un favori se lance même si l'annuaire est tombé
+        // a favorite plays even if the directory is down
         const station = favorites.find((s) => s.id === stationId) ?? await ask((d) => d.byId(stationId))
         if (!station) return sendError(reply, 404, 'NOT_FOUND', `unknown station "${stationId}"`)
         const execute = deps.execute ?? ((id: string, command: Command) => {
@@ -154,7 +155,7 @@ export function createRadioPlugin(deps: RadioPluginDeps = {}): DevicePlugin {
           live: true,
         })
         playing.set(deviceId, station)
-        // une station ajoutée à la main n'existe pas dans l'annuaire : rien à lui signaler
+        // a station added by hand does not exist in the directory: nothing to report to it
         if (!station.id.startsWith('custom-')) void directory?.click(station.id)
         ctx?.logger.info({ deviceId, station: station.name }, 'radio play')
         return { ok: true as const, station }

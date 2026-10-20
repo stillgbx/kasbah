@@ -1,9 +1,9 @@
-// Réponse CAPTURÉE sur la vraie station Proteo 2 (192.168.1.92:23), requête
+// Response CAPTURED from the real Proteo 2 station (192.168.1.92:23), request
 // `{"1234567":{"msgId":5,"read":["status","about","alert","config","consumption","flow","lamp","rtc","wear"]}}`.
-// Écrite depuis la réponse réelle et non depuis la notice : `alert` porte les 21 codes D001-D021,
-// dont le sens n'est documenté nulle part (la notice renvoie au SAV) — Kasbah ne les décode pas,
-// et `D005`/`D017` valant 1 alors que `status.warning`/`status.defect` valent 0 le confirme : `[0]`
-// ne veut pas dire « active ».
+// Written from the real response and not from the manual: `alert` carries the 21 codes D001-D021,
+// whose meaning is documented nowhere (the manual refers to after-sales service) — Kasbah does not
+// decode them, and `D005`/`D017` being 1 while `status.warning`/`status.defect` are 0 confirms it:
+// `[0]` does not mean "active".
 
 export const STATION_READ = {
   '1234567': {

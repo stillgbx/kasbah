@@ -1,31 +1,31 @@
 import { z } from 'zod'
 import type { DeviceDescriptor, StatePatch } from '@kasbah/shared'
 
-// Station Proteo 2 → contrat Kasbah. Fonctions PURES, testées sur la fixture capturée
-// (`__fixtures__/station.ts`). UN SEUL appareil `water` : la station reste un objet unique, pas six
-// capteurs — c'est le choix du propriétaire.
+// Proteo 2 station → Kasbah contract. PURE functions, tested on the captured fixture
+// (`__fixtures__/station.ts`). ONE SINGLE `water` device: the station stays a single object, not six
+// sensors — that is the owner's choice.
 //
-// Le protocole tient en une requête : `{"<id>":{"msgId":N,"read":[...]}}`. L'identifiant racine et
-// `msgId` sont de simples échos (la station renvoie ce qu'on lui donne) ; `msgId` est en revanche
-// OBLIGATOIRE, sans lui elle répond `null`. `ROOT_ID` est donc arbitraire — la valeur de l'exemple
-// capturé — et le mappage lit la réponse par sa PREMIÈRE valeur plutôt que par ce nom littéral, pour
-// ne rien supposer de plus que « la station échote la clé qu'on lui a envoyée ».
+// The protocol fits in one request: `{"<id>":{"msgId":N,"read":[...]}}`. The root id and `msgId` are
+// mere echoes (the station sends back what it is given); `msgId` is however MANDATORY, without it
+// the station answers `null`. `ROOT_ID` is therefore arbitrary — the value from the captured
+// example — and the mapping reads the response by its FIRST value rather than by that literal name,
+// so as to assume nothing more than "the station echoes the key it was sent".
 
 export const PLUGIN_ID = 'comap'
 export const STATION_ID = 'station'
 export const ROOT_ID = '1234567'
 
-/** Les 9 clés tiennent dans une seule requête : un aller-retour par sondage suffit. */
+/** The 9 keys fit in a single request: one round trip per poll is enough. */
 export const READ_KEYS = ['status', 'about', 'alert', 'config', 'consumption', 'flow', 'lamp', 'rtc', 'wear'] as const
 
 export function readRequest(msgId: number): Record<string, unknown> {
   return { [ROOT_ID]: { msgId, read: READ_KEYS } }
 }
 
-// Seuls les champs dont le sens est établi sont déclarés : `alert` (D001-D021), `config` et `lamp`
-// sont ignorés par zod (extra keys silencieusement écartées), pas décodés au hasard. `rtc` fait
-// exception : l'horloge de la station date l'historique de consommation (`history.ts`), qui a
-// besoin d'un instant fiable, pas de celui — potentiellement décalé — du serveur qui la lit.
+// Only fields whose meaning is established are declared: `alert` (D001-D021), `config` and `lamp`
+// are ignored by zod (extra keys silently dropped), not decoded at random. `rtc` is the exception:
+// the station's clock dates the consumption history (`history.ts`), which needs a reliable instant,
+// not the — possibly skewed — one of the server reading it.
 const readSchema = z.object({
   status: z.object({
     warning: z.number().optional(),
@@ -37,7 +37,7 @@ const readSchema = z.object({
     day: z.number().optional(),
     week: z.number().optional(),
     month: z.number().optional(),
-    /** Historique mensuel de l'année civile, index 0 = janvier — voir `history.ts:monthlyOf`. */
+    /** Monthly history of the calendar year, index 0 = January — see `history.ts:monthlyOf`. */
     year: z.array(z.number()).length(12).optional(),
   }).optional(),
   flow: z.object({ inst: z.number().optional() }).optional(),
@@ -47,7 +47,7 @@ const readSchema = z.object({
     filt2: z.number().optional(),
     lamp: z.number().optional(),
   }).optional(),
-  /** `date`: [jour, mois, année] ; `time`: [heure, minute] — confirmé sur la vraie station. */
+  /** `date`: [day, month, year]; `time`: [hour, minute] — confirmed on the real station. */
   rtc: z.object({
     date: z.tuple([z.number(), z.number(), z.number()]),
     time: z.tuple([z.number(), z.number()]),
@@ -57,14 +57,14 @@ export type Read = z.infer<typeof readSchema>
 
 const envelopeSchema = z.record(z.string(), z.object({ msgId: z.number().optional(), read: readSchema.optional() }))
 
-/** Extrait le bloc `read`, quelle que soit la clé racine échotée. `undefined` = réponse inattendue. */
+/** Extracts the `read` block, whatever the echoed root key. `undefined` = unexpected response. */
 export function parseRead(raw: unknown): Read | undefined {
   const parsed = envelopeSchema.safeParse(raw)
   if (!parsed.success) return undefined
   return Object.values(parsed.data)[0]?.read
 }
 
-/** `about.mod` : le modèle tel que la station le nomme (« Proteo V3 »). Absent tant qu'aucune lecture n'a réussi. */
+/** `about.mod`: the model as the station names it ("Proteo V3"). Absent until a read has succeeded. */
 export function modelOf(read: Read): string | undefined {
   return read.about?.mod
 }
@@ -86,9 +86,9 @@ const clampPct = (v: number) => Math.max(0, Math.min(100, Math.round(v)))
 const litres = (v: number) => Math.max(0, round(v))
 
 /**
- * L'état de la station, d'après une lecture `read` réussie. TOUS les champs sont optionnels dans le
- * contrat : seuls ceux que CETTE réponse porte sont posés, jamais un zéro pour un champ absent — un
- * `0 %` d'usure ou un `0 L` de consommation affirmerait une mesure qu'on n'a pas.
+ * The station state, from a successful `read`. ALL fields are optional in the contract: only those
+ * THIS response carries are set, never a zero for a missing field — a `0 %` wear or a `0 L`
+ * consumption would claim a measurement we do not have.
  */
 export function toStatePatch(read: Read): StatePatch<'water'> {
   const patch: StatePatch<'water'> = {}

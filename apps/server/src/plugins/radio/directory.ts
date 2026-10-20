@@ -1,23 +1,23 @@
 import { z } from 'zod'
 import { PluginError } from '../../core/plugin'
 
-// Annuaire radio-browser.info : libre, sans clé, ~50 000 stations. Il demande un User-Agent qui
-// nomme l'appli, et qu'on lui signale chaque écoute (`/json/url/:uuid`) — c'est ce qui classe les
-// stations par popularité pour tout le monde.
+// radio-browser.info directory: free, no key, ~50,000 stations. It asks for a User-Agent naming the
+// app, and to be told about each listen (`/json/url/:uuid`) — it is what ranks the stations by
+// popularity for everyone.
 
 const USER_AGENT = 'Kasbah/0.1 (domotique perso)'
 const LIMIT = 60
-/** Une recherche demande large sur UN mot, puis garde ce qui contient tous les autres. */
+/** A search asks broadly on ONE word, then keeps what contains all the others. */
 const SEARCH_WIDE = 400
 
-/** Pour comparer des noms : minuscules, sans accents ni ponctuation (« ★ Radio Dijon Campus » → « radio dijon campus »). */
+/** To compare names: lowercase, without accents or punctuation ("★ Radio Dijon Campus" → "radio dijon campus"). */
 export function foldName(s: string): string {
   return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}.]+/gu, ' ').trim()
 }
 
 /**
- * Les mots d'une recherche, et celui qu'on envoie à l'annuaire : il ne sait chercher qu'une suite
- * exacte (« campus dijon » ne trouve pas « Dijon Campus »). Le plus long mot est le plus sélectif.
+ * The words of a search, and the one sent to the directory: it can only search for an exact sequence
+ * ("campus dijon" does not find "Dijon Campus"). The longest word is the most selective.
  */
 export function searchWords(q: string): { words: string[]; probe: string } {
   const words = foldName(q).split(' ').filter(Boolean)
@@ -43,7 +43,7 @@ const rawStationSchema = z.object({
 export interface Station {
   id: string
   name: string
-  /** Flux direct (après redirections, playlists .pls/.m3u déjà résolues par l'annuaire). */
+  /** Direct stream (after redirects, .pls/.m3u playlists already resolved by the directory). */
   url: string
   favicon?: string
   country?: string
@@ -87,10 +87,10 @@ export function toStation(raw: z.infer<typeof rawStationSchema>): Station | null
 
 export interface RadioDirectory {
   search(q: string): Promise<Station[]>
-  /** Les plus écoutées d'un pays (code ISO à deux lettres). */
+  /** A country's most listened stations (two-letter ISO code). */
   top(countryCode: string): Promise<Station[]>
   byId(id: string): Promise<Station | null>
-  /** Signale une écoute à l'annuaire ; jamais bloquant, jamais une erreur pour l'appelant. */
+  /** Reports a listen to the directory; never blocking, never an error for the caller. */
   click(id: string): Promise<void>
 }
 
@@ -135,7 +135,7 @@ export function createRadioDirectory(base: string, fetchImpl: typeof fetch = fet
       return found[0] ?? null
     },
     async click(id) {
-      try { await get(`/json/url/${encodeURIComponent(id)}`) } catch { /* compteur de popularité : sans conséquence */ }
+      try { await get(`/json/url/${encodeURIComponent(id)}`) } catch { /* popularity counter: no consequence */ }
     },
   }
 }

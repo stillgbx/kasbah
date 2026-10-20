@@ -19,112 +19,112 @@ import {
 } from './mapping'
 import type { SdmDevice } from './types'
 
-// Plugin Google Nest (caméras, sonnettes, écrans à caméra, thermostats) via l'API cloud Smart
-// Device Management. Il n'y a PAS d'API locale : rien à découvrir sur le LAN, tout passe par le
-// compte Google.
+// Google Nest plugin (cameras, doorbells, displays with a camera, thermostats) through the Smart
+// Device Management cloud API. There is NO local API: nothing to discover on the LAN, everything
+// goes through the Google account.
 //
-// Mise en route, en deux temps comme Hue et TaHoma :
-//  1. côté Google (une fois, par l'utilisateur, hors de Kasbah) : projet Device Access + client
-//     OAuth → NEST_PROJECT_ID, NEST_CLIENT_ID, NEST_CLIENT_SECRET dans .env ;
-//  2. côté Kasbah : sans NEST_REFRESH_TOKEN le plugin est en `needs_pairing` et propose la liaison
-//     du compte (GET /auth/url → consentement Google → GET /auth/callback). Le jeton obtenu est
-//     adopté EN MÉMOIRE et rendu à l'utilisateur pour qu'il le colle dans .env : le serveur n'écrit
-//     jamais .env.
+// Setup, in two steps like Hue and TaHoma:
+//  1. on the Google side (once, by the user, outside Kasbah): Device Access project + OAuth client
+//     → NEST_PROJECT_ID, NEST_CLIENT_ID, NEST_CLIENT_SECRET in .env;
+//  2. on the Kasbah side: without NEST_REFRESH_TOKEN the plugin is in `needs_pairing` and offers to
+//     link the account (GET /auth/url → Google consent → GET /auth/callback). The token obtained is
+//     adopted IN MEMORY and returned to the user so they can paste it into .env: the server never
+//     writes .env.
 //
-// Les caméras n'ont ni commande (l'API ne sait pas les éteindre) ni état au delà de leur présence ;
-// leurs événements viendront plus tard (Pub/Sub). Le thermostat, lui, a un état et deux commandes ;
-// comme l'API ne pousse rien sans Pub/Sub, la liste des appareils est relue à cadence lente
-// (NEST_POLL_MS, une minute par défaut : Google borne les appels à quelques-uns par minute), ce qui
-// suit aussi les ajouts et retraits d'appareils.
+// Cameras have neither commands (the API cannot turn them off) nor state beyond their presence;
+// their events will come later (Pub/Sub). The thermostat, however, has a state and two commands;
+// since the API pushes nothing without Pub/Sub, the device list is read again at a slow rate
+// (NEST_POLL_MS, one minute by default: Google caps calls at a few per minute), which also follows
+// devices being added and removed.
 //
-// Vidéo : tout le parc est en RTSP (caméras de 1re génération), qu'aucun navigateur ne lit. Google
-// ouvre une session RTSP à la demande (`GenerateRtspStream`, cinq minutes, prolongeable), un relais
-// ffmpeg par caméra regardée la recopie en MP4 fragmenté (`core/video/rtsp-relay.ts`), et la route
-// WebSocket `/cameras/<id>/stream` la distribue aux écrans. Plus personne ne regarde → la
-// session Google est arrêtée : rien ne justifie de la laisser courir.
+// Video: the whole device set is RTSP (1st-generation cameras), which no browser plays. Google opens
+// an RTSP session on demand (`GenerateRtspStream`, five minutes, extendable), one ffmpeg relay per
+// watched camera remuxes it into fragmented MP4 (`core/video/rtsp-relay.ts`), and the WebSocket
+// route `/cameras/<id>/stream` distributes it to the screens. Nobody watching anymore → the Google
+// session is stopped: nothing justifies leaving it running.
 
 /**
- * Clé optionnelle dont la valeur VIDE vaut « absente » : `.env.example` liste les clés à remplir, et
- * une ligne `NEST_REFRESH_TOKEN=` laissée vide en attendant la liaison ne doit pas désactiver le
- * plugin (c'est ce qui arrivait avec `min(1)` : config invalide → `disabled`, sans rien dire d'utile).
+ * Optional key whose EMPTY value counts as "absent": `.env.example` lists the keys to fill in, and a
+ * `NEST_REFRESH_TOKEN=` line left empty while waiting for the linking must not disable the plugin
+ * (that is what happened with `min(1)`: invalid config → `disabled`, without saying anything useful).
  */
 const optionalKey = z.string().trim().transform((s) => (s === '' ? undefined : s)).optional()
 
 export const nestConfigSchema = z.object({
-  /** Id (UUID) du projet Device Access — pas le projet Google Cloud. */
+  /** Id (UUID) of the Device Access project — not the Google Cloud project. */
   NEST_PROJECT_ID: optionalKey,
   NEST_CLIENT_ID: optionalKey,
   NEST_CLIENT_SECRET: optionalKey,
   NEST_REFRESH_TOKEN: optionalKey,
-  /** Doit être déclarée telle quelle dans le client OAuth Google (« URI de redirection autorisés »). */
+  /** Must be declared as is in the Google OAuth client ("Authorized redirect URIs"). */
   NEST_REDIRECT_URI: z.string().url().default('http://localhost:8787/api/plugins/nest/auth/callback'),
-  /** Cadence de relecture de la liste des appareils (état du thermostat, ajouts / retraits). */
+  /** Rate for re-reading the device list (thermostat state, additions / removals). */
   NEST_POLL_MS: z.coerce.number().int().min(10_000).max(600_000).default(60_000),
-  /** Binaire ffmpeg du relais vidéo (dans le PATH, ou chemin complet). Clé commune, pas préfixée NEST_. */
+  /** ffmpeg binary of the video relay (in the PATH, or full path). Shared key, not prefixed with NEST_. */
   FFMPEG_PATH: z.string().min(1).default('ffmpeg'),
   /**
-   * Sessions RTSP ouvertes en même temps, au plus (directs regardés + vignettes de la vue Caméras).
-   * C'est CE qui coûte — une session Google, un ffmpeg, 1 à 2 Mbit/s par caméra — pas la cadence
-   * des images. En dessous du nombre de caméras, les vignettes tournent en rotation.
+   * RTSP sessions open at the same time, at most (live streams watched + thumbnails of the Cameras
+   * view). THAT is what costs — a Google session, an ffmpeg, 1 to 2 Mbit/s per camera — not the
+   * image rate. Below the number of cameras, the thumbnails rotate.
    */
   NEST_LIVE_BUDGET: z.coerce.number().int().min(1).max(32).default(10),
-  /** Cadence des vignettes de la vue Caméras (une image JPEG par caméra dont la session est ouverte). */
+  /** Thumbnail rate of the Cameras view (one JPEG image per camera whose session is open). */
   NEST_SNAPSHOT_MS: z.coerce.number().int().min(2000).max(120_000).default(10_000),
-  /** Abonnement Pub/Sub « pull » d'où tirer les événements (sonnette…). Absent → aucun événement. */
+  /** "Pull" Pub/Sub subscription to pull the events from (doorbell…). Absent → no events. */
   NEST_PUBSUB_SUBSCRIPTION: optionalKey,
-  /** Cadence de tirage de l'abonnement Pub/Sub. Une sonnerie arrive au plus tard au prochain tirage. */
+  /** Pull rate of the Pub/Sub subscription. A ring arrives at the latest on the next pull. */
   NEST_PUBSUB_POLL_MS: z.coerce.number().int().min(1000).max(60_000).default(5000),
 })
 export type NestConfig = z.infer<typeof nestConfigSchema>
 
-/** Google fait expirer une session RTSP au bout de cinq minutes : on prolonge avant. */
+/** Google expires an RTSP session after five minutes: we extend before that. */
 const STREAM_EXTEND_MS = 4 * 60_000
-/** Messages tirés au plus par appel Pub/Sub. */
+/** Maximum messages pulled per Pub/Sub call. */
 const PUBSUB_MAX_MESSAGES = 20
-/** Un relais sans abonné attend ce délai avant d'arrêter la session (changement de vue, reconnexion). */
+/** A relay without subscribers waits this long before stopping the session (view change, reconnection). */
 const STREAM_IDLE_MS = 8000
-/** Au-delà de ce retard d'envoi, un écran ne suit plus : on saute des fragments plutôt que d'empiler. */
+/** Beyond this send backlog, a screen is no longer keeping up: we skip fragments rather than pile them up. */
 const WS_MAX_BUFFERED = 8 << 20
-/** Ping du flux vidéo : deux battements sans pong et l'écran est considéré parti. */
+/** Video stream ping: two beats without a pong and the screen is considered gone. */
 const WS_HEARTBEAT_MS = 30_000
 
-/** La vue Caméras se signale toutes les 5 s ; sans nouvelle de personne pendant ce délai, les vignettes s'arrêtent. */
+/** The Cameras view checks in every 5 s; with no news from anyone during this delay, the thumbnails stop. */
 const GRID_WATCH_TTL_MS = 15_000
 const GRID_TICK_MS = 8000
-/** Rotation (budget < nombre de caméras) : temps de présence d'une caméra avant de céder sa place. */
+/** Rotation (budget < number of cameras): how long a camera stays before giving up its slot. */
 const GRID_DWELL_MS = 20_000
-/** Largeur des vignettes JPEG. */
+/** Width of the JPEG thumbnails. */
 const SNAPSHOT_WIDTH = 480
 /**
- * Une caméra dont le flux échoue (éteinte, en veille : Google donne l'URL, son serveur répond 404)
- * n'est pas retentée tout de suite — sinon la rotation la redemanderait toutes les 5 s et
- * épuiserait le quota Google. Attente doublée à chaque échec, bornée.
+ * A camera whose stream fails (off, on standby: Google gives the URL, its server answers 404) is not
+ * retried right away — otherwise the rotation would ask for it again every 5 s and exhaust the
+ * Google quota. Wait doubled on each failure, capped.
  */
 const GRID_RETRY_MIN_MS = 3 * 60_000
 const GRID_RETRY_MAX_MS = 15 * 60_000
 /**
- * Google limite les commandes à une dizaine par minute et par utilisateur (constaté : neuf ouvertures
- * d'un coup puis des retentatives ont valu un « Rate limited » sur TOUTES les commandes, liste
- * comprise). Donc UNE ouverture par tick de 8 s — dix caméras en 80 s, puis plus rien que les
- * prolongations — et une pause globale dès que Google se plaint.
+ * Google limits commands to about ten per minute and per user (observed: nine openings at once then
+ * retries earned a "Rate limited" on ALL commands, the list included). So ONE opening per 8 s tick —
+ * ten cameras in 80 s, then nothing but the extensions — and a global pause as soon as Google
+ * complains.
  */
 const GRID_OPEN_PER_TICK = 1
 const GRID_RATE_LIMIT_PAUSE_MS = 90_000
 
 interface StreamSession { relay: RtspRelay; url: string; extensionToken: string; extendTimer: unknown }
-/** Prise de la vue Caméras sur une session : un abonné muet qui la tient ouverte le temps d'une vignette. */
+/** The Cameras view's hold on a session: a silent subscriber keeping it open for the time of a thumbnail. */
 interface GridHold { since: number; hold: RelaySubscriber }
-/** Caméra dont le flux a échoué : à partir de quand réessayer, et combien d'échecs de suite. */
+/** Camera whose stream failed: from when to retry, and how many failures in a row. */
 interface GridFailure { retryAt: number; failures: number; reason: string }
 
 export interface NestPluginDeps {
-  /** Injection pour les tests (fetch simulé). */
+  /** Injection for tests (simulated fetch). */
   fetchImpl?: FetchLike
-  /** Injection pour les tests : délai d'abandon d'une requête. */
+  /** Injection for tests: request timeout. */
   requestTimeoutMs?: number
-  /** Injection pour les tests : le `state` anti-CSRF de la liaison OAuth. */
+  /** Injection for tests: the anti-CSRF `state` of the OAuth linking. */
   randomState?: () => string
-  /** Injection pour les tests : remplace le lancement de ffmpeg. */
+  /** Injection for tests: replaces launching ffmpeg. */
   spawnImpl?: typeof spawn
 }
 
@@ -132,37 +132,37 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
   let ctx: PluginContext | null = null
   let config: NestConfig | null = null
   let client: NestClient | null = null
-  /** Appareils retenus (caméras et thermostats), par externalId, dans leur dernière forme reçue. */
+  /** Devices kept (cameras and thermostats), by externalId, in their last received form. */
   let entries = new Map<string, SdmDevice>()
   let descriptors: DeviceDescriptor[] = []
-  /** Dernière consigne publiée hors arrêt et hors éco, par thermostat : Google la tait à l'arrêt. */
+  /** Last setpoint published outside off and eco, per thermostat: Google hides it when off. */
   const lastSetpoint = new Map<string, number>()
-  /** Appareils de l'API qui ne sont ni caméra ni thermostat : ignorés mais comptés. */
+  /** API devices that are neither camera nor thermostat: ignored but counted. */
   let ignored = 0
-  /** Dernière réponse brute de la liste, pour relever une fixture réelle. */
+  /** Last raw response of the list, to capture a real fixture. */
   let lastRaw: unknown = undefined
   let lastError: string | null = null
   let poller: { stop(): void } | null = null
   let eventsPoller: { stop(): void } | null = null
-  /** Sessions vidéo ouvertes, par externalId : un relais ffmpeg et le jeton qui prolonge la session Google. */
+  /** Open video sessions, by externalId: an ffmpeg relay and the token that extends the Google session. */
   const streams = new Map<string, StreamSession>()
-  /** Ouvertures en cours, pour qu'une seconde demande simultanée rejoigne la première. */
+  /** Openings in progress, so that a simultaneous second request joins the first. */
   const opening = new Map<string, Promise<RtspRelay>>()
-  /** Vue Caméras : jusqu'à quand quelqu'un la regarde, et les sessions qu'elle tient pour ses vignettes. */
+  /** Cameras view: until when someone is watching it, and the sessions it holds for its thumbnails. */
   let gridWantedUntil = 0
   const gridHeld = new Map<string, GridHold>()
-  /** Dernière fois qu'une caméra a rendu sa place : départage la rotation quand aucune vignette ne date. */
+  /** Last time a camera gave up its slot: breaks rotation ties when no thumbnail has a date. */
   const gridReleasedAt = new Map<string, number>()
   const gridFailed = new Map<string, GridFailure>()
-  /** Google a répondu « Rate limited » : aucune ouverture de vignette avant cette date. */
+  /** Google answered "Rate limited": no thumbnail opening before this date. */
   let gridCooldownUntil = 0
-  /** Caméras dont l'utilisateur a arrêté la vignette depuis la vue (bouton stop) : hors rotation jusqu'à reprise. */
+  /** Cameras whose thumbnail the user stopped from the view (stop button): out of rotation until resumed. */
   const gridPaused = new Set<string>()
   let gridTimer: unknown = null
-  /** Dossier des vignettes JPEG (une par caméra, réécrite en place par ffmpeg). */
+  /** Folder of the JPEG thumbnails (one per camera, rewritten in place by ffmpeg). */
   const snapshotDir = join(tmpdir(), 'kasbah-nest-snapshots')
   const snapshotPath = (externalId: string) => join(snapshotDir, `${externalId}.jpg`)
-  /** `state` émis par /auth/url et attendus au retour : une liaison ne s'accepte que si on l'a lancée. */
+  /** `state`s issued by /auth/url and expected on return: a linking is only accepted if we started it. */
   const pendingStates = new Set<string>()
   const randomState = deps.randomState ?? (() => randomBytes(16).toString('hex'))
 
@@ -173,7 +173,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     return client
   }
 
-  /** Relit la liste des appareils et reconstruit les descripteurs. Vrai si l'inventaire a changé. */
+  /** Reads the device list again and rebuilds the descriptors. True if the inventory changed. */
   async function refresh(): Promise<boolean> {
     const { raw, devices } = await ready().listDevices(ctx!.signal)
     lastRaw = raw
@@ -193,7 +193,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     return changed
   }
 
-  /** Publie l'état d'UN appareil : présence pour une caméra, état complet pour un thermostat. */
+  /** Publishes the state of ONE device: presence for a camera, full state for a thermostat. */
   function emitOne(externalId: string, device: SdmDevice): void {
     if (isThermostat(device)) {
       const patch = toClimatePatch(device, lastSetpoint.get(externalId))
@@ -201,7 +201,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       if (patch) ctx!.emitState(externalId, patch)
       ctx!.setAvailable(externalId, thermostatAvailable(device))
     } else {
-      ctx!.emitState(externalId, {})                    // même vide, le patch marque l'appareil disponible
+      ctx!.emitState(externalId, {})                    // even empty, the patch marks the device available
     }
   }
 
@@ -209,14 +209,14 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     for (const [externalId, device] of entries) emitOne(externalId, device)
   }
 
-  /** Une passe de relecture : inventaire (republié s'il change) puis états. */
+  /** One re-read pass: inventory (republished if it changes) then states. */
   async function tick(): Promise<void> {
     try {
       if (await refresh()) ctx!.emitDevices(descriptors)
       emitAll()
     } catch (err) {
       lastError = (err as Error).message
-      throw err                                         // le poller journalise et applique son backoff
+      throw err                                         // the poller logs and applies its backoff
     }
   }
 
@@ -228,7 +228,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     })
   }
 
-  /** Boucle Pub/Sub : tire les événements, pousse la sonnette aux clients, acquitte. Optionnelle. */
+  /** Pub/Sub loop: pulls the events, pushes the doorbell to the clients, acknowledges. Optional. */
   function startEvents(): void {
     if (eventsPoller || !config?.NEST_PUBSUB_SUBSCRIPTION || !client?.linked) return
     eventsPoller = createPoller({
@@ -244,23 +244,23 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     for (const m of msgs) {
       const parsed = m.data ? parseSdmEvent(m.data) : undefined
       if (!parsed || !entries.has(parsed.externalId)) continue
-      // Sonnette d'abord : on ne pousse que 'chime'. Mouvement/personne/son sont décodés mais pas
-      // encore exposés (ils spammeraient un client qui n'en fait rien) — un seul `if` à ouvrir plus tard.
+      // Doorbell first: we only push 'chime'. Motion/person/sound are decoded but not exposed yet
+      // (they would spam a client that does nothing with them) — a single `if` to open up later.
       for (const kind of parsed.kinds) {
         if (kind !== 'chime') continue
         log().info({ externalId: parsed.externalId, event: kind }, 'nest event')
         ctx!.emitEvent(parsed.externalId, kind)
       }
     }
-    // acquitter TOUT ce qu'on a tiré (même les événements ignorés), sinon Google les redonne en boucle
+    // acknowledge EVERYTHING pulled (even the ignored events), otherwise Google redelivers them in a loop
     await ready().acknowledge(sub, msgs.map((m) => m.ackId), ctx!.signal)
   }
 
   /**
-   * Ouvre (ou rejoint) la session vidéo d'une caméra RTSP. Deux écrans qui arrivent en même
-   * temps (ou un écran qui se connecte deux fois, vu en réel) doivent partager la MÊME
-   * ouverture : sans `opening`, chacune demandait sa session à Google et la seconde écrasait la
-   * première dans `streams`, dont le ffmpeg et le minuteur de prolongation tournaient alors sans fin.
+   * Opens (or joins) the video session of an RTSP camera. Two screens arriving at the same time (or
+   * one screen connecting twice, seen for real) must share the SAME opening: without `opening`, each
+   * asked Google for its own session and the second overwrote the first in `streams`, whose ffmpeg
+   * and extension timer then ran forever.
    */
   function openStream(externalId: string): Promise<RtspRelay> {
     const existing = streams.get(externalId)
@@ -285,9 +285,9 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}),
     })
     const session: StreamSession = { relay, url: started.streamUrls.rtspUrl, extensionToken: started.streamExtensionToken, extendTimer: null }
-    // Prolonger ne suffit pas : Google coupe la connexion RTSP à l'échéance INITIALE (constaté :
-    // vignettes figées puis ffmpeg en fin de flux pile à `expiresAt`, prolongation ou pas). Le nouveau
-    // `streamToken` sert à rouvrir la connexion, et le relais bascule dessus sans coupure.
+    // Extending is not enough: Google cuts the RTSP connection at the INITIAL deadline (observed:
+    // frozen thumbnails then ffmpeg at end of stream right at `expiresAt`, extension or not). The new
+    // `streamToken` is used to reopen the connection, and the relay switches to it without a gap.
     session.extendTimer = ctx!.clock.setInterval(() => {
       c.extendRtspStream(externalId, session.extensionToken, ctx!.signal)
         .then((r) => {
@@ -303,7 +303,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     return relay
   }
 
-  /** Ferme la session vidéo : relais arrêté, session Google libérée. */
+  /** Closes the video session: relay stopped, Google session released. */
   async function closeStream(externalId: string, reason: string): Promise<void> {
     const session = streams.get(externalId)
     if (!session) return
@@ -312,26 +312,26 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     const started = session.relay.ready
     session.relay.stop(reason)
     log().info({ externalId, reason }, 'rtsp stream closed')
-    // Une session dont le flux n'a jamais démarré (caméra éteinte : Google donne l'URL, son serveur
-    // répond 404) n'a rien à rendre — et chaque commande compte dans le quota par minute de Google,
-    // que sept caméras éteintes relancées ensemble suffisent à épuiser. Elle expire seule en cinq minutes.
+    // A session whose stream never started (camera off: Google gives the URL, its server answers
+    // 404) has nothing to release — and each command counts in Google's per-minute quota, which seven
+    // cameras that are off, restarted together, are enough to exhaust. It expires on its own in five minutes.
     if (!started) return
     try { await client?.stopRtspStream(externalId, session.extensionToken, ctx!.signal) }
     catch (err) { log().debug({ err }, 'StopRtspStream failed (the session expires by itself)') }
   }
 
-  // ---- vignettes de la vue Caméras -----------------------------------------------------------
-  // La vue se signale toutes les 5 s (`GET /cameras/snapshots?watch=1`). Tant qu'elle le fait, le
-  // plugin tient ouvertes des sessions pour les caméras RTSP, dans la limite du budget, et chaque
-  // relais écrit sa vignette JPEG. Les directs regardés comptent dans le budget ; s'il ne couvre
-  // pas toutes les caméras, les vignettes tournent : la caméra tenue depuis le plus longtemps cède
-  // sa place à celle dont la vignette est la plus vieille.
+  // ---- Cameras view thumbnails --------------------------------------------------------------
+  // The view checks in every 5 s (`GET /cameras/snapshots?watch=1`). As long as it does, the plugin
+  // keeps sessions open for the RTSP cameras, within the budget, and each relay writes its JPEG
+  // thumbnail. Watched live streams count in the budget; if it does not cover all the cameras, the
+  // thumbnails rotate: the camera held the longest gives its slot to the one with the oldest
+  // thumbnail.
 
   function rtspCameraIds(): string[] {
     return [...entries].filter(([, d]) => isCamera(d) && streamProtocols(d).includes('rtsp')).map(([id]) => id)
   }
 
-  /** Date de la vignette d'une caméra (mtime du fichier), ou `undefined` sans vignette. */
+  /** Date of a camera's thumbnail (file mtime), or `undefined` without a thumbnail. */
   async function snapshotAt(externalId: string): Promise<number | undefined> {
     try { return Math.round((await stat(snapshotPath(externalId))).mtimeMs) }
     catch { return undefined }
@@ -349,7 +349,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     let gotInit = false
     const hold: RelaySubscriber = (msg) => {
       if (msg.kind === 'init') { gotInit = true; gridFailed.delete(externalId) }
-      // fin AVANT la première image : la caméra ne diffuse pas (éteinte, en veille), on n'insiste pas
+      // end BEFORE the first image: the camera is not streaming (off, on standby), we do not insist
       else if (msg.kind === 'ended' && !gotInit) { gridHeld.delete(externalId); gridFailure(externalId, msg.reason) }
     }
     gridHeld.set(externalId, { since: ctx!.clock.now(), hold })
@@ -357,7 +357,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       .then((relay) => { if (gridHeld.get(externalId)?.hold === hold) relay.subscribe(hold) })
       .catch((err) => {
         gridHeld.delete(externalId)
-        // un refus de quota n'est pas la faute de la caméra : pause pour tout le monde, pas de compteur d'échec
+        // a quota refusal is not the camera's fault: pause for everyone, no failure count
         if (err instanceof PluginError && err.code === 'RATE_LIMITED') {
           gridCooldownUntil = ctx!.clock.now() + GRID_RATE_LIMIT_PAUSE_MS
           log().warn({ pauseMs: GRID_RATE_LIMIT_PAUSE_MS }, 'Google rate limit: snapshot sessions paused')
@@ -370,7 +370,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     if (!h) return
     gridHeld.delete(externalId)
     gridReleasedAt.set(externalId, ctx!.clock.now())
-    streams.get(externalId)?.relay.unsubscribe(h.hold)   // sans autre abonné, le relais se ferme après la grâce
+    streams.get(externalId)?.relay.unsubscribe(h.hold)   // without another subscriber, the relay closes after the grace period
   }
 
   async function gridTick(): Promise<void> {
@@ -380,7 +380,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       if (gridTimer !== null) { ctx!.clock.clearInterval(gridTimer); gridTimer = null }
       return
     }
-    // une prise dont le relais est mort n'a plus rien à tenir
+    // a hold whose relay is dead has nothing left to hold
     for (const id of [...gridHeld.keys()]) { const s = streams.get(id); if (!s || s.relay.hasEnded) gridHeld.delete(id) }
     const ids = rtspCameraIds()
     const budget = config!.NEST_LIVE_BUDGET
@@ -391,16 +391,16 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     const free = Math.min(GRID_OPEN_PER_TICK, budget - streams.size - [...gridHeld.keys()].filter((id) => !streams.has(id)).length)
     if (free <= 0) return
     const candidates = ids.filter((id) => !streams.has(id) && !gridHeld.has(id) && !gridPaused.has(id) && (gridFailed.get(id)?.retryAt ?? 0) <= now)
-    // Ordre, avec une ouverture par tick (quota Google) :
-    //  0. caméras qui ont une vignette mais n'ont pas encore été rendues par la rotation : ce sont
-    //     celles d'une exécution précédente (redémarrage du serveur) ou dont la session est morte —
-    //     on SAIT qu'elles diffusent. Sans ce rang, après un redémarrage les six caméras éteintes
-    //     (aucune vignette, donc « plus anciennes ») passaient d'abord, et les trois actives
-    //     affichaient une image d'il y a plusieurs minutes pendant qu'on les attendait ;
-    //  1. jamais essayées ;
-    //  2. rendues par la rotation (la plus vieille image en tête) ;
-    //  3. en échec dont le délai vient d'expirer — six caméras éteintes à réessayer feraient sinon
-    //     attendre plus d'une minute la seule qui marche (vu : « il y a 82 s » sur une caméra active).
+    // Order, with one opening per tick (Google quota):
+    //  0. cameras that have a thumbnail but have not yet been given back by the rotation: those of a
+    //     previous run (server restart) or whose session died — we KNOW they are streaming. Without
+    //     this rank, after a restart the six cameras that were off (no thumbnail, hence "oldest")
+    //     went first, and the three active ones showed an image several minutes old while we waited
+    //     for them;
+    //  1. never tried;
+    //  2. given back by the rotation (oldest image first);
+    //  3. failed, whose delay has just expired — six cameras that are off to retry would otherwise
+    //     make the only working one wait more than a minute (seen: "82 s ago" on an active camera).
     const dated = await Promise.all(candidates.map(async (id) => {
       const at = await snapshotAt(id), released = gridReleasedAt.get(id)
       const tier = gridFailed.has(id) ? 3 : released !== undefined ? 2 : at !== undefined ? 0 : 1
@@ -430,7 +430,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
 
     async init(c) {
       ctx = c
-      config = c.config as NestConfig                    // déjà validé/transformé par l'hôte
+      config = c.config as NestConfig                    // already validated/transformed by the host
       if (!config.NEST_PROJECT_ID || !config.NEST_CLIENT_ID || !config.NEST_CLIENT_SECRET) return
       mkdirSync(snapshotDir, { recursive: true })
       client = new NestClient({
@@ -444,9 +444,9 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
 
     async discover(): Promise<DeviceDescriptor[]> {
       if (!client?.linked) return []
-      // Un échec ici (quota Google épuisé, réseau) ne doit pas condamner le plugin jusqu'au prochain
-      // redémarrage : on démarre quand même, `health` dit pourquoi la liste est vide, et le sondage
-      // réessaie — l'inventaire est publié dès qu'il passe.
+      // A failure here (Google quota exhausted, network) must not doom the plugin until the next
+      // restart: we start anyway, `health` says why the list is empty, and the polling retries — the
+      // inventory is published as soon as it goes through.
       try { await refresh() }
       catch (err) { lastError = (err as Error).message; log().warn({ err }, 'Nest device list unavailable at start') }
       return descriptors
@@ -454,9 +454,9 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
 
     async start() {
       if (!client?.linked) return
-      emitAll()                                          // `discover` vient de remplir les entrées
-      startPolling()                                     // le premier tick relit la liste tout de suite : c'est le prix d'un poller simple
-      startEvents()                                      // événements Pub/Sub (sonnette) si un abonnement est configuré
+      emitAll()                                          // `discover` has just filled the entries
+      startPolling()                                     // the first tick reads the list again right away: that is the price of a simple poller
+      startEvents()                                      // Pub/Sub events (doorbell) if a subscription is configured
     },
 
     async execute(externalId: string, command: Command) {
@@ -470,8 +470,8 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
         throw new PluginError('UNSUPPORTED_COMMAND', `${command.type} refused by the thermostat in mode "${patch?.mode ?? 'unknown'}"`)
       }
       for (const cmd of commands) await c.executeCommand(externalId, cmd.command, cmd.params, ctx!.signal)
-      // Google a accusé ; on relit l'appareil pour publier ce qu'il a RETENU (arrondis, mode
-      // effectif) plutôt que ce qu'on a demandé — un sondage à la minute laisserait l'UI en retard.
+      // Google has acknowledged; we read the device again to publish what it KEPT (rounding,
+      // effective mode) rather than what we asked for — a once-a-minute poll would leave the UI behind.
       const fresh = await c.getDevice(externalId, ctx!.signal)
       entries.set(externalId, fresh)
       emitOne(externalId, fresh)
@@ -488,7 +488,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     },
 
     registerRoutes(app: FastifyInstance) {
-      // Lien à ouvrir dans un navigateur pour lier le compte Google au projet Device Access.
+      // Link to open in a browser to link the Google account to the Device Access project.
       app.get('/auth/url', async (_req, reply) => {
         if (!client) return sendError(reply, 409, 'NEEDS_PAIRING', 'set NEST_PROJECT_ID, NEST_CLIENT_ID and NEST_CLIENT_SECRET first')
         const state = randomState()
@@ -496,7 +496,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
         return { url: client.authorizationUrl(state), redirectUri: config!.NEST_REDIRECT_URI }
       })
 
-      // Retour de Google après consentement : le code s'échange contre le jeton de rafraîchissement.
+      // Return from Google after consent: the code is exchanged for the refresh token.
       app.get<{ Querystring: { code?: string; state?: string; error?: string } }>('/auth/callback', async (req, reply) => {
         if (!client) return sendError(reply, 409, 'NEEDS_PAIRING', 'plugin not configured')
         const { code, state, error } = req.query
@@ -509,7 +509,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
           await refresh()
           ctx!.emitDevices(descriptors)
           emitAll()
-          startPolling()                                 // le plugin avait démarré sans compte : le sondage part maintenant
+          startPolling()                                 // the plugin had started without an account: polling starts now
           return reply.type('text/html; charset=utf-8').send(linkedPage(refreshToken, descriptors.length, ignored))
         } catch (err) {
           lastError = (err as Error).message
@@ -518,9 +518,9 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
         }
       })
 
-      // Flux vidéo d'une caméra : une ligne JSON d'entête (codecs), puis l'entête MP4 et les
-      // fragments en binaire. Chaque fragment commence par une image clé : un écran qui arrive
-      // en cours de route décode dès le premier, et un écran trop lent peut en sauter.
+      // A camera's video stream: a JSON header line (codecs), then the MP4 header and the fragments
+      // as binary. Each fragment starts with a keyframe: a screen arriving midway decodes from the
+      // first one, and a screen that is too slow can skip some.
       app.get<{ Params: { id: string } }>('/cameras/:id/stream', { websocket: true }, (socket, req) => {
         const externalId = req.params.id
         const fail = (message: string) => { socket.send(JSON.stringify({ type: 'error', message })); socket.close(1008, message.slice(0, 120)) }
@@ -536,8 +536,8 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
           if (socket.bufferedAmount > WS_MAX_BUFFERED) return
           socket.send(msg.data, { binary: true })
         }
-        // un écran qui disparaît sans fermer (Wi-Fi coupé) laisserait la session Google et ffmpeg
-        // tourner : ping toutes les 30 s, et on coupe si le pong ne revient pas
+        // a screen that disappears without closing (Wi-Fi cut) would leave the Google session and
+        // ffmpeg running: ping every 30 s, and we cut if the pong does not come back
         let alive = true
         socket.on('pong', () => { alive = true })
         const heartbeat = ctx!.clock.setInterval(() => {
@@ -551,8 +551,8 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
           .catch((err) => { if (!closed) fail((err as Error).message) })
       })
 
-      // Vignettes de la vue Caméras : la date de chacune, et `watch=1` pour signaler qu'on regarde
-      // (c'est ce qui tient les sessions ouvertes ; sans signal pendant 15 s, elles se ferment).
+      // Cameras view thumbnails: the date of each, and `watch=1` to signal that someone is watching
+      // (it is what keeps the sessions open; without a signal for 15 s, they close).
       app.get<{ Querystring: { watch?: string } }>('/cameras/snapshots', async (req) => {
         if (req.query.watch === '1' && client?.linked) watchGrid()
         const ids = rtspCameraIds()
@@ -566,9 +566,9 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
         return { snapshots, budget: config?.NEST_LIVE_BUDGET ?? 0, sessions: streams.size }
       })
 
-      // Bouton stop d'une tuile : la vignette de CETTE caméra s'arrête (sa session est rendue, l'image
-      // reste figée) jusqu'à reprise. Partagé entre les écrans — un écran qui arrête une caméra
-      // l'arrête pour la maison, comme il éteindrait une lampe. Le direct n'est pas concerné.
+      // A tile's stop button: the thumbnail of THIS camera stops (its session is released, the image
+      // stays frozen) until resumed. Shared between screens — a screen that stops a camera stops it
+      // for the house, as it would turn off a light. The live stream is not affected.
       app.put<{ Params: { id: string }; Body: { enabled?: unknown } }>('/cameras/:id/snapshots', async (req, reply) => {
         const device = entries.get(req.params.id)
         if (!device || !isCamera(device)) return sendError(reply, 404, 'NOT_FOUND', `unknown Nest camera ${req.params.id}`)
@@ -589,7 +589,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
         }
       })
 
-      // Dernière liste brute reçue de Google : sert à relever une fixture réelle (voir __fixtures__).
+      // Last raw list received from Google: used to capture a real fixture (see __fixtures__).
       app.get('/devices/raw', async (_req, reply) => {
         if (lastRaw === undefined) return sendError(reply, 404, 'NOT_FOUND', 'no device list received yet')
         return lastRaw
@@ -610,7 +610,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
   }
 }
 
-/** Page de fin de liaison : le jeton à coller dans .env, rien d'autre (le serveur n'écrit pas .env). */
+/** End-of-linking page: the token to paste into .env, nothing else (the server does not write .env). */
 function linkedPage(refreshToken: string, devices: number, ignored: number): string {
   const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
   return `<!doctype html><meta charset="utf-8"><title>Kasbah · Google Nest</title>

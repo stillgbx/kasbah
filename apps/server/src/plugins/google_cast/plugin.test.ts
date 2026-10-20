@@ -25,9 +25,9 @@ const flush = async (n = 4) => { for (let i = 0; i < n; i++) await new Promise((
 interface Sent { namespace: string; destination: string; body: Record<string, unknown> }
 
 /**
- * Faux récepteur Cast au bout d'une socket en mémoire : répond aux GET_STATUS, SET_VOLUME, PING et
- * aux commandes média avec le `requestId` reçu, comme le vrai. `receiver` et `media` sont ses états
- * courants, modifiables par le test ; `push` envoie un état non sollicité.
+ * Fake Cast receiver at the end of an in-memory socket: answers GET_STATUS, SET_VOLUME, PING and
+ * media commands with the `requestId` received, like the real one. `receiver` and `media` are its
+ * current states, modifiable by the test; `push` sends an unsolicited state.
  */
 function fakeReceiver(receiver: Record<string, unknown>, media?: Record<string, unknown>) {
   const sent: Sent[] = []
@@ -36,7 +36,7 @@ function fakeReceiver(receiver: Record<string, unknown>, media?: Record<string, 
   const state = { receiver: structuredClone(receiver), media: media ? structuredClone(media) : undefined, sent, closed: false }
   const reply = (to: string, namespace: string, body: Record<string, unknown>) => { if (!state.closed) fromReceiver.write(encodeFrame(jsonMessage(to === 'sender-0' ? 'receiver-0' : to, 'sender-0', namespace, body))) }
   const mediaStatus = (requestId: number | undefined) => ({ type: 'MEDIA_STATUS', requestId, status: state.media ? [state.media] : [] })
-  /** Comme le vrai récepteur : une commande de transport est acquittée par un état SANS le bloc `media` (inchangé). */
+  /** Like the real receiver: a transport command is acknowledged by a state WITHOUT the `media` block (unchanged). */
   const mediaDelta = (requestId: number | undefined) => {
     const { media: _omitted, ...rest } = state.media as Record<string, unknown>
     return { type: 'MEDIA_STATUS', requestId, status: [rest] }
@@ -52,7 +52,7 @@ function fakeReceiver(receiver: Record<string, unknown>, media?: Record<string, 
           const v = body.volume as { level?: number; muted?: boolean }
           state.receiver.volume = { ...(state.receiver.volume as object), ...v }
         }
-        // STOP d'une session : l'appli se ferme, le récepteur répond par un état sans appli
+        // STOP of a session: the app closes, the receiver answers with a state without an app
         if (body.type === 'STOP') { state.receiver = { ...state.receiver, applications: [] }; state.media = undefined }
         if (body.type === 'LAUNCH') {
           const appId = String(body.appId)
@@ -100,7 +100,7 @@ function fakeReceiver(receiver: Record<string, unknown>, media?: Record<string, 
     state, sent, socket,
     push(receiver: Record<string, unknown>) { state.receiver = structuredClone(receiver); reply('sender-0', NS_RECEIVER, { type: 'RECEIVER_STATUS', status: state.receiver }) },
     pushMedia(media: Record<string, unknown> | undefined, transportId: string) { state.media = media ? structuredClone(media) : undefined; if (!state.closed) fromReceiver.write(encodeFrame(jsonMessage(transportId, 'sender-0', NS_MEDIA, mediaStatus(undefined)))) },
-    /** L'appareil coupe (redémarrage, Wi-Fi perdu). */
+    /** The device drops (restart, Wi-Fi lost). */
     drop() { state.closed = true; fromReceiver.end() },
     of(type: string): Sent[] { return sent.filter((s) => s.body.type === type) },
   }
@@ -119,9 +119,9 @@ function fakeDiscovery(initial: CastService[]) {
 function fakeContext(clock: ManualClock, config: Record<string, string> = {}) {
   const ctrl = new AbortController()
   const ctx: PluginContext = {
-    // `CAST_KNOWN_FILE` vide : aucun test ne doit lire ni écrire la mémoire réelle du poste de dev.
-    // `CAST_COVER_LOOKUP` faux : aucun test ne doit sortir sur le réseau — le test qui l'éprouve
-    // l'active en injectant de faux catalogues.
+    // Empty `CAST_KNOWN_FILE`: no test may read or write the dev machine's real memory.
+    // `CAST_COVER_LOOKUP` false: no test may go out on the network — the test that exercises it
+    // turns it on by injecting fake catalogs.
     pluginId: 'google_cast', config: googleCastConfigSchema.parse({ CAST_DISCOVERY_WAIT_MS: '1000', CAST_KNOWN_FILE: '', CAST_COVER_LOOKUP: 'false', ...config }), logger: pino({ level: 'silent' }), clock, signal: ctrl.signal,
     emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
     parts: {}, site: { lat: 47.3, lon: 5.05, alt: 180 },
@@ -129,7 +129,7 @@ function fakeContext(clock: ManualClock, config: Record<string, string> = {}) {
   return { ctx, ctrl }
 }
 
-/** Câble un faux récepteur par hôte ; un hôte absent est injoignable. */
+/** Wires one fake receiver per host; a missing host is unreachable. */
 function network(receivers: Record<string, ReturnType<typeof fakeReceiver>>) {
   const connect: SocketFactory = vi.fn(async (host) => {
     const r = receivers[host]
@@ -139,14 +139,14 @@ function network(receivers: Record<string, ReturnType<typeof fakeReceiver>>) {
   return connect
 }
 
-/** Registre des applis Cast : muet par défaut (aucun test ne doit sortir sur le réseau), Netflix ou Prime Video connus sur demande. */
+/** Cast app registry: silent by default (no test may go out on the network), Netflix or Prime Video known on request. */
 const noRegistry: RegistryFetch = async () => ({ ok: false, status: 404, text: async () => '' })
 const netflixRegistry: RegistryFetch = async (url) => (url.endsWith('CA5E8412') ? { ok: true, status: 200, text: async () => CAST_REGISTRY_NETFLIX } : noRegistry(url))
 const primeVideoRegistry: RegistryFetch = async (url) => (url.endsWith('17608BC8') ? { ok: true, status: 200, text: async () => CAST_REGISTRY_PRIME_VIDEO } : noRegistry(url))
-/** Comme le vrai registre : la variante Android TV de YouTube (2C6A6E3D) ne rend AUCUN visuel. */
+/** Like the real registry: the Android TV variant of YouTube (2C6A6E3D) returns NO visual. */
 const youtubeRegistry: RegistryFetch = async (url) => (url.endsWith('233637DE') ? { ok: true, status: 200, text: async () => CAST_REGISTRY_YOUTUBE } : noRegistry(url))
 
-/** Mémoire des appareils vus, en mémoire vive : ce que `known.ts` fait avec un fichier. */
+/** Memory of seen devices, in RAM: what `known.ts` does with a file. */
 function fakeKnown(initial: CastService[] = []) {
   let devices = initial
   return {
@@ -156,18 +156,18 @@ function fakeKnown(initial: CastService[] = []) {
   }
 }
 
-/** API d'une TV Sony : muette par défaut (aucun test ne doit sortir sur le réseau). */
+/** A Sony TV's API: silent by default (no test may go out on the network). */
 const noBravia: BraviaFetch = async () => { throw new Error('ECONNREFUSED') }
 
 async function started(discovery: CastDiscovery, connect: SocketFactory, fetchImpl?: ArtFetch, enrichFetch?: EnrichFetch, registryFetch: RegistryFetch = noRegistry, known?: ReturnType<typeof fakeKnown>, coverFetch?: CoverFetch, braviaFetch: BraviaFetch = noBravia) {
   const clock = new ManualClock(0)
-  // injecter de faux catalogues, c'est vouloir éprouver la recherche de pochette : elle s'allume avec
+  // injecting fake catalogs means wanting to exercise the cover lookup: it gets switched on with them
   const { ctx, ctrl } = fakeContext(clock, coverFetch ? { CAST_COVER_LOOKUP: 'true' } : {})
   const plugin = createGoogleCastPlugin({ discovery, connect, registryFetch, braviaFetch, ...(fetchImpl ? { fetchImpl } : {}), ...(enrichFetch ? { enrichFetch } : {}), ...(known ? { known } : {}), ...(coverFetch ? { coverFetch } : {}) })
   await plugin.init(ctx)
   const p = plugin.discover()
   await flush()
-  clock.advance(1000)                                            // fin de la fenêtre d'écoute mDNS
+  clock.advance(1000)                                            // end of the mDNS listening window
   await flush(8)
   const descriptors = await p
   await plugin.start()
@@ -184,10 +184,10 @@ describe('google_cast plugin', () => {
 
     expect(descriptors.map((d) => d.name)).toEqual(['Réveil parents', "Chambre 3"])
     expect(descriptors[0]!.capabilities).toContain('volume')
-    expect(descriptors[1]!.capabilities).not.toContain('volume')          // volume `fixed` connu dès le premier état
-    // le récepteur a reçu CONNECT puis GET_STATUS
+    expect(descriptors[1]!.capabilities).not.toContain('volume')          // `fixed` volume known from the first state
+    // the receiver got CONNECT then GET_STATUS
     expect(hub.sent.map((s) => s.body.type)).toEqual(['CONNECT', 'GET_STATUS'])
-    // rien n'est publié pendant discover (les appareils ne sont pas encore enregistrés) : un seul patch complet au start
+    // nothing is published during discover (the devices are not registered yet): a single full patch at start
     expect(patches(ctx, TXT_NEST_HUB.id)).toEqual([{ volume: 20, muted: false, playback: 'idle', nowPlaying: null }])
     expect(ctx.setAvailable).not.toHaveBeenCalled()
     expect(plugin.health!()).toEqual({ status: 'ok', detail: '2 device(s), 2 connected' })
@@ -202,7 +202,7 @@ describe('google_cast plugin', () => {
     expect(ctx.setAvailable).toHaveBeenCalledWith(TXT_NEST_MINI.id, false)
     expect(plugin.health!()).toMatchObject({ status: 'ok', detail: '2 device(s), 1 connected' })
 
-    // l'enceinte revient : la nouvelle tentative (backoff 5 s ± gigue) la trouve
+    // the speaker comes back: the new attempt (5 s backoff ± jitter) finds it
     receivers[SERVICE_NEST_MINI.host] = fakeReceiver(RECEIVER_STATUS_NEST_HUB_IDLE)
     clock.advance(7000)
     await flush(8)
@@ -214,25 +214,25 @@ describe('google_cast plugin', () => {
     const speaker = fakeReceiver(RECEIVER_STATUS_PLAYING, MEDIA_STATUS_PLAYING)
     const { plugin, ctx } = await started(fakeDiscovery([SERVICE_NEST_MINI]), network({ [SERVICE_NEST_MINI.host]: speaker }))
     const transportId = RECEIVER_STATUS_PLAYING.applications[0]!.transportId
-    // connexion au canal de l'appli, puis état média demandé
+    // connection to the app's channel, then media state requested
     expect(speaker.sent.filter((s) => s.destination === transportId).map((s) => s.body.type)).toEqual(['CONNECT', 'GET_STATUS'])
     expect(patches(ctx, TXT_NEST_MINI.id).at(-1)).toMatchObject({ playback: 'playing', nowPlaying: { title: 'Terracotta', artist: 'Mira Solano', source: 'Spotify' } })
 
     await plugin.execute(TXT_NEST_MINI.id, { type: 'media_player.pause' })
     expect(speaker.of('PAUSE')[0]).toMatchObject({ destination: transportId, body: { mediaSessionId: 1 } })
     await flush()
-    // l'accusé de PAUSE ne porte pas `media` : le morceau connu est conservé
+    // the PAUSE ack does not carry `media`: the known track is kept
     expect(patches(ctx, TXT_NEST_MINI.id).at(-1)).toMatchObject({ playback: 'paused', nowPlaying: { title: 'Terracotta', artist: 'Mira Solano' } })
 
     await plugin.execute(TXT_NEST_MINI.id, { type: 'media_player.next' })
     expect(speaker.of('QUEUE_UPDATE')[0]!.body).toMatchObject({ jump: 1, mediaSessionId: 1 })
 
-    // se placer dans le morceau : SEEK, et l'état qui revient porte la nouvelle position
+    // seeking within the track: SEEK, and the state that comes back carries the new position
     await plugin.execute(TXT_NEST_MINI.id, { type: 'media_player.seek', positionS: 90 })
     expect(speaker.of('SEEK')[0]!.body).toMatchObject({ mediaSessionId: 1, currentTime: 90 })
     await flush()
     expect(patches(ctx, TXT_NEST_MINI.id).at(-1)).toMatchObject({ nowPlaying: { title: 'Terracotta', positionS: 90 } })
-    // une nouvelle session sans `media` (autre morceau pas encore décrit) ne garde pas l'ancien
+    // a new session without `media` (another track not yet described) does not keep the old one
     speaker.pushMedia({ mediaSessionId: 2, playerState: 'BUFFERING' }, transportId)
     await flush()
     expect(patches(ctx, TXT_NEST_MINI.id).at(-1)).toEqual({ playback: 'playing', nowPlaying: null })
@@ -250,13 +250,13 @@ describe('google_cast plugin', () => {
     await flush()
     expect(patches(ctx, TXT_NEST_MINI.id).at(-1)).toMatchObject({ nowPlaying: { title: 'Terracotta', positionS: 0 } })
 
-    // deux secondes plus tard (position estimée ~2 s), « précédent » veut dire le morceau d'avant
+    // two seconds later (estimated position ~2 s), "previous" means the track before
     clock.advance(2000)
     await plugin.execute(TXT_NEST_MINI.id, { type: 'media_player.previous' })
     expect(speaker.of('QUEUE_UPDATE')[0]!.body).toMatchObject({ jump: -1, mediaSessionId: 1 })
     expect(speaker.of('SEEK')).toHaveLength(1)
 
-    // quatre secondes après le dernier état, la position estimée dépasse le seuil : retour au début
+    // four seconds after the last state, the estimated position exceeds the threshold: back to the start
     clock.advance(4000)
     await plugin.execute(TXT_NEST_MINI.id, { type: 'media_player.previous' })
     expect(speaker.of('SEEK')).toHaveLength(2)
@@ -264,9 +264,9 @@ describe('google_cast plugin', () => {
   })
 
   it('refuses to skip or seek a LIVE stream, and sends nothing (real franceinfo capture)', async () => {
-    // Relevé en réel : « précédent » sur le direct de franceinfo envoyait un SEEK à 0 (position >
-    // 3 s, comme sur un morceau). Le flux s'arrêtait et l'appli ne repartait plus. Un direct n'a ni
-    // début où revenir, ni piste voisine, quoi qu'annonce `supportedMediaCommands`.
+    // Observed for real: "previous" on the franceinfo live stream sent a SEEK to 0 (position > 3 s,
+    // as on a track). The stream stopped and the app would not restart. A live stream has no start
+    // to go back to, no neighboring track, whatever `supportedMediaCommands` announces.
     const speaker = fakeReceiver(RECEIVER_STATUS_RADIO, MEDIA_STATUS_RADIO)
     const { plugin, ctx } = await started(fakeDiscovery([SERVICE_NEST_MINI]), network({ [SERVICE_NEST_MINI.host]: speaker }))
     expect(patches(ctx, TXT_NEST_MINI.id).at(-1)).toMatchObject({ playback: 'playing', nowPlaying: { title: 'franceinfo', live: true } })
@@ -278,7 +278,7 @@ describe('google_cast plugin', () => {
     expect(speaker.of('SEEK')).toHaveLength(0)
     expect(speaker.of('QUEUE_UPDATE')).toHaveLength(0)
 
-    // pause, reprise et volume, eux, marchent sur un direct : ils ne sont pas grisés
+    // pause, resume and volume, however, work on a live stream: they are not grayed out
     await plugin.execute(TXT_NEST_MINI.id, { type: 'media_player.pause' })
     expect(speaker.of('PAUSE')).toHaveLength(1)
     await plugin.stop()
@@ -287,7 +287,7 @@ describe('google_cast plugin', () => {
   it('clears the track when the app stops, and refuses play when nothing plays', async () => {
     const speaker = fakeReceiver(RECEIVER_STATUS_PLAYING, MEDIA_STATUS_PLAYING)
     const { plugin, ctx } = await started(fakeDiscovery([SERVICE_NEST_MINI]), network({ [SERVICE_NEST_MINI.host]: speaker }))
-    speaker.push(RECEIVER_STATUS_NEST_HUB_IDLE)                           // Spotify fermé, écran de veille
+    speaker.push(RECEIVER_STATUS_NEST_HUB_IDLE)                           // Spotify closed, idle screen
     await flush()
     expect(patches(ctx, TXT_NEST_MINI.id).at(-1)).toEqual({ playback: 'idle', nowPlaying: null })
     await expect(plugin.execute(TXT_NEST_MINI.id, { type: 'media_player.play' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND', message: expect.stringContaining('nothing is playing') })
@@ -316,17 +316,17 @@ describe('google_cast plugin', () => {
   it('shows a native app without a media channel as on screen, and never talks to it (real Netflix capture)', async () => {
     const tv = fakeReceiver(RECEIVER_STATUS_CHROMECAST_FIXED)
     const { plugin, ctx } = await started(fakeDiscovery([SERVICE_CHROMECAST]), network({ [SERVICE_CHROMECAST.host]: tv }), undefined, undefined, netflixRegistry)
-    tv.push(RECEIVER_STATUS_NETFLIX)                                      // Netflix ouvert sur le Chromecast
+    tv.push(RECEIVER_STATUS_NETFLIX)                                      // Netflix open on the Chromecast
     await flush(8)
     const onScreen = patches(ctx, TXT_CHROMECAST.id).filter((p) => p.playback === 'on')
-    // d'abord l'état nu, sans attendre le registre ; puis le logo de l'appli (identifiant natif → CA5E8412), relayé par /art, en pochette de repli
+    // first the bare state, without waiting for the registry; then the app logo (native id → CA5E8412), relayed by /art, as the fallback cover
     const icon = 'https://lh3.googleusercontent.com/anonymised-netflix-icon'
     expect(onScreen[0]).toEqual({ playback: 'on', nowPlaying: { title: '', source: 'Netflix' } })
     expect(onScreen.at(-1)).toEqual({ playback: 'on', nowPlaying: { title: '', source: 'Netflix', artUrl: `/api/plugins/google_cast/art?url=${encodeURIComponent(icon)}` } })
-    // pas de transportId : ni CONNECT vers l'appli ni GET_STATUS média, seulement ceux du récepteur à l'ouverture
+    // no transportId: neither CONNECT to the app nor media GET_STATUS, only the receiver's ones on opening
     expect(tv.sent.filter((s) => s.destination !== 'receiver-0')).toEqual([])
     await expect(plugin.execute(TXT_CHROMECAST.id, { type: 'media_player.pause' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
-    // « éteindre » = fermer l'appli : STOP de sa session sur le canal récepteur, acquitté par un état sans appli
+    // "turn off" = close the app: STOP of its session on the receiver channel, acknowledged by a state without an app
     await plugin.execute(TXT_CHROMECAST.id, { type: 'media_player.stop' })
     expect(tv.of('STOP')).toEqual([{ namespace: NS_RECEIVER, destination: 'receiver-0', body: { type: 'STOP', sessionId: '0a9d3eeb-0000-4000-8000-000000000005', requestId: expect.any(Number) } }])
     await flush()
@@ -370,8 +370,8 @@ describe('google_cast plugin', () => {
     const { plugin, ctx, clock } = await started(fakeDiscovery([SERVICE_NEST_HUB]), network({ [SERVICE_NEST_HUB.host]: hub }))
     clock.advance(5000)
     await flush()
-    expect(hub.of('PING')).toHaveLength(1)                                 // notre battement de cœur, et le PONG est revenu
-    hub.state.closed = true                                                // l'appareil ne répond plus, sans fermer
+    expect(hub.of('PING')).toHaveLength(1)                                 // our heartbeat, and the PONG came back
+    hub.state.closed = true                                                // the device stops answering, without closing
     clock.advance(20_000)
     await flush()
     expect(ctx.setAvailable).toHaveBeenCalledWith(TXT_NEST_HUB.id, false)
@@ -399,7 +399,7 @@ describe('google_cast plugin', () => {
     const calls: string[] = []
     const fetchImpl: ArtFetch = vi.fn(async (url) => {
       calls.push(url)
-      // Google se plaint une fois, puis sert l'image
+      // Google complains once, then serves the image
       if (calls.length === 1) return { ok: false, status: 429, headers: { get: () => null }, arrayBuffer: async () => new ArrayBuffer(0) }
       return { ok: true, status: 200, headers: { get: (n: string) => (n === 'content-type' ? 'image/jpeg' : null) }, arrayBuffer: async () => new Uint8Array([0xff, 0xd8, 0xff]).buffer }
     })
@@ -410,43 +410,43 @@ describe('google_cast plugin', () => {
     const app = Fastify()
     await app.register(async (a) => { plugin.registerRoutes!(a) }, { prefix: '/api/plugins/google_cast' })
     await app.ready()
-    // la nouvelle tentative attend 800 ms d'horloge : on l'avance pendant que la requête est en vol
+    // the new attempt waits 800 ms of clock time: we advance it while the request is in flight
     const pending = app.inject({ method: 'GET', url: `/api/plugins/google_cast/art?url=${encodeURIComponent(original)}` })
     await flush(); clock.advance(1000)
     const res = await pending
     expect(res.statusCode).toBe(200)
     expect(res.headers['content-type']).toBe('image/jpeg')
     expect(res.rawPayload.length).toBe(3)
-    expect(calls).toHaveLength(2)                                           // 429 puis 200
-    // en cache : pas de nouveau téléchargement
+    expect(calls).toHaveLength(2)                                           // 429 then 200
+    // cached: no new download
     expect((await app.inject({ method: 'GET', url: `/api/plugins/google_cast/art?url=${encodeURIComponent(original)}` })).statusCode).toBe(200)
     expect(calls).toHaveLength(2)
-    // une URL jamais vue dans un état média n'est pas relayée
+    // a URL never seen in a media state is not relayed
     expect((await app.inject({ method: 'GET', url: '/api/plugins/google_cast/art?url=https%3A%2F%2Fexample.com%2Fx.jpg' })).statusCode).toBe(404)
     await app.close()
     await plugin.stop()
   })
 
   it('enriches a Crunchyroll episode: series, S·E and thumbnail arrive in a second patch, then straight from cache', async () => {
-    // vu en réel le 2026-09-10 : l'appareil peut omettre le titre lui-même, l'API le fournit
+    // seen for real on 2026-09-10: the device may omit the title itself, the API provides it
     const tv = fakeReceiver(RECEIVER_STATUS_CRUNCHYROLL, { ...MEDIA_STATUS_CRUNCHYROLL, media: { ...MEDIA_STATUS_CRUNCHYROLL.media, metadata: { metadataType: 0, artist: ' ' } } })
     const enrichFetch: EnrichFetch = vi.fn(async (url) => ({ ok: true, status: 200, json: async () => (url.endsWith('/auth/v1/token') ? CRUNCHYROLL_TOKEN : url.includes('/cms/series/') ? CRUNCHYROLL_OBJECT_SERIES : CRUNCHYROLL_OBJECT_EPISODE) }))
     const { plugin, ctx } = await started(fakeDiscovery([SERVICE_CHROMECAST]), network({ [SERVICE_CHROMECAST.host]: tv }), undefined, enrichFetch)
     const all = patches(ctx, TXT_CHROMECAST.id)
-    // d'abord ce que l'appareil a dit (titre seul), sans attendre Crunchyroll
+    // first what the device said (title only), without waiting for Crunchyroll
     expect(all.at(-1)).toMatchObject({ nowPlaying: { title: '', source: 'Crunchyroll' } })
     expect((all.at(-1) as { nowPlaying: { artist?: string } }).nowPlaying.artist).toBeUndefined()
     await flush(8)
-    // puis la même lecture, complétée
+    // then the same playback, completed
     expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({
       playback: 'playing',
       nowPlaying: { title: 'Un épisode de démonstration', artist: 'Les Chroniques de démo', album: 'S1 · E10', source: 'Crunchyroll', artUrl: expect.stringContaining('poster_tall') },
     })
-    expect(enrichFetch).toHaveBeenCalledTimes(3)                           // jeton + épisode + série
-    // l'affiche enrichie est servie par /art (URL connue), comme les pochettes des métadonnées
+    expect(enrichFetch).toHaveBeenCalledTimes(3)                           // token + episode + series
+    // the enriched poster is served by /art (known URL), like the metadata covers
     const poster = CRUNCHYROLL_OBJECT_SERIES.data[0]!.images.poster_tall[0]![3]!.source
     expect((patches(ctx, TXT_CHROMECAST.id).at(-1) as { nowPlaying: { artUrl: string } }).nowPlaying.artUrl).toBe(`/api/plugins/google_cast/art?url=${encodeURIComponent(poster)}`)
-    // un nouvel état du même contenu (pause) part enrichi d'un coup, depuis le cache
+    // a new state of the same content (pause) goes out enriched at once, from the cache
     await plugin.execute(TXT_CHROMECAST.id, { type: 'media_player.pause' })
     await flush()
     expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({ playback: 'paused', nowPlaying: { artist: 'Les Chroniques de démo', album: 'S1 · E10' } })
@@ -459,28 +459,28 @@ describe('google_cast plugin', () => {
     const enrichFetch: EnrichFetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) }))
     const { plugin } = await started(fakeDiscovery([SERVICE_NEST_MINI]), network({ [SERVICE_NEST_MINI.host]: speaker }), undefined, enrichFetch)
     await flush(4)
-    expect(enrichFetch).not.toHaveBeenCalled()                               // Spotify : rien à enrichir
+    expect(enrichFetch).not.toHaveBeenCalled()                               // Spotify: nothing to enrich
     await plugin.stop()
     expect(googleCastConfigSchema.parse({ CAST_CRUNCHYROLL_ENRICH: 'false' }).CAST_CRUNCHYROLL_ENRICH).toBe(false)
   })
 
   it('remembers a device that stopped announcing itself: listed and unavailable, connected as soon as it speaks again', async () => {
-    // le téléviseur a été vu lors d'un run précédent ; il est éteint, donc absent du mDNS et du réseau
+    // the TV was seen during a previous run; it is off, so absent from mDNS and from the network
     const known = fakeKnown([SERVICE_CHROMECAST])
     const receivers: Record<string, ReturnType<typeof fakeReceiver>> = { [SERVICE_NEST_MINI.host]: fakeReceiver(RECEIVER_STATUS_NEST_HUB_IDLE) }
     const discovery = fakeDiscovery([SERVICE_NEST_MINI])
     const { plugin, ctx, descriptors } = await started(discovery, network(receivers), undefined, undefined, undefined, known)
 
-    // il garde son nom, sa nature et ses capacités : l'entrée de house.json qui le vise reste lisible
+    // it keeps its name, its kind and its capabilities: the house.json entry pointing at it stays readable
     expect(descriptors.map((d) => d.name)).toEqual(['Chambre 3', 'Cuisine'])
     expect(descriptors[0]!.meta.mediaPlayer).toEqual({ deviceClass: 'tv' })
     expect(descriptors[0]!.meta.forgettable).toBe(true)
     expect(ctx.setAvailable).toHaveBeenCalledWith(TXT_CHROMECAST.id, false)
     expect(plugin.health!()).toMatchObject({ detail: '2 device(s), 1 connected' })
-    // la nouvelle enceinte est entrée dans la mémoire, le téléviseur y reste
+    // the new speaker has entered the memory, the TV stays in it
     expect(known.current.map((s) => s.txt.id)).toEqual([TXT_CHROMECAST.id, TXT_NEST_MINI.id])
 
-    // on rallume le téléviseur : son annonce suffit, sans attendre la fin du délai de reconnexion
+    // we switch the TV back on: its announcement is enough, without waiting for the reconnect delay to end
     receivers[SERVICE_CHROMECAST.host] = fakeReceiver(RECEIVER_STATUS_CHROMECAST_FIXED)
     discovery.announce(SERVICE_CHROMECAST)
     await flush(8)
@@ -496,18 +496,18 @@ describe('google_cast plugin', () => {
     const discovery = fakeDiscovery([SERVICE_NEST_MINI])
     const { plugin, ctx, clock } = await started(discovery, network(receivers), undefined, undefined, undefined, known)
 
-    // nouveau bail DHCP et renommage dans Google Home : l'ancienne connexion ne mène plus à rien
+    // new DHCP lease and rename in Google Home: the old connection leads nowhere anymore
     const moved: CastService = { ...SERVICE_NEST_MINI, host: '192.168.1.207', txt: { ...TXT_NEST_MINI, fn: 'Cuisine bas' } }
     receivers[moved.host] = fakeReceiver(RECEIVER_STATUS_NEST_HUB_IDLE)
     discovery.announce(moved)
     await flush()
     expect((ctx.emitDevices as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0]).toMatchObject([{ name: 'Cuisine bas' }])
     expect(known.current[0]!.host).toBe(moved.host)
-    clock.advance(7000)                                                   // nouvelle tentative, sur la nouvelle adresse
+    clock.advance(7000)                                                   // new attempt, on the new address
     await flush(8)
     expect(plugin.health!()).toMatchObject({ detail: '1 device(s), 1 connected' })
 
-    // oublier : l'appareil sort de la liste ET de la mémoire (route pendant de `known.ts`)
+    // forget: the device leaves the list AND the memory (route counterpart of `known.ts`)
     const app = Fastify()
     await app.register(async (a) => { plugin.registerRoutes!(a) }, { prefix: '/api/plugins/google_cast' })
     await app.ready()
@@ -515,7 +515,7 @@ describe('google_cast plugin', () => {
     expect(res.statusCode).toBe(200)
     expect((ctx.emitDevices as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0]).toEqual([])
     expect(known.current).toEqual([])
-    // un appareil déjà oublié n'est plus connu
+    // a device already forgotten is no longer known
     expect((await app.inject({ method: 'DELETE', url: `/api/plugins/google_cast/devices/${TXT_NEST_MINI.id}` })).statusCode).toBe(404)
     await app.close()
     await plugin.stop()
@@ -525,11 +525,11 @@ describe('google_cast plugin', () => {
     const tv = fakeReceiver(RECEIVER_STATUS_PRIME_VIDEO, MEDIA_STATUS_PRIME_VIDEO)
     const { plugin, ctx } = await started(fakeDiscovery([SERVICE_CHROMECAST]), network({ [SERVICE_CHROMECAST.host]: tv }), undefined, undefined, primeVideoRegistry)
     const all = patches(ctx, TXT_CHROMECAST.id)
-    // `duration: -0.001` veut dire « inconnue » : pas de durée publiée, la position reste
+    // `duration: -0.001` means "unknown": no duration published, the position stays
     expect(all.at(-1)).toMatchObject({ playback: 'playing', nowPlaying: { title: '', positionS: 141.89, source: 'Prime Video' } })
     expect((all.at(-1) as { nowPlaying: Record<string, unknown> }).nowPlaying).not.toHaveProperty('durationS')
     await flush(8)
-    // puis le logo de l'appli en pochette de repli (appli native → 17608BC8 dans le registre), relayé par /art
+    // then the app logo as the fallback cover (native app → 17608BC8 in the registry), relayed by /art
     const icon = 'https://lh3.googleusercontent.com/anonymised-prime-video-icon'
     expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({
       nowPlaying: { title: '', source: 'Prime Video', artUrl: `/api/plugins/google_cast/art?url=${encodeURIComponent(icon)}` },
@@ -540,13 +540,13 @@ describe('google_cast plugin', () => {
   it('takes the app logo from the CANONICAL app id when a TV runs its own variant (real YouTube capture)', async () => {
     const tv = fakeReceiver(RECEIVER_STATUS_YOUTUBE_TV, MEDIA_STATUS_YOUTUBE_TV)
     const { plugin, ctx } = await started(fakeDiscovery([SERVICE_CHROMECAST]), network({ [SERVICE_CHROMECAST.host]: tv }), undefined, undefined, youtubeRegistry)
-    // titre et artiste viennent de l'appli, mais elle ne publie aucune image
+    // title and artist come from the app, but it publishes no image
     expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({
       playback: 'playing',
       nowPlaying: { title: 'SLOW RIVERS - Live Performance (Piano Set)', artist: 'SLOW RIVERS', durationS: 1544.541, positionS: 602.781, source: 'YouTube' },
     })
     await flush(8)
-    // le logo arrive par `universalAppId` (233637DE) : interroger `appId` (2C6A6E3D) ne rendait rien
+    // the logo comes through `universalAppId` (233637DE): querying `appId` (2C6A6E3D) returned nothing
     const icon = 'https://lh3.googleusercontent.com/anonymised-youtube-icon'
     expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({
       nowPlaying: { artUrl: `/api/plugins/google_cast/art?url=${encodeURIComponent(icon)}` },
@@ -564,15 +564,15 @@ describe('google_cast plugin', () => {
       json: async () => (url.includes('itunes.apple.com') ? ITUNES_SEARCH_BOUNDARY : DEEZER_SEARCH_BOUNDARY),
     }))
     const { plugin, ctx } = await started(fakeDiscovery([SERVICE_CHROMECAST]), network({ [SERVICE_CHROMECAST.host]: tv }), undefined, undefined, youtubeRegistry, undefined, catalogs)
-    // d'abord ce que l'appareil dit, sans image : on ne fait pas attendre le catalogue
+    // first what the device says, without an image: we do not make it wait for the catalog
     expect(patches(ctx, TXT_CHROMECAST.id)[0]).toMatchObject({ nowPlaying: { title: 'Horizon', artist: 'Northwind et Lumen' } })
     await flush(8)
-    // puis la pochette de l'album, relayée par /art — et non le logo de YouTube
+    // then the album cover, relayed by /art — and not the YouTube logo
     const cover = 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/anonymised/199502092474_cover.jpg/600x600bb.jpg'
     expect(patches(ctx, TXT_CHROMECAST.id).at(-1)).toMatchObject({
       nowPlaying: { title: 'Horizon', artUrl: `/api/plugins/google_cast/art?url=${encodeURIComponent(cover)}` },
     })
-    expect(catalogs).toHaveBeenCalledTimes(1)                            // iTunes a suffi, Deezer n'a pas été appelé
+    expect(catalogs).toHaveBeenCalledTimes(1)                            // iTunes was enough, Deezer was not called
     await plugin.stop()
   })
 
@@ -584,25 +584,25 @@ describe('google_cast plugin', () => {
       return { ok: true, status: 200, json: async () => replies[method] }
     })
     const { plugin, ctx, clock } = await started(fakeDiscovery([SERVICE_BRAVIA, SERVICE_CHROMECAST]), network({ [SERVICE_BRAVIA.host]: tv, [SERVICE_CHROMECAST.host]: chromecast }), undefined, undefined, noRegistry, undefined, undefined, bravia)
-    // relevé fait pendant `discover`, publié d'un bloc au `start` avec le reste de l'état
+    // reading taken during `discover`, published in one block at `start` with the rest of the state
     expect(patches(ctx, TXT_BRAVIA.id)[0]).toMatchObject({ playback: 'playing', audioOutput: { terminal: 'external', name: 'Flexus 300' } })
-    // seule la TV Sony est interrogée, et seulement à son adresse
+    // only the Sony TV is queried, and only at its address
     for (const call of (bravia as ReturnType<typeof vi.fn>).mock.calls) expect(call[0]).toMatch(`http://${SERVICE_BRAVIA.host}/sony/`)
     expect(patches(ctx, TXT_CHROMECAST.id).some((p) => 'audioOutput' in p)).toBe(false)
 
-    // même réponse dix secondes plus tard : rien de republié (la relecture de position, elle, continue)
+    // same answer ten seconds later: nothing republished (the position re-reading, however, continues)
     const audioPatches = () => patches(ctx, TXT_BRAVIA.id).filter((p) => 'audioOutput' in p)
     expect(audioPatches()).toHaveLength(1)
     clock.advance(10_000)
     await flush(6)
     expect(audioPatches()).toHaveLength(1)
-    // la TV repasse sur ses haut-parleurs : un patch, sans nom d'appareil (plus rien à nommer)
+    // the TV switches back to its speakers: one patch, without a device name (nothing left to name)
     replies.getSoundSettings = BRAVIA_SOUND_SPEAKER
     clock.advance(10_000)
     await flush(6)
     expect(audioPatches()).toHaveLength(2)
     expect(audioPatches().at(-1)).toEqual({ audioOutput: { terminal: 'internal' } })
-    // la TV ne répond plus (éteinte) : le dernier relevé reste, rien d'inventé
+    // the TV no longer answers (off): the last reading stays, nothing invented
     replies.getSoundSettings = { error: [403, 'Forbidden'] }
     clock.advance(10_000)
     await flush(6)

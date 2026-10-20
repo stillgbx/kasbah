@@ -1,15 +1,15 @@
-// CAPTURES RÉELLES (2026-09-10) de l'API REST locale d'une Sony BRAVIA XR-65A80L (« TV Salon »), sans clé
-// PSK : YouTube Music jouait à l'écran, le son sortait par HDMI eARC vers une barre de son Klipsch Flexus
-// Core 300 — que la TV connaît par CEC sous « Flexus 300 ». Étiquettes d'entrées gardées telles quelles.
+// REAL CAPTURES (2026-09-10) of the local REST API of a Sony BRAVIA XR-65A80L ("TV Salon"), without a
+// PSK key: YouTube Music was playing on screen, the sound went out over HDMI eARC to a Klipsch Flexus
+// Core 300 soundbar — which the TV knows through CEC as "Flexus 300". Input labels kept as they are.
 
-/** `audio.getSoundSettings` `[{ target: 'outputTerminal' }]` : le son part vers le système audio. */
+/** `audio.getSoundSettings` `[{ target: 'outputTerminal' }]`: the sound goes to the audio system. */
 export const BRAVIA_SOUND_AUDIO_SYSTEM = { result: [[{ target: 'outputTerminal', currentValue: 'audioSystem' }]], id: 3 }
-/** Même question, TV réglée sur ses propres haut-parleurs. */
+/** Same question, TV set to its own speakers. */
 export const BRAVIA_SOUND_SPEAKER = { result: [[{ target: 'outputTerminal', currentValue: 'speaker' }]], id: 3 }
-/** Méthode refusée sans clé (forme d'une erreur de cette API). */
+/** Method refused without a key (shape of an error from this API). */
 export const BRAVIA_FORBIDDEN = { auth_url: { default: 'http://192.168.1.87:80/sony/webauth/auth_default' }, error: [403, 'Forbidden'], id: 5 }
 
-/** `avContent.getCurrentExternalInputsStatus` : la barre sur HDMI 3 (eARC/ARC), connectée, nommée par CEC. */
+/** `avContent.getCurrentExternalInputsStatus`: the soundbar on HDMI 3 (eARC/ARC), connected, named by CEC. */
 export const BRAVIA_INPUTS_ARC_SOUNDBAR = {
   result: [[
     { uri: 'extInput:cec?type=player&port=4&logicalAddr=4', title: 'PlayStation 5', connection: true, label: '', icon: 'meta:playbackdevice', status: '' },

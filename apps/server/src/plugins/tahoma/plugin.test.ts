@@ -10,7 +10,7 @@ const flush = () => new Promise((r) => setTimeout(r, 0))
 const json = (data: unknown, status = 200) =>
   ({ ok: status < 400, status, body: null, json: async () => data, text: async () => JSON.stringify(data) })
 
-/** Fausse box : sert le setup, rend une trame d'événements une seule fois, journalise les exec. */
+/** Fake box: serves the setup, returns an event frame only once, logs the execs. */
 function fakeBox(opts: { events?: unknown[]; then?: unknown[]; listenerGone?: boolean } = {}) {
   const applied: { label: string; actions: unknown }[] = []
   const calls: string[] = []
@@ -71,7 +71,7 @@ describe('tahoma plugin', () => {
     await plugin.init(ctx)
     expect(await plugin.discover()).toEqual([])
     await plugin.start()
-    // le sondage prouve que le mode développeur est actif : le seul manque est le jeton
+    // the probe proves developer mode is on: the only thing missing is the token
     expect(box.calls).toEqual(['GET /apiVersion'])
     expect(plugin.health!()).toMatchObject({ status: 'needs_pairing', detail: expect.stringContaining('developer mode is on') })
     await plugin.stop()
@@ -101,7 +101,7 @@ describe('tahoma plugin', () => {
     const { plugin, ctx, descriptors } = await started(box)
     expect(descriptors.map((d) => d.name)).toEqual(['Volet salon', 'BSO chambre', 'Store terrasse', 'Volet cuisine', 'Portail', 'Volet bureau', 'Volet bureau · luminosité'])
     expect(ctx.emitState).toHaveBeenCalledWith('io.1234-5678-9012.11110001', { position: 70, presetPosition: 27, motion: 'stopped' })
-    // RTS : aucun état à publier, mais l'appareil doit devenir disponible
+    // RTS: no state to publish, but the device must become available
     expect(ctx.emitState).toHaveBeenCalledWith('rts.1234-5678-9012.22220001', {})
     expect(ctx.setAvailable).toHaveBeenCalledWith('rts.1234-5678-9012.22220001', true)
     expect(plugin.health!()).toMatchObject({ status: 'ok', detail: '192.168.1.30 (protocol 2021.5.4)' })
@@ -114,11 +114,11 @@ describe('tahoma plugin', () => {
     vi.mocked(ctx.emitState).mockClear()
     clock.advance(2000)
     await flush()
-    // la cible (fermeture 100) et `MovingState` arrivent dans DEUX trames distinctes : c'est la
-    // fusion avec la position connue (70) qui donne le sens du mouvement
+    // the target (closure 100) and `MovingState` arrive in TWO separate frames: it is the merge with
+    // the known position (70) that gives the direction of movement
     expect(ctx.emitState).toHaveBeenCalledWith('io.1234-5678-9012.11110001', { position: 70, presetPosition: 27, motion: 'closing' })
     expect(ctx.setAvailable).toHaveBeenCalledWith('io.1234-5678-9012.11110002', false)
-    // fin de course : la position réelle n'arrive qu'ici
+    // end of travel: the real position only arrives here
     vi.mocked(ctx.emitState).mockClear()
     clock.advance(2000)
     await flush()
@@ -131,9 +131,9 @@ describe('tahoma plugin', () => {
     const box = fakeBox({ listenerGone: true })
     const { plugin, ctx, clock } = await started(box)
     vi.mocked(ctx.emitDevices).mockClear()
-    clock.advance(2000)                         // fetch → écouteur perdu
+    clock.advance(2000)                         // fetch → listener lost
     await flush()
-    clock.advance(2000)                         // réenregistrement + resynchronisation complète
+    clock.advance(2000)                         // re-registration + full resync
     await flush()
     expect(box.calls.filter((c) => c === 'POST /events/register').length).toBeGreaterThan(1)
     expect(ctx.emitDevices).toHaveBeenCalled()
@@ -164,7 +164,7 @@ describe('tahoma plugin', () => {
       { deviceURL: RTS_SHUTTER.deviceURL, commands: [{ name: 'down', parameters: [] }] },
     ])
     expect(ctx.emitState).toHaveBeenCalledWith('rts.1234-5678-9012.22220001', { position: 0, motion: 'stopped' })
-    // un io positionnable, lui, attend le retour de la box : aucun état inventé
+    // a positionable io, however, waits for the box's feedback: no invented state
     vi.mocked(ctx.emitState).mockClear()
     await plugin.execute('io.1234-5678-9012.11110001', { type: 'cover.open' })
     expect(ctx.emitState).not.toHaveBeenCalled()
@@ -175,10 +175,10 @@ describe('tahoma plugin', () => {
     await plugin.stop()
   })
 
-  it('rappeler la position favorite d un RTS EFFACE la position supposee', async () => {
-    // La position favorite vit dans le moteur et un RTS ne dit pas laquelle c'est : apres ce
-    // rappel, le 0 suppose par la fermeture precedente est devenu faux. Le garder afficherait
-    // « Baisse » pour un store parti ailleurs — exactement le defaut qu'on a corrige.
+  it("recalling an RTS's favorite position CLEARS the assumed position", async () => {
+    // The favorite position lives in the motor and an RTS does not say which one it is: after this
+    // recall, the 0 assumed from the previous closing has become wrong. Keeping it would show
+    // "Lowered" for a blind that went elsewhere — exactly the defect that was fixed.
     const box = fakeBox({ events: [] })
     const { plugin, ctx } = await started(box)
     await plugin.execute('rts.1234-5678-9012.22220001', { type: 'cover.close' })
@@ -191,17 +191,17 @@ describe('tahoma plugin', () => {
     ])
     expect(ctx.emitState).toHaveBeenCalledWith('rts.1234-5678-9012.22220001', { position: null, motion: 'stopped' })
 
-    // un io positionnable publiera sa vraie position : rien a inventer ni a effacer
+    // a positionable io will publish its real position: nothing to invent or clear
     vi.mocked(ctx.emitState).mockClear()
     await plugin.execute('io.1234-5678-9012.11110001', { type: 'cover.preset' })
     expect(ctx.emitState).not.toHaveBeenCalled()
     await plugin.stop()
   })
 
-  it('ARRETER un RTS en pleine course efface aussi la position supposee', async () => {
-    // Meme raison que le rappel de position favorite : l arret coupe la course au milieu, et une
-    // radio unidirectionnelle ne dit pas ou. Le store realement a mi-hauteur ne doit pas etre
-    // affiche « Baisse » a 100 %.
+  it('STOPPING an RTS mid-travel also clears the assumed position', async () => {
+    // Same reason as the favorite position recall: the stop cuts the travel in the middle, and a
+    // unidirectional radio does not say where. The blind actually at half height must not be shown
+    // "Lowered" at 100 %.
     const box = fakeBox({ events: [] })
     const { plugin, ctx } = await started(box)
     await plugin.execute('rts.1234-5678-9012.22220001', { type: 'cover.close' })
@@ -209,16 +209,16 @@ describe('tahoma plugin', () => {
     await plugin.execute('rts.1234-5678-9012.22220001', { type: 'cover.stop' })
     expect(ctx.emitState).toHaveBeenCalledWith('rts.1234-5678-9012.22220001', { position: null, motion: 'stopped' })
 
-    // un io dit sa vraie position : son arret n'efface rien
+    // an io reports its real position: its stop clears nothing
     vi.mocked(ctx.emitState).mockClear()
     await plugin.execute('io.1234-5678-9012.11110001', { type: 'cover.stop' })
     expect(ctx.emitState).not.toHaveBeenCalled()
     await plugin.stop()
   })
 
-  it('en mode batch, une rafale de commandes part en UNE execution', async () => {
-    // 15 exec/apply simultanes : la box en a pris 9 en 8 s, les 6 autres ont expire sans etre
-    // executes (releve le 2026-10-14). Une automatisation envoie ses volets d'un bloc.
+  it('in batch mode, a burst of commands goes out in ONE execution', async () => {
+    // 15 simultaneous exec/apply: the box took 9 in 8 s, the other 6 timed out without being
+    // executed (observed 2026-10-14). An automation sends its shutters all at once.
     const box = fakeBox({ events: [] })
     const { plugin, ctx } = await started(box, BATCH)
     await Promise.all([
@@ -234,12 +234,12 @@ describe('tahoma plugin', () => {
         { deviceURL: RTS_SHUTTER.deviceURL, commands: [{ name: 'down', parameters: [] }] },
       ],
     }])
-    // la suite propre a chaque appareil n'a pas change : le RTS pose toujours sa position supposee
+    // what follows for each device has not changed: the RTS still sets its assumed position
     expect(ctx.emitState).toHaveBeenCalledWith('rts.1234-5678-9012.22220001', { position: 0, motion: 'stopped' })
     await plugin.stop()
   })
 
-  it('en mode batch, un meme appareil deux fois dans la rafale part dans un second lot, dans l ordre', async () => {
+  it('in batch mode, the same device twice in the burst goes into a second batch, in order', async () => {
     const box = fakeBox({ events: [] })
     const { plugin } = await started(box, BATCH)
     await Promise.all([
@@ -254,7 +254,7 @@ describe('tahoma plugin', () => {
     await plugin.stop()
   })
 
-  it('en mode batch, un lot refuse par la box fait echouer chacune de ses commandes', async () => {
+  it('in batch mode, a batch refused by the box fails each of its commands', async () => {
     const box = fakeBox({ events: [] })
     const { plugin } = await started(box, BATCH)
     box.fetchImpl.mockImplementationOnce(async () => json({ error: 'busy' }, 500))
@@ -269,14 +269,14 @@ describe('tahoma plugin', () => {
     await plugin.stop()
   })
 
-  it('par defaut (queue), une rafale part en une execution par appareil, une requete a la fois', async () => {
-    // un arret envoye a UN volet ne doit pas pouvoir annuler l'execution des autres
+  it('by default (queue), a burst goes out as one execution per device, one request at a time', async () => {
+    // a stop sent to ONE shutter must not be able to cancel the others' execution
     const box = fakeBox({ events: [] })
     const { plugin } = await started(box)
     const serve = box.fetchImpl.getMockImplementation()!
     let inFlight = 0
     let maxInFlight = 0
-    let failNext = true                         // la premiere requete echoue : les suivantes partent quand meme
+    let failNext = true                         // the first request fails: the following ones go out anyway
     box.fetchImpl.mockImplementation(async (url, init) => {
       maxInFlight = Math.max(maxInFlight, ++inFlight)
       await new Promise((r) => setTimeout(r, 5))
@@ -300,7 +300,7 @@ describe('tahoma plugin', () => {
   })
 
   it('gives up on a hung box request instead of hanging forever', async () => {
-    // une box qui ne repond jamais : sans delai propre, le sondage d'evenements gelerait
+    // a box that never answers: without its own timeout, the event polling would freeze
     const fetchImpl = vi.fn<FetchLike>((_url, init) => new Promise((_resolve, reject) => {
       init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'TimeoutError' })))
     }))
@@ -323,7 +323,7 @@ describe('tahoma plugin', () => {
     await plugin.init(ctx)
     await expect(plugin.discover()).rejects.toMatchObject({
       code: 'NEEDS_PAIRING',
-      // le message de la box distingue « jeton refuse » d'un bug d'en-tete de notre cote
+      // the box's message tells "token refused" apart from a header bug on our side
       message: 'TaHoma local token rejected (Not authenticated.)',
     })
     expect(plugin.health!()).toMatchObject({ status: 'error', detail: expect.stringContaining('Not authenticated.') })

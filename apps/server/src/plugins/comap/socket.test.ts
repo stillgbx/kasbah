@@ -7,9 +7,9 @@ const REQUEST = { '1234567': { msgId: 5, read: ['status'] } }
 const REPLY = { '1234567': { msgId: 5, read: { status: { warning: 0, defect: 0, uvc: 1, mode: 1 } } } }
 
 /**
- * Fabrique une paire de tuyaux en mémoire, et rejoue `chunks` sur `fromStation` un par un, chacun
- * sur son propre `setImmediate` — pour de vrai forcer des évènements `data` SÉPARÉS (des écritures
- * synchrones avant tout abonnement seraient livrées en un seul chunk, et ne testeraient rien).
+ * Builds a pair of in-memory pipes, and replays `chunks` on `fromStation` one by one, each on its
+ * own `setImmediate` — to truly force SEPARATE `data` events (synchronous writes before any
+ * subscription would be delivered as a single chunk, and would test nothing).
  */
 function stationThatSends(chunks: string[]): SocketFactory {
   return async () => {
@@ -32,9 +32,9 @@ const read = (connect: SocketFactory) => readOnce({
 })
 
 describe('comap socket framing', () => {
-  // Bug réel du 2026-09-16 : la station ne termine JAMAIS ses réponses par un saut de ligne
-  // (capture `dialogue-app-station.log` : `}}}}` puis rien). Avec l'ancien cadrage
-  // (`buffer.indexOf('\n')`), cette trame ne résout jamais et le sondage expire à chaque fois.
+  // Real bug from 2026-09-16: the station NEVER ends its responses with a newline (capture
+  // `dialogue-app-station.log`: `}}}}` then nothing). With the old framing
+  // (`buffer.indexOf('\n')`), this frame never resolves and the poll times out every time.
   it('resolves a reply with no trailing newline at all (the real station)', async () => {
     await expect(read(stationThatSends([JSON.stringify(REPLY)]))).resolves.toEqual(REPLY)
   })
@@ -45,7 +45,7 @@ describe('comap socket framing', () => {
 
   it('waits for the second chunk instead of resolving on a JSON truncated mid-object', async () => {
     const full = JSON.stringify(REPLY)
-    const cut = Math.floor(full.length / 2) // coupe en plein milieu d'une clé/valeur, jamais sur une frontière
+    const cut = Math.floor(full.length / 2) // cuts right in the middle of a key/value, never on a boundary
     await expect(read(stationThatSends([full.slice(0, cut), full.slice(cut)]))).resolves.toEqual(REPLY)
   })
 })

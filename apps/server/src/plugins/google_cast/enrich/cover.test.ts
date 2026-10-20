@@ -8,7 +8,7 @@ const logger = pino({ level: 'silent' })
 const BOUNDARY = { title: 'Horizon', artist: 'Northwind et Lumen' }
 const PIANO_SET = { title: 'SLOW RIVERS - Live Performance (Piano Set)', artist: 'SLOW RIVERS' }
 
-/** Réponses des catalogues, choisies par l'hôte de l'URL ; `null` = ne connaît pas. */
+/** Catalog responses, chosen by the URL's host; `null` = does not know. */
 function fakeCatalogs(itunes: unknown | null, deezer: unknown | null) {
   const calls: string[] = []
   const fetchImpl: CoverFetch = vi.fn(async (url) => {
@@ -31,12 +31,12 @@ describe('cover lookup (iTunes then Deezer)', () => {
   })
 
   it('accepts a result only when it really is the track playing', () => {
-    // relevé réel : l'appareil dit « et », iTunes « & », Deezer ne nomme que le premier artiste
+    // real survey: the device says "et", iTunes "&", Deezer only names the first artist
     expect(matches(BOUNDARY, { title: 'Horizon', artist: 'Northwind & Lumen' })).toBe(true)
     expect(matches(BOUNDARY, { title: 'Horizon', artist: 'Northwind' })).toBe(true)
-    // même artiste, autre morceau du même album : non
+    // same artist, another track from the same album: no
     expect(matches(BOUNDARY, { title: 'Black', artist: 'Northwind' })).toBe(false)
-    // ce que iTunes propose sur un titre qui n'est pas un morceau : non
+    // what iTunes offers for a title that is not a track: no
     expect(matches(PIANO_SET, { title: "Highway Don't Care (feat. Taylor Swift & Keith Urban)", artist: 'Tim McGraw' })).toBe(false)
     expect(matches(BOUNDARY, { title: 'Horizon', artist: null })).toBe(false)
   })
@@ -47,7 +47,7 @@ describe('cover lookup (iTunes then Deezer)', () => {
     expect(await f.lookup(BOUNDARY)).toBe('https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/anonymised/199502092474_cover.jpg/600x600bb.jpg')
     expect(calls).toHaveLength(1)
     expect(calls[0]).toContain('entity=song')
-    // en cache : plus aucune requête, et la réponse est immédiate
+    // cached: no more requests, and the answer is immediate
     expect(f.cached(BOUNDARY)).toContain('600x600bb')
     expect(await f.lookup({ title: 'horizon', artist: 'NORTHWIND ET LUMEN' })).toContain('600x600bb')
     expect(calls).toHaveLength(1)
@@ -60,20 +60,20 @@ describe('cover lookup (iTunes then Deezer)', () => {
   })
 
   it('finds nothing on a video that is not a track, and remembers the failure', async () => {
-    // le vrai piège : iTunes répond des morceaux sans rapport, Deezer une liste vide
+    // the real trap: iTunes answers unrelated tracks, Deezer an empty list
     const { fetchImpl, calls } = fakeCatalogs(ITUNES_SEARCH_NOT_A_TRACK, { data: [] })
     const clock = new ManualClock(0)
     const f = finder(fetchImpl, clock)
     expect(await f.lookup(PIANO_SET)).toBeNull()
-    expect(f.cached(PIANO_SET)).toBeNull()                     // échec mémorisé
+    expect(f.cached(PIANO_SET)).toBeNull()                     // failure remembered
     await f.lookup(PIANO_SET)
-    expect(calls).toHaveLength(2)                              // le plugin republie toutes les 10 s : une seule recherche
-    clock.advance(7 * 3_600_000)                               // au-delà du délai d'oubli d'un échec
+    expect(calls).toHaveLength(2)                              // the plugin republishes every 10 s: a single search
+    clock.advance(7 * 3_600_000)                               // past the delay after which a failure is forgotten
     expect(f.cached(PIANO_SET)).toBeUndefined()
   })
 
-  it('never lets a catalogue failure remonter', async () => {
-    const fetchImpl: CoverFetch = vi.fn(async () => { throw new Error('réseau coupé') })
+  it('never lets a catalogue failure surface', async () => {
+    const fetchImpl: CoverFetch = vi.fn(async () => { throw new Error('network down') })
     expect(await finder(fetchImpl).lookup(BOUNDARY)).toBeNull()
   })
 })

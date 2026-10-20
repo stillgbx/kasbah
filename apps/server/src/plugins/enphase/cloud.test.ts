@@ -9,11 +9,11 @@ const response = (text: string, status = 200) => ({
 })
 
 describe('sitesOf', () => {
-  it('lit l\'emballage `sites` + `id` / `title` (forme vue dans l\'appli)', () => {
+  it('reads the `sites` wrapper + `id` / `title` (shape seen in the app)', () => {
     expect(sitesOf({ sites: [{ id: 1234567, title: 'Maison' }] })).toEqual([{ id: '1234567', title: 'Maison' }])
   })
 
-  it('accepte les autres enveloppes et clés d\'id, sans inventer un site', () => {
+  it('accepts the other envelopes and id keys, without inventing a site', () => {
     expect(sitesOf({ systems: [{ system_id: '99', name: 'Toit' }] })).toEqual([{ id: '99', title: 'Toit' }])
     expect(sitesOf({ data: [{ siteId: 1 }] })).toEqual([{ id: '1' }])
     expect(sitesOf({ nope: [] })).toEqual([])
@@ -22,7 +22,7 @@ describe('sitesOf', () => {
 })
 
 describe('probeEvRaw', () => {
-  it('sonde chaque chemin et porte l\'échec d\'un seul sans tomber', async () => {
+  it('probes each path and carries the failure of one without falling over', async () => {
     const fetchImpl = vi.fn<FetchLike>(async (url) => {
       if (url.includes('/ev_chargers/status') && !url.includes('/api/v2/')) return response('<html>', 404)
       if (url.includes('search_sites')) return response(JSON.stringify({ sites: [{ id: 42, title: 'Maison' }] }))
@@ -35,7 +35,7 @@ describe('probeEvRaw', () => {
     expect(raw['/service/evse_controller/42/ev_chargers/status']).toMatchObject({ error: expect.stringContaining('404') as unknown as string })
   })
 
-  it('sans id de site, les chemins qui en ont besoin se disent au lieu d\'être appelés', async () => {
+  it('without a site id, the paths that need one say so instead of being called', async () => {
     const fetchImpl = vi.fn<FetchLike>(async () => response('{"ok":true}'))
     const client = new EnlightenClient({ fetchImpl, session: { sessionId: 'sess-1' } })
     const raw = await probeEvRaw(client, undefined)
@@ -44,7 +44,7 @@ describe('probeEvRaw', () => {
     expect(raw.hasCookie).toBe(false)
   })
 
-  it('envoie le cookie Rails, pas le session_id d\'entrez', async () => {
+  it("sends the Rails cookie, not entrez's session_id", async () => {
     const fetchImpl = vi.fn<FetchLike>(async () => response('{"sites":[]}'))
     const client = new EnlightenClient({
       fetchImpl,

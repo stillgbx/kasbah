@@ -12,8 +12,8 @@ import {
   ensembleInventorySchema, ensemblePowerSchema, invertersSchema, livedataSchema, productionSchema,
 } from './types'
 
-// Mappage de la passerelle IQ, éprouvé sur des réponses CAPTUREES sur la vraie (voir
-// `__fixtures__/gateway.ts`) : installation triphasée, 20 micro-onduleurs, 2 batteries IQ.
+// IQ Gateway mapping, tested against responses CAPTURED from the real one (see
+// `__fixtures__/gateway.ts`): three-phase installation, 20 microinverters, 2 IQ batteries.
 
 const report = productionSchema.parse(PRODUCTION)
 const inverters = invertersSchema.parse(INVERTERS)
@@ -22,50 +22,50 @@ const inventory = ensembleInventorySchema.parse(ENSEMBLE_INVENTORY)
 const power = ensemblePowerSchema.parse(ENSEMBLE_POWER)
 const batteries = batteriesOf(inventory)
 
-describe('lecture des réponses réelles', () => {
-  it('les schémas acceptent ce que la passerelle envoie, clé `devices:` à deux-points comprise', () => {
+describe('reading the real responses', () => {
+  it('the schemas accept what the gateway sends, colon-suffixed `devices:` key included', () => {
     expect(report.production).toHaveLength(2)
     expect(inverters).toHaveLength(20)
     expect(live.meters?.enc_agg_soc).toBe(100)
     expect(batteries).toHaveLength(2)
     expect(power['devices:']).toHaveLength(2)
-    // deux CT en triphasé : c'est ce qui rend la production et la consommation mesurées disponibles
+    // two CTs in three-phase: it is what makes measured production and consumption available
     const meters = METERS as readonly { measurementType: string; phaseCount: number }[]
     expect(meters.map((m) => m.measurementType)).toEqual(['production', 'net-consumption'])
     expect(meters.every((m) => m.phaseCount === 3)).toBe(true)
   })
 })
 
-describe('descripteurs', () => {
+describe('descriptors', () => {
   const descriptors = toDescriptors({ report, inverters, batteries })
 
-  it('publie un site, un capteur par onduleur, un appareil par batterie', () => {
+  it('publishes a site, a sensor per inverter, a device per battery', () => {
     expect(descriptors).toHaveLength(23)
     expect(descriptors.filter((d) => d.kind === 'sensor')).toHaveLength(20)
     expect(descriptors.filter((d) => d.kind === 'energy')).toHaveLength(3)
     for (const d of descriptors) expect(deviceDescriptorSchema.parse(d)).toEqual(d)
   })
 
-  it('le site déclare le stockage parce que l\'installation a des batteries', () => {
+  it('the site declares storage because the installation has batteries', () => {
     const site = descriptors[0]!
     expect(site).toMatchObject({ id: 'enphase:site', externalId: 'site', kind: 'energy' })
     expect(site.capabilities).toEqual(['production', 'consumption', 'grid', 'storage'])
-    // sans batterie, la capacité tombe : l'UI n'affiche pas une tuile batterie vide
+    // without a battery, the capability drops: the UI does not show an empty battery tile
     const noBattery = toDescriptors({ report, inverters, batteries: [] })
     expect(noBattery[0]!.capabilities).toEqual(['production', 'consumption', 'grid'])
     expect(noBattery).toHaveLength(21)
   })
 
-  it('un panneau est un capteur de puissance en watts, nommé par la fin de son numéro de série', () => {
+  it('a solar panel is a power sensor in watts, named after the end of its serial number', () => {
     const panel = descriptors.find((d) => d.kind === 'sensor')!
     expect(panel.externalId).toBe(inverters[0]!.serialNumber)
     expect(panel.name).toBe(`Onduleur ${inverters[0]!.serialNumber.slice(-5)}`)
     expect(panel.meta.sensor).toEqual({ unit: 'W', deviceClass: 'power', precision: 0 })
-    // les 20 identifiants sont distincts : c'est ce qui permet de lier un champ de panneaux
+    // the 20 ids are distinct: it is what allows linking a panel array
     expect(new Set(descriptors.filter((d) => d.kind === 'sensor').map((d) => d.id)).size).toBe(20)
   })
 
-  it('une batterie est un `energy` de seul stockage : c\'est ce qui lui donne l\'icône batterie', () => {
+  it('a battery is a storage-only `energy`: it is what gives it the battery icon', () => {
     const battery = descriptors.filter((d) => d.kind === 'energy').slice(1)
     expect(battery).toHaveLength(2)
     expect(battery[0]!.capabilities).toEqual(['storage'])
@@ -74,145 +74,145 @@ describe('descripteurs', () => {
   })
 })
 
-describe('état du site', () => {
+describe('site state', () => {
   const patch = toSitePatch(live) as Record<string, number>
 
-  it('lit les compteurs par `livedata`, mille fois plus rapide que `production.json`', () => {
-    // mêmes compteurs, à quelques secondes d'échantillonnage près : 6472 W contre 6456 W
+  it('reads the meters through `livedata`, a thousand times faster than `production.json`', () => {
+    // same meters, give or take a few seconds of sampling: 6472 W versus 6456 W
     expect(patch.productionW).toBe(6472)
     expect(patch.consumptionW).toBe(725)
-    expect(patch.gridW).toBe(-5763)                      // négatif = injection, déjà le signe du contrat
+    expect(patch.gridW).toBe(-5763)                      // negative = export, already the contract's sign
   })
 
-  it('en repli sur `production.json`, prend le COMPTEUR et non la somme des onduleurs', () => {
+  it('when falling back on `production.json`, takes the METER and not the inverters\' sum', () => {
     const p = toSitePatch(undefined, report) as Record<string, number>
     expect(productionW(report)).toBe(6456)
     const inverterSum = report.production.find((e) => e.type === 'inverters')!.wNow
-    expect(inverterSum).toBe(4952)                       // 1,5 kW de retard sur la capture
+    expect(inverterSum).toBe(4952)                       // 1.5 kW behind on the capture
     expect(p).toMatchObject({ productionW: 6456, consumptionW: 691, gridW: -5765 })
-    // ce repli ne connaît pas la batterie : elle n'est que dans `livedata`
+    // this fallback does not know the battery: it is only in `livedata`
     expect(p.batteryW).toBeUndefined()
     expect(p.batterySoc).toBeUndefined()
   })
 
-  it('les Wh du jour viennent du compteur de production et de la consommation TOTALE', () => {
+  it("the day's Wh come from the production meter and the TOTAL consumption", () => {
     const day = toDailyPatch(report) as Record<string, number>
     expect(day.todayProductionWh).toBe(47127)
-    // `net-consumption` publie un whToday à 0 : le lire aurait donné une consommation nulle
+    // `net-consumption` publishes a whToday of 0: reading it would have given zero consumption
     expect(report.consumption.find((e) => e.measurementType === 'net-consumption')!.whToday).toBe(0)
     expect(day.todayConsumptionWh).toBe(18516)
   })
 
-  it('INVERSE le signe du stockage : le fabricant compte positif en décharge', () => {
+  it('INVERTS the storage sign: the vendor counts positive when discharging', () => {
     const m = live.meters!
-    // le bilan du fabricant ne se ferme qu'avec « storage positif = décharge », et il se ferme au
-    // milliwatt : c'est la preuve qui justifie l'inversion
+    // the vendor's balance only closes with "positive storage = discharge", and it closes to the
+    // milliwatt: that is the proof that justifies the inversion
     expect(m.pv!.agg_p_mw + m.storage!.agg_p_mw + m.grid!.agg_p_mw).toBe(m.load!.agg_p_mw)
-    expect(m.storage!.agg_p_mw).toBe(16000)              // +16 W chez Enphase = 16 W de DÉCHARGE
-    expect(patch.batteryW).toBe(-16)                     // donc négatif au contrat, qui veut positif = charge
+    expect(m.storage!.agg_p_mw).toBe(16000)              // +16 W at Enphase = 16 W of DISCHARGE
+    expect(patch.batteryW).toBe(-16)                     // so negative in the contract, which wants positive = charging
     expect(patch.batterySoc).toBe(100)
   })
 
-  it('produit un état `energy` complet et valide, fusionnable par le registre', () => {
+  it('produces a complete and valid `energy` state, mergeable by the registry', () => {
     const merged = mergeState(defaultState('energy'), toSitePatch(live, report), 1000)
     expect(merged).toMatchObject({ kind: 'energy', productionW: 6472, consumptionW: 725, gridW: -5763, batterySoc: 100 })
   })
 
-  it('ne descend PAS sous zéro : la pince lit la veille des onduleurs à l\'envers la nuit', () => {
+  it('does NOT go below zero: the clamp reads the inverters\' standby backwards at night', () => {
     const night = { ...live, meters: { ...live.meters!, pv: { ...live.meters!.pv!, agg_p_mw: -7000 } } }
     expect((toSitePatch(night) as Record<string, number>).productionW).toBe(0)
-    // même règle sur le repli `production.json`
+    // same rule on the `production.json` fallback
     const negative = { ...report, production: report.production.map((e) => ({ ...e, wNow: -7 })) }
     expect(productionW(negative)).toBe(0)
   })
 
-  it('sans rien à lire, ne dit rien plutôt que d\'affirmer des zéros', () => {
+  it('with nothing to read, says nothing rather than claiming zeros', () => {
     expect(toSitePatch(undefined)).toEqual({ kind: 'energy' })
   })
 })
 
-describe('état d\'un panneau', () => {
-  it('rend la puissance du dernier rapport', () => {
-    // …et le RECORD que la passerelle tient pour lui : ce qu'il a déjà sorti, jamais sa fiche technique
+describe('solar panel state', () => {
+  it('returns the power of the last report', () => {
+    // …and the RECORD the gateway keeps for it: what it has already delivered, never its datasheet
     expect(toPanelPatch(inverters[0]!)).toEqual({ kind: 'sensor', value: inverters[0]!.lastReportWatts, maxValue: inverters[0]!.maxReportWatts })
-    // les records du parc réel vont de 418 à 440 W : aucun plateau, donc aucun écrêtage à en déduire
+    // the real installation's records range from 418 to 440 W: no plateau, so no clipping to infer
     const records = inverters.map((i) => i.maxReportWatts!)
     expect(new Set(records).size).toBeGreaterThan(1)
-    // un onduleur qui ne publie pas de record n'en reçoit pas un inventé
+    // an inverter that publishes no record does not get an invented one
     expect(toPanelPatch({ ...inverters[0]!, maxReportWatts: undefined })).toEqual({ kind: 'sensor', value: inverters[0]!.lastReportWatts })
   })
 
-  it('un onduleur muet depuis plus d\'une demi-heure devient indisponible, sans zéro inventé', () => {
+  it('an inverter silent for more than half an hour becomes unavailable, with no invented zero', () => {
     const at = inverters[0]!.lastReportDate * 1000
     expect(isPanelStale(inverters[0]!, at + 60_000)).toBe(false)
     expect(isPanelStale(inverters[0]!, at + PANEL_STALE_MS + 1)).toBe(true)
-    // la valeur publiée ne change pas : c'est `available: false` qui dit qu'on ne la connaît plus
+    // the published value does not change: it is `available: false` that says we no longer know it
     expect(toPanelPatch(inverters[0]!)).toMatchObject({ value: inverters[0]!.lastReportWatts })
   })
 
-  it('les 20 onduleurs de la capture ont tous rapporté dans les cinq dernières minutes', () => {
+  it('the 20 inverters of the capture all reported within the last five minutes', () => {
     const latest = Math.max(...inverters.map((i) => i.lastReportDate)) * 1000
     expect(inverters.every((i) => !isPanelStale(i, latest))).toBe(true)
   })
 })
 
-describe('état d\'une batterie', () => {
-  it('charge de l\'inventaire, puissance de `ensemble/power`, au signe du contrat', () => {
+describe('battery state', () => {
+  it('charge from the inventory, power from `ensemble/power`, with the contract sign', () => {
     const first = toBatteryPatch(batteries[0]!, power) as Record<string, number>
     expect(first).toMatchObject({ kind: 'energy', productionW: 0, consumptionW: 0, gridW: 0, batterySoc: 100, batteryW: 0 })
     const second = toBatteryPatch(batteries[1]!, power) as Record<string, number>
-    expect(second.batteryW).toBe(-16)                    // 16000 mW de décharge chez Enphase
-    // la somme des batteries redonne le stockage d'ensemble de `livedata`
+    expect(second.batteryW).toBe(-16)                    // 16000 mW of discharge at Enphase
+    // the batteries' sum gives back `livedata`'s overall storage
     const sum = power['devices:'].reduce((s, d) => s + d.real_power_mw, 0)
     expect(sum).toBe(live.meters!.storage!.agg_p_mw)
   })
 
-  it('sans relevé de puissance, la charge suffit', () => {
+  it('without a power reading, the charge is enough', () => {
     const p = toBatteryPatch(batteries[0]!, undefined) as Record<string, number>
     expect(p.batterySoc).toBe(100)
     expect(p.batteryW).toBeUndefined()
   })
 
-  it('une batterie qui ne communique plus est indisponible et garde ses valeurs', () => {
+  it('a battery that no longer communicates is unavailable and keeps its values', () => {
     expect(isBatteryAvailable(batteries[0]!)).toBe(true)
     expect(isBatteryAvailable({ ...batteries[0]!, communicating: false })).toBe(false)
   })
 })
 
-describe('borne IQ EV Charger 2 (capture Enlighten)', () => {
+describe('IQ EV Charger 2 (Enlighten capture)', () => {
   const chargers = chargersOf(EVSE_STATUS)
   const summaries = chargerSummariesOf(EVSE_SUMMARY)
 
-  it('lit la borne malgré `error: {}` dans un HTTP 200', () => {
+  it('reads the charger despite `error: {}` in an HTTP 200', () => {
     expect(chargers).toHaveLength(1)
     expect(chargers[0]).toMatchObject({ sn: '482000000001', pluggedIn: true, charging: false, connected: true, sessionWh: 12363 })
     expect(summaries[0]).toMatchObject({ serialNumber: '482000000001', modelName: 'IQ-EVSE-EU-3032', maxCurrent: 32, defaultChargeLevel: 24 })
   })
 
-  it('une enveloppe inconnue ne lève pas : liste vide', () => {
+  it('an unknown envelope does not throw: empty list', () => {
     expect(chargersOf(null)).toEqual([])
     expect(chargersOf({ error: 'nope' })).toEqual([])
     expect(chargerSummariesOf({ data: {} })).toEqual([])
   })
 
-  it('SUSPENDED_EVSE / INSUFFICIENT_SOLAR = connected, pas une panne, et 0 W', () => {
+  it('SUSPENDED_EVSE / INSUFFICIENT_SOLAR = connected, not a failure, and 0 W', () => {
     const patch = toChargerPatch(chargers[0]!, summaries[0])
     expect(patch).toMatchObject({ kind: 'ev_charger', status: 'connected', powerW: 0, sessionWh: 12363, maxCurrentA: 24 })
     const merged = mergeState(defaultState('ev_charger'), patch, 1000)
     expect(merged).toMatchObject({ kind: 'ev_charger', status: 'connected', sessionWh: 12363 })
   })
 
-  it('déclare un ev_charger qu\'on démarre, arrête et dont on choisit le mode (vraie borne, 2026-10-01 et 02)', () => {
+  it('declares an ev_charger that can be started, stopped and have its mode chosen (real charger, 2026-10-01 and 02)', () => {
     const [d] = toChargerDescriptors(chargers, summaries)
     expect(d).toMatchObject({ id: 'enphase:482000000001', kind: 'ev_charger', capabilities: ['charge_control', 'charge_mode'], meta: { model: 'IQ-EVSE-EU-3032' } })
     expect(deviceDescriptorSchema.parse(d)).toEqual(d)
   })
 
-  it('arrêter la bloque jusqu\'au débranchement : le descripteur le dit, pour l\'aide sous le bouton', () => {
+  it('stopping blocks it until unplug: the descriptor says so, for the help under the button', () => {
     expect(toChargerDescriptors(chargers, summaries)[0]!.meta.evCharger).toEqual({ stopUntilUnplug: true })
   })
 
-  it('`safeLimitState` 1 = mode sécurisé, 0 = normal', () => {
+  it('`safeLimitState` 1 = safe mode, 0 = normal', () => {
     expect(toChargerPatch(chargers[0]!, summaries[0])).toMatchObject({ safeLimit: false })
     const safe = structuredClone(EVSE_STATUS) as unknown as { data: { chargers: { connectors: { safeLimitState: number }[] }[] } }
     safe.data.chargers[0]!.connectors[0]!.safeLimitState = 1
@@ -221,7 +221,7 @@ describe('borne IQ EV Charger 2 (capture Enlighten)', () => {
     expect(mergeState(defaultState('ev_charger'), patch, 1000)).toMatchObject({ safeLimit: true })
   })
 
-  it('`mode` 0 = annulation manuelle publiée, 1 = la borne suit son mode (vraie maison, 2026-10-15)', () => {
+  it('`mode` 0 = manual cancellation published, 1 = the charger follows its mode (real house, 2026-10-15)', () => {
     expect(toChargerPatch(chargers[0]!, summaries[0])).toMatchObject({ manualOverride: false })
     const overridden = structuredClone(EVSE_STATUS) as unknown as { data: { chargers: { mode: number }[] } }
     overridden.data.chargers[0]!.mode = 0

@@ -33,7 +33,7 @@ describe('comap mapping', () => {
       uvOn: true, flowLph: 0, todayL: 412, weekL: 1210, monthL: 6980,
       warning: false, defect: false,
     })
-    // `alert` (D001-D021) et `consumption.year` ne traversent nulle part vers l'état publié
+    // `alert` (D001-D021) and `consumption.year` never make it through to the published state
     expect(patch).not.toHaveProperty('alert')
     expect(patch).not.toHaveProperty('year')
   })

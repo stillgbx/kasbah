@@ -1,10 +1,10 @@
 import { z } from 'zod'
 import { PluginError } from '../../core/plugin'
 
-// API publique de Mixcloud (api.mixcloud.com) : sans clé ni connexion, tout ce qu'un compte montre
-// publiquement se lit par son nom d'utilisateur — ses mix, favoris, écoutes, playlists, suivis. Le
-// fil « nouveautés de mes suivis » du site, lui, demande une connexion : on le recompose à partir
-// des derniers mix de chaque compte suivi (`followingUploads`).
+// Mixcloud's public API (api.mixcloud.com): without a key or sign-in, everything an account shows
+// publicly can be read by its username — its mixes, favorites, listens, playlists, follows. The
+// site's "new from the accounts I follow" feed, however, requires a sign-in: we rebuild it from the
+// latest mixes of each followed account (`followingUploads`).
 
 const picturesSchema = z.record(z.string(), z.string()).optional()
 const userSchema = z.object({ username: z.string(), name: z.string().optional().default(''), pictures: picturesSchema })
@@ -23,16 +23,16 @@ const pageSchema = <T extends z.ZodTypeAny>(item: T) => z.object({
 })
 
 export interface MixcloudMix {
-  /** `/<user>/<slug>/` : l'id de la piste pour le lecteur commun, et la page à donner à yt-dlp. */
+  /** `/<user>/<slug>/`: the track id for the shared player, and the page to give yt-dlp. */
   key: string
   name: string
   user: { username: string; name: string }
-  /** Pochette carrée, la plus grande que l'API donne (jusqu'à 1024 px). */
+  /** Square cover, the largest the API gives (up to 1024 px). */
   artUrl: string | null
   durationS: number | null
   createdAt: string | null
   tags: string[]
-  /** Les genres du mix tels que l'API les nomme dans ses URL (`/genres/jazz/` → `jazz`), dans l'ordre des tags. */
+  /** The mix's genres as the API names them in its URLs (`/genres/jazz/` → `jazz`), in tag order. */
   genres: { slug: string; name: string }[]
 }
 
@@ -49,7 +49,7 @@ export interface MixcloudPlaylist {
 
 export interface MixcloudPage<T> {
   items: T[]
-  /** Curseur de la page suivante (l'URL `paging.next` de l'API), ou null en bout de liste. */
+  /** Cursor of the next page (the API's `paging.next` URL), or null at the end of the list. */
   next: string | null
 }
 
@@ -76,22 +76,22 @@ export function toMix(c: z.infer<typeof cloudcastSchema>): MixcloudMix {
   }
 }
 
-/** Un nom d'utilisateur Mixcloud tel qu'il apparaît dans l'URL du profil. */
+/** A Mixcloud username as it appears in the profile URL. */
 export const USERNAME_RE = /^[A-Za-z0-9_-]{1,64}$/
-/** Une clé de mix ou de playlist : `/user/slug/`, rien d'autre (elle part telle quelle dans une URL). */
+/** A mix or playlist key: `/user/slug/`, nothing else (it goes as is into a URL). */
 export const KEY_RE = /^\/[A-Za-z0-9_-]{1,64}\/(playlists\/)?[A-Za-z0-9_.%-]{1,200}\/$/
 
 export interface MixcloudApi {
   user(username: string): Promise<MixcloudUser | null>
   cloudcasts(username: string, next?: string): Promise<MixcloudPage<MixcloudMix>>
   favorites(username: string, next?: string): Promise<MixcloudPage<MixcloudMix>>
-  /** `limit` : jusqu'à 100 par page (l'accueil en tire les créateurs et genres les plus écoutés). */
+  /** `limit`: up to 100 per page (the home view derives the most listened creators and genres from it). */
   listens(username: string, next?: string, limit?: number): Promise<MixcloudPage<MixcloudMix>>
   playlists(username: string): Promise<MixcloudPlaylist[]>
   playlist(key: string, next?: string): Promise<MixcloudPage<MixcloudMix>>
   following(username: string): Promise<MixcloudUser[]>
   search(q: string, next?: string): Promise<MixcloudPage<MixcloudMix>>
-  /** Les émissions populaires d'un genre (`/discover/<slug>/popular/`). */
+  /** A genre's popular shows (`/discover/<slug>/popular/`). */
   popular(genreSlug: string): Promise<MixcloudPage<MixcloudMix>>
 }
 
@@ -99,7 +99,7 @@ const PAGE = 40
 
 export function createMixcloudApi(base: string, fetchImpl: typeof fetch = fetch, signal?: AbortSignal): MixcloudApi {
   const root = base.replace(/\/+$/, '')
-  /** Seules les URL de l'API elle-même sont suivies : un curseur venu de l'UI n'ouvre rien d'autre. */
+  /** Only the API's own URLs are followed: a cursor coming from the UI opens nothing else. */
   function urlFor(path: string, params: Record<string, string>, next?: string): string {
     if (next) {
       if (!next.startsWith(`${root}/`)) throw new PluginError('UNSUPPORTED_COMMAND', 'invalid page cursor')
@@ -137,7 +137,7 @@ export function createMixcloudApi(base: string, fetchImpl: typeof fetch = fetch,
       const u = userSchema.parse(body)
       return { username: u.username, name: u.name || u.username, artUrl: bestPicture(u.pictures) }
     },
-    // `async` : un nom invalide se rend en promesse rejetée, comme toute autre erreur de ces appels
+    // `async`: an invalid name comes back as a rejected promise, like any other error from these calls
     cloudcasts: async (u, next) => mixes(userPath(u, 'cloudcasts/'), next),
     favorites: async (u, next) => mixes(userPath(u, 'favorites/'), next),
     listens: async (u, next, limit) => mixes(userPath(u, 'listens/'), next, limit ? { limit: String(Math.min(100, limit)) } : {}),
@@ -164,9 +164,10 @@ export function createMixcloudApi(base: string, fetchImpl: typeof fetch = fetch,
 }
 
 /**
- * « Nouveautés de mes suivis » sans connexion : les derniers mix de chaque compte suivi, fusionnés du
- * plus récent au plus ancien. `max` comptes au plus, `perUser` mix chacun, `concurrency` requêtes à la
- * fois — l'API publique n'annonce pas son quota, on ne la martèle pas. Un compte qui échoue est sauté.
+ * "New from the accounts I follow" without a sign-in: the latest mixes of each followed account,
+ * merged from newest to oldest. At most `max` accounts, `perUser` mixes each, `concurrency` requests
+ * at a time — the public API does not announce its quota, we do not hammer it. An account that fails
+ * is skipped.
  */
 export async function followingUploads(
   api: MixcloudApi,
@@ -180,7 +181,7 @@ export async function followingUploads(
   async function worker() {
     while (cursor < users.length) {
       const u = users[cursor++]!
-      try { found.push(...(await api.cloudcasts(u.username)).items.slice(0, perUser)) } catch { /* compte injoignable : sauté */ }
+      try { found.push(...(await api.cloudcasts(u.username)).items.slice(0, perUser)) } catch { /* unreachable account: skipped */ }
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, users.length) }, worker))

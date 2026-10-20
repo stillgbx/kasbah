@@ -15,29 +15,28 @@ import {
 } from './mapping'
 import type { OverkizAction, OverkizDevice, OverkizEvent } from './types'
 
-// Plugin Somfy TaHoma (plateforme Overkiz), API LOCALE du « mode développeur » : aucun appel cloud,
-// un jeton local collé dans .env (TAHOMA_TOKEN). Sans jeton : mode `needs_pairing`, zéro appareil.
+// Somfy TaHoma plugin (Overkiz platform), LOCAL API of the "developer mode": no cloud call, a local
+// token pasted into .env (TAHOMA_TOKEN). Without a token: `needs_pairing` mode, zero devices.
 //
-// La box mélange deux radios et le plugin les distingue par ce qu'elle DÉCLARE, pas par le préfixe
-// de l'URL : io-homecontrol est bidirectionnel (position réelle, `setClosure`) alors que RTS est
-// unidirectionnel (ouvrir / fermer / stop, aucun retour). Un appareil sans commande de position
-// n'annonce donc pas la capacité `position` : l'UI n'affiche pas de curseur, et sa position reste
-// INCONNUE jusqu'à la première commande, puis déduite d'elle (100 après « ouvrir », 0 après
-// « fermer »). Rappeler la position favorite du moteur la rend inconnue à nouveau : on ne sait pas
-// où elle est réglée.
+// The box mixes two radios and the plugin tells them apart by what it DECLARES, not by the URL
+// prefix: io-homecontrol is bidirectional (real position, `setClosure`) whereas RTS is
+// unidirectional (open / close / stop, no feedback). A device without a position command therefore
+// does not announce the `position` capability: the UI shows no slider, and its position stays
+// UNKNOWN until the first command, then inferred from it (100 after "open", 0 after "close").
+// Recalling the motor's favorite position makes it unknown again: we do not know where it is set.
 
 const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1')
 
 /**
- * Une automatisation ou une scène envoie ses volets d'un bloc : 15 `exec/apply` simultanés, la box
- * en a pris 9 en 8 s et les 6 autres ont expiré sans être exécutés (relevé le 2026-10-14). Les
- * requêtes partent donc une à une (`queue`), ou bien les commandes reçues dans cette fenêtre
- * partent en UNE exécution (`batch`, 15 volets acceptés en ~200 ms le même soir). Fenêtre en temps
- * réel, pas l'horloge du contexte : elle ne mesure que l'arrivée des requêtes d'une même rafale.
+ * An automation or a scene sends its shutters all at once: 15 simultaneous `exec/apply`, the box
+ * took 9 in 8 s and the other 6 timed out without being executed (observed 2026-10-14). Requests
+ * therefore go out one at a time (`queue`), or else the commands received within this window go out
+ * in ONE execution (`batch`, 15 shutters accepted in ~200 ms the same evening). Real-time window,
+ * not the context clock: it only measures the arrival of the requests of one burst.
  */
 export const BATCH_WINDOW_MS = 50
 
-/** Une commande en attente de la prochaine exécution groupée. */
+/** A command waiting for the next grouped execution. */
 interface Pending {
   action: OverkizAction
   type: Command['type']
@@ -52,48 +51,48 @@ export const tahomaConfigSchema = z.object({
   TAHOMA_TLS_INSECURE: bool.default(true),
   TAHOMA_POLL_MS: z.coerce.number().int().min(500).max(60_000).default(2000),
   /**
-   * Envoi d'une rafale de commandes. `queue` : une exécution par appareil, une requête à la fois.
-   * `batch` : une seule exécution pour toute la rafale (comme un scénario TaHoma), plus rapide, mais
-   * un arrêt envoyé ensuite à UN appareil pourrait annuler l'exécution entière — non vérifié.
+   * Sending a burst of commands. `queue`: one execution per device, one request at a time.
+   * `batch`: a single execution for the whole burst (like a TaHoma scenario), faster, but a stop sent
+   * afterwards to ONE device might cancel the whole execution — not verified.
    */
   TAHOMA_COMMAND_MODE: z.enum(['queue', 'batch']).default('queue'),
-  /** Historique de luminosité des volets solaires ; vide = pas de persistance. */
+  /** Light history of the solar shutters; empty = no persistence. */
   TAHOMA_LIGHT_HISTORY_FILE: z.string().trim().default(stateFile('tahoma-light-history.json')),
-  /** Volets en mode discret (un réglage de Kasbah, la box ne le retient pas) ; vide = pas de persistance. */
+  /** Shutters in quiet mode (a Kasbah setting, the box does not keep it); empty = no persistence. */
   TAHOMA_QUIET_FILE: z.string().trim().default(stateFile('tahoma-quiet.json')),
 })
 export type TahomaConfig = z.infer<typeof tahomaConfigSchema>
 
 export interface TahomaPluginDeps {
-  /** Injection pour les tests (fetch simulé). */
+  /** Injection for tests (simulated fetch). */
   fetchImpl?: FetchLike
-  /** Injection pour les tests : délai d'abandon d'une requête, abrégé pour ne pas ralentir la suite. */
+  /** Injection for tests: request timeout, shortened so as not to slow down the suite. */
   requestTimeoutMs?: number
-  /** Injection pour les tests : historique de luminosité en mémoire. */
+  /** Injection for tests: in-memory light history. */
   lightHistoryStore?: LightHistoryStore
 }
 
 interface Entry {
   device: OverkizDevice
   commands: CoverCommands
-  /** Position réelle remontée par la box (io) ou déduite des commandes (RTS). */
+  /** Real position reported by the box (io) or inferred from the commands (RTS). */
   feedback: boolean
   /**
-   * Dernier état COMPLET connu, semé par `/setup` puis mis à jour par chaque trame. La box
-   * n'envoie que des deltas, souvent une seule clé à la fois (`core:MovingState=true` arrive dans
-   * sa propre trame, sans position ni cible) : sans cette accumulation, une trame prise isolément
-   * ne permet jamais de dire dans quel sens l'ouvrant se déplace.
+   * Last known FULL state, seeded by `/setup` then updated by each frame. The box only sends deltas,
+   * often a single key at a time (`core:MovingState=true` arrives in its own frame, without position
+   * or target): without this accumulation, a frame taken on its own never tells which way the cover
+   * is moving.
    */
   states: Map<string, unknown>
 }
 
-/** Un capteur de luminosité : le panneau d'un volet solaire. */
+/** A light sensor: the solar panel of a solar shutter. */
 interface SensorEntry {
   device: OverkizDevice
   states: Map<string, unknown>
 }
 
-/** Volets en mode discret, relus au démarrage. Fichier illisible ou absent = aucun. */
+/** Shutters in quiet mode, read back at startup. Unreadable or missing file = none. */
 async function loadQuiet(path: string): Promise<Set<string>> {
   try {
     const parsed = z.object({ quiet: z.array(z.string()) }).safeParse(JSON.parse(await readFile(path, 'utf8')))
@@ -113,27 +112,27 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
   let sensors = new Map<string, SensorEntry>()
   let history = new LightHistory()
   let historyStore: LightHistoryStore | null = null
-  /** Volets en mode discret (`externalId`). */
+  /** Shutters in quiet mode (`externalId`). */
   let quiet = new Set<string>()
   let descriptors: DeviceDescriptor[] = []
-  /** Dernière position connue, pour deviner le sens du mouvement et pour les appareils sans retour. */
+  /** Last known position, to guess the direction of movement and for devices without feedback. */
   const positions = new Map<string, number>()
   let listenerId: string | null = null
   let poller: { stop(): void } | null = null
   let protocolVersion: string | undefined
   /**
-   * L'API locale a répondu au moins une fois : le mode développeur est donc bien actif. Posé par la
-   * sonde de `init` ET par toute réponse réussie ensuite : sans ça, une sonde tombée pendant un
-   * redémarrage de la box (connexions coupées, relevé le 2026-09-24 à 8 h) laissait « activez le
-   * mode développeur » affiché pour de bon, alors que la suite fonctionnait.
+   * The local API has answered at least once: developer mode is therefore indeed on. Set by the
+   * `init` probe AND by any successful response afterwards: without that, a probe that landed during
+   * a box restart (connections cut, observed 2026-09-24 at 8:00) left "activate developer mode"
+   * displayed for good, even though everything after worked.
    */
   let localApiUp = false
   let lastError: string | null = null
   let needsResync = false
-  /** Commandes de la rafale en cours, envoyées ensemble à l'échéance de `batchTimer`. */
+  /** Commands of the current burst, sent together when `batchTimer` fires. */
   let batch: Pending[] = []
   let batchTimer: ReturnType<typeof setTimeout> | null = null
-  /** Dernière requête `exec/apply` partie : la suivante attend qu'elle soit finie. */
+  /** Last `exec/apply` request sent: the next one waits for it to finish. */
   let sending: Promise<unknown> = Promise.resolve()
 
   const log = () => ctx!.logger
@@ -142,7 +141,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
     return client
   }
 
-  /** Relit le setup : appareils retenus, commandes disponibles, descripteurs. */
+  /** Reads the setup again: devices kept, available commands, descriptors. */
   async function refresh(): Promise<void> {
     const devices = await ready().getSetup(ctx!.signal)
     const next = new Map<string, Entry>()
@@ -151,7 +150,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
     descriptors = []
     for (const device of devices) {
       if (isLightSensor(device)) {
-        // rattaché au moteur du même nœud radio (`…#2` → `…#1`) : l'UI les montre ensemble
+        // attached to the motor on the same radio node (`…#2` → `…#1`): the UI shows them together
         const cover = devices.find((d) => sameNode(d.deviceURL, device.deviceURL) && isCover(d))
         nextSensors.set(deviceUrlToExternalId(device.deviceURL), { device, states: readStates(device.states) })
         descriptors.push(toLightSensorDescriptor(device, cover ? `tahoma:${deviceUrlToExternalId(cover.deviceURL)}` : undefined))
@@ -172,11 +171,11 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
     lastError = null
   }
 
-  /** Publie l'état courant de tous les appareils (et leur disponibilité). */
+  /** Publishes the current state of all devices (and their availability). */
   function emitAll(): void {
     for (const [externalId, entry] of entries) {
       const patch = toCoverPatch(entry.states, positions.get(externalId))
-      // même vide, le patch marque l'appareil disponible (`emitState` ajoute `available: true`)
+      // even empty, the patch marks the device available (`emitState` adds `available: true`)
       ctx!.emitState(externalId, patch)
       if (typeof patch.position === 'number') positions.set(externalId, patch.position)
       if (entry.commands.quiet) ctx!.emitState(externalId, { quiet: quiet.has(externalId) })
@@ -188,7 +187,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
     }
   }
 
-  /** Publie la luminance d'un capteur et l'inscrit dans l'historique. */
+  /** Publishes a sensor's luminance and records it in the history. */
   function emitSensor(externalId: string, entry: SensorEntry): void {
     const lux = luminance(entry.states)
     if (lux === undefined) return
@@ -197,9 +196,9 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Une écriture à la fois : les 11 capteurs ouvrent leur heure dans la même passe, et des
-   * écritures simultanées se disputent le même fichier temporaire (ENOENT au renommage, relevé).
-   * Les demandes arrivées pendant une écriture sont fusionnées en UNE écriture de plus.
+   * One write at a time: the 11 sensors open their hour in the same pass, and simultaneous writes
+   * fight over the same temporary file (ENOENT on rename, observed). Requests arriving during a
+   * write are merged into ONE more write.
    */
   let saving: Promise<void> | null = null
   let saveAgain = false
@@ -242,7 +241,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
           const patch = toCoverPatch(entry.states, positions.get(externalId))
           if (Object.keys(patch).length > 0) ctx!.emitState(externalId, patch)
           if (typeof patch.position === 'number') positions.set(externalId, patch.position)
-          const status = frame.get('core:StatusState')      // seulement si la trame en parlait
+          const status = frame.get('core:StatusState')      // only if the frame mentioned it
           if (status === 'available' || status === 'unavailable') ctx!.setAvailable(externalId, status === 'available')
           break
         }
@@ -254,12 +253,12 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
         case 'DeviceEnabledEvent':
           ctx!.setAvailable(externalId, true)
           break
-        default: break                                  // exécutions, passerelle, calendrier : hors sujet
+        default: break                                  // executions, gateway, calendar: off topic
       }
     }
   }
 
-  /** Une requête `exec/apply` à la fois : la box décroche quand elles arrivent ensemble. */
+  /** One `exec/apply` request at a time: the box drops out when they arrive together. */
   function applyInTurn(label: string, actions: OverkizAction[]): Promise<void> {
     const sent = sending.then(() => ready().apply(label, actions, ctx!.signal))
     sending = sent.catch(() => undefined)
@@ -267,9 +266,9 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
   }
 
   /**
-   * Envoie une action selon `TAHOMA_COMMAND_MODE` ; se résout quand la box a pris l'exécution.
-   * En `batch`, un appareil déjà dans le lot part dans le lot suivant : deux actions sur un même
-   * appareil, dans une même exécution, n'ont pas d'ordre garanti.
+   * Sends an action according to `TAHOMA_COMMAND_MODE`; resolves when the box has taken the
+   * execution. In `batch`, a device already in the batch goes into the next batch: two actions on the
+   * same device, in the same execution, have no guaranteed order.
    */
   function enqueue(action: OverkizAction, type: Command['type']): Promise<void> {
     if (config!.TAHOMA_COMMAND_MODE === 'queue') return applyInTurn(`Kasbah ${type}`, [action])
@@ -280,7 +279,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
     })
   }
 
-  /** Envoie le lot en cours ; l'issue (prise ou échec) vaut pour toutes ses commandes. */
+  /** Sends the current batch; the outcome (taken or failed) applies to all its commands. */
   function sendBatch(): void {
     if (batchTimer) clearTimeout(batchTimer)
     batchTimer = null
@@ -295,25 +294,25 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
     )
   }
 
-  /** Une passe de sondage : (ré)enregistrement de l'écouteur puis lecture des événements. */
+  /** One polling pass: (re)registering the listener then reading the events. */
   async function tick(): Promise<void> {
     const c = ready()
     try {
       if (!listenerId) {
         listenerId = await c.registerListener(ctx!.signal)
-        await resync(true)                              // aveugle jusqu'ici : on repart d'un état complet
+        await resync(true)                              // blind until now: we start again from a full state
       }
       const events = await c.fetchEvents(listenerId, ctx!.signal)
       if (events === null) { listenerId = null; return }
       handleEvents(events)
       if (needsResync) { needsResync = false; await resync(true) }
-      // une heure s'ouvre aussi sans trame (la nuit, la luminance ne change pas) : on l'écrit quand même
+      // an hour also opens without a frame (at night, the luminance does not change): we write it anyway
       if (history.advance(ctx!.clock.now())) await saveHistory()
       localApiUp = true
       lastError = null
     } catch (err) {
       lastError = (err as Error).message
-      throw err                                         // le poller journalise et applique son backoff
+      throw err                                         // the poller logs and applies its backoff
     }
   }
 
@@ -323,7 +322,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
 
     async init(c) {
       ctx = c
-      config = c.config as TahomaConfig                 // déjà validé/transformé par l'hôte
+      config = c.config as TahomaConfig                 // already validated/transformed by the host
       historyStore = deps.lightHistoryStore ?? (config.TAHOMA_LIGHT_HISTORY_FILE ? createLightHistoryFile(config.TAHOMA_LIGHT_HISTORY_FILE, c.logger) : null)
       history = new LightHistory(await historyStore?.load())
       quiet = config.TAHOMA_QUIET_FILE ? await loadQuiet(config.TAHOMA_QUIET_FILE) : new Set()
@@ -337,9 +336,9 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
         ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
         ...(deps.requestTimeoutMs !== undefined ? { requestTimeoutMs: deps.requestTimeoutMs } : {}),
       })
-      // `/apiVersion` est le seul endpoint SANS jeton : il répond uniquement si l'API locale est
-      // servie, donc si le mode développeur est actif. On le sonde même sans jeton, pour pouvoir
-      // distinguer « box injoignable / mode développeur éteint » de « box prête, jeton manquant ».
+      // `/apiVersion` is the only endpoint WITHOUT a token: it only answers if the local API is
+      // served, hence if developer mode is on. We probe it even without a token, to be able to tell
+      // "box unreachable / developer mode off" from "box ready, token missing".
       try {
         protocolVersion = await client.getApiVersion(c.signal)
         localApiUp = true
@@ -363,9 +362,9 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
 
     async start() {
       if (!client || !config?.TAHOMA_TOKEN) return
-      emitAll()                                         // `discover` vient de remplir les entrées
-      // écouteur enregistré ici et pas au premier tick : le plugin est « ok » dès le démarrage,
-      // et le tick n'a plus qu'un cas de réenregistrement (la box a oublié l'écouteur).
+      emitAll()                                         // `discover` has just filled the entries
+      // listener registered here and not at the first tick: the plugin is "ok" from startup, and
+      // the tick only has one re-registration case left (the box forgot the listener).
       try { listenerId = await client.registerListener(ctx!.signal) }
       catch (err) { lastError = (err as Error).message; log().warn({ err }, 'TaHoma event listener registration failed') }
       poller = createPoller({
@@ -379,7 +378,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       const entry = entries.get(externalId)
       if (!entry) throw new PluginError('DEVICE_UNAVAILABLE', `unknown TaHoma device ${externalId}`)
       if (command.type === 'cover.set_quiet') {
-        // rien n'est envoyé à la box : le mode discret est une option des manœuvres suivantes
+        // nothing is sent to the box: quiet mode is an option of the following moves
         if (!entry.commands.quiet) throw new PluginError('UNSUPPORTED_COMMAND', `${command.type} on ${entry.device.controllableName ?? externalId}`)
         if (command.on) quiet.add(externalId)
         else quiet.delete(externalId)
@@ -391,20 +390,20 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       if (!action) throw new PluginError('UNSUPPORTED_COMMAND', `${command.type} on ${entry.device.controllableName ?? externalId}`)
       await enqueue(action, command.type)
       if (entry.feedback) return
-      // radio unidirectionnelle : la box ne dira jamais où en est l'ouvrant, on pose ce qu'on a demandé
+      // unidirectional radio: the box will never say where the cover is, we set what we asked for
       const assumed = assumedPosition(command)
       if (assumed !== undefined) {
         positions.set(externalId, assumed)
         ctx!.emitState(externalId, { position: assumed, motion: 'stopped' })
       } else if (command.type === 'cover.preset' || command.type === 'cover.stop') {
-        // Deux commandes qui laissent l'ouvrant SANS POSITION CONNUE sur une radio unidirectionnelle.
-        // Le rappel : la position favorite vit dans le moteur, qui ne dit pas laquelle c'est. L'arrêt :
-        // il coupe une course au milieu, et personne ne sait où. Dans les deux cas ce qu'on affichait
-        // (la fin de course déduite de la commande précédente) est devenu faux — on l'EFFACE (`null`)
-        // plutôt que d'en garder une périmée. C'est à ça que sert l'effacement.
+        // Two commands that leave the cover WITHOUT A KNOWN POSITION on a unidirectional radio. The
+        // recall: the favorite position lives in the motor, which does not say which one it is. The
+        // stop: it cuts a travel in the middle, and nobody knows where. In both cases what we were
+        // showing (the end of travel inferred from the previous command) has become wrong — we CLEAR
+        // it (`null`) rather than keep a stale one. That is what clearing is for.
         //
-        // Un arrêt sur un ouvrant déjà immobile efface donc une position juste : assumé, c'est le
-        // prix à payer pour ne jamais AFFIRMER « baissé » d'un store arrêté à mi-course.
+        // A stop on a cover that is already still therefore clears a correct position: accepted, it
+        // is the price to pay for never ASSERTING "lowered" for a blind stopped halfway.
         positions.delete(externalId)
         ctx!.emitState(externalId, { position: null, motion: 'stopped' })
       }
@@ -417,7 +416,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       batchTimer = null
       for (const p of batch) p.reject(new PluginError('DEVICE_UNAVAILABLE', 'TaHoma plugin stopped before the command was sent'))
       batch = []
-      await saveHistory()                               // l'heure en cours n'est écrite qu'à sa bascule
+      await saveHistory()                               // the current hour is only written when it rolls over
       if (client && listenerId) {
         try { await client.unregisterListener(listenerId) }
         catch (err) { log().debug({ err }, 'TaHoma listener unregister failed') }
@@ -429,8 +428,8 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
 
     registerRoutes(app: FastifyInstance) {
       /**
-       * Historique de luminosité d'un capteur : maximum par heure, par jour et par mois. Construit
-       * au fil des trames et rendu tel quel, jamais un appel à la box.
+       * A sensor's light history: maximum per hour, per day and per month. Built frame after frame
+       * and returned as is, never a call to the box.
        */
       app.get<{ Params: { externalId: string } }>('/light/:externalId', async (req, reply) => {
         const snap = history.snapshot(req.params.externalId, ctx?.clock.now() ?? Date.now())

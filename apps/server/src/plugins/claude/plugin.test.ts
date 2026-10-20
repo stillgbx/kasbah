@@ -13,14 +13,14 @@ import type { SpawnFn } from '../../music/proxy'
 import { claudeConfigSchema, createClaudePlugin } from '.'
 import { FakeChild, fakeClaude, happy } from './test-claude'
 
-// Le plugin : le forfait Claude de chaque compte (jamais rendu au navigateur), la santé (version de
-// `claude`, binaire introuvable), et le moteur inscrit tant qu'il tourne.
+// The plugin: each account's Claude subscription (never returned to the browser), health (`claude`
+// version, missing binary), and the engine registered while it runs.
 
 const stateDir = process.env.KASBAH_STATE_DIR
 let fake: ReturnType<typeof fakeClaude>
 
 const ctx = (env: Record<string, string> = {}): PluginContext => ({
-  // la config telle que l'hôte la donne : DÉJÀ validée (booléens compris)
+  // the config as the host hands it over: ALREADY validated (booleans included)
   pluginId: 'claude', config: claudeConfigSchema.parse(env), logger: pino({ level: 'silent' }), clock: systemClock, signal: new AbortController().signal,
   emitState() {}, setAvailable() {}, emitDevices() {}, emitScenes() {}, emitSceneState() {}, emitEvent() {}, parts: {}, site: { lat: 0, lon: 0, alt: 0 },
 })
@@ -38,7 +38,7 @@ async function started(spawnImpl: SpawnFn = fake.spawnImpl, env: Record<string, 
   return plugin
 }
 
-/** Une instruction par le moteur inscrit, comme le cœur la lance. */
+/** An instruction through the registered engine, the way the core runs it. */
 async function ask(user: string | null) {
   const events: AssistantEvent[] = []
   await currentAssistantEngine()!.run({
@@ -54,7 +54,7 @@ beforeEach(() => {
 })
 afterEach(() => { process.env.KASBAH_STATE_DIR = stateDir })
 
-it('inscrit le moteur au démarrage et le retire à l’arrêt', async () => {
+it('registers the engine on start and removes it on stop',async () => {
   const plugin = await started()
   expect(currentAssistantEngine()?.id).toBe('claude')
   expect((await ask(null)).at(-1)?.type).toBe('done')
@@ -62,7 +62,7 @@ it('inscrit le moteur au démarrage et le retire à l’arrêt', async () => {
   expect(currentAssistantEngine()).toBeUndefined()
 })
 
-it('lance Haiku 5.5 par défaut, ou le modèle de CLAUDE_MODEL', async () => {
+it('runs Haiku 5.5 by default, or the CLAUDE_MODEL model',async () => {
   const model = (i: number) => fake.calls[i]!.args[fake.calls[i]!.args.indexOf('--model') + 1]
   const plugin = await started()
   await ask(null)
@@ -75,7 +75,7 @@ it('lance Haiku 5.5 par défaut, ou le modèle de CLAUDE_MODEL', async () => {
   await other.stop()
 })
 
-it('prend le forfait du compte, sinon celui de la maison, sinon la connexion de la machine', async () => {
+it("uses the account's subscription, else the house's, else the machine's sign-in",async () => {
   const plugin = await started()
   await ask('lou')
   expect(fake.calls[0]!.env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
@@ -90,7 +90,7 @@ it('prend le forfait du compte, sinon celui de la maison, sinon la connexion de 
   await plugin.stop()
 })
 
-it('dit sa santé : la version de claude, ou le binaire introuvable', async () => {
+it('reports its health: the claude version, or the missing binary',async () => {
   const ok = await started()
   expect(ok.health!()).toMatchObject({ status: 'ok', detail: "claude 2.1.288 — claude-haiku-5-5 — no house token: the server's claude sign-in is used" })
   await ok.stop()
@@ -104,14 +104,14 @@ it('dit sa santé : la version de claude, ou le binaire introuvable', async () =
   await ko.stop()
 })
 
-describe('routes du compte', () => {
+describe('account routes', () => {
   let app: FastifyInstance
   beforeEach(async () => {
     const plugin = createClaudePlugin({ spawnImpl: fake.spawnImpl })
     await plugin.init(ctx())
     app = Fastify()
     app.setErrorHandler((err, _req, reply) => { const d = describeError(err); return sendError(reply, d.status, d.code, d.message) })
-    // le compte de la requête, comme le pose la porte à session
+    // the request's account, as the session gate sets it
     app.decorateRequest('sessionUser', null)
     app.addHook('onRequest', async (req) => { const u = req.headers['x-test-user']; req.sessionUser = typeof u === 'string' ? u : null })
     await app.register(async (sub) => plugin.registerRoutes!(sub), { prefix: '/api/plugins/claude' })
@@ -119,19 +119,19 @@ describe('routes du compte', () => {
   })
   afterEach(() => app.close())
 
-  it('range le jeton du compte courant et ne le renvoie jamais', async () => {
+  it("stores the current account's token and never sends it back",async () => {
     const put = await app.inject({ method: 'PUT', url: '/api/plugins/claude/account', headers: { 'x-test-user': 'lou' }, payload: { token: 'sk-ant-oat01-abcdefghijklmnopqrstuvwxyz' } })
     expect(put.statusCode).toBe(200)
     expect(put.body).not.toContain('sk-ant')
     expect(put.json()).toMatchObject({ user: 'lou', house: false })
     expect(JSON.parse(readFileSync(userStateFile('lou', 'claude.json'), 'utf8')).token).toBe('sk-ant-oat01-abcdefghijklmnopqrstuvwxyz')
-    // la maison n'a rien
+    // the house has nothing
     expect((await app.inject({ method: 'GET', url: '/api/plugins/claude/account' })).json()).toEqual({ user: null, savedAt: null, house: false })
     const del = await app.inject({ method: 'DELETE', url: '/api/plugins/claude/account', headers: { 'x-test-user': 'lou' } })
     expect(del.json()).toEqual({ user: 'lou', savedAt: null, house: false })
   })
 
-  it('refuse ce qui n’a pas la forme d’un jeton de `claude setup-token`', async () => {
+  it('rejects anything not shaped like a `claude setup-token` token',async () => {
     const res = await app.inject({ method: 'PUT', url: '/api/plugins/claude/account', payload: { token: 'mot de passe' } })
     expect(res.statusCode).toBe(400)
   })

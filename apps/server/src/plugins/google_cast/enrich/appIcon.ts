@@ -2,21 +2,21 @@ import type { Logger } from 'pino'
 import { z } from 'zod'
 import type { Clock } from '../../../core/clock'
 
-// Logo de l'appli en pochette de REPLI : quand ce qui joue n'a pas d'image (Netflix natif n'envoie rien,
-// Crunchyroll rien avant enrichissement, une radio parfois rien), la ligne et le panneau restent nus alors
-// qu'on sait au moins quelle appli est à l'écran. Source : le registre PUBLIC des applis Cast, celui que
-// les téléphones interrogent pour afficher l'icône d'une appli (`clients3.google.com/cast/chromecast/device/app?a=<appId>`,
-// sans clé) — `promo_assets[].icon_url`, une image carrée 512 px chez Google (relevé du 2026-09-10 :
-// Netflix, YouTube, Spotify, Radio France). Réponse JSON précédée du garde `)]}'` à retirer.
+// App logo as a FALLBACK cover: when what is playing has no image (native Netflix sends nothing,
+// Crunchyroll nothing before enrichment, a radio sometimes nothing), the row and the panel stay bare even
+// though we at least know which app is on screen. Source: the PUBLIC Cast app registry, the one phones
+// query to show an app's icon (`clients3.google.com/cast/chromecast/device/app?a=<appId>`, no key) —
+// `promo_assets[].icon_url`, a 512 px square image hosted by Google (survey of 2026-09-10: Netflix,
+// YouTube, Spotify, Radio France). JSON response preceded by the `)]}'` guard, to be stripped.
 //
-// Une appli NATIVE d'un Chromecast avec Google TV ne porte pas son identifiant Cast (`appId: "Netflix"`,
-// `AndroidNativeApp`) : une petite table par nom fait le lien. Une appli inconnue du registre reste sans
-// logo — l'affichage garde ce qu'il a.
+// A NATIVE app on a Chromecast with Google TV does not carry its Cast id (`appId: "Netflix"`,
+// `AndroidNativeApp`): a small table by name makes the link. An app unknown to the registry stays
+// without a logo — the display keeps what it has.
 
 const REGISTRY = 'https://clients3.google.com/cast/chromecast/device/app?a='
 /**
- * Applis natives → identifiant du registre Cast (vérifiés le 2026-09-10 : le registre rend bien
- * `display_name` et une icône pour chacun). À compléter au fil des relevés.
+ * Native apps → Cast registry id (verified 2026-09-10: the registry does return `display_name` and an
+ * icon for each). To be extended as surveys come in.
  */
 const NATIVE_APP_IDS: Record<string, string> = {
   Netflix: 'CA5E8412',
@@ -33,20 +33,20 @@ const registrySchema = z.looseObject({
   promo_assets: z.array(z.looseObject({ icon_url: z.string().nullish() })).nullish(),
 })
 
-/** Le strict nécessaire de `fetch` pour lire le registre (texte, à cause du garde). */
+/** The bare minimum of `fetch` to read the registry (text, because of the guard). */
 export type RegistryFetch = (url: string, init?: { signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>
 
-/** Identifiant sous lequel le registre connaît l'appli, ou `undefined` si on ne sait pas la nommer. */
+/** Id under which the registry knows the app, or `undefined` if we cannot name it. */
 export function registryAppId(app: { appId: string; universalAppId?: string | null; displayName?: string | null }): string | undefined {
-  // `universalAppId` D'ABORD : c'est l'identifiant canonique de l'appli, celui qui porte ses visuels.
-  // Relevé sur une TV Android : YouTube tourne sous `appId: 2C6A6E3D` (variante Android TV, connue du
-  // registre mais SANS aucun `promo_assets`) et `universalAppId: 233637DE`, qui en a dix-sept. Prendre
-  // l'un pour l'autre donne une réponse valide… et un fond vide.
+  // `universalAppId` FIRST: it is the app's canonical id, the one carrying its visuals. Observed on an
+  // Android TV: YouTube runs under `appId: 2C6A6E3D` (Android TV variant, known to the registry but
+  // WITHOUT any `promo_assets`) and `universalAppId: 233637DE`, which has seventeen. Taking one for the
+  // other gives a valid response… and an empty background.
   for (const id of [app.universalAppId, app.appId]) if (id && /^[0-9A-F]{8}$/.test(id)) return id
   return app.displayName ? NATIVE_APP_IDS[app.displayName] : undefined
 }
 
-/** Retire le garde anti-hijacking `)]}'` que Google place devant le JSON. */
+/** Strips the `)]}'` anti-hijacking guard Google puts in front of the JSON. */
 export function parseRegistry(text: string): string | null {
   const json = text.replace(/^\)\]\}'\s*/, '')
   const parsed = registrySchema.safeParse(JSON.parse(json))
@@ -70,14 +70,14 @@ export class AppIconResolver {
     this.fetchImpl = opts.fetchImpl ?? ((url, init) => fetch(url, init))
   }
 
-  /** Logo déjà connu (ou échec récent : `null`), sans requête ; `undefined` si jamais demandé ou périmé. */
+  /** Logo already known (or recent failure: `null`), without a request; `undefined` if never asked or stale. */
   cached(registryId: string): string | null | undefined {
     const hit = this.cache.get(registryId)
     if (!hit) return undefined
     return this.opts.clock.now() - hit.at < (hit.url ? HIT_TTL_MS : MISS_TTL_MS) ? hit.url : undefined
   }
 
-  /** Logo d'une appli du registre ; une seule requête en vol par identifiant, `null` si inconnue ou injoignable. */
+  /** Logo of a registry app; a single request in flight per id, `null` if unknown or unreachable. */
   lookup(registryId: string): Promise<string | null> {
     const known = this.cached(registryId)
     if (known !== undefined) return Promise.resolve(known)

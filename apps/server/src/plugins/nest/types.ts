@@ -1,21 +1,21 @@
 import { z } from 'zod'
 
-// Formes de l'API Google Smart Device Management (SDM), `https://smartdevicemanagement.googleapis.com/v1`.
-// Schémas VOLONTAIREMENT souples (`looseObject`, `z.unknown()` sur les traits) : Google ajoute des
-// traits à chaque génération d'appareil, et contraindre un champ qu'on ne lit pas suffirait à faire
-// échouer la liste entière (leçon du plugin TaHoma, cf. `doc/3_plugins/3_2_ecrire-un-plugin.md`).
+// Shapes of the Google Smart Device Management (SDM) API, `https://smartdevicemanagement.googleapis.com/v1`.
+// DELIBERATELY lenient schemas (`looseObject`, `z.unknown()` on traits): Google adds traits with
+// each device generation, and constraining a field we do not read would be enough to fail the whole
+// list (lesson from the TaHoma plugin, cf. `doc/3_plugins/3_2_ecrire-un-plugin.md`).
 
 /**
- * Un appareil SDM. `name` est le chemin de ressource `enterprises/<projet>/devices/<id>` ; l'id
- * est opaque et stable. `traits` est un dictionnaire `sdm.devices.traits.<Nom>` → valeurs, lu
- * trait par trait avec `readTrait` pour ne rien imposer sur ceux qu'on ignore.
+ * An SDM device. `name` is the resource path `enterprises/<project>/devices/<id>`; the id is opaque
+ * and stable. `traits` is a dictionary `sdm.devices.traits.<Name>` → values, read trait by trait
+ * with `readTrait` so as to impose nothing on the ones we ignore.
  */
 export const sdmDeviceSchema = z.looseObject({
   name: z.string(),
   /** `sdm.devices.types.DOORBELL`, `…CAMERA`, `…DISPLAY`, `…THERMOSTAT`. */
   type: z.string().optional(),
   traits: z.record(z.string(), z.unknown()).default({}),
-  /** La pièce (structure Google Home) qui contient l'appareil : `displayName` est son nom. */
+  /** The room (Google Home structure) containing the device: `displayName` is its name. */
   parentRelations: z.array(z.looseObject({
     parent: z.string().optional(),
     displayName: z.string().optional(),
@@ -23,12 +23,12 @@ export const sdmDeviceSchema = z.looseObject({
 })
 export type SdmDevice = z.infer<typeof sdmDeviceSchema>
 
-/** `GET /enterprises/<projet>/devices`. Chaque élément est validé séparément par le client. */
+/** `GET /enterprises/<project>/devices`. Each item is validated separately by the client. */
 export const sdmDevicesResponseSchema = z.looseObject({
   devices: z.array(z.unknown()).default([]),
 })
 
-/** Corps d'erreur Google (`{ error: { code, message, status } }`) — diagnostique, sans secret. */
+/** Google error body (`{ error: { code, message, status } }`) — diagnostic, no secret. */
 export const sdmErrorSchema = z.looseObject({
   error: z.looseObject({
     code: z.number().optional(),
@@ -37,32 +37,32 @@ export const sdmErrorSchema = z.looseObject({
   }).optional(),
 })
 
-/** Réponse de `https://oauth2.googleapis.com/token` (échange de code et rafraîchissement). */
+/** Response of `https://oauth2.googleapis.com/token` (code exchange and refresh). */
 export const oauthTokenResponseSchema = z.looseObject({
   access_token: z.string(),
-  /** Secondes de validité (3600 en pratique). */
+  /** Seconds of validity (3600 in practice). */
   expires_in: z.number().optional(),
-  /** Présent à l'échange du code seulement (avec `access_type=offline` + `prompt=consent`). */
+  /** Present only on the code exchange (with `access_type=offline` + `prompt=consent`). */
   refresh_token: z.string().optional(),
 })
 export type OAuthTokenResponse = z.infer<typeof oauthTokenResponseSchema>
 
-/** Corps d'erreur OAuth (`invalid_grant` = jeton de rafraîchissement révoqué ou code déjà consommé). */
+/** OAuth error body (`invalid_grant` = refresh token revoked or code already used). */
 export const oauthErrorSchema = z.looseObject({
   error: z.string().optional(),
   error_description: z.string().optional(),
 })
 
-/** Trait de l'appareil sous forme d'objet, ou `undefined` s'il est absent ou n'est pas un objet. */
+/** The device's trait as an object, or `undefined` if it is missing or is not an object. */
 export function readTrait(device: SdmDevice, name: string): Record<string, unknown> | undefined {
   const t = device.traits[`sdm.devices.traits.${name}`]
   return t !== null && typeof t === 'object' && !Array.isArray(t) ? (t as Record<string, unknown>) : undefined
 }
 
 /**
- * `results` de `CameraLiveStream.GenerateRtspStream` : l'URL `rtsps://…?auth=<streamToken>` vaut
- * cinq minutes, prolongeables par `ExtendRtspStream` avec `streamExtensionToken`. Forme d'après la
- * documentation, à confirmer sur la première capture (le plugin journalise la réponse en debug).
+ * `results` of `CameraLiveStream.GenerateRtspStream`: the `rtsps://…?auth=<streamToken>` URL lasts
+ * five minutes, extendable through `ExtendRtspStream` with `streamExtensionToken`. Shape from the
+ * documentation, to be confirmed on the first capture (the plugin logs the response at debug).
  */
 export const sdmRtspStreamSchema = z.looseObject({
   streamUrls: z.looseObject({ rtspUrl: z.string() }),
@@ -72,17 +72,17 @@ export const sdmRtspStreamSchema = z.looseObject({
 })
 export type SdmRtspStream = z.infer<typeof sdmRtspStreamSchema>
 
-/** `results` de `ExtendRtspStream` : un nouveau jeton de prolongation, l'URL ne change pas. */
+/** `results` of `ExtendRtspStream`: a new extension token, the URL does not change. */
 export const sdmExtendStreamSchema = z.looseObject({
   streamExtensionToken: z.string(),
   streamToken: z.string().optional(),
   expiresAt: z.string().optional(),
 })
 
-/** Enveloppe de `:executeCommand` : `results` est absent pour les commandes sans réponse. */
+/** Envelope of `:executeCommand`: `results` is missing for commands without a response. */
 export const sdmCommandResponseSchema = z.looseObject({ results: z.unknown().optional() })
 
-/** Réponse de `subscriptions:pull` : messages non acquittés (le corps utile est en base64 dans `message.data`). */
+/** Response of `subscriptions:pull`: unacknowledged messages (the useful body is base64 in `message.data`). */
 export const pubsubPullResponseSchema = z.looseObject({
   receivedMessages: z.array(z.looseObject({
     ackId: z.string(),
@@ -90,7 +90,7 @@ export const pubsubPullResponseSchema = z.looseObject({
   })).optional(),
 })
 
-/** Événement SDM (corps décodé d'un message Pub/Sub) : quel appareil, quels événements. */
+/** SDM event (decoded body of a Pub/Sub message): which device, which events. */
 export const sdmEventSchema = z.looseObject({
   resourceUpdate: z.looseObject({
     name: z.string(),

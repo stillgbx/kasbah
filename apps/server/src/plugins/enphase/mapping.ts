@@ -3,30 +3,30 @@ import {
   ENCHARGE, type EnsembleDevice, type EnsemblePower, type Inverter, type Livedata, type ProductionEntry, type ProductionReport,
 } from './types'
 
-// Passerelle IQ → contrat Kasbah. Fonctions PURES, testées sur des réponses capturées.
+// IQ Gateway → Kasbah contract. PURE functions, tested on captured responses.
 //
-// Trois sortes d'appareils, décidées par ce que l'installation contient vraiment :
-//   - UN site `energy` : production, consommation, réseau, et le stockage d'ensemble s'il y a des
-//     batteries. C'est lui que la vue Énergie montre ;
-//   - UN `sensor` de puissance par micro-onduleur, donc un par panneau : c'est ce que les champs de
-//     panneaux de house.json lient, et ce qui colore chaque module dans la scène 3D ;
-//   - UN `energy` par batterie IQ, avec la seule capacité `storage` : l'UI leur donne déjà l'icône
-//     batterie (`strokeIcons.ts`), et chacune se place dans une pièce.
+// Three kinds of devices, decided by what the installation really contains:
+//   - ONE `energy` site: production, consumption, grid, and the overall storage if there are
+//     batteries. It is what the Energy view shows;
+//   - ONE power `sensor` per microinverter, so one per solar panel: it is what house.json's panel
+//     arrays link, and what colors each module in the 3D scene;
+//   - ONE `energy` per IQ battery, with the `storage` capability only: the UI already gives them
+//     the battery icon (`strokeIcons.ts`), and each one is placed in a room.
 //
-// La borne IQ EV Charger 2 parle au cloud, pas à la passerelle : `chargersOf` / `toChargerPatch`
-// sont ici parce que le contrat est le même fichier, mais leurs fixtures viennent de
-// `__fixtures__/evse.ts` (capture Enlighten), pas de `gateway.ts`.
+// The IQ EV Charger 2 talks to the cloud, not the gateway: `chargersOf` / `toChargerPatch` are here
+// because the contract is the same file, but their fixtures come from `__fixtures__/evse.ts`
+// (Enlighten capture), not from `gateway.ts`.
 
 export const PLUGIN_ID = 'enphase'
-/** Identifiant du site : un seul par passerelle, nom stable pour que house.json puisse le lier. */
+/** Site id: one per gateway, a stable name so that house.json can link it. */
 export const SITE_ID = 'site'
 
 const id = (externalId: string) => `${PLUGIN_ID}:${externalId}`
 /**
- * Un numéro de série entier est illisible dans une liste : on garde la fin, qui suffit à distinguer.
- * CINQ caractères, la même longueur que celle affichée dans les cases d'un champ de panneaux
- * (`apps/web/src/components/home/PanelArraysCard.vue`) — une liste et une grille qui ne coupent pas
- * au même endroit ne se rapprochent pas à l'œil.
+ * A full serial number is unreadable in a list: we keep the end, which is enough to tell them apart.
+ * FIVE characters, the same length as shown in the cells of a panel array
+ * (`apps/web/src/components/home/PanelArraysCard.vue`) — a list and a grid that do not cut at the
+ * same place cannot be matched by eye.
  */
 const SHORT_SERIAL = 5
 const shortSerial = (serial: string) => serial.slice(-SHORT_SERIAL)
@@ -35,38 +35,38 @@ function descriptor(externalId: string, kind: DeviceDescriptor['kind'], name: st
   return { id: id(externalId), pluginId: PLUGIN_ID, externalId, kind, name, capabilities, meta }
 }
 
-/** Entrée de mesure d'une famille, par `type` puis par `measurementType`. */
+/** Measurement entry of a family, by `type` then by `measurementType`. */
 function pick(entries: ProductionEntry[], type: string, measurementType?: string): ProductionEntry | undefined {
   return entries.find((e) => e.type === type && (measurementType === undefined || e.measurementType === measurementType))
 }
 
 /**
- * Puissance produite : le CT (`eim`) quand il est là, car il mesure en TEMPS RÉEL. La somme des
- * onduleurs (`inverters`) traîne de plusieurs minutes — 4952 W contre 6456 W sur la capture — et ne
- * sert donc que de repli, pour une passerelle sans compteur.
+ * Produced power: the CT (`eim`) when present, because it measures in REAL TIME. The inverters' sum
+ * (`inverters`) lags by several minutes — 4952 W versus 6456 W on the capture — and so is only a
+ * fallback, for a gateway without a meter.
  *
- * RAMENÉE À ZÉRO quand elle passe sous zéro : la nuit, la pince de production lit quelques watts à
- * l'envers (−7 W relevés sur la vraie passerelle), le courant de veille des onduleurs qui remonte la
- * chaîne. Le contrat compte la production en positif ; « −7 W · Production » n'a pas de sens, et
- * cette veille est déjà comptée dans la consommation.
+ * CLAMPED TO ZERO when it goes below zero: at night, the production clamp reads a few watts
+ * backwards (−7 W observed on the real gateway), the inverters' standby current flowing back up the
+ * string. The contract counts production as positive; "−7 W · Production" makes no sense, and that
+ * standby is already counted in consumption.
  */
 export function productionW(report: ProductionReport): number {
   const entry = pick(report.production, 'eim', 'production') ?? pick(report.production, 'inverters')
   return Math.max(0, Math.round(entry?.wNow ?? 0))
 }
 
-/** Batteries IQ de l'inventaire (familles autres que `ENCHARGE` ignorées : Enpower, relais…). */
+/** IQ batteries of the inventory (families other than `ENCHARGE` ignored: Enpower, relays…). */
 export function batteriesOf(inventory: { type: string; devices: EnsembleDevice[] }[]): EnsembleDevice[] {
   return inventory.filter((g) => g.type === ENCHARGE).flatMap((g) => g.devices)
 }
 
-/** Puissance d'une batterie en watts, SIGNE DU CONTRAT (positif = charge). */
+/** A battery's power in watts, CONTRACT SIGN (positive = charging). */
 function batteryW(realPowerMw: number): number {
-  // le fabricant compte POSITIF en décharge : le bilan `load = pv + storage + grid` ne se ferme
-  // qu'avec cette convention, verifiée au milliwatt sur la vraie passerelle et sur l'exemple de sa
-  // note technique. Le contrat Kasbah, lui, veut positif = charge.
-  // `|| 0` : sans lui une puissance nulle devient `-0`, qui traverse le JSON en `0` mais ne s'y
-  // compare pas de la même façon selon l'outil. Une batterie au repos vaut 0, pas moins que rien.
+  // the vendor counts POSITIVE when discharging: the balance `load = pv + storage + grid` only closes
+  // with that convention, verified to the milliwatt on the real gateway and on its technical note's
+  // example. The Kasbah contract, however, wants positive = charging.
+  // `|| 0`: without it a zero power becomes `-0`, which crosses JSON as `0` but does not compare the
+  // same way depending on the tool. A battery at rest is 0, not less than nothing.
   return Math.round(-realPowerMw / 1000) || 0
 }
 
@@ -76,7 +76,7 @@ export interface Inventory {
   batteries: EnsembleDevice[]
 }
 
-/** Les descripteurs que le plugin publie, d'après ce que l'installation contient. */
+/** The descriptors the plugin publishes, based on what the installation contains. */
 export function toDescriptors(inv: Inventory): DeviceDescriptor[] {
   const hasStorage = inv.batteries.length > 0
   const site = descriptor(
@@ -95,24 +95,24 @@ export function toDescriptors(inv: Inventory): DeviceDescriptor[] {
   return [site, ...panels, ...batteries]
 }
 
-/** Milliwatts → watts. `livedata` compte en mW, `production.json` en W. */
+/** Milliwatts → watts. `livedata` counts in mW, `production.json` in W. */
 const mw = (v: number) => Math.round(v / 1000) || 0
 
 /**
- * Instantané du site : production, consommation, réseau, batterie.
+ * Site snapshot: production, consumption, grid, battery.
  *
- * La source est `livedata`, et c'est une décision de PERFORMANCE mesurée sur la vraie passerelle :
- * elle répond en 0,2 s, là où `production.json` a mis jusqu'à 10,8 s pour les mêmes compteurs. Ce
- * dernier sert de repli, pour une passerelle qui ne servirait pas `livedata`.
+ * The source is `livedata`, and it is a PERFORMANCE decision measured on the real gateway: it
+ * answers in 0.2 s, where `production.json` took up to 10.8 s for the same meters. The latter is
+ * the fallback, for a gateway that would not serve `livedata`.
  *
- * Signes : `grid` est déjà celui du contrat, négatif en injection ; `storage` est l'INVERSE, le
- * fabricant le comptant positif en décharge.
+ * Signs: `grid` is already the contract's, negative when exporting; `storage` is the OPPOSITE, the
+ * vendor counting it positive when discharging.
  */
 export function toSitePatch(live: Livedata | undefined, report?: ProductionReport): StatePatch {
   const m = live?.meters
   const total = report && pick(report.consumption, 'eim', 'total-consumption')
   const net = report && pick(report.consumption, 'eim', 'net-consumption')
-  // `Math.max(0, …)` pour la même raison que dans `productionW` : la pince passe sous zéro la nuit
+  // `Math.max(0, …)` for the same reason as in `productionW`: the clamp goes below zero at night
   const production = m?.pv ? Math.max(0, mw(m.pv.agg_p_mw)) : report ? productionW(report) : undefined
   const consumption = m?.load ? mw(m.load.agg_p_mw) : total ? Math.round(total.wNow) : undefined
   const grid = m?.grid ? mw(m.grid.agg_p_mw) : net ? Math.round(net.wNow) : undefined
@@ -127,9 +127,9 @@ export function toSitePatch(live: Livedata | undefined, report?: ProductionRepor
 }
 
 /**
- * Totaux du jour : seul `production.json` les porte, et il est lent — d'où sa relecture à la
- * cadence lente. `net-consumption` publie un `whToday` à zéro : c'est la consommation TOTALE qu'il
- * faut lire, sous peine d'afficher une journée sans consommation.
+ * The day's totals: only `production.json` carries them, and it is slow — hence reading it at the
+ * slow rate. `net-consumption` publishes a `whToday` of zero: it is the TOTAL consumption that must
+ * be read, or else a day with no consumption would be shown.
  */
 export function toDailyPatch(report: ProductionReport): StatePatch {
   const eim = pick(report.production, 'eim', 'production')
@@ -142,36 +142,37 @@ export function toDailyPatch(report: ProductionReport): StatePatch {
 }
 
 /**
- * Au-delà, un onduleur est considéré muet. Ils rapportent toutes les ~5 min ; la nuit ils se
- * taisent, et une demi-heure sans rapport est donc la nuit tombée ou une vraie panne.
+ * Beyond this, an inverter is considered silent. They report every ~5 min; at night they go quiet,
+ * so half an hour without a report means nightfall or a real failure.
  */
 export const PANEL_STALE_MS = 30 * 60_000
 
 /**
- * État d'un panneau : la puissance de son dernier rapport, telle quelle, et le record que la
- * passerelle tient pour lui (`maxReportWatts`). Ce record n'est PAS la puissance de sortie maximale
- * de l'onduleur : relevé sur un vrai parc, il va de 418 à 440 W d'un onduleur à l'autre, sans
- * plateau — c'est le meilleur moment de l'année, pas la fiche technique.
+ * A solar panel's state: the power of its last report, as is, and the record the gateway keeps for
+ * it (`maxReportWatts`). That record is NOT the inverter's maximum output power: observed on a real
+ * installation, it ranges from 418 to 440 W from one inverter to another, with no plateau — it is
+ * the best moment of the year, not the datasheet.
  */
 export function toPanelPatch(inverter: Inverter): StatePatch {
   const patch = { kind: 'sensor', value: Math.round(inverter.lastReportWatts) } as StatePatch & { maxValue?: number }
-  // `maxReportWatts` est optionnel dans la réponse : sans lui, pas de record inventé
+  // `maxReportWatts` is optional in the response: without it, no invented record
   if (inverter.maxReportWatts !== undefined) patch.maxValue = Math.round(inverter.maxReportWatts)
   return patch
 }
 
 /**
- * Vrai si l'onduleur n'a plus rapporté depuis `PANEL_STALE_MS`. Il devient alors INDISPONIBLE et
- * garde sa dernière valeur, grisée : inventer un zéro serait affirmer une mesure qu'on n'a pas.
+ * True if the inverter has not reported for `PANEL_STALE_MS`. It then becomes UNAVAILABLE and keeps
+ * its last value, grayed out: inventing a zero would claim a measurement we do not have.
  */
 export function isPanelStale(inverter: Inverter, now: number, staleAfterMs = PANEL_STALE_MS): boolean {
   return now - inverter.lastReportDate * 1000 > staleAfterMs
 }
 
 /**
- * État d'une batterie : sa charge et sa puissance. `percentFull` de l'inventaire et `soc` de
- * `/ivp/ensemble/power` disent la même chose ; on prend l'inventaire, qui porte aussi la température.
- * Les trois autres champs de l'état `energy` sont à zéro : une batterie ne produit ni ne soutire.
+ * A battery's state: its charge and its power. The inventory's `percentFull` and
+ * `/ivp/ensemble/power`'s `soc` say the same thing; we take the inventory, which also carries the
+ * temperature. The other three fields of the `energy` state are zero: a battery neither produces
+ * nor draws.
  */
 export function toBatteryPatch(battery: EnsembleDevice, power: EnsemblePower | undefined): StatePatch {
   const entry = power?.['devices:']?.find((d) => d.serial_num === battery.serial_num)
@@ -186,12 +187,12 @@ export function toBatteryPatch(battery: EnsembleDevice, power: EnsemblePower | u
   } as StatePatch
 }
 
-/** Une batterie qui ne communique plus garde ses dernières valeurs, grisées côté UI. */
+/** A battery that no longer communicates keeps its last values, grayed out in the UI. */
 export function isBatteryAvailable(battery: EnsembleDevice): boolean {
   return battery.communicating !== false
 }
 
-/** Une ligne de borne, extraite de `/ev_chargers/status` (v1). Champs absents = inconnus, pas des zéros. */
+/** A charger row, taken from `/ev_chargers/status` (v1). Missing fields = unknown, not zeros. */
 export interface EvCharger {
   sn: string
   name?: string
@@ -201,11 +202,11 @@ export interface EvCharger {
   faulted: boolean
   sessionWh: number
   chargeLevel?: number
-  /** `connectors[0].safeLimitState` : 1 = repliée sur l'intensité de sécurité (« mode sécurisé » de l'appli). */
+  /** `connectors[0].safeLimitState`: 1 = fallen back to the safety current (the app's "safe mode"). */
   safeLimit?: boolean
   /**
-   * `mode` à 0 : la borne obéit à une annulation manuelle (un démarrer / arrêter), pas à la
-   * préférence de l'appli, qui elle ne change pas. 1 en charge verte (captures du 20/09 et 02/10).
+   * `mode` at 0: the charger obeys a manual cancellation (a start / stop), not the app's preference,
+   * which does not change. 1 in green charging (captures of 09/20 and 10/02).
    */
   manualOverride?: boolean
 }
@@ -228,8 +229,8 @@ function num(v: unknown): number | undefined {
 }
 
 /**
- * Bornes d'un site, d'après le corps v1. `error: {}` y figure même en succès (capture du 20/09) :
- * ce n'est pas un échec. Une enveloppe inconnue rend une liste vide, jamais une exception.
+ * A site's chargers, from the v1 body. `error: {}` appears even on success (capture of 09/20): it is
+ * not a failure. An unknown envelope returns an empty list, never an exception.
  */
 export function chargersOf(json: unknown): EvCharger[] {
   if (!json || typeof json !== 'object') return []
@@ -263,17 +264,17 @@ export function chargersOf(json: unknown): EvCharger[] {
   return out
 }
 
-/** Le mode de l'appli, dans le vocabulaire du contrat (`chargeMode`). */
+/** The app's mode, in the contract's vocabulary (`chargeMode`). */
 const CHARGE_MODE_OF: Record<string, ChargeMode> = {
   GREEN_CHARGING: 'green', MANUAL_CHARGING: 'manual', SCHEDULED_CHARGING: 'scheduled', SMART_CHARGING: 'smart',
 }
-/** Et retour, pour les modes qu'on sait choisir (`ev_charger.set_mode`). */
+/** And back, for the modes we can choose (`ev_charger.set_mode`). */
 export const ENPHASE_CHARGE_MODE: Record<SettableChargeMode, string> = { green: 'GREEN_CHARGING', manual: 'MANUAL_CHARGING' }
 
 /**
- * Le mode choisi dans l'appli, d'après `…/charging-mode/{site}/{sn}/preference` : celui des `modes`
- * marqué `enabled` (`GREEN_CHARGING`, `SCHEDULED_CHARGING`, `MANUAL_CHARGING`, `SMART_CHARGING`).
- * Un forçage ne le touche pas : c'est le mode d'avant le forçage.
+ * The mode chosen in the app, from `…/charging-mode/{site}/{sn}/preference`: the one among `modes`
+ * marked `enabled` (`GREEN_CHARGING`, `SCHEDULED_CHARGING`, `MANUAL_CHARGING`, `SMART_CHARGING`).
+ * Forcing does not touch it: it is the mode from before the forcing.
  */
 export function enabledChargingMode(json: unknown): string | undefined {
   const modes = (json as { data?: { modes?: unknown } } | null)?.data?.modes
@@ -315,24 +316,24 @@ export function toChargerDescriptors(chargers: EvCharger[], summaries: EvCharger
     const sum = summaries.find((s) => s.serialNumber === c.sn)
     return descriptor(
       c.sn, 'ev_charger', c.name || `Borne ${shortSerial(c.sn)}`,
-      // démarrer / arrêter, essayés sur la vraie borne le 2026-10-01 ; l'intensité ne se règle pas
-      // encore (`charge_current`) : Démarrer prend celle par défaut de l'appli. Le mode (vert,
-      // manuel) se choisit comme dans l'appli : les deux PUT essayés sur la vraie borne le 2026-10-02
+      // start / stop, tried on the real charger on 2026-10-01; the current cannot be set yet
+      // (`charge_current`): Start takes the app's default one. The mode (green, manual) is chosen as
+      // in the app: both PUTs tried on the real charger on 2026-10-02
       ['charge_control', 'charge_mode'],
-      // arrêter pose une annulation manuelle « jusqu'au prochain débranchement » : plus de charge verte
+      // stopping sets a manual cancellation "until the next unplug": no more green charging
       { manufacturer: 'Enphase', ...(sum?.modelName ? { model: sum.modelName } : {}), evCharger: { stopUntilUnplug: true } },
     )
   })
 }
 
 /**
- * État d'une borne. Capture du 20/09 : branchée, pas en charge, `SUSPENDED_EVSE` /
- * `INSUFFICIENT_SOLAR` (charge verte à l'arrêt faute de soleil). Ça reste `connected`, pas une
- * panne. Aucun watt dans cette trame : `powerW` vaut 0 hors charge, et 0 aussi EN charge tant
- * qu'une capture en cours n'a pas montré le champ — on n'invente pas 7 kW.
+ * A charger's state. Capture of 09/20: plugged in, not charging, `SUSPENDED_EVSE` /
+ * `INSUFFICIENT_SOLAR` (green charging paused for lack of sun). That stays `connected`, not a
+ * failure. No watts in this frame: `powerW` is 0 when not charging, and 0 too WHILE charging until
+ * a capture taken during a charge has shown the field — we do not invent 7 kW.
  *
- * `preference` : le mode de l'appli (`enabledChargingMode`), lu à part. En mode MANUEL, `mode` 0
- * n'est pas une annulation à lever : il n'y a pas d'autre mode à rendre (`resumeMode` n'y fait rien).
+ * `preference`: the app's mode (`enabledChargingMode`), read separately. In MANUAL mode, `mode` 0 is
+ * not a cancellation to lift: there is no other mode to give back (`resumeMode` does nothing there).
  */
 export function toChargerPatch(charger: EvCharger, summary?: EvChargerSummary, preference?: string): StatePatch {
   const status = charger.faulted ? 'error'

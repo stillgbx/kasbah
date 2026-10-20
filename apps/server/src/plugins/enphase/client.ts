@@ -3,18 +3,19 @@ import type { Logger } from 'pino'
 import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 
-// Client de l'API locale de la passerelle IQ. Trois particularités :
-//  - HTTPS SEUL : le port 80 de la passerelle refuse la connexion (vérifié sur la vraie), et son
-//    certificat est auto-signé → Agent undici dédié, jamais global (même choix que Hue et TaHoma) ;
-//  - `/info` répond SANS jeton et donne le numéro de série : c'est ainsi que le plugin connaît la
-//    passerelle sans le demander à l'utilisateur. Tout le reste exige `Authorization: Bearer` ;
-//  - un jeton refusé ne rend pas 401 en JSON mais une page HTML de redirection vers /login.html.
-//    On traduit donc le code HTTP, pas le corps.
+// Client for the IQ Gateway's local API. Three peculiarities:
+//  - HTTPS ONLY: the gateway's port 80 refuses the connection (verified on the real one), and its
+//    certificate is self-signed → dedicated undici Agent, never global (same choice as Hue and
+//    TaHoma);
+//  - `/info` answers WITHOUT a token and gives the serial number: that is how the plugin knows the
+//    gateway without asking the user. Everything else requires `Authorization: Bearer`;
+//  - a rejected token does not return a JSON 401 but an HTML page redirecting to /login.html.
+//    So we translate the HTTP code, not the body.
 
 /**
- * Au-delà, on abandonne. Généreux pour du LAN, et c'est mesuré : la passerelle répond en 0,2 s sur
- * presque tout, mais `/production.json?details=1` a mis 1,5 s, 3,2 s, 6,6 s puis 10,8 s sur quatre
- * appels d'affilée. Huit secondes coupaient donc une lecture sur deux.
+ * Beyond this, we give up. Generous for a LAN, and it is measured: the gateway answers in 0.2 s on
+ * almost everything, but `/production.json?details=1` took 1.5 s, 3.2 s, 6.6 s then 10.8 s over
+ * four calls in a row. Eight seconds therefore cut one read out of two.
  */
 export const REQUEST_TIMEOUT_MS = 20_000
 
@@ -23,19 +24,19 @@ export interface EnphaseClientOptions {
   token?: string | undefined
   fetchImpl?: FetchLike
   logger?: Logger
-  /** Abrégé dans les tests ; en production c'est `REQUEST_TIMEOUT_MS`. */
+  /** Shortened in tests; in production it is `REQUEST_TIMEOUT_MS`. */
   requestTimeoutMs?: number
-  /** Vérifier le certificat (jamais en production : il est auto-signé). */
+  /** Verify the certificate (never in production: it is self-signed). */
   secureTls?: boolean
 }
 
 export interface GatewayInfo {
   serial: string
-  /** Version du logiciel (`D8.3.5289`) : c'est elle qui décide si le jeton est exigé (7.0 et plus). */
+  /** Software version (`D8.3.5289`): it decides whether the token is required (7.0 and above). */
   software?: string
 }
 
-/** Valeur d'une balise du XML de `/info`. Deux champs à lire : pas de quoi embarquer un parseur XML. */
+/** Value of a tag in the `/info` XML. Two fields to read: no reason to ship an XML parser. */
 function tag(xml: string, name: string): string | undefined {
   return new RegExp(`<${name}>([^<]+)</${name}>`).exec(xml)?.[1]?.trim()
 }
@@ -54,7 +55,7 @@ export class EnphaseClient {
 
   get baseUrl(): string { return `https://${this.opts.host}` }
   get hasToken(): boolean { return !!this.token }
-  /** Après un (ré)appairage : le jeton change sans reconstruire le client ni redémarrer le plugin. */
+  /** After a (re)pairing: the token changes without rebuilding the client or restarting the plugin. */
   setToken(token: string): void { this.token = token }
 
   private deadline(signal?: AbortSignal): AbortSignal {
@@ -79,7 +80,7 @@ export class EnphaseClient {
       throw new PluginError(aborted ? 'TIMEOUT' : 'UPSTREAM_ERROR', `IQ Gateway unreachable at ${this.opts.host}${path}`, { cause: err })
     }
     const text = await res.text()
-    // 401 / 403 : jeton absent, expiré ou d'une autre passerelle — un geste de l'utilisateur, pas un incident
+    // 401 / 403: token missing, expired or from another gateway — a user action, not an incident
     if (res.status === 401 || res.status === 403) {
       throw new PluginError('NEEDS_PAIRING', `IQ Gateway refused the token (HTTP ${res.status} on ${path}): renew it`)
     }
@@ -87,7 +88,7 @@ export class EnphaseClient {
     return { status: res.status, text }
   }
 
-  /** Identité de la passerelle. Seule route qui ne demande aucun jeton : sert à la reconnaître d'abord. */
+  /** Gateway identity. The only route that needs no token: used to recognize it first. */
   async info(signal?: AbortSignal): Promise<GatewayInfo> {
     const { text } = await this.request('/info', { auth: false, ...(signal ? { signal } : {}) })
     const serial = tag(text, 'sn')
@@ -96,7 +97,7 @@ export class EnphaseClient {
     return { serial, ...(software ? { software } : {}) }
   }
 
-  /** GET authentifié, corps JSON. Le schéma est appliqué par l'appelant (mapping). */
+  /** Authenticated GET, JSON body. The schema is applied by the caller (mapping). */
   async getJson(path: string, signal?: AbortSignal): Promise<unknown> {
     const { text } = await this.request(path, { auth: true, ...(signal ? { signal } : {}) })
     try { return JSON.parse(text) as unknown }

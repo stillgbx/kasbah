@@ -2,32 +2,32 @@ import type { Logger } from 'pino'
 import { z } from 'zod'
 import type { Clock } from '../../../core/clock'
 
-// Pochette d'un morceau que l'appareil nomme SANS l'illustrer. Relevé sur la TV Android : l'appli
-// YouTube publie titre et artiste (« Horizon » / « Northwind et Lumen ») mais aucune image,
-// et son `contentId` est vide — la vignette de la vidéo n'est donc pas atteignable localement (le canal
-// `youtube.mdx` ne rend qu'un `screenId`, voir le wiki 3_6_google-cast). Il reste le nom du morceau :
-// deux catalogues publics le retrouvent SANS clé ni compte, et rendent la pochette de l'album.
+// Cover of a track the device names WITHOUT illustrating it. Observed on the Android TV: the YouTube
+// app publishes title and artist ("Horizon" / "Northwind et Lumen") but no image, and its `contentId`
+// is empty — so the video thumbnail cannot be reached locally (the `youtube.mdx` channel only returns
+// a `screenId`, see the wiki 3_6_google-cast). What remains is the track name: two public catalogs
+// find it WITHOUT a key or account, and return the album cover.
 //
-//  - iTunes Search (`itunes.apple.com/search`) : couverture large, mais il répond TOUJOURS quelque
-//    chose — relevé : un set piano de « SLOW RIVERS » lui a fait proposer Tim McGraw. C'est pourquoi la
-//    correspondance est VÉRIFIÉE avant d'accepter une image (`matches`) : mieux vaut le logo de
-//    l'appli qu'une pochette qui n'est pas celle du morceau.
-//  - Deezer (`api.deezer.com/search`) en second recours : plus strict (il ne rend rien sur une vidéo
-//    non musicale) et sa pochette monte à 1000 px, mais il ne nomme que l'artiste principal.
+//  - iTunes Search (`itunes.apple.com/search`): wide coverage, but it ALWAYS answers something —
+//    observed: a piano set by "SLOW RIVERS" made it offer Tim McGraw. That is why the match is
+//    CHECKED before accepting an image (`matches`): the app logo is better than a cover that is not
+//    the track's.
+//  - Deezer (`api.deezer.com/search`) as a second resort: stricter (it returns nothing for a
+//    non-music video) and its cover goes up to 1000 px, but it only names the main artist.
 //
-// Ce n'est pas la vignette de la vidéo mais la pochette de l'ALBUM : pour de la musique c'est ce qu'on
-// veut voir ; pour tout le reste, aucune correspondance ne sera trouvée et l'appel n'a pas lieu deux
-// fois (les échecs sont mémorisés — le plugin republie l'état toutes les dix secondes pendant une
-// lecture). Non officiel au sens où aucune des deux API n'est contractuelle : tout échec est avalé.
+// It is not the video thumbnail but the ALBUM cover: for music that is what we want to see; for
+// everything else, no match will be found and the call does not happen twice (failures are
+// remembered — the plugin republishes the state every ten seconds during playback). Unofficial in the
+// sense that neither API is contractual: every failure is swallowed.
 
 const ITUNES = 'https://itunes.apple.com/search'
 const DEEZER = 'https://api.deezer.com/search'
-/** Une pochette ne change pas ; un échec peut venir d'un réseau qui tousse, on le retente plus tôt. */
+/** A cover does not change; a failure may come from a hiccuping network, we retry it sooner. */
 const HIT_TTL_MS = 7 * 24 * 3_600_000
 const MISS_TTL_MS = 6 * 3_600_000
 const CACHE_MAX = 256
 const REQUEST_TIMEOUT_MS = 6000
-/** Taille demandée à iTunes : ses URL portent le gabarit, `100x100bb` par défaut. */
+/** Size requested from iTunes: its URLs carry the template, `100x100bb` by default. */
 const ITUNES_SIZE = '600x600bb'
 
 const itunesSchema = z.looseObject({
@@ -45,18 +45,18 @@ const deezerSchema = z.looseObject({
   })).nullish(),
 })
 
-/** Le strict nécessaire de `fetch` pour interroger un catalogue (réponse JSON). */
+/** The bare minimum of `fetch` to query a catalog (JSON response). */
 export type CoverFetch = (url: string, init?: { signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>
 
 export interface Track { title: string; artist: string }
 
-/** Sans accents (décomposition NFD, marques combinantes retirées) et en minuscules. */
+/** Without accents (NFD decomposition, combining marks removed) and lowercased. */
 const strip = (s: string) => [...s.normalize('NFD')].filter((c) => c.codePointAt(0)! < 0x300 || c.codePointAt(0)! > 0x36f).join('').toLowerCase()
-/** Titre comparable : sans accents, sans ce qui est entre parenthèses (« (Live) », « [Official Video] »), sans ponctuation. */
+/** Comparable title: without accents, without what is in brackets ("(Live)", "[Official Video]"), without punctuation. */
 export const normTitle = (s: string) => strip(s).replace(/[([][^)\]]*[)\]]/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim()
 /**
- * Artiste comparable : en plus, les mots de liaison partent — un même duo s'écrit « A & B » chez
- * iTunes, « A et B » sur un appareil en français (relevé), « A feat. B » ailleurs.
+ * Comparable artist: on top of that, joining words go — the same duo is written "A & B" at iTunes,
+ * "A et B" on a device set to French (observed), "A feat. B" elsewhere.
  */
 export const normArtist = (s: string) => normTitle(s).replace(/\b(feat|ft|featuring|avec|with|and|et)\b/g, ' ').replace(/\s+/g, ' ').trim()
 
@@ -64,9 +64,9 @@ const tokens = (s: string) => new Set(normArtist(s).split(' ').filter(Boolean))
 const subset = (a: Set<string>, b: Set<string>) => a.size > 0 && [...a].every((t) => b.has(t))
 
 /**
- * Le résultat parle-t-il DU morceau qui joue ? Titre identique une fois normalisé, et artistes
- * compatibles : l'un des deux jeux de mots contient l'autre, ce qui accepte « Northwind » (Deezer ne
- * nomme que le premier) face à « Northwind et Lumen », et refuse « Tim McGraw ».
+ * Is the result about THE track playing? Same title once normalized, and compatible artists: one of
+ * the two word sets contains the other, which accepts "Northwind" (Deezer only names the first)
+ * against "Northwind et Lumen", and refuses "Tim McGraw".
  */
 export function matches(played: Track, found: { title?: string | null; artist?: string | null }): boolean {
   if (!found.title || !found.artist) return false
@@ -91,17 +91,17 @@ export class CoverFinder {
     this.fetchImpl = opts.fetchImpl ?? ((url, init) => fetch(url, init))
   }
 
-  /** Clé de cache : ce qui identifie le morceau pour nous, indépendamment de la casse et des accents. */
+  /** Cache key: what identifies the track for us, regardless of case and accents. */
   static key(track: Track): string { return `${normArtist(track.artist)}|${normTitle(track.title)}` }
 
-  /** Pochette déjà trouvée (ou échec récent : `null`), sans requête ; `undefined` si jamais demandée ou périmée. */
+  /** Cover already found (or recent failure: `null`), without a request; `undefined` if never asked or stale. */
   cached(track: Track): string | null | undefined {
     const hit = this.cache.get(CoverFinder.key(track))
     if (!hit) return undefined
     return this.opts.clock.now() - hit.at < (hit.url ? HIT_TTL_MS : MISS_TTL_MS) ? hit.url : undefined
   }
 
-  /** Cherche la pochette (iTunes puis Deezer) ; une seule requête en vol par morceau, `null` si rien de sûr. */
+  /** Looks up the cover (iTunes then Deezer); a single request in flight per track, `null` if nothing certain. */
   lookup(track: Track): Promise<string | null> {
     const known = this.cached(track)
     if (known !== undefined) return Promise.resolve(known)

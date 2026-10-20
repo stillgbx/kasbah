@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { CRUNCHYROLL_OBJECT_EPISODE, CRUNCHYROLL_OBJECT_SERIES, CRUNCHYROLL_TOKEN } from '../__fixtures__/network'
 import { CrunchyrollEnricher, isCrunchyrollApp, type EnrichFetch } from './crunchyroll'
 
-/** Fausse API Crunchyroll : jeton puis objet ; journalise les appels ; `fail` force une erreur HTTP sur l'objet. */
+/** Fake Crunchyroll API: token then object; logs the calls; `fail` forces an HTTP error on the object. */
 function fakeApi(opts: { fail?: number; objectData?: unknown; noSeries?: boolean } = {}) {
   const calls: string[] = []
   const fetchImpl = vi.fn<EnrichFetch>(async (url, init) => {
@@ -37,7 +37,7 @@ describe('crunchyroll enricher', () => {
     const { e } = enricher(api)
     expect(await e.lookup('GE00000000DEMO')).toEqual({ title: 'Un épisode de démonstration', series: 'Les Chroniques de démo', seasonNumber: 1, episodeNumber: 10, artwork: expect.stringContaining('poster_tall/480x720') })
     expect(api.calls).toEqual(['POST /auth/v1/token', 'GET /content/v2/cms/objects/GE00000000DEMO?locale=fr-FR', 'GET /content/v2/cms/series/GT00000000?locale=fr-FR'])
-    // second épisode de la même série : le jeton ET l'affiche sont réutilisés
+    // second episode of the same series: the token AND the poster are reused
     await e.lookup('GE00000000OTHER')
     expect(api.calls.filter((c) => c.startsWith('POST'))).toHaveLength(1)
     expect(api.calls.filter((c) => c.includes('/cms/series/'))).toHaveLength(1)
@@ -63,7 +63,7 @@ describe('crunchyroll enricher', () => {
     const failing = fakeApi({ fail: 500 })
     const { e: e2, clock: c2 } = enricher(failing)
     expect(await e2.lookup('GE2')).toBeNull()
-    expect(e2.cached('GE2')).toBeNull()                                      // échec mémorisé : pas de nouvelle requête tout de suite
+    expect(e2.cached('GE2')).toBeNull()                                      // failure remembered: no new request right away
     await e2.lookup('GE2')
     expect(failing.calls.filter((c) => c.includes('GE2'))).toHaveLength(1)
     c2.advance(11 * 60_000)
@@ -79,9 +79,9 @@ describe('crunchyroll enricher', () => {
       return { ok: true, status: 200, json: async () => ({ data: [{ type: 'series', title: 'Une série' }] }) }
     })
     const e = new CrunchyrollEnricher({ fetchImpl, clock: new ManualClock(0), logger: pino({ level: 'silent' }), signal: new AbortController().signal })
-    expect(await e.lookup('GE3')).toBeNull()                                 // 401 → échec mémorisé (le jeton est jeté)
+    expect(await e.lookup('GE3')).toBeNull()                                 // 401 → failure remembered (the token is dropped)
     const clock = new ManualClock(11 * 60_000)
     const e3 = new CrunchyrollEnricher({ fetchImpl, clock, logger: pino({ level: 'silent' }), signal: new AbortController().signal })
-    expect(await e3.lookup('GE4')).toBeNull()                                // pas un épisode : rien à enrichir
+    expect(await e3.lookup('GE4')).toBeNull()                                // not an episode: nothing to enrich
   })
 })

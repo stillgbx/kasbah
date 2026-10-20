@@ -5,27 +5,27 @@ import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { writeFileAtomic } from '../../core/atomic-file'
 
-// Jeton d'accès à l'API locale de la passerelle IQ (logiciel 7.0 et plus : plus de mot de passe, un
-// JWT signé par le cloud Enphase). Deux façons de l'obtenir, décrites par la note technique du
-// fabricant (« Accessing IQ Gateway local APIs or local UI with token-based authentication ») :
+// Access token for the IQ Gateway's local API (software 7.0 and above: no more password, a JWT
+// signed by the Enphase cloud). Two ways to get it, described in the vendor's technical note
+// ("Accessing IQ Gateway local APIs or local UI with token-based authentication"):
 //
-//  - à la main sur entrez.enphaseenergy.com, puis collé ici ;
-//  - PROGRAMMATIQUEMENT, en deux requêtes au cloud : ouvrir une session avec le compte Enphase,
-//    puis échanger l'id de session contre un jeton pour un numéro de série de passerelle. Cette
-//    voie donne un jeton de PROPRIÉTAIRE (un an) là où, pour un compte à la fois installateur et
-//    propriétaire — le cas d'un auto-installateur —, le formulaire web n'en donne qu'un de 12 h.
+//  - by hand on entrez.enphaseenergy.com, then pasted here;
+//  - PROGRAMMATICALLY, in two requests to the cloud: open a session with the Enphase account, then
+//    exchange the session id for a token for a gateway serial number. This route gives an OWNER
+//    token (one year) whereas, for an account that is both installer and owner — the case of a
+//    self-installer —, the web form only gives a 12 h one.
 //
-// Le mot de passe du compte Enphase ouvre bien plus que l'API locale : il n'est donc NI une clé de
-// configuration, NI conservé. Il traverse une fois la route d'appairage, sert à frapper le jeton, et
-// c'est tout — seul le jeton est mis en cache. Rien ici ne lit `process.env` pour des identifiants.
+// The Enphase account password opens far more than the local API: it is therefore NEITHER a config
+// key, NOR kept. It crosses the pairing route once, is used to mint the token, and that is all —
+// only the token is cached. Nothing here reads `process.env` for credentials.
 
-/** Ouverture de session (compte Enphase) — première des deux requêtes au cloud. */
+/** Session opening (Enphase account) — first of the two requests to the cloud. */
 const LOGIN_URL = 'https://enlighten.enphaseenergy.com/login/login.json'
-/** Échange de l'id de session contre un jeton pour une passerelle — seconde requête. */
+/** Exchange of the session id for a token for a gateway — second request. */
 const TOKENS_URL = 'https://entrez.enphaseenergy.com/tokens'
-/** Le cloud est sur Internet, pas sur le LAN : plus généreux que les 8 s accordées à la passerelle. */
+/** The cloud is on the Internet, not on the LAN: more generous than the 8 s given to the gateway. */
 export const CLOUD_TIMEOUT_MS = 15_000
-/** En dessous, l'UI réclame un renouvellement (le jeton d'un propriétaire vaut un an). */
+/** Below this, the UI asks for a renewal (an owner's token lasts one year). */
 export const RENEW_WARNING_DAYS = 30
 
 const loginResponseSchema = z.object({
@@ -33,34 +33,34 @@ const loginResponseSchema = z.object({
   message: z.string().optional(),
 })
 
-/** Corps de `/tokens` : du JSON chez certains firmwares, le JWT en texte brut chez d'autres. */
+/** Body of `/tokens`: JSON on some firmwares, the JWT as plain text on others. */
 const tokenResponseSchema = z.object({ token: z.string().min(1) })
 
 const claimsSchema = z.object({
-  /** Passerelle pour laquelle le jeton a été émis (numéro de série). */
+  /** Gateway the token was issued for (serial number). */
   aud: z.union([z.string(), z.array(z.string())]).optional(),
-  /** `owner` (un an) ou `installer` (douze heures) : explique une expiration courte. */
+  /** `owner` (one year) or `installer` (twelve hours): explains a short expiry. */
   enphaseUser: z.string().optional(),
   username: z.string().optional(),
-  /** Expiration, en SECONDES epoch (convention JWT). */
+  /** Expiry, in epoch SECONDS (JWT convention). */
   exp: z.number(),
 })
 
 export interface EnphaseTokenClaims {
-  /** Numéro de série de la passerelle visée, si le jeton le porte. */
+  /** Serial number of the target gateway, if the token carries it. */
   serial: string | undefined
-  /** Rôle du compte émetteur (`owner`, `installer`). */
+  /** Role of the issuing account (`owner`, `installer`). */
   role: string | undefined
   username: string | undefined
-  /** Expiration en MILLISECONDES epoch (le JWT la porte en secondes). */
+  /** Expiry in epoch MILLISECONDS (the JWT carries it in seconds). */
   expiresAt: number
 }
 
 /**
- * Contenu utile d'un jeton, sans vérifier sa signature : le vérificateur est la passerelle, pas nous.
- * On ne lit que ce qui sert à l'utilisateur — pour quelle passerelle, jusqu'à quand, quel rôle.
- * `null` si ce n'est pas un JWT lisible : un jeton tronqué à la copie doit se dire en clair, pas
- * partir en 401 inexpliqué à la première requête.
+ * Useful content of a token, without checking its signature: the verifier is the gateway, not us.
+ * We only read what serves the user — for which gateway, until when, which role. `null` if it is
+ * not a readable JWT: a token truncated when copied must say so plainly, not end up as an
+ * unexplained 401 on the first request.
  */
 export function decodeEnphaseToken(token: string): EnphaseTokenClaims | null {
   const parts = token.trim().split('.')
@@ -82,9 +82,9 @@ export function decodeEnphaseToken(token: string): EnphaseTokenClaims | null {
 export type TokenStage = 'ok' | 'expiring' | 'expired'
 
 /**
- * Où en est le jeton : `expired` (la passerelle refusera tout), `expiring` (moins de
- * `RENEW_WARNING_DAYS` : l'UI le signale avant la panne), `ok`. `daysLeft` est arrondi vers le bas
- * et négatif après l'échéance.
+ * Where the token stands: `expired` (the gateway will refuse everything), `expiring` (less than
+ * `RENEW_WARNING_DAYS`: the UI flags it before the failure), `ok`. `daysLeft` is rounded down and
+ * negative after the expiry.
  */
 export function tokenStage(claims: EnphaseTokenClaims, now: number): { stage: TokenStage; daysLeft: number } {
   const daysLeft = Math.floor((claims.expiresAt - now) / 86_400_000)
@@ -101,9 +101,9 @@ export interface CheckedToken {
 export type TokenRejection = 'unreadable' | 'other-gateway' | 'expired'
 
 /**
- * Un jeton est-il utilisable pour cette passerelle ? Trois refus possibles, distingués parce qu'ils
- * ne se réparent pas pareil : illisible (copie tronquée), émis pour une AUTRE passerelle (deux
- * passerelles sur le compte), expiré (à renouveler).
+ * Is a token usable for this gateway? Three possible refusals, told apart because they are not
+ * fixed the same way: unreadable (truncated copy), issued for ANOTHER gateway (two gateways on the
+ * account), expired (to renew).
  */
 export function checkToken(token: string, o: { serial?: string | undefined; now: number }):
 { ok: true; checked: CheckedToken } | { ok: false; reason: TokenRejection; claims: EnphaseTokenClaims | null } {
@@ -115,7 +115,7 @@ export function checkToken(token: string, o: { serial?: string | undefined; now:
   return { ok: true, checked: { token: token.trim(), claims, stage, daysLeft } }
 }
 
-/** Phrase à montrer à l'utilisateur pour un refus (l'UI n'a pas à traduire un code en cause). */
+/** Sentence to show the user for a refusal (the UI does not have to translate a code into a cause). */
 export function rejectionMessage(reason: TokenRejection, claims: EnphaseTokenClaims | null, serial?: string): string {
   switch (reason) {
     case 'unreadable': return 'this is not a readable Enphase token (truncated copy?)'
@@ -127,19 +127,19 @@ export function rejectionMessage(reason: TokenRejection, claims: EnphaseTokenCla
 export interface CloudFetchOptions {
   fetchImpl?: FetchLike
   signal?: AbortSignal
-  /** Abrégé dans les tests ; en production c'est `CLOUD_TIMEOUT_MS`. */
+  /** Shortened in tests; in production it is `CLOUD_TIMEOUT_MS`. */
   timeoutMs?: number
 }
 
 export interface LoginOptions extends CloudFetchOptions {
-  /** Identifiant du compte Enphase (adresse e-mail). Jamais conservé. */
+  /** Enphase account login (e-mail address). Never kept. */
   user: string
-  /** Mot de passe du compte. Traverse cette fonction, n'est ni journalisé ni écrit. */
+  /** Account password. Passes through this function, is neither logged nor written. */
   password: string
 }
 
 export interface MintOptions extends LoginOptions {
-  /** Numéro de série de la passerelle — lu sur `/info`, qui ne demande aucun jeton. */
+  /** Gateway serial number — read from `/info`, which needs no token. */
   serial: string
 }
 
@@ -169,7 +169,7 @@ async function postCloud(
   return { status: res.status, text: await res.text(), headers: headersOf(res) }
 }
 
-/** Sous-ensemble de `Headers` : le `fetch` réel l'a, les faux des tests souvent pas. */
+/** Subset of `Headers`: the real `fetch` has it, the test fakes often do not. */
 interface MinimalHeaders {
   get(name: string): string | null
   getSetCookie?(): string[]
@@ -182,8 +182,8 @@ function headersOf(res: Awaited<ReturnType<FetchLike>>): MinimalHeaders | undefi
 
 function setCookieLines(headers?: MinimalHeaders): string[] {
   if (!headers) return []
-  // undici : `get('set-cookie')` concatène au virgule (cassé dès qu'un cookie a un `Expires`),
-  // `getSetCookie()` rend une ligne par cookie. C'est ça qu'il faut lire.
+  // undici: `get('set-cookie')` joins with commas (broken as soon as a cookie has an `Expires`),
+  // `getSetCookie()` returns one line per cookie. That is what must be read.
   const lines = typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : []
   if (lines.length) return lines
   const joined = headers.get('set-cookie')
@@ -204,10 +204,10 @@ function cookieFrom(headers: MinimalHeaders | undefined, name: string): string |
 }
 
 /**
- * Ouvre une session Enlighten. Deux jetons distincts, à ne pas confondre :
- *  - `session_id` JSON → `POST entrez.enphaseenergy.com/tokens` (JWT local de la passerelle) ;
- *  - cookie `_enlighten_4_session` → API web/appli (sites, borne). Un `session_id` collé en
- *    cookie se fait répondre 401. Identifiants faux → `NEEDS_PAIRING`, pas une panne.
+ * Opens an Enlighten session. Two distinct tokens, not to be confused:
+ *  - JSON `session_id` → `POST entrez.enphaseenergy.com/tokens` (the gateway's local JWT);
+ *  - `_enlighten_4_session` cookie → web/app API (sites, charger). A `session_id` pasted as a
+ *    cookie gets a 401. Wrong credentials → `NEEDS_PAIRING`, not a failure.
  */
 export async function loginEnlighten(o: LoginOptions): Promise<{ sessionId: string; cookie?: string }> {
   const timeoutMs = o.timeoutMs ?? CLOUD_TIMEOUT_MS
@@ -224,7 +224,7 @@ export async function loginEnlighten(o: LoginOptions): Promise<{ sessionId: stri
   return cookie ? { sessionId, cookie } : { sessionId }
 }
 
-/** Échange une session Enlighten déjà ouverte contre un jeton LOCAL de CETTE passerelle. */
+/** Exchanges an already open Enlighten session for a LOCAL token of THIS gateway. */
 export async function exchangeEnphaseToken(o: CloudFetchOptions & {
   sessionId: string
   serial: string
@@ -244,7 +244,7 @@ export async function exchangeEnphaseToken(o: CloudFetchOptions & {
   return { token, claims }
 }
 
-/** Frappe un jeton auprès du cloud Enphase (session puis échange). Lève `PluginError` sinon. */
+/** Mints a token with the Enphase cloud (session then exchange). Throws `PluginError` otherwise. */
 export async function mintEnphaseToken(o: MintOptions): Promise<{ token: string; claims: EnphaseTokenClaims }> {
   const { sessionId } = await loginEnlighten(o)
   return exchangeEnphaseToken({ ...o, sessionId, username: o.user })
@@ -258,10 +258,10 @@ export interface TokenStore {
 const tokenFileSchema = z.object({ token: z.string().min(1) })
 
 /**
- * Où vit le jeton entre deux démarrages. C'est ce qui permet de ne demander les identifiants qu'au
- * moment où il faut (re)frapper un jeton, et jamais de les garder : le jeton, lui, sert un an.
- * Fichier absent ou illisible : cache vide, jamais une erreur fatale (le plugin doit démarrer même
- * si le disque refuse l'écriture).
+ * Where the token lives between two starts. It is what allows asking for the credentials only when
+ * a token must be (re)minted, and never keeping them: the token itself serves for a year. File
+ * missing or unreadable: empty cache, never a fatal error (the plugin must start even if the disk
+ * refuses the write).
  */
 export function createTokenFile(path: string, logger?: Logger): TokenStore {
   return {
@@ -281,16 +281,16 @@ export function createTokenFile(path: string, logger?: Logger): TokenStore {
 }
 
 export interface ResolveTokenOptions {
-  /** `ENPHASE_TOKEN` : un jeton posé en configuration gagne sur le cache tant qu'il est valable. */
+  /** `ENPHASE_TOKEN`: a token set in the configuration wins over the cache as long as it is valid. */
   token?: string | undefined
   store?: TokenStore | undefined
-  /** Passerelle visée (lue sur `/info`) : sert à refuser un jeton d'une AUTRE passerelle. */
+  /** Target gateway (read from `/info`): used to refuse a token from ANOTHER gateway. */
   serial?: string | undefined
   now: number
   logger?: Logger
 }
 
-/** D'où vient le jeton en service : la configuration, le cache, ou une frappe qu'on vient de faire. */
+/** Where the token in use comes from: the configuration, the cache, or a mint just made. */
 export type TokenSource = 'config' | 'cache' | 'minted'
 
 export interface ResolvedToken extends CheckedToken {
@@ -298,16 +298,16 @@ export interface ResolvedToken extends CheckedToken {
 }
 
 /**
- * Le jeton à utiliser au démarrage, parmi celui de la configuration et celui du cache. AUCUN appel
- * au cloud ici — frapper un jeton demande des identifiants, que seul l'utilisateur peut donner, au
- * moment où il les tape (route d'appairage). Un candidat refusé est journalisé et on passe au
- * suivant : un jeton périmé en configuration ne doit pas masquer un jeton frais en cache.
+ * The token to use at startup, between the configuration's and the cache's. NO call to the cloud
+ * here — minting a token requires credentials, which only the user can give, when typing them
+ * (pairing route). A refused candidate is logged and we move on to the next: an expired token in
+ * the configuration must not hide a fresh token in the cache.
  *
- * Entre deux candidats recevables, on garde celui qui expire LE PLUS TARD, et non celui de la
- * configuration. C'est un cas vécu : un jeton d'installateur de 12 h laissé dans `.env` aurait
- * éclipsé pendant toute sa durée le jeton d'un an fraîchement frappé et mis en cache.
+ * Between two acceptable candidates, we keep the one that expires the LATEST, not the
+ * configuration's. It is a real case: a 12 h installer token left in `.env` would have eclipsed,
+ * for its whole lifetime, the one-year token freshly minted and cached.
  *
- * `null` quand il n'y a rien d'utilisable : au plugin de se déclarer `needs_pairing`.
+ * `null` when there is nothing usable: up to the plugin to declare itself `needs_pairing`.
  */
 export async function resolveEnphaseToken(o: ResolveTokenOptions): Promise<ResolvedToken | null> {
   const candidates: { token: string; source: 'config' | 'cache' }[] = []

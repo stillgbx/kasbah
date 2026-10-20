@@ -7,17 +7,17 @@ import {
   overkizSetupEnvelopeSchema, type OverkizAction, type OverkizDevice, type OverkizEvent,
 } from './types'
 
-// Client de l'API locale Overkiz (mode développeur de la box TaHoma). Trois particularités :
-//  - le certificat de la box est signé par l'AC Overkiz pour le nom `gateway-XXXX-XXXX-XXXX.local` :
-//    joindre la box par son IP échoue la vérification TLS → Agent undici dédié (jamais globalement,
-//    même choix que le pont Hue) ;
-//  - il n'y a pas de flux d'événements poussés : on enregistre un écouteur puis on le sonde ;
-//  - CHAQUE requête porte son propre délai. La box répond d'ordinaire en 50 à 300 ms, mais on l'a
-//    vue bloquer une commande au-delà de 10 s sans rien journaliser. Le défaut d'undici étant de
-//    300 s, une requête coincée gèlerait le sondage d'événements pour de bon — le plugin
-//    resterait « ok » tout en étant aveugle. D'où l'abandon explicite ci-dessous.
+// Client for the Overkiz local API (developer mode of the TaHoma box). Three peculiarities:
+//  - the box certificate is signed by the Overkiz CA for the name `gateway-XXXX-XXXX-XXXX.local`:
+//    reaching the box by its IP fails TLS verification → dedicated undici Agent (never globally,
+//    same choice as the Hue bridge);
+//  - there is no pushed event stream: we register a listener then poll it;
+//  - EACH request carries its own timeout. The box usually answers in 50 to 300 ms, but it has been
+//    seen blocking a command beyond 10 s without logging anything. undici's default being 300 s, a
+//    stuck request would freeze event polling for good — the plugin would stay "ok" while being
+//    blind. Hence the explicit abort below.
 
-/** Au-delà, on abandonne la requête : la box est sur le LAN et répond en centaines de ms. */
+/** Beyond this, we abort the request: the box is on the LAN and answers in hundreds of ms. */
 export const REQUEST_TIMEOUT_MS = 8000
 
 export interface TahomaClientOptions {
@@ -27,7 +27,7 @@ export interface TahomaClientOptions {
   insecureTls?: boolean
   fetchImpl?: FetchLike
   logger?: Logger
-  /** Abrégé dans les tests ; en production c'est `REQUEST_TIMEOUT_MS`. */
+  /** Shortened in tests; in production it is `REQUEST_TIMEOUT_MS`. */
   requestTimeoutMs?: number
 }
 
@@ -47,7 +47,7 @@ export class TahomaClient {
     return `https://${this.opts.host}:${this.opts.port}/enduser-mobile-web/1/enduserAPI`
   }
 
-  /** Signal de la requête : celui de l'appelant (arrêt du plugin) OU l'abandon sur délai. */
+  /** The request's signal: the caller's (plugin stop) OR the abort on timeout. */
   private deadline(signal?: AbortSignal): AbortSignal {
     const timeout = AbortSignal.timeout(this.opts.requestTimeoutMs ?? REQUEST_TIMEOUT_MS)
     return signal ? AbortSignal.any([signal, timeout]) : timeout
@@ -68,16 +68,16 @@ export class TahomaClient {
         ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),
       })
     } catch (err) {
-      // `signal` déjà annulé = arrêt du plugin ; sinon c'est notre propre délai qui a expiré
+      // `signal` already aborted = plugin stop; otherwise it is our own timeout that expired
       if ((err as Error).name === 'TimeoutError' && signal?.aborted !== true) {
         const ms = this.opts.requestTimeoutMs ?? REQUEST_TIMEOUT_MS
         throw new PluginError('TIMEOUT', `TaHoma box did not answer ${method} ${path} within ${ms} ms`, { cause: err })
       }
       throw new PluginError('UPSTREAM_ERROR', `TaHoma box unreachable (${(err as Error).message})`, { cause: err })
     }
-    // Le corps est diagnostique et vaut d'être remonté : « Missing authorization token. » accuse
-    // NOTRE en-tête, « Not authenticated. » accuse le jeton (inconnu de la box, ou pas encore
-    // synchronisé depuis le compte Somfy). Il ne contient jamais le jeton.
+    // The body is diagnostic and worth passing up: "Missing authorization token." blames OUR header,
+    // "Not authenticated." blames the token (unknown to the box, or not yet synced from the Somfy
+    // account). It never contains the token.
     if (res.status === 401 || res.status === 403) {
       throw new PluginError('NEEDS_PAIRING', `TaHoma local token rejected${await this.describe(res)}`)
     }
@@ -86,7 +86,7 @@ export class TahomaClient {
     return res.json()
   }
 
-  /** Détail lisible d'une erreur de la box, sans jamais recopier le jeton. */
+  /** Readable detail of a box error, never copying the token. */
   private async describe(res: Awaited<ReturnType<FetchLike>>): Promise<string> {
     try {
       const parsed = overkizErrorSchema.safeParse(JSON.parse(await res.text()))
@@ -95,14 +95,14 @@ export class TahomaClient {
     } catch { return '' }
   }
 
-  /** Sonde de joignabilité et de validité du jeton : `{ protocolVersion }`. */
+  /** Reachability and token validity probe: `{ protocolVersion }`. */
   async getApiVersion(signal?: AbortSignal): Promise<string | undefined> {
     return overkizApiVersionSchema.parse(await this.request('GET', '/apiVersion', undefined, signal)).protocolVersion
   }
 
   /**
-   * Liste des appareils. Chaque appareil est validé SÉPARÉMENT : un seul appareil à la forme
-   * inattendue ne doit pas priver la maison de tous les autres (même choix que le pont Hue).
+   * Device list. Each device is validated SEPARATELY: a single device with an unexpected shape must
+   * not deprive the house of all the others (same choice as the Hue bridge).
    */
   async getSetup(signal?: AbortSignal): Promise<OverkizDevice[]> {
     const raw = overkizSetupEnvelopeSchema.parse(await this.request('GET', '/setup', undefined, signal))
@@ -120,8 +120,8 @@ export class TahomaClient {
   }
 
   /**
-   * Sonde l'écouteur. `null` quand la box ne le connaît plus (expiré, box redémarrée) : l'appelant
-   * doit en réenregistrer un et resynchroniser.
+   * Polls the listener. `null` when the box no longer knows it (expired, box restarted): the caller
+   * must register a new one and resync.
    */
   async fetchEvents(listenerId: string, signal?: AbortSignal): Promise<OverkizEvent[] | null> {
     try {
@@ -141,8 +141,8 @@ export class TahomaClient {
   }
 
   /**
-   * Exécute des actions (une par appareil) en UNE exécution, comme un scénario TaHoma ; la box
-   * répond `{ execId }` dès qu'elle a pris la commande.
+   * Executes actions (one per device) in ONE execution, like a TaHoma scenario; the box answers
+   * `{ execId }` as soon as it has taken the command.
    */
   async apply(label: string, actions: OverkizAction[], signal?: AbortSignal): Promise<void> {
     await this.request('POST', '/exec/apply', { label, actions }, signal)
