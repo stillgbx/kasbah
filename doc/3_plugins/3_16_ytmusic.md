@@ -1,6 +1,6 @@
 # Plugin YouTube Music (non officiel)
 
-> Dernière mise à jour : 2026-10-08
+> Dernière mise à jour : 2026-10-20
 > Sources : `apps/server/src/plugins/ytmusic/{index,catalog,cookie,browserCookies,resolve,mapping,types}.ts` (`stream.ts` et `queue.ts` devenus `apps/server/src/music/{proxy,queue}.ts` le 2026-09-23), `apps/server/src/music/{player,sources,ytdlp}.ts`, `apps/server/src/core/playbackBridge.ts` (ex-`ytmusic/bridge.ts`), tests `apps/server/src/plugins/ytmusic/plugin.test.ts` et `apps/server/src/music/{proxy,queue}.test.ts` (ex-`ytmusic/{stream,queue}.test.ts`), `apps/server/src/app.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue` (ex-`YtmusicView.vue`), `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/composables/useMediaPosition.ts`, `apps/web/src/components/ui/{ArtThumb,artThumbLoader}.vue|ts`, `apps/web/src/components/music/ArtPlay.vue` (ex-`ui/PlayButton.vue`), `apps/web/src/components/YtmusicLinkCard.vue`, `apps/server/.env.example`, Music Assistant `providers/ytmusic` (référence)
 
 ## Avertissement
@@ -43,7 +43,8 @@ Aucun appareil publié par ce plugin (`discover` → `[]`).
    (`pip install -U bgutil-ytdlp-pot-provider` si yt-dlp vient de pip).
 3. Lancer le **générateur PO Token** (HTTP, port 4416). Avec `npm run dev` à la racine, le script
    `scripts/dev-pot.mjs` le démarre s'il est présent sous `_external/bgutil-ytdlp-pot-provider/server`
-   (skip s'il répond déjà à `/ping`). **Docker n'est pas obligatoire** — c'est juste une option.
+   (skip s'il répond déjà à `/ping`). *(Depuis le 2026-10-20, c'est le plugin lui-même qui le lance,
+   avec `npm run start` comme avec `npm run dev` : voir « Mise à jour 2026-10-20 » plus bas.)* **Docker n'est pas obligatoire** — c'est juste une option.
    Santé `degraded` tant que `GET …/ping` échoue (`YTM_PO_TOKEN_URL`, défaut
    `http://127.0.0.1:4416`).
 
@@ -1269,3 +1270,24 @@ détail anonyme là où l'on lisait « liaison requise » ; vue du réseau local
 `needs_pairing`. Tests : assertions `healthFor` dans `describe('ytmusic accounts')`.
 
 Sources : `apps/server/src/plugins/ytmusic/index.ts`, `apps/web/src/components/YtmusicLinkCard.vue`.
+
+### Mise à jour 2026-10-20 — le plugin lance le générateur PO Token
+
+Symptôme sur la vraie maison : avec `npm run start` (production), santé `degraded` « PO Token
+generator unreachable » — seul `npm run dev` lançait le générateur (`scripts/dev-pot.mjs`, dans le
+`concurrently`).
+
+Désormais, au `start()` du plugin, si rien ne répond au `/ping` de `YTM_PO_TOKEN_URL`, le plugin lance
+`node _external/bgutil-ytdlp-pot-provider/server/build/main.js --port <port de l'URL>`
+(`potServer.ts`), à trois conditions : l'URL est sur cette machine (`127.0.0.1`, `localhost`,
+`[::1]`), le build existe, et rien ne répond encore (un Docker ou un lancement manuel est donc
+respecté). Il attend ensuite que le générateur réponde (30 essais, 1 s) sans bloquer le démarrage,
+journalise sa sortie s'il s'arrête, et l'arrête au `stop()` du plugin. Même schéma que VoiceStudio
+pour la transcription (`3_25_transcription.md`).
+
+`scripts/dev-pot.mjs` sort de `npm run dev` et `npm run house` : deux lanceurs se disputeraient le
+port 4416. `npm run dev:pot` le garde pour un lancement à la main. Avec la relance du serveur de dev,
+un générateur dont l'arrêt n'a pas eu lieu reste sur le port et est réutilisé au démarrage suivant.
+
+Sources : `apps/server/src/plugins/ytmusic/{index,potServer}.ts`, `plugin.test.ts`
+(describe « ytmusic PO Token generator »), `package.json`, `scripts/dev-pot.mjs`.

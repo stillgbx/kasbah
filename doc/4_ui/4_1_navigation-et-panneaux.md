@@ -1,6 +1,6 @@
 # Navigation et panneaux
 
-> Dernière mise à jour : 2026-10-19
+> Dernière mise à jour : 2026-10-20
 > Sources : `apps/web/src/App.vue`, `apps/web/src/components/layout/*.vue`, `apps/web/src/views/*.vue`, `apps/web/src/components/home/*.vue`, `apps/web/src/components/controls/*.vue`, `apps/web/src/views/LightsView.vue`, `apps/web/src/components/home/PlacementControl.vue`, `apps/web/src/components/scenes/SceneChips.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/components/devices/RoomLightsToggle.vue`, `apps/web/src/views/CoversView.vue`, `apps/web/src/components/covers/CoverPill.vue`, `apps/web/src/lib/{cover,deviceState}.ts`, `apps/web/src/composables/useHomeSummary.ts`, `apps/web/src/components/devices/ForgetDeviceButton.vue`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `apps/web/src/lib/audioRouting.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/web/src/lib/energy.ts`, `apps/web/src/components/devices/RoomBrightness.vue`, `apps/web/src/components/devices/CoversMaster.vue`, `apps/web/src/components/devices/LightsMaster.vue`, `apps/web/src/composables/useRoomLights.ts`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/components/energy/InverterFields.vue`, `apps/web/src/components/TeslaLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/components/vehicles/VehicleTuning.vue`, `apps/web/src/lib/vehicleTuning.ts`, `apps/web/src/lib/map.ts`, `apps/web/src/components/controls/VehicleCard.vue`, `apps/web/src/components/vehicles/ChargeLimitCard.vue`, `apps/web/src/components/home/DevicePanel.vue`, `apps/web/src/components/settings/PluginSection.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/composables/useSearch.ts`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/web/src/lib/search.ts`, `apps/web/src/lib/navItems.ts`, `apps/web/src/views/HeatingView.vue`, `apps/web/src/components/heating/*.vue`, `apps/web/src/components/MelcloudLinkCard.vue`, `apps/web/src/components/home/OpeningPanel.vue`, `apps/web/src/components/home/RoomEditPanel.vue`, `apps/web/src/components/home/ParkingPanel.vue`, `apps/web/src/lib/deviceIcons.ts`, `apps/web/src/views/MusicView.vue`, `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/components/music/MixcloudBrowser.vue`, `apps/web/src/components/MixcloudLinkCard.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/views/{AutomationsView,AutomationEditView}.vue`, `apps/web/src/components/automations/*.vue`, `apps/web/src/components/layout/NavRail.vue` (`meta.nav`), `apps/web/src/components/controls/LightHistoryChart.vue`, `apps/web/src/components/weather/WeatherPlaces.vue`, `apps/web/src/composables/useMusicSession.ts`, `apps/web/src/lib/streamQuality.ts`, `apps/web/src/components/home/ReliefPanel.vue`, `apps/web/src/lib/ignRelief.ts`, `apps/web/src/lib/moon.ts`, `apps/web/src/components/vehicles/VehicleSoftware.vue`, `apps/web/src/components/layout/AssistantReply.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/components/ClaudeLinkCard.vue`, `apps/web/src/composables/useVoiceInput.ts`, `apps/web/src/stores/properties.ts`, `apps/web/src/components/layout/PropertyList.vue`, `apps/web/src/components/home/{HouseEditPanel,RoomShapeSection}.vue`, `apps/web/src/components/property/*.vue`, `apps/web/src/lib/onboarding.ts`, `apps/web/src/lib/geocode.ts`, `apps/web/src/views/ShoppingView.vue` (2026-10-11)
 
 ## Où sont les vues
@@ -1254,3 +1254,41 @@ repli vers la vue d'un appareil non placé (tout est placé dans la simulation).
 
 Sources : `apps/web/src/components/home/HomePanel.vue`, `apps/web/src/stores/alerts.ts` (+ test),
 `apps/web/src/views/{RobotsView,WeatherView}.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.
+
+### Mise à jour 2026-10-20 — les plugins en panne sur l'engrenage des Réglages
+
+Demande de l'utilisateur, devant des plugins en panne sur la vraie maison sans que rien ne le signale
+(un compte Nest à relier, le générateur PO Token de YouTube Music absent) : les mettre dans les
+alertes, comme les appareils.
+
+**Source.** La santé des plugins (`GET /api/health`, `plugins[id].status`) n'est pas poussée par le
+WebSocket : `App.vue` la lit au montage puis **toutes les minutes** (`devices.refreshHealth`). Le
+store `alerts` en tire `plugins` (`PluginAlert` : `pluginId`, `status`, `detail`, gravité `problem`,
+vue `settings`) :
+- `error` et `needs_pairing` : alerte tout de suite ;
+- `degraded` : seulement après **5 min** sans interruption (`DEGRADED_GRACE_MS`), mesurées d'une
+  lecture à l'autre. Un `degraded` est souvent un raté passager (un sondage manqué, un flux
+  d'événements qui se reconnecte, un démarrage) ; un retour à `ok` remet l'attente à zéro ;
+- `ok`, `disabled`, `not_implemented` : rien.
+Une lecture ratée (serveur injoignable, `health` à `null`) ne dit rien des plugins : la dernière
+lecture est gardée. Pas de « vu » : comme une `problem` d'appareil, l'alerte dure autant que la panne.
+
+**Où.** La **pastille** se pose sur l'engrenage des Réglages du rail (`NavRail.vue`), même gabarit et
+même `aria-label` que celle des vues : c'est dans les Réglages qu'on relie un compte. Dans la section
+« Alertes » du panneau maison (`HomePanel.vue`), **une ligne par plugin** après les appareils (triées
+ensemble par gravité) : icône `plug`, l'id du plugin comme dans les Réglages, puis
+`settings.pluginStatus.<statut>` · le `detail` du serveur (en anglais : c'est lui qui dit quoi faire).
+Le clic ouvre les Réglages.
+
+Écartés à la question posée : signaler tout `degraded` tout de suite (chaque raté allume la
+pastille), ou seulement `error` et `needs_pairing` (YouTube Music sans PO Token resterait muet) ;
+ranger l'alerte sur la vue du plugin (Musique, Agenda…) plutôt que sur les Réglages, où se fait la
+réparation.
+
+Vérifié dans la preview `kasbah-mock`, santé forcée (un plugin en `error`, un en `needs_pairing`) à
+1440 × 900 : pastille sur l'engrenage, lignes de 59 px sans débordement, tuiles et boutons du rail
+immobiles (`getBoundingClientRect`), clic → `/settings`, aucune erreur console. **Non joués** : zooms
+1,25 / 1,5, thème sombre, largeur téléphone.
+
+Sources : `apps/web/src/stores/alerts.ts` (+ test), `apps/web/src/App.vue`,
+`apps/web/src/components/layout/NavRail.vue`, `apps/web/src/components/home/HomePanel.vue`.

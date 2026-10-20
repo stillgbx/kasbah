@@ -1,7 +1,7 @@
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useLocalStorage } from '@vueuse/core'
-import { ALERT_SEVERITIES, deviceAlerts, type AlertSeverity, type DeviceAlert, type DeviceKind } from '@kasbah/shared'
+import { ALERT_SEVERITIES, deviceAlerts, type AlertSeverity, type DeviceAlert, type DeviceKind, type PluginHealth } from '@kasbah/shared'
 import { useDevicesStore } from './devices'
 
 // The devices' alerts and the rail marker. The alerts come from the state (`deviceAlerts`,
@@ -16,6 +16,16 @@ const VIEW_OF: Partial<Record<DeviceKind, string>> = {
 }
 
 export interface RailAlert extends DeviceAlert { view: string }
+
+/**
+ * A plugin that is not working (`/api/health`, polled by `App.vue`): an account to link again, a
+ * service that does not answer. Flagged on the Settings gear, where it is repaired.
+ */
+export interface PluginAlert { pluginId: string; status: PluginHealth['status']; detail?: string; severity: AlertSeverity; view: 'settings' }
+
+/** `degraded` is often a passing miss (a poll, a restart): flagged only once it has lasted this long. */
+export const DEGRADED_GRACE_MS = 5 * 60_000
+const FAILING: PluginHealth['status'][] = ['error', 'needs_pairing']
 
 const rank = (s: AlertSeverity) => ALERT_SEVERITIES.indexOf(s)
 
@@ -36,6 +46,27 @@ export const useAlertsStore = defineStore('alerts', () => {
     (list ?? []).flatMap((a) => (VIEW_OF[a.kind] ? [{ ...a, view: VIEW_OF[a.kind]! }] : [])))
     .sort((a, b) => rank(b.severity) - rank(a.severity)))
 
+  /** The last health read, since when each plugin reads `degraded` (ms epoch), and when health was last read. */
+  const lastPlugins = ref<Record<string, PluginHealth>>({})
+  const degradedSince = ref<Record<string, number>>({})
+  const healthAt = ref(0)
+  watch(() => devices.health, (h) => {
+    if (!h) return                                       // unread: the server's silence says nothing of its plugins
+    const now = Date.now()
+    const next: Record<string, number> = {}
+    for (const [id, p] of Object.entries(h?.plugins ?? {})) if (p.status === 'degraded') next[id] = degradedSince.value[id] ?? now
+    degradedSince.value = next
+    healthAt.value = now
+    lastPlugins.value = h.plugins
+  }, { immediate: true })
+
+  /** The plugins that are not working, in the order of the server's inventory. */
+  const plugins = computed<PluginAlert[]>(() => Object.entries(lastPlugins.value).flatMap(([pluginId, p]) => {
+    const failing = FAILING.includes(p.status)
+      || (p.status === 'degraded' && healthAt.value - (degradedSince.value[pluginId] ?? healthAt.value) >= DEGRADED_GRACE_MS)
+    return failing ? [{ pluginId, status: p.status, ...(p.detail ? { detail: p.detail } : {}), severity: 'problem' as const, view: 'settings' as const }] : []
+  }))
+
   const isDismissed = (id: string) => id in dismissed.value
   /** What the rail flags: everything that lasts, and the `info` not yet seen. */
   const pending = computed(() => active.value.filter((a) => a.severity !== 'info' || !isDismissed(a.id)))
@@ -43,7 +74,7 @@ export const useAlertsStore = defineStore('alerts', () => {
   /** The highest severity waiting in a view, `null` = nothing to flag. */
   function viewSeverity(view: string): AlertSeverity | null {
     let top: AlertSeverity | null = null
-    for (const a of pending.value) if (a.view === view && (top === null || rank(a.severity) > rank(top))) top = a.severity
+    for (const a of [...pending.value, ...plugins.value]) if (a.view === view && (top === null || rank(a.severity) > rank(top))) top = a.severity
     return top
   }
 
@@ -66,5 +97,5 @@ export const useAlertsStore = defineStore('alerts', () => {
     if (keep.length !== Object.keys(dismissed.value).length) dismissed.value = Object.fromEntries(keep)
   }, { immediate: true })
 
-  return { active, pending, viewSeverity, markViewSeen, isDismissed }
+  return { active, pending, plugins, viewSeverity, markViewSeen, isDismissed }
 })

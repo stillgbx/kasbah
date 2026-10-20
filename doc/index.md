@@ -24,7 +24,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 
 | Pages | Dernière mise à jour |
 |---|---|
-| [1_0 Monorepo et flux de données](1_architecture/1_0_monorepo-et-flux.md) | 2026-10-10 |
+| [1_0 Monorepo et flux de données](1_architecture/1_0_monorepo-et-flux.md) | 2026-10-20 |
 | [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-10-20 |
 | [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-10-11 |
 | [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-10-13 |
@@ -79,7 +79,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_13 Mitsubishi MELCloud](3_plugins/3_13_mitsubishi-melcloud.md) | 2026-10-02 |
 | [3_14 iRobot (Roomba)](3_plugins/3_14_irobot-roomba.md) | 2026-10-06 |
 | [3_15 Sonos](3_plugins/3_15_sonos.md) | 2026-10-02 |
-| [3_16 YouTube Music (non officiel)](3_plugins/3_16_ytmusic.md) | 2026-10-08 |
+| [3_16 YouTube Music (non officiel)](3_plugins/3_16_ytmusic.md) | 2026-10-20 |
 | [3_17 PetKit](3_plugins/3_17_petkit.md) | 2026-10-06 |
 | [3_18 Tuya (ventilateur CREATE)](3_plugins/3_18_tuya.md) | 2026-10-06 |
 | [3_19 Radios (radio-browser.info)](3_plugins/3_19_radio.md) | 2026-10-07 |
@@ -99,7 +99,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | Socle | Dernière mise à jour |
 |---|---|
 | [4_0 Langage visuel](4_ui/4_0_langage-visuel.md) | 2026-10-06 |
-| [4_1 Navigation et panneaux](4_ui/4_1_navigation-et-panneaux.md) | 2026-10-19 |
+| [4_1 Navigation et panneaux](4_ui/4_1_navigation-et-panneaux.md) | 2026-10-20 |
 | [4_2 Thème et langues](4_ui/4_2_theme-et-langues.md) | 2026-10-06 |
 
 | Vues | Dernière mise à jour |

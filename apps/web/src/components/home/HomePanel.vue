@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import type { DeviceAlert, StateFor } from '@kasbah/shared'
+import { ALERT_SEVERITIES, type AlertSeverity, type DeviceAlert, type StateFor } from '@kasbah/shared'
 import { useHomeSummary } from '../../composables/useHomeSummary'
 import { useAlertsStore, type RailAlert } from '../../stores/alerts'
 import { useDevicesStore } from '../../stores/devices'
@@ -74,6 +74,8 @@ function alertText(a: DeviceAlert): string {
   }
 }
 
+const rank = (s: AlertSeverity) => ALERT_SEVERITIES.indexOf(s)
+
 /**
  * One row per DEVICE, its alerts following: it is the device one goes to see, and a
  * dispenser that is both empty and out of desiccant does not need to take two rows. `active` is sorted
@@ -84,11 +86,12 @@ function alertText(a: DeviceAlert): string {
 const alertRows = computed(() => {
   const byDevice = new Map<string, RailAlert[]>()
   for (const a of alerts.active) byDevice.set(a.deviceId, [...(byDevice.get(a.deviceId) ?? []), a])
-  return [...byDevice.values()].map((list) => {
+  const devicesRows = [...byDevice.values()].map((list) => {
     const first = list[0]!
     const descriptor = devices.descriptors[first.deviceId]
     return {
-      deviceId: first.deviceId,
+      key: first.deviceId,
+      deviceId: first.deviceId as string | null,
       view: first.view,
       severity: first.severity,
       name: house.houseDeviceFor(first.deviceId)?.name ?? descriptor?.name ?? first.deviceId,
@@ -96,11 +99,22 @@ const alertRows = computed(() => {
       text: list.map(alertText).join(' · '),
     }
   })
+  // then the plugins that are not working: their status, and the server's detail which says what to do
+  const plugins = alerts.plugins.map((a) => ({
+    key: `plugin:${a.pluginId}`,
+    deviceId: null,
+    view: a.view,
+    severity: a.severity,
+    name: a.pluginId.replace('_', ' '),
+    icon: 'plug' as const,
+    text: [t(`settings.pluginStatus.${a.status}`), a.detail].filter(Boolean).join(' · '),
+  }))
+  return [...devicesRows, ...plugins].sort((a, b) => rank(b.severity) - rank(a.severity))
 })
 
 /** A device of the house: we select it in the scene (its room is framed, its panel opens). Otherwise, its view. */
-function openAlert(deviceId: string, view: string) {
-  const hd = house.houseDeviceFor(deviceId)
+function openAlert(deviceId: string | null, view: string) {
+  const hd = deviceId ? house.houseDeviceFor(deviceId) : undefined
   if (hd) house.selectDevice(hd.id)
   else void router.push({ name: view })
 }
@@ -115,7 +129,7 @@ function openAlert(deviceId: string, view: string) {
   <!-- wedged at the BOTTOM of the panel (margin-top: auto): it appears and leaves without moving anything above -->
   <section v-if="alertRows.length" class="alerts" :aria-label="$t('alerts.title')">
     <div class="section-label">{{ $t('alerts.title') }}</div>
-    <button v-for="r in alertRows" :key="r.deviceId" type="button" class="alert-row" :data-severity="r.severity"
+    <button v-for="r in alertRows" :key="r.key" type="button" class="alert-row" :data-severity="r.severity"
             :title="`${r.name} · ${r.text}`" @click="openAlert(r.deviceId, r.view)">
       <span class="icon-square"><StrokeIcon :name="r.icon" :size="18" /></span>
       <span class="alert-row__main">

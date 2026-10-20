@@ -106,8 +106,10 @@ function page(dir: 1 | -1) {
       </router-link>
       <div class="rail__spacer" />
       <router-link v-slot="{ navigate }" :to="{ name: settingsItem.name }" custom>
-        <button type="button" class="rail__btn" :data-on="current === settingsItem.name ? '1' : '0'" :title="$t(settingsItem.label)" :aria-label="$t(settingsItem.label)" @click="navigate">
+        <button type="button" class="rail__btn" :data-on="current === settingsItem.name ? '1' : '0'" :title="$t(settingsItem.label)"
+                :aria-label="alerts.viewSeverity(settingsItem.name) ? $t('alerts.pending', { view: $t(settingsItem.label) }) : $t(settingsItem.label)" @click="navigate">
           <StrokeIcon :name="settingsItem.icon" :size="24" />
+          <span v-if="alerts.viewSeverity(settingsItem.name)" class="rail__badge" :data-severity="alerts.viewSeverity(settingsItem.name)" />
         </button>
       </router-link>
     </div>

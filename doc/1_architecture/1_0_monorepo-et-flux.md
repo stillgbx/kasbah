@@ -1,6 +1,6 @@
 # Monorepo et flux de données
 
-> Dernière mise à jour : 2026-10-10
+> Dernière mise à jour : 2026-10-20
 > Sources : `package.json`, `tsconfig.base.json`, `vitest.config.ts`, `apps/server/src/app.ts`, `README.md`, `scripts/dev-server.mjs`
 
 ## Workspaces (npm)
@@ -41,8 +41,8 @@ réponse et annulé si le serveur refuse (`apps/web/src/lib/optimistic.ts`).
 
 | Script | Effet |
 |---|---|
-| `npm run dev` | `concurrently` : serveur (`tsx watch`, 8787) + Vite (5173, proxy `/api` `/ws`) + générateur PO Token (`scripts/dev-pot.mjs` → `_external/bgutil-ytdlp-pot-provider/server`, port 4416 ; skip si absent ou déjà up) |
-| `npm run dev:pot` | PO Token seul |
+| `npm run dev` | `concurrently` : serveur (`tsx watch`, 8787) + Vite (5173, proxy `/api` `/ws`). *(Jusqu'au 2026-10-20, aussi le générateur PO Token ; c'est désormais le plugin ytmusic qui le lance, `../3_plugins/3_16_ytmusic.md`)* |
+| `npm run dev:pot` | PO Token seul, à la main |
 | `npm test` | Vitest, projets `packages/*` et `apps/*` (`vitest.config.ts` racine → `test.projects`) |
 | `npm run typecheck` | `tsc --noEmit` par workspace, `vue-tsc` pour le web |
 | `npm run lint` | ESLint flat config (typescript-eslint + eslint-plugin-vue) |

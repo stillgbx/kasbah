@@ -1,3 +1,4 @@
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
@@ -10,6 +11,7 @@ import { YtmusicCatalog, type CreateSession } from './catalog'
 import { createCookieFile, hasRequiredCookie, writeNetscapeBeside, type CookieStore } from './cookie'
 import { importCookiesFromBrowser, isAuthError, YTM_BROWSERS } from './browserCookies'
 import { pingPoToken, resolveStreamUrl } from './resolve'
+import { POT_SERVER_MAIN, spawnPoTokenServer } from './potServer'
 import type { YtmusicExploreCategory, YtmusicStatus } from './types'
 import { ART_PLAY_SIZE, upgradeArtUrl } from './mapping'
 
@@ -39,6 +41,10 @@ export interface YtmusicPluginDeps {
   createSession?: CreateSession
   fetchImpl?: typeof fetch
   spawnImpl?: SpawnFn
+  /** The PO Token generator to launch when nothing answers (`build/main.js`); `null` = never launch. */
+  poTokenServer?: string | null
+  /** Polling interval while waiting for the launched generator (default 1 s). */
+  poTokenWaitMs?: number
 }
 
 export function healthFrom(
@@ -118,6 +124,35 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     const url = config?.YTM_PO_TOKEN_URL ?? 'http://127.0.0.1:4416'
     poTokenOk = await pingPoToken(url, deps.fetchImpl ?? fetch)
     return poTokenOk
+  }
+
+  /** The generator launched by the plugin, stopped with it. */
+  let potChild: ChildProcessWithoutNullStreams | null = null
+
+  /** Nothing answers: launch the generator if it is installed, then wait until it answers, without blocking startup. */
+  async function launchPo(): Promise<void> {
+    const url = cfg().YTM_PO_TOKEN_URL
+    const main = deps.poTokenServer === undefined ? POT_SERVER_MAIN : deps.poTokenServer
+    const launched = main === null ? 'not launched' : spawnPoTokenServer(deps.spawnImpl ?? (spawn as unknown as SpawnFn), url, main)
+    if (typeof launched === 'string') { log().warn({ url }, `PO Token generator unreachable — ${launched}`); return }
+    potChild = launched
+    let tail = ''
+    const keep = (d: Buffer) => { tail = (tail + d.toString()).slice(-1000) }
+    launched.stdout?.on('data', keep)
+    launched.stderr?.on('data', keep)
+    launched.on('error', (err) => log().warn({ err: err.message }, 'PO Token generator failed to launch'))
+    launched.on('exit', (code) => {
+      if (potChild === launched) {
+        potChild = null
+        poTokenOk = false
+        log().warn({ code, tail: tail.trim().split(/\r?\n/).slice(-3).join(' | ') }, 'PO Token generator exited')
+      }
+    })
+    log().info({ url }, 'PO Token generator launched by Kasbah')
+    for (let i = 0; i < 30 && potChild === launched; i++) {
+      await new Promise((r) => setTimeout(r, deps.poTokenWaitMs ?? 1000))
+      if (await refreshPo()) { log().info({ url }, 'PO Token generator ready'); return }
+    }
   }
 
   /** Light probe: likes (`LM`) — fails with a 401 if the cookie is dead. */
@@ -261,9 +296,7 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
         log().info('YouTube Music (unofficial): cookie present')
         void probeCookie(home, raw)
       }
-      void refreshPo().then((ok) => {
-        if (!ok) log().warn({ url: cfg().YTM_PO_TOKEN_URL }, 'PO Token generator unreachable')
-      })
+      void refreshPo().then((ok) => (ok ? undefined : launchPo()))
     },
 
     async execute(_externalId: string, command: Command) {
@@ -271,6 +304,9 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     },
 
     async stop() {
+      const child = potChild
+      potChild = null
+      if (child && child.exitCode === null) child.kill()
       unregister?.()
       unregister = null
       for (const a of accounts.values()) a.catalog.reset()

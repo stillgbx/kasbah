@@ -7,6 +7,18 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-20] update | Alertes des plugins en panne, et le générateur PO Token lancé par ytmusic
+
+**Déclencheur** : « actuellement sur la vraie maison il y a plusieurs pb de plugins. je pense qu'il faudrait ajouter les alertes dans le rail etc si un pb est présent dans un plugin » (un compte Nest à relier, le PO Token absent avec `npm run start`).
+
+**Pages modifiées** :
+- `4_ui/4_1_navigation-et-panneaux.md` - section datée : santé lue chaque minute, `error` / `needs_pairing` tout de suite, `degraded` après 5 min, pastille sur l'engrenage, lignes du panneau maison, choix écartés.
+- `3_plugins/3_16_ytmusic.md` - section datée : le plugin lance `bgutil` s'il est buildé et que rien ne répond ; renvoi depuis l'étape 3 de la mise en route.
+- `5_setup/5_0_installation-et-scripts.md` - `dev-pot` sort de `npm run dev` / `house`, `dev:pot` reste manuel.
+- `1_architecture/1_0_monorepo-et-flux.md` - tableau des scripts racine.
+
+**Index** : catalogues mis à jour (3 lignes), index.md régénéré.
+
 ## [2026-10-20] update | Véhicules : alerte de pneu sous-gonflé
 
 **Déclencheur** : « la Tesla a un pneu à moins de 2,8 bar, affiché en warn dans la voiture : on devrait afficher cette alerte (rail, etc.) ».

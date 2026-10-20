@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
-import { defaultState, type DeviceDescriptor, type DeviceState, type StateFor } from '@kasbah/shared'
+import { defaultState, type DeviceDescriptor, type DeviceState, type PluginHealth, type StateFor } from '@kasbah/shared'
 import { useDevicesStore } from './devices'
-import { useAlertsStore } from './alerts'
+import { DEGRADED_GRACE_MS, useAlertsStore } from './alerts'
 
 const car: DeviceDescriptor = { id: 'tesla:car', pluginId: 'tesla', externalId: 'car', kind: 'vehicle', name: 'Model S', capabilities: [], meta: {} }
 const robot: DeviceDescriptor = { id: 'aut:m', pluginId: 'aut', externalId: 'm', kind: 'mower', name: 'Robby', capabilities: [], meta: {} }
@@ -77,5 +77,45 @@ describe('alerts store', () => {
     useDevicesStore().setEntries([{ descriptor: car, state: carState() }])
     await nextTick()
     expect(alerts.isDismissed('gone:x|device_error|1@')).toBe(false)
+  })
+})
+
+describe('plugin alerts', () => {
+  beforeEach(() => { setActivePinia(createPinia()); localStorage.clear(); vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+  const health = (plugins: Record<string, PluginHealth>) => ({ ok: true, uptimeS: 1, clients: 1, plugins })
+
+  it('flags an account to link again on the settings, at once', async () => {
+    const devices = useDevicesStore()
+    const alerts = useAlertsStore()
+    devices.health = health({ nest: { status: 'error', detail: 'link the account again' }, hue: { status: 'ok' }, sonos: { status: 'disabled' } })
+    await nextTick()
+    expect(alerts.plugins).toEqual([{ pluginId: 'nest', status: 'error', detail: 'link the account again', severity: 'problem', view: 'settings' }])
+    expect(alerts.viewSeverity('settings')).toBe('problem')
+    devices.health = health({ nest: { status: 'ok' } })
+    await nextTick()
+    expect(alerts.viewSeverity('settings')).toBeNull()
+  })
+
+  it('flags a degraded plugin only once it has lasted, and forgets a recovery', async () => {
+    const devices = useDevicesStore()
+    const alerts = useAlertsStore()
+    const read = async (status: PluginHealth['status']) => { devices.health = health({ ytmusic: { status } }); await nextTick() }
+    await read('degraded')
+    expect(alerts.plugins).toEqual([])
+    vi.advanceTimersByTime(DEGRADED_GRACE_MS - 1000)
+    await read('degraded')
+    expect(alerts.plugins).toEqual([])
+    vi.advanceTimersByTime(1000)
+    await read('degraded')
+    expect(alerts.plugins.map((a) => a.pluginId)).toEqual(['ytmusic'])
+    // a server that does not answer says nothing: the alert holds
+    devices.health = null
+    await nextTick()
+    expect(alerts.plugins.map((a) => a.pluginId)).toEqual(['ytmusic'])
+    // recovered, then degraded again: the wait starts over
+    await read('ok')
+    await read('degraded')
+    expect(alerts.plugins).toEqual([])
   })
 })

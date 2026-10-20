@@ -1,5 +1,8 @@
 import Fastify from 'fastify'
 import { EventEmitter } from 'node:events'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import pino from 'pino'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -1228,5 +1231,49 @@ describe('ytmusic accounts', () => {
     expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/status' })).json()).toMatchObject({ linked: true })
     expect(plugin.health!().status).not.toBe('needs_pairing')
     await plugin.stop()
+  })
+})
+
+describe('ytmusic PO Token generator', () => {
+  /** A plugin whose generator answers once `up` is set; the spawned process is a fake. */
+  async function bootPo(opts: { url?: string; installed?: boolean } = {}) {
+    let up = false
+    const fetchImpl = (async () => (up ? new Response('ok', { status: 200 }) : Promise.reject(new Error('ECONNREFUSED')))) as typeof fetch
+    const proc = Object.assign(new EventEmitter(), {
+      stdout: new PassThrough(), stderr: new PassThrough(), exitCode: null as number | null,
+      kill: vi.fn(() => { proc.exitCode = 0; proc.emit('exit', 0) }),
+    })
+    const spawnImpl = vi.fn(() => { setTimeout(() => { up = true }, 5); return proc as never }) as unknown as SpawnFn
+    const main = join(mkdtempSync(join(tmpdir(), 'pot-')), 'main.js')
+    if (opts.installed !== false) writeFileSync(main, '')
+    const cookieStore = createCookieFile('')
+    await cookieStore.write(COOKIE)
+    const plugin = createYtmusicPlugin({
+      cookieStore, createSession: async () => fakeMusic(), fetchImpl, spawnImpl,
+      poTokenServer: main, poTokenWaitMs: 10,
+    })
+    await plugin.init(fakeCtx(plugin.configSchema.parse({ YTM_COOKIE_FILE: '', YTM_PO_TOKEN_URL: opts.url ?? 'http://127.0.0.1:4416' })))
+    await plugin.start()
+    return { plugin, spawnImpl: spawnImpl as unknown as ReturnType<typeof vi.fn>, proc, main }
+  }
+  const poOk = async (plugin: ReturnType<typeof createYtmusicPlugin>) =>
+    vi.waitFor(() => expect(plugin.health!().status).toBe('ok'))
+
+  it('launches the installed generator when nothing answers, on the port of the url, and stops it with the plugin', async () => {
+    const { plugin, spawnImpl, proc, main } = await bootPo({ url: 'http://127.0.0.1:4500' })
+    await vi.waitFor(() => expect(spawnImpl).toHaveBeenCalledTimes(1))
+    expect(spawnImpl.mock.calls[0]![0]).toBe(process.execPath)
+    expect(spawnImpl.mock.calls[0]![1]).toEqual([main, '--port', '4500'])
+    await poOk(plugin)
+    await plugin.stop!()
+    expect(proc.kill).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not launch a generator that is not installed, nor one for another machine', async () => {
+    const missing = await bootPo({ installed: false })
+    const remote = await bootPo({ url: 'http://192.168.1.20:4416' })
+    await new Promise((r) => setTimeout(r, 30))
+    expect(missing.spawnImpl).not.toHaveBeenCalled()
+    expect(remote.spawnImpl).not.toHaveBeenCalled()
   })
 })

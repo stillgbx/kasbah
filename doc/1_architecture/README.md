@@ -13,7 +13,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 
 | Page | Résumé | Dernière mise à jour |
 |---|---|---|
-| [1_0 Monorepo et flux de données](1_0_monorepo-et-flux.md) | Les quatre workspaces npm et leurs dépendances, le flux d'un état (plugin → registre → WebSocket → écrans) et d'une commande, les scripts racine (`dev`, `house`, PO Token, watcher `scripts/dev-server.mjs`). | 2026-10-10 |
+| [1_0 Monorepo et flux de données](1_0_monorepo-et-flux.md) | Les quatre workspaces npm et leurs dépendances, le flux d'un état (plugin → registre → WebSocket → écrans) et d'une commande, les scripts racine (`dev`, `house`, PO Token, watcher `scripts/dev-server.mjs`). | 2026-10-20 |
 | [1_1 Contrat des appareils](1_1_contrat-appareils.md) | Modèle zod partagé de `packages/shared` : kinds et capacités, états discriminés, natures (`meta.*.deviceClass`), commandes `kind.verbe`, règles pures (`rules.ts`), `StatePatch` qui sait effacer un champ, scènes plugin et leur rappel. | 2026-10-20 |
 | [1_2 Serveur et hôte de plugins](1_2_serveur-et-plugins.md) | Assemblage Fastify (`app.ts`), hôte de plugins (cycle de vie, isolation, activation lue dans la maison, réglages persistés), registre d'états et de scènes, bus, historique énergie, hooks `forecast?` / `journal?` / `consumption?`, relais vidéo `core/video/`, chemins `core/paths.ts`. | 2026-10-11 |
 | [1_3 Protocole REST et WebSocket](1_3_protocole-rest-ws.md) | Routes REST (appareils, maison et ses écritures atomiques, scènes, plugins et leur activation, santé et quotas), messages WebSocket `/ws` (états complets, coalescence, `house`, `scenes`), codes d'erreur, transport et reconnexion côté client (`httpTransport.ts`). | 2026-10-13 |

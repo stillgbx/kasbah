@@ -18,8 +18,14 @@ const devices = useDevicesStore()
 const notifications = useNotificationsStore()
 const properties = usePropertiesStore()
 
-onMounted(() => { void house.load(); void properties.load(); devices.start() })
-onBeforeUnmount(() => devices.stop())
+// the plugins' health is not pushed: read every minute, for the alerts of the rail (`stores/alerts`)
+let healthTimer: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  void house.load(); void properties.load(); devices.start()
+  void devices.refreshHealth()
+  healthTimer = setInterval(() => void devices.refreshHealth(), 60_000)
+})
+onBeforeUnmount(() => { devices.stop(); clearInterval(healthTimer) })
 </script>
 
 <template>

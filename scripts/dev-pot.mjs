@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Starts the PO Token generator (bgutil) for ytmusic locally.
- * Absent from `_external/` (gitignored) or already reachable on :4416 → skip without breaking `npm run dev`.
+ * Starts the PO Token generator (bgutil) for ytmusic locally, by hand (`npm run dev:pot`): the
+ * ytmusic plugin launches it itself when nothing answers.
+ * Absent from `_external/` (gitignored) or already reachable on :4416 → skip.
  * (Not in vite.config: Vite must not drive a Node service outside the front end.)
  */
 import { spawn } from 'node:child_process'

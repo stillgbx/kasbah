@@ -8,8 +8,8 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "concurrently -n server,web,pot -c blue,green,magenta \"npm run dev -w @kasbah/server\" \"npm run dev -w @kasbah/web\" \"node scripts/dev-pot.mjs\"",
-    "house": "concurrently -n house,web,pot -c blue,green,magenta \"npm run house -w @kasbah/server\" \"npm run dev -w @kasbah/web\" \"node scripts/dev-pot.mjs\"",
+    "dev": "concurrently -n server,web -c blue,green \"npm run dev -w @kasbah/server\" \"npm run dev -w @kasbah/web\"",
+    "house": "concurrently -n house,web -c blue,green \"npm run house -w @kasbah/server\" \"npm run dev -w @kasbah/web\"",
     "dev:pot": "node scripts/dev-pot.mjs",
     "build": "npm run build -w @kasbah/web -w @kasbah/server",
     "start": "npm run start -w @kasbah/server",

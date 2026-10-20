@@ -14,7 +14,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | Page | Résumé | Dernière mise à jour |
 |---|---|---|
 | [4_0 Langage visuel](4_0_langage-visuel.md) | Maquette de référence, jetons et primitives CSS, règle « rien ne doit bouger » (`PulseDot`, `MarqueeText`, emplacements réservés), jeu d'icônes trait, couleurs Vuetify, palette de la scène 3D, pilules de marqueur. | 2026-10-06 |
-| [4_1 Navigation et panneaux](4_1_navigation-et-panneaux.md) | Grille, rail, en-tête et barre du bas, vue Maison immersive (panneaux maison → pièce → appareil, ambiances, mode « déplacer », emplacement), recherche et palette Ctrl+K, assistant, téléphone, alertes (pastille du rail, liste du panneau maison), banc de réglage de la lumière ; renvoie aux pages des autres vues. | 2026-10-19 |
+| [4_1 Navigation et panneaux](4_1_navigation-et-panneaux.md) | Grille, rail, en-tête et barre du bas, vue Maison immersive (panneaux maison → pièce → appareil, ambiances, mode « déplacer », emplacement), recherche et palette Ctrl+K, assistant, téléphone, alertes des appareils et des plugins (pastille du rail, liste du panneau maison), banc de réglage de la lumière ; renvoie aux pages des autres vues. | 2026-10-20 |
 | [4_2 Thème et langues](4_2_theme-et-langues.md) | Apparence clair / sombre / système, thèmes nommés déclarés dans `src/themes/` et dérivés pour Vuetify, persistance des réglages, i18n fr / en (vocabulaires d'ouvrant, neutralité de genre, pluriels). | 2026-10-06 |
 
 ### Vues

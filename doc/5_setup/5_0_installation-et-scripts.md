@@ -23,6 +23,8 @@ Web sur <http://localhost:5173> (Vite, `host: true` → accessible depuis un aut
 poste), serveur sur <http://localhost:8787>. Sans configuration : plugin `mock` + maison démo.
 `npm run dev` lance aussi le **générateur PO Token** (`scripts/dev-pot.mjs`) s'il est buildé sous
 `_external/bgutil-ytdlp-pot-provider/server` (gitignored) ; skip si déjà sur le port 4416.
+*(Depuis le 2026-10-20, c'est le plugin ytmusic qui le lance, quel que soit le script de démarrage :
+`../3_plugins/3_16_ytmusic.md`, mise à jour du 2026-10-20.)*
 
 `esbuild` a un script d'installation : si npm le bloque (`allow-scripts`), exécuter
 `npm approve-scripts esbuild` puis `npm rebuild esbuild`.
@@ -274,7 +276,7 @@ recopier depuis l'ancienne machine, puis ajuster dans `.env` ce qui porte l'IP d
 |---|---|
 | `npm run dev` | développement ; serveur relancé à chaque modification (`node --watch`) |
 | `npm run house` | maison réelle au quotidien : serveur sans relance automatique, front Vite |
-| `npm run dev:pot` | le générateur PO Token seul (`scripts/dev-pot.mjs`), déjà lancé par `npm run dev` |
+| `npm run dev:pot` | le générateur PO Token seul (`scripts/dev-pot.mjs`), à la main ; le plugin ytmusic le lance lui-même (2026-10-20) |
 | `npm run mcp-user -w @kasbah/server -- add <nom>`, `… remove <nom>`, `… list` | comptes du serveur MCP (`mcp-users.json`), en secours de Réglages : `add` demande le mot de passe, `remove` coupe aussi les jetons (`apps/server/src/mcp/users-cli.ts`) |
 | `npm run build && npm start` | production de base : app + API sur `KASBAH_PORT` (8787), sans Vite (`5_2_production.md`) |
 | `node scripts/supervisor.mjs` | production supervisée : build si absent, serveur relancé s'il tombe, mise à jour depuis Réglages ; lancé au démarrage de la machine (`5_2_production.md`, mise à jour 2026-10-13 (bis)) |
