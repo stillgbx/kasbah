@@ -10,7 +10,6 @@ import HeatingHistoryChart from '../components/heating/HeatingHistoryChart.vue'
 import HeatingUnitCard from '../components/heating/HeatingUnitCard.vue'
 import type { HeatingPoint, MelcloudUnit } from '../api/transport'
 import { useDevicesStore } from '../stores/devices'
-import { formatPercent } from '../lib/format'
 
 // Heating view. Only two tiers:
 //
@@ -63,7 +62,6 @@ const heating = (e: DeviceEntry) => climate(e)?.action === 'heating'
  * zone whose MACHINE heats: the machine is there, even though MELCloud cannot say which zone it serves.
  */
 const warm = (e: DeviceEntry) => heating(e) || climate(e)?.unitHeating === true
-const humidityOf = (e: DeviceEntry) => climate(e)?.humidity
 </script>
 
 <template>
@@ -88,8 +86,6 @@ const humidityOf = (e: DeviceEntry) => climate(e)?.humidity
           <!-- no word when the activity is not known (a heat pump zone while its machine heats):
                "idle" would be as much a guess as "heating" -->
           <span v-if="climate(entry as DeviceEntry)?.action" class="act" :data-hot="heating(entry as DeviceEntry) ? '1' : '0'">· {{ $t(`climate.actions.${climate(entry as DeviceEntry)!.action}`) }}</span>
-          <!-- the indoor humidity, when the device measures it (Nest thermostat) -->
-          <span v-if="humidityOf(entry as DeviceEntry) !== undefined" class="act">· {{ $t('climate.humidity') }} {{ formatPercent(humidityOf(entry as DeviceEntry)!, $i18n.locale) }}</span>
         </template>
         <!-- the controls on their own row, like a cover's buttons or a light's slider:
              nothing can overlap the name or the link pill -->
@@ -114,7 +110,9 @@ const humidityOf = (e: DeviceEntry) => climate(e)?.humidity
 /* the state following the temperatures, in the same ink as the rest of the status */
 .act { flex: 0 0 auto; white-space: nowrap; }
 /* warm, not the accent: the accent already means "on", and a zone that is on is not heating */
-.heat__bands { --emph: #e07b39; }
+/* wider cards than the other views (340 px): a thermostat carries three mode keys, the setpoint
+   and the humidity */
+.heat__bands { --emph: #e07b39; --card-min: 420px; }
 /* the colour only: a bold weight would widen the word and push what follows it */
 .act[data-hot='1'] { color: var(--emph); }
 @media (min-width: 1040px) { .heat__top { grid-template-columns: 1fr 1fr; } }

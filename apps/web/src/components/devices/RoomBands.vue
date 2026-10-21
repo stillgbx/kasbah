@@ -255,7 +255,8 @@ defineExpose({ count: computed(() => entries.value.length) })
 .band__title { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin: 0 0 8px 2px; }
 /* `min(340px, 100%)` and not `340px`: a fixed floor remains a floor when the container is narrower
    than it, and the column then overflowed the view by 37 px on a 375 px screen. */
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 16px; align-items: start; }
+/* `--card-min`: a view whose cards carry more can ask for wider ones (Heating) */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(var(--card-min, 340px), 100%), 1fr)); gap: 16px; align-items: start; }
 .group { padding: 16px 20px; display: grid; gap: 2px; align-content: start; }
 .group__head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 /* the title absorbs the free space: the content of `room-action` and the handle stay stuck to the right */

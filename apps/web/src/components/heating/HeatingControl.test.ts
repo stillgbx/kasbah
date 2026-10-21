@@ -92,6 +92,16 @@ describe('HeatingControl', () => {
     expect(off.findAll('.key--text')).toHaveLength(2)   // the modes stay, to turn back on
   })
 
+  /** The humidity sits on the setpoint's row, and stays there when off takes the setpoint away. */
+  it('shows the humidity on the control row, off included', () => {
+    const humid = mount(HeatingControl, { props: { entry: entry({ ...thermostat.descriptor }, { humidity: 62 }) } })
+    expect(humid.find('.controls .humidity').text()).toBe('62 %')
+    const off = mount(HeatingControl, { props: { entry: entry({ ...thermostat.descriptor }, { humidity: 62, mode: 'off' }) } })
+    expect(off.find('.keys--target').exists()).toBe(false)
+    expect(off.find('.humidity').text()).toBe('62 %')
+    expect(mount(HeatingControl, { props: { entry: thermostat } }).find('.humidity').exists()).toBe(false)
+  })
+
   /** A Nest in eco follows its own eco setpoint and refuses any other: shown, not set. */
   it('shows the eco setpoint without the keys that would set it', () => {
     const eco = mount(HeatingControl, { props: { entry: entry({ ...thermostat.descriptor }, { mode: 'eco', targetTempC: 13.9 }) } })

@@ -1184,3 +1184,20 @@ heures, « 2 j 2 h », « 133 j 4 h » (« d » en anglais). Le libellé `heatin
 retiré. Mesuré dans la preview (réponses MELCloud injectées) : « 133 j 4 h » tient dans la case
 réservée au chiffre (`min-width: 7ch`), le sélecteur de durée ne bouge pas d'une fenêtre à l'autre.
 Tests : `lib.test.ts`, `HeatingHistoryChart.test.ts`.
+
+### Mise à jour 2026-10-21 (quater) — vue Chauffage : cartes plus larges, modes à parts égales, humidité sur la ligne de consigne
+
+Demande : « on peut peut-être les élargir un peu […] que les 3 boutons chauffage/éco/arrêt prennent
+toute la largeur de la ligne et fassent la même taille, placer le taux d'humidité ailleurs ».
+
+- **Largeur** : `RoomBands` lit `--card-min` (340 px par défaut, inchangé pour les autres vues) ;
+  la vue Chauffage le pose à **420 px**. À 1280 px de large, deux colonnes au lieu de trois.
+- **Modes** (`HeatingControl`) : la rangée prend toute la ligne, chaque touche `flex: 1 1 0` avec
+  `min-width: max-content` — trois modes (Nest) font la même largeur ; un mot plus long que sa part
+  (« Refroidissement », thermostat simulé à cinq modes) garde sa largeur et la rangée passe à la ligne
+  plutôt que de déborder.
+- **Humidité** : retirée de la ligne d'état, posée au bout droit de la ligne de consigne (icône goutte,
+  infobulle « Humidité »). Elle reste affichée à l'arrêt ; la ligne garde alors la hauteur d'une touche
+  (`min-height: 36px`) : mesuré, carte, touches et humidité immobiles entre chauffage, éco et arrêt.
+- Vérifié en mode simulé à 1280 / 853 / 375 px, clair et sombre, fr et en (le cas Nest à trois modes
+  simulé en réduisant les modes du thermostat de démo dans le store). Test : `HeatingControl.test.ts`.
