@@ -61,7 +61,10 @@ décocher une fois le pont sur le réseau.
 - **Sondage de `/status`** toutes les 2 s (`HORMANN_POLL_MS`), pas le SSE : `/events` ne porte pas la
   porte (seuls `sensor` et `io` y sont émis).
 - **Deux appareils par porte** : `cover` (`meta.cover.deviceClass: 'garage'`, capacités `open_close`,
-  `stop`, `position`) et `light` (`on_off`), relié par `meta.linkedTo` — même forme que Tuya.
+  `stop`, `position`) et `light` (`on_off`), **sans** `meta.linkedTo` *(corrigé le 2026-10-21 : le
+  lien, copié de Tuya, masquait la lampe de la vue Lumières — `RoomBands hide-linked` cache tout
+  accessoire, prévu pour être rendu avec son principal ; or la porte est dans le mur et ses LED au
+  plafond)*.
   `externalId` = `<id>_door` / `<id>_light`, l'`id` étant choisi dans `HORMANN_DOORS`.
 - **Disponibilité = fraîcheur du bus**, pas le drapeau `valid` (jamais remis à faux par le firmware) :
   `busResponseAge` entre 0 et 30 s. Un pont qui répond avec un bus muet (pas de scan, prise débranchée)

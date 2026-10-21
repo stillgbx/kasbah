@@ -4,7 +4,9 @@ import { ACTIONS } from './client'
 import type { HormannDoorConfig, HormannStatus } from './types'
 
 // HCPBridgeMqtt `/status` ↔ Kasbah contract. One door yields TWO devices: the door (`cover`,
-// garage class) and the motor's light (`light`, on/off), linked by the light's `meta.linkedTo`.
+// garage class) and the motor's light (`light`, on/off). No `meta.linkedTo` between them: that link
+// means "one object, rendered together", and the views hide the accessory accordingly (the Lights
+// view hid this lamp). The door sits in the wall, its light on the ceiling: two places.
 //
 // The light only TOGGLES over HTTP (action 5): an on/off command is turned into a toggle only when
 // the current state differs, otherwise a "switch on" would switch a lit lamp off.
@@ -47,12 +49,11 @@ export function isLightExternalId(externalId: string): boolean {
 
 export function toDescriptors(cfg: HormannDoorConfig): DeviceDescriptor[] {
   const doorId = doorExternalId(cfg.id)
-  const doorDeviceId = `${PLUGIN_ID}:${doorId}` as DeviceId
   const lightId = lightExternalId(cfg.id)
   const meta = { manufacturer: 'Hörmann', model: 'SupraMatic 4 (HCPBridge)' }
   return [
     {
-      id: doorDeviceId,
+      id: `${PLUGIN_ID}:${doorId}` as DeviceId,
       pluginId: PLUGIN_ID,
       externalId: doorId,
       kind: 'cover',
@@ -67,7 +68,7 @@ export function toDescriptors(cfg: HormannDoorConfig): DeviceDescriptor[] {
       kind: 'light',
       name: `Éclairage ${cfg.name}`,
       capabilities: ['on_off'],
-      meta: { ...meta, linkedTo: doorDeviceId },
+      meta,
     },
   ]
 }

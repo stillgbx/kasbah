@@ -7,7 +7,7 @@ import { hormannStatusSchema, parseHormannDoors } from './types'
 const status = (raw: unknown) => hormannStatusSchema.parse(raw)
 
 describe('hormann mapping', () => {
-  it('one door yields a garage cover and its linked light', () => {
+  it('one door yields a garage cover and a light that is NOT linked to it', () => {
     const [door, light] = toDescriptors({ id: 'garage1', host: '192.168.1.51', password: '', name: 'Porte garage 1' })
     expect(door).toMatchObject({
       id: 'hormann:garage1_door', kind: 'cover', capabilities: ['open_close', 'stop', 'position'],
@@ -15,8 +15,9 @@ describe('hormann mapping', () => {
     })
     expect(light).toMatchObject({
       id: 'hormann:garage1_light', kind: 'light', name: 'Éclairage Porte garage 1', capabilities: ['on_off'],
-      meta: { linkedTo: 'hormann:garage1_door' },
     })
+    // `linkedTo` would hide the lamp from the Lights view (an accessory rendered with its main device)
+    expect(light!.meta).not.toHaveProperty('linkedTo')
   })
 
   it('reads the door id back from either externalId', () => {

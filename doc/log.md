@@ -7,6 +7,13 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-21] update | Hörmann : la lumière du moteur n'est plus liée à la porte
+
+**Déclencheur** : « ce sont des led sur le moteur, donc au plafond du garage […] ça ne semble pas apparaître dans la vue Lumières ».
+
+**Pages modifiées** :
+- `3_plugins/3_26_hormann.md` - plus de `meta.linkedTo` sur la lumière : la vue Lumières (`RoomBands hide-linked`) cache tout accessoire lié, et la porte (mur) et ses LED (plafond) ne sont pas un même objet.
+
 ## [2026-10-21] update | Hörmann : stop avant inversion ; lier un ouvrant à un appareil jamais placé
 
 **Déclencheur** : « quand une action est en cours et qu'on demande une autre action, la deuxième ne fonctionne pas » ; « pouvoir directement lier l'appareil à l'ouvrant sans manip de placement ».
