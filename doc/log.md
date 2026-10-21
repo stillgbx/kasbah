@@ -7,6 +7,18 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-21] ingest | Plugin Hörmann : portes de garage par un pont HCPBridgeMqtt
+
+**Déclencheur** : « écris le plugin Kasbah Hörmann (HTTP /status, /command, SSE /events de l'Atom) », après le raccordement de la première porte au bus.
+
+**Pages créées** :
+- `3_plugins/3_26_hormann.md` - câblage RJ12, bus coupé hors scan, broches série inversées sur l'Atom Lite, API HTTP lue dans le firmware 1.0.2, choix du plugin (sondage, fraîcheur du bus, effet vérifié, lumière en bascule), reste à faire.
+
+**Pages modifiées** :
+- `3_plugins/README.md` - entrée du catalogue.
+
+**Contradictions** : la demande citait le SSE `/events` ; le firmware n'y émet que capteurs et E/S, d'où le sondage de `/status`.
+
 ## [2026-10-21] update | Vue Chauffage : cartes plus larges, modes à parts égales, humidité déplacée
 
 **Déclencheur** : « on peut peut-être les élargir un peu […] les 3 boutons chauffage/éco/arrêt prennent toute la largeur […] placer le taux d'humidité ailleurs ».

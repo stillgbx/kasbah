@@ -274,6 +274,7 @@ Each plugin has its own **page**: what it does, how it connects, step-by-step se
 | `open_meteo` | Open-Meteo | `weather` | cloud, no key (CC BY 4.0) | [open_meteo](docs/plugins/open_meteo.md) |
 | `petkit` | PetKit (feeders, fountains) | `pet_feeder`, `pet_fountain` | private cloud (sign-in with an email code) | [petkit](docs/plugins/petkit.md) |
 | `tuya` | Tuya (fan light) | `fan`, `light` | local (Tuya protocol 3.5) | [tuya](docs/plugins/tuya.md) |
+| `hormann` | Hörmann (SupraMatic 4 garage doors) | `cover`, `light` | local (HCPBridgeMqtt bridge on the motor bus, HTTP) | [hormann](docs/plugins/hormann.md) |
 | `ytmusic` | YouTube Music | — (music source) | unofficial cloud (account cookie) | [ytmusic](docs/plugins/ytmusic.md) |
 | `mixcloud` | Mixcloud | — (music source) | public cloud, no key | [mixcloud](docs/plugins/mixcloud.md) |
 | `radio` | Radio stations (radio-browser.info) | — (music source) | free cloud, no key | [radio](docs/plugins/radio.md) |

@@ -5,6 +5,7 @@ import { createClaudePlugin } from './claude'
 import { createComapPlugin } from './comap'
 import { createEnphasePlugin } from './enphase'
 import { createGoogleCastPlugin } from './google_cast'
+import { createHormannPlugin } from './hormann'
 import { createHuePlugin } from './hue'
 import { createIrobotPlugin } from './irobot'
 import { createMelcloudPlugin } from './melcloud'
@@ -47,6 +48,7 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   radio: () => createRadioPlugin(),
   mixcloud: () => createMixcloudPlugin(),
   tuya: () => createTuyaPlugin(),
+  hormann: () => createHormannPlugin(),
   agenda: () => createAgendaPlugin(),
   toutemonannee: () => createToutemonanneePlugin(),
   claude: () => createClaudePlugin(),
