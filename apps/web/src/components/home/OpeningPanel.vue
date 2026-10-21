@@ -278,7 +278,7 @@ function openingLabelById(id: string): string {
 }
 
 /** Candidate covers: the devices we have the RIGHT to assign to an opening (`canTakeOpening` —
- * everything except gate and garage door, a single rule with the Covers view).
+ * everything except a gate, a single rule with the Covers view).
  *
  * `d.kind` alone is not enough: a device of the raw JSON (linked by `deviceId` only, never
  * auto-placed) does not carry it — it is the plugin's descriptor that decides, as everywhere else
@@ -297,10 +297,19 @@ const deviceOptions = computed(() => {
       const takenElsewhere = d.openingId && d.openingId !== opening.value?.id
       return { value: d.id, title: takenElsewhere ? t('opening.deviceTaken', { name, opening: openingLabelById(d.openingId!) }) : name }
     })
-  return [{ value: '', title: t('opening.deviceNone') }, ...list]
+  // Plugin covers with no house entry at all (plugin activated after the opening was drawn):
+  // offered too, under their PLUGIN id — choosing one creates its entry on this opening.
+  const bound = new Set((house.effective?.devices ?? []).map((d) => d.deviceId))
+  const unplaced = Object.values(devices.descriptors)
+    .filter((desc) => desc.kind === 'cover' && canTakeOpening(desc) && !bound.has(desc.id))
+    .map((desc) => ({ value: desc.id, title: desc.name }))
+  return [{ value: '', title: t('opening.deviceNone') }, ...list, ...unplaced]
 })
 const linkedDeviceId = computed(() => house.openingDevices[0]?.id ?? '')
-function setDevice(id: string) { void house.setOpeningDevice(id || null) }
+function setDevice(id: string) {
+  if (id && devices.descriptors[id]) void house.setOpeningPluginDevice(id)
+  else void house.setOpeningDevice(id || null)
+}
 
 // --- delete: TWO-STEP gesture (arm, then confirm within 4 s), like "Forget
 // device" and "Remove from house". An opening surveyed with a tape measure must not go away

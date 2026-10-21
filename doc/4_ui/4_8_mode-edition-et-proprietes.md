@@ -1,6 +1,6 @@
 # Mode édition et propriétés
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-21
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre le mode édition de la maison (ouvertures, menuiserie, places, fenêtres de toit, jardin, terrain, relief, cadastre, apparence, dimensions, pièces et niveaux) et la gestion des propriétés (démo, création, renommage). Elle est née du découpage de
@@ -914,3 +914,28 @@ Vérifié dans la preview simulée : renommages (onglet « R+1 », en-tête), ri
 zoom 1,5 sans débordement ; recherches Paris (IGN seul), Madrid et Londres (Photon).
 
 Tests : `apps/web/src/lib/geocode.test.ts`.
+
+### Mise à jour 2026-10-21 — « Ouvrant lié » propose aussi les ouvrants jamais placés
+
+Demande de l'utilisateur, en branchant sa porte de garage Hörmann : l'ouvrant du garage était dessiné
+depuis longtemps, le plugin activé ensuite, et la porte n'apparaissait pas dans le select « Ouvrant
+lié ». Le select ne listait que les appareils de la maison `effective` ; une porte sans pièce
+déclarée par son plugin n'y est pas (ni entrée, ni auto-placement), et il fallait passer par
+« Placer » dans la scène pour rien, puisque le lien la replace de toute façon sur la baie.
+
+- `OpeningPanel` ajoute à la liste les descripteurs `cover` acceptés par `canTakeOpening` et qu'aucun
+  appareil de la maison ne lie (`deviceId`), sous leur id de PLUGIN : un id de la maison n'a jamais
+  de `:` (`idSchema`), la distinction est sans ambiguïté.
+- Les choisir appelle `house.setOpeningPluginDevice` : libère le volet déjà posé sur l'ouvrant, puis
+  `placeDevice(houseIdForDevice(id), { deviceId, openingId, position: [0, 0, 0] })`. Le serveur crée
+  l'entrée, lui donne la pièce qui porte l'ouvrant, et `alignDevicesOnOpenings` remplace la position
+  graine par le centre de la baie (sans position, l'alignement ne s'applique pas et l'appareil ne
+  serait pas « placé »). `setCoverOpening` n'a pas été modifiée.
+- Non traité : un appareil seulement AUTO-PLACÉ (présent dans `effective` sans entrée dans le fichier)
+  passe par `setCoverOpening`, qui n'envoie pas de `deviceId` : le serveur devrait refuser de créer
+  l'entrée. Non vérifié.
+
+Vérifié dans la preview simulée : porte de garage injectée sans entrée, proposée sur « porte-garage-2 »,
+choisie → entrée `auto.hormann-garage1_door` avec `roomId: garage`, position au centre de la baie,
+ancien volet libéré, aucune erreur console, select à 150 px inchangé. Test :
+`packages/shared/src/house/place.test.ts` (création sur un ouvrant).

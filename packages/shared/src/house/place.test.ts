@@ -166,6 +166,13 @@ describe('placeDeviceInJson', () => {
     // window of the east wall of the living room (segment 1, from [10, 0] to [10, 5]), 1.5 m from the corner, 1.2 wide
     expect(place(linked, 'cover.terrasse')).toEqual([10, 2.1, 1.55])
     expect(() => parseHouse(linked)).not.toThrow()
+
+    // a plugin cover with NO entry yet, linked straight from the opening's panel: the entry is
+    // created with the room that carries the bay, and the seed position becomes the bay's centre
+    const created = placeDeviceInJson(demo, 'auto.hormann-garage1_door', { deviceId: 'hormann:garage1_door', openingId: 'fen-salon-est', position: [0, 0, 0] })
+    expect(devices(created).at(-1)).toMatchObject({ deviceId: 'hormann:garage1_door', openingId: 'fen-salon-est', roomId: 'salon' })
+    expect(place(created, 'auto.hormann-garage1_door')).toEqual([10, 2.1, 1.55])
+    expect(() => parseHouse(created)).not.toThrow()
   })
 
   it('writes the orientation when given, and leaves it alone otherwise', () => {

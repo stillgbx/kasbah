@@ -110,7 +110,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-10-13 |
 | [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-10-21 |
 | [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-10-13 |
-| [4_8 Mode édition et propriétés](4_ui/4_8_mode-edition-et-proprietes.md) | 2026-10-13 |
+| [4_8 Mode édition et propriétés](4_ui/4_8_mode-edition-et-proprietes.md) | 2026-10-21 |
 <!-- section:4_ui:end -->
 
 ## 5 — Setup

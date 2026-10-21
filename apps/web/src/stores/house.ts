@@ -1797,6 +1797,28 @@ export const useHouseStore = defineStore('house', () => {
     }
   }
 
+  /**
+   * Same link, for a plugin cover that has NO house entry yet: the plugin was activated after the
+   * opening was drawn, and its door has no room to be auto-placed in. The entry is created right
+   * on the opening, which gives it the room that carries it — no "Place" detour through the scene.
+   * The position is only a seed: the server aligns it on the bay's centre (`alignDevicesOnOpenings`).
+   */
+  async function setOpeningPluginDevice(pluginDeviceId: string): Promise<boolean> {
+    const openingId = selectedOpeningId.value
+    if (!openingId) return false
+    savingOpening.value = true
+    try {
+      for (const d of coversOn(openingId)) house.value = await getTransport().placeDevice(d.id, { openingId: '' })
+      house.value = await getTransport().placeDevice(houseIdForDevice(pluginDeviceId), { deviceId: pluginDeviceId, openingId, position: [0, 0, 0] })
+      return true
+    } catch (err) {
+      useNotificationsStore().error(t('opening.saveError', { message: (err as Error).message }))
+      return false
+    } finally {
+      savingOpening.value = false
+    }
+  }
+
   return {
     house, effective, loading, error, index, levels, zones, soundRoutes, relaySource,
     focusedLevelId, gardenFocus, selectedRoomId, selectedLevelId, selectedKey, floorTab, selectedRoom, selectedZone, selectedDevice,
@@ -1809,7 +1831,7 @@ export const useHouseStore = defineStore('house', () => {
     placementLevelId, setPlacementLevel,
     selectedOpeningId, selectedOpening, savedOpening, openingDraft, openingBounds, openingCeiling, openingDevices, savingOpening, canRevertOpening,
     placingOpening, startPlacingOpening, cancelPlacingOpening, placeOpeningAt, removeOpening,
-    selectOpening, previewOpeningAt, saveOpening, dropOpening, revertOpening, setOpeningDevice, setCoverOpening, coversWithoutOpening,
+    selectOpening, previewOpeningAt, saveOpening, dropOpening, revertOpening, setOpeningDevice, setOpeningPluginDevice, setCoverOpening, coversWithoutOpening,
     parkings, parkingsInRoom, selectedParkingId, selectedParking, savedParking, parkingHostOf, parkingGapsOf, savingParking, placingParking,
     dockFor,
     selectParking, previewParkingAt, saveParking, dropParking, setParkingGap,

@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-21] update | Hörmann : stop avant inversion ; lier un ouvrant à un appareil jamais placé
+
+**Déclencheur** : « quand une action est en cours et qu'on demande une autre action, la deuxième ne fonctionne pas » ; « pouvoir directement lier l'appareil à l'ouvrant sans manip de placement ».
+
+**Pages modifiées** :
+- `3_plugins/3_26_hormann.md` - le moteur ignore une commande contraire au mouvement : stop puis commande (`needsStopFirst`), délai non mesuré.
+- `4_ui/4_8_mode-edition-et-proprietes.md` - section datée : « Ouvrant lié » propose les covers de plugin sans entrée, `setOpeningPluginDevice`, cas auto-placé non vérifié.
+- `4_ui/README.md` - date du catalogue.
+
 ## [2026-10-21] ingest | Plugin Hörmann : portes de garage par un pont HCPBridgeMqtt
 
 **Déclencheur** : « écris le plugin Kasbah Hörmann (HTTP /status, /command, SSE /events de l'Atom) », après le raccordement de la première porte au bus.
