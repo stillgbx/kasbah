@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { STATUS_BUS_SILENT, STATUS_CLOSED, STATUS_OPEN_LIT, STATUS_OPENING } from './__fixtures__/status'
 import { ACTIONS } from './client'
-import { doorIdOf, effectReached, isBusAlive, motionOf, toDescriptors, toDoorPatch, toLightPatch, toRequest } from './mapping'
+import { doorIdOf, effectReached, isBusAlive, motionOf, needsStopFirst, toDescriptors, toDoorPatch, toLightPatch, toRequest } from './mapping'
 import { hormannStatusSchema, parseHormannDoors } from './types'
 
 const status = (raw: unknown) => hormannStatusSchema.parse(raw)
@@ -64,6 +64,17 @@ describe('hormann mapping', () => {
     expect(effectReached('garage1_door', { type: 'cover.open' }, status(STATUS_OPENING))).toBe(true)
     expect(effectReached('garage1_door', { type: 'cover.stop' }, status(STATUS_OPENING))).toBe(false)
     expect(effectReached('garage1_door', { type: 'cover.set_position', position: 3 }, status(STATUS_CLOSED))).toBe(true)
+  })
+
+  it('a reversal needs a stop first, a command in the same direction does not', () => {
+    const opening = status(STATUS_OPENING) // at 12 %
+    expect(needsStopFirst('garage1_door', { type: 'cover.close' }, opening)).toBe(true)
+    expect(needsStopFirst('garage1_door', { type: 'cover.open' }, opening)).toBe(false)
+    expect(needsStopFirst('garage1_door', { type: 'cover.set_position', position: 8 }, opening)).toBe(true)
+    expect(needsStopFirst('garage1_door', { type: 'cover.set_position', position: 50 }, opening)).toBe(false)
+    expect(needsStopFirst('garage1_door', { type: 'cover.stop' }, opening)).toBe(false)
+    expect(needsStopFirst('garage1_door', { type: 'cover.close' }, status(STATUS_CLOSED))).toBe(false)
+    expect(needsStopFirst('garage1_light', { type: 'light.set', on: true }, opening)).toBe(false)
   })
 
   it('refuses a door list with a duplicate id', () => {

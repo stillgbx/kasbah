@@ -3,7 +3,7 @@ import pino from 'pino'
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
-import { STATUS_BUS_SILENT, STATUS_CLOSED } from './__fixtures__/status'
+import { STATUS_BUS_SILENT, STATUS_CLOSED, STATUS_OPENING } from './__fixtures__/status'
 import { createHormannPlugin, hormannConfigSchema } from './index'
 
 const flush = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)) }
@@ -32,7 +32,11 @@ function fakeBridge(initial: Record<string, unknown> = STATUS_CLOSED) {
     if (url.pathname === '/status') return reply(200, JSON.stringify(bridge.state))
     if (url.pathname === '/command' && !bridge.ignoreCommands) {
       const action = Number(url.searchParams.get('action'))
-      if (action === 1) bridge.state = { ...bridge.state, doorstate: 'opening', targetPosition: 100 }
+      const doorstate = bridge.state.doorstate
+      // Like the real motor: a command against the movement in progress is ignored.
+      if (action === 1 && doorstate !== 'closing') bridge.state = { ...bridge.state, doorstate: 'opening', targetPosition: 100 }
+      if (action === 0 && doorstate !== 'opening') bridge.state = { ...bridge.state, doorstate: 'closing', targetPosition: 0 }
+      if (action === 2 && (doorstate === 'opening' || doorstate === 'closing')) bridge.state = { ...bridge.state, doorstate: 'stopped' }
       if (action === 5) bridge.state = { ...bridge.state, light: !bridge.state.light }
     }
     return reply(200, 'OK')
@@ -134,6 +138,16 @@ describe('hormann plugin', () => {
     await drive(clock, plugin.execute('garage1_door', { type: 'cover.open' }))
     expect(bridge.requests.some((r) => r.url === 'http://192.168.1.51/command?action=1')).toBe(true)
     expect(patches(ctx, 'garage1_door').at(-1)).toMatchObject({ motion: 'opening' })
+    ctrl.abort()
+    await plugin.stop()
+  })
+
+  it('closing a door that is opening stops it first', async () => {
+    const { clock, ctx, ctrl, bridge, plugin } = await started(STATUS_OPENING)
+    await drive(clock, plugin.execute('garage1_door', { type: 'cover.close' }))
+    const commands = bridge.requests.filter((r) => r.url.includes('/command')).map((r) => r.url.split('?')[1])
+    expect(commands).toEqual(['action=2', 'action=0'])
+    expect(patches(ctx, 'garage1_door').at(-1)).toMatchObject({ motion: 'closing' })
     ctrl.abort()
     await plugin.stop()
   })

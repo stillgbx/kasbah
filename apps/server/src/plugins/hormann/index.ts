@@ -5,13 +5,15 @@ import { sleep } from '../../core/clock'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { createPoller } from '../../core/poll'
 import type { FetchLike } from '../../core/sse'
-import { HormannClient } from './client'
+import { ACTIONS, HormannClient } from './client'
 import {
   doorExternalId,
   doorIdOf,
   effectReached,
   isBusAlive,
   lightExternalId,
+  motionOf,
+  needsStopFirst,
   PLUGIN_ID,
   toDescriptors,
   toDoorPatch,
@@ -48,6 +50,12 @@ export type HormannConfig = z.infer<typeof hormannConfigSchema>
 
 /** Reading cadence while waiting for the effect of a command. */
 const EFFECT_POLL_MS = 500
+
+/**
+ * Wait for the door to rest before reversing it. With the 5 s of the command itself, it must fit
+ * under KASBAH_COMMAND_TIMEOUT_MS (10 s by default). Not measured yet on the real motor.
+ */
+const STOP_TIMEOUT_MS = 3_000
 
 export interface HormannPluginDeps {
   fetchImpl?: FetchLike
@@ -95,6 +103,23 @@ export function createHormannPlugin(deps: HormannPluginDeps = {}): DevicePlugin 
       lastError.set(doorId, err as Error)
       setDoorAvailable(doorId, false)
       throw err
+    }
+  }
+
+  /**
+   * Reads the door every `EFFECT_POLL_MS` until `reached`, and returns that reading; `null` if the
+   * plugin stops meanwhile. Past `timeoutMs`, the door did not react: a failure, not a silent "OK".
+   */
+  async function waitFor(doorId: string, reached: (s: HormannStatus) => boolean, timeoutMs: number, what: string): Promise<HormannStatus | null> {
+    const deadline = ctx!.clock.now() + timeoutMs
+    for (;;) {
+      await sleep(ctx!.clock, EFFECT_POLL_MS, ctx!.signal)
+      if (ctx!.signal.aborted) return null
+      const status = await read(doorId)
+      if (reached(status)) return status
+      if (ctx!.clock.now() >= deadline) {
+        throw new PluginError('UPSTREAM_ERROR', `hormann door ${doorId} did not react to ${what}`)
+      }
     }
   }
 
@@ -151,21 +176,18 @@ export function createHormannPlugin(deps: HormannPluginDeps = {}): DevicePlugin 
       if (!doorId || !client) throw new PluginError('UNSUPPORTED_COMMAND', `unknown hormann id ${externalId}`)
       if (!alive.has(doorId)) throw new PluginError('DEVICE_UNAVAILABLE', `hormann door ${doorId} is not reachable`)
 
-      const request = toRequest(externalId, command, lastStatus.get(doorId))
+      // A fresh reading: the last poll may be 2 s old, and the direction of travel decides below.
+      let current: HormannStatus | null = await read(doorId)
+      if (needsStopFirst(externalId, command, current)) {
+        await client.command(ACTIONS.stop, {}, ctx!.signal)
+        current = await waitFor(doorId, (s) => motionOf(s) === 'stopped', STOP_TIMEOUT_MS, 'cover.stop')
+        if (!current) return
+      }
+      const request = toRequest(externalId, command, current)
       if (!request) return
       await client.command(request.action, request.params, ctx!.signal)
-
       // The firmware answers "OK" to everything, including a command it drops: wait for the effect.
-      const deadline = ctx!.clock.now() + config!.HORMANN_COMMAND_TIMEOUT_MS
-      for (;;) {
-        await sleep(ctx!.clock, EFFECT_POLL_MS, ctx!.signal)
-        if (ctx!.signal.aborted) return
-        const status = await read(doorId)
-        if (effectReached(externalId, command, status)) return
-        if (ctx!.clock.now() >= deadline) {
-          throw new PluginError('UPSTREAM_ERROR', `hormann door ${doorId} did not react to ${command.type}`)
-        }
-      }
+      await waitFor(doorId, (s) => effectReached(externalId, command, s), config!.HORMANN_COMMAND_TIMEOUT_MS, command.type)
     },
 
     async stop(): Promise<void> {

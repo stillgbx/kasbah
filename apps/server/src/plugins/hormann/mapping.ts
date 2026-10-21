@@ -121,6 +121,34 @@ export function toRequest(externalId: string, command: Command, current: Hormann
   }
 }
 
+/** Direction a door command asks for, given where the door stands; `null` = none (stop, already there). */
+function wantedMotion(command: Command, status: HormannStatus): 'opening' | 'closing' | null {
+  switch (command.type) {
+    case 'cover.open': return 'opening'
+    case 'cover.close': return 'closing'
+    case 'cover.set_position': {
+      if (command.position <= POSITION_EDGE) return 'closing'
+      if (command.position >= 100 - POSITION_EDGE) return 'opening'
+      const position = status.currentPosition
+      if (typeof position !== 'number' || position === command.position) return null
+      return command.position > position ? 'opening' : 'closing'
+    }
+    default: return null
+  }
+}
+
+/**
+ * Must the door be stopped before this command? The motor ignores a command against the movement
+ * in progress (a close while opening does nothing, reported on the real door): it has to rest first.
+ */
+export function needsStopFirst(externalId: string, command: Command, status: HormannStatus | undefined): boolean {
+  if (isLightExternalId(externalId) || !status) return false
+  const motion = motionOf(status)
+  if (motion === 'stopped') return false
+  const wanted = wantedMotion(command, status)
+  return wanted !== null && wanted !== motion
+}
+
 /**
  * Has the door started doing what was asked? The proof is the published state, never the
  * firmware's "OK". A movement counts as soon as it starts: a full course takes longer than the

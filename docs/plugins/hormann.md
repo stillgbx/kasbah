@@ -12,6 +12,7 @@
 
 - **Door**: open, close, stop, and go to a position (0-100 %). The door's position and movement (opening, closing, at rest) are shown as they change.
 - **Light**: on / off of the motor's light. Remote controls, wall buttons and BlueSecur are picked up as well: Kasbah reads the motor, not its own commands.
+- Asking for the opposite direction while the door moves (closing while it opens) **stops it first**, then sends the command: the motor ignores a command against the movement in progress.
 - A command counts as done once the door is **seen moving** (or the light changes): the bridge acknowledges every command, even one it drops, so Kasbah checks the effect and reports a failure otherwise.
 
 Hörmann has no public API, and BlueSecur is Bluetooth only. The bridge talks to the motor over its HCP2 bus, like a Hörmann UAP 1-HCP accessory.

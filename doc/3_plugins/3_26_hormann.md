@@ -72,6 +72,12 @@ décocher une fois le pont sur le réseau.
   sinon `UPSTREAM_ERROR` après `HORMANN_COMMAND_TIMEOUT_MS` (5 s, sous les 10 s de
   `KASBAH_COMMAND_TIMEOUT_MS`). Attendre la fin de course (15-20 s) dépasserait ce plafond. Test vu
   rouge en retirant l'attente.
+- **Inversion = stop d'abord** : relevé sur la vraie porte, le moteur ignore une commande contraire au
+  mouvement en cours (fermer pendant une ouverture ne fait rien ; le firmware, lui, l'envoie bien).
+  `execute` relit la porte, envoie `stop` si elle va dans l'autre sens (`needsStopFirst`), attend
+  qu'elle soit au repos (3 s au plus), puis envoie la commande. Délai entre l'arrêt et la reprise
+  **pas encore mesuré** : si le moteur avale la commande envoyée juste après l'arrêt, c'est là qu'il
+  faudra une pause. Test vu rouge sans le stop.
 - **Lumière en bascule** : allumer une lampe allumée ne doit rien envoyer. La commande n'est traduite
   en bascule que si l'état lu diffère.
 - Positions : le firmware transforme ≤ 5 % en fermeture et ≥ 95 % en ouverture complètes.
