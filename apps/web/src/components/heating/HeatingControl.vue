@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import type { CommandInput, DeviceEntry, StateFor } from '@kasbah/shared'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import { formatPercent } from '../../lib/format'
+import { useSetpointDraft } from '../../composables/useSetpointDraft'
 
 // The commands of a heating device, on its room's line (`control` slot of `RoomBands`).
 //
@@ -39,14 +40,16 @@ const off = computed(() => state.value.mode === 'off')
 // In eco the device follows its own eco setpoint (a Nest refuses any other): read, not set.
 const eco = computed(() => state.value.mode === 'eco')
 
+// clicks in a row: the figure follows at once, ONE command leaves once they are over (Google quota)
+const setpoint = useSetpointDraft(() => props.entry.descriptor.id, () => state.value.targetTempC,
+  (id, targetTempC) => emit('command', id, { type: 'climate.set_target_temp', targetTempC }))
 function step(d: number) {
   const [lo, hi] = bounds.value
-  const next = Math.min(hi, Math.max(lo, Math.round((state.value.targetTempC + d) * 2) / 2))
-  emit('command', props.entry.descriptor.id, { type: 'climate.set_target_temp', targetTempC: next })
+  setpoint.set(Math.min(hi, Math.max(lo, Math.round((setpoint.value.value + d) * 2) / 2)))
 }
 const setMode = (mode: string) => emit('command', props.entry.descriptor.id, { type: 'climate.set_mode', mode: mode as StateFor<'climate'>['mode'] })
 
-const target = computed(() => `${state.value.targetTempC.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} °C`)
+const target = computed(() => `${setpoint.value.value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} °C`)
 /** Indoor humidity, when the device measures it (Nest): on the setpoint's row, at its right end. */
 const humidity = computed(() => state.value.humidity)
 const showTarget = computed(() => canSetTemp.value && !off.value)

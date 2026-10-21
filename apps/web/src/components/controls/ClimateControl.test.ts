@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import type { DeviceDescriptor, StateFor } from '@kasbah/shared'
 import ClimateControl from './ClimateControl.vue'
+import { SETPOINT_SEND_AFTER_MS } from '../../composables/useSetpointDraft'
 
 // Two very different devices share this control:
 //
@@ -106,8 +107,25 @@ describe('ClimateControl — setpoint alignment', () => {
     const w = mount(ClimateControl, { props: { descriptor: flowZone, state } })
     const wide: DeviceDescriptor = { ...thermostat, meta: { ...thermostat.meta, targetTempC: [5, 35] } }
     await w.setProps({ descriptor: wide, state: { ...state, targetTempC: 20 } })
+    vi.useFakeTimers()
     await w.findAll('.v-btn')[0]!.trigger('click')
+    vi.advanceTimersByTime(SETPOINT_SEND_AFTER_MS)
+    vi.useRealTimers()
     expect(w.emitted('command')).toEqual([[{ type: 'climate.set_target_temp', targetTempC: 19.5 }]])
+  })
+
+  /**
+   * The panel routes the command to the device ON SCREEN: a draft still waiting when the panel
+   * switches device would be sent to the new one. It is dropped.
+   */
+  it('drops a pending setpoint when the panel switches device', async () => {
+    vi.useFakeTimers()
+    const w = mount(ClimateControl, { props: { descriptor: thermostat, state } })
+    await w.findAll('.v-btn')[1]!.trigger('click')
+    await w.setProps({ descriptor: { ...thermostat, id: 'mock:other' } })
+    vi.advanceTimersByTime(SETPOINT_SEND_AFTER_MS)
+    vi.useRealTimers()
+    expect(w.emitted('command')).toBeUndefined()
   })
 })
 

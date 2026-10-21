@@ -536,3 +536,24 @@ c'était l'interface qui proposait un geste impossible. Décisions avec l'utilis
 
 Tests : `mapping.test.ts` (ordre des modes, consigne éco à 14), `plugin.test.ts` (relecture en éco),
 `ClimateControl.test.ts` et `HeatingControl.test.ts` (boutons masqués en éco, valeur gardée).
+
+### Mise à jour 2026-10-21 (bis) — plusieurs demi-degrés d'affilée : « Rate limited »
+
+Constaté sur la vraie maison : baisser la consigne de plusieurs demi-degrés d'un coup valait des
+erreurs « trop de commandes ». C'est **Google** qui limite (une dizaine d'appels par minute et par
+compte, voir le quota plus haut), et chaque clic en coûtait **deux** : `SetHeat`, puis la relecture
+de l'appareil (`GET devices/<id>`) qui publie ce qu'il a retenu. Cinq clics, dix appels.
+
+Correction côté web, sans toucher au plugin : `composables/useSetpointDraft.ts`. Le chiffre suit
+chaque clic aussitôt (un brouillon local), et **une seule** commande part `SETPOINT_SEND_AFTER_MS`
+(1,2 s) après le dernier clic, avec la valeur finale. Le brouillon s'efface à l'envoi : le correctif
+optimiste du store (`sendCommand`, appliqué de façon synchrone) prend le relais sans clignotement.
+Un aller-retour (+ puis −) n'envoie rien ; quitter la vue pendant l'attente envoie la consigne
+choisie. Branché dans `HeatingControl` (vue Chauffage) et `ClimateControl` (panneau 3D). Ce dernier
+est **réutilisé d'un appareil à l'autre** et son parent route la commande vers l'appareil affiché :
+un brouillon en attente au changement d'appareil y est **abandonné** (`onSwitch: 'drop'`), sinon il
+partirait vers le nouvel appareil. Même principe que `VehicleClimate` (800 ms), écrit avant.
+
+Vérifié en mode simulé : quatre clics affichent 20,5 → 19,0 °C, aucune commande pendant les clics,
+une seule à 19,0 °C ensuite. Pas encore rejoué sur le vrai thermostat. Tests : `HeatingControl.test.ts`
+(une commande après la rafale, aller-retour, démontage), `ClimateControl.test.ts` (changement d'appareil).

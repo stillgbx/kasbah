@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import type { DeviceEntry } from '@kasbah/shared'
 import HeatingControl from './HeatingControl.vue'
+import { SETPOINT_SEND_AFTER_MS } from '../../composables/useSetpointDraft'
 
 // The commands of a heating device, in its room's line. What they must hold:
 //
@@ -31,6 +32,9 @@ const readOnlyZone = entry(
   { currentTempC: 20, targetTempC: 45 },
 )
 
+beforeEach(() => { vi.useFakeTimers() })
+afterEach(() => { vi.useRealTimers() })
+
 describe('HeatingControl', () => {
   it('puts its commands on their own row, outside the status columns', () => {
     const w = mount(HeatingControl, { props: { entry: thermostat } })
@@ -55,15 +59,39 @@ describe('HeatingControl', () => {
     expect(mount(HeatingControl, { props: { entry: readOnlyZone } }).find('.controls').exists()).toBe(false)
   })
 
-  it('sets the setpoint in steps of 0.5', () => {
+  it('sets the setpoint in steps of 0.5', async () => {
+    const w = mount(HeatingControl, { props: { entry: thermostat } })
+    const [, plus] = w.find('.keys--target').findAll('.key')
+    await plus!.trigger('click')
+    vi.advanceTimersByTime(SETPOINT_SEND_AFTER_MS)
+    expect(w.emitted('command')).toEqual([['x:1', { type: 'climate.set_target_temp', targetTempC: 20 }]])
+  })
+
+  /**
+   * A Nest counts against Google's quota (about ten calls a minute): five clicks in a row earned
+   * "Rate limited" on the real house. The figure follows each click; ONE command leaves once they
+   * are over.
+   */
+  it('sends one command once the clicks in a row are over', async () => {
     const w = mount(HeatingControl, { props: { entry: thermostat } })
     const [minus, plus] = w.find('.keys--target').findAll('.key')
-    void plus!.trigger('click')
-    void minus!.trigger('click')
-    expect(w.emitted('command')).toEqual([
-      ['x:1', { type: 'climate.set_target_temp', targetTempC: 20 }],
-      ['x:1', { type: 'climate.set_target_temp', targetTempC: 19 }],
-    ])
+    for (let i = 0; i < 4; i++) { await minus!.trigger('click'); vi.advanceTimersByTime(300) }
+    expect(w.find('.target').text()).toBe('17,5 °C')          // follows the finger
+    expect(w.emitted('command')).toBeUndefined()               // nothing sent yet
+    vi.advanceTimersByTime(SETPOINT_SEND_AFTER_MS)
+    expect(w.emitted('command')).toEqual([['x:1', { type: 'climate.set_target_temp', targetTempC: 17.5 }]])
+    // back where it started: nothing to ask
+    await plus!.trigger('click'); await minus!.trigger('click')
+    vi.advanceTimersByTime(SETPOINT_SEND_AFTER_MS)
+    expect(w.emitted('command')).toHaveLength(1)
+  })
+
+  /** Leaving the view before the wait ends: the setpoint chosen is not lost. */
+  it('sends a pending setpoint when it goes away', async () => {
+    const w = mount(HeatingControl, { props: { entry: thermostat } })
+    await w.find('.keys--target').findAll('.key')[1]!.trigger('click')
+    w.unmount()
+    expect(w.emitted('command')).toEqual([['x:1', { type: 'climate.set_target_temp', targetTempC: 20 }]])
   })
 
   /** The bounds come from the device: a flow water does not go down to 10 °C. */
@@ -71,7 +99,9 @@ describe('HeatingControl', () => {
     const atFloor = entry({ capabilities: ['target_temp'], meta: { targetTempC: [30, 60] } }, { targetTempC: 30 })
     const w = mount(HeatingControl, { props: { entry: atFloor } })
     void w.findAll('.key')[0]!.trigger('click')
-    expect(w.emitted('command')![0]![1]).toEqual({ type: 'climate.set_target_temp', targetTempC: 30 })
+    vi.advanceTimersByTime(SETPOINT_SEND_AFTER_MS)
+    // at the floor already: nothing to send, rather than 30 again
+    expect(w.emitted('command')).toBeUndefined()
   })
 
   it('chooses a mode, and shows the one in effect', () => {

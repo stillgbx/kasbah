@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { CLIMATE_MODES, type CommandInput, type DeviceDescriptor, type StateFor } from '@kasbah/shared'
 import { formatPercent, formatTemp } from '../../lib/format'
+import { useSetpointDraft } from '../../composables/useSetpointDraft'
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'climate'>; pending?: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
@@ -28,7 +29,11 @@ const canSetMode = computed(() => has('hvac_mode'))
  * is not 45 °C in a living room: only the vocabulary tells them apart.
  */
 const flow = computed(() => props.descriptor.meta.climate?.control === 'flow')
-const step = (d: number) => emit('command', { type: 'climate.set_target_temp', targetTempC: Math.min(range.value[1], Math.max(range.value[0], Math.round((props.state.targetTempC + d) * 2) / 2)) })
+// clicks in a row: the figure follows at once, ONE command leaves once they are over (Google quota).
+// The parent routes the command to the device on screen: a draft left when switching devices is dropped.
+const setpoint = useSetpointDraft(() => props.descriptor.id, () => props.state.targetTempC,
+  (_id, targetTempC) => emit('command', { type: 'climate.set_target_temp', targetTempC }), { onSwitch: 'drop' })
+const step = (d: number) => setpoint.set(Math.min(range.value[1], Math.max(range.value[0], Math.round((setpoint.value.value + d) * 2) / 2)))
 </script>
 
 <template>
@@ -62,7 +67,7 @@ const step = (d: number) => emit('command', { type: 'climate.set_target_temp', t
            rather than floating alone in the middle of the card -->
       <div class="d-flex align-center ga-4 my-2" :class="canSetTemp ? 'justify-center' : 'justify-start'">
         <v-btn v-if="canSetTemp" icon="minus" variant="tonal" size="large" :class="{ 'btn-hidden': eco }" :aria-hidden="eco" :disabled="disabled || eco" @click="step(-0.5)" />
-        <span class="text-h3 font-weight-medium target">{{ formatTemp(state.targetTempC, $i18n.locale) }}</span>
+        <span class="text-h3 font-weight-medium target">{{ formatTemp(setpoint.value.value, $i18n.locale) }}</span>
         <v-btn v-if="canSetTemp" icon="plus" variant="tonal" size="large" :class="{ 'btn-hidden': eco }" :aria-hidden="eco" :disabled="disabled || eco" @click="step(0.5)" />
       </div>
     </template>
