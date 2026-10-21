@@ -100,7 +100,7 @@ export class GenericMarker extends DeviceMarker {
   /** Cover art shown on the screen (TV and smart display only). */
   private art: ScreenArt | null = null
   /**
-   * Material SPECIFIC to what pulses (battery cabinet, charger while charging): it cannot share
+   * Material SPECIFIC to what pulses (battery cabinet, charger while charging, heating): it cannot share
    * that of the other neutral objects. `null` for everything else, which keeps the shared material.
    */
   private readonly pulseMat: MeshStandardMaterial | null = null
@@ -153,9 +153,11 @@ export class GenericMarker extends DeviceMarker {
       // the direction of the `yaw`. A HEAT PUMP is the reverse: a machine standing in a utility
       // room, and drawing it as a disc made a whole installation look like a living room
       // box.
+      // Both breathe in the warm colour while they heat (`pulseCue`).
       case 'climate':
         if (climateClass === 'heat_pump') { geometry = new BoxGeometry(HEATPUMP_BOX.w, HEATPUMP_BOX.d, HEATPUMP_BOX.h); this.setLift(HEATPUMP_BOX.h / 2 + 0.25) }
         else { geometry = new CylinderGeometry(0.06, 0.06, 0.04, 28); this.setLift(0.18) }
+        pulse = true
         break
       case 'ev_charger': geometry = new BoxGeometry(0.3, 0.15, 0.8); this.setLift(0.6); pulse = true; break
       // Two objects under the same kind: the SITE of an installation is a gateway, a box the
@@ -335,12 +337,15 @@ export class GenericMarker extends DeviceMarker {
    * What a cabinet must say, and nothing more. Battery: GREEN when it is filling, BLUE when
    * it gives back what it holds, RED when it no longer responds (the only failure the contract carries —
    * an `energy` has no fault field, and a silent battery keeps its last values,
-   * frozen). Charger: GREEN only while charging — plugged in at rest, it does not pulse. `null` at
+   * frozen). Charger: GREEN only while charging — plugged in at rest, it does not pulse. Heating
+   * (thermostat, heat pump): WARM while it heats — a heat pump zone also when its machine heats
+   * without saying which zone (`unitHeating`): the block drawn is the machine. `null` at
    * rest: below the meters' threshold, an idle battery has nothing to report.
    */
   private pulseCue(state: DeviceState | undefined): Color | null {
     if (!state) return null
     if (state.kind === 'ev_charger') return state.status === 'charging' ? this.ctx.theme.success : null
+    if (state.kind === 'climate') return state.available && (state.action === 'heating' || state.unitHeating === true) ? this.ctx.theme.warning : null
     if (state.kind !== 'energy') return null
     if (!state.available) return this.ctx.theme.error
     const w = state.batteryW ?? 0

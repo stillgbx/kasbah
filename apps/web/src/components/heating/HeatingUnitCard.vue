@@ -52,7 +52,10 @@ const lines = computed<Line[]>(() => {
     { key: 'defrost', icon: 'snow', label: t('heating.unit.lamps.defrost'), value: flag(u.defrosting), on: u.defrosting },
     { key: 'booster', icon: 'bolt', label: t('heating.unit.lamps.booster'), value: flag(u.boosterHeater), on: u.boosterHeater, warn: true },
     { key: 'immersion', icon: 'bolt', label: t('heating.unit.lamps.immersion'), value: flag(u.immersionHeater), on: u.immersionHeater, warn: true },
-    { key: 'pump', icon: 'waves', label: t('heating.unit.lamps.pump'), value: running ? t('heating.unit.pumpsOf', { n: running, total: u.pumps.length }) : '—', on: running > 0 },
+    // a machine that heats with no circulator running says one thing: MELCloud does not see them
+    // (a cascade's circulators are not the controller's outputs). "Not reported", not a dash
+    // that would read as "stopped" while the circulator turns.
+    { key: 'pump', icon: 'waves', label: t('heating.unit.lamps.pump'), value: running ? t('heating.unit.pumpsOf', { n: running, total: u.pumps.length }) : u.heating ? t('heating.unit.notReported') : '—', on: running > 0 },
     { key: 'valve', icon: 'wrench', label: t('heating.unit.lamps.valve'), value: flag(u.valve3Way), on: u.valve3Way },
   ]
 })

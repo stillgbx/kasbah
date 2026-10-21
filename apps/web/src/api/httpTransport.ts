@@ -285,7 +285,7 @@ export function createHttpTransport(base = ''): Transport {
     ),
     melcloudLogout: () => request(`${base}/api/plugins/melcloud/logout`, { method: 'POST' }, (j) => j as MelcloudStatus),
     melcloudSystem: () => request(`${base}/api/plugins/melcloud/system`, undefined, (j) => j as { units: MelcloudUnit[]; pollMs: number }),
-    melcloudHistory: () => request(`${base}/api/plugins/melcloud/history`, undefined, (j) => j as { hourly: HeatingPoint[]; pollMs: number }),
+    melcloudHistory: () => request(`${base}/api/plugins/melcloud/history`, undefined, (j) => j as { hourly: HeatingPoint[]; daily?: HeatingPoint[]; pollMs: number }),
     lightHistory: (deviceId) => {
       const [pluginId, externalId] = [deviceId.slice(0, deviceId.indexOf(':')), deviceId.slice(deviceId.indexOf(':') + 1)]
       if (pluginId !== 'tahoma') return Promise.reject(new ApiRequestError(501, 'NOT_IMPLEMENTED', `no light history for ${deviceId}`))

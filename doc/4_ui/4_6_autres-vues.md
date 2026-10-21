@@ -1153,3 +1153,24 @@ Sources : `apps/web/src/views/RobotsView.vue`, `apps/web/src/components/controls
   [../3_plugins/3_5_google-nest](../3_plugins/3_5_google-nest.md), mise à jour du même jour.
 - **Fraîcheur** : la vue relit l'état machine au rythme du sondage du serveur (`pollMs`), une
   minute par défaut — voir [../3_plugins/3_13_mitsubishi-melcloud](../3_plugins/3_13_mitsubishi-melcloud.md).
+
+### Mise à jour 2026-10-21 (bis) — vue Chauffage : la zone dont on ne sait rien ne dit rien, et la durée de l'historique
+
+- **Pas de mot quand l'action est inconnue.** La ligne d'une zone n'affiche aucun mot d'action quand
+  `action` est absente (cascade MELCloud : la machine chauffe, on ne sait pas quelle zone elle sert —
+  [3_13](../3_plugins/3_13_mitsubishi-melcloud.md), même date). « Chauffe » est réservé à une action
+  `heating` connue. Le fond dégradé chaud de `RoomBands` (`emphasize`) s'allume si `action === 'heating'`
+  **ou** `unitHeating` : la carte dit « la machine chauffe », pas « cette zone chauffe ». Dans le panneau 3D
+  (`ClimateControl`), la pastille **« Machine en chauffe »** (couleur d'avertissement) remplace l'action
+  quand elle manque et que `unitHeating` est vrai.
+- **Circulateurs : « Non remonté »** (carte machine, `HeatingUnitCard`) quand la machine chauffe et
+  qu'aucune pompe n'est remontée, au lieu d'un « — » qui se lisait « arrêtée ».
+- **Durée de l'historique** : un `Segmented` **48 h / Semaine / Mois / Année** sur `HeatingHistoryChart`
+  (demandé : « est-ce qu'on garde les infos ? pourrait-on switcher la durée »). 48 h lit les heures ;
+  Semaine (7 jours) et Mois (31 jours) lisent la série quotidienne du serveur ; Année (12 mois) est
+  **sommée côté client** à partir des jours, les moyennes pondérées par les échantillons. Les pas sont
+  ceux des graphes d'eau et de lumière (`bucketSlots`, `lib/consumption`). Les heures de marche = part ×
+  durée du pas. Hauteur de carte **fixe** d'une fenêtre à l'autre (mesurée à 279 px sur les deux cartes,
+  quatre fenêtres). Vérifié dans la preview en injectant des réponses MELCloud dans le transport simulé
+  (la maison simulée n'a pas de MELCloud) ; test : `HeatingHistoryChart.test.ts`. Côté serveur : l'historique
+  garde maintenant ~13 mois de jours, voir [3_13](../3_plugins/3_13_mitsubishi-melcloud.md).

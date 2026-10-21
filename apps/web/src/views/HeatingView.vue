@@ -30,6 +30,7 @@ const devices = useDevicesStore()
 
 const units = ref<MelcloudUnit[]>([])
 const history = ref<HeatingPoint[]>([])
+const daily = ref<HeatingPoint[]>([])
 const pollMs = ref(60_000)
 
 /**
@@ -42,6 +43,7 @@ async function refresh() {
     const [sys, hist] = await Promise.all([getTransport().melcloudSystem(), getTransport().melcloudHistory()])
     units.value = sys.units
     history.value = hist.hourly
+    daily.value = hist.daily ?? []
     pollMs.value = sys.pollMs || hist.pollMs || pollMs.value
   } catch {
     // plugin off or account not linked: the page keeps its devices and drops the machine part
@@ -53,9 +55,15 @@ const { pause } = useIntervalFn(refresh, pollMs)
 onUnmounted(pause)
 
 const send = (deviceId: string, cmd: CommandInput) => devices.sendCommand(deviceId, cmd)
-/** The device that is heating right now is brought forward (warm tint, `--emph`). */
-const heating = (e: DeviceEntry) => e.state.kind === 'climate' && (e.state as StateFor<'climate'>).action === 'heating'
-const humidityOf =(e: DeviceEntry) => e.state.kind === 'climate' ? (e.state as StateFor<'climate'>).humidity : undefined
+const climate = (e: DeviceEntry) => (e.state.kind === 'climate' ? (e.state as StateFor<'climate'>) : undefined)
+/** The device heating right now: its word ("Heating") takes the warm tint. */
+const heating = (e: DeviceEntry) => climate(e)?.action === 'heating'
+/**
+ * Its room's card is brought forward (warm gradient, `--emph`) — and so is the card of a heat pump
+ * zone whose MACHINE heats: the machine is there, even though MELCloud cannot say which zone it serves.
+ */
+const warm = (e: DeviceEntry) => heating(e) || climate(e)?.unitHeating === true
+const humidityOf = (e: DeviceEntry) => climate(e)?.humidity
 </script>
 
 <template>
@@ -69,15 +77,17 @@ const humidityOf =(e: DeviceEntry) => e.state.kind === 'climate' ? (e.state as S
         <div class="heat__units">
           <HeatingUnitCard v-for="u in units" :key="u.deviceId" :unit="u" />
         </div>
-        <HeatingHistoryChart :points="history" :poll-ms="pollMs" />
+        <HeatingHistoryChart :points="history" :daily="daily" :poll-ms="pollMs" />
       </div>
 
-      <RoomBands kind="climate" class="heat__bands" :emphasize="heating">
+      <RoomBands kind="climate" class="heat__bands" :emphasize="warm">
         <!-- "currently heating" or "idle", following the two temperatures that the status
              already shows: text, as the Media view puts the playback state before the title. Not
              a pill — this application uses none anywhere else in a list. -->
         <template #status-after="{ entry }">
-          <span class="act" :data-hot="heating(entry as DeviceEntry) ? '1' : '0'">· {{ $t(`climate.actions.${(entry as DeviceEntry).state.kind === 'climate' ? ((entry as DeviceEntry).state as StateFor<'climate'>).action ?? 'idle' : 'idle'}`) }}</span>
+          <!-- no word when the activity is not known (a heat pump zone while its machine heats):
+               "idle" would be as much a guess as "heating" -->
+          <span v-if="climate(entry as DeviceEntry)?.action" class="act" :data-hot="heating(entry as DeviceEntry) ? '1' : '0'">· {{ $t(`climate.actions.${climate(entry as DeviceEntry)!.action}`) }}</span>
           <!-- the indoor humidity, when the device measures it (Nest thermostat) -->
           <span v-if="humidityOf(entry as DeviceEntry) !== undefined" class="act">· {{ $t('climate.humidity') }} {{ formatPercent(humidityOf(entry as DeviceEntry)!, $i18n.locale) }}</span>
         </template>

@@ -657,7 +657,8 @@ export interface Transport {
   /** The state of the heating machines (last reading of the polling, never a new call to the vendor). */
   melcloudSystem(): Promise<{ units: MelcloudUnit[]; pollMs: number }>
   /** The operating history, built by the server as the polls go. */
-  melcloudHistory(): Promise<{ hourly: HeatingPoint[]; pollMs: number }>
+  /** `daily` is absent from a server older than the daily series. */
+  melcloudHistory(): Promise<{ hourly: HeatingPoint[]; daily?: HeatingPoint[]; pollMs: number }>
   /** Brightness history of a solar-shutter sensor (TaHoma only). */
   lightHistory(deviceId: string): Promise<LightHistory>
   /** Where the iRobot account link stands (known robots, and which ones answer on the network). */

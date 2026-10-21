@@ -1,6 +1,6 @@
 # Scène 3D : objets dessinés
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-21
 > Sources : sections reprises telles quelles de `1_5_scene-3d.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre ce que la scène dessine : marqueurs et formes d'appareils (onde sonore, écrans et pochettes, ventilateur, enceintes), modules photovoltaïques et coffrets de batterie, véhicules et carrosseries, tondeuse et son journal, places de stationnement, menuiseries et Velux, détail architectural, terrain en relief et son contour, calque du jardin. Elle est née du découpage de
@@ -1404,3 +1404,14 @@ capture de l'utilisateur.
 Sources : `apps/web/src/three/builders/groundOverlay.ts` (+ test), `apps/web/src/three/HouseScene.ts`,
 `apps/web/src/composables/{useSceneGroundOverlay,useHouseScene}.ts`, `apps/web/src/stores/sceneZones.ts`,
 `apps/web/src/lib/siteMap.ts`.
+
+### Mise à jour 2026-10-21 (bis) — les marqueurs de chauffage pulsent
+
+Les marqueurs `climate` de `GenericMarker` (disque du thermostat, bloc de la pompe à chaleur) respirent
+désormais comme les coffrets de batterie et la borne de recharge, en `theme.warning`, quand
+`available && (action === 'heating' || unitHeating)` (`pulseCue`). Pour une zone de pompe à chaleur,
+`unitHeating` suffit : le bloc dessiné est la machine, pas la zone. Au repos, pas de pulsation. Vérifié
+par test (`three.test.ts`) seulement : le panneau de preview masqué fige la boucle 3D, l'effet n'a pas
+été vu à l'écran.
+
+Sources : `apps/web/src/three/markers/markers.ts` (+ `three.test.ts`).

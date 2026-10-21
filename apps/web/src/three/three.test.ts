@@ -930,6 +930,35 @@ describe('3D markers', () => {
     expect(pillOn(m)).toBe('0')
   })
 
+  /** Thermostat and heat pump breathe warm while they heat; a heat pump zone also when its machine does. */
+  it('a heating device breathes warm while it heats', () => {
+    const theme = defaultSceneTheme()
+    const climate = (deviceClass: 'thermostat' | 'heat_pump') =>
+      ({ id: `p:${deviceClass}`, pluginId: 'p', externalId: deviceClass, kind: 'climate', name: 'Chauffage', capabilities: ['current_temp'], meta: { climate: { modes: ['heat', 'off'], deviceClass } } }) as unknown as DeviceDescriptor
+    const state = (extra: Record<string, unknown>) =>
+      ({ kind: 'climate', updatedAt: 0, available: true, mode: 'heat', targetTempC: 19.5, currentTempC: 17, ...extra }) as DeviceState
+    const matOf = (m: { object: { traverse(cb: (x: unknown) => void): void } }) => meshes(m.object)[0]!.material as MeshStandardMaterial
+
+    const thermostat = marker(device(), climate('thermostat'))
+    thermostat.update(state({ action: 'idle' }))
+    expect(matOf(thermostat).emissiveIntensity).toBe(0)
+    expect(animations.length).toBe(0)
+    thermostat.update(state({ action: 'heating' }))
+    expect(matOf(thermostat).emissive.getHex()).toBe(theme.warning.getHex())
+    expect(animations.length).toBe(1)
+    thermostat.update(state({ action: 'idle' }))
+    expect(matOf(thermostat).emissiveIntensity).toBe(0)
+    expect(animations[0]!.step(4000, 0)).toBe(false)
+
+    // a cascade zone: no action known, but the machine heats — the block drawn IS the machine
+    const zone = marker(device(), climate('heat_pump'))
+    zone.update(state({ unitHeating: true }))
+    expect(matOf(zone).emissive.getHex()).toBe(theme.warning.getHex())
+    // unreachable: it says nothing
+    zone.update(state({ unitHeating: true, available: false }))
+    expect(matOf(zone).emissiveIntensity).toBe(0)
+  })
+
   it("a battery cabinet's gauge rises with its charge, on both its faces", () => {
     const stored = { id: 'p:b', pluginId: 'p', externalId: 'b', kind: 'energy', name: 'Batterie', capabilities: ['storage'], meta: {} } as unknown as DeviceDescriptor
     const site = { ...stored, id: 'p:site', capabilities: ['production', 'consumption', 'grid', 'storage'] } as unknown as DeviceDescriptor

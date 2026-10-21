@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HOURLY_POINTS_MAX, HeatingHistory } from './history'
+import { DAILY_POINTS_MAX, HOURLY_POINTS_MAX, HeatingHistory } from './history'
 import type { SystemReading, ZoneReading } from './types'
 
 // The history is BUILT here, for lack of a meter on the vendor's side. What it must hold up:
@@ -114,5 +114,47 @@ describe('MELCloud — operating history', () => {
     // and the current hour keeps accumulating after the read-back
     again.record(system(), [zone(false)], T0 + 120_000)
     expect(again.points()[0]).toMatchObject({ n: 3, heating: 2 })
+  })
+
+  /** The month and year views read DAYS: the same counters, one point per local day. */
+  it('also files the samples by local day, across the hours', () => {
+    const h = new HeatingHistory()
+    const day = new Date(2026, 0, 15).getTime()   // local midnight
+    h.record(system(), [zone(false)], day + 2 * HOUR)
+    h.record(system(), [zone(true)], day + 9 * HOUR)
+    h.record(system({ outdoorTempC: 8 }), [zone(false)], day + 23 * HOUR)
+    h.record(system(), [zone(false)], day + 24 * HOUR)        // next day
+    const days = h.dailyPoints()
+    expect(days).toHaveLength(2)
+    expect(days[0]).toMatchObject({ t: day, n: 3, heating: 2, outdoorC: 5.3 })
+    expect(days[1]).toMatchObject({ t: day + 24 * HOUR, n: 1 })
+    expect(h.points()).toHaveLength(4)                        // the hours are still there
+  })
+
+  it('keeps thirteen months of days', () => {
+    const h = new HeatingHistory()
+    const day = new Date(2025, 0, 1, 12).getTime()
+    for (let i = 0; i < DAILY_POINTS_MAX + 10; i++) h.record(system(), [zone(false)], day + i * 24 * HOUR)
+    expect(h.dailyPoints()).toHaveLength(DAILY_POINTS_MAX)
+  })
+
+  /** A file written before the daily series: the days are rebuilt from the hours at hand. */
+  it('rebuilds the days from the hours of an older file', () => {
+    const h = new HeatingHistory()
+    const day = new Date(2026, 0, 15).getTime()
+    h.record(system(), [zone(false)], day + 2 * HOUR)
+    h.record(system(), [zone(true)], day + 3 * HOUR)
+    const old = new HeatingHistory({ hourly: h.points() })
+    expect(old.dailyPoints()).toEqual([expect.objectContaining({ t: day, n: 2, heating: 1 })])
+  })
+
+  /** A day read back weighs its samples: one sample per point would let the next poll rewrite the day's mean. */
+  it('reads a day back with the weight of its samples', () => {
+    const h = new HeatingHistory()
+    const day = new Date(2026, 0, 15).getTime()
+    for (let i = 0; i < 10; i++) h.record(system({ outdoorTempC: 4 }), [zone(false)], day + i * HOUR)
+    const again = new HeatingHistory(h.toState())
+    again.record(system({ outdoorTempC: 15 }), [zone(false)], day + 10 * HOUR)
+    expect(again.dailyPoints()[0]).toMatchObject({ n: 11, outdoorC: 5 })
   })
 })

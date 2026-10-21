@@ -1,6 +1,6 @@
 # Contrat des appareils (packages/shared)
 
-> Dernière mise à jour : 2026-10-20
+> Dernière mise à jour : 2026-10-21
 > Sources : `packages/shared/src/devices/{kinds,descriptor,state,command,rules,color}.ts`, `packages/shared/src/scenes/scene.ts`, `packages/shared/src/devices/activity.ts`, `packages/shared/src/house/geo.ts`
 
 ## Principe
@@ -1104,3 +1104,14 @@ affiche, et le niveau critique en prime. Contrepartie : un véhicule qui ne publ
 n'a pas d'alerte de pneu, même avec ses pressions.
 
 Sources : `packages/shared/src/devices/{alerts,state}.ts` (+ `alerts.test.ts`).
+
+### Mise à jour 2026-10-21 (bis) — `climate.unitHeating`
+
+`climateStateSchema` gagne **`unitHeating`** (booléen facultatif) : la MACHINE derrière cette zone chauffe,
+sans dire si elle sert cette zone. Né d'une cascade de pompes à chaleur (MELCloud) qui sait que la machine
+chauffe mais pas quelle zone — forcer `action: 'heating'` affichait « Chauffe » sur une zone qui ne chauffait
+pas. Le plugin laisse alors `action` absente (effacée par `null` dans le patch) plutôt que de la deviner.
+Absent = inconnu, ou pas une zone d'une machine partagée. Lecteurs : vue Chauffage, panneau `ClimateControl`
+(pastille « Machine en chauffe »), marqueurs 3D. Voir [3_13](../3_plugins/3_13_mitsubishi-melcloud.md).
+
+Sources : `packages/shared/src/devices/state.ts`.

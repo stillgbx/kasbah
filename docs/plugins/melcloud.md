@@ -16,7 +16,7 @@
 
 - **One heating zone = one device**: measured temperature, and displayed setpoint. The unit is "on" almost all year round; the interface tells apart what is switched on from what is actually heating.
 - **Heating view**: the unit's state (heating, running, standby, unreachable), defrost, electric backup heater, circulation pumps, 3-way valve, flow, return and outdoor temperatures, demand, any error, and the time of the last report.
-- **Operating history** over the last 48 hours (when the unit heated, defrosted, called on the backup heater, and at what outdoor temperature). It is built up from the readings Kasbah takes, one week at most: it starts out empty.
+- **Operating history** (when the unit heated, defrosted, called on the backup heater, and at what outdoor temperature), over 48 hours, a week, a month or a year. It is built up from the readings Kasbah takes — hour by hour for a week, day by day for thirteen months: it starts out empty.
 - **Placement**: each zone is placed in the house like the other devices, through the house file.
 
 What the plugin does not do: see Limitations.
@@ -51,7 +51,7 @@ Everything is optional, no secret goes in there.
 ## Limitations
 
 - **Read-only**: setpoints are displayed, they cannot be changed from Kasbah yet.
-- **A MELCloud unit is not a heat pump**: several heat pumps cascaded behind a single controller show up only as one unit with two zones. On such a cascade, MELCloud keeps the zones "idle" and the circulation pumps off even while a unit runs: Kasbah reads heating from the unit's operating mode instead, and cannot tell which of the two zones is being served.
+- **A MELCloud unit is not a heat pump**: several heat pumps cascaded behind a single controller show up only as one unit with two zones. On such a cascade, MELCloud keeps the zones "idle" and the circulation pumps off even while a unit runs: Kasbah reads heating from the unit's operating mode instead, and cannot tell which of the two zones is being served: the zones then show no activity rather than a guess, and the circulation pumps read "Not reported".
 - **No hot water tank, no energy meter**: MELCloud does not expose them for every installation, nothing is shown in kWh.
 - Depending on the zone, the displayed temperature is the room temperature or the water flow temperature (weather compensation): the interface says which.
 - The history only follows the first unit on the account.

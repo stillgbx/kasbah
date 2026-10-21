@@ -249,18 +249,24 @@ export const machineHeating = (f: Record<string, unknown>): boolean => num(f, 'O
 /**
  * A zone's state. `action` separates what many integrations mix up: the machine is ON
  * (`mode: 'heat'`) almost all year round, but it only HEATS (`action: 'heating'`) by moments — on
- * the September capture, both zones are idle while `Power` is true. A zone heats when it is not
- * idle OR when the machine heats and the zone is in heat mode: MELCloud does not say WHICH zone
- * the cascade serves, so both zones in heat mode show it.
+ * the September capture, both zones are idle while `Power` is true.
+ *
+ * When the machine heats (`OperationMode`) while MELCloud keeps the zone "idle", the zone's
+ * activity is NOT KNOWN: MELCloud does not say which zone the cascade serves, and on site zone 2
+ * was not heating while zone 1 was. `action` is then left out (neither "heating" nor "idle", both
+ * would be guesses) and `unitHeating` says what is known: the machine is heating.
  */
 export function toStatePatch(fields: Record<string, unknown>, z: ZoneReading, now: number): StatePatch<'climate'> {
   const prohibited = bool(fields, `Prohibit${z.cooling ? 'Cooling' : 'Heating'}Zone${z.zone}`)
   const on = bool(fields, 'Power') && !prohibited
-  const idle = z.idle && !(z.heating && machineHeating(fields))
+  const unitHeating = on && machineHeating(fields)
+  const unknown = z.idle && unitHeating
   return {
     available: unitAvailable(fields, now),
     mode: !on ? 'off' : bool(fields, 'HolidayMode') ? 'eco' : z.cooling ? 'cool' : 'heat',
-    action: !on ? 'off' : idle ? 'idle' : z.cooling ? 'cooling' : 'heating',
+    unitHeating,
+    // `null` CLEARS the field: left out, the previous poll's action would stay in the registry
+    action: unknown ? null : !on ? 'off' : z.idle ? 'idle' : z.cooling ? 'cooling' : 'heating',
     ...(z.currentTempC !== null ? { currentTempC: z.currentTempC } : {}),
     ...(z.targetTempC !== null ? { targetTempC: z.targetTempC } : {}),
   }

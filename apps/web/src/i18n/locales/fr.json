@@ -260,7 +260,7 @@
   },
   "climate": {
     "current": "Température", "humidity": "Humidité", "target": "Consigne", "mode": "Mode",
-    "flowCurrent": "Eau de départ", "flowTarget": "Consigne de départ", "ecoTarget": "Consigne éco",
+    "flowCurrent": "Eau de départ", "flowTarget": "Consigne de départ", "ecoTarget": "Consigne éco", "unitHeating": "Machine en chauffe",
     "actions": { "heating": "Chauffe", "cooling": "Refroidit", "idle": "Au repos", "off": "Arrêté" },
     "modes": { "off": "Arrêt", "heat": "Chauffage", "cool": "Refroidissement", "auto": "Auto", "eco": "Éco", "fan_only": "Ventilation" }
   },
@@ -270,7 +270,7 @@
     "lower": "Baisser la consigne",
     "raise": "Monter la consigne",
     "unit": {
-      "on": "En marche", "heating": "En chauffe", "standby": "En veille", "offline": "Injoignable",
+      "on": "En marche", "heating": "En chauffe", "notReported": "Non remonté", "standby": "En veille", "offline": "Injoignable",
       "outdoor": "Extérieur", "flow": "Départ", "return": "Retour", "delta": "Écart", "demand": "Demande",
       "condensing": "Condensation", "active": "Actif", "pumpsOf": "{n} sur {total}",
       "lamps": { "defrost": "Dégivrage", "booster": "Appoint électrique", "immersion": "Résistance ballon", "pump": "Circulateurs", "valve": "Vanne 3 voies" },
@@ -279,7 +279,9 @@
       "noMeter": "pas de compteur d'énergie sur cette machine"
     },
     "history": {
-      "title": "Fonctionnement", "window": "48 dernières heures",
+      "title": "Fonctionnement",
+      "ranges": { "h48": "48 h", "week": "Semaine", "month": "Mois", "year": "Année" },
+      "windows": { "h48": "48 dernières heures", "week": "7 derniers jours", "month": "31 derniers jours", "year": "12 derniers mois" },
       "run": "de marche", "runHours": "{h} h",
       "filling": "L'historique se construit au fil des lectures, une toutes les {min} min.",
       "legendRun": "Chauffe", "legendOutdoor": "Extérieur", "legendDefrost": "Dégivrage", "legendBooster": "Appoint"

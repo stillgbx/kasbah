@@ -7,6 +7,18 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-21] update | MELCloud : la zone qui chauffe n'est plus devinée, historique d'un an
+
+**Déclencheur** : retour de la vraie maison : la zone 2 ne chauffait pas alors que la vue disait « Chauffe » sur les deux ; puis demande de garder l'historique et de pouvoir changer la durée (semaine / mois / année).
+
+**Pages modifiées** :
+- `3_plugins/3_13_mitsubishi-melcloud.md` - section datée (bis) : `action` effacée par `null` (et non omise) quand la machine chauffe sans que la zone le dise, `unitHeating` ; circulateurs « Non remonté » (seuls `OperationMode` et `DemandPercentage` bougent) ; série quotidienne de ~13 mois, points relus pondérés. Mention « dépassé » sur « les deux zones affichent Chauffe ».
+- `4_ui/4_6_autres-vues.md` - section datée (bis) : pas de mot d'action inconnu, dégradé sur `action` ou `unitHeating`, pastille « Machine en chauffe », sélecteur 48 h / Semaine / Mois / Année.
+- `1_architecture/1_1_contrat-appareils.md` - `climate.unitHeating`.
+- `1_architecture/1_12_scene-3d-objets.md` - marqueurs `climate` qui pulsent en chauffe (vérifié par test seulement).
+
+**Index** : catalogues mis à jour (4 lignes), index.md régénéré.
+
 ## [2026-10-21] update | Vue Chauffage : thermostat en chauffe mis en valeur, MELCloud lu chaque minute
 
 **Déclencheur** : « le chauffage est lancé, normal de ne rien voir bouger dans la vue chauffage ? on pourrait déjà mettre en valeur la carte du thermostat non ? ensuite pourquoi les données ne sont pas refresh ? »

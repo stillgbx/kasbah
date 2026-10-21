@@ -268,8 +268,8 @@ vieille de plusieurs minutes et rien ne bougeait. Deux causes **cumulées** :
   - `SystemReading.heating` le porte, et la carte machine dit « En chauffe » plutôt que « En marche » ;
   - une zone passe en `action: 'heating'` si elle n'est pas au repos **ou** si la machine chauffe et
     que la zone est en mode chauffage (`ZoneNInHeatMode`). MELCloud ne dit pas **quelle** zone la
-    cascade sert (maison ou échangeur piscine) : les deux zones en mode chauffage l'affichent.
-    Limite assumée, à revoir si un champ s'avère départager les zones ;
+    cascade sert : les deux zones en mode chauffage l'affichent.
+    Limite assumée, à revoir si un champ s'avère départager les zones *(dépassé le 2026-10-21 (bis) : la zone 2 ne chauffait pas, voir plus bas — la zone n'est plus devinée)* ;
   - l'historique compte une heure de chauffe sur `system.heating` aussi : les 0 h de marche
     venaient du même aveuglement.
 
@@ -289,3 +289,28 @@ Note : la route `/raw` refait des appels au cloud (`ListDevices`, `Device/Get`, 
 Voir aussi : la vue Chauffage dans [../4_ui/4_1_navigation-et-panneaux](../4_ui/4_1_navigation-et-panneaux.md),
 les deux champs de contrat dans [../1_architecture/1_1_contrat-appareils](../1_architecture/1_1_contrat-appareils.md),
 et les leçons transposables dans [3_2_ecrire-un-plugin](3_2_ecrire-un-plugin.md).
+
+### Mise à jour 2026-10-21 (bis) — la zone qui chauffe n'est pas devinée, et l'historique garde l'année
+
+**Dépassé : « les deux zones en mode chauffage affichent Chauffe ».** Retour de la vraie maison : la
+zone 2 ne chauffait pas alors que la vue disait « Chauffe » sur les deux
+zones. MELCloud ne dit pas quelle zone la cascade sert ; forcer `heating` était une supposition, forcer
+`idle` en aurait été une autre. `toStatePatch` (`mapping.ts`) ne tranche donc plus : quand la zone se
+dit au repos **alors que** la machine chauffe (`OperationMode`), `action` est **effacée** et le
+contrat porte `unitHeating: true` (« la machine derrière cette zone chauffe », voir
+[1_1](../1_architecture/1_1_contrat-appareils.md)). Piège : l'effacement s'envoie en **`null`**, pas en
+omettant le champ — un patch qui omet garde la valeur du sondage précédent dans le registre, et
+`mergeState` ne supprime que sur `null`. Une zone qui se dit active garde `heating` / `cooling`.
+
+- **Circulateurs « Non remonté »** : la carte machine n'affiche plus « — » pour les circulateurs quand
+  la machine chauffe sans qu'aucune pompe soit remontée — un tiret se lit « à l'arrêt » alors que le
+  circulateur tournait. MELCloud ne rapporte pas ceux d'une cascade : en comparant tous les drapeaux de
+  la capture de septembre (au repos) à une lecture pendant la chauffe, **seuls `OperationMode` et
+  `DemandPercentage` ont bougé** — rien pour les circulateurs, le compresseur ni les unités extérieures.
+- **L'historique garde un an** (`history.ts`). Jusque-là, 168 points horaires : tout ce qui dépassait la
+  semaine était perdu. S'y ajoute une série **par jour** (minuit local, `DAILY_POINTS_MAX` = 400, soit
+  ~13 mois : l'année plus le même mois de l'an passé), écrite dans le fichier d'historique sous `daily`
+  (facultatif). Un fichier plus ancien, sans `daily`, voit ses jours reconstruits à partir de ses heures.
+  Les points relus du disque sont **pondérés par leur nombre d'échantillons** (`fromPoint` : moyenne × n) :
+  sans cela, le sondage suivant réécrivait la moyenne d'un jour restauré avec un seul échantillon.
+  Tests : `history.test.ts`, `mapping.test.ts`.

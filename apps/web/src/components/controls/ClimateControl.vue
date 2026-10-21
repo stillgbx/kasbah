@@ -39,7 +39,10 @@ const step = (d: number) => emit('command', { type: 'climate.set_target_temp', t
         <div class="text-h4 font-weight-medium">{{ formatTemp(state.currentTempC, $i18n.locale) }}</div>
         <div v-if="state.humidity !== undefined" class="text-caption text-medium-emphasis">{{ $t('climate.humidity') }} {{ formatPercent(state.humidity, $i18n.locale) }}</div>
       </div>
-      <v-chip variant="tonal" :color="state.action === 'heating' ? 'error' : state.action === 'cooling' ? 'info' : undefined">
+      <!-- a heat pump zone whose machine heats without saying which zone (MELCloud): the
+           machine's activity, not a guess about the zone -->
+      <v-chip v-if="!state.action && state.unitHeating" variant="tonal" color="warning">{{ $t('climate.unitHeating') }}</v-chip>
+      <v-chip v-else variant="tonal" :color="state.action === 'heating' ? 'error' : state.action === 'cooling' ? 'info' : undefined">
         {{ $t(`climate.actions.${state.action ?? 'idle'}`) }}
       </v-chip>
     </div>

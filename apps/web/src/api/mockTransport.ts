@@ -401,7 +401,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async petkitLogin() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no PetKit account in mock mode') },
     async petkitLogout() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no PetKit account in mock mode') },
     async melcloudSystem() { return { units: [], pollMs: 0 } },
-    async melcloudHistory() { return { hourly: [], pollMs: 0 } },
+    async melcloudHistory() { return { hourly: [], daily: [], pollMs: 0 } },
     async lightHistory() { return mockLightHistory() },
     async irobotStatus() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no iRobot account in mock mode') },
     async irobotLogin() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no iRobot account in mock mode') },

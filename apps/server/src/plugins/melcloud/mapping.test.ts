@@ -146,13 +146,16 @@ describe('MELCloud — the two zones, read on the capture', () => {
   /**
    * Seen on site: three outdoor units in cascade, one running with the circulator, while MELCloud
    * kept both zones idle, the compressor at 0 Hz and the pumps off. Only `OperationMode` moved (2).
+   * Which zone it serves is not said (zone 2 was not heating): the zone's action is CLEARED, neither
+   * "heating" nor "idle", and `unitHeating` carries what is known.
    */
-  it('sees the cascade heating through OperationMode, though the zones say idle', () => {
+  it('sees the cascade heating through OperationMode without guessing the zone', () => {
     const heating = { ...link.fields, OperationMode: 2 }
     for (const z of toZones(heating)) {
       expect(z.idle).toBe(true)   // what MELCloud claims
-      expect(toStatePatch(heating, z, NOW)).toMatchObject({ mode: 'heat', action: 'heating' })
+      expect(toStatePatch(heating, z, NOW)).toMatchObject({ mode: 'heat', action: null, unitHeating: true })
     }
+    for (const z of toZones(link.fields)) expect(toStatePatch(link.fields, z, NOW)).toMatchObject({ action: 'idle', unitHeating: false })
     expect(toSystem({ ...link, fields: heating }, NOW).heating).toBe(true)
     expect(toSystem(link, NOW).heating).toBe(false)   // September, OperationMode 0
   })

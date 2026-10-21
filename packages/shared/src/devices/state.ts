@@ -96,6 +96,12 @@ export const climateStateSchema = z.object({
   kind: z.literal('climate'), ...base,
   mode: z.enum(CLIMATE_MODES),
   action: z.enum(CLIMATE_ACTIONS).optional(),
+  /**
+   * The MACHINE behind this zone is heating, without saying whether it serves this zone: a heat
+   * pump cascade (MELCloud) tells that the machine heats, not which of its zones. `action` is then
+   * left out rather than guessed. Absent = not known, or not a zone of a shared machine.
+   */
+  unitHeating: z.boolean().optional(),
   targetTempC: z.number(),
   currentTempC: z.number(),
   humidity: pct.optional(),

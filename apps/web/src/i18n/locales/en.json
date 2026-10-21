@@ -260,7 +260,7 @@
   },
   "climate": {
     "current": "Temperature", "humidity": "Humidity", "target": "Target", "mode": "Mode",
-    "flowCurrent": "Flow temperature", "flowTarget": "Flow target", "ecoTarget": "Eco setpoint",
+    "flowCurrent": "Flow temperature", "flowTarget": "Flow target", "ecoTarget": "Eco setpoint", "unitHeating": "Unit heating",
     "actions": { "heating": "Heating", "cooling": "Cooling", "idle": "Idle", "off": "Off" },
     "modes": { "off": "Off", "heat": "Heat", "cool": "Cool", "auto": "Auto", "eco": "Eco", "fan_only": "Fan only" }
   },
@@ -270,7 +270,7 @@
     "lower": "Lower the setpoint",
     "raise": "Raise the setpoint",
     "unit": {
-      "on": "Running", "heating": "Heating", "standby": "Standby", "offline": "Unreachable",
+      "on": "Running", "heating": "Heating", "notReported": "Not reported", "standby": "Standby", "offline": "Unreachable",
       "outdoor": "Outdoor", "flow": "Flow", "return": "Return", "delta": "Delta", "demand": "Demand",
       "condensing": "Condensing", "active": "Active", "pumpsOf": "{n} of {total}",
       "lamps": { "defrost": "Defrost", "booster": "Electric backup", "immersion": "Immersion heater", "pump": "Pumps", "valve": "3-way valve" },
@@ -279,7 +279,9 @@
       "noMeter": "no energy meter on this unit"
     },
     "history": {
-      "title": "Operation", "window": "Last 48 hours",
+      "title": "Operation",
+      "ranges": { "h48": "48 h", "week": "Week", "month": "Month", "year": "Year" },
+      "windows": { "h48": "Last 48 hours", "week": "Last 7 days", "month": "Last 31 days", "year": "Last 12 months" },
       "run": "running", "runHours": "{h} h",
       "filling": "The history builds up as readings come in, one every {min} min.",
       "legendRun": "Heating", "legendOutdoor": "Outdoor", "legendDefrost": "Defrost", "legendBooster": "Backup"
