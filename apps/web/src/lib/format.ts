@@ -47,6 +47,19 @@ export function formatMinutes(min: number, locale = 'fr'): string {
 }
 
 /**
+ * A run time that can last a year: "45 min", "1 h 20" under a day, then days and hours, "3 j 4 h"
+ * ("3 d 4 h" in English) — "3 130 h" of heating over a year reads as nothing.
+ */
+export function formatRunTime(hours: number, locale = 'fr'): string {
+  if (hours < 24) return formatMinutes(hours * 60, locale)
+  const total = Math.round(hours)
+  const d = Math.floor(total / 24)
+  const h = total % 24
+  const day = locale.startsWith('fr') ? 'j' : 'd'
+  return h === 0 ? `${nf(locale, 0).format(d)} ${day}` : `${nf(locale, 0).format(d)} ${day} ${h} h`
+}
+
+/**
  * Short relative age ("12 min ago", "3 h ago", "yesterday"), to date a reading. Below
  * a minute: "now" depending on the language (Intl, `numeric: 'auto'`). A date IN THE FUTURE is
  * brought back to now: the server's clock and the browser's differ by a few seconds,

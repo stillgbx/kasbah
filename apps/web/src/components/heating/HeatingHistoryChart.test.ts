@@ -36,7 +36,7 @@ describe('HeatingHistoryChart', () => {
 
   it('counts a day as 24 hours of which its share heated', async () => {
     const w = await show('Semaine', { daily: [point(day(-1), 0.5), point(day(0), 0.25)] })
-    expect(w.find('.hist__value').text()).toBe('18 h')   // 12 h + 6 h
+    expect(w.find('.hist__value').text()).toBe('18 h 00')   // 12 h + 6 h
   })
 
   /** The year in months: two days of September and one of October make two bars, and their hours. */
@@ -44,12 +44,12 @@ describe('HeatingHistoryChart', () => {
     const daily = [point(new Date(2026, 8, 10).getTime(), 0.5), point(new Date(2026, 8, 11).getTime(), 0.5), point(day(0), 0.25)]
     const w = await show('Année', { daily })
     expect(w.findAll('.hist__bar').filter((b) => b.attributes('style')?.includes('display: none') !== true)).toHaveLength(2)
-    expect(w.find('.hist__value').text()).toBe('30 h')   // 12 + 12 + 6
+    expect(w.find('.hist__value').text()).toBe('1 j 6 h')   // 12 + 12 + 6 hours
   })
 
   it('keeps the 48 h window on the hours', async () => {
     const hour = Math.floor(NOW / 3_600_000) * 3_600_000
     const w = await show('48 h', { points: [point(hour, 1), point(hour - 3_600_000, 0.5)] })
-    expect(w.find('.hist__value').text()).toBe('1,5 h')
+    expect(w.find('.hist__value').text()).toBe('1 h 30')
   })
 })

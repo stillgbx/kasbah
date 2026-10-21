@@ -5,7 +5,7 @@ import { fromClosure, toClosure } from './cover'
 import type { HouseDevice } from '@kasbah/shared'
 import { emitsSound, relayLabel, soundRouting } from './audioRouting'
 import { headlineValue, isDeviceBusy, isDeviceOn, isDevicePulsing, statusLabel, toggleChecked, toggleCommand } from './deviceState'
-import { formatFlow, formatPower, formatSensor, formatVolume, formatVolumeAxisTick, summarize, volumeAxisUnit } from './format'
+import { formatFlow, formatPower, formatRunTime, formatSensor, formatVolume, formatVolumeAxisTick, summarize, volumeAxisUnit } from './format'
 import { deviceColor, deviceIcon, presentRoomFilters, roomFilterCategory } from './deviceIcons'
 import { findBatteries, findEnergySite, inverterGroups, isEnergySite, isInverter, shortInverterId } from './energy'
 import { coverActivity, coverAtRest, isFlatCover, isPassageCover } from './cover'
@@ -21,6 +21,17 @@ import en from '../i18n/locales/en.json'
 const light: StateFor<'light'> = { kind: 'light', updatedAt: 0, available: true, on: false, brightness: 50 }
 const cover: StateFor<'cover'> = { kind: 'cover', updatedAt: 0, available: true, position: 100, motion: 'stopped' }
 const sensor: DeviceDescriptor = { id: 'mock:s', pluginId: 'mock', externalId: 's', kind: 'sensor', name: 'T', capabilities: ['measure'], meta: { sensor: { unit: '°C', deviceClass: 'temperature', precision: 1 } } }
+
+/** A heating run time over a year: days and hours, never 3 130 h. */
+describe('formatRunTime', () => {
+  it('reads minutes, hours, then days', () => {
+    expect(formatRunTime(0.6, 'fr')).toBe('36 min')
+    expect(formatRunTime(1.6, 'fr')).toBe('1 h 36')
+    expect(formatRunTime(30, 'fr')).toBe('1 j 6 h')
+    expect(formatRunTime(72.2, 'fr')).toBe('3 j')
+    expect(formatRunTime(3130, 'en')).toBe('130 d 10 h')
+  })
+})
 
 describe('optimisticPatch', () => {
   it('light.set', () => {

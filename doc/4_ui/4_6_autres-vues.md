@@ -1174,3 +1174,13 @@ Sources : `apps/web/src/views/RobotsView.vue`, `apps/web/src/components/controls
   quatre fenêtres). Vérifié dans la preview en injectant des réponses MELCloud dans le transport simulé
   (la maison simulée n'a pas de MELCloud) ; test : `HeatingHistoryChart.test.ts`. Côté serveur : l'historique
   garde maintenant ~13 mois de jours, voir [3_13](../3_plugins/3_13_mitsubishi-melcloud.md).
+
+### Mise à jour 2026-10-21 (ter) — vue Chauffage : un temps de marche lisible
+
+Demande : « mettre le temps de fonctionnement dans un format plus humain » (le chiffre « de marche »
+de `HeatingHistoryChart`, en heures décimales : « 1,6 h », « 3 130 h » sur l'année). `formatRunTime`
+(`lib/format.ts`) prolonge `formatMinutes` : « 36 min », « 1 h 36 » sous la journée, puis jours et
+heures, « 2 j 2 h », « 133 j 4 h » (« d » en anglais). Le libellé `heating.history.runHours` est
+retiré. Mesuré dans la preview (réponses MELCloud injectées) : « 133 j 4 h » tient dans la case
+réservée au chiffre (`min-width: 7ch`), le sélecteur de durée ne bouge pas d'une fenêtre à l'autre.
+Tests : `lib.test.ts`, `HeatingHistoryChart.test.ts`.

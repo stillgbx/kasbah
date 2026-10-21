@@ -40,6 +40,15 @@ export function useHomeSummary() {
   // the SITE: a battery is also an `energy`, but measures neither production nor the grid
   const energy = computed(() => findEnergySite(devices.list)?.state as StateFor<'energy'> | undefined)
   const climate = computed(() => devices.list.find((e) => e.state.kind === 'climate')?.state as StateFor<'climate'> | undefined)
+  /**
+   * Something is heating the house right now: a thermostat or zone that says so, or a heat pump
+   * zone whose machine heats without saying which zone (`unitHeating`, MELCloud cascade).
+   */
+  const heating = computed(() => devices.list.some((e) => {
+    if (e.state.kind !== 'climate' || !e.state.available) return false
+    const s = e.state as StateFor<'climate'>
+    return s.action === 'heating' || s.unitHeating === true
+  }))
   const indoorTemp = computed<number | null>(() => {
     if (climate.value) return climate.value.currentTempC
     const s = devices.list.find((e) => e.descriptor.kind === 'sensor' && e.descriptor.meta.sensor?.deviceClass === 'temperature' && e.descriptor.name.toLowerCase().indexOf('ext') < 0)
@@ -64,12 +73,14 @@ export function useHomeSummary() {
     if (awnings.value.length) parts.push(t('summary.awningsDown', { n: awningsDown.value }, awningsDown.value))
     if (players.value.length) parts.push(t('summary.playing', { n: playing.value }, playing.value))
     if (indoorTemp.value !== null) parts.push(formatTemp(indoorTemp.value, locale.value))
+    // only when it heats: "heating off" all summer would be noise
+    if (heating.value) parts.push(t('summary.heating'))
     if (energy.value) parts.push(`${formatPower(energy.value.productionW, locale.value)} ${t('summary.solar').toLowerCase()}`)
     return parts.join(' · ')
   })
 
   return {
     lights, lightsOn, covers, coversOpen, shutters, shuttersOpen, awnings, awningsDown,
-    players, playing, cameras, energy, climate, indoorTemp, vehicles, chargers, headline,
+    players, playing, cameras, energy, climate, heating, indoorTemp, vehicles, chargers, headline,
   }
 }

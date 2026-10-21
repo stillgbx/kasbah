@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useIntervalFn } from '@vueuse/core'
 import type { HeatingPoint } from '../../api/transport'
 import { bucketSlots, type ConsumptionPeriod } from '../../lib/consumption'
-import { formatTemp } from '../../lib/format'
+import { formatRunTime, formatTemp } from '../../lib/format'
 import Segmented from '../ui/Segmented.vue'
 
 // Operating history: how much of each step (hour, day or month) the machine spent heating, and
@@ -92,7 +92,7 @@ const empty = computed(() => measured.value.length === 0)
 
 /** Run hours accumulated over the window. */
 const runHours = computed(() => measured.value.reduce((a, s) => a + s.hours, 0))
-const runLabel = computed(() => t('heating.history.runHours', { h: runHours.value.toLocaleString(locale.value, { maximumFractionDigits: runHours.value >= 100 ? 0 : 1 }) }))
+const runLabel = computed(() => formatRunTime(runHours.value, locale.value))
 
 /** Bounds of the outdoor curve, rounded to the degree and never flat (otherwise the curve would be a line on the floor). */
 const outdoorRange = computed<[number, number] | null>(() => {

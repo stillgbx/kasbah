@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-21] update | Résumé de l'en-tête : « chauffage en marche » ; temps de marche lisible
+
+**Déclencheur** : « on pourrait indiquer ici que le chauffage fonctionne quand c'est le cas », puis « mettre le temps de fonctionnement dans un format plus humain ».
+
+**Pages modifiées** :
+- `4_ui/4_1_navigation-et-panneaux.md` - section datée : `useHomeSummary.heating` (action `heating` ou `unitHeating`), mention seulement pendant la chauffe.
+- `4_ui/4_6_autres-vues.md` - section datée : `formatRunTime` (min, h, puis jours et heures) pour le temps de marche de la vue Chauffage.
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-21] update | MELCloud : la zone qui chauffe n'est plus devinée, historique d'un an
 
 **Déclencheur** : retour de la vraie maison : la zone 2 ne chauffait pas alors que la vue disait « Chauffe » sur les deux ; puis demande de garder l'historique et de pouvoir changer la durée (semaine / mois / année).

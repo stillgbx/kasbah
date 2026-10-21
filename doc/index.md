@@ -99,7 +99,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | Socle | Dernière mise à jour |
 |---|---|
 | [4_0 Langage visuel](4_ui/4_0_langage-visuel.md) | 2026-10-06 |
-| [4_1 Navigation et panneaux](4_ui/4_1_navigation-et-panneaux.md) | 2026-10-20 |
+| [4_1 Navigation et panneaux](4_ui/4_1_navigation-et-panneaux.md) | 2026-10-21 |
 | [4_2 Thème et langues](4_ui/4_2_theme-et-langues.md) | 2026-10-06 |
 
 | Vues | Dernière mise à jour |
