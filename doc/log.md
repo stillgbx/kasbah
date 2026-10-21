@@ -7,6 +7,13 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-21] update | Hörmann : flasher et configurer un pont
+
+**Déclencheur** : préparation du 2e Atom ; « mettre ces infos d'aide à la config dans le doc du plugin », avec les liens du matériel.
+
+**Pages modifiées** :
+- `3_plugins/3_26_hormann.md` - section « Flasher et configurer un pont » : esptool à 115 200 bauds, offsets, AP HCPBRIDGE, ordre des réglages, Device ID ; LED de l'Atom allumée sur USB-C seulement (corrige « pas de voyant »).
+
 ## [2026-10-21] update | Hörmann : la lumière du moteur n'est plus liée à la porte
 
 **Déclencheur** : « ce sont des led sur le moteur, donc au plafond du garage […] ça ne semble pas apparaître dans la vue Lumières ».

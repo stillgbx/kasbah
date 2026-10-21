@@ -36,8 +36,27 @@ projets hgdo / esphome-hoermann_supramatic_3), non couvert.
   scan à `0` même en permutant A et B, pont pourtant alimenté et joignable. Correctif sans reflasher :
   onglet **Expert**, **TX = 19, RX = 22**. Avec ce réglage, l'alimentation par le bus seul suffit (le
   pont démarre assez vite pour répondre au scan) ; l'alimentation par le bornier 5/20 reste un repli.
-- L'Atom Lite **n'a pas de voyant d'alimentation** (sa LED RGB est pilotée par le firmware) : une LED
-  éteinte ne prouve rien, un ping sur le réseau si.
+- Une LED de l'Atom Lite s'allume **alimenté par l'USB-C, pas par le socle** (constat de
+  l'utilisateur, corrigé le 2026-10-21 : on l'avait crue absente) ; la LED RGB, elle, dépend du
+  firmware. Au garage, alimenté par le bus, une LED éteinte ne prouve donc rien, un ping si.
+
+## Flasher et configurer un pont (relevé sur le 2e pont, 2026-10-21)
+
+- Matériel : M5Stack ATOM Lite (M5-C008) + ATOMIC TTL-RS485 Base (M5-A131), liens d'achat dans
+  `docs/plugins/hormann.md`.
+- Sans PlatformIO (désinstallé depuis la compilation du 3 octobre), le build se reflashe par
+  l'`esptool.py` de PlatformIO et un Python qui a `pyserial`, **à 115 200 bauds** : à 921 600, « No
+  serial data received » sur la puce FTDI de l'ATOM. Effacer d'abord (`erase_flash`), puis
+  `write_flash -z` aux offsets 0x1000 (bootloader), 0x8000 (partitions), 0xe000 (`boot_app0.bin` du
+  framework Arduino), 0x10000 (application). Lire l'adresse MAC avant d'écrire évite de reflasher le
+  mauvais pont.
+- Premier démarrage (préférences vides) : point d'accès **HCPBRIDGE**, mot de passe `gifford47`
+  (défaut public : un mot de passe d'AP de moins de 8 caractères y retombe), interface sur
+  `192.168.4.1` sans mot de passe. Régler Wi-Fi, hostname, nom, mot de passe web en gardant l'AP ;
+  puis, une fois le pont joignable sur le réseau, TX 19 / RX 22 et AP décoché. Sans AP ni Wi-Fi, seul
+  le bouton pressé 5 fois (remise à zéro) rend la main.
+- **Device ID** ne sert qu'aux topics MQTT : sans effet pour Kasbah, mais un par pont (`garage-1`,
+  `garage-2`) au cas où un broker arriverait.
 
 ## API HTTP du pont (lue dans le source du firmware)
 

@@ -21,15 +21,47 @@ Hörmann has no public API, and BlueSecur is Bluetooth only. The bridge talks to
 
 The Kasbah server reads each bridge's `/status` every 2 seconds on the house network. The bridge's event stream (`/events`) is not used: it only carries the bridge's optional sensors, never the door.
 
+## Hardware
+
+One bridge per door. The combination checked on a real door:
+
+- an [M5Stack ATOM Lite](https://openelab.io/fr/products/m5stackatomliteesp32) (ESP32, SKU M5-C008);
+- its [M5Stack ATOMIC TTL-RS485 Base](https://openelab.io/fr/products/m5stack-ttl-rs485) (SKU M5-A131): SP3485 transceiver, DC-DC converter that powers the ATOM from the bus's 24 V, VH-3.96 4-pin terminal;
+- an RJ12 cable. One with only the **four middle wires** (pins 2 to 5) is enough: ground and 24 V are doubled on the outer pins.
+
+Any ESP32 with an RS485 transceiver works with HCPBridgeMqtt; only the RS485 pins change.
+
+## Flashing the bridge
+
+HCPBridgeMqtt publishes no binary for the ATOM Lite: build it with PlatformIO from the [project's sources](https://github.com/Gifford47/HCPBridgeMqtt) (environment `m5stack-atom-lite`, v1.0.2 checked). On Windows, build in a short path (`C:\pio`, for instance): a long temporary folder makes the compiler fail.
+
+To flash a built firmware again (a second bridge) without PlatformIO, use the `esptool.py` that PlatformIO installed, with any Python that has `pyserial`, **at 115,200 baud** (921,600 drops on the ATOM's FTDI serial chip):
+
+```
+python esptool.py --chip esp32 --port COMx --baud 115200 erase_flash
+python esptool.py --chip esp32 --port COMx --baud 115200 write_flash -z 0x1000 bootloader.bin 0x8000 partitions.bin 0xe000 boot_app0.bin 0x10000 m5stack-atom-lite.bin
+```
+
+`bootloader.bin`, `partitions.bin` and `m5stack-atom-lite.bin` are in `.pio/build/m5stack-atom-lite/`; `boot_app0.bin` comes with the Arduino framework (`framework-arduinoespressif32/tools/partitions/`). The ATOM Lite's LED lights when it is powered over USB-C, not when it is powered from the base: on the motor, an unlit LED proves nothing, a ping does.
+
+## First configuration of the bridge
+
+1. Power the ATOM over USB. On its first start it opens a Wi-Fi access point named **HCPBRIDGE**, password **`gifford47`** (the firmware's public default).
+2. Join it and open **http://192.168.4.1/** (no password yet).
+3. In **Basic Configuration**: your Wi-Fi network and password, a **Hostname** and a **Device Name** per door, and a **Web Password**. Leave **Enable Wifi AP** ticked for now, then **Save & Restart**.
+4. Back on your own network, open the bridge at its new address:
+   - **Expert Configuration**: **TX = 19 and RX = 22** on the ATOM Lite + ATOMIC TTL-RS485 Base. The firmware's defaults for that board are swapped, and a bus scan then always ends on 0;
+   - untick **Enable Wifi AP**, then **Save & Restart**. Untick it only once the bridge answers on your network: without the access point and without Wi-Fi, the only way back is pressing the ATOM's button 5 times (factory reset).
+5. **Device ID** only names the MQTT topics: Kasbah does not use it, but give each bridge its own (`garage-1`, `garage-2`) in case a broker is added later.
+6. Give each bridge a **static DHCP lease** in your router.
+
 ## Setup
 
-1. **Build one bridge per door**: an ESP32 with an RS485 transceiver, flashed with HCPBridgeMqtt (v1.0.2 checked, on an M5Stack Atom Lite with its Atomic RS485 Base). Connect it to the motor's **BUS** socket (RJ12): pins 1-2 GND, 3 B−, 4 A+, 5-6 +24 V. A cable with only the four middle wires is enough.
-2. In the bridge's web interface (Expert tab), check the RS485 pins. **On the Atom Lite + Atomic RS485 Base, set TX = 19 and RX = 22**: the firmware's defaults for that board are swapped.
-3. **Run a bus scan** on the motor (menu 37, parameter 01, hold PRG until "bS" shows). The motor only powers the bus during the scan and keeps it on if an accessory answers: the display ends on **1**. A **0** means nothing answered (wiring, A/B swapped, pins).
-4. Set a password for the bridge's web interface, and give each bridge a **static DHCP lease**.
-5. In `apps/server/.env`, set `HORMANN_DOORS` (see below), then restart the server.
-6. Tick **Hormann** in **Settings → Plugins**. As long as `HORMANN_DOORS` is empty, the plugin stays "Pairing required".
-7. Place the door and its light in the house like any other device.
+1. Connect the bridge to the motor's **BUS** socket (RJ12, the one next to the screw terminal; the other one is the safety input): pins 1-2 GND, 3 B−, 4 A+, 5-6 +24 V. On the base's terminal: GND → G, B− → B, A+ → A, +24 V → DC. Cable colours follow no standard: go by the pin numbers.
+2. **Run a bus scan** on the motor: hold PRG until `00`, arrows to menu **37**, short PRG, parameter **01**, hold PRG until `bS` blinks. The motor only powers the bus **during the scan** (0 V on the socket at rest is normal) and keeps it on if an accessory answers: the display ends on **1**. A **0** means nothing answered: A/B swapped (harmless, swap them), RS485 pins, or the bridge too slow to start (then power the base from the screw terminal: 5 = +24 V → DC, 20 = 0 V → G).
+3. In `apps/server/.env`, set `HORMANN_DOORS` (see below), then restart the server.
+4. Tick **Hormann** in **Settings → Plugins**. As long as `HORMANN_DOORS` is empty, the plugin stays "Pairing required".
+5. Link the door to its opening (edit mode, select the opening, **Linked cover** list: a door never placed in the house is offered too), and place its light on the ceiling (**Lights** view → **Place**, then **Mounting height → Ceiling**).
 
 If you unplug a bridge, run a bus scan again, otherwise the motor shows error 04.
 
