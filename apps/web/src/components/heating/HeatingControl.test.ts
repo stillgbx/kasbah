@@ -92,6 +92,17 @@ describe('HeatingControl', () => {
     expect(off.findAll('.key--text')).toHaveLength(2)   // the modes stay, to turn back on
   })
 
+  /** A Nest in eco follows its own eco setpoint and refuses any other: shown, not set. */
+  it('shows the eco setpoint without the keys that would set it', () => {
+    const eco = mount(HeatingControl, { props: { entry: entry({ ...thermostat.descriptor }, { mode: 'eco', targetTempC: 13.9 }) } })
+    const keys = eco.find('.keys--target')
+    expect(keys.find('.target').text()).toBe('13,9 °C')
+    // the keys keep their place (the setpoint does not slide) but are neither seen nor usable
+    const buttons = keys.findAll('.key')
+    expect(buttons).toHaveLength(2)
+    expect(buttons.every((b) => b.classes('key--hidden') && b.attributes('disabled') !== undefined)).toBe(true)
+  })
+
   it('greys everything out when the device is unreachable', () => {
 
     const gone = mount(HeatingControl, { props: { entry: entry({ ...thermostat.descriptor }, { available: false }) } })

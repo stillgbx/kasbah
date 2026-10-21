@@ -119,13 +119,17 @@ const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : und
 /** Google publishes raw floats (24.23999): to the tenth, the state only changes when it matters. */
 const round1 = (v: number) => Math.round(v * 10) / 10
 
-/** Modes the thermostat declares, in Google's order, eco last if offered. */
+/**
+ * Modes the thermostat declares, in Google's order, with eco (if offered) and off last: the user
+ * wants "Heat / Eco / Off", from the most heating to none.
+ */
 export function thermostatModes(device: SdmDevice): ClimateMode[] {
   const raw = readTrait(device, 'ThermostatMode')?.availableModes
   const out: ClimateMode[] = []
-  if (Array.isArray(raw)) for (const m of raw) { const k = typeof m === 'string' ? MODE_FROM_SDM[m] : undefined; if (k && !out.includes(k)) out.push(k) }
+  if (Array.isArray(raw)) for (const m of raw) { const k = typeof m === 'string' ? MODE_FROM_SDM[m] : undefined; if (k && k !== 'off' && !out.includes(k)) out.push(k) }
   const eco = readTrait(device, 'ThermostatEco')?.availableModes
   if (Array.isArray(eco) && eco.includes('MANUAL_ECO')) out.push('eco')
+  if (Array.isArray(raw) && raw.includes('OFF')) out.push('off')
   return out
 }
 
@@ -169,8 +173,11 @@ export function toClimatePatch(device: SdmDevice, lastSetpointC?: number): State
   const hvac = str(readTrait(device, 'ThermostatHvac')?.status)
   const action = hvac === 'HEATING' ? 'heating' : hvac === 'COOLING' ? 'cooling' : mode === 'off' ? 'off' : 'idle'
   const setpoint = readTrait(device, 'ThermostatTemperatureSetpoint')
+  // The eco setpoints are stored in °F by Nest: 57 °F arrives as 13.91568 °C, which the device and
+  // its app show as 14. To the half degree, the step of a Nest in Celsius.
+  const ecoTarget = sdmMode === 'COOL' ? num(eco?.coolCelsius) : num(eco?.heatCelsius)
   const target = mode === 'eco'
-    ? (sdmMode === 'COOL' ? num(eco?.coolCelsius) : num(eco?.heatCelsius))
+    ? (ecoTarget !== undefined ? Math.round(ecoTarget * 2) / 2 : undefined)
     : sdmMode === 'COOL' ? num(setpoint?.coolCelsius) : num(setpoint?.heatCelsius) ?? num(setpoint?.coolCelsius)
   const humidity = num(readTrait(device, 'Humidity')?.ambientHumidityPercent)
   return {

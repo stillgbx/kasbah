@@ -246,7 +246,7 @@ describe('nest plugin', () => {
 
     await plugin.execute('DEVICE3', { type: 'climate.set_mode', mode: 'eco' })
     expect(google.commands.at(-1)).toEqual({ id: 'DEVICE3', command: 'sdm.devices.commands.ThermostatEco.SetMode', params: { mode: 'MANUAL_ECO' } })
-    expect(ctx.emitState).toHaveBeenLastCalledWith('DEVICE3', { ...THERMOSTAT_STATE, mode: 'eco', targetTempC: 13.9 })
+    expect(ctx.emitState).toHaveBeenLastCalledWith('DEVICE3', { ...THERMOSTAT_STATE, mode: 'eco', targetTempC: 14 })
 
     // in eco: the setpoint is refused BEFORE calling Google, and "cool" is not declared
     await expect(plugin.execute('DEVICE3', { type: 'climate.set_target_temp', targetTempC: 20 })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND', message: expect.stringContaining('"eco"') })

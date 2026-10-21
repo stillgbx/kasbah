@@ -10,6 +10,7 @@ import HeatingHistoryChart from '../components/heating/HeatingHistoryChart.vue'
 import HeatingUnitCard from '../components/heating/HeatingUnitCard.vue'
 import type { HeatingPoint, MelcloudUnit } from '../api/transport'
 import { useDevicesStore } from '../stores/devices'
+import { formatPercent } from '../lib/format'
 
 // Heating view. Only two tiers:
 //
@@ -52,6 +53,7 @@ const { pause } = useIntervalFn(refresh, 120_000)
 onUnmounted(pause)
 
 const send = (deviceId: string, cmd: CommandInput) => devices.sendCommand(deviceId, cmd)
+const humidityOf = (e: DeviceEntry) => e.state.kind === 'climate' ? (e.state as StateFor<'climate'>).humidity : undefined
 </script>
 
 <template>
@@ -74,6 +76,8 @@ const send = (deviceId: string, cmd: CommandInput) => devices.sendCommand(device
              a pill — this application uses none anywhere else in a list. -->
         <template #status-after="{ entry }">
           <span class="act">· {{ $t(`climate.actions.${(entry as DeviceEntry).state.kind === 'climate' ? ((entry as DeviceEntry).state as StateFor<'climate'>).action ?? 'idle' : 'idle'}`) }}</span>
+          <!-- the indoor humidity, when the device measures it (Nest thermostat) -->
+          <span v-if="humidityOf(entry as DeviceEntry) !== undefined" class="act">· {{ $t('climate.humidity') }} {{ formatPercent(humidityOf(entry as DeviceEntry)!, $i18n.locale) }}</span>
         </template>
         <!-- the controls on their own row, like a cover's buttons or a light's slider:
              nothing can overlap the name or the link pill -->

@@ -17,6 +17,9 @@ const has = (c: string) => props.descriptor.capabilities.includes(c as never)
 // and no real `climate` device existed. A heat pump read in READ-ONLY mode (MELCloud)
 // publishes its state without accepting commands — showing the buttons would make the UI promise what
 // the plugin would refuse. The VALUE is shown in every case: it is the gesture that is missing.
+// In eco the device follows its own eco setpoint, set on the device: a Nest refuses any other.
+// The value stays, read only, and the buttons keep their place invisible so that it does not slide.
+const eco = computed(() => props.state.mode === 'eco')
 const canSetTemp = computed(() => has('target_temp'))
 const canSetMode = computed(() => has('hvac_mode'))
 /**
@@ -51,13 +54,13 @@ const step = (d: number) => emit('command', { type: 'climate.set_target_temp', t
          The mode therefore comes BEFORE it: choosing "Off" removes it at the bottom of the panel,
          without making the chip we just touched move up. -->
     <template v-if="state.mode !== 'off'">
-      <div class="text-caption text-medium-emphasis mt-3">{{ flow ? $t('climate.flowTarget') : $t('climate.target') }}</div>
+      <div class="text-caption text-medium-emphasis mt-3">{{ flow ? $t('climate.flowTarget') : eco ? $t('climate.ecoTarget') : $t('climate.target') }}</div>
       <!-- centered between its two buttons when there are some; otherwise aligned on its label, to the left,
            rather than floating alone in the middle of the card -->
       <div class="d-flex align-center ga-4 my-2" :class="canSetTemp ? 'justify-center' : 'justify-start'">
-        <v-btn v-if="canSetTemp" icon="minus" variant="tonal" size="large" :disabled="disabled" @click="step(-0.5)" />
+        <v-btn v-if="canSetTemp" icon="minus" variant="tonal" size="large" :class="{ 'btn-hidden': eco }" :aria-hidden="eco" :disabled="disabled || eco" @click="step(-0.5)" />
         <span class="text-h3 font-weight-medium target">{{ formatTemp(state.targetTempC, $i18n.locale) }}</span>
-        <v-btn v-if="canSetTemp" icon="plus" variant="tonal" size="large" :disabled="disabled" @click="step(0.5)" />
+        <v-btn v-if="canSetTemp" icon="plus" variant="tonal" size="large" :class="{ 'btn-hidden': eco }" :aria-hidden="eco" :disabled="disabled || eco" @click="step(0.5)" />
       </div>
     </template>
   </div>
@@ -67,4 +70,5 @@ const step = (d: number) => emit('command', { type: 'climate.set_target_temp', t
 .target { min-width: 6ch; font-variant-numeric: tabular-nums; }
 .justify-center .target { text-align: center; }
 .mode-readonly { margin-top: 2px; }
+.btn-hidden { visibility: hidden; }
 </style>

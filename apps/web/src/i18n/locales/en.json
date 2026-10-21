@@ -260,7 +260,7 @@
   },
   "climate": {
     "current": "Temperature", "humidity": "Humidity", "target": "Target", "mode": "Mode",
-    "flowCurrent": "Flow temperature", "flowTarget": "Flow target",
+    "flowCurrent": "Flow temperature", "flowTarget": "Flow target", "ecoTarget": "Eco setpoint",
     "actions": { "heating": "Heating", "cooling": "Cooling", "idle": "Idle", "off": "Off" },
     "modes": { "off": "Off", "heat": "Heat", "cool": "Cool", "auto": "Auto", "eco": "Eco", "fan_only": "Fan only" }
   },

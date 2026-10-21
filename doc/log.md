@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-21] update | Thermostat Nest en éco : consigne lue, modes réordonnés
+
+**Déclencheur** : « en mode eco l'action sur la température retourne un "commande non supportée" […] on peut masquer les boutons », puis « revoir l'ordre des boutons chauffage / eco / eteint ».
+
+**Pages modifiées** :
+- `3_plugins/3_5_google-nest.md` - section datée : ordre Chauffage / Éco / Arrêt, consigne éco = borne basse arrondie au demi-degré (stockée en °F), boutons masqués à leur place, humidité sur la vue Chauffage, température extérieure absente de SDM (écartée).
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-20] update | Alertes des plugins en panne, et le générateur PO Token lancé par ytmusic
 
 **Déclencheur** : « actuellement sur la vraie maison il y a plusieurs pb de plugins. je pense qu'il faudrait ajouter les alertes dans le rail etc si un pb est présent dans un plugin » (un compte Nest à relier, le PO Token absent avec `npm run start`).

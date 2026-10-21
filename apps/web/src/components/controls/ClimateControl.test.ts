@@ -51,6 +51,18 @@ describe('ClimateControl', () => {
     expect(off.find('.v-chip-group').exists()).toBe(true)   // enough to turn it back on
   })
 
+  /** A Nest in eco follows its own eco setpoint and refuses any other: shown, not set. */
+  it('shows the eco setpoint without buttons in eco', () => {
+    const w = mount(ClimateControl, { props: { descriptor: thermostat, state: { ...state, mode: 'eco', targetTempC: 13.9 } } })
+    expect(w.text()).toContain('Consigne éco')
+    expect(w.text()).toContain('13,9')
+    // the buttons keep their place (the setpoint does not slide) but are neither seen nor usable
+    const buttons = w.findAll('.v-btn')
+    expect(buttons).toHaveLength(2)
+    expect(buttons.every((b) => b.classes('btn-hidden') && b.attributes('disabled') !== undefined)).toBe(true)
+    expect(w.find('.v-chip-group').exists()).toBe(true)   // the mode stays, to leave eco
+  })
+
   it('still shows the setpoint and the mode, which are state', () => {
     const w = mount(ClimateControl, { props: { descriptor: flowZone, state } })
     expect(w.text()).toContain('19,5')                // the setpoint stays readable

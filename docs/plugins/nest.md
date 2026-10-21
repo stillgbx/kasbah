@@ -13,7 +13,7 @@
 - **Cameras and doorbell**: **live** image in the device panel (optional sound, started muted), with about 4 seconds of delay.
 - **Cameras view**: one **thumbnail** per camera, refreshed every 10 seconds, and for each tile three states: **Off**, **Preview** (the image and its age), **Live**. At most three simultaneous live streams in this view. The header counts the "active" cameras.
 - **Doorbell** (with Pub/Sub events, see below): when someone rings, Kasbah switches back to the Home view, frames the doorbell's room and starts its video.
-- **Thermostat**: measured temperature, humidity, setpoint and mode (heat, off, eco, depending on what the thermostat offers), heating state. The setpoint can be set between 9 and 32 °C, except in eco or off mode where Google refuses it.
+- **Thermostat**: measured temperature, humidity, setpoint and mode (heat, eco, off, depending on what the thermostat offers), heating state. The setpoint can be set between 9 and 32 °C, except in eco or off mode where Google refuses it: in eco, the eco setpoint (its lower bound, the one a heat-only thermostat follows) is shown without the − / + buttons.
 - **Automatic placement**: a device is placed in the house room that has **the same name** as its room in Google Home. Otherwise it stays "not placed" and is placed by hand from its panel.
 
 ## Connection

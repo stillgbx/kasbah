@@ -260,7 +260,7 @@
   },
   "climate": {
     "current": "Température", "humidity": "Humidité", "target": "Consigne", "mode": "Mode",
-    "flowCurrent": "Eau de départ", "flowTarget": "Consigne de départ",
+    "flowCurrent": "Eau de départ", "flowTarget": "Consigne de départ", "ecoTarget": "Consigne éco",
     "actions": { "heating": "Chauffe", "cooling": "Refroidit", "idle": "Au repos", "off": "Arrêté" },
     "modes": { "off": "Arrêt", "heat": "Chauffage", "cool": "Refroidissement", "auto": "Auto", "eco": "Éco", "fan_only": "Ventilation" }
   },

@@ -35,6 +35,8 @@ const canSetMode = computed(() => caps.value.includes('hvac_mode'))
 const modes = computed(() => props.entry.descriptor.meta.climate?.modes ?? [])
 const bounds = computed<[number, number]>(() => props.entry.descriptor.meta.targetTempC ?? [10, 30])
 const off = computed(() => state.value.mode === 'off')
+// In eco the device follows its own eco setpoint (a Nest refuses any other): read, not set.
+const eco = computed(() => state.value.mode === 'eco')
 
 function step(d: number) {
   const [lo, hi] = bounds.value
@@ -58,12 +60,13 @@ const target = computed(() => `${state.value.targetTempC.toLocaleString(undefine
 
     <!-- unreachable: greyed out, the gesture would be refused further down -->
     <div v-if="canSetTemp && !off" class="keys keys--target">
-      <button type="button" class="key" :disabled="!entry.state.available" :title="$t('heating.lower')" :aria-label="$t('heating.lower')" @click="step(-0.5)">
+      <!-- in eco the keys keep their place, invisible: the setpoint does not slide when switching -->
+      <button type="button" class="key" :class="{ 'key--hidden': eco }" :aria-hidden="eco" :disabled="!entry.state.available || eco" :title="$t('heating.lower')" :aria-label="$t('heating.lower')" @click="step(-0.5)">
         <StrokeIcon name="minus" :size="18" />
       </button>
       <!-- the setpoint between its two keys: you set a number by looking at it -->
-      <span class="target">{{ target }}</span>
-      <button type="button" class="key" :disabled="!entry.state.available" :title="$t('heating.raise')" :aria-label="$t('heating.raise')" @click="step(0.5)">
+      <span class="target" :title="eco ? $t('climate.ecoTarget') : undefined">{{ target }}</span>
+      <button type="button" class="key" :class="{ 'key--hidden': eco }" :aria-hidden="eco" :disabled="!entry.state.available || eco" :title="$t('heating.raise')" :aria-label="$t('heating.raise')" @click="step(0.5)">
         <StrokeIcon name="plus" :size="18" />
       </button>
     </div>
@@ -84,6 +87,7 @@ const target = computed(() => `${state.value.targetTempC.toLocaleString(undefine
 }
 .key:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .key:disabled { opacity: .4; }
+.key--hidden { visibility: hidden; }
 /* a key that carries a word and not a sign: same height and same corner, free width */
 .key--text { width: auto; padding: 0 14px; font: inherit; font-size: 13px; }
 .key--text[data-on="1"] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }

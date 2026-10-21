@@ -1,6 +1,6 @@
 # Plugin Google Nest (caméras, sonnettes)
 
-> Dernière mise à jour : 2026-10-12
+> Dernière mise à jour : 2026-10-21
 > Sources : `apps/server/src/plugins/nest/{index,client,mapping,types}.ts`, `apps/server/src/plugins/nest/__fixtures__/sdm.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/server/.env.example`, `apps/web/src/components/NestLinkCard.vue`, demande de l'utilisateur du 2026-09-09
 
 ## Ce que l'utilisateur veut, et par étapes
@@ -510,3 +510,29 @@ Désormais (`apps/server/src/plugins/nest/{mapping,index}.ts`) :
 Tests : `mapping.test.ts` (OFF au trait vide, avec et sans consigne retenue) ; le faux Google de
 `plugin.test.ts` vide désormais la consigne à `SetMode OFF` et la restaure à la remise en chauffe,
 et un test vérifie qu'un thermostat éteint garde la consigne réglée avant.
+
+### Mise à jour 2026-10-21 — thermostat en éco : consigne lue, pas réglée
+
+Constaté sur la vraie maison : en éco, − / + renvoyaient « commande non supportée ». Le refus est
+voulu (`toThermostatCommands` rend `undefined` en éco, Google répondrait `FAILED_PRECONDITION`) ;
+c'était l'interface qui proposait un geste impossible. Décisions avec l'utilisateur :
+
+- **Ordre des modes** : Chauffage / Éco / Arrêt (`thermostatModes` met l'éco puis l'arrêt en fin
+  de liste), du plus chauffant au plus rien, au lieu de l'ordre de Google suivi de l'éco.
+- **Consigne éco = borne basse seule.** `ThermostatEco` porte `heatCelsius` **et** `coolCelsius`
+  (une plage) ; sur un thermostat qui ne fait que chauffer, seule la borne basse agit, la haute ne
+  sert qu'à la climatisation : on ne l'affiche pas. Nest stocke ces bornes en °F : 57 °F arrive en
+  13,91568 °C, que l'appareil et son appli affichent 14. `toClimatePatch` arrondit donc la consigne
+  éco **au demi-degré** (le pas d'un Nest en Celsius), les autres consignes restent au dixième.
+- **Côté web** : en éco, `ClimateControl.vue` (panneau) titre « Consigne éco » et `HeatingControl.vue`
+  (vue Chauffage) garde la valeur ; les boutons − / + restent **à leur place, invisibles et
+  désactivés** (`visibility: hidden`), pour que la valeur ne glisse pas au changement de mode
+  (mesuré : même position en chauffage et en éco, dans les deux composants).
+- **Humidité** : déjà publiée (`humidity`) et affichée dans le panneau, elle s'ajoute à la ligne
+  d'état de la carte du thermostat sur la vue Chauffage (`views/HeatingView.vue`).
+- **Température extérieure : écartée.** L'appli Nest l'affiche, mais elle vient d'un service météo
+  de Google : aucun trait SDM ne la porte. Kasbah a sa propre météo (Open-Meteo) ; l'utilisateur
+  n'a rien voulu ajouter.
+
+Tests : `mapping.test.ts` (ordre des modes, consigne éco à 14), `plugin.test.ts` (relecture en éco),
+`ClimateControl.test.ts` et `HeatingControl.test.ts` (boutons masqués en éco, valeur gardée).

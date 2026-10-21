@@ -77,7 +77,7 @@ describe('nest thermostat mapping', () => {
     expect(d).toMatchObject({
       id: 'nest:DEVICE3', kind: 'climate', name: 'Thermostat Palier',
       capabilities: ['hvac_mode', 'target_temp', 'current_temp', 'humidity'],
-      meta: { manufacturer: 'Google Nest', model: 'THERMOSTAT', room: 'Palier', targetTempC: [9, 32], climate: { modes: ['heat', 'off', 'eco'] } },
+      meta: { manufacturer: 'Google Nest', model: 'THERMOSTAT', room: 'Palier', targetTempC: [9, 32], climate: { modes: ['heat', 'eco', 'off'] } },
     })
   })
 
@@ -89,7 +89,8 @@ describe('nest thermostat mapping', () => {
 
   it('eco overrides the HVAC mode and brings its own setpoint; OFF means off; HEATING means heating', () => {
     const eco = withTraits({ 'sdm.devices.traits.ThermostatEco': { ...THERMOSTAT.traits['sdm.devices.traits.ThermostatEco'], mode: 'MANUAL_ECO' } })
-    expect(toClimatePatch(eco)).toMatchObject({ mode: 'eco', action: 'idle', targetTempC: 13.9 })
+    // 13.91568 °C = 57 °F: the device shows 14, to the half degree
+    expect(toClimatePatch(eco)).toMatchObject({ mode: 'eco', action: 'idle', targetTempC: 14 })
     // the real Google: when off, the setpoint trait arrives EMPTY. We return the last setpoint seen
     // while heating, and the ambient only for lack of better (server restarted while off).
     const off = withTraits({
