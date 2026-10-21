@@ -30,12 +30,12 @@ const devices = useDevicesStore()
 
 const units = ref<MelcloudUnit[]>([])
 const history = ref<HeatingPoint[]>([])
-const pollMs = ref(120_000)
+const pollMs = ref(60_000)
 
 /**
  * The machine state and the history are not pushed by the WebSocket (they are not device
- * states): this page asks for them again itself, at the rate of the server poll. No point going
- * faster than that — it would re-read the same thing.
+ * states): this page asks for them again itself, at the rate of the server poll (`pollMs`, which
+ * the server returns). No point going faster than that — it would re-read the same thing.
  */
 async function refresh() {
   try {
@@ -49,11 +49,13 @@ async function refresh() {
   }
 }
 onMounted(refresh)
-const { pause } = useIntervalFn(refresh, 120_000)
+const { pause } = useIntervalFn(refresh, pollMs)
 onUnmounted(pause)
 
 const send = (deviceId: string, cmd: CommandInput) => devices.sendCommand(deviceId, cmd)
-const humidityOf = (e: DeviceEntry) => e.state.kind === 'climate' ? (e.state as StateFor<'climate'>).humidity : undefined
+/** The device that is heating right now is brought forward (warm tint, `--emph`). */
+const heating = (e: DeviceEntry) => e.state.kind === 'climate' && (e.state as StateFor<'climate'>).action === 'heating'
+const humidityOf =(e: DeviceEntry) => e.state.kind === 'climate' ? (e.state as StateFor<'climate'>).humidity : undefined
 </script>
 
 <template>
@@ -70,12 +72,12 @@ const humidityOf = (e: DeviceEntry) => e.state.kind === 'climate' ? (e.state as 
         <HeatingHistoryChart :points="history" :poll-ms="pollMs" />
       </div>
 
-      <RoomBands kind="climate">
+      <RoomBands kind="climate" class="heat__bands" :emphasize="heating">
         <!-- "currently heating" or "idle", following the two temperatures that the status
              already shows: text, as the Media view puts the playback state before the title. Not
              a pill — this application uses none anywhere else in a list. -->
         <template #status-after="{ entry }">
-          <span class="act">· {{ $t(`climate.actions.${(entry as DeviceEntry).state.kind === 'climate' ? ((entry as DeviceEntry).state as StateFor<'climate'>).action ?? 'idle' : 'idle'}`) }}</span>
+          <span class="act" :data-hot="heating(entry as DeviceEntry) ? '1' : '0'">· {{ $t(`climate.actions.${(entry as DeviceEntry).state.kind === 'climate' ? ((entry as DeviceEntry).state as StateFor<'climate'>).action ?? 'idle' : 'idle'}`) }}</span>
           <!-- the indoor humidity, when the device measures it (Nest thermostat) -->
           <span v-if="humidityOf(entry as DeviceEntry) !== undefined" class="act">· {{ $t('climate.humidity') }} {{ formatPercent(humidityOf(entry as DeviceEntry)!, $i18n.locale) }}</span>
         </template>
@@ -101,5 +103,9 @@ const humidityOf = (e: DeviceEntry) => e.state.kind === 'climate' ? (e.state as 
 .heat__units { display: grid; gap: 16px; min-width: 0; grid-auto-rows: 1fr; }
 /* the state following the temperatures, in the same ink as the rest of the status */
 .act { flex: 0 0 auto; white-space: nowrap; }
+/* warm, not the accent: the accent already means "on", and a zone that is on is not heating */
+.heat__bands { --emph: #e07b39; }
+/* the colour only: a bold weight would widen the word and push what follows it */
+.act[data-hot='1'] { color: var(--emph); }
 @media (min-width: 1040px) { .heat__top { grid-template-columns: 1fr 1fr; } }
 </style>

@@ -15,7 +15,7 @@
 ## What the plugin does
 
 - **One heating zone = one device**: measured temperature, and displayed setpoint. The unit is "on" almost all year round; the interface tells apart what is switched on from what is actually heating.
-- **Heating view**: the unit's state (running, standby, unreachable), defrost, electric backup heater, circulation pumps, 3-way valve, flow, return and outdoor temperatures, demand, any error, and the time of the last report.
+- **Heating view**: the unit's state (heating, running, standby, unreachable), defrost, electric backup heater, circulation pumps, 3-way valve, flow, return and outdoor temperatures, demand, any error, and the time of the last report.
 - **Operating history** over the last 48 hours (when the unit heated, defrosted, called on the backup heater, and at what outdoor temperature). It is built up from the readings Kasbah takes, one week at most: it starts out empty.
 - **Placement**: each zone is placed in the house like the other devices, through the house file.
 
@@ -45,13 +45,13 @@ Everything is optional, no secret goes in there.
 | `MELCLOUD_BASE_URL` | `https://app.melcloud.com/Mitsubishi.Wifi.Client` | API entry point, in case the vendor moves it |
 | `MELCLOUD_APP_VERSION` | `1.34.12.0` | App version announced at sign-in |
 | `MELCLOUD_SESSION_FILE` | `apps/server/.state/melcloud-session.json` | Where to keep the session key (never the password). Empty: the link is lost on every restart |
-| `MELCLOUD_POLL_MS` | `120000` | Reading pace, from 60,000 to 3,600,000 ms |
+| `MELCLOUD_POLL_MS` | `60000` | Reading pace, from 60,000 to 3,600,000 ms |
 | `MELCLOUD_HISTORY_FILE` | `apps/server/.state/melcloud-history.json` | Operating history. Empty: it starts again from zero on every restart |
 
 ## Limitations
 
 - **Read-only**: setpoints are displayed, they cannot be changed from Kasbah yet.
-- **A MELCloud unit is not a heat pump**: several heat pumps cascaded behind a single controller show up only as one unit with two zones.
+- **A MELCloud unit is not a heat pump**: several heat pumps cascaded behind a single controller show up only as one unit with two zones. On such a cascade, MELCloud keeps the zones "idle" and the circulation pumps off even while a unit runs: Kasbah reads heating from the unit's operating mode instead, and cannot tell which of the two zones is being served.
 - **No hot water tank, no energy meter**: MELCloud does not expose them for every installation, nothing is shown in kWh.
 - Depending on the zone, the displayed temperature is the room temperature or the water flow temperature (weather compensation): the interface says which.
 - The history only follows the first unit on the account.

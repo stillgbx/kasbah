@@ -14,7 +14,7 @@ const HOUR = 3_600_000
 const T0 = Date.UTC(2026, 0, 15, 8)
 
 const system = (over: Partial<SystemReading> = {}): SystemReading => ({
-  deviceId: '1', name: 'Chauffage', power: true, offline: false, stale: false,
+  deviceId: '1', name: 'Chauffage', power: true, heating: false, offline: false, stale: false,
   outdoorTempC: 4, flowTempC: 38, returnTempC: 33, condensingTempC: 42, demandPercent: 100,
   defrosting: false, boosterHeater: false, immersionHeater: false, pumps: [true, false, false, false], valve3Way: false,
   error: { hasError: false, code: 8000, message: null },
@@ -46,6 +46,14 @@ describe('MELCloud — operating history', () => {
     h.record(system(), [zone(false)], T0 + 60_000)        // on, heating
     h.record(system({ power: false }), [zone(false)], T0 + 120_000)   // off
     expect(h.points()[0]).toMatchObject({ n: 3, heating: 1 })
+  })
+
+  /** A cascade: the units run while MELCloud keeps the zones idle; the machine's own state counts. */
+  it('counts the machine heating even when the zones say idle', () => {
+    const h = new HeatingHistory()
+    h.record(system({ heating: true }), [zone(true)], T0)
+    h.record(system(), [zone(true)], T0 + 60_000)
+    expect(h.points()[0]).toMatchObject({ n: 2, heating: 1 })
   })
 
   it('counts defrost and electric backup heaters separately', () => {

@@ -73,7 +73,7 @@ const seen = computed(() => (props.unit.lastSeen === null ? null : new Date(prop
       <div class="unit__main">
         <div class="unit__name">{{ unit.name }}</div>
         <div class="muted unit__sub">
-          {{ unit.stale ? $t('heating.unit.offline') : unit.power ? $t('heating.unit.on') : $t('heating.unit.standby') }}
+          {{ unit.stale ? $t('heating.unit.offline') : unit.heating ? $t('heating.unit.heating') : unit.power ? $t('heating.unit.on') : $t('heating.unit.standby') }}
           <template v-if="unit.wifi"> · {{ unit.wifi }}</template>
         </div>
       </div>

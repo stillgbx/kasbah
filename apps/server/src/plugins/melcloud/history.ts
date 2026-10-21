@@ -10,7 +10,7 @@ import { writeFileAtomic } from '../../core/atomic-file'
 // It is built HERE, poll after poll, and not read from the vendor: MELCloud does serve an energy
 // report, but this installation has no meter and returns it empty even over a whole winter (see
 // `__fixtures__/melcloud.ts`). What we can know, on the other hand, is what each read shows — and
-// one read every two minutes is enough to tell the essentials of a quantity as slow as heating.
+// one read a minute is enough to tell the essentials of a quantity as slow as heating.
 //
 // Each point carries SAMPLE COUNTS, not minutes: `n` gives the scale, and a poorly polled hour
 // (server restarted, silent cloud) then reads as what it is — an hour with three samples — instead
@@ -85,8 +85,10 @@ export class HeatingHistory {
 
     b.n++
     // `idle` is the key: the machine is ON almost all year round, it only heats at times.
-    // Counting `power` would amount to drawing a flat line from January to December.
-    if (system.power && zones.some((z) => !z.idle)) b.heating++
+    // Counting `power` would amount to drawing a flat line from January to December. And the
+    // machine's own `heating` (`OperationMode`) counts too: on a cascade, the zones stay "idle"
+    // while the units run.
+    if (system.power && (system.heating || zones.some((z) => !z.idle))) b.heating++
     if (system.defrosting) b.defrost++
     if (system.boosterHeater || system.immersionHeater) b.booster++
     add(b.outdoor, system.outdoorTempC)

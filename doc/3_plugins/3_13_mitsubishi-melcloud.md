@@ -1,6 +1,6 @@
 # Plugin Mitsubishi MELCloud (pompes à chaleur Ecodan Zubadan)
 
-> Dernière mise à jour : 2026-10-02
+> Dernière mise à jour : 2026-10-21
 > Sources : `apps/server/src/plugins/melcloud/{index,auth,client,mapping,history,types}.ts`, tests `mapping.test.ts`, `plugin.test.ts`, `history.test.ts`, capture anonymisée `apps/server/src/plugins/melcloud/__fixtures__/melcloud.ts`, `apps/server/src/plugins/index.ts`, `apps/server/.env.example`, `apps/web/src/components/MelcloudLinkCard.vue`, `apps/web/src/api/transport.ts`, journal de session `_generated-ai-doc/sessions/2026-09-17-melcloud-chauffage/journal.md`
 
 ## Ce que la maison chauffe, et ce que MELCloud en montre
@@ -85,6 +85,7 @@ Elle est bornée par la **physique**, pas par un quota : la machine remonte au c
 (`NextCommunication` une minute après `LastCommunication`). Sonder plus vite relit la même chose, et
 le chauffage est de toute façon une grandeur lente. Le repli d'erreur (`createBackoff`) est calé sur
 l'intervalle lui-même : réessayer dans deux secondes ne ferait que fâcher une API déjà muette.
+*(Dépassé le 2026-10-21 : une minute par défaut, et la vue Chauffage suit la cadence du serveur — voir « Mise à jour 2026-10-21 ».)*
 
 Le mappage met à plat **l'enveloppe et le sous-objet `Device`** (`Device` gagne en cas de conflit) :
 aucun des deux ne se suffit — les bornes de consigne sont dans l'enveloppe, l'état de la machine
@@ -245,6 +246,45 @@ Routes du plugin (préfixées `/api/plugins/melcloud`) :
   connecté, c'est une commande filaire du boîtier. Rien à placer dans la scène.
 - **Les Zubadan en cascade restent invisibles** : rien dans l'API ne les distingue. Si un jour l'un tombe
   en panne, c'est le régulateur qui le dira, ou personne.
+
+### Mise à jour 2026-10-21 — une lecture par minute, et une vue qui suit le serveur
+
+Constaté sur la vraie maison : Nest passé en chauffe, la vue Chauffage affichait « dernière remontée »
+vieille de plusieurs minutes et rien ne bougeait. Deux causes **cumulées** :
+
+- les retards s'ajoutaient : la machine remonte chaque minute, le serveur lisait MELCloud toutes les
+  **2 min**, et la vue relisait `/system` toutes les **2 min**, cadence **écrite en dur**
+  (`useIntervalFn(refresh, 120_000)`) alors que la page recevait déjà `pollMs` du serveur. Jusqu'à
+  ~5 min de retard au pire ;
+- et **MELCloud ne voit pas la cascade**. Sur place, l'utilisateur constatait le circulateur en
+  marche et une des trois unités extérieures en route ; MELCloud disait au même moment compresseur
+  à **0 Hz** (`HeatPumpFrequency`), quatre circulateurs arrêtés, `IdleZone1/2` vrais. La vue
+  affichait donc à tort zones « au repos » et 0 h de marche. Lu d'abord comme « la machine ne chauffe
+  pas » — **faux**, corrigé par l'utilisateur. Les compteurs d'activité de `ListDevices` décrivent
+  le FTC et son unité propre, pas les Zubadan en cascade. Seul champ vu bouger : `OperationMode`,
+  **0** sur la capture de septembre (machine au repos) et **2** (chauffage, dans la numérotation
+  Ecodan) pendant cette chauffe ; `DemandPercentage` ne départage rien (100 au repos en septembre).
+  D'où `machineHeating` (`mapping.ts`) : `OperationMode` 2 = la machine chauffe.
+  - `SystemReading.heating` le porte, et la carte machine dit « En chauffe » plutôt que « En marche » ;
+  - une zone passe en `action: 'heating'` si elle n'est pas au repos **ou** si la machine chauffe et
+    que la zone est en mode chauffage (`ZoneNInHeatMode`). MELCloud ne dit pas **quelle** zone la
+    cascade sert (maison ou échangeur piscine) : les deux zones en mode chauffage l'affichent.
+    Limite assumée, à revoir si un champ s'avère départager les zones ;
+  - l'historique compte une heure de chauffe sur `system.heating` aussi : les 0 h de marche
+    venaient du même aveuglement.
+
+  Tests : `mapping.test.ts` (« sees the cascade heating through OperationMode… »),
+  `history.test.ts` (« counts the machine heating even when the zones say idle »). La valeur 2 est
+  la numérotation Ecodan (0 arrêt, 1 eau chaude, 2 chauffage, 3 rafraîchissement…) recoupée par
+  la seule observation du 2026-10-21 ; garder la capture le jour où une autre valeur apparaît.
+
+Désormais `MELCLOUD_POLL_MS` vaut **60 000** par défaut (le plancher : aucun quota MELCloud, la
+remontée de la machine est la seule borne) et `views/HeatingView.vue` relit au rythme de `pollMs`
+(une valeur de `.env` est respectée). Retard maximal ramené à ~2 min. L'historique n'écrit toujours
+qu'à la bascule d'heure.
+
+Note : la route `/raw` refait des appels au cloud (`ListDevices`, `Device/Get`, rapport d'énergie)
+à chaque requête — à ne pas sonder en boucle pour du diagnostic ; `/system` rend la dernière lecture.
 
 Voir aussi : la vue Chauffage dans [../4_ui/4_1_navigation-et-panneaux](../4_ui/4_1_navigation-et-panneaux.md),
 les deux champs de contrat dans [../1_architecture/1_1_contrat-appareils](../1_architecture/1_1_contrat-appareils.md),

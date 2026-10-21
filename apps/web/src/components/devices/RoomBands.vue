@@ -24,7 +24,16 @@ import { useHouseStore } from '../../stores/house'
 // `status-badge`, allows adding a pill before the status label (empty by default).
 // `kind` accepts a LIST: the Energy view brings together the site, the batteries and the charger,
 // which do not have the same kind but are read and placed in the same spot.
-const props = defineProps<{ kind: DeviceKind | DeviceKind[]; /** Hide the devices that declare `meta.linkedTo`. */ hideLinked?: boolean }>()
+const props = defineProps<{
+  kind: DeviceKind | DeviceKind[]
+  /** Hide the devices that declare `meta.linkedTo`. */
+  hideLinked?: boolean
+  /**
+   * Devices to bring forward (Heating view: the thermostat that is heating): their icon and their
+   * room's card take the `--emph` colour that the view sets, accent by default.
+   */
+  emphasize?: (entry: DeviceEntry) => boolean
+}>()
 const kinds = computed<DeviceKind[]>(() => (Array.isArray(props.kind) ? props.kind : [props.kind]))
 const router = useRouter()
 
@@ -164,7 +173,8 @@ defineExpose({ count: computed(() => entries.value.length) })
       <div class="cards">
         <section v-for="g in b.groups" :key="g.key" class="card group"
                  :data-room="g.roomId ?? undefined" :data-level="b.levelId ?? undefined"
-                 :data-dragged="reorder && reorder.roomId === g.roomId ? '1' : '0'">
+                 :data-dragged="reorder && reorder.roomId === g.roomId ? '1' : '0'"
+                 :data-emph="emphasize && g.rows.some((r) => emphasize!(r.entry)) ? '1' : '0'">
           <div class="group__head">
             <div class="group__title">{{ g.title }}</div>
             <!-- control applying to the WHOLE room (Lights view: the master switch); empty by default -->
@@ -184,7 +194,7 @@ defineExpose({ count: computed(() => entries.value.length) })
             <!-- 1st column: the default icon; a view can replace it with a control that
                  shows the state (Covers view: the cover's vertical thumbnail) -->
             <slot name="leading" :entry="r.entry" :on="r.on">
-              <span class="icon-square" :data-on="r.on ? '1' : '0'">
+              <span class="icon-square" :data-on="r.on ? '1' : '0'" :data-emph="emphasize?.(r.entry) ? '1' : '0'">
                 <StrokeIcon :name="deviceIcon(r.entry.descriptor, r.entry.state, { linkedFan: !!fanLinkedTo(r.entry.descriptor.id, devices.list) })" :size="18" />
               </span>
             </slot>
@@ -252,6 +262,10 @@ defineExpose({ count: computed(() => entries.value.length) })
 .group__title { flex: 1 1 0; min-width: 0; font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .group__sub { font-size: 12px; margin-bottom: 8px; }
 .group[data-dragged='1'] { outline: 2px solid var(--accent); opacity: .65; }
+/* a tint behind the head of the card that fades out, like a player's cover art in the Media view:
+   a background, so bringing a card forward does not change its size */
+.group[data-emph='1'] { background-image: linear-gradient(170deg, color-mix(in srgb, var(--emph, var(--accent)) 38%, transparent) 0, transparent 110px); }
+.icon-square[data-emph='1'] { background: color-mix(in srgb, var(--emph, var(--accent)) 18%, transparent); color: var(--emph, var(--accent)); }
 .grip {
   flex: 0 0 auto; display: grid; place-items: center; width: 28px; height: 28px; margin: -4px -6px -4px 0;
   border: 0; background: none; color: var(--muted); border-radius: 8px; cursor: grab; touch-action: none;

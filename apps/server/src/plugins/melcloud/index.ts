@@ -50,10 +50,10 @@ export const melcloudConfigSchema = z.object({
   /**
    * Read pace. ONE single call per round whatever the number of machines: `ListDevices` returns
    * the whole account at once, and it is richer than the detailed read (210 fields against 42).
-   * Two minutes follow closely enough a machine that reports to the cloud every minute, without
-   * hammering it — heating is a slow quantity anyway.
+   * One minute follows a machine that reports to the cloud every minute (the user asked for fresher
+   * figures than two minutes gave: up to five minutes late on the Heating view), and it is the floor.
    */
-  MELCLOUD_POLL_MS: z.coerce.number().int().min(60_000).max(3_600_000).default(120_000),
+  MELCLOUD_POLL_MS: z.coerce.number().int().min(60_000).max(3_600_000).default(60_000),
   /**
    * Where to keep the ALREADY COMPUTED operating history (one week of hours, a few tens of
    * kilobytes). The vendor serves none on this installation: it is built poll after poll, and
@@ -113,7 +113,7 @@ export function createMelcloudPlugin(deps: MelcloudPluginDeps = {}): DevicePlugi
    *
    * The descriptors are only republished if they changed: a machine that switches its zone 2 from
    * room temperature to the weather curve changes its `meta.climate.control`, and the UI must know
-   * — but repeating the same thing every two minutes would churn the registry for nothing.
+   * — but repeating the same thing every minute would churn the registry for nothing.
    */
   async function pollOnce(signal?: AbortSignal): Promise<void> {
     links = toDeviceLinks(await client!.listDevices(signal))
@@ -138,8 +138,8 @@ export function createMelcloudPlugin(deps: MelcloudPluginDeps = {}): DevicePlugi
       // in a single curve would mean nothing. To be revisited the day there are two.
       if (link === links[0]) rolled = history.record(toSystem(link, now), zones, now)
     }
-    // write on the hour rollover, not on every poll: one read every two minutes would make 720
-    // writes a day to save at best two minutes of trace
+    // write on the hour rollover, not on every poll: one read a minute would make 1440
+    // writes a day to save at best a minute of trace
     if (rolled) await historyStore?.save(history.toState())
     lastError = null
   }

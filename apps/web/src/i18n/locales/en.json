@@ -270,7 +270,7 @@
     "lower": "Lower the setpoint",
     "raise": "Raise the setpoint",
     "unit": {
-      "on": "Running", "standby": "Standby", "offline": "Unreachable",
+      "on": "Running", "heating": "Heating", "standby": "Standby", "offline": "Unreachable",
       "outdoor": "Outdoor", "flow": "Flow", "return": "Return", "delta": "Delta", "demand": "Demand",
       "condensing": "Condensing", "active": "Active", "pumpsOf": "{n} of {total}",
       "lamps": { "defrost": "Defrost", "booster": "Electric backup", "immersion": "Immersion heater", "pump": "Pumps", "valve": "3-way valve" },

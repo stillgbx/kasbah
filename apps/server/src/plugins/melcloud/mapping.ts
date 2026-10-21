@@ -239,17 +239,28 @@ export function toDescriptors(link: DeviceLink): DeviceDescriptor[] {
 }
 
 /**
+ * Ecodan `OperationMode` 2: the machine is heating its circuit. 0 on the September capture (at
+ * rest), 2 while the house was heating on 2026-10-21. The other activity fields (`IdleZoneN`,
+ * `HeatPumpFrequency`, `WaterPumpNStatus`) describe the controller, not the units in cascade
+ * behind it: they stayed at rest while a unit and the circulator ran.
+ */
+export const machineHeating = (f: Record<string, unknown>): boolean => num(f, 'OperationMode') === 2
+
+/**
  * A zone's state. `action` separates what many integrations mix up: the machine is ON
- * (`mode: 'heat'`) almost all year round, but it only HEATS (`action: 'heating'`) when the zone is
- * not idle — on the September capture, both zones are idle while `Power` is true.
+ * (`mode: 'heat'`) almost all year round, but it only HEATS (`action: 'heating'`) by moments — on
+ * the September capture, both zones are idle while `Power` is true. A zone heats when it is not
+ * idle OR when the machine heats and the zone is in heat mode: MELCloud does not say WHICH zone
+ * the cascade serves, so both zones in heat mode show it.
  */
 export function toStatePatch(fields: Record<string, unknown>, z: ZoneReading, now: number): StatePatch<'climate'> {
   const prohibited = bool(fields, `Prohibit${z.cooling ? 'Cooling' : 'Heating'}Zone${z.zone}`)
   const on = bool(fields, 'Power') && !prohibited
+  const idle = z.idle && !(z.heating && machineHeating(fields))
   return {
     available: unitAvailable(fields, now),
     mode: !on ? 'off' : bool(fields, 'HolidayMode') ? 'eco' : z.cooling ? 'cool' : 'heat',
-    action: !on ? 'off' : z.idle ? 'idle' : z.cooling ? 'cooling' : 'heating',
+    action: !on ? 'off' : idle ? 'idle' : z.cooling ? 'cooling' : 'heating',
     ...(z.currentTempC !== null ? { currentTempC: z.currentTempC } : {}),
     ...(z.targetTempC !== null ? { targetTempC: z.targetTempC } : {}),
   }
@@ -262,6 +273,7 @@ export function toSystem(link: DeviceLink, now: number): SystemReading {
     deviceId: link.deviceId,
     name: link.name,
     power: bool(f, 'Power'),
+    heating: bool(f, 'Power') && machineHeating(f),
     offline: bool(f, 'Offline'),
     stale: !unitAvailable(f, now),
     outdoorTempC: num(f, 'OutdoorTemperature'),

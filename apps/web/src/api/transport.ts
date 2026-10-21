@@ -493,6 +493,8 @@ export interface MelcloudUnit {
   deviceId: string
   name: string
   power: boolean
+  /** Heating its circuit right now (`OperationMode`): the only activity signal a cascade gives. */
+  heating: boolean
   /** What the vendor claims — it says it is offline while talking. Kept for diagnosis only. */
   offline: boolean
   /** Is the last report too old? It is THIS field that says "unreachable". */

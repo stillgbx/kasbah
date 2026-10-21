@@ -270,7 +270,7 @@
     "lower": "Baisser la consigne",
     "raise": "Monter la consigne",
     "unit": {
-      "on": "En marche", "standby": "En veille", "offline": "Injoignable",
+      "on": "En marche", "heating": "En chauffe", "standby": "En veille", "offline": "Injoignable",
       "outdoor": "Extérieur", "flow": "Départ", "return": "Retour", "delta": "Écart", "demand": "Demande",
       "condensing": "Condensation", "active": "Actif", "pumpsOf": "{n} sur {total}",
       "lamps": { "defrost": "Dégivrage", "booster": "Appoint électrique", "immersion": "Résistance ballon", "pump": "Circulateurs", "valve": "Vanne 3 voies" },

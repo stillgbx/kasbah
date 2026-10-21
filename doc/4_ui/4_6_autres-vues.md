@@ -1,6 +1,6 @@
 # Autres vues : Météo, Robots, Eau, Chauffage, Animaux, Agenda, École, Courses, Automatisations
 
-> Dernière mise à jour : 2026-10-19
+> Dernière mise à jour : 2026-10-21
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre les vues propres à un domaine : Météo et radar, Robots (tondeuse, aspirateur), Eau, Chauffage, Animaux, Agenda, École, Courses, Automatisations. Elle est née du découpage de
@@ -1135,3 +1135,21 @@ Tests `RobotsView.test.ts` et `MowerControl.test.ts`.
 
 Sources : `apps/web/src/views/RobotsView.vue`, `apps/web/src/components/controls/MowerControl.vue`,
 `apps/web/src/i18n/locales/{fr,en}.json` (`mower.resumeSchedule`, `mower.confirmError`).
+
+### Mise à jour 2026-10-21 — vue Chauffage : le thermostat qui chauffe ressort, et l'humidité
+
+- **Mise en valeur** : `RoomBands` gagne une prop facultative `emphasize(entry)` (sans effet sur
+  les sept autres vues qui l'utilisent). Pour un appareil retenu, la carte de sa pièce prend un **fond
+  dégradé** derrière son en-tête et l'icône se teinte, dans la couleur `--emph` posée par la vue
+  (accent par défaut). La vue Chauffage retient l'appareil dont `action` vaut `heating` et pose un
+  orange chaud : l'accent veut déjà dire « allumé », et une zone allumée ne chauffe pas forcément.
+  « Chauffe » passe dans la même couleur, **sans gras** (le mot s'élargirait et pousserait la suite).
+  Un premier essai par liseré (`box-shadow` inset) a été remplacé, à la demande de l'utilisateur, par
+  le dégradé, à la manière de la pochette derrière une enceinte de la vue Médias. Mesuré en mode
+  simulé : carte et textes immobiles entre chauffe et repos ; vérifié en clair et en sombre.
+- **Humidité** : ajoutée à la ligne d'état (« Au repos · Humidité 48 % ») quand l'appareil la
+  publie (thermostat Nest).
+- **Éco** : consigne affichée sans − / +, boutons gardés invisibles à leur place — détail dans
+  [../3_plugins/3_5_google-nest](../3_plugins/3_5_google-nest.md), mise à jour du même jour.
+- **Fraîcheur** : la vue relit l'état machine au rythme du sondage du serveur (`pollMs`), une
+  minute par défaut — voir [../3_plugins/3_13_mitsubishi-melcloud](../3_plugins/3_13_mitsubishi-melcloud.md).

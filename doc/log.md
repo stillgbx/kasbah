@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-21] update | Vue Chauffage : thermostat en chauffe mis en valeur, MELCloud lu chaque minute
+
+**Déclencheur** : « le chauffage est lancé, normal de ne rien voir bouger dans la vue chauffage ? on pourrait déjà mettre en valeur la carte du thermostat non ? ensuite pourquoi les données ne sont pas refresh ? »
+
+**Pages modifiées** :
+- `3_plugins/3_13_mitsubishi-melcloud.md` - section datée : retards cumulés (machine 1 min, serveur 2 min, vue 2 min en dur), sondage à 60 s par défaut, vue au rythme de `pollMs`  ; MELCloud ne voit pas la cascade (zones « au repos » à tort) : la chauffe se lit sur `OperationMode` 2 (carte machine, zones, historique) ; `/raw` refait des appels cloud. Mention « Dépassé » sur la cadence.
+- `4_ui/4_6_autres-vues.md` - section datée : prop `emphasize` de `RoomBands`, fond dégradé chaud sur la carte du thermostat qui chauffe (liseré écarté), humidité sur la ligne d'état, renvois Nest / MELCloud.
+
+**Index** : catalogues mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-10-21] update | Thermostat Nest en éco : consigne lue, modes réordonnés
 
 **Déclencheur** : « en mode eco l'action sur la température retourne un "commande non supportée" […] on peut masquer les boutons », puis « revoir l'ordre des boutons chauffage / eco / eteint ».

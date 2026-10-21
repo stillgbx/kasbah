@@ -116,6 +116,12 @@ export interface SystemReading {
   name: string
   power: boolean
   /**
+   * The machine is heating its circuit (`OperationMode` 2). The only reliable activity signal on a
+   * cascade: with three outdoor units behind one controller, MELCloud kept the compressor at 0 Hz,
+   * the circulators off and both zones idle while a unit and the circulator ran (seen on site).
+   */
+  heating: boolean
+  /**
    * What the VENDOR claims. Not to be confused with reachable: observed on the real machine,
    * `Offline` turns true while the timestamp moves forward every minute, `WifiAdapterStatus` says
    * `NORMAL` and no error is reported. Kept for diagnosis, never for deciding.
