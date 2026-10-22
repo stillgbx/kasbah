@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagnostic du navigateur</title>
+<!--
+  Browser diagnostics, outside the app: no framework, no module, ES5 only, so that a browser on
+  which the app does not run (the car's) still loads it. It reads the browser and its WebGL, shows
+  the report and posts it to the server log (`POST /api/diag`, apps/server/src/http/diag.ts).
+-->
+<style>
+  :root { --bg: #f5f5f5; --fg: #1b1b1b; --muted: #666; --line: #d6d6d6; --ok: #1e7d32; --ko: #b3261e; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161616; --fg: #ececec; --muted: #9a9a9a; --line: #333; --ok: #7bc77f; --ko: #f2867d; } }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 18px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 24px; margin: 0 0 8px; }
+  h2 { font-size: 19px; margin: 24px 0 6px; }
+  table { border-collapse: collapse; width: 100%; max-width: 960px; }
+  td { border-top: 1px solid var(--line); padding: 4px 8px 4px 0; vertical-align: top; word-break: break-word; }
+  td:first-child { color: var(--muted); width: 40%; }
+  .ok { color: var(--ok); } .ko { color: var(--ko); }
+  #status { margin: 8px 0; }
+  button { font: inherit; padding: 6px 14px; }
+</style>
+</head>
+<body>
+<h1>Diagnostic du navigateur</h1>
+<div id="status">Lecture…</div>
+<button id="resend" type="button">Renvoyer au serveur</button>
+<div id="out"></div>
+<script>
+(function () {
+  var statusEl = document.getElementById('status')
+  var out = document.getElementById('out')
+  var errors = []
+  window.onerror = function (msg) { errors.push(String(msg)) }
+
+  function attempt(fn) { try { return fn() } catch (e) { return 'erreur : ' + e } }
+
+  /** Does this source PARSE? The app is built for es2022: a syntax refused here is a blank app. */
+  function parses(src) { try { new Function(src); return true } catch (e) { return false } }
+
+  function cssSupports(test) { return !!(window.CSS && CSS.supports && attempt(function () { return CSS.supports(test) }) === true) }
+
+  var LIMITS = ['MAX_TEXTURE_SIZE', 'MAX_CUBE_MAP_TEXTURE_SIZE', 'MAX_RENDERBUFFER_SIZE', 'MAX_TEXTURE_IMAGE_UNITS',
+    'MAX_COMBINED_TEXTURE_IMAGE_UNITS', 'MAX_VERTEX_TEXTURE_IMAGE_UNITS', 'MAX_VERTEX_UNIFORM_VECTORS',
+    'MAX_FRAGMENT_UNIFORM_VECTORS', 'MAX_VARYING_VECTORS', 'MAX_VERTEX_ATTRIBS']
+  var LIMITS2 = ['MAX_SAMPLES', 'MAX_3D_TEXTURE_SIZE', 'MAX_DRAW_BUFFERS', 'MAX_COLOR_ATTACHMENTS']
+
+  function probe(kind, attrs) {
+    var canvas = document.createElement('canvas')
+    var gl = null
+    try { gl = canvas.getContext(kind, attrs) } catch (e) { return { ok: false, error: String(e) } }
+    if (!gl) return { ok: false }
+    var r = { ok: true }
+    var dbg = gl.getExtension('WEBGL_debug_renderer_info')
+    r.vendor = gl.getParameter(dbg ? dbg.UNMASKED_VENDOR_WEBGL : gl.VENDOR)
+    r.renderer = gl.getParameter(dbg ? dbg.UNMASKED_RENDERER_WEBGL : gl.RENDERER)
+    r.version = gl.getParameter(gl.VERSION)
+    r.glsl = gl.getParameter(gl.SHADING_LANGUAGE_VERSION)
+    var names = kind === 'webgl2' ? LIMITS.concat(LIMITS2) : LIMITS
+    for (var i = 0; i < names.length; i++) r[names[i]] = gl.getParameter(gl[names[i]])
+    r.MAX_VIEWPORT_DIMS = Array.prototype.slice.call(gl.getParameter(gl.MAX_VIEWPORT_DIMS))
+    var a = gl.getContextAttributes()
+    r.antialias = a ? a.antialias : null
+    r.extensions = gl.getSupportedExtensions()
+    // Chromium keeps a limited number of live contexts: give this one back right away.
+    var lose = gl.getExtension('WEBGL_lose_context')
+    if (lose) lose.loseContext()
+    return r
+  }
+
+  function collect() {
+    var nav = navigator
+    var perfMemory = window.performance && performance.memory
+    return {
+      navigateur: {
+        userAgent: nav.userAgent,
+        platform: nav.platform,
+        language: nav.language,
+        hardwareConcurrency: nav.hardwareConcurrency,
+        deviceMemory: nav.deviceMemory === undefined ? null : nav.deviceMemory,
+        jsHeapSizeLimitMo: perfMemory ? Math.round(perfMemory.jsHeapSizeLimit / 1048576) : null,
+        maxTouchPoints: nav.maxTouchPoints,
+        pointerCoarse: !!(window.matchMedia && matchMedia('(pointer: coarse)').matches),
+        sombre: !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches)
+      },
+      ecran: {
+        screen: screen.width + ' × ' + screen.height,
+        fenetre: window.innerWidth + ' × ' + window.innerHeight,
+        devicePixelRatio: window.devicePixelRatio,
+        colorDepth: screen.colorDepth
+      },
+      webgl2: probe('webgl2'),
+      webgl1: probe('webgl'),
+      // false: the browser itself judges its GPU too slow (software rendering, blocklisted driver).
+      webgl2SansAlerteDePerf: probe('webgl2', { failIfMajorPerformanceCaveat: true }).ok,
+      javascript: {
+        optionalChaining: parses('var a = {}; return a?.b ?? 1'),
+        classFields: parses('class A { x = 1; static y = 2 }'),
+        privateMethods: parses('class A { #x = 1; #m() { return this.#x } }'),
+        staticBlocks: parses('class A { static { } }'),
+        arrayAt: typeof [].at === 'function',
+        objectHasOwn: typeof Object.hasOwn === 'function',
+        structuredClone: typeof window.structuredClone === 'function',
+        resizeObserver: typeof window.ResizeObserver === 'function',
+        offscreenCanvas: typeof window.OffscreenCanvas === 'function'
+      },
+      css: {
+        backdropFilter: cssSupports('backdrop-filter: blur(2px)'),
+        containerQueries: cssSupports('container-type: inline-size'),
+        has: cssSupports('selector(:has(a))'),
+        colorMix: cssSupports('color: color-mix(in srgb, red, blue)'),
+        aspectRatio: cssSupports('aspect-ratio: 1')
+      },
+      erreurs: errors
+    }
+  }
+
+  function cell(value) {
+    if (value === true) return '<span class="ok">oui</span>'
+    if (value === false) return '<span class="ko">non</span>'
+    if (value === null || value === undefined) return '—'
+    if (Object.prototype.toString.call(value) === '[object Array]') return value.length ? escape(value.join(', ')) : '—'
+    return escape(String(value))
+  }
+
+  function escape(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;') }
+
+  function render(report) {
+    var html = ''
+    for (var section in report) {
+      var v = report[section]
+      html += '<h2>' + section + '</h2><table>'
+      if (v !== null && typeof v === 'object' && Object.prototype.toString.call(v) !== '[object Array]') {
+        for (var k in v) html += '<tr><td>' + k + '</td><td>' + cell(v[k]) + '</td></tr>'
+      } else html += '<tr><td></td><td>' + cell(v) + '</td></tr>'
+      html += '</table>'
+    }
+    out.innerHTML = html
+  }
+
+  function send(report) {
+    statusEl.textContent = 'Envoi au serveur…'
+    var xhr = new XMLHttpRequest()
+    xhr.open('POST', '/api/diag')
+    xhr.setRequestHeader('Content-Type', 'application/json')
+    xhr.onload = function () {
+      statusEl.innerHTML = xhr.status === 204
+        ? '<span class="ok">Rapport inscrit dans le journal du serveur.</span>'
+        : '<span class="ko">Le serveur a refusé le rapport (HTTP ' + xhr.status + ').</span>'
+    }
+    xhr.onerror = function () { statusEl.innerHTML = '<span class="ko">Serveur injoignable : le rapport n’est qu’à l’écran.</span>' }
+    xhr.send(JSON.stringify(report))
+  }
+
+  var report = attempt(collect)
+  if (typeof report === 'string') { statusEl.innerHTML = '<span class="ko">' + escape(report) + '</span>'; return }
+  render(report)
+  send(report)
+  document.getElementById('resend').onclick = function () { send(report) }
+})()
+</script>
+</body>
+</html>

@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-22] update | Page de diagnostic navigateur et `POST /api/diag`
+
+**Déclencheur** : « j'ai essayé l'app dans le navigateur de la tesla, ça rame beaucoup et la vue 3d ne semble jamais s'afficher » ; avant de corriger, savoir ce qu'est ce navigateur.
+
+**Pages modifiées** :
+- `1_architecture/1_3_protocole-rest-ws.md` - section datée : page autonome `/diag.html` (ES5, hors app), route `POST /api/diag` journalisée par un journal enfant (le journal HTTP est à `warn`).
+
+**Index** : catalogue 1_architecture (1 ligne), index.md régénéré.
+
 ## [2026-10-21] update | Thermostat : une seule commande après une rafale de clics (quota Google)
 
 **Déclencheur** : « quand on veut régler la température et baisser de plusieurs demi degrés […] des messages d'erreur indiquant qu'il y a trop de commandes ».

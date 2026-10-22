@@ -19,6 +19,7 @@ import { SceneRegistry } from './core/scene-registry'
 import { SceneSeeder } from './core/scene-seeder'
 import { ShoppingService, shoppingPathFor } from './core/shopping'
 import { EnergyHistory } from './core/history'
+import { registerDiagRoutes } from './http/diag'
 import { registerRoutes } from './http/routes'
 import { registerSystemRoutes, type SystemRoutesDeps } from './http/system'
 import { actAsHook, createAppSession, sessionConfigSchema } from './http/session'
@@ -145,6 +146,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   registerRoutes(app, { registry, scenes, host, house, hub, history, automations, shopping, startedAt: clock.now(), ...(opts.properties ? { properties: opts.properties } : {}) })
   host.registerRoutes(app)
   registerSystemRoutes(app, { supervisor: opts.supervisor, statusFile: stateFile('update-status.json') })
+  registerDiagRoutes(app, opts.logger.child({ component: 'diag' }))
   await registerMcp(app, { registry, scenes, host, house, auth: mcpAuth })
   registerMcpUserRoutes(app, { usersFile: mcpConfig.MCP_USERS_FILE })
   registerAssistantRoutes(app, {

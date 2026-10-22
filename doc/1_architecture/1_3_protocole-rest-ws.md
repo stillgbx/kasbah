@@ -1,7 +1,7 @@
 # Protocole REST et WebSocket
 
-> Dernière mise à jour : 2026-10-13
-> Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11), `apps/server/src/http/static.ts` (`appBuild`, 2026-10-13), `apps/server/src/http/system.ts` (2026-10-13)
+> Dernière mise à jour : 2026-10-22
+> Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11), `apps/server/src/http/static.ts` (`appBuild`, 2026-10-13), `apps/server/src/http/system.ts` (2026-10-13), `apps/server/src/http/diag.ts` et `apps/web/public/diag.html` (2026-10-22)
 
 ## REST
 
@@ -751,3 +751,29 @@ seulement : 403 `LAN_ONLY` sous l'adresse publique, même connecté (`../1_archi
 | `POST /api/system/update` | 202 `{ status }` et la demande part au superviseur (IPC) ; 409 `NOT_SUPERVISED` sans superviseur, 409 `UPDATE_RUNNING` si une mise à jour tourne. |
 
 Déroulé et procédure d'installation : `../5_setup/5_2_production.md` (mise à jour 2026-10-13 (bis)).
+
+### Mise à jour 2026-10-22 — `POST /api/diag` et la page `/diag.html`
+
+Diagnostic d'un navigateur faible, né d'un navigateur embarqué de voiture où l'app rame et où la
+scène 3D ne s'affiche jamais. Il faut savoir ce que ce navigateur est vraiment (version de Chromium,
+GPU, limites WebGL) avant de choisir un remède.
+
+**La page** (`apps/web/public/diag.html`, servie à `/diag.html`). Hors de l'app : ni Vue, ni module,
+ES5 seul, pour se charger là où l'app ne se charge pas. Elle lit la chaîne d'agent, les cœurs,
+`deviceMemory`, `performance.memory.jsHeapSizeLimit`, l'écran et le rapport de pixels ; pour WebGL 1
+et 2 le GPU démasqué (`WEBGL_debug_renderer_info`), les limites (`MAX_TEXTURE_SIZE`, `MAX_SAMPLES`…),
+les extensions, et si un contexte `failIfMajorPerformanceCaveat` s'ouvre (`false` : le navigateur
+juge lui-même son GPU trop lent) ; enfin si la syntaxe es2022 du build passe (`new Function`) et quels
+CSS récents sont reconnus (`backdrop-filter`, `:has`, `color-mix`…). Elle affiche le rapport et le
+poste au serveur, avec un bouton pour le renvoyer.
+
+| Route | Réponse |
+|---|---|
+| `POST /api/diag` | 204, le rapport est écrit au journal (`info`, `component: diag`, message `browser diagnostics`, avec l'en-tête `user-agent`). 400 `BAD_REQUEST` si le corps n'est pas un objet JSON, 413 au-delà de 32 Ko. |
+
+Le rapport est écrit par un journal enfant passé à la route, **pas par `req.log`** : le journal HTTP
+de Fastify est réglé à `warn` (`apps/server/src/app.ts`), un `info` y disparaîtrait sans bruit. Même
+règle de session que le reste de `/api` (pas de `LAN_ONLY`). Comme tout `public/`, la page n'existe
+côté serveur qu'après un build (`dist/`) ; en dev, Vite la sert.
+
+Sources : `apps/server/src/http/diag.ts`, `apps/server/src/http/diag.test.ts`, `apps/web/public/diag.html`.
