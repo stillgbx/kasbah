@@ -14,6 +14,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 **Pages modifiées** :
 - `1_architecture/1_3_protocole-rest-ws.md` - section datée : page autonome `/diag.html` (ES5, hors app), route `POST /api/diag` journalisée par un journal enfant (le journal HTTP est à `warn`).
 - `1_architecture/1_3_protocole-rest-ws.md` - section (bis) : tests 3D depuis `/diag.html` (vraie scène avec ou sans ombres et photos, `?probe=`, `sceneProbe.ts`), rampe mémoire GPU, lecture des traces.
+- `1_architecture/1_11_scene-3d-rendu.md` - section datée : mesures du navigateur de voiture, `lacksResources()` (≤ 2 Go annoncés) → pas de scène, message et « Afficher quand même » pour la session.
 
 **Index** : catalogue 1_architecture (1 ligne), index.md régénéré.
 

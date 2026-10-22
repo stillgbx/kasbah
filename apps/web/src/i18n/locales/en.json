@@ -699,6 +699,8 @@
   },
   "scene": {
     "webglUnavailable": "3D is not available on this device.",
+    "lowResources": "This device does not seem to have enough resources for the 3D view.",
+    "showAnyway": "Show anyway",
     "loading": {
       "title": "Preparing the house",
       "house": "House plan",

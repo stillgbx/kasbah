@@ -14,6 +14,7 @@ import { useDevicesStore } from '../stores/devices'
 import { useSettingsStore } from '../stores/settings'
 import { useWeather } from './useWeather'
 import { sceneProbe, startSceneProbe } from '../lib/sceneProbe'
+import { lacksResources } from '../three/core/post'
 
 // Vue adapter of the scene controller: lifecycle, size, appearance (rendering style, time,
 // Vuetify theme) → scene, house/states → scene (diff by reference), tap events → callbacks.
@@ -28,6 +29,11 @@ export interface UseHouseSceneArgs {
 
 type Handler<T extends unknown[]> = (...args: T) => void
 
+const FORCED_KEY = 'kasbah.scene3dForced'
+function forcedThisSession(): boolean {
+  try { return sessionStorage.getItem(FORCED_KEY) === '1' } catch { return false }
+}
+
 export function useHouseScene(args: UseHouseSceneArgs) {
   const supported = ref(true)
   const ready = ref(false)
@@ -35,6 +41,8 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const preparing = ref<{ stage: ScenePrepareStage; progress: { done: number; total: number } | null } | null>(null)
   /** A house has been prepared and shown at least once (or 3D is unavailable: nothing to wait for). */
   const shown = ref(false)
+  /** Too weak a machine (`lacksResources`): no scene is created, the house view says why. */
+  const lowResources = ref(false)
   const relief = shallowRef<ReliefEditState | null>(null)
   let scene: HouseScene | null = null
   let stopProbe: (() => void) | null = null
@@ -99,7 +107,12 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   onMounted(() => {
     const canvas = args.canvas.value
     if (!canvas) return
-    scene = new HouseScene(canvas, { labelLayer: args.labelLayer.value, style: style.value, ambience: ambience.value })
+    // the 3D test of the diagnostic page wants the scene whatever the machine
+    if (lacksResources() && !sceneProbe && !forcedThisSession()) {
+      lowResources.value = true; supported.value = false; shown.value = true
+      return
+    }
+    scene = new HouseScene(canvas,{ labelLayer: args.labelLayer.value, style: style.value, ambience: ambience.value })
     // a 3D test of the diagnostic page (`?probe=`) imposes its switches, without saving them
     if (sceneProbe) stopProbe = startSceneProbe(scene, canvas, sceneProbe)
     scene.setAppearance({ ui: readUiTheme(), style: style.value, ambience: ambience.value, assets: sceneProbe?.assets ?? settings.sceneAssets, tuning: settings.sceneTuning })
@@ -206,7 +219,15 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   onBeforeUnmount(() => { stopProbe?.(); scene?.dispose(); scene = null })
 
   return {
-    supported, ready, preparing, shown,
+    supported, ready, preparing, shown, lowResources,
+    /**
+     * "Show anyway", for THIS session only: a machine that cannot hold the scene would otherwise
+     * crash again at every opening. The scene is created on mount, hence the reload.
+     */
+    showAnyway: () => {
+      try { sessionStorage.setItem(FORCED_KEY, '1') } catch { /* private browsing: the reload simply shows the message again */ }
+      location.reload()
+    },
     onDeviceTap: (f: Handler<[string]>) => { deviceTap.add(f) },
     onJournalTap: (f: Handler<[number]>) => { journalTap.add(f) },
     onRoomTap: (f: Handler<[string]>) => { roomTap.add(f) },

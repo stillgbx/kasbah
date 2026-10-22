@@ -11,7 +11,7 @@ import { createMaterials } from './builders/materials'
 import { fitBox, fitDistance, ISO_FOV_DEG, ISO_POLAR, ORTHO_BASE_M, snapIsoAzimuth, sphericalOf, visibleHeight } from './core/cameraFit'
 import { boundsToWorldBox, houseToWorld } from './core/coords'
 import { createRenderLoop } from './core/renderLoop'
-import { createCostGuard, detectQuality } from './core/post'
+import { createCostGuard, detectQuality, lacksResources } from './core/post'
 import { parseCssColor } from './core/theme'
 import { defaultLook, defaultSceneTheme, RENDER_STYLES, rolesOf, styleById } from './styles'
 import { applyLook } from './builders/materials'
@@ -2210,6 +2210,21 @@ describe('render quality', () => {
     expect(detectQuality('ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Laptop GPU (0x00002560) Direct3D11 vs_5_0 ps_5_0, D3D11)')).toBe('high')
     expect(detectQuality('ANGLE (AMD, AMD Radeon RX 6800 XT Direct3D11 vs_5_0 ps_5_0, D3D11)')).toBe('high')
     expect(detectQuality('')).toBe('high')
+  })
+
+  it('no 3D at 2 GB or less announced, and the 3D stays when the browser does not say', () => {
+    const nav = globalThis.navigator as Navigator & { deviceMemory?: number }
+    const before = Object.getOwnPropertyDescriptor(nav, 'deviceMemory')
+    const announce = (v: number | undefined) => Object.defineProperty(nav, 'deviceMemory', { value: v, configurable: true })
+    try {
+      announce(2); expect(lacksResources()).toBe(true)
+      announce(0.5); expect(lacksResources()).toBe(true)
+      announce(4); expect(lacksResources()).toBe(false)
+      announce(undefined); expect(lacksResources()).toBe(false)
+    } finally {
+      if (before) Object.defineProperty(nav, 'deviceMemory', before)
+      else delete nav.deviceMemory
+    }
   })
 
   it('the safeguard ignores warm-up and isolated spikes, then steps down only once, on the median', () => {

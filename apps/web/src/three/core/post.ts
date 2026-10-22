@@ -89,6 +89,17 @@ export function detectQuality(gpu = ''): EffectiveQuality {
 }
 
 /**
+ * Too little for the 3D at all, whatever the quality. Measured in a car's browser (`deviceMemory`
+ * 2, four slow cores, integrated GPU): even without shadows nor photos, 95 s before the house shows,
+ * then 10 frames/s, and the GPU context lost past ~300 MB. `deviceMemory` is Chromium's, rounded
+ * down (2 up to about 3 GB); unknown elsewhere, where the 3D stays.
+ */
+export function lacksResources(): boolean {
+  const memory = (globalThis.navigator as (Navigator & { deviceMemory?: number }) | undefined)?.deviceMemory
+  return memory !== undefined && memory <= 2
+}
+
+/**
  * The safeguard: `sample` receives the cost of a frame, `onOver` is called ONCE if the MEDIAN of the
  * observed frames exceeds the budget. The first ones compile shaders and are ignored; the
  * median, for its part, ignores isolated spikes — a texture upload, an environment map —

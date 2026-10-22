@@ -1,6 +1,6 @@
 # Scène 3D : rendu
 
-> Dernière mise à jour : 2026-10-14
+> Dernière mise à jour : 2026-10-22
 > Sources : sections reprises telles quelles de `1_5_scene-3d.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre le rendu de la scène : styles et thèmes, lumière du jour et de la nuit, ombres, météo (nuages, pluie, neige, brume), eau de la piscine, matières photo, chaîne d'image et étalonnage, tilt-shift, banc de réglage, performance GPU (passes, MSAA, shaders précompilés, voile de mesure). Elle est née du découpage de
@@ -2089,3 +2089,35 @@ translucide posé sur la scène sans en être la matière va sur une couche de d
 (la 3D ne se rend pas dans le panneau masqué de la préversion) : vérifié sur l'état de la scène.
 
 Sources : `apps/web/src/three/builders/groundOverlay.ts` (+ test), `apps/web/src/three/core/{post,layers}.ts`.
+
+### Mise à jour 2026-10-22 — pas de scène du tout sur une machine trop faible
+
+Mesuré dans un navigateur embarqué de voiture avec les tests de `/diag.html`
+(`1_3_protocole-rest-ws.md`, mises à jour 2026-10-22) : Chromium récent, `deviceMemory` 2, quatre
+cœurs lents, GPU intégré. La qualité « basse » y est déjà choisie par l'auto, mais ne suffit pas :
+
+| Mesure | Résultat |
+|---|---|
+| Rampe mémoire GPU | contexte perdu à 320 Mo (288 Mo tenus) |
+| Scène sans ombres ni photos : programmes (13 à 16) | 34 s |
+| … première image (29 programmes en tout) | 54 s |
+| … maison montrée | 95 s après l'ouverture |
+| … ensuite | 10 à 12 img/s, ~60 ms CPU par image (~350 appels de dessin) |
+
+Avec ombres et photos, plus de programmes encore et une mémoire au plafond : écran vide ou onglet
+tué. La page Maison étant gardée en vie (`<keep-alive>`, `App.vue`), cette préparation pesait aussi
+sur toutes les autres vues.
+
+Depuis le 2026-10-22, `lacksResources()` (`three/core/post.ts`) : `deviceMemory ≤ 2` (Chromium arrondit
+vers le bas, 2 jusque vers 3 Go ; inconnu ailleurs, où la 3D reste). Dans ce cas `useHouseScene` ne crée
+**pas** la scène (`lowResources`, `supported` à faux) et la page Maison affiche, à la place du message
+« pas de WebGL », « Cet appareil ne semble pas avoir assez de ressources pour la vue 3D » avec un bouton
+**« Afficher quand même »**. Ce choix ne vaut que **pour la session** (`sessionStorage`
+`kasbah.scene3dForced`, puis rechargement) : une machine qui ne tient pas la scène replanterait
+sinon à chaque ouverture. Un test de `/diag.html` (`?probe=`) crée la scène quelle que soit la machine.
+
+Pistes non suivies : une 3D très allégée (gain incertain, le coût est aussi CPU) ; une page d'accueil
+2D (autre vue au choix, ou cartes de résumé) si le message ne suffit pas.
+
+Sources : `apps/web/src/three/core/post.ts` (`lacksResources`), `apps/web/src/composables/useHouseScene.ts`,
+`apps/web/src/views/HomeView.vue`, `apps/web/src/three/three.test.ts`.

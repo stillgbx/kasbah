@@ -448,7 +448,13 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
         <button type="button" class="home__ctl home__ctl--solo" :title="$t('home.resetView')" :aria-label="$t('home.resetView')" @click="onTab('all')"><StrokeIcon name="home" :size="18" /></button>
       </div>
     </div>
-    <div v-if="!scene.supported.value" class="home__fallback card">{{ $t('scene.webglUnavailable') }}</div>
+    <div v-if="!scene.supported.value" class="home__fallback card">
+      <template v-if="scene.lowResources.value">
+        <span>{{ $t('scene.lowResources') }}</span>
+        <button type="button" class="pill" @click="scene.showAnyway()">{{ $t('scene.showAnyway') }}</button>
+      </template>
+      <template v-else>{{ $t('scene.webglUnavailable') }}</template>
+    </div>
     <Transition name="home-loader">
       <div v-if="sceneHidden" class="home__loader">
         <SceneLoader :house="house.effective" :stage="loaderStage" :progress="loaderProgress" @settled="(v) => (loaderDrawn = v)" />
@@ -499,7 +505,7 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
 .home__header { position: absolute; top: 0; left: var(--rail-w); right: 0; z-index: 2; pointer-events: none; }
 .home__header > * { pointer-events: auto; }
 .home[data-wide='1'] .home__header { right: calc(var(--safe-right) + var(--aside-w) + 2 * var(--panel-gap)); }
-.home__fallback { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 16px 20px; z-index: 2; }
+.home__fallback { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 16px 20px; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
 /* above the weather widget, which holds the bottom-left corner */
 /* The loading veil, centered in the FREE part of the scene (outside the rail, outside the wide panel). */
 /* it covers the whole scene: transparent to clicks, otherwise the header (appearance) is no longer touchable */
