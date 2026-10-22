@@ -20,13 +20,20 @@
   td:first-child { color: var(--muted); width: 40%; }
   .ok { color: var(--ok); } .ko { color: var(--ko); }
   #status { margin: 8px 0; }
-  button { font: inherit; padding: 6px 14px; }
+  button { font: inherit; padding: 6px 14px; margin: 0 8px 8px 0; }
+  #frame { width: 100%; height: 70vh; border: 1px solid var(--line); display: none; }
+  #trace { font: 15px/1.4 ui-monospace, monospace; white-space: pre-wrap; max-height: 40vh; overflow: auto; }
 </style>
 </head>
 <body>
 <h1>Diagnostic du navigateur</h1>
 <div id="status">Lecture…</div>
 <button id="resend" type="button">Renvoyer au serveur</button>
+<h2>Tests 3D</h2>
+<p>Un test à la fois. Chaque étape part au journal du serveur : si l’onglet se ferme, recharger la page pour le suivant.</p>
+<div id="tests"></div>
+<div id="trace"></div>
+<iframe id="frame" title="Test 3D"></iframe>
 <div id="out"></div>
 <script>
 (function () {
@@ -153,6 +160,115 @@
     xhr.onerror = function () { statusEl.innerHTML = '<span class="ko">Serveur injoignable : le rapport n’est qu’à l’écran.</span>' }
     xhr.send(JSON.stringify(report))
   }
+
+  // ---- 3D tests -------------------------------------------------------------------------------
+
+  var traceEl = document.getElementById('trace')
+  var frame = document.getElementById('frame')
+
+  function traceLine(text) { traceEl.textContent += text + '\n'; traceEl.scrollTop = traceEl.scrollHeight }
+
+  function beacon(payload) {
+    var body = JSON.stringify(payload)
+    if (navigator.sendBeacon && navigator.sendBeacon('/api/diag', new Blob([body], { type: 'application/json' }))) return
+    var xhr = new XMLHttpRequest()
+    xhr.open('POST', '/api/diag')
+    xhr.setRequestHeader('Content-Type', 'application/json')
+    xhr.send(body)
+  }
+
+  // The real scene of the app, with its switches (apps/web/src/lib/sceneProbe.ts). "low" for all:
+  // that is what a weak machine gets in "auto", and the tests stay comparable from one machine to another.
+  var SCENES = [
+    { label: 'Scène telle quelle', query: 'probe=base' },
+    { label: 'Sans ombres', query: 'probe=noshadows&shadows=0' },
+    { label: 'Sans photos', query: 'probe=nophotos&assets=0' },
+    { label: 'Sans ombres ni photos', query: 'probe=bare&shadows=0&assets=0' }
+  ]
+
+  function runScene(test) {
+    stopRamp()
+    traceEl.textContent = ''
+    traceLine('— ' + test.label)
+    frame.style.display = 'block'
+    frame.src = '/?' + test.query + '&quality=low'
+  }
+
+  // What the scene in the frame reports (`sceneProbe.ts` posts each step to its parent as well).
+  window.addEventListener('message', function (e) {
+    var p = e.origin === location.origin && e.data && e.data.kasbahProbe
+    if (!p) return
+    var s = p.stats || {}
+    var line = (p.t / 1000).toFixed(1) + ' s · ' + p.step
+    if (p.progress) line += ' ' + p.progress.done + '/' + p.progress.total
+    if (p.heapMo !== null) line += ' · tas ' + p.heapMo + ' Mo'
+    if (s.fps !== undefined) line += ' · ' + s.fps + ' img/s, ' + s.cpuMs + ' ms CPU, ' + s.textures + ' textures, ' + s.programs + ' programmes'
+    if (p.message) line += ' · ' + p.message
+    if (p.why) line += ' (' + p.why + ')'
+    traceLine(line)
+  })
+
+  // GPU memory ramp: textures of 4 MB uploaded until the browser refuses or drops the context.
+  // Tells the GPU memory ceiling, to compare with what the scene uploads.
+  var RAMP_STEP_MO = 32, RAMP_MAX_MO = 1024, TEXTURE_MO = 4
+  var ramp = null
+
+  function stopRamp() { if (ramp) { clearTimeout(ramp.timer); ramp.lose && ramp.lose.loseContext(); ramp = null } }
+
+  function runRamp() {
+    stopRamp()
+    frame.style.display = 'none'
+    frame.src = 'about:blank'
+    traceEl.textContent = ''
+    traceLine('— Rampe mémoire GPU')
+    var run = Math.random().toString(36).slice(2, 8)
+    var canvas = document.createElement('canvas')
+    var gl = canvas.getContext('webgl2') || canvas.getContext('webgl')
+    if (!gl) { traceLine('pas de WebGL'); return }
+    var lost = false
+    canvas.addEventListener('webglcontextlost', function () { lost = true })
+    var size = 1024, pixels = new Uint8Array(size * size * 4)
+    for (var i = 0; i < pixels.length; i++) pixels[i] = i & 255
+    var textures = []
+    var t0 = Date.now()
+    ramp = { lose: gl.getExtension('WEBGL_lose_context'), timer: 0 }
+    function report(step, mo, extra) {
+      var payload = { ramp: { run: run, step: step, mo: mo, t: Date.now() - t0 } }
+      if (extra) payload.ramp.error = extra
+      beacon(payload)
+      traceLine(((Date.now() - t0) / 1000).toFixed(1) + ' s · ' + step + ' · ' + mo + ' Mo' + (extra ? ' · ' + extra : ''))
+    }
+    report('start', 0)
+    function next() {
+      for (var k = 0; k < RAMP_STEP_MO / TEXTURE_MO; k++) {
+        var tex = gl.createTexture()
+        gl.bindTexture(gl.TEXTURE_2D, tex)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+        textures.push(tex)
+      }
+      // a draw-free flush is not enough everywhere: `finish` makes the driver commit the uploads
+      gl.finish()
+      var mo = textures.length * TEXTURE_MO
+      var err = gl.getError()
+      if (lost || gl.isContextLost()) { report('contextlost', mo); ramp = null; return }
+      if (err !== gl.NO_ERROR) { report('refused', mo, 'erreur GL ' + err); stopRamp(); return }
+      report('ok', mo)
+      if (mo >= RAMP_MAX_MO) { report('end', mo, 'plafond du test atteint'); stopRamp(); return }
+      ramp.timer = setTimeout(next, 250)
+    }
+    ramp.timer = setTimeout(next, 250)
+  }
+
+  var testsEl = document.getElementById('tests')
+  function addButton(label, onclick) {
+    var b = document.createElement('button')
+    b.type = 'button'
+    b.textContent = label
+    b.onclick = onclick
+    testsEl.appendChild(b)
+  }
+  for (var s = 0; s < SCENES.length; s++) addButton(SCENES[s].label, (function (test) { return function () { runScene(test) } })(SCENES[s]))
+  addButton('Rampe mémoire GPU', runRamp)
 
   var report = attempt(collect)
   if (typeof report === 'string') { statusEl.innerHTML = '<span class="ko">' + escape(report) + '</span>'; return }

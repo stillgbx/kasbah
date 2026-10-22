@@ -1,7 +1,7 @@
 # Protocole REST et WebSocket
 
 > Dernière mise à jour : 2026-10-22
-> Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11), `apps/server/src/http/static.ts` (`appBuild`, 2026-10-13), `apps/server/src/http/system.ts` (2026-10-13), `apps/server/src/http/diag.ts` et `apps/web/public/diag.html` (2026-10-22)
+> Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11), `apps/server/src/http/static.ts` (`appBuild`, 2026-10-13), `apps/server/src/http/system.ts` (2026-10-13), `apps/server/src/http/diag.ts` et `apps/web/public/diag.html`, `apps/web/src/lib/sceneProbe.ts` (2026-10-22)
 
 ## REST
 
@@ -777,3 +777,35 @@ règle de session que le reste de `/api` (pas de `LAN_ONLY`). Comme tout `public
 côté serveur qu'après un build (`dist/`) ; en dev, Vite la sert.
 
 Sources : `apps/server/src/http/diag.ts`, `apps/server/src/http/diag.test.ts`, `apps/web/public/diag.html`.
+
+### Mise à jour 2026-10-22 (bis) — tests 3D lancés depuis `/diag.html`
+
+Le premier rapport du navigateur de voiture a écarté un navigateur trop vieux (Chromium récent, tout
+le JS et le CSS de l'app reconnus) : il reste le matériel — 4 cœurs lents, ~2 Go annoncés
+(`deviceMemory`), GPU intégré partageant cette mémoire. La qualité « basse », que l'auto choisit
+déjà, garde les ombres (carte 2048 floutée) et les matières photo : il faut savoir lequel tue la scène.
+
+**Tests de la vraie scène.** Quatre boutons de `/diag.html` ouvrent l'app dans un cadre à
+`/?probe=<test>&quality=low`, avec ou sans `shadows=0` et `assets=0` : telle quelle, sans ombres,
+sans photos, sans les deux. `apps/web/src/lib/sceneProbe.ts` lit ces interrupteurs
+(`readSceneProbe`) et `useHouseScene` les impose à la scène **sans toucher aux réglages enregistrés** ;
+sans `?probe`, rien ne change. La sonde envoie par `navigator.sendBeacon` (il part même si la page
+meurt juste après) chaque étape au même `POST /api/diag` : `start`, `prepare:materials|shaders|frame`
+(événement `prepare` de la scène, avec la progression de l'étape qui s'achève), `shown`, un `beat`
+toutes les 2 s (`debugStats()` : img/s, ms CPU, textures, programmes ; tas JS), `contextlost`,
+`error`, `end`. Une fois la maison montrée, la caméra tourne 20 s (`orbitBy`) : la scène ne dessine
+qu'à la demande, sans cela il n'y aurait aucune image à mesurer. Chaque étape est aussi postée au
+parent (`postMessage`) et s'affiche en direct dans la page.
+
+Lecture : des lignes qui s'arrêtent net = onglet tué (la dernière étape et le dernier tas disent où) ;
+un trou entre deux `beat` = page figée ; `contextlost` = le GPU a lâché, la page vivait encore.
+
+**Rampe mémoire GPU** (dans la page seule, sans three) : des textures de 4 Mo, 32 Mo à la fois avec
+`gl.finish()`, jusqu'au refus (`getError`), à la perte du contexte ou au plafond du test (1 Go) ;
+chaque palier part au journal (`{ ramp: … }`). Elle cherche la limite : à lancer en dernier.
+
+Piège de vérification : dans la preview masquée, l'étape `frame` attend une image qui ne vient pas
+(pas de `requestAnimationFrame`) ; le temps de la première image y est faux.
+
+Sources : `apps/web/src/lib/sceneProbe.ts`, `apps/web/src/lib/sceneProbe.test.ts`,
+`apps/web/src/composables/useHouseScene.ts`, `apps/web/public/diag.html`.

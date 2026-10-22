@@ -13,6 +13,7 @@ import type { GroundShape } from '../three/builders/groundOverlay'
 import { useDevicesStore } from '../stores/devices'
 import { useSettingsStore } from '../stores/settings'
 import { useWeather } from './useWeather'
+import { sceneProbe, startSceneProbe } from '../lib/sceneProbe'
 
 // Vue adapter of the scene controller: lifecycle, size, appearance (rendering style, time,
 // Vuetify theme) → scene, house/states → scene (diff by reference), tap events → callbacks.
@@ -36,6 +37,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const shown = ref(false)
   const relief = shallowRef<ReliefEditState | null>(null)
   let scene: HouseScene | null = null
+  let stopProbe: (() => void) | null = null
   const theme = useTheme()
   const visibility = useDocumentVisibility()
   const devices = useDevicesStore()
@@ -98,7 +100,9 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     const canvas = args.canvas.value
     if (!canvas) return
     scene = new HouseScene(canvas, { labelLayer: args.labelLayer.value, style: style.value, ambience: ambience.value })
-    scene.setAppearance({ ui: readUiTheme(), style: style.value, ambience: ambience.value, assets: settings.sceneAssets, tuning: settings.sceneTuning })
+    // a 3D test of the diagnostic page (`?probe=`) imposes its switches, without saving them
+    if (sceneProbe) stopProbe = startSceneProbe(scene, canvas, sceneProbe)
+    scene.setAppearance({ ui: readUiTheme(), style: style.value, ambience: ambience.value, assets: sceneProbe?.assets ?? settings.sceneAssets, tuning: settings.sceneTuning })
     supported.value = scene.supported
     if (!scene.supported) shown.value = true
     // A 3D scene can only be debugged by looking at it: in development only, the controller is
@@ -144,7 +148,10 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.setDescriptors(devices.descriptors)
     // The two scene settings that Settings holds (render budget, projection) go
     // first; what the caller imposes through `options` wins afterwards.
-    scene.setOptions({ quality: settings.sceneQuality, projection: settings.sceneProjection, ...(args.options ? args.options.value : {}) })
+    scene.setOptions({
+      quality: sceneProbe?.quality ?? settings.sceneQuality, projection: settings.sceneProjection, ...(args.options ? args.options.value : {}),
+      ...(sceneProbe?.shadows !== undefined ? { shadows: sceneProbe.shadows } : {}),
+    })
     if (args.house.value) scene.load(args.house.value)
     scene.updateStates(args.states.value)
     scene.setSeason(season.value)
@@ -196,7 +203,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   useIntervalFn(() => { clock.value = new Date() }, 15 * 60 * 1000)
   watch(visibility, (v) => scene?.setPaused(v === 'hidden'))
 
-  onBeforeUnmount(() => { scene?.dispose(); scene = null })
+  onBeforeUnmount(() => { stopProbe?.(); scene?.dispose(); scene = null })
 
   return {
     supported, ready, preparing, shown,
