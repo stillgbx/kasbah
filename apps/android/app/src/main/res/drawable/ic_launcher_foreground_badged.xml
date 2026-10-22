@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The logo as on the web app (centered, same size), with the badge in its free top-right corner, in
+  the same 512 viewport mapped to the visible part of the icon.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:inset="11dp">
+    <layer-list>
+        <item android:drawable="@drawable/ic_launcher_foreground" />
+        <item android:drawable="@drawable/ic_launcher_badge" />
+    </layer-list>
+</inset>

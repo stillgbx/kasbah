@@ -1,7 +1,7 @@
 # Plugin Renault (véhicules, Gigya + Kamereon)
 
-> Dernière mise à jour : 2026-10-19
-> Sources : `apps/server/src/plugins/renault/{index,auth,client,mapping,types}.ts`, `apps/server/src/plugins/renault/__fixtures__/kamereon.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/components/RenaultLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/server/.env.example`, capture du vrai compte le 2026-09-14 (Renault 5 E-Tech `R5E1VE`), documentation `renault-api` (hacf-fr), portail `developer.ampere.cars`, dépôt `evcc-io/evcc` (modes de réveil), forum communautaire Renault, écriture de la cible de charge essayée sur le vrai véhicule le 2026-09-14, diagnostic du 2026-09-19 sur le vrai véhicule et le vrai serveur (réveil de charge qui ne partait pas)
+> Dernière mise à jour : 2026-10-22
+> Sources : `apps/server/src/plugins/renault/{index,auth,client,mapping,types}.ts`, `apps/server/src/plugins/renault/__fixtures__/kamereon.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/components/RenaultLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/server/.env.example`, capture du vrai compte le 2026-09-14 (Renault 5 E-Tech `R5E1VE`), documentation `renault-api` (hacf-fr), portail `developer.ampere.cars`, dépôt `evcc-io/evcc` (modes de réveil), forum communautaire Renault, écriture de la cible de charge essayée sur le vrai véhicule le 2026-09-14, diagnostic du 2026-09-19 sur le vrai véhicule et le vrai serveur (réveil de charge qui ne partait pas), portail `developer.renaultgroup.com` (propriétés véhicule partenaires), session du 2026-10-22
 
 ## Il n'existe aucune voie officielle
 
@@ -733,3 +733,18 @@ d'exemple pour voir la proposition en simulation).
 
 Sources : `apps/server/src/plugins/renault/{client,mapping,types,index}.ts`, `mapping.test.ts`,
 `plugin.test.ts`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`.
+
+### Mise à jour 2026-10-22 — l'appli embarquée ne lira pas les pneus de la R5
+
+La première porte (« À retenir quand même », plus haut) a été réexaminée. Le portail s'appelle
+désormais `developer.renaultgroup.com` (Ampere a réintégré Renault). Sa table des propriétés
+véhicule ouvertes aux partenaires porte bien `TIRE_PRESSURE`, lisible par une appli tierce via
+`Car.PERMISSION_TIRES_3P`, mais **ce `_3P` n'existe qu'à partir d'Android Automotive 15** (openR evo :
+Renault Trafic Van E-Tech et suivants). La R5 est en openR Link **Android 12** (vu dans ses réglages) :
+la pression y exige `PERMISSION_TIRES`, réservée au système et au constructeur. S'ajoute la
+distribution par le seul Play Store. Piste close tant que la R5 ne passe pas en Android Automotive 15.
+
+Ce qui en est sorti est une appli **Android Auto** (sur le téléphone, affichée par la voiture) pour le
+portail, les garages et la voix : [1_15 Appli Android Auto](../1_architecture/1_15_appli-android-auto.md).
+Son écran « Voiture » relève ce qu'Android Auto transmet de la voiture (énergie, autonomie, vitesse,
+compteur) — pas de pression des pneus non plus.

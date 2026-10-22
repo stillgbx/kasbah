@@ -20,7 +20,7 @@ Vision du projet, principes structurants et vocabulaire commun. Résumés : [0_o
 ## 1 — Architecture
 
 <!-- section:1_architecture:begin (généré par scripts/wiki-index.mjs depuis 1_architecture/README.md - ne pas éditer ici) -->
-Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses. Résumés : [1_architecture/README.md](1_architecture/README.md) (15 pages, dernière mise à jour 2026-10-22).
+Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses. Résumés : [1_architecture/README.md](1_architecture/README.md) (16 pages, dernière mise à jour 2026-10-22).
 
 | Pages | Dernière mise à jour |
 |---|---|
@@ -33,12 +33,13 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-10-09 |
 | [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-10-20 |
 | [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-15 |
-| [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-10-11 |
+| [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-10-22 |
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-10-11 |
 | [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-10-22 |
 | [1_12 Scène 3D : objets dessinés](1_architecture/1_12_scene-3d-objets.md) | 2026-10-21 |
 | [1_13 Comptes et sessions](1_architecture/1_13_comptes-et-sessions.md) | 2026-10-13 |
 | [1_14 Énergie](1_architecture/1_14_energie.md) | 2026-10-13 |
+| [1_15 Appli Android Auto](1_architecture/1_15_appli-android-auto.md) | 2026-10-22 |
 <!-- section:1_architecture:end -->
 
 ## 2 — Maison
@@ -56,7 +57,7 @@ La maison décrite en JSON : format et validation, géométrie dérivée (murs, 
 ## 3 — Plugins
 
 <!-- section:3_plugins:begin (généré par scripts/wiki-index.mjs depuis 3_plugins/README.md - ne pas éditer ici) -->
-Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (27 pages, dernière mise à jour 2026-10-21).
+Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (27 pages, dernière mise à jour 2026-10-22).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -72,7 +73,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_6 Google Cast](3_plugins/3_6_google-cast.md) | 2026-10-12 |
 | [3_7 Enphase](3_plugins/3_7_enphase.md) | 2026-10-15 |
 | [3_8 Tesla (Fleet API)](3_plugins/3_8_tesla.md) | 2026-10-20 |
-| [3_9 Renault (Gigya + Kamereon)](3_plugins/3_9_renault.md) | 2026-10-19 |
+| [3_9 Renault (Gigya + Kamereon)](3_plugins/3_9_renault.md) | 2026-10-22 |
 | [3_10 Open-Meteo](3_plugins/3_10_open-meteo.md) | 2026-10-09 |
 | [3_11 Husqvarna Automower](3_plugins/3_11_husqvarna-automower.md) | 2026-10-14 |
 | [3_12 COMAP Proteo 2](3_plugins/3_12_comap-proteo.md) | 2026-10-06 |
@@ -128,10 +129,10 @@ Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5
 ## 6 — FAQ
 
 <!-- section:6_faq:begin (généré par scripts/wiki-index.mjs depuis 6_faq/README.md - ne pas éditer ici) -->
-Pièges rencontrés et recettes : une entrée datée par incident (Date / Symptôme / Diagnostic / Solution). Résumés : [6_faq/README.md](6_faq/README.md) (2 pages, dernière mise à jour 2026-10-13).
+Pièges rencontrés et recettes : une entrée datée par incident (Date / Symptôme / Diagnostic / Solution). Résumés : [6_faq/README.md](6_faq/README.md) (2 pages, dernière mise à jour 2026-10-22).
 
 | Pages | Dernière mise à jour |
 |---|---|
-| [6_0 Pièges d'outillage](6_faq/6_0_pieges-outillage.md) | 2026-10-13 |
+| [6_0 Pièges d'outillage](6_faq/6_0_pieges-outillage.md) | 2026-10-22 |
 | [6_1 Pièges à l'exécution](6_faq/6_1_pieges-runtime.md) | 2026-10-13 |
 <!-- section:6_faq:end -->

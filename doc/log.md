@@ -7,6 +7,20 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-22] update | Appli Android Auto (`apps/android`)
+
+**Déclencheur** : lire la pression des pneus de la R5 par une appli dans la voiture ; devenu une appli Android Auto pour le portail, les garages et la voix (« Parler »), essayée sur un téléphone et dans le simulateur.
+
+**Pages modifiées** :
+- `1_architecture/1_9_assistant.md` - mise à jour datée : la synthèse vocale des réponses existe (route `speak`), et l'appli de voiture est un deuxième client de `/api/assistant/ask`.
+- `3_plugins/3_9_renault.md` - mise à jour datée : l'appli embarquée openR Link ne lira pas les pneus (permission `_3P` à partir d'Android Automotive 15, R5 en Android 12).
+- `6_faq/6_0_pieges-outillage.md` - deux entrées : simulateur DHU bloqué par des connexions fermées de force, script `.cmd` lu de travers (LF, `chcp`).
+
+**Pages créées** :
+- `1_architecture/1_15_appli-android-auto.md` - l'appli : choix d'Android Auto et pistes écartées, connexion, écrans voiture, sondage, voix, simulateur, pièges.
+
+**Index** : catalogues mis à jour (4 lignes), index.md régénéré.
+
 ## [2026-10-22] update | Page de diagnostic navigateur et `POST /api/diag`
 
 **Déclencheur** : « j'ai essayé l'app dans le navigateur de la tesla, ça rame beaucoup et la vue 3d ne semble jamais s'afficher » ; avant de corriger, savoir ce qu'est ce navigateur.

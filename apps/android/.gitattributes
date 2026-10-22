@@ -1,0 +1,4 @@
+# cmd misreads batch files with LF line endings; gradlew is a shell script.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+gradlew text eol=lf

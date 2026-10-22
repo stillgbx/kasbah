@@ -191,6 +191,7 @@ npm run lint       # eslint (flat config, TypeScript + Vue)
 kasbah/
   apps/web          Vite 8 + Vue 3 + Vuetify 4 + Three.js — l'application web
   apps/server       Node 22 + Fastify 5 — REST + WebSocket, hôte des plugins, sert le build web
+  apps/android      Kotlin + Car App Library — l'appli Android Auto (portail, garages, voix)
   packages/shared   Schémas zod : kinds, états, commandes, protocole, maison + géométrie pure
   packages/mock-sim Moteur de simulation déterministe (plugin `mock` et démo sans serveur)
   house/            demos/ — trois propriétés de démonstration (maison à deux pans, toit plat, appartement) ; properties/ — vos propriétés (hors git) ; demo-house.json — maison des tests
@@ -413,6 +414,7 @@ Chaque plugin valide ses propres variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST
 - [docs/plugins/](docs/plugins/) — une page par plugin : fonctionnalités, connexion, mise en route (liste dans [Plugins](#plugins)).
 - [doc/index.md](doc/index.md) — wiki (architecture, contrat, chaque plugin, UI, setup, pièges).
 - [docs/house-json.md](docs/house-json.md) — format du fichier maison (repère, pièces, relevé métré).
+- [docs/android-auto.md](docs/android-auto.md) — l'appli Android Auto : portail et portes de garage sur l'écran de la voiture, voix, construire et essayer (en anglais).
 - [doc/5_setup/5_1_configuration-env.md](doc/5_setup/5_1_configuration-env.md) — variables d'environnement.
 
 ## Licence

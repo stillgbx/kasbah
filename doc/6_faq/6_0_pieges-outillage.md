@@ -1,7 +1,7 @@
 # FAQ — pièges d'outillage
 
-> Dernière mise à jour : 2026-10-13
-> Sources : sessions des 2026-09-04 et 2026-09-08, `apps/web/src/stores/settings.ts`, `apps/web/vite.config.ts`, `apps/web/src/components/home/*.vue`, `apps/web/src/styles/app.css`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/views/EnergyView.vue`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/three/builders/details.ts`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/server/src/app.ts`, `apps/server/src/plugins/mixcloud/resolve.ts`, `apps/server/package.json`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `docs/plugins/claude-assistant.md`, session du 2026-10-08, `scripts/dev-server.mjs`, session du 2026-10-10, `apps/web/src/lib/maplibreWorker.ts`, session du 2026-10-13
+> Dernière mise à jour : 2026-10-22
+> Sources : sessions des 2026-09-04 et 2026-09-08, `apps/web/src/stores/settings.ts`, `apps/web/vite.config.ts`, `apps/web/src/components/home/*.vue`, `apps/web/src/styles/app.css`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/views/EnergyView.vue`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/three/builders/details.ts`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/server/src/app.ts`, `apps/server/src/plugins/mixcloud/resolve.ts`, `apps/server/package.json`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `docs/plugins/claude-assistant.md`, session du 2026-10-08, `scripts/dev-server.mjs`, session du 2026-10-10, `apps/web/src/lib/maplibreWorker.ts`, session du 2026-10-13, `apps/android/dhu.cmd`, session du 2026-10-22
 
 ## Vuetify 4 : changer de thème
 
@@ -880,3 +880,33 @@ et sa variante `-dev`) : Vite ne la voit pas, le build ne contient pas le worker
   servie en `text/javascript`, et un worker s'y lance sans erreur.
 - **À retenir** : un `optimizeDeps.exclude` qui « répare » le dev ne dit rien du build ; un correctif de
   chargement se vérifie aussi sur un build.
+
+## 2026-10-22 — Simulateur Android Auto (DHU) : « waiting for phone », ou coupé juste après la connexion
+
+- **Date** : 2026-10-22
+- **Symptôme** : le *Desktop Head Unit* reste sur « waiting for phone », ou se connecte (poignée de
+  main TLS réussie) puis s'arrête sur `Failed to read from transport - disconnect. Exiting...`.
+  Variante : connecté, mais `screenshot` répond `Don't have video focus` et la fenêtre reste noire.
+- **Diagnostic** : le « serveur de l'unité principale » d'Android Auto, sur le téléphone, garde les
+  connexions des simulateurs **fermés de force** (`taskkill`, fenêtre tuée) : on les voit dans
+  `/proc/net/tcp6` du téléphone (port `149D` = 5277, état `CLOSE_WAIT`, file d'attente non vide sur la
+  socket d'écoute). Il ne prend plus la nouvelle. Arrêter puis redémarrer ce serveur **pendant** qu'un
+  simulateur est connecté coupe celui-ci (`FRAMER_READ_IO_EXCEPTION` dans `adb logcat`, juste avant
+  `GH.DHUService: Network server running on port 5277`). La fenêtre noire, elle, attend qu'on valide
+  Android Auto sur le téléphone **déverrouillé**.
+- **Solution** : fermer le simulateur, puis, sur le téléphone, arrêter et redémarrer le serveur de
+  l'unité principale (menu ⋮ du mode développeur d'Android Auto), puis relancer `apps/android/dhu.cmd`
+  sans plus toucher au téléphone. Fermer le simulateur par `quit` dans sa console plutôt que de force.
+
+## 2026-10-22 — Un script `.cmd` lu de travers par cmd (`'t' n'est pas reconnu…`)
+
+- **Date** : 2026-10-22
+- **Symptôme** : `dhu.cmd` affiche des erreurs absurdes (`'t' n'est pas reconnu…`, `'/i' n'est pas
+  reconnu…`) et saute des lignes, alors qu'il marchait avant l'ajout d'un `chcp 65001` et d'accents.
+- **Diagnostic** : cmd lit un script batch par décalages d'octets. Avec des fins de ligne LF (écrit
+  depuis Git Bash ou le tool Write) et des caractères multi-octets après un changement de page de
+  code, ses décalages tombent au milieu des lignes. Autre piège du même jour : appelé depuis cet
+  environnement, cmd ne cherche pas un exécutable dans le dossier courant (`desktop-head-unit.exe`
+  « n'est pas reconnu » après `cd`).
+- **Solution** : script en ASCII seul, sans `chcp`, fins de ligne CRLF, imposées par
+  `apps/android/.gitattributes` (`*.cmd text eol=crlf`) ; appeler l'exécutable par `.\nom.exe`.

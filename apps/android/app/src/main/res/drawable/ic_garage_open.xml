@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Garage, open: the door rolled up under the lintel, drawn in the web app's stroke style (apps/web/src/lib/strokeIcons.ts: 24x24, stroke 1.8, rounded). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M3 20V10l9-6 9 6v10M7 20v-8.5h10V20M7 13.4h10" />
+</vector>

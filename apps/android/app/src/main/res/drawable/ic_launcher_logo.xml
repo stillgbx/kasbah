@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The logo at the web app's scale: an adaptive icon only shows the middle 72dp of its 108dp layer,
+  where the installed web app shows its whole maskable image. Inset by 11dp (measured against the web app on the phone), the 512 viewport fills
+  that visible part and both apps draw the tower at the same size.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_launcher_foreground"
+    android:inset="11dp" />

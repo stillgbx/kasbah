@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Colors the car screen takes from the app (the car keeps the rest: background, fonts, layout).
+  Kasbah's accent, day and night as on the web app; the secondary is the logo's copper.
+-->
+<resources>
+    <style name="CarAppTheme">
+        <item name="carColorPrimary">#1f6f78</item>
+        <item name="carColorPrimaryDark">#4fb3bd</item>
+        <item name="carColorSecondary">#b77a45</item>
+        <item name="carColorSecondaryDark">#e0aa70</item>
+    </style>
+</resources>

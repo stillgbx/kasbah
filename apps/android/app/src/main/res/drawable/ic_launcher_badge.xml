@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The phone's "Kasbah Auto" badge, over the logo (ic_launcher_foreground.xml, same 512 viewport, both inset in ic_launcher_foreground_badged.xml): a
+  teal disc ringed with the logo's night, holding the web app's `vehicle` stroke icon
+  (apps/web/src/lib/strokeIcons.ts). It tells this app from the installed web app, same name and logo.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="#4fb3bd"
+        android:strokeColor="#0d1420"
+        android:strokeWidth="12"
+        android:pathData="M350,165m-64,0a64,64 0 1,0 128,0a64,64 0 1,0 -128,0" />
+    <group
+        android:scaleX="5"
+        android:scaleY="5"
+        android:translateX="290"
+        android:translateY="95">
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#0d1420"
+            android:strokeWidth="2"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M3 13l2-5h14l2 5v5H3zM3 13h18M7 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M17 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0" />
+    </group>
+</vector>

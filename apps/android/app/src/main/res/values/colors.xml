@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The "Kasbah" theme as the server's sign-in page carries it (apps/server/src/mcp/auth.ts, PAGE_CSS). -->
+<resources>
+    <color name="bg">#e9edf1</color>
+    <color name="surface">#ffffff</color>
+    <color name="surface2">#f2f5f8</color>
+    <color name="text">#141a22</color>
+    <color name="muted">#5f6a78</color>
+    <color name="line">#17141a22</color>
+    <color name="accent">#1f6f78</color>
+    <color name="on_accent">#ffffff</color>
+    <color name="error">#d24a43</color>
+    <!-- The logo's background, in both themes. -->
+    <color name="night">#0d1420</color>
+</resources>
