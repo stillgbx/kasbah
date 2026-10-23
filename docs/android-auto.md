@@ -45,12 +45,20 @@ export JAVA_HOME="<Android Studio>/jbr" ANDROID_HOME="<Android SDK>"
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The app is installed by hand, not from the Play Store. On the phone:
+An app installed this way shows in the **simulator** only. **A real car only shows car apps installed
+from Google Play**: Android Auto's *Unknown sources* developer option covers media and messaging apps,
+not apps built with the Car App Library like this one
+([Google's testing guide](https://developer.android.com/training/cars/testing)). The simulator skips the
+check, so everything can look fine on a computer and the app still be missing in the car. For the car,
+go through Play's **Internal app sharing**, which needs a Google Play developer account (one-time
+fee) but no review and no public listing: upload the APK there, open the link Google gives on the
+phone, and the app installs from Play. Uninstall a version installed by `adb` first: Play will not
+replace an app signed with another key.
 
-1. Open **Kasbah Auto** (the logo with a car badge, to tell it from the installed web app), enter the server address, the user and the password, and allow the microphone.
-2. Turn on Android Auto's developer mode (tap the version ten times in Android Auto's settings), then in
-   its top-right menu tick **Unknown sources**.
-3. The app then shows as **Kasbah**, without the badge, in Android Auto's launcher, in the car or in the simulator.
+On the phone, open **Kasbah Auto** (the logo with a car badge, to tell it from the installed web app),
+enter the server address, the user and the password, and allow the microphone. In Android Auto the app
+shows as **Kasbah**, without the badge. The app follows the phone's language: English, or French on a
+phone set to French.
 
 ## Trying it on a computer
 

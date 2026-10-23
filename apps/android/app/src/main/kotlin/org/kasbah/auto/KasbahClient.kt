@@ -30,7 +30,7 @@ data class Vocabulary(val hints: List<String>, val words: Map<String, String>)
  * Talks to the Kasbah server the way the web app does: the session cookie of `POST /login`, and the
  * server's own Origin on every request (it refuses any write without it).
  */
-class KasbahClient(context: Context) {
+class KasbahClient(private val context: Context) {
     private val prefs = context.getSharedPreferences("kasbah", Context.MODE_PRIVATE)
 
     var baseUrl: String
@@ -66,9 +66,9 @@ class KasbahClient(context: Context) {
             .firstNotNullOfOrNull { Regex("$COOKIE=([^;]+)").find(it)?.groupValues?.get(1) }
         c.disconnect()
         when {
-            code == 401 -> throw KasbahError("Utilisateur ou mot de passe incorrect.")
-            code == 429 -> throw KasbahError("Trop d'essais : compte bloqué quelques minutes.")
-            code == 403 -> throw KasbahError("Adresse refusée par le serveur : saisir l'adresse publique exacte.")
+            code == 401 -> throw KasbahError(context.getString(R.string.err_credentials))
+            code == 429 -> throw KasbahError(context.getString(R.string.err_locked))
+            code == 403 -> throw KasbahError(context.getString(R.string.err_origin))
             // On the local network there is no session: `/login` just sends back to the app.
             else -> session = cookie
         }
@@ -126,7 +126,7 @@ class KasbahClient(context: Context) {
         for (line in lines.filter { it.isNotBlank() }.map(::JSONObject)) {
             when (line.optString("type")) {
                 "text" -> answer += line.getString("text")
-                "error" -> throw KasbahError(line.optString("message", "L'assistant a échoué."))
+                "error" -> throw KasbahError(line.optString("message", context.getString(R.string.failed)))
             }
         }
         return answer.joinToString("\n")
@@ -144,7 +144,7 @@ class KasbahClient(context: Context) {
         String(call(method, path, json, timeout))
 
     private fun call(method: String, path: String, json: String?, timeout: Int): ByteArray {
-        if (baseUrl.isEmpty()) throw KasbahError("Adresse du serveur à saisir sur le téléphone.")
+        if (baseUrl.isEmpty()) throw KasbahError(context.getString(R.string.err_no_address))
         val c = open(path, method)
         c.readTimeout = timeout
         if (json != null) {
@@ -154,12 +154,12 @@ class KasbahClient(context: Context) {
         }
         try {
             val code = c.responseCode
-            if (code == 401) throw KasbahError("Session expirée : se reconnecter sur le téléphone.")
+            if (code == 401) throw KasbahError(context.getString(R.string.err_session))
             if (code !in 200..299) {
                 val message = runCatching {
                     JSONObject(c.errorStream.bufferedReader().readText()).getJSONObject("error").getString("message")
                 }.getOrNull()
-                throw KasbahError(message ?: "Erreur du serveur ($code).")
+                throw KasbahError(message ?: context.getString(R.string.err_server, code))
             }
             return c.inputStream.readBytes()
         } finally {
@@ -199,12 +199,12 @@ object Background {
     }
 }
 
-fun stateLabel(a: Access): String = when {
-    !a.available -> "Hors ligne"
-    a.motion == "opening" -> "Ouverture…"
-    a.motion == "closing" -> "Fermeture…"
-    a.position == null -> "État inconnu"
-    a.position == 0 -> "Fermé"
-    a.position == 100 -> "Ouvert"
-    else -> "Ouvert à ${a.position} %"
+fun stateLabel(context: Context, a: Access): String = when {
+    !a.available -> context.getString(R.string.state_offline)
+    a.motion == "opening" -> context.getString(R.string.state_opening)
+    a.motion == "closing" -> context.getString(R.string.state_closing)
+    a.position == null -> context.getString(R.string.state_unknown)
+    a.position == 0 -> context.getString(R.string.state_closed)
+    a.position == 100 -> context.getString(R.string.state_open)
+    else -> context.getString(R.string.state_open_pct, a.position)
 }

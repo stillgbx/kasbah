@@ -82,7 +82,7 @@ class Endpointer {
  */
 fun recordSentence(carContext: CarContext, cancelled: () -> Boolean): ByteArray? {
     if (carContext.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-        throw KasbahError("Micro non autorisé sur le téléphone.")
+        throw KasbahError(carContext.getString(R.string.err_mic))
     }
     val audio = carContext.getSystemService(AudioManager::class.java)
     val focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE).setAudioAttributes(SPEECH).build()
@@ -167,7 +167,7 @@ class Speaker(private val context: Context) {
         tts = TextToSpeech(context) { status ->
             val t = tts ?: return@TextToSpeech
             if (status != TextToSpeech.SUCCESS) return@TextToSpeech stop()
-            t.language = Locale.FRENCH
+            t.language = Locale.getDefault()
             t.setAudioAttributes(SPEECH)
             // Called on a speech thread: back to the main one, where the speaker lives.
             t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {

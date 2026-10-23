@@ -20,7 +20,7 @@ Vision du projet, principes structurants et vocabulaire commun. Résumés : [0_o
 ## 1 — Architecture
 
 <!-- section:1_architecture:begin (généré par scripts/wiki-index.mjs depuis 1_architecture/README.md - ne pas éditer ici) -->
-Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses. Résumés : [1_architecture/README.md](1_architecture/README.md) (16 pages, dernière mise à jour 2026-10-22).
+Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses. Résumés : [1_architecture/README.md](1_architecture/README.md) (16 pages, dernière mise à jour 2026-10-23).
 
 | Pages | Dernière mise à jour |
 |---|---|
@@ -39,7 +39,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_12 Scène 3D : objets dessinés](1_architecture/1_12_scene-3d-objets.md) | 2026-10-21 |
 | [1_13 Comptes et sessions](1_architecture/1_13_comptes-et-sessions.md) | 2026-10-13 |
 | [1_14 Énergie](1_architecture/1_14_energie.md) | 2026-10-13 |
-| [1_15 Appli Android Auto](1_architecture/1_15_appli-android-auto.md) | 2026-10-22 |
+| [1_15 Appli Android Auto](1_architecture/1_15_appli-android-auto.md) | 2026-10-23 |
 <!-- section:1_architecture:end -->
 
 ## 2 — Maison

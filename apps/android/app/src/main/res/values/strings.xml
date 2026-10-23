@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English by default; values-fr/strings.xml when the phone is in French. -->
+<resources>
+    <!-- Phone: sign-in -->
+    <string name="intro">Sign in to your house to use Kasbah from the car.</string>
+    <string name="label_address">Address (https://…)</string>
+    <string name="label_user">User</string>
+    <string name="label_password">Password</string>
+    <string name="sign_in">Sign in</string>
+    <string name="signing_in">Signing in…</string>
+    <string name="sign_in_failed">Sign-in failed.</string>
+    <string name="connected_title">You\'re signed in</string>
+    <string name="connected_text">Kasbah is waiting for you in the car: open it from Android Auto.</string>
+    <string name="switch_account">Switch account</string>
+
+    <!-- Server errors -->
+    <string name="err_credentials">Wrong user or password.</string>
+    <string name="err_locked">Too many attempts: account locked for a few minutes.</string>
+    <string name="err_origin">Address refused by the server: enter the exact public address.</string>
+    <string name="err_no_address">Enter the server address on the phone.</string>
+    <string name="err_session">Session expired: sign in again on the phone.</string>
+    <string name="err_server">Server error (%1$d).</string>
+    <string name="err_mic">Microphone not allowed on the phone.</string>
+
+    <!-- Car: gates and garage doors -->
+    <string name="refresh">Refresh</string>
+    <string name="no_access">No gate or garage door in Kasbah.</string>
+    <string name="car">Car</string>
+    <string name="open">Open</string>
+    <string name="close">Close</string>
+    <string name="stop">Stop</string>
+    <string name="command_sent">%1$s: %2$s</string>
+    <string name="command_failed">Command failed</string>
+    <string name="state_offline">Offline</string>
+    <string name="state_opening">Opening…</string>
+    <string name="state_closing">Closing…</string>
+    <string name="state_unknown">Unknown state</string>
+    <string name="state_closed">Closed</string>
+    <string name="state_open">Open</string>
+    <string name="state_open_pct">%1$d %% open</string>
+
+    <!-- Car: probe -->
+    <string name="probe_model">Model</string>
+    <string name="probe_energy">Energy</string>
+    <string name="probe_battery">Battery</string>
+    <string name="probe_speed">Speed</string>
+    <string name="probe_odometer">Odometer</string>
+    <string name="probe_energy_value">types %1$s, connectors %2$s</string>
+    <string name="probe_battery_value">%1$s %%, range %2$s m</string>
+    <string name="probe_refused">refused (%1$s)</string>
+    <string name="value_unimplemented">not provided</string>
+    <string name="value_unavailable">unavailable</string>
+    <string name="value_unknown">unknown</string>
+
+    <!-- Car: talk -->
+    <string name="voice_title">Talk to Kasbah</string>
+    <string name="voice_again">Talk again</string>
+    <string name="voice_listening">Listening…</string>
+    <string name="voice_allow_mic">Allow the microphone on the phone…</string>
+    <string name="voice_mic_refused">Microphone refused: allow it in the phone\'s settings.</string>
+    <string name="voice_nothing">Nothing heard.</string>
+    <string name="voice_thinking">“%1$s”\n\nKasbah is thinking…</string>
+    <string name="voice_answer">“%1$s”\n\n%2$s</string>
+    <string name="voice_done">Done.</string>
+    <string name="failed">Failed.</string>
+</resources>

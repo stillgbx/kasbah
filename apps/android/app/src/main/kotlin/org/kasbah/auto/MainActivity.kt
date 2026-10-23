@@ -38,7 +38,7 @@ class MainActivity : Activity() {
         login.setOnClickListener {
             client.baseUrl = url.text.toString()
             login.isEnabled = false
-            login.text = "Connexion…"
+            login.setText(R.string.signing_in)
             error.visibility = View.GONE
             val name = user.text.toString().trim()
             Background.run({
@@ -46,10 +46,10 @@ class MainActivity : Activity() {
                 client.accesses() // proves the address and the session
             }) { result ->
                 login.isEnabled = true
-                login.text = "Se connecter"
+                login.setText(R.string.sign_in)
                 password.text.clear()
                 result.onSuccess { client.account = name; render() }.onFailure {
-                    error.text = it.message ?: "Connexion impossible."
+                    error.text = it.message ?: getString(R.string.sign_in_failed)
                     error.visibility = View.VISIBLE
                 }
             }

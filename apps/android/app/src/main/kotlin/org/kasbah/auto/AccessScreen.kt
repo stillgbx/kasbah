@@ -50,13 +50,13 @@ class AccessScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycl
     // Titles, header actions and action strips use the deprecated builders: the `Header` that replaces
     // them needs a recent Android Auto host, these work on every one.
     override fun onGetTemplate(): Template {
-        val retry = Action.Builder().setTitle("Actualiser").setOnClickListener(::refresh).build()
+        val retry = Action.Builder().setTitle(carContext.getString(R.string.refresh)).setOnClickListener(::refresh).build()
         error?.let {
             return MessageTemplate.Builder(it).setTitle("Kasbah").setHeaderAction(Action.APP_ICON).addAction(retry).build()
         }
         val list = accesses
         if (list != null && list.isEmpty()) {
-            return MessageTemplate.Builder("Aucun portail ni garage dans Kasbah.")
+            return MessageTemplate.Builder(carContext.getString(R.string.no_access))
                 .setTitle("Kasbah").setHeaderAction(Action.APP_ICON).addAction(retry).build()
         }
         // A strip takes a single action with a text title, the microphone is an icon: the grid reloads on
@@ -68,7 +68,7 @@ class AccessScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycl
             .setActionStrip(
                 ActionStrip.Builder()
                     .addAction(Action.Builder().setIcon(mic).setOnClickListener { screenManager.push(VoiceScreen(carContext)) }.build())
-                    .addAction(Action.Builder().setTitle("Voiture").setOnClickListener { screenManager.push(ProbeScreen(carContext)) }.build())
+                    .addAction(Action.Builder().setTitle(carContext.getString(R.string.car)).setOnClickListener { screenManager.push(ProbeScreen(carContext)) }.build())
                     .build(),
             )
         if (list == null) return builder.setLoading(true).build()
@@ -84,7 +84,7 @@ class AccessScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycl
             items.addItem(
                 GridItem.Builder()
                     .setTitle(a.name)
-                    .setText(stateLabel(a))
+                    .setText(stateLabel(carContext, a))
                     .setImage(CarIcon.Builder(IconCompat.createWithResource(carContext, icon)).setTint(tint(a)).build())
                     .setOnClickListener { screenManager.push(AccessActionScreen(carContext, a)) }
                     .build(),
@@ -121,27 +121,27 @@ class AccessActionScreen(carContext: CarContext, private val access: Access) : S
     private val client = KasbahClient(carContext)
 
     override fun onGetTemplate(): Template =
-        MessageTemplate.Builder(stateLabel(access))
+        MessageTemplate.Builder(stateLabel(carContext, access))
             .setTitle(access.name)
             .setHeaderAction(Action.BACK)
-            .addAction(button("Ouvrir", "cover.open", primary = true))
-            .addAction(button("Fermer", "cover.close"))
-            .setActionStrip(ActionStrip.Builder().addAction(button("Stop", "cover.stop")).build())
+            .addAction(button(R.string.open, "cover.open", primary = true))
+            .addAction(button(R.string.close, "cover.close"))
+            .setActionStrip(ActionStrip.Builder().addAction(button(R.string.stop, "cover.stop")).build())
             .build()
 
     /** The primary action, filled with Kasbah's accent as the web app's main buttons. */
-    private fun button(title: String, type: String, primary: Boolean = false) =
-        Action.Builder().setTitle(title).setOnClickListener { send(title, type) }
+    private fun button(title: Int, type: String, primary: Boolean = false) =
+        Action.Builder().setTitle(carContext.getString(title)).setOnClickListener { send(carContext.getString(title), type) }
             .apply { if (primary) setBackgroundColor(ACCENT).setFlags(Action.FLAG_PRIMARY) }
             .build()
 
     private fun send(title: String, type: String) {
         Background.run({ client.command(access.id, type) }) { result ->
             result.onSuccess {
-                CarToast.makeText(carContext, "${access.name} : $title", CarToast.LENGTH_SHORT).show()
+                CarToast.makeText(carContext, carContext.getString(R.string.command_sent, access.name, title), CarToast.LENGTH_SHORT).show()
                 screenManager.pop()
             }.onFailure {
-                CarToast.makeText(carContext, it.message ?: "Échec de la commande", CarToast.LENGTH_LONG).show()
+                CarToast.makeText(carContext, it.message ?: carContext.getString(R.string.command_failed), CarToast.LENGTH_LONG).show()
             }
         }
     }

@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-23] update | Appli Android Auto : le Play Store exigé en voiture, français et anglais
+
+**Déclencheur** : l'appli n'apparaît pas dans la vraie voiture ; puis la demander en français et en anglais.
+
+**Pages modifiées** :
+- `1_architecture/1_15_appli-android-auto.md` - deux mises à jour datées : « Sources inconnues » ne couvre pas la Car App Library (le simulateur saute le contrôle), essais écartés, voie du partage interne Play et adresse publique du compte ; textes en `strings.xml` anglais / français.
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-22] update | Appli Android Auto (`apps/android`)
 
 **Déclencheur** : lire la pression des pneus de la R5 par une appli dans la voiture ; devenu une appli Android Auto pour le portail, les garages et la voix (« Parler »), essayée sur un téléphone et dans le simulateur.

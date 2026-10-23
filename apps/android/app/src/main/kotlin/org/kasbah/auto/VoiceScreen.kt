@@ -21,7 +21,7 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
     private val speaker = Speaker(carContext)
     @Volatile private var stopped = false
     private var busy = false
-    private var message = "Je vous écoute…"
+    private var message = carContext.getString(R.string.voice_listening)
 
     init {
         lifecycle.addObserver(this)
@@ -40,15 +40,15 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
     private fun listen() {
         if (busy) return
         if (carContext.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            show("Autoriser le micro sur le téléphone…", busy = true)
+            show(carContext.getString(R.string.voice_allow_mic), busy = true)
             carContext.requestPermissions(listOf(Manifest.permission.RECORD_AUDIO)) { granted, _ ->
                 busy = false
-                if (Manifest.permission.RECORD_AUDIO in granted) listen() else show("Micro refusé : l'autoriser dans les réglages du téléphone.")
+                if (Manifest.permission.RECORD_AUDIO in granted) listen() else show(carContext.getString(R.string.voice_mic_refused))
             }
             return
         }
         speaker.stop()
-        show("Je vous écoute…", busy = true)
+        show(carContext.getString(R.string.voice_listening), busy = true)
         Background.run({
             val sentence = recordSentence(carContext) { stopped } ?: return@run null
             val vocabulary = client.vocabulary()
@@ -56,16 +56,16 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
             Heard(heard, vocabulary)
         }) { result ->
             result.onSuccess { h ->
-                if (h == null || h.text.isEmpty()) show("Rien entendu.") else think(h)
+                if (h == null || h.text.isEmpty()) show(carContext.getString(R.string.voice_nothing)) else think(h)
             }.onFailure { fail(it) }
         }
     }
 
     private fun think(h: Heard) {
-        show("« ${h.text} »\n\nKasbah réfléchit…", busy = true)
+        show(carContext.getString(R.string.voice_thinking, h.text), busy = true)
         Background.run({ client.ask(h.text) }) { result ->
             result.onSuccess { answer ->
-                show("« ${h.text} »\n\n${answer.ifEmpty { "C'est fait." }}")
+                show(carContext.getString(R.string.voice_answer, h.text, answer.ifEmpty { carContext.getString(R.string.voice_done) }))
                 if (answer.isNotEmpty()) say(answer, h.vocabulary.words)
             }.onFailure { fail(it) }
         }
@@ -84,7 +84,7 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
 
     private fun fail(e: Throwable) {
         Log.w(TAG, "voice failed", e)
-        show(e.message ?: "Échec.")
+        show(e.message ?: carContext.getString(R.string.failed))
     }
 
     private fun show(text: String, busy: Boolean = false) {
@@ -97,9 +97,9 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
     // screen, not as a new screen (those are counted).
     override fun onGetTemplate(): Template =
         MessageTemplate.Builder(message)
-            .setTitle("Parler à Kasbah")
+            .setTitle(carContext.getString(R.string.voice_title))
             .setHeaderAction(Action.BACK)
-            .addAction(Action.Builder().setTitle("Reparler").setOnClickListener(::listen).build())
+            .addAction(Action.Builder().setTitle(carContext.getString(R.string.voice_again)).setOnClickListener(::listen).build())
             .build()
 
     private data class Heard(val text: String, val vocabulary: Vocabulary)

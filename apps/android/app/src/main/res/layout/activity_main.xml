@@ -56,7 +56,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Connexion à la maison, pour piloter Kasbah depuis la voiture."
+                    android:text="@string/intro"
                     android:textColor="@color/muted"
                     android:textSize="14sp" />
 
@@ -75,7 +75,7 @@
                 <TextView
                     style="@style/Kasbah.Label"
                     android:labelFor="@id/url"
-                    android:text="Adresse (https://…)" />
+                    android:text="@string/label_address" />
 
                 <EditText
                     android:id="@+id/url"
@@ -86,7 +86,7 @@
                 <TextView
                     style="@style/Kasbah.Label"
                     android:labelFor="@id/user"
-                    android:text="Utilisateur" />
+                    android:text="@string/label_user" />
 
                 <EditText
                     android:id="@+id/user"
@@ -97,7 +97,7 @@
                 <TextView
                     style="@style/Kasbah.Label"
                     android:labelFor="@id/password"
-                    android:text="Mot de passe" />
+                    android:text="@string/label_password" />
 
                 <EditText
                     android:id="@+id/password"
@@ -108,7 +108,7 @@
                 <Button
                     android:id="@+id/login"
                     style="@style/Kasbah.Button"
-                    android:text="Se connecter" />
+                    android:text="@string/sign_in" />
             </LinearLayout>
 
             <!-- Signed in: what to do next, nothing else. -->
@@ -131,7 +131,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
-                    android:text="Vous êtes connecté"
+                    android:text="@string/connected_title"
                     android:textColor="@color/text"
                     android:textSize="20sp"
                     android:textStyle="bold" />
@@ -141,7 +141,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:gravity="center"
-                    android:text="Kasbah vous attend dans la voiture : ouvrez-le depuis Android Auto."
+                    android:text="@string/connected_text"
                     android:textColor="@color/muted"
                     android:textSize="14sp" />
 
@@ -157,7 +157,7 @@
                 <Button
                     android:id="@+id/switch_account"
                     style="@style/Kasbah.Button.Outline"
-                    android:text="Changer de compte" />
+                    android:text="@string/switch_account" />
             </LinearLayout>
         </LinearLayout>
     </FrameLayout>

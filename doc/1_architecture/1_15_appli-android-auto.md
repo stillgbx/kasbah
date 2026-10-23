@@ -1,6 +1,6 @@
 # Appli Android Auto
 
-> Dernière mise à jour : 2026-10-22
+> Dernière mise à jour : 2026-10-23
 > Sources : `apps/android/app/src/main/kotlin/org/kasbah/auto/{KasbahClient,MainActivity,KasbahCarAppService,AccessScreen,VoiceScreen,Voice,ProbeScreen}.kt`, `apps/android/app/src/main/AndroidManifest.xml`, `apps/android/app/build.gradle.kts`, `apps/android/dhu.cmd`, `apps/android/.gitattributes`, `apps/server/src/http/session.ts`, `apps/server/src/plugins/transcription/index.ts`, portail `developer.renaultgroup.com`, session du 2026-10-22 (essais sur un téléphone Android et dans le simulateur DHU)
 
 Une appli Android, à côté de l'app web, qui met Kasbah sur l'écran de la voiture par **Android
@@ -178,3 +178,40 @@ en écran large (`config/default_wide.ini`) ou, avec `dhu sensors`, en 800×480 
   « cloud-to-cloud », liaison de compte par l'OAuth du MCP) : non fait.
 - Textes en français en dur dans le code (pas de `strings.xml`) : à reprendre si l'appli doit
   parler anglais.
+
+### Mise à jour 2026-10-23 — invisible dans la vraie voiture : la Car App Library exige le Play Store
+
+Premier essai dans la R5 : Kasbah n'apparaît ni dans la grille d'Android Auto, ni dans « Personnaliser
+le lanceur » du téléphone, alors que « Sources inconnues » est coché. **C'est la règle de Google** : cette
+option couvre les applis média, messagerie et « à l'arrêt », **pas les applis faites avec la Car App
+Library** (guide « Test Android apps for cars », developer.android.com/training/cars/testing). Dans une
+vraie voiture, une telle appli doit venir d'une source de confiance : Play Store, **Internal App
+Sharing** ou piste de test interne. Le **simulateur DHU saute ce contrôle**, d'où tous les essais verts
+de la veille au PC — la phrase « Installée à la main, mode développeur, Sources inconnues » plus haut ne
+vaut donc que pour le simulateur.
+
+Ce qui ne marche pas, essayé ce jour-là :
+- `adb install -i com.android.vending` : Android Auto lit l'installeur **initiateur** (le shell), pas le
+  nom déclaré (`installerPackageName`). Analyse détaillée de la validation (Android Auto 17.7) dans le
+  ticket Fermata #846 sur GitHub ; elle dépend en partie de réglages côté serveur de Google.
+- Retirer le nom et l'icône propres au service, ou la déclaration du thème : sans effet, remis.
+- Un réglage de la voiture : le tri se fait dans l'appli Android Auto du téléphone, la voiture
+  n'affiche que ce qu'elle reçoit. Seul un boîtier qui se fait passer pour un écran de développement
+  (AAWireless, mode développeur) contournerait le contrôle, au gré d'un réglage serveur de Google.
+
+Voie retenue : un compte développeur Google Play (droit d'entrée unique) et le **partage interne
+d'applications**, sans relecture ni fiche publique. Le profil public du compte porte une adresse
+e-mail **visible de tous** : en prendre une dédiée, jamais une adresse personnelle. La version installée
+par `adb` doit être désinstallée avant, Play ne remplaçant pas une appli signée d'une autre clé.
+Publier sur le Play Store public a été écarté pour l'instant : test fermé obligatoire, relecture des
+applis voiture, serveur de démonstration à exposer, identité publique.
+
+### Mise à jour 2026-10-23 — français et anglais
+
+Les textes sont sortis du code : `res/values/strings.xml` (anglais, par défaut) et
+`res/values-fr/strings.xml` (français), 53 chaînes, mêmes clés des deux côtés. Le téléphone choisit ;
+l'écran de la voiture suit la langue du téléphone. La voix de secours (`TextToSpeech`) prend la langue
+du téléphone au lieu du français imposé. Restent tels quels : « Kasbah », les noms des appareils (ceux
+de la maison) et les messages d'erreur rendus par le serveur. Vérifié sur le téléphone dans les deux
+langues (`adb shell cmd locale set-app-locales org.kasbah.auto --locales en-US`, puis retour au système).
+La suite « Textes en français en dur » ci-dessus est donc faite.
