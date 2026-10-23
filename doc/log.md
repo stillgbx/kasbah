@@ -12,6 +12,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 **Déclencheur** : demande de ne plus ouvrir l'appli pour ouvrir le portail ; prototype d'une notification voiture à l'approche, essayé dans le DHU.
 
 **Pages modifiées** :
+- `1_architecture/1_15_appli-android-auto.md` - troisième section datée : version 0.4, message de localisation en arrière-plan exigé par Google Play, déclaration et vidéo de la Play Console.
 - `1_architecture/1_15_appli-android-auto.md` - seconde section datée : noms courts numérotés par type, icône numérotée, liste du téléphone (ordre, ★ deux au plus pour l'alerte), notification qui ouvre la grille ; vérifié dans le DHU.
 - `1_architecture/1_15_appli-android-auto.md` - section datée : position de la maison (`origin`), géorepérage de 400 m, contrôle « en voiture », notification à deux boutons, version debug à part et `MockLocationReceiver`, constats du DHU (bandeau bref, pas de second bandeau, résultat non montré dans la voiture), pièges (code 1000, émulateur), reste à faire.
 

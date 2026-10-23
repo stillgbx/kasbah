@@ -390,3 +390,20 @@ portail et le garage 2) :
 La liste du téléphone a été vue sur le téléphone. Ses deux dernières retouches n'ont pas été revues à
 l'écran : ▼ obtenu en retournant ▲ (le ▼ de la police est dessiné plus petit), et le nom complet masqué
 quand il égale le nom court.
+
+### Mise à jour 2026-10-23 — version 0.4 : le message de localisation exigé par Google Play
+
+Google Play exige, d'une appli qui lit la position en arrière-plan, un **message explicite dans
+l'appli, affiché avant la demande d'Android**. Il doit dire à quoi sert la position, et qu'elle est lue
+même appli fermée ou inutilisée. C'est la condition de la **déclaration « Autorisations de
+localisation »** de la Play Console, qui demande aussi une courte vidéo de la fonction (message, choix
+« Toujours autoriser », alerte, appui sur « Ouvrir »).
+
+`MainActivity.askBackgroundLocation` ouvre donc une boîte « Position en arrière-plan » (`background_*`
+dans `strings.xml`) : l'alerte d'approche, la position qui reste sur le téléphone (ni le serveur Kasbah
+ni personne d'autre ne la reçoit), et le choix à faire à l'écran suivant. « Continuer » lance la demande
+d'Android ; « Pas maintenant » ne demande rien.
+
+La position ne servant qu'au géorepérage, sur le téléphone, elle n'est pas « collectée » au sens de la
+fiche de sécurité des données. Version 0.4, `versionCode` 4 : le bundle signé contient bien
+`ACCESS_BACKGROUND_LOCATION` et pas le récepteur de test de la version debug.

@@ -42,6 +42,10 @@
     <string name="approach_title">Bientôt à la maison</string>
     <string name="approach_channel">Arrivée à la maison</string>
     <string name="approach_sent">%1$s : ouverture demandée</string>
+    <string name="background_title">Position en arrière-plan</string>
+    <string name="background_text">Kasbah Auto utilise votre position en arrière-plan, même quand l\'appli est fermée ou inutilisée, pour savoir quand la voiture approche de la maison et vous proposer d\'ouvrir le portail ou un garage sur l\'écran de la voiture. Votre position reste sur ce téléphone : elle n\'est envoyée ni à votre serveur Kasbah ni à personne d\'autre.\n\nPour l\'activer, choisissez « Toujours autoriser » sur l\'écran suivant.</string>
+    <string name="background_continue">Continuer</string>
+    <string name="background_no">Pas maintenant</string>
 
     <!-- Ouvrants : noms courts, liste du téléphone -->
     <string name="kind_gate">Portail</string>

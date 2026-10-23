@@ -43,6 +43,10 @@
     <string name="approach_title">Almost home</string>
     <string name="approach_channel">Arriving home</string>
     <string name="approach_sent">%1$s: opening requested</string>
+    <string name="background_title">Location in the background</string>
+    <string name="background_text">Kasbah Auto uses your location in the background, even when the app is closed or not in use, to notice when the car comes near your house and offer to open the gate or a garage door on the car\'s screen. Your location stays on this phone: it is not sent to your Kasbah server nor to anyone else.\n\nTo turn it on, choose \"Allow all the time\" on the next screen.</string>
+    <string name="background_continue">Continue</string>
+    <string name="background_no">Not now</string>
 
     <!-- Accesses: short names, the phone's list -->
     <string name="kind_gate">Gate</string>

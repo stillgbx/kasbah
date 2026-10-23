@@ -100,7 +100,7 @@ new internal testing release: the phone updates from Play.
 On the phone, open **Kasbah Auto** (the logo with a car badge, to tell it from the installed web app),
 enter the server address, the user and the password, and allow the microphone, the notifications and the
 location, then the location **all the time** (Android shows it as a settings page): the approach alert
-needs it. Android refuses the alert's geofence when *Google Location Accuracy* is off in the phone's
+needs it. A message says what it is for first, as Google Play requires; the position stays on the phone. Android refuses the alert's geofence when *Google Location Accuracy* is off in the phone's
 location settings. In Android Auto the app
 shows as **Kasbah**, without the badge. The app follows the phone's language: English, or French on a
 phone set to French.

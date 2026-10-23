@@ -2,6 +2,7 @@ package org.kasbah.auto
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.pm.PackageManager
 import android.graphics.Typeface
 import android.net.Uri
@@ -70,12 +71,18 @@ class MainActivity : Activity() {
 
     /**
      * The approach alert needs the location "all the time": asked on its own, after the location while
-     * in use (Android shows it as a settings page). Not asked again once refused.
+     * in use (Android shows it as a settings page), and after saying what it is for, as Google Play
+     * requires of an app that reads the location in the background. Not asked again once refused.
      */
     private fun askBackgroundLocation() {
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
         if (checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED) return
-        requestPermissions(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), 1)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.background_title)
+            .setMessage(R.string.background_text)
+            .setPositiveButton(R.string.background_continue) { _, _ -> requestPermissions(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), 1) }
+            .setNegativeButton(R.string.background_no, null)
+            .show()
     }
 
     /** The house's position read again (it may have moved in the editor), then the geofence around it. */
