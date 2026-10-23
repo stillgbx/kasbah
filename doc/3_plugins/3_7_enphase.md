@@ -1,6 +1,6 @@
 # Plugin Enphase (production solaire, micro-onduleurs, batteries)
 
-> Dernière mise à jour : 2026-10-15
+> Dernière mise à jour : 2026-10-23
 > Sources : `apps/server/src/plugins/enphase/{index,client,token,cloud,mapping,types}.ts`, `apps/server/src/plugins/enphase/__fixtures__/gateway.ts`, tests `token.test.ts`, `mapping.test.ts`, `plugin.test.ts` et `cloud.test.ts`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/server/.env.example`, note technique du fabricant « Accessing IQ Gateway local APIs or local UI with token-based authentication » (2022-12-14), commits 3b4767a et a89ae3b
 
 ## Ce que le plugin lit, et ce qu'il ne peut pas lire
@@ -419,3 +419,11 @@ Sources : `packages/shared/src/devices/{kinds,state,command}.ts` (test `rules.te
 `apps/server/src/plugins/enphase/{index,mapping}.ts` (tests `plugin.test.ts`, `mapping.test.ts`),
 `apps/web/src/components/controls/EvChargerControl.vue`, `apps/web/src/lib/optimistic.ts`,
 `docs/plugins/enphase.md`.
+
+### Mise à jour 2026-10-23 — `/ev/raw` ne rend plus le jeton du compte
+
+Constat d'un audit de sécurité : la sonde `GET /api/plugins/enphase/ev/raw` interrogeait aussi
+`/users/self/token` et en recopiait la réponse, soit le jeton d'accès Enlighten du compte, utilisable depuis
+Internet (piloter la borne, lire le site) par quiconque appelait la route. Ce chemin est retiré de
+`EV_RAW_PATHS` (`apps/server/src/plugins/enphase/cloud.ts`) ; la sonde dit seulement s'il est obtenable
+(`hasAccessToken`). La lecture du jeton pour les commandes (`readAccessToken`) ne change pas.

@@ -333,8 +333,12 @@ describe('raw reading (to write the mapping fixtures)', () => {
     const cloud = fakeCloud(minted)
     const { app } = await started({ gateway: fakeGateway({ accept: minted }), cloud })
     await post(app, { user: 'u', password: 'p' })
-    const raw = await get(app, '/ev/raw').then((r) => r.json() as Record<string, unknown>)
-    expect(raw).toHaveProperty('/users/self/token')
+    const res = await get(app, '/ev/raw')
+    const raw = res.json() as Record<string, unknown>
+    // the account's bearer token never leaves the server: only whether one is obtainable
+    expect(raw).not.toHaveProperty('/users/self/token')
+    expect(raw.hasAccessToken).toBe(true)
+    expect(res.body).not.toContain('access-1')
     expect(cloud.calls.some((c) => c.url.includes('/ev_chargers/status') || c.url.includes('search_sites'))).toBe(true)
   })
 })

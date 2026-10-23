@@ -91,9 +91,12 @@ export function sitesOf(json: unknown): EnlightenSite[] {
 
 const accessTokenSchema = z.object({ token: z.string().min(1) })
 
-/** Paths probed to write the charger fixtures. Read-only. `{site}` = Enlighten id. */
+/**
+ * Paths probed to write the charger fixtures. Read-only. `{site}` = Enlighten id. Never
+ * `/users/self/token`: its answer is the account's bearer token, usable from anywhere; the probe
+ * only says whether one is obtainable (`hasAccessToken`).
+ */
 export const EV_RAW_PATHS = [
-  '/users/self/token',
   '/app-api/search_sites.json?searchText=&favourite=false',
   '/service/evse_controller/{site}/ev_chargers/status',
   '/service/evse_controller/api/v2/{site}/ev_chargers/status',
@@ -225,7 +228,11 @@ export async function probeEvRaw(
   siteId: string | undefined,
   signal?: AbortSignal,
 ): Promise<Record<string, unknown>> {
-  const out: Record<string, unknown> = { siteId: siteId ?? null, hasCookie: !!client.current?.cookie }
+  const out: Record<string, unknown> = {
+    siteId: siteId ?? null,
+    hasCookie: !!client.current?.cookie,
+    hasAccessToken: (await client.readAccessToken(signal)) !== undefined,
+  }
   for (const template of EV_RAW_PATHS) {
     if (template.includes('{site}') && !siteId) {
       out[template] = { error: 'no Enlighten site id yet: pair with the account, then retry' }
