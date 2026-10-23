@@ -5,7 +5,7 @@ import type { Logger } from 'pino'
 import { z } from 'zod'
 import { writeFileAtomic } from '../core/atomic-file'
 import { stateFile } from '../core/paths'
-import { checkLogin, esc, htmlPage, isPublicRequest, lockedMessage, sha256, token, type LoginGuard, type UsersFile } from '../mcp/auth'
+import { checkLogin, esc, htmlPage, isPublicRequest, lockedMessage, pwTag, sha256, token, type LoginGuard, type UsersFile } from '../mcp/auth'
 import { sendError } from './errors'
 
 // The application under the PUBLIC name (`MCP_PUBLIC_URL`, the NAS reverse proxy): a cookie session,
@@ -96,9 +96,6 @@ const cookieOf = (req: FastifyRequest): string | null => {
 }
 const setCookie = (reply: FastifyReply, value: string, maxAgeMs: number) =>
   reply.header('set-cookie', `${COOKIE}=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(maxAgeMs / 1000)}`)
-
-/** Fingerprint of the password hash: the session does not survive a change. */
-const pwTag = (hash: string) => sha256(hash).slice(0, 16)
 
 // The app can be installed from the sign-in page already: manifest and icons are served without a
 // session (the manifest points `start_url` to `/`). Same tags as `apps/web/index.html`.

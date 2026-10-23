@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import Fastify, { type FastifyInstance } from 'fastify'
 import pino from 'pino'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createMcpAuth, hashPassword, mcpAuthConfigSchema, verifyPassword } from './auth'
+import { createMcpAuth, hashPassword, mcpAuthConfigSchema, sha256, verifyPassword } from './auth'
 
 // The authorization server alone, in front of a fake protected route: the refusals that the happy
 // path (server.test.ts, real SDK client) does not go through.
@@ -177,6 +177,31 @@ it('cuts the tokens of an account removed from the file', async () => {
   writeFileSync(usersFile, JSON.stringify({ users: [] }))
   expect((await callMcp(tokens.access_token)).statusCode).toBe(401)
   expect((await refresh(clientId, tokens.refresh_token)).statusCode).toBe(400)
+})
+
+it('cuts the tokens when the password changes, and an account created again under the name does not revive them', async () => {
+  const { clientId, tokens } = await signIn()
+  writeFileSync(usersFile, JSON.stringify({ users: [{ name: 'lou', password: await hashPassword('nouveau-mot-de-passe') }] }))
+  expect((await callMcp(tokens.access_token)).statusCode).toBe(401)
+  expect((await refresh(clientId, tokens.refresh_token)).statusCode).toBe(400)
+  writeFileSync(usersFile, JSON.stringify({ users: [] }))
+  writeFileSync(usersFile, JSON.stringify({ users: [{ name: 'lou', password: await hashPassword('bon-mot-de-passe') }] }))
+  expect((await callMcp(tokens.access_token)).statusCode).toBe(401)
+  expect((await refresh(clientId, tokens.refresh_token)).statusCode).toBe(400)
+})
+
+it('refuses a token written without the password fingerprint (issued before 2026-10-23)', async () => {
+  const dir = usersFile.replace(/mcp-users\.json$/, '')
+  const grant = { clientId: 'c1', user: 'lou', expiresAt: clock + 60_000 }
+  writeFileSync(join(dir, 'mcp-auth.json'), JSON.stringify({ access: { [sha256('old-access')]: grant }, refresh: { [sha256('old-refresh')]: grant } }))
+  const auth = createMcpAuth({
+    config: mcpAuthConfigSchema.parse({ MCP_USERS_FILE: usersFile, MCP_AUTH_FILE: join(dir, 'mcp-auth.json') }),
+    logger: pino({ level: 'silent' }), now: () => clock,
+  })
+  app = Fastify()
+  await app.register(async (sub) => { auth.routes(sub); sub.get('/mcp', { onRequest: auth.requireToken }, async () => ({ ok: true })) })
+  expect((await callMcp('old-access')).statusCode).toBe(401)
+  expect((await refresh('c1', 'old-refresh')).statusCode).toBe(400)
 })
 
 it('opens /mcp to the per-run token, in the name of the account or the house, until it is revoked', async () => {

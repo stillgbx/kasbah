@@ -91,7 +91,8 @@ reste plus stricte (pas d'IP). Tests : `mcp/public-host.test.ts`.
 - **90 jours glissants**, prolongés au plus une fois par jour (le cookie est alors réécrit).
 - **Gardée hachée** (sha256) dans `KASBAH_SESSIONS_FILE` (défaut `.state/sessions.json`, 0600), avec une
   **empreinte du haché du mot de passe** : changer le mot de passe ferme les sessions du compte, de quoi
-  couper un téléphone perdu. Les jetons MCP, eux, ne tombent qu'au retrait du compte.
+  couper un téléphone perdu. Les jetons MCP, eux, ne tombent qu'au retrait du compte. *(Dépassé le 2026-10-23 : ils portent la même
+  empreinte et tombent aussi au changement de mot de passe, voir plus bas.)*
 - **Sans session** : une navigation (`GET` d'une page HTML) part en 302 vers `/login?next=…` ; l'API, le
   WebSocket et les fichiers chargés par la page rendent 401 `AUTH_REQUIRED`, et le web renvoie lui-même à
   la connexion. `next` n'accepte qu'un chemin du site (ni `//`, ni `/\`, ni `/login`). *(Depuis le
@@ -152,3 +153,17 @@ trahit pas quels comptes existent), et il vit en mémoire : un redémarrage le l
 
 Supprimer `sessions.json` déconnecte tout le monde ; supprimer `mcp-auth.json` oblige chaque client MCP à
 se reconnecter.
+
+### Mise à jour 2026-10-23 (nuit) - les jetons MCP tombent avec le mot de passe
+
+Constat d'un audit de sécurité : un jeton OAuth du MCP (accès 1 h, rafraîchissement 90 jours glissants) ne
+vérifiait que l'existence du **nom** du compte. Changer le mot de passe ne coupait donc pas un client MCP
+volé, et un compte retiré puis recréé sous le même nom ranimait ses anciens jetons. Chaque jeton porte
+désormais `pw`, l'empreinte du haché du mot de passe à l'émission (`pwTag`, déplacée de `http/session.ts`
+vers `mcp/auth.ts`, la même que pour les sessions) ; `requireToken` et le rafraîchissement le comparent au
+compte courant (`grantHolds`). Un nouveau haché a un nouveau sel : un compte recréé ne correspond pas.
+
+Un jeton écrit avant ce changement n'a pas d'empreinte : il est **refusé**, et chaque client MCP (connecteur
+Claude, par exemple) se reconnecte une fois. L'accepter l'aurait lié au mot de passe du moment de son
+prochain rafraîchissement, ce qui annulait la protection. Les jetons d'exécution de l'assistant
+(`runToken`), en mémoire seulement, ne sont pas concernés. Tests : `mcp/auth.test.ts`.

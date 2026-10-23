@@ -155,7 +155,10 @@ export async function deleteUser(path: string, name: string): Promise<string[] |
   return users.map((u) => u.name)
 }
 
-const grantSchema = z.object({ clientId: z.string(), user: z.string(), expiresAt: z.number() })
+// `pw`: fingerprint of the password hash when the grant was issued. Changing the password, or
+// removing the account and creating it again, cuts the tokens; a grant without one (written before
+// 2026-10-23) is refused, its client signs in again.
+const grantSchema = z.object({ clientId: z.string(), user: z.string(), pw: z.string().optional(), expiresAt: z.number() })
 const stateSchema = z.object({
   clients: z.record(z.string(), z.object({ name: z.string().optional(), redirectUris: z.array(z.string()), createdAt: z.number() })).default({}),
   access: z.record(z.string(), grantSchema).default({}),
@@ -165,6 +168,8 @@ type AuthState = z.infer<typeof stateSchema>
 type Grant = z.infer<typeof grantSchema>
 
 export const sha256 = (s: string) => createHash('sha256').update(s).digest('base64url')
+/** Fingerprint of a password hash: a session or a token does not survive a change of password. */
+export const pwTag = (hash: string) => sha256(hash).slice(0, 16)
 export const token = () => randomBytes(32).toString('base64url')
 
 // The app logo, INSIDE the page: neither `/icons` nor the rest of the interface is served without a session.
@@ -405,19 +410,23 @@ export function createMcpAuth(deps: McpAuthDeps): McpAuth {
     } catch { return null }
   }
 
-  const codes = new Map<string, { clientId: string; redirectUri: string; challenge: string; user: string; expiresAt: number }>()
+  const codes = new Map<string, { clientId: string; redirectUri: string; challenge: string; user: string; pw: string; expiresAt: number }>()
 
-  async function issue(clientId: string, user: string) {
+  async function issue(clientId: string, user: string, pw: string) {
     const s = await load()
     const access = token(), refresh = token()
-    s.access[sha256(access)] = { clientId, user, expiresAt: now() + ACCESS_TTL_MS }
-    s.refresh[sha256(refresh)] = { clientId, user, expiresAt: now() + REFRESH_TTL_MS }
+    s.access[sha256(access)] = { clientId, user, pw, expiresAt: now() + ACCESS_TTL_MS }
+    s.refresh[sha256(refresh)] = { clientId, user, pw, expiresAt: now() + REFRESH_TTL_MS }
     await save(s)
     return { access_token: access, token_type: 'Bearer', expires_in: ACCESS_TTL_MS / 1000, refresh_token: refresh }
   }
 
   const accountExists = async (user: string) => (await currentUsers()).users.some((u) => u.name === user)
-  const userExists = (g: Grant) => accountExists(g.user)
+  /** The account still exists, with the password the grant was issued under. */
+  const grantHolds = async (g: Grant) => {
+    const account = (await currentUsers()).users.find((u) => u.name === g.user)
+    return !!account && g.pw === pwTag(account.password)
+  }
 
   // Per-run tokens: never written to disk, they do not survive the process that drew them.
   const runs = new Map<string, { user: string | null; expiresAt: number }>()
@@ -481,7 +490,7 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
         return
       }
       const grant = m ? (await load()).access[sha256(m[1]!)] : undefined
-      if (grant && grant.expiresAt > now() && await userExists(grant)) {
+      if (grant && grant.expiresAt > now() && await grantHolds(grant)) {
         // the tools act in the name of this account (its music accounts)
         req.sessionUser = grant.user
         return
@@ -560,7 +569,7 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
         }
         const { user } = result
         const code = token()
-        codes.set(code, { clientId: params.client_id, redirectUri: params.redirect_uri, challenge: params.code_challenge, user: user.name, expiresAt: now() + CODE_TTL_MS })
+        codes.set(code, { clientId: params.client_id, redirectUri: params.redirect_uri, challenge: params.code_challenge, user: user.name, pw: pwTag(user.password), expiresAt: now() + CODE_TTL_MS })
         logger.info({ user: user.name, client: client.name ?? params.client_id }, 'mcp client authorized')
         const to = new URL(params.redirect_uri)
         to.searchParams.set('code', code)
@@ -578,17 +587,17 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
           if (!entry || entry.expiresAt <= now() || entry.clientId !== body.client_id || entry.redirectUri !== body.redirect_uri || entry.challenge !== challenge) {
             return oauthError(reply, 400, 'invalid_grant')
           }
-          return reply.header('cache-control', 'no-store').send(await issue(entry.clientId, entry.user))
+          return reply.header('cache-control', 'no-store').send(await issue(entry.clientId, entry.user, entry.pw))
         }
         if (body.grant_type === 'refresh_token') {
           const s = await load()
           const key = sha256(body.refresh_token ?? '')
           const grant = s.refresh[key]
-          if (!grant || grant.expiresAt <= now() || (body.client_id && grant.clientId !== body.client_id) || !await userExists(grant)) {
+          if (!grant?.pw || grant.expiresAt <= now() || (body.client_id && grant.clientId !== body.client_id) || !await grantHolds(grant)) {
             return oauthError(reply, 400, 'invalid_grant')
           }
           delete s.refresh[key]
-          return reply.header('cache-control', 'no-store').send(await issue(grant.clientId, grant.user))
+          return reply.header('cache-control', 'no-store').send(await issue(grant.clientId, grant.user, grant.pw))
         }
         return oauthError(reply, 400, 'unsupported_grant_type')
       })
