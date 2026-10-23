@@ -276,11 +276,16 @@ const MCP_PATHS = new Set([
   '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp', '/.well-known/oauth-authorization-server',
 ])
 
+// A host name as DNS and the proxy see it: case-insensitive, trailing dot optional. Fastify's
+// `req.hostname` is the raw header, so `KASBAH.example.org` or `kasbah.example.org.` would not match.
+const hostKey = (host: string) => host.toLowerCase().replace(/\.$/, '')
+
 /** Does the request arrive under a public name (`Host`, or a proxy's first `X-Forwarded-Host`)? */
 export function isPublicRequest(req: FastifyRequest, publicHosts: string[]): boolean {
   if (!publicHosts.length) return false
   const forwarded = String(req.headers['x-forwarded-host'] ?? '').split(',')[0]!.trim().replace(/:\d+$/, '')
-  return publicHosts.includes(req.hostname) || publicHosts.includes(forwarded)
+  const hosts = publicHosts.map(hostKey)
+  return hosts.includes(hostKey(req.hostname)) || hosts.includes(hostKey(forwarded))
 }
 
 type Hook = (req: FastifyRequest, reply: FastifyReply) => Promise<void>

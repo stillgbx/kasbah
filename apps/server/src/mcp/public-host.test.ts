@@ -63,6 +63,16 @@ it('also recognizes the public name forwarded by the proxy in X-Forwarded-Host',
   expect((await get('/api/devices', { host: '192.168.1.90:8787', 'x-forwarded-host': `${PUBLIC}:443` })).statusCode).toBe(401)
 })
 
+it('recognizes the public name whatever its letter case or trailing dot, in Host and X-Forwarded-Host', async () => {
+  for (const name of [PUBLIC.toUpperCase(), 'Kasbah.Example.Org', `${PUBLIC}.`, `${PUBLIC.toUpperCase()}.`]) {
+    expect((await get('/api/devices', { host: name })).statusCode, name).toBe(401)
+    expect((await get('/api/devices', { host: `${name}:443` })).statusCode, name).toBe(401)
+    expect((await get('/api/devices', { host: '192.168.1.90:8787', 'x-forwarded-host': `${name}:443` })).statusCode, name).toBe(401)
+    expect((await get('/api/devices', { host: '192.168.1.90:8787', 'x-forwarded-host': `${name}, proxy.example.org` })).statusCode, name).toBe(401)
+    expect((await get('/login', { host: name })).statusCode, name).toBe(200)
+  }
+})
+
 it('changes nothing on the local network', async () => {
   expect((await get('/api/devices', { host: 'kasbah:8787' })).statusCode).toBe(200)
   expect((await get('/api/mcp/users', { host: 'localhost:8787' })).statusCode).toBe(200)

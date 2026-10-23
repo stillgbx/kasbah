@@ -39,6 +39,9 @@ async function build(maxFailures = 3) {
   app.get('/api/devices', async () => ({ devices: [] }))
   app.post('/api/devices/x/command', async () => ({ ok: true }))
   app.get('/api/mcp/users', async () => ({ users: [] }))
+  app.put('/api/mcp/users/:name', async () => ({ ok: true }))
+  app.delete('/api/mcp/users/:name', async () => ({ ok: true }))
+  app.post('/api/system/update', async () => ({ ok: true }))
   app.get('/ws', async () => ({ ws: true }))
   app.get('/api/plugins/nest/cameras/c1/stream', async () => ({ ws: true }))
   app.get('/settings', async () => 'app')
@@ -146,6 +149,19 @@ it('leaves the server update to the local network, even when signed in', async (
   const c = await signIn()
   for (const [method, url] of [['GET', '/api/system/version'], ['POST', '/api/system/update']] as const) {
     const res = await req({ method, url, cookie: c, origin: ORIGIN })
+    expect(res.statusCode, url).toBe(403)
+    expect(res.json().error.code, url).toBe('LAN_ONLY')
+  }
+})
+
+it('keeps account management and the server update local under an encoded path, too', async () => {
+  const c = await signIn()
+  // the router decodes `%75` into `u` before matching, hex in either case (`%6D`, `%6d`)
+  for (const [method, url] of [
+    ['PUT', '/api/mcp/%75sers/lou'], ['DELETE', '/api/%6Dcp/users/lou'], ['DELETE', '/api/%6dcp/users/lou'],
+    ['POST', '/api/%73ystem/update'], ['POST', '/api/syste%6D/update'],
+  ] as const) {
+    const res = await req({ method, url, cookie: c, origin: ORIGIN, payload: {} })
     expect(res.statusCode, url).toBe(403)
     expect(res.json().error.code, url).toBe('LAN_ONLY')
   }

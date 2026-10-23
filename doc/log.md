@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-23] update | Sécurité : nom public sans casse, routes locales décidées sur la route trouvée
+
+**Déclencheur** : audit de sécurité de `apps/server` (Claude Security), correctifs des deux failles les plus graves.
+
+**Pages modifiées** :
+- `1_architecture/1_13_comptes-et-sessions.md` - mise à jour datée : le nom public comparé sans casse ni point final (`isPublicRequest`), `LAN_ONLY` décidé aussi sur `req.routeOptions.url`, le piège de `req.url` dans un hook `onRequest`, et le *DNS rebinding* qui reste ouvert.
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-23] update | Appli Android Auto : le Play Store exigé en voiture, français et anglais
 
 **Déclencheur** : l'appli n'apparaît pas dans la vraie voiture ; puis la demander en français et en anglais.

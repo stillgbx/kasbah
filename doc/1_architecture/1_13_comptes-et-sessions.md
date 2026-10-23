@@ -1,6 +1,6 @@
 # Comptes et sessions
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-23
 > Sources : `apps/server/src/http/session.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/music/sources.ts`, `apps/server/src/plugins/claude/index.ts`, `apps/server/src/assistant/assistant.ts` ; pages citées plus bas
 
 Page de synthèse, écrite au lint du 2026-10-13 : le sujet était dispersé entre le serveur MCP, la
@@ -38,6 +38,30 @@ Access : [1_7 Serveur MCP](1_7_serveur-mcp.md), sections du 2026-10-04 (soir) et
   dans `session.ts`, et le message d'erreur ne nomme plus les comptes.
 - **Droits par compte** (un compte en lecture seule, par exemple) : pas encore faits, tout compte connecté
   peut tout. Voir [0_0 Vision et principes](../0_overview/0_0_vision-et-principes.md).
+
+### Mise à jour 2026-10-23 - le nom public sous toutes ses graphies, les routes locales sous toutes leurs écritures
+
+Deux failles relevées par un audit de sécurité du serveur, corrigées le même jour :
+
+- **Le nom public se compare sans casse ni point final** (`isPublicRequest`, `mcp/auth.ts`). Avant,
+  `Host: KASBAH.example.org` ou `kasbah.example.org.` ne valait pas le nom de `MCP_PUBLIC_URL` (comparaison
+  exacte, et Fastify rend `req.hostname` tel qu'envoyé) : si le proxy transmet le `Host` d'origine, la
+  requête passait pour locale, donc **sans authentification**. Désormais le nom public, `Host` et le premier
+  `X-Forwarded-Host` sont mis en minuscules et privés d'un point final avant la comparaison
+  (`hostKey`). La liste passée au SDK MCP (`hostHeaderValidation`, `mcp/server.ts`) n'est pas touchée.
+  Test : `mcp/public-host.test.ts`.
+- **`LAN_ONLY` se décide aussi sur la route trouvée** (`gate`, `http/session.ts`) : le chemin brut **ou**
+  `req.routeOptions.url`, le motif de route que le routeur a choisi. find-my-way décode `%XX`, coupe à `#`
+  et retire un `http://hôte` en tête avant de chercher la route : `/api/mcp/%75sers/x`,
+  `/api/mcp/users#x` ou `PUT http://hôte/api/mcp/users/x` atteignaient la gestion des comptes depuis
+  l'adresse publique avec n'importe quelle session. Test : `http/session.test.ts`.
+
+Le piège à retenir : **ne jamais décider d'un accès sur `req.url` dans un hook `onRequest`**, le routeur
+ne cherche pas la même chaîne ; se fier à `req.routeOptions.url` (fixé avant les hooks, `undefined` en 404).
+
+Reste ouvert : un `Host` qui n'est pas le nom public passe toujours pour le réseau local. Une page web
+piégée peut donc, par *DNS rebinding*, parler à Kasbah depuis le navigateur d'un poste de la maison ; il
+faudrait une liste des noms locaux admis, qui n'existe pas encore.
 
 ## La session de l'app (`http/session.ts`)
 

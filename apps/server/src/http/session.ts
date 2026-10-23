@@ -41,6 +41,7 @@ type SessionsFile = z.infer<typeof fileSchema>
 const OPEN_PATHS = new Set(['/login', '/logout', '/manifest.webmanifest'])
 const OPEN_PREFIXES = ['/icons/']
 const LAN_ONLY = ['/api/mcp/users', '/api/system']
+const lanOnly = (path: string | undefined) => path !== undefined && LAN_ONLY.some((p) => path === p || path.startsWith(`${p}/`))
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
 declare module 'fastify' {
@@ -171,7 +172,9 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
         }
         return
       }
-      if (LAN_ONLY.some((p) => path === p || path.startsWith(`${p}/`))) {
+      // The route the router matched decides too, not the raw URL alone: it decodes `%75` into `u`,
+      // stops at `#` and drops an absolute `http://host` before matching.
+      if (lanOnly(path) || lanOnly(req.routeOptions.url)) {
         await sendError(reply, 403, 'LAN_ONLY', 'managed from the local network only')
         return
       }
