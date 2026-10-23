@@ -39,6 +39,21 @@
     <string name="state_open">Open</string>
     <string name="state_open_pct">%1$d %% open</string>
 
+    <!-- Car: approach alert -->
+    <string name="approach_title">Almost home</string>
+    <string name="approach_channel">Arriving home</string>
+    <string name="approach_sent">%1$s: opening requested</string>
+
+    <!-- Accesses: short names, the phone's list -->
+    <string name="kind_gate">Gate</string>
+    <string name="kind_garage">Garage</string>
+    <string name="accesses_label">Doors in the car</string>
+    <string name="accesses_hint">★ a button in the approach alert, two at most (none: the first two). ▲ ▼ the order, which numbers them.</string>
+    <string name="accesses_two">Two at most in the alert.</string>
+    <string name="move_up">Move up</string>
+    <string name="move_down">Move down</string>
+    <string name="in_alert">In the approach alert</string>
+
     <!-- Car: probe -->
     <string name="probe_model">Model</string>
     <string name="probe_energy">Energy</string>

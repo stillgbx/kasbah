@@ -67,4 +67,37 @@ class ParsingTest {
         assertEquals("CCS2", plugName(5))
         assertEquals("#42", plugName(42))
     }
+
+    @Test fun `the house's position is its origin`() {
+        assertEquals(Home(45.0, 5.0), parseHome("""{"name": "Démo", "origin": {"lat": 45, "lon": 5, "alt": 0, "heading": 20}}"""))
+    }
+
+    @Test fun `no position for a house without origin`() {
+        assertNull(parseHome("""{"name": "Démo"}"""))
+        assertNull(parseHome("""{"origin": {"heading": 20}}"""))
+    }
+
+    private val kinds = { kind: String -> if (kind == "garage") "Garage" else "Portail" }
+    private val gate = Access("g", "Portail du jardin", "gate", 0, "stopped", true)
+    private val left = Access("l", "Porte de garage gauche", "garage", 0, "stopped", true)
+    private val right = Access("r", "Porte de garage droite", "garage", 0, "stopped", true)
+
+    @Test fun `a kind alone keeps its name, several are numbered in the server's order`() {
+        val list = arrangeAccesses(listOf(gate, left, right), emptyList(), kinds)
+        assertEquals(listOf("Portail", "Garage 1", "Garage 2"), list.map { it.label })
+        assertEquals(listOf(null, 1, 2), list.map { it.number })
+    }
+
+    @Test fun `the phone's order sorts and numbers, the unknown ones after`() {
+        val list = arrangeAccesses(listOf(gate, left, right), listOf("r", "g"), kinds)
+        assertEquals(listOf("r", "g", "l"), list.map { it.id })
+        assertEquals(listOf("Garage 1", "Portail", "Garage 2"), list.map { it.label })
+    }
+
+    @Test fun `the alert takes the two chosen, else the first two`() {
+        val list = listOf(gate, left, right)
+        assertEquals(listOf("g", "r"), alertAccesses(list, setOf("r", "g")).map { it.id })
+        assertEquals(listOf("g", "l"), alertAccesses(list, emptySet()).map { it.id })
+        assertEquals(listOf("g", "l"), alertAccesses(list, setOf("gone")).map { it.id })
+    }
 }

@@ -415,7 +415,7 @@ Chaque plugin valide ses propres variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST
 - [docs/plugins/](docs/plugins/) — une page par plugin : fonctionnalités, connexion, mise en route (liste dans [Plugins](#plugins)).
 - [doc/index.md](doc/index.md) — wiki (architecture, contrat, chaque plugin, UI, setup, pièges).
 - [docs/house-json.md](docs/house-json.md) — format du fichier maison (repère, pièces, relevé métré).
-- [docs/android-auto.md](docs/android-auto.md) — l'appli Android Auto : portail et portes de garage sur l'écran de la voiture, voix, construire et essayer (en anglais).
+- [docs/android-auto.md](docs/android-auto.md) — l'appli Android Auto : portail et portes de garage sur l'écran de la voiture, une alerte pour les ouvrir en arrivant, voix, construire et essayer (en anglais).
 - [doc/5_setup/5_1_configuration-env.md](doc/5_setup/5_1_configuration-env.md) — variables d'environnement.
 
 ## Licence

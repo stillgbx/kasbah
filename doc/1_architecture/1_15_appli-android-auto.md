@@ -1,7 +1,7 @@
 # Appli Android Auto
 
 > Dernière mise à jour : 2026-10-23
-> Sources : `apps/android/app/src/test/kotlin/org/kasbah/auto/*Test.kt`, `apps/android/app/src/main/kotlin/org/kasbah/auto/{KasbahClient,MainActivity,KasbahCarAppService,AccessScreen,VoiceScreen,Voice,ProbeScreen}.kt`, `apps/android/app/src/main/AndroidManifest.xml`, `apps/android/app/build.gradle.kts`, `apps/android/dhu.cmd`, `apps/android/.gitattributes`, `apps/server/src/http/session.ts`, `apps/server/src/plugins/transcription/index.ts`, portail `developer.renaultgroup.com`, session du 2026-10-22 (essais sur un téléphone Android et dans le simulateur DHU), `apps/android/keystore.properties.example`, `apps/android/app/build.gradle.kts` (signature), console Google Play (2026-10-23)
+> Sources : `apps/android/app/src/test/kotlin/org/kasbah/auto/*Test.kt`, `apps/android/app/src/main/kotlin/org/kasbah/auto/{KasbahClient,MainActivity,KasbahCarAppService,AccessScreen,VoiceScreen,Voice,ProbeScreen,Approach}.kt`, `apps/android/app/src/debug/`, `apps/android/app/src/main/AndroidManifest.xml`, `apps/android/app/build.gradle.kts`, `apps/android/dhu.cmd`, `apps/android/.gitattributes`, `apps/server/src/http/session.ts`, `apps/server/src/plugins/transcription/index.ts`, portail `developer.renaultgroup.com`, session du 2026-10-22 (essais sur un téléphone Android et dans le simulateur DHU), `apps/android/keystore.properties.example`, `apps/android/app/build.gradle.kts` (signature), console Google Play (2026-10-23)
 
 Une appli Android, à côté de l'app web, qui met Kasbah sur l'écran de la voiture par **Android
 Auto** : le portail et les portes de garage, un relevé de ce que la voiture transmet, et la voix de
@@ -293,3 +293,100 @@ Pièges rencontrés :
   `error`) et `VoiceScreen.answered` : pas de serveur ni de micro à simuler.
 - Non couvert : l'écran « Voiture » (il lit le matériel de la voiture) ; sa mise en forme l'est en partie
   (`plugName`).
+
+### Mise à jour 2026-10-23 — l'alerte d'approche « Ouvrir le portail » (prototype)
+
+Demande : ne plus avoir à ouvrir l'appli pour ouvrir le portail. La colonne à droite de la carte reste
+réservée à la navigation et au média en cours (voir plus haut). La voie retenue est une **notification
+pour la voiture**, qu'Android Auto affiche en bandeau **par-dessus l'écran partagé**.
+`Approach.kt` :
+
+- **La position de la maison** : `origin` (`lat`, `lon`) du fichier maison, lu par `GET /api/house`
+  (`parseHome`, `KasbahClient.readHome`). Elle est relue à la connexion et à chaque ouverture de l'appli
+  sur le téléphone, et gardée dans ses préférences seulement (oubliée à la déconnexion). Le serveur MCP
+  ne la rend pas : `get_weather` s'en sert sans la renvoyer.
+- **Le réveil** : un géorepérage Play services (`play-services-location`) de **400 m** autour de
+  `origin`, en entrée et en sortie, **sans déclenchement initial** (le téléphone est souvent à la maison
+  quand on le pose). Il est replacé au démarrage du téléphone et après une mise à jour de l'appli
+  (`ApproachReceiver`, `BOOT_COMPLETED`, `MY_PACKAGE_REPLACED`).
+- **Seulement en voiture** : à l'entrée, `CarConnection` doit dire « projeté », sinon rien (à pied, à
+  vélo). Puis `GET /api/devices` : les portails et garages joignables, portail d'abord.
+- **La notification** : `CarAppExtender` en importance haute, postée par `CarNotificationManager`.
+  Titre « Bientôt à la maison », texte = l'état de chaque accès, **deux boutons au plus** (limite
+  d'Android Auto), « Portail : Ouvrir », chacun envoyant `cover.open`. La notification est retirée à la
+  sortie du cercle et expire au bout de 10 min. **Un seul appui ouvre** : exception voulue à « un appui
+  ne bouge rien » de l'écran des accès.
+- **Les permissions** : notifications, localisation, puis localisation « toujours », demandée à part
+  (Android l'ouvre en page de réglages). `androidx.core` est déclaré dans `build.gradle.kts` : la
+  bibliothèque voiture l'apporte déjà, mais sans le rendre visible au code de l'appli
+  (`NotificationChannelCompat` introuvable à la compilation).
+
+**Vérifié dans le DHU le 2026-10-23**, appli reliée au serveur de démonstration par `adb reverse` :
+le bandeau passe par-dessus Maps, avec les deux boutons, et l'appui envoie bien la commande (le portail
+de démonstration passe à `opening`).
+
+Constats du DHU :
+- **Le bandeau ne reste que quelques secondes** ; la notification reste ensuite dans le centre de
+  notifications de la voiture, et ses boutons y marchent.
+- **Un deuxième déclenchement ne refait pas de bandeau** tant que la notification est là
+  (`setOnlyAlertOnce`). La sortie du cercle la retire, donc la prochaine arrivée en refait un.
+- Après l'appui, le texte devient « Portail : ouverture demandée » sur le téléphone, mais la voiture ne
+  l'a pas montré. **À revoir.**
+
+Pour tester sans rouler, la **version debug** a :
+- son propre identifiant, `org.kasbah.auto.debug` (`applicationIdSuffix`), ce qui permet de l'installer
+  à côté de la version du Play Store sans rien désinstaller ;
+- un récepteur `MockLocationReceiver` (`app/src/debug/`). Il déplace la position par un décalage depuis
+  la maison, sans jamais de coordonnées dans la commande, ou bien simule l'entrée avec `--ez arrive true`.
+
+Pièges :
+- **Le géorepérage est refusé** (`ApiException` 1000, `GEOFENCE_NOT_AVAILABLE`) quand la « précision de
+  la localisation Google » est éteinte. C'était le cas sur un émulateur neuf.
+- **Une position simulée seule n'a pas déclenché le géorepérage** sur l'émulateur, même au bout de deux
+  minutes ni avec le GPS de l'émulateur, Maps n'y demandant pas la position. D'où `arrive`. Le
+  déclenchement réel reste **à vérifier en roulant**.
+- **Un émulateur Play Store ne remplace pas le téléphone** pour le DHU : Android Auto n'y est qu'un
+  « stub » à mettre à jour depuis le Play Store, ce qui demande un compte Google.
+- **Dans le DHU, un `tap` arrivé après la fin du bandeau tombe sur Maps** : il a lancé un guidage. La
+  console du DHU accepte `tap`, `screenshot` et `quit`, lus ici depuis un fichier suivi par `tail -f`.
+
+Reste à faire :
+- l'essai en roulant ;
+- la **déclaration de localisation en arrière-plan** dans la Play Console, demandée pour publier une
+  appli qui la réclame (à confirmer pour la piste de test interne) ;
+- un `versionCode` 4 pour la piste de test.
+
+### Mise à jour 2026-10-23 — ouvrants numérotés, ordre et alerte choisis sur le téléphone
+
+Constat de l'utilisateur : la voiture coupe les titres des tuiles, et « Porte de garage gauche » ne se
+distinguait plus de « Porte de garage droite ». L'alerte, elle, ne montrait que les deux premiers
+ouvrants, alors qu'il faut parfois le troisième.
+
+- **Des noms courts, numérotés par type** (`arrangeAccesses`, `KasbahClient.kt`). Un type présent une
+  seule fois prend le nom du type (« Portail ») ; s'il y en a plusieurs, ils sont numérotés : « Garage 1 »,
+  « Garage 2 ». Ce nom court (`Access.label`) sert aux tuiles, aux boutons de l'alerte, au titre de l'écran
+  d'action et au message de confirmation. Le nom complet reste sur le téléphone.
+- **Une icône numérotée** (`accessIcon`, `AccessScreen.kt`) : le pictogramme, réduit à 80 %, avec le
+  numéro dans une pastille en bas à droite. Le chiffre est **évidé** dans la pastille : la teinte de la
+  voiture colore toute l'icône d'une seule couleur, comme les icônes sans numéro. C'est une image
+  (`IconCompat.createWithBitmap`). Les boutons d'une notification n'acceptent qu'une ressource
+  (`CarAppExtender.addAction(int, …)`) : leur numéro est donc dans le texte.
+- **Sur le téléphone, la liste « Ouvrants dans la voiture »** (`MainActivity.showAccesses`,
+  `layout/access_row.xml`). ▲ ▼ règlent l'ordre, qui fixe à la fois les **numéros** et l'ordre de la
+  grille. ★ met un ouvrant dans l'alerte, **deux au plus**. Sans choix, ce sont les deux premiers, montrés
+  avec une étoile grise. Ces réglages sont gardés dans les préférences du téléphone (`order`, `alert`).
+  Le choix vaut **pour le téléphone, pas pour la voiture** : l'alerte part sans session voiture ouverte, et
+  le modèle de la voiture ne se lit que pendant une session.
+- **Le troisième ouvrant est à deux appuis** : toucher le corps de la notification ouvre la grille Kasbah
+  dans la voiture (`CarPendingIntent.getCarApp`, `setContentIntent`).
+
+**Vérifié dans le DHU le 2026-10-23** (serveur de démonstration : un portail, deux garages, ★ sur le
+portail et le garage 2) :
+- le bandeau montre tout son texte, « Portail : Fermé · Garage 1 : Fermé · Garage 2 : Fermé » ;
+- ses boutons sont « Portail : Ouvrir » et « Garage 2 : Ouvrir » ;
+- toucher la notification ouvre la grille « Portail », « Garage 1 », « Garage 2 », avec le chiffre dessiné
+  sur l'icône des garages.
+
+La liste du téléphone a été vue sur le téléphone. Ses deux dernières retouches n'ont pas été revues à
+l'écran : ▼ obtenu en retournant ▲ (le ▼ de la police est dessiné plus petit), et le nom complet masqué
+quand il égale le nom court.

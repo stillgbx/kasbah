@@ -4,6 +4,7 @@ import androidx.car.app.model.GridItem
 import androidx.car.app.model.GridTemplate
 import androidx.car.app.model.MessageTemplate
 import androidx.car.app.testing.TestCarContext
+import androidx.core.graphics.drawable.IconCompat
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,6 +32,14 @@ class CarScreensTest {
         val tiles = grid.singleList!!.items.map { it as GridItem }
         assertEquals(listOf("Portail", "Garage", "Garage 2"), tiles.map { it.title.toString() })
         assertEquals(listOf("Unknown state", "Opening…", "Offline"), tiles.map { it.text.toString() })
+    }
+
+    @Test fun `tiles take the short label, and a numbered access gets its own icon`() {
+        val (g, first, second) = arrangeAccesses(listOf(gate, garage, offline), emptyList()) { if (it == "garage") "Garage" else "Portail" }
+        val grid = AccessScreen(car).apply { accesses = listOf(g, first, second) }.onGetTemplate() as GridTemplate
+        assertEquals(listOf("Portail", "Garage 1", "Garage 2"), grid.singleList!!.items.map { (it as GridItem).title.toString() })
+        assertEquals(IconCompat.TYPE_RESOURCE, accessIcon(car, g).type)
+        assertEquals(IconCompat.TYPE_BITMAP, accessIcon(car, second).type)
     }
 
     @Test fun `home screen strip keeps a single titled action, the microphone being an icon`() {

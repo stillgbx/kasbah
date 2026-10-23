@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One access in the phone's list (MainActivity.showAccesses): its car name and full name, ★ for the alert, ▲ ▼ to move it. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingVertical="6dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/text"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:textColor="@color/muted"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/star"
+        style="@style/Kasbah.RowButton"
+        android:contentDescription="@string/in_alert"
+        android:textSize="18sp" />
+
+    <TextView
+        android:id="@+id/up"
+        style="@style/Kasbah.RowButton"
+        android:contentDescription="@string/move_up"
+        android:text="▲" />
+
+    <!-- ▲ turned over: the font's ▼ is drawn smaller. -->
+    <TextView
+        android:id="@+id/down"
+        style="@style/Kasbah.RowButton"
+        android:contentDescription="@string/move_down"
+        android:rotation="180"
+        android:text="▲" />
+</LinearLayout>

@@ -23,6 +23,12 @@ android {
         versionName = "0.3"
     }
 
+    // The debug build installs next to the Play Store one (signed with another key, it could not replace
+    // it): tests in the simulator without uninstalling the app used in the car.
+    buildTypes {
+        getByName("debug") { applicationIdSuffix = ".debug" }
+    }
+
     if (keystore != null) {
         signingConfigs {
             create("upload") {
@@ -53,6 +59,11 @@ dependencies {
     implementation("androidx.car.app:app:1.7.0")
     // Car data (model, energy, speed, odometer) when the phone is projected by Android Auto.
     implementation("androidx.car.app:app-projected:1.7.0")
+    // The geofence around the house that wakes the app for the approach alert.
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+    // The notification classes the car's notification manager takes; already in the build through the
+    // car library, at this version, but not visible to the app's code without it.
+    implementation("androidx.core:core:1.7.0")
 
     // `./gradlew testDebugUnitTest`, on the computer: no phone, no car.
     testImplementation("junit:junit:4.13.2")

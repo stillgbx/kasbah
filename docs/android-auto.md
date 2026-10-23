@@ -19,7 +19,14 @@ Android Auto parts around the app (map, app bar) are cut out.
 
 - **Gates and garage doors**: one tile per cover whose class is `gate` or `garage`, with its state
   (closed, open, opening…, offline, or unknown for a one-way radio motor). Tapping a tile never moves
-  anything: it opens a screen with **Open**, **Close** and **Stop**.
+  anything: it opens a screen with **Open**, **Close** and **Stop**. Tiles carry short names that fit the
+  car's screen: the kind, numbered when the house has several (*Gate*, *Garage 1*, *Garage 2*), with the
+  number drawn on the icon too.
+- **Approach alert**: when the car comes within 400 m of the house, without opening the app, a
+  notification shows over the map with the doors' states and an **Open** button for two of them (Android
+  Auto's limit). Tapping the notification itself opens the app's tiles for the others. It only shows when
+  the phone is projected by Android Auto, and is removed once the car leaves the circle. The house's
+  position is its `origin`, read from the server and kept on the phone.
 - **Talk**: the microphone button listens to one sentence through the car's microphone, sends it to the
   transcription, then to the assistant ("Ask Kasbah"), and says the answer aloud with the Kasbah voice
   (the account's voice, when *spoken answers* is on in the transcription plugin), or with Android's own
@@ -28,7 +35,10 @@ Android Auto parts around the app (map, app bar) are cut out.
   battery and range, speed, odometer). Raw values, also written to the phone's log
   (`adb logcat -s KasbahProbe`). Android Auto does not report tire pressure.
 - **Phone screen**: the server address and the sign-in, styled like the server's sign-in page. The
-  password is sent once and never stored; only the session cookie is.
+  password is sent once and never stored; only the session cookie is. Once signed in, **Doors in the
+  car** lists the gates and garage doors: ▲ ▼ set their order, which also numbers them, and ★ picks the
+  two with a button in the approach alert (none picked: the first two). These choices belong to the
+  phone, not to the car.
 
 The app needs the server's **public address** (see [Remote access](../README.md#remote-access)) when the
 phone is away from home. On the local network, it works without an account.
@@ -48,7 +58,8 @@ export JAVA_HOME="<Android Studio>/jbr" ANDROID_HOME="<Android SDK>"
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-An app installed this way shows in the **simulator** only.
+An app installed this way shows in the **simulator** only. The debug build is `org.kasbah.auto.debug`: it
+installs next to the one from Google Play, without replacing it.
 
 ### For the car
 
@@ -87,7 +98,10 @@ new internal testing release: the phone updates from Play.
 ### First start
 
 On the phone, open **Kasbah Auto** (the logo with a car badge, to tell it from the installed web app),
-enter the server address, the user and the password, and allow the microphone. In Android Auto the app
+enter the server address, the user and the password, and allow the microphone, the notifications and the
+location, then the location **all the time** (Android shows it as a settings page): the approach alert
+needs it. Android refuses the alert's geofence when *Google Location Accuracy* is off in the phone's
+location settings. In Android Auto the app
 shows as **Kasbah**, without the badge. The app follows the phone's language: English, or French on a
 phone set to French.
 
@@ -115,7 +129,18 @@ a key, then opens a wide car screen; `dhu sensors` opens an 800×480 screen with
 (`fuel`, `range`, `speed`, `odometer` commands in its console). The simulator uses the computer's
 microphone.
 
-**In the simulator, Open and Close move the real gate and garage doors.**
+**In the simulator, Open and Close move the real gate and garage doors.** To try without them, point the
+debug build at the demo server on the computer: `adb reverse tcp:9789 tcp:9789`, then the address
+`http://localhost:9789` (any user name; the local network needs no account).
+
+The approach alert can be tried without driving, with the debug build only:
+
+```bash
+adb shell am broadcast -n org.kasbah.auto.debug/org.kasbah.auto.MockLocationReceiver --ez arrive true
+```
+
+It acts as if the car had just entered the circle. The bar shows the alert for a few seconds only; it
+then stays in the car's notification list.
 
 If the simulator stays on "waiting for phone" or disconnects right after connecting, close it, restart
 the head unit server on the phone, and start the script again. Quit the simulator with `quit` in its

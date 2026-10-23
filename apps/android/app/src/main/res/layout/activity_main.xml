@@ -154,6 +154,34 @@
                     android:textColor="@color/muted"
                     android:textSize="13sp" />
 
+                <!-- The accesses as the car shows them: their order (and so their numbers), the alert's two. -->
+                <LinearLayout
+                    android:id="@+id/accesses_section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        style="@style/Kasbah.Label"
+                        android:text="@string/accesses_label" />
+
+                    <LinearLayout
+                        android:id="@+id/accesses"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/accesses_hint"
+                        android:textColor="@color/muted"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
                 <Button
                     android:id="@+id/switch_account"
                     style="@style/Kasbah.Button.Outline"

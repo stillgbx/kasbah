@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-23] update | Appli Android Auto : alerte d'approche « Ouvrir le portail », ouvrants numérotés
+
+**Déclencheur** : demande de ne plus ouvrir l'appli pour ouvrir le portail ; prototype d'une notification voiture à l'approche, essayé dans le DHU.
+
+**Pages modifiées** :
+- `1_architecture/1_15_appli-android-auto.md` - seconde section datée : noms courts numérotés par type, icône numérotée, liste du téléphone (ordre, ★ deux au plus pour l'alerte), notification qui ouvre la grille ; vérifié dans le DHU.
+- `1_architecture/1_15_appli-android-auto.md` - section datée : position de la maison (`origin`), géorepérage de 400 m, contrôle « en voiture », notification à deux boutons, version debug à part et `MockLocationReceiver`, constats du DHU (bandeau bref, pas de second bandeau, résultat non montré dans la voiture), pièges (code 1000, émulateur), reste à faire.
+
+**Index** : catalogue `1_architecture` (résumé de 1_15), index.md regénéré.
+
 ## [2026-10-23] update | Appli Android Auto : ajouter un testeur
 
 **Déclencheur** : un second testeur ne trouvait pas l'appli sur le Play Store, puis l'a eue un peu plus tard.

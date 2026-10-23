@@ -415,7 +415,7 @@ Each plugin validates its own variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST_*`
 - [docs/plugins/](docs/plugins/) — one page per plugin: features, connection, setup (list in [Plugins](#plugins)).
 - [doc/index.md](doc/index.md) — wiki, in French (architecture, contract, each plugin, UI, setup, pitfalls).
 - [docs/house-json.md](docs/house-json.md) — house file format (reference frame, rooms, survey).
-- [docs/android-auto.md](docs/android-auto.md) — the Android Auto app: gates and garage doors on the car's screen, voice, building and trying it.
+- [docs/android-auto.md](docs/android-auto.md) — the Android Auto app: gates and garage doors on the car's screen, an alert to open them when nearing home, voice, building and trying it.
 - [doc/5_setup/5_1_configuration-env.md](doc/5_setup/5_1_configuration-env.md) — environment variables (in French).
 
 ## License

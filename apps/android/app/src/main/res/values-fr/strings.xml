@@ -38,6 +38,21 @@
     <string name="state_open">Ouvert</string>
     <string name="state_open_pct">Ouvert à %1$d %%</string>
 
+    <!-- Voiture : alerte d'approche -->
+    <string name="approach_title">Bientôt à la maison</string>
+    <string name="approach_channel">Arrivée à la maison</string>
+    <string name="approach_sent">%1$s : ouverture demandée</string>
+
+    <!-- Ouvrants : noms courts, liste du téléphone -->
+    <string name="kind_gate">Portail</string>
+    <string name="kind_garage">Garage</string>
+    <string name="accesses_label">Ouvrants dans la voiture</string>
+    <string name="accesses_hint">★ un bouton dans l\'alerte d\'approche, deux au plus (aucun : les deux premiers). ▲ ▼ l\'ordre, qui les numérote.</string>
+    <string name="accesses_two">Deux au plus dans l\'alerte.</string>
+    <string name="move_up">Monter</string>
+    <string name="move_down">Descendre</string>
+    <string name="in_alert">Dans l\'alerte d\'approche</string>
+
     <!-- Voiture : sondage -->
     <string name="probe_model">Modèle</string>
     <string name="probe_energy">Énergie</string>

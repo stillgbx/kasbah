@@ -1,5 +1,13 @@
 package org.kasbah.auto
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.Typeface
 import android.os.Handler
 import android.os.Looper
 import androidx.annotation.VisibleForTesting
@@ -75,24 +83,52 @@ class AccessScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycl
         if (list == null) return builder.setLoading(true).build()
         val items = ItemList.Builder()
         for (a in list) {
-            // Open past half way, as the web app's cover icon (apps/web/src/lib/deviceIcons.ts); one glyph
-            // per class, which the web app does not have: read at a glance while driving.
-            val open = (a.position ?: 0) > 50
-            val icon = when {
-                a.deviceClass == "garage" -> if (open) R.drawable.ic_garage_open else R.drawable.ic_garage
-                else -> if (open) R.drawable.ic_gate_open else R.drawable.ic_gate
-            }
             items.addItem(
                 GridItem.Builder()
-                    .setTitle(a.name)
+                    .setTitle(a.label)
                     .setText(stateLabel(carContext, a))
-                    .setImage(CarIcon.Builder(IconCompat.createWithResource(carContext, icon)).setTint(tint(a)).build())
+                    .setImage(CarIcon.Builder(accessIcon(carContext, a)).setTint(tint(a)).build())
                     .setOnClickListener { screenManager.push(AccessActionScreen(carContext, a)) }
                     .build(),
             )
         }
         return builder.setSingleList(items.build()).build()
     }
+}
+
+/**
+ * The access's glyph, open past half way as the web app's cover icon (apps/web/src/lib/deviceIcons.ts);
+ * one glyph per class, which the web app does not have: read at a glance while driving. With several
+ * of a kind, its number in a disc at the bottom right, the glyph shrunk to leave it room. The digit is
+ * cut out of the disc: the car's tint colors the whole icon, one color, as with the plain glyphs.
+ */
+@VisibleForTesting
+internal fun accessIcon(context: Context, a: Access): IconCompat {
+    val open = (a.position ?: 0) > 50
+    val glyph = when {
+        a.deviceClass == "garage" -> if (open) R.drawable.ic_garage_open else R.drawable.ic_garage
+        else -> if (open) R.drawable.ic_gate_open else R.drawable.ic_gate
+    }
+    val number = a.number ?: return IconCompat.createWithResource(context, glyph)
+    val size = 192
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    context.getDrawable(glyph)!!.apply { setBounds(0, 0, size * 4 / 5, size * 4 / 5) }.draw(canvas)
+    val r = size * 0.24f
+    val (cx, cy) = size - r to size - r
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    // A gap around the disc, so the glyph's strokes never touch it.
+    paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+    canvas.drawCircle(cx, cy, r + size * 0.05f, paint)
+    paint.xfermode = null
+    paint.color = Color.WHITE
+    canvas.drawCircle(cx, cy, r, paint)
+    paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+    paint.typeface = Typeface.DEFAULT_BOLD
+    paint.textSize = r * 1.45f
+    paint.textAlign = Paint.Align.CENTER
+    canvas.drawText("$number", cx, cy - (paint.descent() + paint.ascent()) / 2, paint)
+    return IconCompat.createWithBitmap(bitmap)
 }
 
 /**
@@ -123,7 +159,7 @@ class AccessActionScreen(carContext: CarContext, private val access: Access) : S
 
     override fun onGetTemplate(): Template =
         MessageTemplate.Builder(stateLabel(carContext, access))
-            .setTitle(access.name)
+            .setTitle(access.label)
             .setHeaderAction(Action.BACK)
             .addAction(button(R.string.open, "cover.open", primary = true))
             .addAction(button(R.string.close, "cover.close"))
@@ -139,7 +175,7 @@ class AccessActionScreen(carContext: CarContext, private val access: Access) : S
     private fun send(title: String, type: String) {
         Background.run({ client.command(access.id, type) }) { result ->
             result.onSuccess {
-                CarToast.makeText(carContext, carContext.getString(R.string.command_sent, access.name, title), CarToast.LENGTH_SHORT).show()
+                CarToast.makeText(carContext, carContext.getString(R.string.command_sent, access.label, title), CarToast.LENGTH_SHORT).show()
                 screenManager.pop()
             }.onFailure {
                 CarToast.makeText(carContext, it.message ?: carContext.getString(R.string.command_failed), CarToast.LENGTH_LONG).show()

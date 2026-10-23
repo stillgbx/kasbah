@@ -20,11 +20,18 @@ data class Access(
     val position: Int?,
     val motion: String?,
     val available: Boolean,
+    /** What fits a car tile and button: its kind, numbered when the house has several ("Garage 2"). */
+    val label: String = name,
+    /** Its number among the accesses of its kind, null when it is the only one. */
+    val number: Int? = null,
 )
 
 class KasbahError(message: String) : Exception(message)
 
 data class Vocabulary(val hints: List<String>, val words: Map<String, String>)
+
+/** Where the house stands: the `origin` of the house file, the point its 3D scene, sun and weather start from. */
+data class Home(val lat: Double, val lon: Double)
 
 /**
  * Talks to the Kasbah server the way the web app does: the session cookie of `POST /login`, and the
@@ -46,11 +53,20 @@ class KasbahClient(private val context: Context) {
         get() = prefs.getString("account", "")!!
         set(value) = prefs.edit().putString("account", value).apply()
 
+    /**
+     * The house's position, kept on this phone only (never sent anywhere): the approach alert works from
+     * it without the network. Null until read once signed in.
+     */
+    var home: Home?
+        get() = prefs.getString("home", null)?.split(',')?.let { (lat, lon) -> Home(lat.toDouble(), lon.toDouble()) }
+        set(value) = prefs.edit().putString("home", value?.let { "${it.lat},${it.lon}" }).apply()
+
     /** Closes the session on the server when it can be reached, and forgets it here in any case. */
     fun logout() {
         runCatching { open("/logout", "POST").apply { responseCode; disconnect() } }
         session = null
         account = ""
+        home = null
     }
 
     /** The password is sent once and never kept: only the session cookie is. */
@@ -71,7 +87,27 @@ class KasbahClient(private val context: Context) {
         }
     }
 
-    fun accesses(): List<Access> = parseAccesses(request("GET", "/api/devices"))
+    /**
+     * The accesses in the order chosen on the phone, which also numbers them: the car's tiles are
+     * too narrow for "Porte de garage gauche" and "Porte de garage droite".
+     */
+    var order: List<String>
+        get() = prefs.getString("order", "")!!.split(',').filter { it.isNotEmpty() }
+        set(value) = prefs.edit().putString("order", value.joinToString(",")).apply()
+
+    /** The accesses with a button in the approach alert, two at most; none chosen = the first two. */
+    var alert: Set<String>
+        get() = prefs.getStringSet("alert", emptySet())!!
+        set(value) = prefs.edit().putStringSet("alert", value).apply()
+
+    fun accesses(): List<Access> = arrange(parseAccesses(request("GET", "/api/devices")))
+
+    /** [arrangeAccesses] with this phone's order and the kinds' names in its language. */
+    fun arrange(list: List<Access>): List<Access> = arrangeAccesses(list, order) {
+        context.getString(if (it == "garage") R.string.kind_garage else R.string.kind_gate)
+    }
+
+    fun readHome(): Home? = parseHome(request("GET", "/api/house"))
 
     fun command(id: String, type: String) {
         request("POST", "/api/devices/$id/command", JSONObject().put("type", type).toString())
@@ -181,6 +217,29 @@ internal fun parseAccesses(body: String): List<Access> {
             available = s?.optBoolean("available", false) ?: false,
         )
     }.sortedBy { KasbahClient.ACCESS_CLASSES.indexOf(it.deviceClass) }
+}
+
+/**
+ * The accesses in `order` (ids; the others after, as the server gives them), each labelled by its kind,
+ * numbered in that order when the house has several of the kind: "Portail", "Garage 1", "Garage 2".
+ */
+internal fun arrangeAccesses(list: List<Access>, order: List<String>, kindName: (String) -> String): List<Access> {
+    val sorted = list.sortedBy { a -> order.indexOf(a.id).takeIf { it >= 0 } ?: Int.MAX_VALUE }
+    val counts = sorted.groupingBy { it.deviceClass }.eachCount()
+    val seen = mutableMapOf<String, Int>()
+    return sorted.map { a ->
+        if (counts[a.deviceClass] == 1) return@map a.copy(label = kindName(a.deviceClass), number = null)
+        val n = (seen[a.deviceClass] ?: 0) + 1
+        seen[a.deviceClass] = n
+        a.copy(label = "${kindName(a.deviceClass)} $n", number = n)
+    }
+}
+
+/** The house's `origin` in a `GET /api/house` body, null when it has none. */
+internal fun parseHome(body: String): Home? {
+    val origin = JSONObject(body).optJSONObject("origin") ?: return null
+    if (!origin.has("lat") || !origin.has("lon")) return null
+    return Home(origin.getDouble("lat"), origin.getDouble("lon"))
 }
 
 /**
