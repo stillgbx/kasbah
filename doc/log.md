@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-23] update | Sécurité : le réseau local reconnu à son nom, les pages des autres sites refusées
+
+**Déclencheur** : audit de sécurité de `apps/server`, constat F14 (DNS rebinding) et les requêtes croisées depuis le réseau local (F15, F16, F22 et les déliaisons de comptes).
+
+**Pages modifiées** :
+- `1_architecture/1_13_comptes-et-sessions.md` - mise à jour datée (soir) : `isLanHost` (IP, `localhost`, nom court, suffixes locaux, `KASBAH_LAN_HOSTS`), 403 `UNKNOWN_HOST`, `Origin` exigé du même hôte pour une écriture ou un WebSocket sur le réseau local, choix écartés.
+- `5_setup/5_1_configuration-env.md` - mise à jour datée : variable `KASBAH_LAN_HOSTS`.
+
+**Index** : catalogues mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-23] update | Sécurité : nom public sans casse, routes locales décidées sur la route trouvée
 
 **Déclencheur** : audit de sécurité de `apps/server` (Claude Security), correctifs des deux failles les plus graves.

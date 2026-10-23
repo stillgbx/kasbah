@@ -1,6 +1,6 @@
 # Configuration (.env)
 
-> Dernière mise à jour : 2026-10-10
+> Dernière mise à jour : 2026-10-23
 > Sources : `apps/server/src/config/env.ts`, `apps/server/.env.example`, `apps/server/src/plugins/{mock,hue,tahoma,nest}/index.ts`, `apps/server/src/plugins/google_cast/{index,known}.ts`, `apps/server/src/plugins/google_cast/enrich/cover.ts`, `apps/server/src/plugins/google_cast/bravia.ts`, `apps/server/src/plugins/enphase/index.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/plugins/comap/index.ts`, `apps/server/src/plugins/sonos/index.ts`, `apps/server/src/plugins/ytmusic/index.ts`, `apps/server/src/core/paths.ts`, `apps/server/test/state-isolation.ts`, `apps/server/.env.example`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{mixcloud,radio}/index.ts`, `apps/server/src/core/automations/schedule.ts` (`TZ`), `apps/server/src/plugins/claude/index.ts`, `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/main.ts`, `.gitignore`, `apps/server/src/config/{catalog,properties}.ts`
 
 ## Où vivent les secrets
@@ -591,3 +591,13 @@ du 2026-10-10 ci-dessus : ce n'est plus un mode du serveur mais le cas normal.
   (`../1_architecture/1_2_serveur-et-plugins.md`, même date).
 
 Sources : `apps/server/.env.example`, `apps/server/src/main.ts`, `apps/server/src/config/{catalog,properties}.ts`.
+
+### Mise à jour 2026-10-23 — `KASBAH_LAN_HOSTS`
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `KASBAH_LAN_HOSTS` | *(vide)* | Noms du réseau local admis **en plus** de ceux acceptés d'office (adresse IP, `localhost`, nom court sans point, suffixes `.internal` `.local` `.lan` `.home.arpa`), séparés par des virgules. Tout autre nom reçoit 403 `UNKNOWN_HOST`. Utile seulement pour un nom local qui ressemble à un nom public (DNS de la maison qui sert un vrai domaine). |
+
+Lue par `mcpAuthConfigSchema` (`apps/server/src/mcp/auth.ts`), comme `MCP_PUBLIC_URL`. Le pourquoi
+(DNS rebinding, contrôle de l'`Origin` sur le réseau local) : `../1_architecture/1_13_comptes-et-sessions.md`,
+section du 2026-10-23 (soir).

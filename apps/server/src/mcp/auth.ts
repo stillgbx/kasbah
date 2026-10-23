@@ -1,5 +1,6 @@
 import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { isIP } from 'node:net'
 import { readFile, rm, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
@@ -30,6 +31,8 @@ export const mcpAuthConfigSchema = z.object({
   KASBAH_LOGIN_MAX_FAILURES: z.coerce.number().int().min(0).default(5),
   /** Duration of an account lockout, in minutes. */
   KASBAH_LOGIN_LOCK_MINUTES: z.coerce.number().positive().default(15),
+  /** Local network names on top of the ones always accepted (`isLanHost`), comma-separated. */
+  KASBAH_LAN_HOSTS: z.string().default('').transform((s) => s.split(',').map((h) => h.trim()).filter(Boolean)),
 })
 export type McpAuthConfig = z.infer<typeof mcpAuthConfigSchema>
 
@@ -288,16 +291,54 @@ export function isPublicRequest(req: FastifyRequest, publicHosts: string[]): boo
   return hosts.includes(hostKey(req.hostname)) || hosts.includes(hostKey(forwarded))
 }
 
+// Suffixes nobody can buy: a page on the Internet cannot be served under them.
+const LAN_SUFFIXES = ['.internal', '.local', '.lan', '.home.arpa', '.localhost']
+
+/**
+ * Is this a name the local network can be reached under? An IP address, `localhost`, a single label
+ * (`kasbah`), a non-public suffix, or one of `extra` (`KASBAH_LAN_HOSTS`). Any other name is one a
+ * DNS-rebinding page can take: its domain re-resolved to the server's IP, the browser keeps sending it.
+ */
+export function isLanHost(hostname: string, extra: string[] = []): boolean {
+  const host = hostKey(hostname)
+  if (!host) return false
+  if (isIP(host) || (host.startsWith('[') && isIP(host.slice(1, -1)))) return true
+  if (host === 'localhost' || !host.includes('.') || LAN_SUFFIXES.some((s) => host.endsWith(s))) return true
+  return extra.some((h) => hostKey(h) === host)
+}
+
+/** Does the `Origin` name the host the request was sent to? An absent `Origin` is not a browser's. */
+function sameOrigin(req: FastifyRequest): boolean {
+  const origin = req.headers.origin
+  if (origin === undefined) return true
+  try {
+    return new URL(origin).host === req.host.toLowerCase()
+  } catch {
+    return false
+  }
+}
+
 type Hook = (req: FastifyRequest, reply: FastifyReply) => Promise<void>
 const notFound: Hook = async (_req, reply) => { await reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'not found' } }) }
+const refuse = (reply: FastifyReply, code: string, message: string) => reply.code(403).send({ error: { code, message } })
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
 /**
  * GLOBAL `onRequest` hook: under a public name, the MCP paths go through, everything else goes to
- * `gate` (404 by default). To be set before any route. The local network is never filtered.
+ * `gate` (404 by default). To be set before any route. On the local network, no account, but the
+ * name must be a local one (`isLanHost`), and a browser's write or WebSocket must come from the page
+ * Kasbah served: another site's page in a browser at home is not the local network.
  */
-export function publicHostFilter(publicHosts: string[], gate: Hook = notFound): Hook {
+export function publicHostFilter(publicHosts: string[], gate: Hook = notFound, lanHosts: string[] = []): Hook {
   return async (req, reply) => {
-    if (!isPublicRequest(req, publicHosts)) return
+    if (!isPublicRequest(req, publicHosts)) {
+      if (!isLanHost(req.hostname, lanHosts)) {
+        await refuse(reply, 'UNKNOWN_HOST', 'unknown host name: add it to KASBAH_LAN_HOSTS')
+      } else if ((!SAFE_METHODS.has(req.method) || req.headers.upgrade !== undefined) && !sameOrigin(req)) {
+        await refuse(reply, 'BAD_ORIGIN', 'cross-site request refused')
+      }
+      return
+    }
     if (MCP_PATHS.has(req.url.split('?')[0]!)) return
     await gate(req, reply)
   }

@@ -29,6 +29,7 @@ beforeAll(async () => {
     envSource: {
       MCP_PUBLIC_URL: ORIGIN, MCP_USERS_FILE: usersFile, MCP_AUTH_FILE: join(dir, 'mcp-auth.json'),
       KASBAH_SESSIONS_FILE: join(dir, 'sessions.json'), KASBAH_LOGIN_MAX_FAILURES: '2',
+      KASBAH_LAN_HOSTS: 'nas.example.net, Kasbah.Example.Net',
     },
     serveStatic: false,
   })
@@ -77,6 +78,40 @@ it('changes nothing on the local network', async () => {
   expect((await get('/api/devices', { host: 'kasbah:8787' })).statusCode).toBe(200)
   expect((await get('/api/mcp/users', { host: 'localhost:8787' })).statusCode).toBe(200)
   expect((await get('/api/session', { host: 'kasbah:8787' })).json()).toEqual({ user: null })
+})
+
+it('refuses on the local network a name a DNS-rebinding page could take', async () => {
+  for (const host of ['attacker.example.com:8787', 'attacker.example.com', 'example.org', 'kasbah.example.org.evil.example']) {
+    const res = await get('/api/devices', { host })
+    expect(res.statusCode, host).toBe(403)
+    expect(res.json().error.code, host).toBe('UNKNOWN_HOST')
+  }
+  const put = await kasbah.app.inject({ method: 'PUT', url: '/api/mcp/users/eve', headers: { host: 'attacker.example.com:8787' }, payload: { password: 'mot-de-passe-long' } })
+  expect(put.statusCode).toBe(403)
+  await expect(kasbah.app.injectWS('/ws', { headers: { host: 'attacker.example.com:8787' } })).rejects.toThrow('403')
+  for (const host of [
+    '192.168.1.90:8787', '192.168.1.90', '[::1]:8787', 'localhost:5173', 'kasbah:8787', 'kasbah.home.internal:8787',
+    'KASBAH.HOME.INTERNAL', 'kasbah.local', 'kasbah.lan', 'kasbah.home.arpa', 'app.localhost', 'nas.example.net', 'kasbah.example.net:8787',
+  ]) {
+    expect((await get('/api/devices', { host })).statusCode, host).toBe(200)
+  }
+})
+
+it('refuses on the local network a write or a WebSocket from another site, not a read or a client without Origin', async () => {
+  const host = 'kasbah.home.internal:8787'
+  const command = (headers: Record<string, string>) => kasbah.app.inject({ method: 'POST', url: '/api/devices/unknown/command', headers: { host, ...headers }, payload: {} })
+  for (const origin of ['http://attacker.example.com', 'http://192.168.1.90:8787', 'http://kasbah.home.internal:5173', 'null']) {
+    const res = await command({ origin })
+    expect(res.statusCode, origin).toBe(403)
+    expect(res.json().error.code, origin).toBe('BAD_ORIGIN')
+  }
+  expect((await command({ origin: `http://${host}` })).statusCode).not.toBe(403)
+  expect((await command({ origin: 'HTTP://KASBAH.home.internal:8787' })).statusCode).not.toBe(403)
+  expect((await command({})).statusCode).not.toBe(403)
+  expect((await get('/api/devices', { host, origin: 'http://attacker.example.com' })).statusCode).toBe(200)
+  await expect(kasbah.app.injectWS('/ws', { headers: { host, origin: 'http://attacker.example.com' } })).rejects.toThrow('403')
+  const socket = await kasbah.app.injectWS('/ws', { headers: { host, origin: `http://${host}` } })
+  socket.terminate()
 })
 
 const login = (username: string, password: string) => kasbah.app.inject({

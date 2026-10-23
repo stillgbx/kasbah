@@ -117,12 +117,12 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 ## 5 — Setup
 
 <!-- section:5_setup:begin (généré par scripts/wiki-index.mjs depuis 5_setup/README.md - ne pas éditer ici) -->
-Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5_setup/README.md) (3 pages, dernière mise à jour 2026-10-20).
+Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5_setup/README.md) (3 pages, dernière mise à jour 2026-10-23).
 
 | Pages | Dernière mise à jour |
 |---|---|
 | [5_0 Installation et scripts](5_setup/5_0_installation-et-scripts.md) | 2026-10-20 |
-| [5_1 Configuration (.env)](5_setup/5_1_configuration-env.md) | 2026-10-10 |
+| [5_1 Configuration (.env)](5_setup/5_1_configuration-env.md) | 2026-10-23 |
 | [5_2 Production](5_setup/5_2_production.md) | 2026-10-13 |
 <!-- section:5_setup:end -->
 

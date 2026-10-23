@@ -159,6 +159,7 @@ From a phone away from home, without a VPN: an **HTTPS reverse proxy** (the Syno
 
 - **Under the public address**: a sign-in page, then the whole app (interface, API, cameras, WebSocket). The MCP server answers there too, with its own tokens (see [MCP server](#mcp-server)).
 - **On the local network** (`http://<ip>:8787`, `kasbah.home.internal`): nothing changes, no account required. The **name** decides, not the place: the public address requires signing in even from home (through the proxy, every request comes from the NAS).
+- **Local names**: an IP address, `localhost`, a short name (`kasbah`) or a name ending in `.internal`, `.local`, `.lan` or `.home.arpa`; add any other in `KASBAH_LAN_HOSTS`. Any other name is refused (protection against DNS rebinding), and so is a write or a WebSocket that a page from another site sends from a browser at home.
 - **Accounts**: the same as the AI assistants' accounts, in **Settings → Accounts**, managed from the local network only (even when signed in, the public address doesn't show them).
 - **Session**: a 90-day cookie, extended on every use; you sign in once per device. Changing an account's password closes all its sessions (lost phone); so does removing it. “Sign out” is in Settings → Accounts.
 - **Lockout**: after 5 failed sign-ins in a row, the account is locked for 15 minutes, even with the right password (app and AI assistants; `KASBAH_LOGIN_MAX_FAILURES`, `KASBAH_LOGIN_LOCK_MINUTES`). Open sessions are not affected.

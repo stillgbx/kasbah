@@ -86,7 +86,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     users: mcpAuth.users,
     logger: opts.logger.child({ component: 'session' }),
   })
-  app.addHook('onRequest', publicHostFilter(mcpAuth.publicHosts, session.gate))
+  app.addHook('onRequest', publicHostFilter(mcpAuth.publicHosts, session.gate, mcpConfig.KASBAH_LAN_HOSTS))
   app.addHook('onRequest', actAsHook)
   const house = opts.house ?? (await loadHouse(opts.env.KASBAH_HOUSE_FILE))
   if (opts.readOnly) house.readOnly = true

@@ -61,7 +61,29 @@ ne cherche pas la même chaîne ; se fier à `req.routeOptions.url` (fixé avant
 
 Reste ouvert : un `Host` qui n'est pas le nom public passe toujours pour le réseau local. Une page web
 piégée peut donc, par *DNS rebinding*, parler à Kasbah depuis le navigateur d'un poste de la maison ; il
-faudrait une liste des noms locaux admis, qui n'existe pas encore.
+faudrait une liste des noms locaux admis, qui n'existe pas encore. *(Fait le même jour, section suivante.)*
+
+### Mise à jour 2026-10-23 (soir) - le réseau local reconnu à son nom, et les pages des autres sites refusées
+
+Le réseau local reste sans compte, mais `publicHostFilter` (`mcp/auth.ts`) le filtre désormais :
+
+- **Le nom doit être un nom local** (`isLanHost`) : une adresse IP (v4, ou v6 entre crochets),
+  `localhost`, un nom court sans point (`kasbah`), un suffixe qui ne s'achète pas (`.internal`, `.local`,
+  `.lan`, `.home.arpa`, `.localhost`), ou un nom de `KASBAH_LAN_HOSTS` (liste à virgules, pour un nom
+  local qui ressemble à un nom public). Sinon 403 `UNKNOWN_HOST`. C'est la parade au *DNS rebinding* :
+  la page piégée garde son nom de domaine, que le navigateur continue d'envoyer dans `Host` ; elle ne peut
+  pas se faire servir sous une IP ni sous un suffixe local. Un `Host` vide (HTTP/1.0) est refusé aussi.
+- **Une écriture ou un WebSocket d'un navigateur doit venir de la page servie** : si l'en-tête `Origin`
+  est présent, son hôte (port compris) doit être celui de `Host`, sinon 403 `BAD_ORIGIN`. Cela ferme ce
+  que la liste de noms ne couvre pas : une page d'un autre site qui vise directement l'IP de Kasbah
+  (requête croisée sur une route sans corps, WebSocket `/ws` ou flux de caméra). Sans `Origin` (appli
+  Android, enceintes, scripts, outils MCP par `app.inject`), rien ne change, et les lectures non plus.
+  Avec Vite en développement, le proxy garde le `Host` du navigateur : `Origin` et `Host` concordent.
+
+Choix écartés : refuser tout nom non listé (il aurait fallu déclarer `kasbah.home.internal`), ou envoyer
+un nom inconnu vers la page de connexion (le cookie `__Host-` exige HTTPS et l'origine publique : on
+serait bloqué sans comprendre). La liste `ALLOWED_HOSTS` de `/mcp` (`mcp/server.ts`) n'a pas changé, elle
+reste plus stricte (pas d'IP). Tests : `mcp/public-host.test.ts`.
 
 ## La session de l'app (`http/session.ts`)
 
