@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-23] update | Appli Android Auto : ajouter un testeur
+
+**Déclencheur** : un second testeur ne trouvait pas l'appli sur le Play Store, puis l'a eue un peu plus tard.
+
+**Pages modifiées** :
+- `1_architecture/1_15_appli-android-auto.md` - mémo du Play Store, étape 7 : un autre testeur (pas de mode développeur, liste cochée, délai avant que l'appli apparaisse).
+
+**Index** : index.md inchangé (page déjà datée du jour).
+
 ## [2026-10-23] update | Sécurité : les jetons MCP tombent avec le mot de passe
 
 **Déclencheur** : audit de sécurité de `apps/server`, constats F8/F9 (jetons MCP qui survivaient au mot de passe).

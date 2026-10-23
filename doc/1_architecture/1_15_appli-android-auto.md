@@ -252,6 +252,12 @@ la faisant, dans l'ordre :
    du téléphone, accepter, **désinstaller la version posée par `adb`** (signée d'une autre clé, Play ne la remplace
    pas), installer depuis le Play Store. La première version met quelques minutes à y apparaître.
 6. **Mises à jour** : augmenter `versionCode`, reconstruire le bundle, nouvelle version de test interne.
+7. **Un autre testeur** (2026-10-23) : aucun mode développeur, ni sur le téléphone ni dans Android Auto,
+   puisque l'appli vient du Play Store ; son adresse dans une liste **cochée** de la piste, le lien
+   d'activation, puis l'appli Play Store. Juste après l'inscription, l'appli peut rester « Not Found » sur
+   le web et « pas disponible » sur le téléphone : elle est apparue un peu plus tard, après l'installation
+   des mises à jour en attente du Play Store (délai de Google ou mises à jour, on ne sait pas lequel).
+   Sur ordinateur, la page web d'une appli sans fiche publique peut aussi répondre « Not Found ».
 
 **Vérifié dans la vraie voiture le 2026-10-23** : installée depuis la piste de test interne, l'appli apparaît dans la grille d'Android Auto (« Kasbah », logo sans pastille), l'écran des accès affiche les vrais états, et « Parler » transcrit la question posée au micro de la voiture. L'écran de la voiture n'affiche que le **début** d'un message : la réponse, placée après la question et une ligne vide, tombait dans la partie coupée (elle était bien dite). Depuis la version 0.2 (`versionCode` 2), l'écran montre la question pendant la réflexion, puis **la réponse seule** ; une réponse très longue reste coupée en fin de texte, mais elle est lue.
 
