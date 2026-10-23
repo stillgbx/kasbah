@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-23] update | Appli Android Auto : tests, écran Voiture lisible et position
+
+**Déclencheur** : mettre en place des tests pour l'appli Android ; rendre l'écran « Voiture » lisible et y ajouter la position GPS de la voiture.
+
+**Pages modifiées** :
+- `1_architecture/1_15_appli-android-auto.md` - mise à jour datée : les quatre classes de test, la contre-épreuve sur le plantage de la barre, les pièges (Java 25 et Robolectric, propriété Android en haut de fichier).
+
+**Index** : index.md inchangé (page déjà datée du jour).
+
 ## [2026-10-23] update | Sécurité : le retour après connexion lu comme le navigateur
 
 **Déclencheur** : audit de sécurité de `apps/server`, constat F4 (redirection ouverte par `next=/<TAB>/evil.example`).

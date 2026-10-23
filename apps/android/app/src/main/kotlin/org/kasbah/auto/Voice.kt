@@ -23,10 +23,14 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
-private val SPEECH = AudioAttributes.Builder()
-    .setUsage(AudioAttributes.USAGE_ASSISTANT)
-    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-    .build()
+// Built on first use: the file also holds pure functions the JVM tests load, where Android's audio
+// classes do not exist.
+private val SPEECH by lazy {
+    AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_ASSISTANT)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+        .build()
+}
 
 /**
  * The end of the sentence, guessed from the sound level: same rule and numbers as the web app's
@@ -39,9 +43,11 @@ class Endpointer {
     private var loudSince: Long? = null
     private var quietSince: Long? = null
     private var spoke = false
+    private var done = false
 
     /** `level`: RMS between 0 and 1; `at`: ms since the start. "end", "nothing", or null to go on. */
     fun push(level: Double, at: Long): String? {
+        if (done) return null
         val dt = max(0L, at - last) / 1000.0
         last = at
         val threshold = max((floor ?: 0.0) * FACTOR, MIN_LEVEL)
@@ -60,12 +66,12 @@ class Endpointer {
             if (quietSince == null) quietSince = at
         }
         val quiet = quietSince
-        if (spoke && quiet != null && at - quiet >= SILENCE_MS) return "end"
-        if (!spoke && at >= NO_SPEECH_MS) return "nothing"
+        if (spoke && quiet != null && at - quiet >= SILENCE_MS) return "end".also { done = true }
+        if (!spoke && at >= NO_SPEECH_MS) return "nothing".also { done = true }
         return null
     }
 
-    private companion object {
+    companion object {
         const val SILENCE_MS = 1000L
         const val NO_SPEECH_MS = 5000L
         const val SPEECH_MS = 250L
@@ -115,7 +121,7 @@ fun recordSentence(carContext: CarContext, cancelled: () -> Boolean): ByteArray?
 /** Same cap as the web app's microphone. */
 private const val MAX_RECORD_MS = 15_000L
 
-private fun rms(frame: ByteArray, length: Int): Double {
+internal fun rms(frame: ByteArray, length: Int): Double {
     val samples = ByteBuffer.wrap(frame, 0, length).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
     var sum = 0.0
     val count = samples.remaining()
@@ -127,7 +133,7 @@ private fun rms(frame: ByteArray, length: Int): Double {
 }
 
 /** A WAV header in front of 16 kHz mono 16-bit PCM: the format the transcription route reads. */
-private fun wav(pcm: ByteArray): ByteArray {
+internal fun wav(pcm: ByteArray): ByteArray {
     val rate = CarAudioRecord.AUDIO_CONTENT_SAMPLING_RATE
     val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN).apply {
         put("RIFF".toByteArray()); putInt(36 + pcm.size); put("WAVE".toByteArray())

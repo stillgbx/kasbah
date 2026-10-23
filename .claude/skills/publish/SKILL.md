@@ -44,6 +44,7 @@ Rien à livrer : on le dit et on s'arrête.
 |---|---|
 | uniquement `doc/`, `docs/`, `README.md`, `*.md` | rien |
 | du code (`apps/`, `packages/`, `scripts/`, configs) | `npm test`, `npm run typecheck`, `npm run lint` |
+| `apps/android/` (l'appli Android Auto, hors de npm) | en plus, dans `apps/android` : `./gradlew testDebugUnitTest :app:lintDebug assembleDebug` avec `JAVA_HOME` = le `jbr` d'Android Studio et `ANDROID_HOME` = le SDK (environ 1 min) ; un fichier de résultat par classe sous `app/build/test-results/testDebugUnitTest/`. Sans JDK ni SDK sur la machine : « non joué », jamais vert |
 
 Avant un commit, la suite est complète (environ 2 min pour les trois). Les trois commandes se
 lancent dans le même message, en parallèle.

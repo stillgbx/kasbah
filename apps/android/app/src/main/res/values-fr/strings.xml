@@ -44,8 +44,10 @@
     <string name="probe_battery">Batterie</string>
     <string name="probe_speed">Vitesse</string>
     <string name="probe_odometer">Compteur</string>
-    <string name="probe_energy_value">types %1$s, prises %2$s</string>
-    <string name="probe_battery_value">%1$s %%, autonomie %2$s m</string>
+    <string name="probe_position">Position</string>
+    <string name="fuel_electric">électrique</string>
+    <string name="probe_energy_value">%1$s, prises : %2$s</string>
+    <string name="probe_battery_value">%1$s, autonomie %2$s</string>
     <string name="probe_refused">refusé (%1$s)</string>
     <string name="value_unimplemented">non fourni</string>
     <string name="value_unavailable">indisponible</string>

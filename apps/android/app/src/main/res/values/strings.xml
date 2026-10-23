@@ -45,8 +45,10 @@
     <string name="probe_battery">Battery</string>
     <string name="probe_speed">Speed</string>
     <string name="probe_odometer">Odometer</string>
-    <string name="probe_energy_value">types %1$s, connectors %2$s</string>
-    <string name="probe_battery_value">%1$s %%, range %2$s m</string>
+    <string name="probe_position">Position</string>
+    <string name="fuel_electric">electric</string>
+    <string name="probe_energy_value">%1$s, plugs: %2$s</string>
+    <string name="probe_battery_value">%1$s, range %2$s</string>
     <string name="probe_refused">refused (%1$s)</string>
     <string name="value_unimplemented">not provided</string>
     <string name="value_unavailable">unavailable</string>

@@ -2,6 +2,7 @@ package org.kasbah.auto
 
 import android.os.Handler
 import android.os.Looper
+import androidx.annotation.VisibleForTesting
 import androidx.car.app.CarContext
 import androidx.car.app.CarToast
 import androidx.car.app.Screen
@@ -23,8 +24,8 @@ import androidx.lifecycle.LifecycleOwner
 class AccessScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycleObserver {
     private val client = KasbahClient(carContext)
     private val handler = Handler(Looper.getMainLooper())
-    private var accesses: List<Access>? = null
-    private var error: String? = null
+    @VisibleForTesting internal var accesses: List<Access>? = null
+    @VisibleForTesting internal var error: String? = null
 
     init {
         lifecycle.addObserver(this)

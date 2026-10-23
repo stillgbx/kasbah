@@ -60,10 +60,7 @@ class KasbahClient(private val context: Context) {
         c.doOutput = true
         c.outputStream.use { it.write("username=${enc(user)}&password=${enc(password)}".toByteArray()) }
         val code = c.responseCode
-        val cookie = c.headerFields.entries
-            .filter { it.key.equals("Set-Cookie", ignoreCase = true) }
-            .flatMap { it.value }
-            .firstNotNullOfOrNull { Regex("$COOKIE=([^;]+)").find(it)?.groupValues?.get(1) }
+        val cookie = sessionCookie(c.headerFields)
         c.disconnect()
         when {
             code == 401 -> throw KasbahError(context.getString(R.string.err_credentials))
@@ -74,23 +71,7 @@ class KasbahClient(private val context: Context) {
         }
     }
 
-    fun accesses(): List<Access> {
-        val devices = JSONObject(request("GET", "/api/devices")).getJSONArray("devices")
-        return (0 until devices.length()).map { devices.getJSONObject(it) }.mapNotNull { entry ->
-            val d = entry.getJSONObject("descriptor")
-            val deviceClass = d.optJSONObject("meta")?.optJSONObject("cover")?.optString("deviceClass")
-            if (d.getString("kind") != "cover" || deviceClass !in ACCESS_CLASSES) return@mapNotNull null
-            val s = entry.optJSONObject("state")
-            Access(
-                id = d.getString("id"),
-                name = d.getString("name"),
-                deviceClass = deviceClass!!,
-                position = s?.optDouble("position")?.takeUnless { it.isNaN() }?.toInt(),
-                motion = s?.optString("motion")?.takeIf { it.isNotEmpty() },
-                available = s?.optBoolean("available", false) ?: false,
-            )
-        }.sortedBy { ACCESS_CLASSES.indexOf(it.deviceClass) }
-    }
+    fun accesses(): List<Access> = parseAccesses(request("GET", "/api/devices"))
 
     fun command(id: String, type: String) {
         request("POST", "/api/devices/$id/command", JSONObject().put("type", type).toString())
@@ -120,17 +101,8 @@ class KasbahClient(private val context: Context) {
     }
 
     /** The assistant's answer: its `text` lines, once the run is over (the stream is read whole). */
-    fun ask(text: String): String {
-        val lines = request("POST", "/api/assistant/ask", JSONObject().put("text", text).toString(), 75_000).lines()
-        val answer = mutableListOf<String>()
-        for (line in lines.filter { it.isNotBlank() }.map(::JSONObject)) {
-            when (line.optString("type")) {
-                "text" -> answer += line.getString("text")
-                "error" -> throw KasbahError(line.optString("message", context.getString(R.string.failed)))
-            }
-        }
-        return answer.joinToString("\n")
-    }
+    fun ask(text: String): String =
+        parseAnswer(request("POST", "/api/assistant/ask", JSONObject().put("text", text).toString(), 75_000), context.getString(R.string.failed))
 
     /** The answer said aloud with the account's Kasbah voice: a WAV file. */
     fun speak(text: String, words: Map<String, String>): ByteArray {
@@ -184,6 +156,46 @@ class KasbahClient(private val context: Context) {
         const val COOKIE = "__Host-kasbah_session"
         val ACCESS_CLASSES = listOf("gate", "garage")
     }
+}
+
+/** The session cookie among a response's headers (`Set-Cookie`, whatever its case), null if none. */
+internal fun sessionCookie(headers: Map<String?, List<String>>): String? = headers.entries
+    .filter { it.key.equals("Set-Cookie", ignoreCase = true) }
+    .flatMap { it.value }
+    .firstNotNullOfOrNull { Regex("${KasbahClient.COOKIE}=([^;]+)").find(it)?.groupValues?.get(1) }
+
+/** The gates and garage doors of a `GET /api/devices` body, gates first. */
+internal fun parseAccesses(body: String): List<Access> {
+    val devices = JSONObject(body).getJSONArray("devices")
+    return (0 until devices.length()).map { devices.getJSONObject(it) }.mapNotNull { entry ->
+        val d = entry.getJSONObject("descriptor")
+        val deviceClass = d.optJSONObject("meta")?.optJSONObject("cover")?.optString("deviceClass")
+        if (d.getString("kind") != "cover" || deviceClass !in KasbahClient.ACCESS_CLASSES) return@mapNotNull null
+        val s = entry.optJSONObject("state")
+        Access(
+            id = d.getString("id"),
+            name = d.getString("name"),
+            deviceClass = deviceClass!!,
+            position = s?.optDouble("position")?.takeUnless { it.isNaN() }?.toInt(),
+            motion = s?.optString("motion")?.takeIf { it.isNotEmpty() },
+            available = s?.optBoolean("available", false) ?: false,
+        )
+    }.sortedBy { KasbahClient.ACCESS_CLASSES.indexOf(it.deviceClass) }
+}
+
+/**
+ * The assistant's answer from the whole NDJSON stream of `POST /api/assistant/ask`: its `text` lines.
+ * An `error` line becomes the error, with `fallback` when it carries no message.
+ */
+internal fun parseAnswer(body: String, fallback: String): String {
+    val answer = mutableListOf<String>()
+    for (line in body.lines().filter { it.isNotBlank() }.map(::JSONObject)) {
+        when (line.optString("type")) {
+            "text" -> answer += line.getString("text")
+            "error" -> throw KasbahError(line.optString("message").ifEmpty { fallback })
+        }
+    }
+    return answer.joinToString("\n")
 }
 
 /** Network off the main thread, result back on it (screens and views are only touched there). */

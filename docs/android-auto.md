@@ -91,6 +91,22 @@ enter the server address, the user and the password, and allow the microphone. I
 shows as **Kasbah**, without the badge. The app follows the phone's language: English, or French on a
 phone set to French.
 
+## Tests
+
+```bash
+cd apps/android
+./gradlew testDebugUnitTest
+```
+
+They run on the computer, without phone or car (about a minute), and are not part of `npm test`, since
+not every machine has Java and the Android SDK:
+
+- **logic**: the end of a sentence (the web app's own cases), the WAV sent to the transcription, what is
+  read from the server (session cookie, gates and garage doors, the assistant's answer), plug names;
+- **car screens**: built on a simulated Android ([Robolectric](https://robolectric.org/)) with Google's
+  car testing library, which checks each screen against Android Auto's rules while building it. A
+  screen the car would refuse fails here instead of showing "not responding" in the car.
+
 ## Trying it on a computer
 
 `apps/android/dhu.cmd` (Windows) starts Google's Desktop Head Unit simulator against the phone plugged in

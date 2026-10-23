@@ -3,6 +3,7 @@ package org.kasbah.auto
 import android.Manifest
 import android.content.pm.PackageManager
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
@@ -65,8 +66,7 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
         show(carContext.getString(R.string.voice_thinking, h.text), busy = true)
         Background.run({ client.ask(h.text) }) { result ->
             result.onSuccess { answer ->
-                // The car screen only shows the start of a message: the answer alone, the question has been seen.
-                show(answer.ifEmpty { carContext.getString(R.string.voice_done) })
+                answered(answer)
                 if (answer.isNotEmpty()) say(answer, h.vocabulary.words)
             }.onFailure { fail(it) }
         }
@@ -82,6 +82,9 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
             }
         }
     }
+
+    /** The car screen only shows the start of a message: the answer alone, the question has been seen. */
+    @VisibleForTesting internal fun answered(answer: String) = show(answer.ifEmpty { carContext.getString(R.string.voice_done) })
 
     private fun fail(e: Throwable) {
         Log.w(TAG, "voice failed", e)

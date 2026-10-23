@@ -19,8 +19,8 @@ android {
         applicationId = "org.kasbah.auto"
         minSdk = 29
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2"
+        versionCode = 3
+        versionName = "0.3"
     }
 
     if (keystore != null) {
@@ -38,8 +38,27 @@ android {
     }
 }
 
+android {
+    testOptions {
+        unitTests {
+            // Robolectric (car screen tests) reads the app's resources: strings, drawables.
+            isIncludeAndroidResources = true
+            // Robolectric reaches into a JDK internal the Java 25 of Android Studio keeps closed.
+            all { it.jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED") }
+        }
+    }
+}
+
 dependencies {
     implementation("androidx.car.app:app:1.7.0")
     // Car data (model, energy, speed, odometer) when the phone is projected by Android Auto.
     implementation("androidx.car.app:app-projected:1.7.0")
+
+    // `./gradlew testDebugUnitTest`, on the computer: no phone, no car.
+    testImplementation("junit:junit:4.13.2")
+    // Android's org.json is only a stub on the JVM: the real one for the parsing tests.
+    testImplementation("org.json:json:20260814")
+    // Car screens built as Android Auto builds them (TestCarContext), on a simulated Android.
+    testImplementation("androidx.car.app:app-testing:1.7.0")
+    testImplementation("org.robolectric:robolectric:4.17")
 }

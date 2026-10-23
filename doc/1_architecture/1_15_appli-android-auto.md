@@ -1,7 +1,7 @@
 # Appli Android Auto
 
 > Dernière mise à jour : 2026-10-23
-> Sources : `apps/android/app/src/main/kotlin/org/kasbah/auto/{KasbahClient,MainActivity,KasbahCarAppService,AccessScreen,VoiceScreen,Voice,ProbeScreen}.kt`, `apps/android/app/src/main/AndroidManifest.xml`, `apps/android/app/build.gradle.kts`, `apps/android/dhu.cmd`, `apps/android/.gitattributes`, `apps/server/src/http/session.ts`, `apps/server/src/plugins/transcription/index.ts`, portail `developer.renaultgroup.com`, session du 2026-10-22 (essais sur un téléphone Android et dans le simulateur DHU), `apps/android/keystore.properties.example`, `apps/android/app/build.gradle.kts` (signature), console Google Play (2026-10-23)
+> Sources : `apps/android/app/src/test/kotlin/org/kasbah/auto/*Test.kt`, `apps/android/app/src/main/kotlin/org/kasbah/auto/{KasbahClient,MainActivity,KasbahCarAppService,AccessScreen,VoiceScreen,Voice,ProbeScreen}.kt`, `apps/android/app/src/main/AndroidManifest.xml`, `apps/android/app/build.gradle.kts`, `apps/android/dhu.cmd`, `apps/android/.gitattributes`, `apps/server/src/http/session.ts`, `apps/server/src/plugins/transcription/index.ts`, portail `developer.renaultgroup.com`, session du 2026-10-22 (essais sur un téléphone Android et dans le simulateur DHU), `apps/android/keystore.properties.example`, `apps/android/app/build.gradle.kts` (signature), console Google Play (2026-10-23)
 
 Une appli Android, à côté de l'app web, qui met Kasbah sur l'écran de la voiture par **Android
 Auto** : le portail et les portes de garage, un relevé de ce que la voiture transmet, et la voix de
@@ -254,3 +254,36 @@ la faisant, dans l'ordre :
 6. **Mises à jour** : augmenter `versionCode`, reconstruire le bundle, nouvelle version de test interne.
 
 **Vérifié dans la vraie voiture le 2026-10-23** : installée depuis la piste de test interne, l'appli apparaît dans la grille d'Android Auto (« Kasbah », logo sans pastille), l'écran des accès affiche les vrais états, et « Parler » transcrit la question posée au micro de la voiture. L'écran de la voiture n'affiche que le **début** d'un message : la réponse, placée après la question et une ligne vide, tombait dans la partie coupée (elle était bien dite). Depuis la version 0.2 (`versionCode` 2), l'écran montre la question pendant la réflexion, puis **la réponse seule** ; une réponse très longue reste coupée en fin de texte, mais elle est lue.
+
+### Mise à jour 2026-10-23 — des tests, sans téléphone ni voiture
+
+`./gradlew testDebugUnitTest` dans `apps/android`, une minute environ, hors de `npm test` (Java et le SDK
+Android ne sont pas sur toutes les machines) ; branché dans `/publish` pour tout diff de `apps/android/`.
+`app/src/test/kotlin/org/kasbah/auto/` :
+
+- `EndpointerTest` : les cas de `apps/web/src/lib/vad.test.ts`, la copie Kotlin devant rester fidèle. Il
+  a trouvé un écart : la copie rendait encore des événements après le premier ; corrigé (`done`).
+- `VoiceAudioTest` : niveau RMS d'une trame 16 bits petit-boutiste, en-tête WAV champ par champ.
+- `ParsingTest` : cookie de session (casse de l'en-tête, réseau local sans cookie), tri portail et
+  garages de `/api/devices`, réponse de l'assistant ligne à ligne (`error` avec ou sans message), noms
+  des prises. Ces lectures sont sorties du client en fonctions pures (`sessionCookie`, `parseAccesses`,
+  `parseAnswer` dans `KasbahClient.kt`, `plugName` dans `ProbeScreen.kt`) ; `org.json:json` en test,
+  celui d'Android n'étant qu'une coquille sur la JVM.
+- `CarScreensTest` : les écrans construits par `TestCarContext` (`androidx.car.app:app-testing`) sur
+  Robolectric — une tuile par accès et son état, barre à une seule action titrée, attente puis liste
+  vide, erreur avec « Actualiser », écran d'action en anglais et en français, « Parler » qui montre la
+  réponse seule. La bibliothèque vérifie chaque modèle contre les règles de l'hôte en le construisant :
+  **contre-épreuve faite**, une seconde action titrée remise dans la barre fait échouer trois tests sur
+  l'erreur exacte vue dans la voiture le 2026-10-22.
+
+Pièges rencontrés :
+- **Java 25** (celui d'Android Studio) ferme `jdk.internal.access`, dont Robolectric a besoin :
+  `--add-opens=java.base/jdk.internal.access=ALL-UNNAMED` pour la JVM des tests (`testOptions` de
+  `app/build.gradle.kts`).
+- **Une propriété de haut de fichier qui appelle Android** (`AudioAttributes` de `Voice.kt`) s'exécute
+  au chargement de la classe du fichier, donc dès qu'un test appelle une fonction pure du même fichier :
+  « Stub! ». Construite au premier usage (`by lazy`).
+- Les états des tests d'écran passent par deux champs `@VisibleForTesting` (`AccessScreen.accesses`,
+  `error`) et `VoiceScreen.answered` : pas de serveur ni de micro à simuler.
+- Non couvert : l'écran « Voiture » (il lit le matériel de la voiture) ; sa mise en forme l'est en partie
+  (`plugName`).
