@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-23] update | Sécurité : le relais `/art` ne rend qu'une image matricielle
+
+**Déclencheur** : audit de sécurité de `apps/server`, constats F5/F6 (relais d'illustrations Sonos et Cast).
+
+**Pages modifiées** :
+- `3_plugins/3_6_google-cast.md`, `3_plugins/3_15_sonos.md` - mise à jour datée : `/art` ne retient que des adresses http(s), ne rend qu'une image matricielle (pas de SVG), en-têtes `nosniff` et CSP `sandbox` (`http/art.ts`).
+
+**Index** : catalogue mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-10-23] update | Sécurité : la sonde Enphase ne rend plus le jeton du compte
 
 **Déclencheur** : audit de sécurité de `apps/server`, constats F12/F13 (jeton Enlighten rendu par `/ev/raw`).

@@ -215,9 +215,31 @@ describe('sonos plugin', () => {
     const r = await app.inject({ method: 'GET', url: artUrl })
     expect(r.statusCode).toBe(200)
     expect(r.headers['content-type']).toBe('image/jpeg')
+    expect(r.headers['x-content-type-options']).toBe('nosniff')
+    expect(r.headers['content-security-policy']).toBe("default-src 'none'; sandbox")
     expect(artFetch).toHaveBeenCalledOnce()
     await plugin.stop()
     await app.close()
+  })
+
+  it('never relays through /art anything but a raster image (a page or an SVG would run under Kasbah’s origin)', async () => {
+    for (const type of ['text/html', 'image/svg+xml', 'application/javascript']) {
+      const net = fakeNetwork({ playing: true })
+      const artFetch = vi.fn(async () => ({ ok: true, status: 200, headers: { get: () => type }, arrayBuffer: async () => new TextEncoder().encode('<script>x</script>').buffer }))
+      const { ctx } = fakeContext(new ManualClock(0))
+      const plugin = createSonosPlugin({ discovery: fakeDiscovery(), fetchImpl: net.fetchImpl, known: fakeKnown([PLAYER_PLAY3]), artFetch })
+      await plugin.init(ctx)
+      await plugin.start()
+      await flush(12)
+      const artUrl = (patches(ctx, UUID_PLAY3)[0] as { nowPlaying: { artUrl: string } }).nowPlaying.artUrl
+      const app = Fastify({ logger: false })
+      await app.register(async (a) => { plugin.registerRoutes!(a) }, { prefix: '/api/plugins/sonos' })
+      const r = await app.inject({ method: 'GET', url: artUrl })
+      expect(r.statusCode, type).toBe(502)
+      expect(r.body, type).not.toContain('<script>')
+      await plugin.stop()
+      await app.close()
+    }
   })
 
   it('rebuilds its list from known on init after stop (closure must not keep stale entries)', async () => {

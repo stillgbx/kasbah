@@ -1,6 +1,6 @@
 # Plugin Google Cast (enceintes, réveils, Chromecast, barres de son)
 
-> Dernière mise à jour : 2026-10-12
+> Dernière mise à jour : 2026-10-23
 > Sources : `apps/server/src/plugins/google_cast/{index,channel,discovery,mapping,protocol,types}.ts`, `apps/server/src/plugins/google_cast/__fixtures__/network.ts`, tests `protocol.test.ts`, `mapping.test.ts` et `plugin.test.ts`, `apps/server/.env.example`, `apps/web/src/views/MediaView.vue`, demande de l'utilisateur du 2026-09-09, `apps/server/src/plugins/google_cast/known.ts`, `apps/server/src/plugins/google_cast/enrich/cover.ts`, `tools/cast-probe.mts`, `apps/server/src/plugins/google_cast/bravia.ts`, `apps/server/src/plugins/google_cast/__fixtures__/bravia.ts`
 
 ## Ce que l'utilisateur veut, et ce que le protocole permet
@@ -672,3 +672,14 @@ machine ne la porte) ; vérifie qu'aucune exception non interceptée ne passe, q
 un `refresh()`, et qu'il nomme l'interface.
 
 Sources : `apps/server/src/plugins/google_cast/{discovery,discovery.test}.ts`.
+
+### Mise à jour 2026-10-23 — le relais `/art` ne rend qu'une image matricielle
+
+Constat d'un audit de sécurité : `/art` rendait le corps de l'URL relayée avec le `Content-Type` choisi par
+le serveur distant, sous l'origine de Kasbah. Un favicon de radio en `text/html`, ou une pochette
+`image/svg+xml` (qu'un émetteur Cast du réseau peut annoncer dans son `MEDIA_STATUS`), s'exécutait en
+ouvrant le lien, avec la session de la victime. Désormais (`apps/server/src/http/art.ts`, commun à Cast et
+Sonos) : seules les adresses http(s) sont retenues (`isWebUrl`, ni `data:` ni `file:`), seuls les types
+matriciels passent (`isRasterImage` : jpeg, png, gif, webp, avif, bmp, icône ; **pas** SVG, sinon 415 puis
+502), et la réponse porte `X-Content-Type-Options: nosniff` et `Content-Security-Policy: default-src 'none';
+sandbox` (`sendArt`). Une balise `<img>` n'en est pas gênée.

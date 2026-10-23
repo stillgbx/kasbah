@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { stateFile } from '../../core/paths'
 import { createPoller } from '../../core/poll'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
+import { isRasterImage, isWebUrl, sendArt } from '../../http/art'
 import { sendError } from '../../http/errors'
 import type { FetchLike } from '../../core/sse'
 import { createSsdpDiscovery, type SonosDiscovery } from './discovery'
@@ -221,7 +222,7 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
 
   function rememberArt(proxyUrl: string): void {
     const raw = new URL(proxyUrl, 'http://local').searchParams.get('url')
-    if (!raw) return
+    if (!isWebUrl(raw)) return
     if (!knownArt.includes(raw)) {
       knownArt.push(raw)
       if (knownArt.length > ART_KNOWN_MAX) knownArt.shift()
@@ -237,7 +238,7 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
       const res = await fetchArt(url, { signal: AbortSignal.timeout(ART_FETCH_TIMEOUT_MS) })
       const type = res.headers.get('content-type') ?? 'image/jpeg'
       const body = Buffer.from(await res.arrayBuffer())
-      const entry = { status: res.ok ? 200 : res.status, type, body, at: now }
+      const entry = { status: !res.ok ? res.status : isRasterImage(type) ? 200 : 415, type, body, at: now }
       artCache.set(url, entry)
       while (artCache.size > ART_CACHE_MAX) artCache.delete(artCache.keys().next().value!)
       return entry
@@ -416,7 +417,7 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
         if (!url || !knownArt.includes(url)) return sendError(reply, 404, 'NOT_FOUND', 'unknown artwork')
         const art = await artFor(url)
         if (art.status !== 200) return sendError(reply, 502, 'UPSTREAM_ERROR', `artwork fetch failed (${art.status || 'network'})`)
-        return reply.header('content-type', art.type).header('cache-control', 'public, max-age=86400').send(art.body)
+        return sendArt(reply, art)
       })
       app.delete<{ Params: { externalId: string } }>('/devices/:externalId', async (req, reply) => {
         if (!forget(req.params.externalId)) return sendError(reply, 404, 'NOT_FOUND', `unknown Sonos device ${req.params.externalId}`)

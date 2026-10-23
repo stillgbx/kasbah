@@ -1,6 +1,6 @@
 # Plugin Sonos (enceintes, Port)
 
-> Dernière mise à jour : 2026-10-02
+> Dernière mise à jour : 2026-10-23
 > Sources : `apps/server/src/plugins/sonos/{index,discovery,soap,mapping,known,types}.ts`, fixtures `apps/server/src/plugins/sonos/__fixtures__/network.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/server/src/plugins/index.ts`, `apps/server/.env.example`, `tools/sonos-probe.mts`, `apps/web/src/views/MediaView.vue`, `apps/server/test/integration.test.ts`
 
 ## Ce que l'utilisateur veut, et ce que le local permet
@@ -257,3 +257,14 @@ successifs (lancé par le plugin `radio`, `3_19_radio.md`).
 
 Sources : `apps/server/src/plugins/sonos/{mapping,index}.ts`, `apps/server/src/plugins/sonos/mapping.test.ts`,
 `packages/shared/src/devices/command.ts`.
+
+### Mise à jour 2026-10-23 — le relais `/art` ne rend qu'une image matricielle
+
+Constat d'un audit de sécurité : `/art` rendait le corps de l'URL relayée avec le `Content-Type` choisi par
+le serveur distant, sous l'origine de Kasbah. Un favicon de radio en `text/html`, ou une pochette
+`image/svg+xml` (qu'un émetteur Cast du réseau peut annoncer dans son `MEDIA_STATUS`), s'exécutait en
+ouvrant le lien, avec la session de la victime. Désormais (`apps/server/src/http/art.ts`, commun à Cast et
+Sonos) : seules les adresses http(s) sont retenues (`isWebUrl`, ni `data:` ni `file:`), seuls les types
+matriciels passent (`isRasterImage` : jpeg, png, gif, webp, avif, bmp, icône ; **pas** SVG, sinon 415 puis
+502), et la réponse porte `X-Content-Type-Options: nosniff` et `Content-Security-Policy: default-src 'none';
+sandbox` (`sendArt`). Une balise `<img>` n'en est pas gênée.

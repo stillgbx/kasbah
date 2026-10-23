@@ -9,6 +9,7 @@ import { isBravia, probeBravia, sameAudioOutput, type AudioOutput, type BraviaFe
 import { CastConnection, tlsSocketFactory, type SocketFactory } from './channel'
 import { createMdnsDiscovery, type CastDiscovery } from './discovery'
 import { createKnownDevicesFile, type KnownDevices } from './known'
+import { isRasterImage, isWebUrl, sendArt } from '../../http/art'
 import { sendError } from '../../http/errors'
 import { AppIconResolver, registryAppId, type RegistryFetch } from './enrich/appIcon'
 import { CoverFinder, type CoverFetch, type Track } from './enrich/cover'
@@ -279,7 +280,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   }
 
   function rememberArt(url: string | null | undefined): void {
-    if (!url || knownArt.includes(url)) return
+    if (!isWebUrl(url) || knownArt.includes(url)) return
     knownArt.push(url)
     if (knownArt.length > ART_KNOWN_MAX) knownArt.shift()
   }
@@ -409,7 +410,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
         status = res.status
         if (res.ok) {
           const type = res.headers.get('content-type') ?? 'image/jpeg'
-          if (!type.startsWith('image/')) { status = 415; break }
+          if (!isRasterImage(type)) { status = 415; break }
           return { status: 200, type, body: Buffer.from(await res.arrayBuffer()), at: ctx!.clock.now() }
         }
         if (status !== 429 && status < 500) break
@@ -600,7 +601,7 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
         if (!url || !knownArt.includes(url)) return sendError(reply, 404, 'NOT_FOUND', 'unknown artwork')
         const art = await artFor(url)
         if (art.status !== 200) return sendError(reply, 502, 'UPSTREAM_ERROR', `artwork fetch failed (${art.status || 'network'})`)
-        return reply.header('content-type', art.type).header('cache-control', 'public, max-age=86400').send(art.body)
+        return sendArt(reply, art)
       })
 
       // Forget a remembered device (see `forget`): it is the counterpart of the memory, without which a
