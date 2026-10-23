@@ -17,6 +17,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 
 **Index** : catalogues mis à jour (1 ligne), index.md régénéré.
 
+## [2026-10-23] update | Appli Android Auto : mémo des étapes Google Play
+
+**Déclencheur** : mise en ligne de l'appli sur la piste de test interne du Play Store, pour qu'elle apparaisse dans la vraie voiture ; garder les étapes en mémoire.
+
+**Pages modifiées** :
+- `1_architecture/1_15_appli-android-auto.md` - mise à jour datée : compte, nom de package, partage interne refusé avant publication, clé d'envoi hors du dépôt, `bundleRelease`, `targetSdk` 36, piste de test interne, lien d'activation, mises à jour., et le constat dans la vraie voiture (réponse vocale coupée à l'écran, corrigée en 0.2).
+
+**Index** : index.md inchangé (page déjà datée du jour).
+
 ## [2026-10-23] update | Sécurité : nom public sans casse, routes locales décidées sur la route trouvée
 
 **Déclencheur** : audit de sécurité de `apps/server` (Claude Security), correctifs des deux failles les plus graves.

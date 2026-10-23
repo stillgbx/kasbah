@@ -1,7 +1,7 @@
 # Appli Android Auto
 
 > Dernière mise à jour : 2026-10-23
-> Sources : `apps/android/app/src/main/kotlin/org/kasbah/auto/{KasbahClient,MainActivity,KasbahCarAppService,AccessScreen,VoiceScreen,Voice,ProbeScreen}.kt`, `apps/android/app/src/main/AndroidManifest.xml`, `apps/android/app/build.gradle.kts`, `apps/android/dhu.cmd`, `apps/android/.gitattributes`, `apps/server/src/http/session.ts`, `apps/server/src/plugins/transcription/index.ts`, portail `developer.renaultgroup.com`, session du 2026-10-22 (essais sur un téléphone Android et dans le simulateur DHU)
+> Sources : `apps/android/app/src/main/kotlin/org/kasbah/auto/{KasbahClient,MainActivity,KasbahCarAppService,AccessScreen,VoiceScreen,Voice,ProbeScreen}.kt`, `apps/android/app/src/main/AndroidManifest.xml`, `apps/android/app/build.gradle.kts`, `apps/android/dhu.cmd`, `apps/android/.gitattributes`, `apps/server/src/http/session.ts`, `apps/server/src/plugins/transcription/index.ts`, portail `developer.renaultgroup.com`, session du 2026-10-22 (essais sur un téléphone Android et dans le simulateur DHU), `apps/android/keystore.properties.example`, `apps/android/app/build.gradle.kts` (signature), console Google Play (2026-10-23)
 
 Une appli Android, à côté de l'app web, qui met Kasbah sur l'écran de la voiture par **Android
 Auto** : le portail et les portes de garage, un relevé de ce que la voiture transmet, et la voix de
@@ -215,3 +215,42 @@ du téléphone au lieu du français imposé. Restent tels quels : « Kasbah », 
 de la maison) et les messages d'erreur rendus par le serveur. Vérifié sur le téléphone dans les deux
 langues (`adb shell cmd locale set-app-locales org.kasbah.auto --locales en-US`, puis retour au système).
 La suite « Textes en français en dur » ci-dessus est donc faite.
+
+### Mise à jour 2026-10-23 — mémo : de l'APK à la piste de test interne du Play Store
+
+La marche à suivre courte est dans `docs/android-auto.md` (*For the car*). Ici, ce qu'on a appris en
+la faisant, dans l'ordre :
+
+1. **Compte développeur Google Play** (droit d'entrée unique, vérification d'identité). Le formulaire
+   demande une **adresse pour le profil public**, visible de tous : une adresse dédiée, jamais
+   personnelle. Le téléphone et l'adresse de contact, eux, restent privés.
+2. **Créer l'application** : nom « Kasbah Auto », **nom de package `org.kasbah.auto`** (l'`applicationId`
+   de `app/build.gradle.kts` ; définitif, Play refuse tout fichier dont l'identifiant diffère), langue
+   par défaut anglais (celle de l'appli). La liste « Configurer votre application » du tableau de bord
+   ne sert qu'à la publication : ignorée.
+3. **Le partage interne d'applications est refusé** à une appli neuve : « doit être publiée pour que vous
+   puissiez utiliser le partage interne ». Il accepte pourtant une version de debug, signée de n'importe
+   quelle clé, numéro de version réutilisable (aide Google « Share app bundles and APKs internally ») :
+   il servira pour les essais rapides une fois l'appli publiée sur une piste.
+4. **Piste de test interne** à la place. Elle demande :
+   - une **clé d'envoi** créée par `keytool` (Java d'Android Studio), rangée **hors du dépôt** ; le
+     projet la lit dans `apps/android/keystore.properties` (ignoré par git, modèle
+     `keystore.properties.example`), chemin écrit avec des `/`. Le `keytool` en français plante sur
+     `-printcert` : `-J-Duser.language=en`. Le nom demandé par `keytool` (« CN ») n'est vu que de Google ;
+   - un **App Bundle signé** : `./gradlew bundleRelease` (configuration `upload` de
+     `app/build.gradle.kts`, absente quand le fichier de clé manque : la version de debug reste
+     constructible partout) ;
+   - **`targetSdk` 36** : exigé de toute appli nouvelle ou mise à jour depuis le 31 août 2026
+     (developer.android.com/google/play/requirements/target-sdk). Passé de 35 à 36 (`compileSdk` aussi),
+     vérifié sur le téléphone, qui redemande alors l'accès au micro ;
+   - dans la console, *Tester et publier → Tests → Tests internes* : une **liste de testeurs** (le
+     compte Google du téléphone), *Créer une version*, **clé de signature générée par Google** (l'option
+     par défaut), import du `.aab`, *Enregistrer et publier*. Seul avertissement : pas de fichier de
+     désobscurcissement (R8 n'est pas activé, l'appli est petite) — ignoré.
+5. **Sur le téléphone** : le **lien d'activation** des testeurs se copie dans l'onglet *Testeurs* de la
+   piste (console web, et sans doute aussi l'appli Play Console) ; l'ouvrir dans Chrome avec le compte
+   du téléphone, accepter, **désinstaller la version posée par `adb`** (signée d'une autre clé, Play ne la remplace
+   pas), installer depuis le Play Store. La première version met quelques minutes à y apparaître.
+6. **Mises à jour** : augmenter `versionCode`, reconstruire le bundle, nouvelle version de test interne.
+
+**Vérifié dans la vraie voiture le 2026-10-23** : installée depuis la piste de test interne, l'appli apparaît dans la grille d'Android Auto (« Kasbah », logo sans pastille), l'écran des accès affiche les vrais états, et « Parler » transcrit la question posée au micro de la voiture. L'écran de la voiture n'affiche que le **début** d'un message : la réponse, placée après la question et une ligne vide, tombait dans la partie coupée (elle était bien dite). Depuis la version 0.2 (`versionCode` 2), l'écran montre la question pendant la réflexion, puis **la réponse seule** ; une réponse très longue reste coupée en fin de texte, mais elle est lue.

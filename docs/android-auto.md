@@ -35,8 +35,11 @@ phone is away from home. On the local network, it works without an account.
 
 ## Building and installing
 
-Requirements: Android Studio (it brings the JDK and the SDK manager), with the Android 15 (API 35)
-platform, the SDK platform-tools, and the *Android Auto Desktop Head Unit Emulator* (SDK Tools tab).
+Requirements: Android Studio (it brings the JDK and the SDK manager), the SDK platform-tools, and the
+*Android Auto Desktop Head Unit Emulator* (SDK Tools tab). Gradle downloads the Android platform it
+needs (API 36).
+
+### For the simulator
 
 ```bash
 cd apps/android
@@ -45,15 +48,43 @@ export JAVA_HOME="<Android Studio>/jbr" ANDROID_HOME="<Android SDK>"
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-An app installed this way shows in the **simulator** only. **A real car only shows car apps installed
-from Google Play**: Android Auto's *Unknown sources* developer option covers media and messaging apps,
-not apps built with the Car App Library like this one
+An app installed this way shows in the **simulator** only.
+
+### For the car
+
+**A real car only shows car apps installed from Google Play.** Android Auto's *Unknown sources*
+developer option covers media and messaging apps, not apps built with the Car App Library like this one
 ([Google's testing guide](https://developer.android.com/training/cars/testing)). The simulator skips the
-check, so everything can look fine on a computer and the app still be missing in the car. For the car,
-go through Play's **Internal app sharing**, which needs a Google Play developer account (one-time
-fee) but no review and no public listing: upload the APK there, open the link Google gives on the
-phone, and the app installs from Play. Uninstall a version installed by `adb` first: Play will not
-replace an app signed with another key.
+check, so everything can look fine on a computer and the app still be missing in the car. The way in,
+without review or public listing, is Play's **internal testing** track:
+
+1. **A Google Play developer account** (one-time fee). Its public profile shows an e-mail address: use
+   a dedicated one.
+2. **The app in the Play Console**, with package name `org.kasbah.auto` (it cannot change afterwards).
+   Play's *Internal app sharing* would be quicker, but it refuses an app that was never published on any
+   track: start with internal testing.
+3. **An upload key**, created once and kept **outside the repository**:
+   ```bash
+   keytool -genkeypair -v -keystore <outside the repo>/kasbah-upload.jks -alias upload -keyalg RSA -keysize 4096 -validity 10000
+   ```
+   then copy `apps/android/keystore.properties.example` to `apps/android/keystore.properties` (ignored by
+   git) and fill in the keystore's path, with `/`, and its password. Google Play signs the app for users
+   with its own key; this one only identifies your uploads.
+4. **The signed App Bundle**: `./gradlew bundleRelease` writes
+   `app/build/outputs/bundle/release/app-release.aab`.
+5. **In the Play Console**, *Test and release → Testing → Internal testing*: create an e-mail list of
+   testers with the phone's Google account, then *Create release*, let Google generate the app signing
+   key, upload the `.aab`, and *Save and publish* (it only reaches the testers). The warning about a
+   missing deobfuscation file can be ignored.
+6. **On the phone**: open the testers' join link (*Testers* tab, opened in a browser with the phone's
+   account), accept, **uninstall a version installed by `adb`** (Play will not replace an app signed
+   with another key), then install from the Play Store page the link leads to. The first release can
+   take a few minutes to show.
+
+For each new version, raise `versionCode` in `app/build.gradle.kts`, build the bundle again and create a
+new internal testing release: the phone updates from Play.
+
+### First start
 
 On the phone, open **Kasbah Auto** (the logo with a car badge, to tell it from the installed web app),
 enter the server address, the user and the password, and allow the microphone. In Android Auto the app

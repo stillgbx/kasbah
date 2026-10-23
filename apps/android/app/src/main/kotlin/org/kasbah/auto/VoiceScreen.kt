@@ -65,7 +65,8 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
         show(carContext.getString(R.string.voice_thinking, h.text), busy = true)
         Background.run({ client.ask(h.text) }) { result ->
             result.onSuccess { answer ->
-                show(carContext.getString(R.string.voice_answer, h.text, answer.ifEmpty { carContext.getString(R.string.voice_done) }))
+                // The car screen only shows the start of a message: the answer alone, the question has been seen.
+                show(answer.ifEmpty { carContext.getString(R.string.voice_done) })
                 if (answer.isNotEmpty()) say(answer, h.vocabulary.words)
             }.onFailure { fail(it) }
         }

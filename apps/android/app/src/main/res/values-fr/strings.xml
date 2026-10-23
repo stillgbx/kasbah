@@ -58,8 +58,7 @@
     <string name="voice_allow_mic">Autoriser le micro sur le téléphone…</string>
     <string name="voice_mic_refused">Micro refusé : l\'autoriser dans les réglages du téléphone.</string>
     <string name="voice_nothing">Rien entendu.</string>
-    <string name="voice_thinking">« %1$s »\n\nKasbah réfléchit…</string>
-    <string name="voice_answer">« %1$s »\n\n%2$s</string>
+    <string name="voice_thinking">« %1$s », je réfléchis…</string>
     <string name="voice_done">C\'est fait.</string>
     <string name="failed">Échec.</string>
 </resources>
