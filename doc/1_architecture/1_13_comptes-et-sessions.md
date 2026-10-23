@@ -94,7 +94,10 @@ reste plus stricte (pas d'IP). Tests : `mcp/public-host.test.ts`.
   couper un téléphone perdu. Les jetons MCP, eux, ne tombent qu'au retrait du compte.
 - **Sans session** : une navigation (`GET` d'une page HTML) part en 302 vers `/login?next=…` ; l'API, le
   WebSocket et les fichiers chargés par la page rendent 401 `AUTH_REQUIRED`, et le web renvoie lui-même à
-  la connexion. `next` n'accepte qu'un chemin du site (ni `//`, ni `/\`, ni `/login`).
+  la connexion. `next` n'accepte qu'un chemin du site (ni `//`, ni `/\`, ni `/login`). *(Depuis le
+  2026-10-23, `safeNext` le lit comme le navigateur, avec `new URL` : une tabulation ou un saut de ligne
+  y sont retirés, donc `/<TAB>/evil.example` valait `//evil.example`, un autre site, et passait le test
+  de préfixe. Seul un résultat de même origine est gardé, rendu en chemin + requête + ancre.)*
 - **Ouverts sans session** : `/login`, `/logout`, `/manifest.webmanifest`, `/icons/*`, pour que l'app
   s'installe dès la page de connexion (le navigateur demande le manifest sans cookie).
 - **Origine exigée** (celle de `MCP_PUBLIC_URL`) sur toute écriture et toute demande de WebSocket, `/ws`

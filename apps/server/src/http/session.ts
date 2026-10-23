@@ -107,9 +107,17 @@ const INSTALL_HEAD = `
 <meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Kasbah">
 <meta name="theme-color" content="#e9edf1" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0d1420" media="(prefers-color-scheme: dark)">`
 
-/** Return after sign-in: a path of THIS site only, never the sign-in page itself. */
-const safeNext = (raw: unknown): string =>
-  typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\') && !raw.startsWith('/login') ? raw : '/'
+/**
+ * Return after sign-in: a path of THIS site only, never the sign-in page itself. Read as the browser
+ * will read it: it drops tabs and line breaks and takes `\` for `/`, so `/<TAB>/evil.example` is
+ * `//evil.example`, another site.
+ */
+const safeNext = (raw: unknown): string => {
+  if (typeof raw !== 'string' || !raw.startsWith('/')) return '/'
+  const base = 'http://kasbah.invalid'
+  const url = new URL(raw, base)
+  return url.origin === base && !url.pathname.startsWith('/login') ? url.pathname + url.search + url.hash : '/'
+}
 
 export function createAppSession(deps: AppSessionDeps): AppSession {
   const { config, guard, users, logger, publicHosts } = deps

@@ -110,7 +110,11 @@ it('opens a session through a protected __Host- cookie, and returns to where you
 })
 
 it('never redirects anywhere but the site after sign-in', async () => {
-  for (const next of ['//evil.example/x', 'https://evil.example', '/\\evil.example', '/login', 'settings']) {
+  // a browser drops tabs and line breaks from a URL: `/<TAB>/evil.example` becomes `//evil.example`
+  for (const next of [
+    '//evil.example/x', 'https://evil.example', '/\\evil.example', '/login', 'settings',
+    '/\t/evil.example', '/\n/evil.example', '/\r\n/evil.example', '/\t\\evil.example', '/\t/login',
+  ]) {
     expect((await login('lou', 'bon-mot-de-passe', next)).headers.location, next).toBe('/')
   }
 })

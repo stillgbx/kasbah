@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-23] update | Sécurité : le retour après connexion lu comme le navigateur
+
+**Déclencheur** : audit de sécurité de `apps/server`, constat F4 (redirection ouverte par `next=/<TAB>/evil.example`).
+
+**Pages modifiées** :
+- `1_architecture/1_13_comptes-et-sessions.md` - précision datée sur `next` : `safeNext` passe par `new URL`, seul un chemin de même origine est gardé.
+
+**Index** : index.md inchangé (page déjà datée du jour).
+
 ## [2026-10-23] update | Sécurité : le réseau local reconnu à son nom, les pages des autres sites refusées
 
 **Déclencheur** : audit de sécurité de `apps/server`, constat F14 (DNS rebinding) et les requêtes croisées depuis le réseau local (F15, F16, F22 et les déliaisons de comptes).
