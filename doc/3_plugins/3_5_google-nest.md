@@ -560,10 +560,34 @@ une seule à 19,0 °C ensuite. Pas encore rejoué sur le vrai thermostat. Tests 
 
 ### Mise à jour 2026-10-24 — le jeton du flux RTSP est visible dans la ligne de commande de ffmpeg
 
-Constat F38 d'un audit de sécurité, **non corrigé dans le code** : l'adresse `rtsps://…?auth=<jeton>` que
+*(Dépassé le même jour : corrigé, voir la section suivante.)* Constat F38 d'un audit de sécurité, **non corrigé dans le code** : l'adresse `rtsps://…?auth=<jeton>` que
 Google rend est passée à ffmpeg par `-i` (`core/video/rtsp-relay.ts`), donc lisible par tout compte
 local de la machine (`ps`, `/proc/<pid>/cmdline`) pendant que le flux tourne ; le jeton change toutes
 les 4 minutes. ffmpeg n'a pas de fichier d'options et ne lit pas son entrée dans l'environnement ; les
 parades (relais TCP local qui ajoute le jeton, liste `concat` dans un fichier 0600) ne se vérifient pas
 sans vraie caméra et ont été laissées de côté. Parade retenue, côté machine : voir
 `../5_setup/5_2_production.md` (`hidepid`). Sans autre compte local sur le serveur, le risque est nul.
+
+### Mise à jour 2026-10-24 (2) — le jeton RTSP passe par un fichier, plus par la ligne de commande
+
+F38 est corrigé (`core/video/rtsp-relay.ts`, `writeSourceList`). ffmpeg ne lit son `-i` nulle part
+ailleurs que sur sa ligne de commande : `-/i fichier` (lecture d'une option dans un fichier, ffmpeg 7+)
+est **refusé pour `-i`**, qui sépare les entrées (essayé avec ffmpeg 9.0.2). Le relais écrit donc l'adresse
+dans une liste `concat` d'une seule entrée, fichier temporaire 0600 effacé à la sortie de ffmpeg :
+
+```
+ffconcat version 1.0
+file 'rtsps://…?auth=<jeton>'
+option rtsp_transport tcp
+option fflags nobuffer
+```
+
+et lance `-protocol_whitelist file,tcp,tls,rtsp,rtsps,rtp,udp,crypto -f concat -safe 0 -i <liste>` : la
+liste blanche est obligatoire, sinon le démuxeur `concat` n'ouvre que `file,crypto,data`. Les options
+RTSP vont dans la liste, où elles s'appliquent au flux ouvert (`-rtsp_transport` sur la ligne de
+commande ne viserait que le démuxeur `concat`).
+
+Vérifié avec ffmpeg 9.0.2 sur un clip local (même sortie MP4 fragmentée qu'avec l'ancienne commande :
+5 fragments des deux côtés ; le relais réel rend l'en-tête puis les 5 fragments, et la liste est effacée).
+**Reste à vérifier sur une vraie caméra** : l'image s'affiche, et `ps -ef | grep ffmpeg` sur le serveur
+ne montre plus `auth=`.

@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-24] update | Sécurité : le jeton RTSP de Nest hors de la ligne de commande de ffmpeg
+
+**Déclencheur** : F38, d'abord seulement documenté ; ffmpeg 9.0.2 sur le serveur et sur le poste a permis de tester les parades.
+
+**Pages modifiées** :
+- `3_plugins/3_5_google-nest.md` - section datée : liste `concat` 0600 effacée à la sortie, `-/i` refusé, liste blanche des protocoles obligatoire ; renvoi sur la section « non corrigé ».
+- `5_setup/5_2_production.md` - renvoi : `hidepid` n'est plus nécessaire pour ce jeton.
+
+**Index** : index.md inchangé (pages déjà datées du jour).
+
 ## [2026-10-24] update | Sécurité : certificat de la box TaHoma épinglé, jeton RTSP de Nest documenté
 
 **Déclencheur** : suite de l'audit de sécurité de `apps/server` : TaHoma ne vérifiait pas non plus son certificat ; constat F38 (jeton du flux Nest dans la ligne de commande de ffmpeg).

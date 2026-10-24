@@ -397,3 +397,7 @@ proc  /proc  proc  defaults,hidepid=2  0  0
 ```
 
 puis `sudo mount -o remount,hidepid=2 /proc`. Sans autre compte local, rien à faire.
+
+*(Le même jour, F38 a été corrigé dans le code : le jeton ne passe plus par la ligne de commande
+de ffmpeg, voir `../3_plugins/3_5_google-nest.md`. `hidepid` reste une bonne pratique, mais n'est
+plus nécessaire pour ce jeton.)*

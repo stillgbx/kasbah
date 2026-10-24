@@ -1,4 +1,8 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
+import { unlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { Logger } from 'pino'
 import type { Clock } from '../clock'
 import { Mp4BoxParser, mseMimeFromMoov, type Mp4Box } from './fmp4'
@@ -56,6 +60,24 @@ export function redactStreamUrl(text: string): string {
   return text.replace(/rtsps?:\/\/[^\s'"]+/g, (url) => {
     try { const u = new URL(url); return `${u.protocol}//${u.host}/…` } catch { return 'rtsps://…' }
   })
+}
+
+/**
+ * The source address, access token included, written for ffmpeg in a file only the server can read:
+ * on its command line, any local account would read it (`ps`, `/proc/<pid>/cmdline`). ffmpeg reads
+ * its `-i` from nowhere else (`-/i file` is refused: `-i` separates the inputs), hence a one-entry
+ * `concat` list. The RTSP options go with the entry: they apply to the stream the list opens.
+ */
+export function writeSourceList(url: string): string {
+  const path = join(tmpdir(), `kasbah-rtsp-${randomBytes(8).toString('hex')}.ffconcat`)
+  const quoted = url.replaceAll("'", "'\\''")
+  writeFileSync(path, `ffconcat version 1.0\nfile '${quoted}'\noption rtsp_transport tcp\noption fflags nobuffer\n`, { mode: 0o600 })
+  return path
+}
+
+/** ffmpeg read the list when it opened it: once it exits, the file goes, token included. */
+function removeSourceList(path: string): void {
+  try { unlinkSync(path) } catch { /* already gone */ }
 }
 
 /** An ffmpeg process and what was read from its output. */
@@ -123,11 +145,13 @@ export class RtspRelay {
   }
 
   private launch(url: string): Source {
+    const list = writeSourceList(url)
     const args = [
       // `-y`: the thumbnail is rewritten in place; without it ffmpeg refuses an existing file and stops
       '-y', '-hide_banner', '-loglevel', 'warning', '-nostdin',
-      '-rtsp_transport', 'tcp', '-fflags', 'nobuffer', '-flags', 'low_delay',
-      '-i', url,
+      '-fflags', 'nobuffer', '-flags', 'low_delay',
+      '-protocol_whitelist', 'file,tcp,tls,rtsp,rtsps,rtp,udp,crypto',
+      '-f', 'concat', '-safe', '0', '-i', list,
       '-c', 'copy', '-f', 'mp4', '-movflags', 'empty_moov+default_base_moof+frag_keyframe', '-reset_timestamps', '1',
       'pipe:1',
     ]
@@ -149,8 +173,9 @@ export class RtspRelay {
       source.stderrTail = (source.stderrTail + text).slice(-2000)
       this.opts.logger?.debug({ ffmpeg: text.trim() }, 'ffmpeg')
     })
-    proc.on('error', (err) => this.onExit(source, `ffmpeg could not start: ${err.message}`))
+    proc.on('error', (err) => { removeSourceList(list); this.onExit(source, `ffmpeg could not start: ${err.message}`) })
     proc.on('exit', (code, signal) => {
+      removeSourceList(list)
       const tail = source.stderrTail.trim().split('\n').at(-1)
       this.onExit(source, `ffmpeg exited (${signal ?? code})${tail ? `: ${tail}` : ''}`)
     })

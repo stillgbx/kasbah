@@ -1,6 +1,6 @@
 import type { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { mkdirSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -347,7 +347,8 @@ describe('nest plugin', () => {
     // a second ffmpeg is launched on the URL carrying the new token; the old one stays until the handover
     expect(ffmpeg.procs).toHaveLength(4)
     const args = (ffmpeg.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[3]![1] as string[]
-    expect(args.find((a) => a.startsWith('rtsps://'))).toBe(`rtsps://stream.google/${google.commands[0]!.id}?auth=tok2`)
+    // the address goes to ffmpeg in a `concat` list, never on its command line
+    expect(readFileSync(args[args.indexOf('-i') + 1]!, 'utf8')).toContain(`file 'rtsps://stream.google/${google.commands[0]!.id}?auth=tok2'`)
     expect(ffmpeg.procs[0]!.kill).not.toHaveBeenCalled()
     await plugin.stop()
   })

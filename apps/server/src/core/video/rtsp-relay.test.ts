@@ -1,5 +1,6 @@
 import type { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { PassThrough } from 'node:stream'
 import { ManualClock } from '@kasbah/mock-sim'
 import { describe, expect, it, vi } from 'vitest'
@@ -31,6 +32,12 @@ function relayWith(clock: ManualClock, onIdle = vi.fn()) {
   return { relay, ...ff, onIdle }
 }
 
+/** What ffmpeg was given to open: the `concat` list, and the address it holds. */
+const sourceOf = (args: string[]) => {
+  const list = args[args.indexOf('-i') + 1]!
+  return { list, text: readFileSync(list, 'utf8') }
+}
+
 const collect = () => { const got: RelayMessage[] = []; return { got, fn: (m: RelayMessage) => got.push(m) } }
 
 describe('RtspRelay', () => {
@@ -41,7 +48,8 @@ describe('RtspRelay', () => {
     relay.subscribe(a.fn)
     relay.start()
     const args = (spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1] as string[]
-    expect(args).toEqual(expect.arrayContaining(['-rtsp_transport', 'tcp', '-c', 'copy', '-f', 'mp4', 'pipe:1']))
+    expect(args).toEqual(expect.arrayContaining(['-f', 'concat', '-c', 'copy', '-f', 'mp4', 'pipe:1']))
+    expect(sourceOf(args).text).toContain('option rtsp_transport tcp')
     expect(args[0]).toBe('-y')                          // the thumbnail is rewritten in place
     expect(args[args.indexOf('-movflags') + 1]).toContain('frag_keyframe')
     // the header arrives in arbitrary chunks
@@ -147,6 +155,21 @@ describe('RtspRelay', () => {
   })
 })
 
+describe('RtspRelay source address', () => {
+  it('keeps the access token off the command line, in a list only the server reads, removed when ffmpeg exits', () => {
+    const { relay, proc, spawnImpl } = relayWith(new ManualClock(0))
+    relay.start()
+    const args = (spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1] as string[]
+    expect(args.join(' ')).not.toContain('auth=')
+    const { list, text } = sourceOf(args)
+    expect(text).toBe(['ffconcat version 1.0', "file 'rtsps://cam/x?auth=t'", 'option rtsp_transport tcp', 'option fflags nobuffer', ''].join('\n'))
+    if (process.platform !== 'win32') expect(statSync(list).mode & 0o777).toBe(0o600)
+    proc.exitCode = 0
+    proc.emit('exit', 0, null)
+    expect(existsSync(list)).toBe(false)
+  })
+})
+
 describe('RtspRelay.rotateSource', () => {
   it('starts a replacement ffmpeg, switches once it delivers an init and a fragment, kills the old one', () => {
     const clock = new ManualClock(0)
@@ -160,7 +183,7 @@ describe('RtspRelay.rotateSource', () => {
     expect(a.got.map((m) => m.kind)).toEqual(['init', 'fragment'])
 
     relay.rotateSource('rtsps://cam/x?auth=t2')
-    expect((spawnImpl.mock.calls[1] as unknown as [string, string[]])[1]).toContain('rtsps://cam/x?auth=t2')
+    expect(sourceOf((spawnImpl.mock.calls[1] as unknown as [string, string[]])[1]).text).toContain("file 'rtsps://cam/x?auth=t2'")
     // as long as the replacement has not delivered a picture, the old source keeps feeding the subscribers
     spawned[0]!.stdout.write(fragment(2))
     spawned[1]!.stdout.write(Buffer.concat([FTYP, MOOV]))
