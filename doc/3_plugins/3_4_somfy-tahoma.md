@@ -1,6 +1,6 @@
 # Plugin Somfy TaHoma
 
-> Dernière mise à jour : 2026-10-14
+> Dernière mise à jour : 2026-10-24
 > Sources : `apps/server/src/plugins/tahoma/{index,client,mapping,types}.ts`, tests `mapping.test.ts`,, `history.ts`, `solar.test.ts` (volets solaires, 2026-09-24)
 > `plugin.test.ts`, fixtures `__fixtures__/box.ts`, `apps/server/.env.example`,
 > [Somfy-Developer/Somfy-TaHoma-Developer-Mode](https://github.com/Somfy-Developer/Somfy-TaHoma-Developer-Mode)
@@ -381,3 +381,13 @@ redémarrage le relance. **Levée le même jour** : l'hôte retente désormais u
 (`../1_architecture/1_2_serveur-et-plugins.md`, mise à jour du 2026-09-24). Relevé : une box qui répond 400 « No registered event listener. » pour un
 écouteur inconnu — cas déjà géré (réenregistrement), donc hors de cause.
 
+### Mise à jour 2026-10-24 — certificat de la box épinglé au premier contact
+
+Comme Hue, Enphase et iRobot (2026-10-24, `core/tls-pin.ts`) : avec `TAHOMA_TLS_INSECURE=true` (défaut),
+le certificat de la box n'était pas vérifié et le jeton `TAHOMA_TOKEN` partait vers quiconque prenait son
+adresse. Il est désormais épinglé au premier contact (`.state/tahoma-tls-pin.json`) ; un certificat
+différent coupe la connexion avant tout envoi, santé `error`. Le jeton vient de `.env` et il n'y a pas
+d'appairage dans Kasbah : pour accepter un nouveau certificat (box remplacée, mise à jour qui le
+régénère), **supprimer `.state/tahoma-tls-pin.json` puis redémarrer le serveur**. Test sur un vrai
+serveur TLS local (`tahoma/plugin.test.ts`). Pas encore essayé sur la vraie box : au premier démarrage,
+le journal doit montrer `device certificate pinned`.

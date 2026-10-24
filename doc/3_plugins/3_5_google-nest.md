@@ -1,6 +1,6 @@
 # Plugin Google Nest (caméras, sonnettes)
 
-> Dernière mise à jour : 2026-10-21
+> Dernière mise à jour : 2026-10-24
 > Sources : `apps/server/src/plugins/nest/{index,client,mapping,types}.ts`, `apps/server/src/plugins/nest/__fixtures__/sdm.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/server/.env.example`, `apps/web/src/components/NestLinkCard.vue`, demande de l'utilisateur du 2026-09-09
 
 ## Ce que l'utilisateur veut, et par étapes
@@ -557,3 +557,13 @@ partirait vers le nouvel appareil. Même principe que `VehicleClimate` (800 ms),
 Vérifié en mode simulé : quatre clics affichent 20,5 → 19,0 °C, aucune commande pendant les clics,
 une seule à 19,0 °C ensuite. Pas encore rejoué sur le vrai thermostat. Tests : `HeatingControl.test.ts`
 (une commande après la rafale, aller-retour, démontage), `ClimateControl.test.ts` (changement d'appareil).
+
+### Mise à jour 2026-10-24 — le jeton du flux RTSP est visible dans la ligne de commande de ffmpeg
+
+Constat F38 d'un audit de sécurité, **non corrigé dans le code** : l'adresse `rtsps://…?auth=<jeton>` que
+Google rend est passée à ffmpeg par `-i` (`core/video/rtsp-relay.ts`), donc lisible par tout compte
+local de la machine (`ps`, `/proc/<pid>/cmdline`) pendant que le flux tourne ; le jeton change toutes
+les 4 minutes. ffmpeg n'a pas de fichier d'options et ne lit pas son entrée dans l'environnement ; les
+parades (relais TCP local qui ajoute le jeton, liste `concat` dans un fichier 0600) ne se vérifient pas
+sans vraie caméra et ont été laissées de côté. Parade retenue, côté machine : voir
+`../5_setup/5_2_production.md` (`hidepid`). Sans autre compte local sur le serveur, le risque est nul.

@@ -68,8 +68,8 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | Intégrations | Dernière mise à jour |
 |---|---|
 | [3_1 Philips Hue](3_plugins/3_1_philips-hue.md) | 2026-10-24 |
-| [3_4 Somfy TaHoma](3_plugins/3_4_somfy-tahoma.md) | 2026-10-14 |
-| [3_5 Google Nest (caméras, sonnettes)](3_plugins/3_5_google-nest.md) | 2026-10-21 |
+| [3_4 Somfy TaHoma](3_plugins/3_4_somfy-tahoma.md) | 2026-10-24 |
+| [3_5 Google Nest (caméras, sonnettes)](3_plugins/3_5_google-nest.md) | 2026-10-24 |
 | [3_6 Google Cast](3_plugins/3_6_google-cast.md) | 2026-10-23 |
 | [3_7 Enphase](3_plugins/3_7_enphase.md) | 2026-10-24 |
 | [3_8 Tesla (Fleet API)](3_plugins/3_8_tesla.md) | 2026-10-20 |
@@ -123,7 +123,7 @@ Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5
 |---|---|
 | [5_0 Installation et scripts](5_setup/5_0_installation-et-scripts.md) | 2026-10-20 |
 | [5_1 Configuration (.env)](5_setup/5_1_configuration-env.md) | 2026-10-24 |
-| [5_2 Production](5_setup/5_2_production.md) | 2026-10-13 |
+| [5_2 Production](5_setup/5_2_production.md) | 2026-10-24 |
 <!-- section:5_setup:end -->
 
 ## 6 — FAQ

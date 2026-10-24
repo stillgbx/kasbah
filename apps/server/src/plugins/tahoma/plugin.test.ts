@@ -1,8 +1,10 @@
+import { X509Certificate } from 'node:crypto'
 import { ManualClock } from '@kasbah/mock-sim'
 import pino from 'pino'
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
+import { selfSignedCertificate, startTlsServer, type TestCertificate } from '../../core/test-tls'
 import { EVENTS, EVENTS_STOPPED, IO_SHUTTER, IO_VENETIAN, RTS_SHUTTER, SETUP } from './__fixtures__/box'
 import { createTahomaPlugin, tahomaConfigSchema } from './index'
 
@@ -328,5 +330,42 @@ describe('tahoma plugin', () => {
     })
     expect(plugin.health!()).toMatchObject({ status: 'error', detail: expect.stringContaining('Not authenticated.') })
     await plugin.stop()
+  })
+})
+
+/** Just enough of a box over real TLS: the token-free `/apiVersion`, an empty setup. */
+function respondLikeABox(chunk: string): string | undefined {
+  const path = /^(?:GET|POST) \S*\/enduserAPI(\S+)/.exec(chunk)?.[1]
+  if (!path) return undefined
+  const body = JSON.stringify(path === '/apiVersion' ? { protocolVersion: '2021.5.4' } : { devices: [], rootPlace: { label: 'Maison', oid: 'p', subPlaces: [] } })
+  return `HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: ${Buffer.byteLength(body)}\r\n\r\n${body}`
+}
+
+describe('tahoma box certificate pin', () => {
+  const fingerprint = (c: TestCertificate) => new X509Certificate(c.cert).fingerprint256
+
+  it('pins the box met first, then never sends the token to a box with another certificate', async () => {
+    const cert = selfSignedCertificate()
+    const server = await startTlsServer(cert, respondLikeABox)
+    const boxConfig = tahomaConfigSchema.parse({ TAHOMA_HOST: '127.0.0.1', TAHOMA_PORT: String(server.port), TAHOMA_TOKEN: 'secret-token' })
+
+    // first contact: learned, and the box answers
+    let saved: string | undefined
+    const first = createTahomaPlugin({ pinFile: { load: async () => saved, save: async (fp) => { saved = fp } } })
+    await first.init(fakeContext(boxConfig, new ManualClock(0)).ctx)
+    expect(saved).toBe(fingerprint(cert))
+    expect(first.health!().status).not.toBe('error')
+    await first.stop()
+
+    // pinned on another box: nothing leaves, and the health says what to do
+    const before = server.received().length
+    saved = fingerprint(selfSignedCertificate())
+    const second = createTahomaPlugin({ pinFile: { load: async () => saved, save: async (fp) => { saved = fp } } })
+    await second.init(fakeContext(boxConfig, new ManualClock(0)).ctx)
+    await expect(second.discover()).rejects.toThrow()
+    expect(server.received().slice(before)).toBe('')       // not even the request line, let alone the token
+    expect(second.health!()).toEqual({ status: 'error', detail: expect.stringContaining('tahoma-tls-pin.json') })
+    await second.stop()
+    await server.close()
   })
 })

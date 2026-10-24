@@ -1,7 +1,8 @@
-import { Agent, fetch as undiciFetch } from 'undici'
+import { fetch as undiciFetch, type Agent } from 'undici'
 import type { Logger } from 'pino'
 import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
+import { pinnedAgent, type TlsPin } from '../../core/tls-pin'
 import {
   overkizApiVersionSchema, overkizDeviceSchema, overkizErrorSchema, overkizEventsSchema, overkizListenerSchema,
   overkizSetupEnvelopeSchema, type OverkizAction, type OverkizDevice, type OverkizEvent,
@@ -10,7 +11,8 @@ import {
 // Client for the Overkiz local API (developer mode of the TaHoma box). Three peculiarities:
 //  - the box certificate is signed by the Overkiz CA for the name `gateway-XXXX-XXXX-XXXX.local`:
 //    reaching the box by its IP fails TLS verification → dedicated undici Agent (never globally,
-//    same choice as the Hue bridge);
+//    same choice as the Hue bridge), the certificate pinned on first use instead (`core/tls-pin.ts`):
+//    the token never goes to a box presenting another one;
 //  - there is no pushed event stream: we register a listener then poll it;
 //  - EACH request carries its own timeout. The box usually answers in 50 to 300 ms, but it has been
 //    seen blocking a command beyond 10 s without logging anything. undici's default being 300 s, a
@@ -25,6 +27,8 @@ export interface TahomaClientOptions {
   port: number
   token?: string
   insecureTls?: boolean
+  /** Without CA verification, the box certificate must match it. Without a pin, verification stays on. */
+  pin?: TlsPin
   fetchImpl?: FetchLike
   logger?: Logger
   /** Shortened in tests; in production it is `REQUEST_TIMEOUT_MS`. */
@@ -37,7 +41,7 @@ export class TahomaClient {
   private readonly logger: Logger | undefined
 
   constructor(private readonly opts: TahomaClientOptions) {
-    this.dispatcher = opts.insecureTls === false ? undefined : new Agent({ connect: { rejectUnauthorized: false } })
+    this.dispatcher = opts.insecureTls === false || !opts.pin ? undefined : pinnedAgent(opts.pin)
     this.fetchImpl = opts.fetchImpl
       ?? ((url, init) => undiciFetch(url, init as Parameters<typeof undiciFetch>[1]) as unknown as ReturnType<FetchLike>)
     this.logger = opts.logger

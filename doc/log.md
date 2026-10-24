@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-24] update | Sécurité : certificat de la box TaHoma épinglé, jeton RTSP de Nest documenté
+
+**Déclencheur** : suite de l'audit de sécurité de `apps/server` : TaHoma ne vérifiait pas non plus son certificat ; constat F38 (jeton du flux Nest dans la ligne de commande de ffmpeg).
+
+**Pages modifiées** :
+- `3_plugins/3_4_somfy-tahoma.md` - mise à jour datée : épingle TOFU, accepter un nouveau certificat en supprimant `.state/tahoma-tls-pin.json`.
+- `3_plugins/3_5_google-nest.md` - mise à jour datée : F38 non corrigé dans le code, pourquoi, et la parade côté machine.
+- `5_setup/5_2_production.md` - section datée : `hidepid=2` sur `/proc`.
+
+**Index** : catalogues mis à jour (3 lignes), index.md régénéré.
+
 ## [2026-10-24] update | Sécurité : robustesse (connexions, messages iRobot, descriptions iCal)
 
 **Déclencheur** : audit de sécurité de `apps/server`, constats F17, F28 (blocage des connexions), F39 (récursion iRobot), F41 (expression régulière iCal).

@@ -1,6 +1,6 @@
 # Production
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-24
 > Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts` (2026-10-13)
 
 ## Build
@@ -383,3 +383,17 @@ la tâche planifiée Windows et le service systemd ci-dessus, à confirmer au pr
 
 Sources : `scripts/supervisor.mjs`, `apps/server/src/http/system.ts` (+ test), `apps/server/src/main.ts`,
 `apps/server/src/app.ts`, `apps/server/src/http/session.ts`, `apps/web/src/components/settings/ServerUpdateCard.vue`.
+
+## Mise à jour 2026-10-24 — cacher les lignes de commande des autres comptes (`hidepid`)
+
+Le relais vidéo Nest passe à ffmpeg une adresse qui contient un jeton d'accès au flux (constat F38, voir
+`../3_plugins/3_5_google-nest.md`). Sous Linux, toute ligne de commande est lisible par tous les comptes
+de la machine. Si le serveur de production a d'autres comptes que celui de Kasbah, monter `/proc` avec
+`hidepid=2` : chaque compte ne voit plus que ses propres processus.
+
+```
+# /etc/fstab
+proc  /proc  proc  defaults,hidepid=2  0  0
+```
+
+puis `sudo mount -o remount,hidepid=2 /proc`. Sans autre compte local, rien à faire.

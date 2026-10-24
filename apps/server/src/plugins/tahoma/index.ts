@@ -7,6 +7,7 @@ import { stateFile } from '../../core/paths'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { createPoller } from '../../core/poll'
 import type { FetchLike } from '../../core/sse'
+import { TlsPin, createPinFile, type PinFile } from '../../core/tls-pin'
 import { TahomaClient } from './client'
 import { LightHistory, createLightHistoryFile, type LightHistoryStore } from './history'
 import {
@@ -70,6 +71,8 @@ export interface TahomaPluginDeps {
   requestTimeoutMs?: number
   /** Injection for tests: in-memory light history. */
   lightHistoryStore?: LightHistoryStore
+  /** Injection for tests: the box certificate pin (otherwise a file under `.state/`). */
+  pinFile?: PinFile
 }
 
 interface Entry {
@@ -108,6 +111,8 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
   let ctx: PluginContext | null = null
   let config: TahomaConfig | null = null
   let client: TahomaClient | null = null
+  /** Box certificate, pinned on first use. */
+  let pin: TlsPin | null = null
   let entries = new Map<string, Entry>()
   let sensors = new Map<string, SensorEntry>()
   let history = new LightHistory()
@@ -330,8 +335,11 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
         lastError = 'TAHOMA_HOST is not set'
         return
       }
+      // the token comes from `.env`, there is no pairing to clear the pin: deleting its file does
+      const pinFile = deps.pinFile ?? createPinFile(stateFile('tahoma-tls-pin.json'), c.logger)
+      pin = new TlsPin(await pinFile.load(), (fp) => { void pinFile.save(fp) }, { device: 'TaHoma box', logger: c.logger })
       client = new TahomaClient({
-        host: config.TAHOMA_HOST, port: config.TAHOMA_PORT, insecureTls: config.TAHOMA_TLS_INSECURE,
+        host: config.TAHOMA_HOST, port: config.TAHOMA_PORT, insecureTls: config.TAHOMA_TLS_INSECURE, pin,
         logger: c.logger, ...(config.TAHOMA_TOKEN ? { token: config.TAHOMA_TOKEN } : {}),
         ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
         ...(deps.requestTimeoutMs !== undefined ? { requestTimeoutMs: deps.requestTimeoutMs } : {}),
@@ -440,6 +448,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
 
     health(): PluginHealth {
       if (!config?.TAHOMA_HOST) return { status: 'error', detail: 'set TAHOMA_HOST to the box address' }
+      if (pin?.changed) return { status: 'error', detail: 'Le certificat de la box TaHoma a changé : connexion refusée. Pour accepter le nouveau, supprimer .state/tahoma-tls-pin.json puis redémarrer le serveur.' }
       if (!localApiUp) {
         return {
           status: 'error',
