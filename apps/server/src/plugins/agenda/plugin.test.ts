@@ -1,3 +1,6 @@
+import { once } from 'node:events'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import Fastify from 'fastify'
 import pino from 'pino'
 import { describe, expect, it, vi } from 'vitest'
@@ -243,5 +246,27 @@ describe('agenda plugin', () => {
     for (const ids of [[b.id], [b.id, b.id], [b.id, 'nope']]) {
       expect((await app.inject({ method: 'PUT', url: '/api/plugins/agenda/calendars/order', payload: { ids } })).statusCode).toBe(400)
     }
+  })
+})
+
+describe('agenda feed reach', () => {
+  it('never fetches a feed on the local network or the machine itself (the real fetch, not an injected one)', async () => {
+    let hits = 0
+    const server = createServer((_req, res) => { hits++; res.end(ICS) })
+    server.listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const store = memoryCalendars()
+    const plugin = createAgendaPlugin({ store })
+    await plugin.init(fakeCtx(plugin.configSchema.parse({})))
+    const app = Fastify()
+    await app.register(async (sub) => plugin.registerRoutes!.call(plugin, sub), { prefix: '/api/plugins/agenda' })
+    await app.ready()
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/basic.ics`
+    const res = await app.inject({ method: 'POST', url: '/api/plugins/agenda/calendars', payload: { url } })
+    expect(res.statusCode).toBe(502)
+    expect(hits).toBe(0)
+    expect(await store.load()).toEqual([])
+    await app.close()
+    await new Promise((ok) => server.close(ok))
   })
 })

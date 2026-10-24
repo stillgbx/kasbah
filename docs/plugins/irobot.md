@@ -24,7 +24,7 @@
 
 Once the account is linked, everything happens locally: the Kasbah server opens an encrypted MQTT session (port 8883) directly with the robot. No vendor polling, no quota, nothing leaves the network.
 
-The detour through the iRobot account is needed only once: recent Roombas no longer hand out the password of their local broker to whoever asks for it on the network. So Kasbah obtains it by signing in to the account, then stores it, for each robot, in `apps/server/.state/irobot-session.json`. The **account** password passes through the server only once and is neither written nor logged. There is no delegated sign-in (OAuth). Accounts with two-factor authentication are not supported.
+The detour through the iRobot account is needed only once: recent Roombas no longer hand out the password of their local broker to whoever asks for it on the network. So Kasbah obtains it by signing in to the account, then stores it, for each robot, in `apps/server/.state/irobot-session.json`. The **account** password passes through the server only once and is neither written nor logged. On the local network it crosses in plain HTTP, since Kasbah is not served over HTTPS. To keep it off the network, link the account from the public address (HTTPS) when Kasbah has one (`MCP_PUBLIC_URL`, see the README's **Remote access**). There is no delegated sign-in (OAuth). Accounts with two-factor authentication are not supported.
 
 ## Setup
 

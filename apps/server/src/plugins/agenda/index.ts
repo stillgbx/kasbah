@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { PluginHealth } from '@kasbah/shared'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
+import { publicFetch } from '../../core/outbound'
 import { stateFile } from '../../core/paths'
 import { createPoller } from '../../core/poll'
 import { sendError } from '../../http/errors'
@@ -40,7 +41,8 @@ interface Feed { parsed: ParsedCalendar | null; fetchedAt: number | null; error:
 const MAX_FEED_BYTES = 10 * 1024 * 1024
 
 const defaultFetch: FetchIcs = async (url, signal) => {
-  const res = await fetch(url, { signal, headers: { accept: 'text/calendar' } })
+  // a public address only: the feed address is typed by whoever adds the calendar (`core/outbound.ts`)
+  const res = await publicFetch(url, { signal, headers: { accept: 'text/calendar' } })
   // the address does not go into the message: it is as good as a password
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const tooBig = new Error(`agenda trop volumineux (plus de ${MAX_FEED_BYTES / 1024 / 1024} Mo)`)

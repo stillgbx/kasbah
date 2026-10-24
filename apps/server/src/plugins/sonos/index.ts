@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { stateFile } from '../../core/paths'
 import { createPoller } from '../../core/poll'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
+import { publicFetch } from '../../core/outbound'
 import { isRasterImage, isWebUrl, sendArt } from '../../http/art'
 import { sendError } from '../../http/errors'
 import type { FetchLike } from '../../core/sse'
@@ -233,7 +234,10 @@ export function createSonosPlugin(deps: SonosPluginDeps = {}): DevicePlugin {
     const cached = artCache.get(url)
     const now = ctx!.clock.now()
     if (cached && now - cached.at < (cached.status === 200 ? ART_TTL_MS : ART_FAIL_TTL_MS)) return cached
-    const fetchArt = deps.artFetch ?? ((u, init) => fetch(u, init))
+    // A speaker serves the cover of what it plays (`http://<speaker>:1400/getaa…`): local, and allowed
+    // for a speaker we know only. Any other address must be public (`core/outbound.ts`).
+    const fromSpeaker = (u: string) => { const { hostname, port } = new URL(u); return port === '1400' && [...entries.values()].some((e) => e.player.host === hostname) }
+    const fetchArt = deps.artFetch ?? ((u, init) => (fromSpeaker(u) ? fetch(u, init) : publicFetch(u, init)))
     try {
       const res = await fetchArt(url, { signal: AbortSignal.timeout(ART_FETCH_TIMEOUT_MS) })
       const type = res.headers.get('content-type') ?? 'image/jpeg'

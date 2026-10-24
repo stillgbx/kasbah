@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto'
+import { once } from 'node:events'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -234,6 +237,25 @@ it('keeps the tokens after a restart', async () => {
   app = Fastify()
   await app.register(async (sub) => { auth.routes(sub); sub.get('/mcp', { onRequest: auth.requireToken }, async () => ({ ok: true })) })
   expect((await callMcp(tokens.access_token)).statusCode).toBe(200)
+})
+
+it('never fetches a client metadata document from the local network (the real fetch)', async () => {
+  let hits = 0
+  const server = createServer((_req, res) => { hits++; res.end('{}') })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const dir = usersFile.replace(/mcp-users\.json$/, '')
+  const auth = createMcpAuth({
+    config: mcpAuthConfigSchema.parse({ MCP_USERS_FILE: usersFile, MCP_AUTH_FILE: join(dir, 'mcp-auth.json') }),
+    logger: pino({ level: 'silent' }), now: () => clock,
+  })
+  app = Fastify()
+  await app.register(async (sub) => { auth.routes(sub) })
+  const clientId = `https://127.0.0.1:${(server.address() as AddressInfo).port}/client.json`
+  const res = await app.inject({ method: 'GET', url: `/oauth/authorize?${new URLSearchParams(authorizeParams(clientId))}` })
+  expect(res.statusCode).toBe(400)
+  expect(hits).toBe(0)
+  await new Promise((ok) => server.close(ok))
 })
 
 it('accepts a client described by its metadata document (client_id = URL)', async () => {

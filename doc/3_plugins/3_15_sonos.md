@@ -1,6 +1,6 @@
 # Plugin Sonos (enceintes, Port)
 
-> Dernière mise à jour : 2026-10-23
+> Dernière mise à jour : 2026-10-24
 > Sources : `apps/server/src/plugins/sonos/{index,discovery,soap,mapping,known,types}.ts`, fixtures `apps/server/src/plugins/sonos/__fixtures__/network.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/server/src/plugins/index.ts`, `apps/server/.env.example`, `tools/sonos-probe.mts`, `apps/web/src/views/MediaView.vue`, `apps/server/test/integration.test.ts`
 
 ## Ce que l'utilisateur veut, et ce que le local permet
@@ -268,3 +268,11 @@ Sonos) : seules les adresses http(s) sont retenues (`isWebUrl`, ni `data:` ni `f
 matriciels passent (`isRasterImage` : jpeg, png, gif, webp, avif, bmp, icône ; **pas** SVG, sinon 415 puis
 502), et la réponse porte `X-Content-Type-Options: nosniff` et `Content-Security-Policy: default-src 'none';
 sandbox` (`sendArt`). Une balise `<img>` n'en est pas gênée.
+
+### Mise à jour 2026-10-24 (2) — `/art` : l'enceinte connue, ou une adresse publique
+
+Constat F24 : comme pour Cast, `/art` allait chercher n'importe quelle adresse retenue. Une pochette servie
+par une enceinte (`http://<enceinte>:1400/getaa…`) reste chargée normalement, **si l'enceinte est connue**
+(même hôte, port 1400) ; toute autre adresse passe par `publicFetch` (`core/outbound.ts`) : adresse
+publique seule. Tests : `sonos/plugin.test.ts` (adresse locale refusée sans être contactée ; pochette d'une
+enceinte connue servie).

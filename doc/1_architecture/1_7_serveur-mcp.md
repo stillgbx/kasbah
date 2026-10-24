@@ -765,3 +765,10 @@ du 2026-10-15. Choix de l'utilisateur, garde **dans le serveur**, pas dans le mo
 
 Tests : `mcp/server.test.ts` (portail refusé après chacune des trois lectures, accepté avec un nouveau
 jeton ; activation et lancement refusés au MCP, acceptés par l'app).
+
+### Mise à jour 2026-10-24 (2) — document de métadonnées d'un client : adresse publique seule
+
+Constat F27 : `client_id` vient de n'importe qui, sans compte (`/oauth/authorize`), et le serveur allait
+chercher son document à cette adresse, réseau local compris : de quoi sonder le réseau de la maison au
+temps de réponse. Le document passe désormais par `publicFetch` (`core/outbound.ts`) : adresse publique
+seule, redirection toujours refusée. Les clients réels (claude.ai) ne sont pas touchés.

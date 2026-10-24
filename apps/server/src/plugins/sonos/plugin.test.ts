@@ -1,3 +1,6 @@
+import { once } from 'node:events'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import Fastify from 'fastify'
 import pino from 'pino'
 import { describe, expect, it, vi } from 'vitest'
@@ -292,5 +295,53 @@ describe('sonos plugin', () => {
       },
     })
     await plugin.stop()
+  })
+})
+
+// The /art relay fetches with the real fetch here (no `artFetch`): what the server may reach.
+describe('sonos /art reach', () => {
+  const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xd9])
+  const imageServer = async (port = 0) => {
+    let hits = 0
+    const server = createServer((_req, res) => { hits++; res.writeHead(200, { 'content-type': 'image/jpeg' }); res.end(JPEG) })
+    server.listen(port, '127.0.0.1')
+    await once(server, 'listening')
+    return { port: (server.address() as AddressInfo).port, hits: () => hits, close: () => new Promise((ok) => server.close(ok)) }
+  }
+  const coverOf = async (plugin: ReturnType<typeof createSonosPlugin>, ctx: PluginContext, artUrl: string) => {
+    await plugin.execute(UUID_PLAY3, { type: 'media_player.play_url', url: 'https://example.org/live.mp3', title: 'T', artUrl })
+    const app = Fastify({ logger: false })
+    await app.register(async (a) => { plugin.registerRoutes!(a) }, { prefix: '/api/plugins/sonos' })
+    const proxied = (patches(ctx, UUID_PLAY3).at(-1) as { nowPlaying: { artUrl: string } }).nowPlaying.artUrl
+    const res = await app.inject({ method: 'GET', url: proxied })
+    await app.close()
+    return res
+  }
+
+  it('never fetches a local address that is not one of our speakers', async () => {
+    const local = await imageServer()
+    const { plugin, ctx } = await started(fakeNetwork(), fakeDiscovery(), fakeKnown([PLAYER_PLAY3]))
+    const res = await coverOf(plugin, ctx, `http://127.0.0.1:${local.port}/router.jpg`)
+    expect(res.statusCode).toBe(502)
+    expect(local.hits()).toBe(0)
+    await plugin.stop()
+    await local.close()
+  })
+
+  it('still fetches the cover a known speaker serves on its port 1400', async (t) => {
+    const speaker = await imageServer(1400).catch(() => null)
+    if (!speaker) return t.skip()                        // port 1400 taken on this machine
+    // the speaker lives on this machine: its group description must say so too, or it moves back
+    const net = fakeNetwork()
+    const base = net.fetchImpl.getMockImplementation()!
+    net.fetchImpl.mockImplementation(async (url, init) => (actionOf(init).includes('GetZoneGroupState')
+      ? textRes(SOAP_ZONES.replaceAll(HOST_PLAY3, '127.0.0.1'))
+      : base(url, init)))
+    const { plugin, ctx } = await started(net, fakeDiscovery(), fakeKnown([{ ...PLAYER_PLAY3, host: '127.0.0.1' }]))
+    const res = await coverOf(plugin, ctx, 'http://127.0.0.1:1400/getaa?s=1&u=x')
+    expect(res.statusCode).toBe(200)
+    expect(speaker.hits()).toBe(1)
+    await plugin.stop()
+    await speaker.close()
   })
 })

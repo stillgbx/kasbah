@@ -139,3 +139,11 @@ description piégée bloquait le serveur à chaque ouverture de l'agenda. Désor
 description tronquée à 20 000 caractères, nettoyage seulement pour une occurrence gardée, et flux refusé
 au-delà de 10 Mo (« agenda trop volumineux »). Test : une règle quotidienne depuis 1990 avec 100 000 `<`
 reste sous les 2 s.
+
+### Mise à jour 2026-10-24 (3) — flux d'agenda : adresse publique seule
+
+Constat F25 : l'adresse d'un agenda, tapée par qui l'ajoute, était chargée sans contrôle : réseau local,
+machine elle-même (routes réservées au réseau local) et redirections comprises, avec des erreurs qui
+servaient à sonder le réseau. Le flux passe désormais par `publicFetch` (`core/outbound.ts`) : un agenda
+servi depuis le réseau local (un NAS) est refusé, choix assumé (les agendas de la maison sont sur
+Internet).

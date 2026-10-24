@@ -1,6 +1,6 @@
 # Plugin Google Cast (enceintes, réveils, Chromecast, barres de son)
 
-> Dernière mise à jour : 2026-10-23
+> Dernière mise à jour : 2026-10-24
 > Sources : `apps/server/src/plugins/google_cast/{index,channel,discovery,mapping,protocol,types}.ts`, `apps/server/src/plugins/google_cast/__fixtures__/network.ts`, tests `protocol.test.ts`, `mapping.test.ts` et `plugin.test.ts`, `apps/server/.env.example`, `apps/web/src/views/MediaView.vue`, demande de l'utilisateur du 2026-09-09, `apps/server/src/plugins/google_cast/known.ts`, `apps/server/src/plugins/google_cast/enrich/cover.ts`, `tools/cast-probe.mts`, `apps/server/src/plugins/google_cast/bravia.ts`, `apps/server/src/plugins/google_cast/__fixtures__/bravia.ts`
 
 ## Ce que l'utilisateur veut, et ce que le protocole permet
@@ -683,3 +683,11 @@ Sonos) : seules les adresses http(s) sont retenues (`isWebUrl`, ni `data:` ni `f
 matriciels passent (`isRasterImage` : jpeg, png, gif, webp, avif, bmp, icône ; **pas** SVG, sinon 415 puis
 502), et la réponse porte `X-Content-Type-Options: nosniff` et `Content-Security-Policy: default-src 'none';
 sandbox` (`sendArt`). Une balise `<img>` n'en est pas gênée.
+
+### Mise à jour 2026-10-24 (2) — `/art` ne va chercher qu'une adresse publique
+
+Constat F30 : `/art` allait chercher n'importe quelle adresse retenue (une `artUrl` de `play_url`, l'image
+annoncée par un émetteur Cast), réseau local et machine elle-même compris : un compte connecté depuis
+l'extérieur lisait ainsi une page de la box ou les routes réservées au réseau local. Les pochettes passent
+désormais par `publicFetch` (`apps/server/src/core/outbound.ts`) : adresse publique seule, redirections
+comprises. Les pochettes Cast sont toujours sur Internet : rien ne change à l'usage.

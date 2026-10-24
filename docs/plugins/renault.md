@@ -25,7 +25,7 @@
 ## Connection
 
 - **Cloud, a use not intended by the vendor's terms**: like every private API, it can change without notice. Renault changed its keys in May 2026, for instance, which broke third-party integrations.
-- **Password entered in the interface, never in `.env`**: it goes through the server only once and is neither logged nor written. Only a session token is kept, in `apps/server/.state/renault-session.json`. It does, however, cross your local network in plain HTTP, since Kasbah is not served over HTTPS.
+- **Password entered in the interface, never in `.env`**: it goes through the server only once and is neither logged nor written. Only a session token is kept, in `apps/server/.state/renault-session.json`. It does, however, cross your local network in plain HTTP, since Kasbah is not served over HTTPS. To keep it off the network, link the account from the public address (HTTPS) when Kasbah has one (`MCP_PUBLIC_URL`, see the README's **Remote access**).
 - **Two-factor authentication**: an account that has it enabled cannot be linked (Renault refuses it to a third party). Linking says so clearly.
 - **Rate**: Renault tolerates about 60 calls per hour and blocks the whole account beyond that (the MY Renault app included, for at least an hour). Kasbah limits itself and reads every 10 minutes.
 

@@ -192,3 +192,13 @@ Inchangé : le blocage d'un compte après N échecs d'affilée reste commun à t
 mot de passe) ; quelqu'un qui connaît un nom de compte peut donc encore le bloquer 15 minutes. Tests :
 `http/session.test.ts` (douze essais simultanés → trois refus 401 et neuf 429 ; un client bloqué, un
 autre qui se connecte).
+
+### Mise à jour 2026-10-24 (3) - les mots de passe de comptes tiers passent en clair sur le réseau local
+
+Constat F35 d'un audit de sécurité, **documenté sans changement de code** (choix de l'utilisateur) : relier
+un compte Renault, MELCloud, iRobot ou Enphase (compte Enlighten) envoie son mot de passe au serveur dans
+le corps d'une requête. Sur le réseau local, Kasbah n'est servi qu'en HTTP : un appareil malveillant du
+réseau qui écoute au bon moment le lit. Le serveur ne le garde pas (seul un jeton ou une session est
+conservé). Parade : relier ces comptes depuis l'adresse publique (HTTPS, `MCP_PUBLIC_URL`). Écarté :
+refuser ces mots de passe reçus en HTTP, qui rendait la liaison impossible sans adresse publique. Les
+pages `docs/plugins/{renault,melcloud,irobot}.md` le disent.

@@ -1,6 +1,6 @@
 # Plugin Renault (véhicules, Gigya + Kamereon)
 
-> Dernière mise à jour : 2026-10-22
+> Dernière mise à jour : 2026-10-24
 > Sources : `apps/server/src/plugins/renault/{index,auth,client,mapping,types}.ts`, `apps/server/src/plugins/renault/__fixtures__/kamereon.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/components/RenaultLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/server/.env.example`, capture du vrai compte le 2026-09-14 (Renault 5 E-Tech `R5E1VE`), documentation `renault-api` (hacf-fr), portail `developer.ampere.cars`, dépôt `evcc-io/evcc` (modes de réveil), forum communautaire Renault, écriture de la cible de charge essayée sur le vrai véhicule le 2026-09-14, diagnostic du 2026-09-19 sur le vrai véhicule et le vrai serveur (réveil de charge qui ne partait pas), portail `developer.renaultgroup.com` (propriétés véhicule partenaires), session du 2026-10-22
 
 ## Il n'existe aucune voie officielle
@@ -748,3 +748,9 @@ Ce qui en est sorti est une appli **Android Auto** (sur le téléphone, affiché
 portail, les garages et la voix : [1_15 Appli Android Auto](../1_architecture/1_15_appli-android-auto.md).
 Son écran « Voiture » relève ce qu'Android Auto transmet de la voiture (énergie, autonomie, vitesse,
 compteur) — pas de pression des pneus non plus.
+
+### Mise à jour 2026-10-24 — mot de passe en clair sur le réseau local (documenté)
+
+Constat F35 : le mot de passe MY Renault traverse le réseau local en HTTP au moment de la liaison. Pas de
+changement de code ; conseil de relier le compte depuis l'adresse publique (HTTPS). Détail et choix :
+`../1_architecture/1_13_comptes-et-sessions.md`, section du 2026-10-24 (3).

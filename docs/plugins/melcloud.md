@@ -25,7 +25,7 @@ What the plugin does not do: see Limitations.
 
 The Kasbah server polls Mitsubishi's cloud at regular intervals (one reading every 2 minutes by default, a single call for the whole account). Nothing goes through the local network. This API is not published by Mitsubishi for consumers: it is the app's API, with the risk that it changes without notice.
 
-There is no delegated sign-in (OAuth). The password passes through the server **only once**, and is neither written nor logged; in exchange MELCloud returns a session key, the only thing kept, in `apps/server/.state/melcloud-session.json`.
+There is no delegated sign-in (OAuth). The password passes through the server **only once**, and is neither written nor logged; in exchange MELCloud returns a session key, the only thing kept, in `apps/server/.state/melcloud-session.json`. On the local network it crosses in plain HTTP, since Kasbah is not served over HTTPS. To keep it off the network, link the account from the public address (HTTPS) when Kasbah has one (`MCP_PUBLIC_URL`, see the README's **Remote access**).
 
 ## Setup
 

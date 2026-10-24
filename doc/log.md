@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-24] update | Sécurité : le serveur ne va plus chercher d'adresse locale pour autrui ; mots de passe en clair documentés
+
+**Déclencheur** : audit de sécurité de `apps/server`, constats F24, F25, F27, F30 (requêtes vers des adresses choisies par d'autres) et F35 (mots de passe de comptes tiers en HTTP sur le réseau local).
+
+**Pages modifiées** :
+- `3_plugins/3_6_google-cast.md`, `3_plugins/3_15_sonos.md`, `3_plugins/3_22_agenda.md`, `1_architecture/1_7_serveur-mcp.md` - sections datées : `publicFetch` (`core/outbound.ts`), adresse publique seule ; exception Sonos pour une enceinte connue.
+- `1_architecture/1_13_comptes-et-sessions.md`, `3_plugins/3_9_renault.md` - F35 documenté, choix de ne pas refuser le HTTP.
+
+**Index** : catalogue mis à jour (4 lignes), index.md régénéré.
+
 ## [2026-10-24] update | Sécurité : le jeton RTSP de Nest hors de la ligne de commande de ffmpeg
 
 **Déclencheur** : F38, d'abord seulement documenté ; ffmpeg 9.0.2 sur le serveur et sur le poste a permis de tester les parades.

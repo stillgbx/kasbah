@@ -9,6 +9,7 @@ import { isBravia, probeBravia, sameAudioOutput, type AudioOutput, type BraviaFe
 import { CastConnection, tlsSocketFactory, type SocketFactory } from './channel'
 import { createMdnsDiscovery, type CastDiscovery } from './discovery'
 import { createKnownDevicesFile, type KnownDevices } from './known'
+import { publicFetch } from '../../core/outbound'
 import { isRasterImage, isWebUrl, sendArt } from '../../http/art'
 import { sendError } from '../../http/errors'
 import { AppIconResolver, registryAppId, type RegistryFetch } from './enrich/appIcon'
@@ -144,7 +145,8 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
   /** Cover URLs seen in media states (the only ones the /art route agrees to serve), most recent last. */
   const knownArt: string[] = []
   const artCache = new Map<string, ArtEntry>()
-  const fetchArt: ArtFetch = deps.fetchImpl ?? ((url, init) => fetch(url, init))
+  // covers are on the Internet: a local address named by a sender or a `play_url` is refused (`core/outbound.ts`)
+  const fetchArt: ArtFetch = deps.fetchImpl ?? ((url, init) => publicFetch(url, init))
   const braviaFetch: BraviaFetch = deps.braviaFetch ?? ((url, init) => fetch(url, init))
   /** False until "start": a state emitted during "discover" would arrive BEFORE the devices are registered and be lost. */
   let started = false

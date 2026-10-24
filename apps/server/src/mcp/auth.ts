@@ -7,6 +7,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { Logger } from 'pino'
 import { z } from 'zod'
 import { writeFileAtomic } from '../core/atomic-file'
+import { publicFetch } from '../core/outbound'
 import { REPO_ROOT, SERVER_ROOT, stateFile, userStateDir } from '../core/paths'
 
 // Authentication of `/mcp`: Kasbah is both the resource server and its own OAuth 2.1 authorization
@@ -393,7 +394,8 @@ export interface McpAuth {
 export function createMcpAuth(deps: McpAuthDeps): McpAuth {
   const { config, logger } = deps
   const now = deps.now ?? Date.now
-  const doFetch = deps.fetch ?? fetch
+  // the client_id comes from anyone, unauthenticated: its document is fetched from a public address only
+  const doFetch = deps.fetch ?? ((url: string, init: { signal?: AbortSignal; redirect?: 'error' }) => publicFetch(url, init))
   const publicUrl = config.MCP_PUBLIC_URL ? new URL(config.MCP_PUBLIC_URL) : null
 
   // Issuer and resource are read from the request: `http://kasbah:8787` on the local network,
