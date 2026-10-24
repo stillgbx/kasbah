@@ -31,8 +31,9 @@ export interface DiscoveredRobot {
  * Reads a robot's answer. Pure, hence testable on the captured frame.
  *
  * Two generations of robots: recent ones give `robotid`, older ones only put the BLID in
- * `hostname` (`Roomba-<blid>`). The address returned by the robot wins over the datagram's: it's
- * the one it believes it has, and it's the one the broker listens on.
+ * `hostname` (`Roomba-<blid>`). The address is the datagram's sender, never the `ip` of the payload:
+ * any host can answer, and an address it chose would send the MQTT link (and the robot password)
+ * wherever it likes.
  */
 export function parseDiscovery(text: string, fromIp: string): DiscoveredRobot | null {
   if (text === PROBE) return null // our own broadcast comes back on the loopback
@@ -45,7 +46,7 @@ export function parseDiscovery(text: string, fromIp: string): DiscoveredRobot | 
   if (!blid) return null
   return {
     blid,
-    ip: p.ip ?? fromIp,
+    ip: fromIp,
     name: p.robotname ?? null,
     sku: p.sku ?? null,
     sw: p.sw ?? null,

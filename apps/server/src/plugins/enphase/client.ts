@@ -1,12 +1,14 @@
-import { Agent, fetch as undiciFetch } from 'undici'
+import { fetch as undiciFetch, type Agent } from 'undici'
 import type { Logger } from 'pino'
 import { PluginError } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
+import { pinnedAgent, type TlsPin } from '../../core/tls-pin'
 
 // Client for the IQ Gateway's local API. Three peculiarities:
 //  - HTTPS ONLY: the gateway's port 80 refuses the connection (verified on the real one), and its
 //    certificate is self-signed → dedicated undici Agent, never global (same choice as Hue and
-//    TaHoma);
+//    TaHoma), and the certificate pinned on first use (`core/tls-pin.ts`): the token never goes to
+//    a gateway presenting another one;
 //  - `/info` answers WITHOUT a token and gives the serial number: that is how the plugin knows the
 //    gateway without asking the user. Everything else requires `Authorization: Bearer`;
 //  - a rejected token does not return a JSON 401 but an HTML page redirecting to /login.html.
@@ -28,6 +30,8 @@ export interface EnphaseClientOptions {
   requestTimeoutMs?: number
   /** Verify the certificate (never in production: it is self-signed). */
   secureTls?: boolean
+  /** The gateway certificate must match it when it is not verified. */
+  pin: TlsPin
 }
 
 export interface GatewayInfo {
@@ -47,7 +51,7 @@ export class EnphaseClient {
   private token: string | undefined
 
   constructor(private readonly opts: EnphaseClientOptions) {
-    this.dispatcher = opts.secureTls ? undefined : new Agent({ connect: { rejectUnauthorized: false } })
+    this.dispatcher = opts.secureTls ? undefined : pinnedAgent(opts.pin)
     this.fetchImpl = opts.fetchImpl
       ?? ((url, init) => undiciFetch(url, init as Parameters<typeof undiciFetch>[1]) as unknown as ReturnType<FetchLike>)
     this.token = opts.token

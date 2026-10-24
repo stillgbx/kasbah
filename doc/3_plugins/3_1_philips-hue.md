@@ -1,6 +1,6 @@
 # Plugin Philips Hue
 
-> Dernière mise à jour : 2026-10-02
+> Dernière mise à jour : 2026-10-24
 > Sources : `apps/server/src/plugins/hue/{index,client,discovery,mapping,types}.ts`, `apps/server/src/core/sse.ts`, tests `mapping.test.ts`, `plugin.test.ts`
 
 ## API utilisée
@@ -180,3 +180,13 @@ confirmation en deux appuis. Le pont émet un `delete` : la resynchronisation di
 scènes. Écrit plus tôt le même jour dans cette page — « Kasbah ne supprime aucune ambiance » — puis
 demandé par l'utilisateur et implémenté : la liste des Réglages est devenue l'écran de gestion des
 ambiances (réglage du démarrage animé + suppression), et non plus seulement une liste de réglages.
+
+### Mise à jour 2026-10-24 — certificat du pont épinglé au premier contact
+
+Constat F32 d'un audit de sécurité : avec `HUE_TLS_INSECURE=true` (défaut), aucune vérification du
+certificat, et la clé `hue-application-key` partait vers quiconque prenait l'adresse du pont. Désormais
+`true` veut dire « pas de vérification par une AC, mais certificat épinglé au premier contact »
+(`.state/hue-tls-pin.json`) : un certificat différent coupe la connexion avant l'envoi de la clé, santé
+`error` (« Le certificat du pont Hue a changé… »). `POST /pair` efface l'épingle (au début de
+l'appairage, pas après sa réussite) et la connexion suivante réapprend. La vérification par l'AC Signify
+a été écartée pour rester simple. Mécanisme commun : `apps/server/src/core/tls-pin.ts` (empreinte SHA-256 apprise au premier contact, contrôle sur le socket établi avant toute écriture ; reprise de session TLS coupée, car une session TLS 1.3 reprise n'expose pas de certificat ; un certificat absent est refusé). Rien n'a encore été essayé sur le vrai matériel : au premier démarrage, le journal doit montrer `device certificate pinned`. Une mise à jour de firmware qui change le certificat met le plugin en erreur jusqu'au ré-appairage : c'est voulu.

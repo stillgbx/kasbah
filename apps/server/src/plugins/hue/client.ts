@@ -1,14 +1,17 @@
-import { Agent, fetch as undiciFetch } from 'undici'
+import { fetch as undiciFetch, type Agent } from 'undici'
 import type { Logger } from 'pino'
 import type { z } from 'zod'
 import type { Clock } from '../../core/clock'
 import { PluginError } from '../../core/plugin'
 import { TokenBucket } from '../../core/rate-limit'
+import { pinnedAgent, type TlsPin } from '../../core/tls-pin'
 import type { FetchLike } from '../../core/sse'
 import { huePairResponseSchema, hueResponseSchema, type HueWriteBody } from './types'
 
 // CLIP v2 HTTP client. The bridge presents a certificate signed by the Signify CA (CN = bridge id):
-// TLS verification is disabled through a dedicated undici Agent (never globally).
+// TLS verification is disabled through a dedicated undici Agent (never globally), and the
+// certificate pinned on first use instead (`core/tls-pin.ts`): the application key never goes to
+// another one.
 // Documented limits: ~10 PUT/s on `light`, ~1/s on `grouped_light` and on `scene` → token bucket; a
 // pending command for the same light is SUPERSEDED by the next one (slider drag).
 
@@ -16,6 +19,8 @@ export interface HueClientOptions {
   host: string
   appKey?: string
   insecureTls?: boolean
+  /** Without CA verification, the bridge certificate must match it. Without a pin, verification stays on. */
+  pin?: TlsPin
   fetchImpl?: FetchLike
   clock: Clock
   logger?: Logger
@@ -41,7 +46,7 @@ export class HueClient {
     this.appKey = opts.appKey
     this.clock = opts.clock
     this.logger = opts.logger
-    this.dispatcher = opts.insecureTls === false ? undefined : new Agent({ connect: { rejectUnauthorized: false } })
+    this.dispatcher = opts.insecureTls === false || !opts.pin ? undefined : pinnedAgent(opts.pin)
     this.fetchImpl = opts.fetchImpl ?? ((url, init) => undiciFetch(url, init as Parameters<typeof undiciFetch>[1]) as unknown as ReturnType<FetchLike>)
     this.buckets = {
       light: new TokenBucket(10, 10, opts.clock),

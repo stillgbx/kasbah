@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-24] update | Sécurité : certificats des appareils épinglés au premier contact
+
+**Déclencheur** : audit de sécurité de `apps/server`, constats F7, F32, F37 (TLS non vérifié vers le pont Hue, la passerelle Enphase, le Roomba).
+
+**Pages modifiées** :
+- `3_plugins/3_1_philips-hue.md`, `3_plugins/3_7_enphase.md`, `3_plugins/3_14_irobot-roomba.md` - mise à jour datée : épingle TOFU (`core/tls-pin.ts`), santé `error` et ré-appairage qui l'efface ; Roomba : adresse de l'émetteur UDP, lien connecté jamais remplacé, CONNECT bloqué jusqu'au contrôle.
+
+**Index** : catalogue mis à jour (3 lignes), index.md régénéré.
+
 ## [2026-10-23] update | Appli Android Auto : alerte d'approche « Ouvrir le portail », ouvrants numérotés
 
 **Déclencheur** : demande de ne plus ouvrir l'appli pour ouvrir le portail ; prototype d'une notification voiture à l'approche, essayé dans le DHU.

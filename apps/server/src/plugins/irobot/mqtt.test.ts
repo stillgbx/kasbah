@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest'
-import { extractReported, mergeShadow } from './mqtt'
+import { X509Certificate } from 'node:crypto'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { selfSignedCertificate, startTlsServer, type TestCertificate, type TestTlsServer } from '../../core/test-tls'
+import { TlsPin } from '../../core/tls-pin'
+import { connectRobot, extractReported, mergeShadow } from './mqtt'
 
 // The robot speaks in DELTAS: these two functions are all that makes them usable, and they are
-// pure. The rest of `mqtt.ts` is just socket plumbing.
+// pure. The rest of `mqtt.ts` is socket plumbing, tested here only for the certificate pin.
 
 describe('mergeShadow', () => {
   it('merges a fragment into the shadow without losing the rest', () => {
@@ -49,5 +52,32 @@ describe('extractReported', () => {
   it('returns null on an unreadable topic rather than cutting the link', () => {
     expect(extractReported('pas du json')).toBeNull()
     expect(extractReported('"texte"')).toBeNull()
+  })
+})
+
+describe('connectRobot certificate pin', () => {
+  const fingerprint = (c: TestCertificate) => new X509Certificate(c.cert).fingerprint256
+  let server: TestTlsServer | null = null
+  afterEach(async () => { await server?.close(); server = null })
+
+  const open = (pin: TlsPin) => connectRobot({ blid: 'BLID-TEST', password: 'local-password', ip: '127.0.0.1', port: server!.port, pin })
+
+  it('sends the CONNECT, password included, to the pinned robot', async () => {
+    const cert = selfSignedCertificate()
+    server = await startTlsServer(cert)
+    const link = open(new TlsPin(fingerprint(cert), vi.fn(), { device: 'test robot' }))
+    await vi.waitFor(() => expect(server!.received()).toContain('local-password'))
+    await link.close()
+  })
+
+  it('never sends it to a host with another certificate', async () => {
+    server = await startTlsServer(selfSignedCertificate())
+    const pin = new TlsPin(fingerprint(selfSignedCertificate()), vi.fn(), { device: 'test robot' })
+    const link = open(pin)
+    await vi.waitFor(() => expect(pin.changed).toBe(true))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(server.received()).toBe('')
+    expect(link.connected).toBe(false)
+    await link.close()
   })
 })

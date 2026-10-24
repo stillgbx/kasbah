@@ -1,9 +1,11 @@
+import { X509Certificate } from 'node:crypto'
 import Fastify from 'fastify'
 import pino from 'pino'
 import { describe, expect, it, vi } from 'vitest'
 import { ManualClock } from '@kasbah/mock-sim'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
+import { selfSignedCertificate, startTlsServer, type TestCertificate } from '../../core/test-tls'
 import { ENSEMBLE_INVENTORY, ENSEMBLE_POWER, INVERTERS, LIVEDATA, PRODUCTION } from './__fixtures__/gateway'
 import { EVSE_PREFERENCE, EVSE_STATUS, EVSE_SUMMARY } from './__fixtures__/evse'
 import { createEnphasePlugin, enphaseConfigSchema } from './index'
@@ -662,5 +664,48 @@ describe('devices', () => {
     const devices = await plugin.discover()
     expect(devices.filter((d) => d.kind === 'ev_charger')).toHaveLength(0)
     expect(devices.filter((d) => d.kind === 'sensor')).toHaveLength(20)
+  })
+})
+
+describe('gateway certificate pin', () => {
+  const fingerprint = (c: TestCertificate) => new X509Certificate(c.cert).fingerprint256
+  /** Just enough of a gateway over real TLS: `/info`, then an empty JSON on any other route. */
+  const respondLikeAGateway = (chunk: string): string | undefined => {
+    const path = /^GET (\S+)/.exec(chunk)?.[1]
+    if (!path) return undefined
+    const body = path === '/info' ? INFO_XML : '{}'
+    return `HTTP/1.1 200 OK\r\ncontent-length: ${Buffer.byteLength(body)}\r\n\r\n${body}`
+  }
+
+  it('never sends the token to a gateway with another certificate, says so, and pairing again accepts it', async () => {
+    const cert = selfSignedCertificate()
+    const server = await startTlsServer(cert, respondLikeAGateway)
+    let saved: string | undefined = fingerprint(selfSignedCertificate())   // pinned on another gateway
+    const plugin = createEnphasePlugin({
+      store: memoryStore(), cloudStore: memoryCloud(), pinFile: { load: async () => saved, save: async (fp) => { saved = fp } },
+    })
+    const ctx: PluginContext = {
+      pluginId: 'enphase',
+      config: enphaseConfigSchema.parse({ ENPHASE_HOST: `127.0.0.1:${server.port}`, ENPHASE_TOKEN: token(365) }),
+      logger: pino({ level: 'silent' }), clock: new ManualClock(NOW), signal: new AbortController().signal,
+      emitState: vi.fn(), setAvailable: vi.fn(), emitDevices: vi.fn(), emitScenes: vi.fn(), emitSceneState: vi.fn(), emitEvent: vi.fn(),
+      parts: {}, site: { lat: 47.3, lon: 5.05, alt: 180 },
+    }
+    await plugin.init(ctx)
+    await expect(plugin.discover()).rejects.toMatchObject({ code: 'UPSTREAM_ERROR' })
+    expect(server.received()).toBe('')                       // neither /info nor, above all, the Bearer
+    expect(plugin.health!()).toMatchObject({ status: 'error', detail: expect.stringContaining('Le certificat de la passerelle IQ Gateway a changé') })
+
+    const app = Fastify()
+    app.register(async (sub) => plugin.registerRoutes!(sub), { prefix: '/api/plugins/enphase' })
+    await app.ready()
+    const r = await post(app, { token: token(365) })
+    expect(r.statusCode).toBe(200)
+    expect(saved).toBe(fingerprint(cert))
+    expect(server.received()).toContain('GET /info')
+    expect(plugin.health!().status).toBe('ok')
+    await plugin.stop()
+    await app.close()
+    await server.close()
   })
 })

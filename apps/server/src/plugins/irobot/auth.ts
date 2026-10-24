@@ -100,6 +100,17 @@ export class IrobotAuth {
     return this.session?.robots.find((r) => r.blid === blid)?.password ?? null
   }
 
+  /** Certificate pin of a robot's broker: it lives with the password, and a new link clears it. */
+  pinFor(blid: string): string | undefined {
+    return this.session?.robots.find((r) => r.blid === blid)?.pin
+  }
+
+  setPin(blid: string, pin: string | undefined): void {
+    if (!this.session) return
+    this.session = { ...this.session, robots: this.session.robots.map((r) => (r.blid === blid ? { ...r, pin } : r)) }
+    void this.opts.store?.save(this.session)
+  }
+
   /** At startup: picks up the credentials from the file if there are any. */
   async restore(): Promise<boolean> {
     this.session = (await this.opts.store?.load()) ?? null

@@ -1,3 +1,4 @@
+import { X509Certificate } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import Fastify from 'fastify'
 import { ManualClock } from '@kasbah/mock-sim'
@@ -5,6 +6,7 @@ import pino from 'pino'
 import type { PluginScene } from '@kasbah/shared'
 import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
+import { selfSignedCertificate, startTlsServer, type TestCertificate } from '../../core/test-tls'
 import { HueClient } from './client'
 import { createHuePlugin, hueConfigSchema } from './index'
 import { DEVICES, GROUPED_LIGHTS, LIGHTS, PAIR_101, PAIR_OK, ROOMS, SCENES, SSE_FRAME, ZIGBEE, ZONES } from './__fixtures__/bridge'
@@ -205,5 +207,43 @@ describe('hue plugin', () => {
     clock.advance(1000); await flush(); await flush()
     expect(bridge.puts.map((p) => p.body)).toEqual([{ on: { on: true } }, { dimming: { brightness: 30 } }])
     await Promise.all([p1, p2, p3])
+  })
+})
+
+/** Just enough of a bridge over real TLS: pairing, empty resources, an event stream left open. */
+function respondLikeABridge(chunk: string): string | undefined {
+  const path = /^(?:GET|POST) (\S+)/.exec(chunk)?.[1]
+  if (!path) return undefined
+  if (path === '/eventstream/clip/v2') return 'HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\n\r\n'
+  const body = JSON.stringify(path === '/api' ? PAIR_OK : { errors: [], data: [] })
+  return `HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: ${Buffer.byteLength(body)}\r\n\r\n${body}`
+}
+
+describe('hue bridge certificate pin', () => {
+  const fingerprint = (c: TestCertificate) => new X509Certificate(c.cert).fingerprint256
+
+  it('never sends the key to a bridge with another certificate, says so, and pairing again accepts it', async () => {
+    const cert = selfSignedCertificate()
+    const server = await startTlsServer(cert, respondLikeABridge)
+    let saved: string | undefined = fingerprint(selfSignedCertificate())   // pinned on another bridge
+    const plugin = createHuePlugin({ pinFile: { load: async () => saved, save: async (fp) => { saved = fp } } })
+    const { ctx } = fakeContext(hueConfigSchema.parse({ HUE_BRIDGE_HOST: `127.0.0.1:${server.port}`, HUE_APP_KEY: 'old-app-key' }), new ManualClock(0))
+    await plugin.init(ctx)
+
+    await expect(plugin.discover()).rejects.toMatchObject({ code: 'UPSTREAM_ERROR' })
+    expect(server.received()).toBe('')                       // not even the request line, let alone the key
+    expect(plugin.health!()).toEqual({ status: 'error', detail: expect.stringContaining('Le certificat du pont Hue a changé') })
+
+    const app = Fastify()
+    app.register(async (sub) => plugin.registerRoutes!(sub), { prefix: '/api/plugins/hue' })
+    await app.ready()
+    const r = await app.inject({ method: 'POST', url: '/api/plugins/hue/pair' })
+    expect(r.statusCode).toBe(200)
+    expect(saved).toBe(fingerprint(cert))
+    expect(server.received()).toContain('hue-application-key: abcdefgh-app-key')
+    expect(plugin.health!().status).toBe('ok')
+    await plugin.stop()
+    await app.close()
+    await server.close()
   })
 })

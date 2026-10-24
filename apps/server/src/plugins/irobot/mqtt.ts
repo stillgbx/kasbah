@@ -1,15 +1,16 @@
-import mqtt, { type MqttClient } from 'mqtt'
+import { MqttClient } from 'mqtt'
 import type { Logger } from 'pino'
 import { PluginError } from '../../core/plugin'
+import { pinnedTlsConnect, type TlsPin } from '../../core/tls-pin'
 
 // LOCAL link with an iRobot robot: its own MQTT broker, over TLS on port 8883.
 //
 // The robot is both the broker and the only device on it. It authenticates with its BLID as client
 // identifier AND as user name, the password being the one obtained once through the account
 // (`auth.ts`). The certificate is signed by an in-house iRobot authority, in the robot's name:
-// unverifiable from here, hence `rejectUnauthorized: false` — the secret protecting the link is
-// the password, not the certificate chain. Recorded on the device set: TLS 1.3,
-// `TLS_AES_256_GCM_SHA384`, no legacy cipher to re-enable.
+// unverifiable from here, hence no chain verification — but the certificate is pinned on first use
+// (`core/tls-pin.ts`), and the CONNECT carrying the password only leaves once it matched. Recorded
+// on the device set: TLS 1.3, `TLS_AES_256_GCM_SHA384`, no legacy cipher to re-enable.
 //
 // THE ROBOT SPEAKS IN DELTAS. It doesn't republish its whole shadow on every change: it sends the
 // fragment that moves, sometimes a single key. A mapping applied to the received fragment alone
@@ -45,14 +46,16 @@ export interface RobotConnectionOptions {
   blid: string
   password: string
   ip: string
+  /** Injected by tests: the broker port. */
+  port?: number
+  /** The robot certificate must match it before the password is sent. */
+  pin: TlsPin
   /** Called on every fragment received, with the ACCUMULATED shadow (never the fragment alone). */
   onShadow?: (shadow: RobotShadow) => void
   onConnected?: () => void
   onDisconnected?: (reason: string) => void
   logger?: Logger
   signal?: AbortSignal
-  /** Injected by tests: replaces the real opening of the MQTT client. */
-  connectImpl?: typeof mqtt.connect
 }
 
 /**
@@ -111,8 +114,8 @@ export function connectRobot(opts: RobotConnectionOptions): RobotConnection {
   let connected = false
   let closed = false
 
-  const connectFn = opts.connectImpl ?? mqtt.connect
-  const client: MqttClient = connectFn(`mqtts://${opts.ip}:${PORT}`, {
+  // built by hand rather than `mqtt.connect`: its TLS stream cannot wait for the pin
+  const client = new MqttClient(() => pinnedTlsConnect({ host: opts.ip, port: opts.port ?? PORT }, opts.pin), {
     clientId: opts.blid,
     username: opts.blid,
     password: opts.password,
@@ -121,8 +124,6 @@ export function connectRobot(opts: RobotConnectionOptions): RobotConnection {
     reconnectPeriod: RECONNECT_MS,
     connectTimeout: CONNECT_TIMEOUT_MS,
     clean: false,
-    // iRobot certificate in the robot's name, signed by an in-house authority: unverifiable here
-    rejectUnauthorized: false,
   })
 
   client.on('connect', () => {

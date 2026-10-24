@@ -299,3 +299,52 @@ describe('iRobot plugin — state and actions', () => {
     expect(h.link.closed).toBe(true)
   })
 })
+
+describe('iRobot plugin — robot certificate pin', () => {
+  /** What the pin reads from a socket whose handshake completed. */
+  const socket = (fingerprint: string) => ({ getPeerCertificate: () => ({ fingerprint256: fingerprint }) }) as never
+
+  it('keeps the pin with the password, reports a changed certificate, and linking again accepts it', async () => {
+    const store = memoryStore()
+    const h = harness({ store })
+    await h.plugin.init(h.ctx)
+    const app = Fastify()
+    h.plugin.registerRoutes!(app)
+    await app.inject({ method: 'POST', url: '/login', payload: { email: 'moi@exemple.fr', password: 'secret' } })
+    const pin = h.link.connectImpl.mock.calls[0]![0].pin
+
+    expect(pin.check(socket('AA:01'))).toBeNull()                      // first connection: pinned
+    expect((await store.load())?.robots[0]?.pin).toBe('AA:01')
+    expect(pin.check(socket('BB:02'))).not.toBeNull()                  // another certificate: refused
+    expect(h.plugin.health!()).toEqual({ status: 'error', detail: expect.stringContaining('Le certificat de Robby a changé') })
+
+    await app.inject({ method: 'POST', url: '/login', payload: { email: 'moi@exemple.fr', password: 'secret' } })
+    expect(h.plugin.health!().status).not.toBe('error')
+    expect((await store.load())?.robots[0]?.pin).toBeUndefined()
+    expect(pin.check(socket('BB:02'))).toBeNull()                      // the next connection pins the new one
+    expect((await store.load())?.robots[0]?.pin).toBe('BB:02')
+  })
+
+  it('opens the next link with the pin kept in the session file', async () => {
+    const h = harness({ store: memoryStore({ robots: [{ blid: BLID, password: ':1:pw', name: 'Robby', sku: null, pin: 'AA:01' }], linkedAt: 1 }) })
+    await h.plugin.init(h.ctx)
+    await h.plugin.discover()
+    expect(h.link.connectImpl.mock.calls[0]![0].pin.check(socket('BB:02'))).not.toBeNull()
+  })
+
+  it('keeps a working link when a datagram names another address, and tries it once that link drops', async () => {
+    const found = [ROBOT]
+    const h = harness({ store: memoryStore({ robots: [{ blid: BLID, password: ':1:pw', name: 'Robby', sku: null }], linkedAt: 1 }), found })
+    await h.plugin.init(h.ctx)
+    await h.plugin.discover()
+    h.link.up()
+    found[0] = { ...ROBOT, ip: '192.168.1.99' }
+    await h.plugin.discover()
+    expect(h.link.connectImpl).toHaveBeenCalledTimes(1)
+    expect(h.link.closed).toBe(false)
+
+    h.link.down()
+    await h.plugin.discover()
+    expect(h.link.connectImpl).toHaveBeenLastCalledWith(expect.objectContaining({ ip: '192.168.1.99' }))
+  })
+})

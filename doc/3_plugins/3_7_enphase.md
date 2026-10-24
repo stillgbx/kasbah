@@ -1,6 +1,6 @@
 # Plugin Enphase (production solaire, micro-onduleurs, batteries)
 
-> Dernière mise à jour : 2026-10-23
+> Dernière mise à jour : 2026-10-24
 > Sources : `apps/server/src/plugins/enphase/{index,client,token,cloud,mapping,types}.ts`, `apps/server/src/plugins/enphase/__fixtures__/gateway.ts`, tests `token.test.ts`, `mapping.test.ts`, `plugin.test.ts` et `cloud.test.ts`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/server/.env.example`, note technique du fabricant « Accessing IQ Gateway local APIs or local UI with token-based authentication » (2022-12-14), commits 3b4767a et a89ae3b
 
 ## Ce que le plugin lit, et ce qu'il ne peut pas lire
@@ -427,3 +427,15 @@ Constat d'un audit de sécurité : la sonde `GET /api/plugins/enphase/ev/raw` in
 Internet (piloter la borne, lire le site) par quiconque appelait la route. Ce chemin est retiré de
 `EV_RAW_PATHS` (`apps/server/src/plugins/enphase/cloud.ts`) ; la sonde dit seulement s'il est obtenable
 (`hasAccessToken`). La lecture du jeton pour les commandes (`readAccessToken`) ne change pas.
+
+### Mise à jour 2026-10-24 — certificat de la passerelle épinglé, fichiers d'identifiants en 0600
+
+Constat F37 : le jeton propriétaire d'un an partait en `Bearer` vers `https://ENPHASE_HOST` (par défaut
+`envoy.local`, un nom mDNS que tout hôte du réseau peut prendre) sans aucun contrôle du certificat. Il
+est désormais épinglé au premier contact dans `.state/enphase-tls-pin.json`, fichier à part car le
+fichier du jeton est facultatif ; l'épingle couvre aussi `/info`. Ré-appairer (`POST /token`, jeton collé
+ou compte) l'efface. Une mise à jour du logiciel de la passerelle peut changer son certificat : il faut
+alors ré-appairer. Mécanisme commun : `apps/server/src/core/tls-pin.ts` (empreinte SHA-256 apprise au premier contact, contrôle sur le socket établi avant toute écriture ; reprise de session TLS coupée, car une session TLS 1.3 reprise n'expose pas de certificat ; un certificat absent est refusé). Rien n'a encore été essayé sur le vrai matériel : au premier démarrage, le journal doit montrer `device certificate pinned`. Une mise à jour de firmware qui change le certificat met le plugin en erreur jusqu'au ré-appairage : c'est voulu.
+
+Constats F26, F31, F33 : le jeton de passerelle et la session Enlighten sont désormais écrits en 0600,
+comme les autres fichiers d'identifiants du serveur.

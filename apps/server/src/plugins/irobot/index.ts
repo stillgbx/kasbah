@@ -6,6 +6,7 @@ import { stateFile } from '../../core/paths'
 import { createPoller } from '../../core/poll'
 import { sleep } from '../../core/clock'
 import type { FetchLike } from '../../core/sse'
+import { TlsPin } from '../../core/tls-pin'
 import { DEFAULT_APP_ID, DEFAULT_DISCOVERY_URL, DEFAULT_USER_AGENT, IrobotAuth, createSessionFile, type SessionStore } from './auth'
 import { discoverRobots, type DiscoveredRobot } from './discovery'
 import { PLUGIN_ID, toActivity, toDescriptor, toRobotCommands, toStatePatch, readMissionStatus } from './mapping'
@@ -98,6 +99,8 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
   const onNetwork = new Map<string, DiscoveredRobot>()
   /** The open MQTT links, by BLID. */
   const links = new Map<string, RobotConnection>()
+  /** Certificate pin of each link, by BLID: what tells the health that a certificate changed. */
+  const pins = new Map<string, TlsPin>()
   /**
    * Fingerprint of the descriptors already published. Reset in `init`: the host restarts a plugin
    * WITHOUT re-instantiating it, and a surviving fingerprint would suggest published devices that
@@ -138,10 +141,13 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
     if (links.has(robot.blid)) return
     const password = auth?.passwordFor(robot.blid)
     if (!password) return // robot from another account, or account not linked: nothing to try
+    const pin = new TlsPin(auth!.pinFor(robot.blid), (fp) => auth?.setPin(robot.blid, fp), { device: `iRobot ${robot.blid}`, logger: ctx?.logger })
+    pins.set(robot.blid, pin)
     const link = connect_({
       blid: robot.blid,
       password,
       ip: robot.ip,
+      pin,
       logger: ctx?.logger,
       signal: ctx?.signal,
       onShadow: (shadow) => onShadow(robot.blid, shadow),
@@ -164,12 +170,15 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
     const found = await discover_({ timeoutMs: config!.IROBOT_SCAN_TIMEOUT_MS, signal: ctx?.signal, logger: ctx?.logger })
     for (const robot of found) {
       const previous = onNetwork.get(robot.blid)
-      onNetwork.set(robot.blid, robot)
-      // address changed: the link points to the old one, we rebuild it
+      // address changed: the link points to the old one, we rebuild it — but never at the expense of
+      // a working link, since any host can answer the broadcast. The new address is tried once that
+      // link drops, and its certificate must match the pin.
       if (previous && previous.ip !== robot.ip) {
+        if (links.get(robot.blid)?.connected) continue
         await links.get(robot.blid)?.close()
         links.delete(robot.blid)
       }
+      onNetwork.set(robot.blid, robot)
       openLink(robot)
     }
     for (const stored of auth?.robots ?? []) {
@@ -230,6 +239,7 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
       lastError = null
       onNetwork.clear()
       links.clear()
+      pins.clear()
       const store = deps.sessionStore ?? createSessionFile(config.IROBOT_SESSION_FILE, context.logger)
       auth = new IrobotAuth({
         discoveryUrl: config.IROBOT_DISCOVERY_URL,
@@ -302,6 +312,8 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
         if (!auth) return reply.code(409).send({ error: 'enable the iRobot plugin before linking the account' })
         try {
           const robots = await auth!.login(body.data.email, body.data.password, ctx?.signal)
+          // linking again is what accepts a robot whose certificate changed
+          for (const pin of pins.values()) pin.clear()
           lastError = null
           log().info({ robots: robots.length }, 'iRobot account linked')
           await scanOnce()
@@ -318,6 +330,7 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
         if (!auth) return reply.code(409).send({ error: 'enable the iRobot plugin before unlinking the account' })
         await closeLinks()
         await auth.forget()
+        pins.clear()
         onNetwork.clear()
         publishDevices()
         return status()
@@ -344,6 +357,10 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
     health(): PluginHealth {
       if (!auth?.linked) {
         return { status: 'needs_pairing', detail: 'link the iRobot account from Settings to fetch each robot local password' }
+      }
+      const changed = auth.robots.filter((r) => pins.get(r.blid)?.changed).map((r) => onNetwork.get(r.blid)?.name ?? r.name ?? r.blid)
+      if (changed.length > 0) {
+        return { status: 'error', detail: `Le certificat de ${changed.join(', ')} a changé : connexion refusée. Relier de nouveau le compte iRobot accepte le nouveau certificat.` }
       }
       const total = auth.robots.length
       const up = [...links.values()].filter((l) => l.connected).length

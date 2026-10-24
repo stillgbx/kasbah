@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { stateFile } from '../../core/paths'
 import type { FetchLike } from '../../core/sse'
+import { TlsPin, createPinFile, type PinFile } from '../../core/tls-pin'
 import { sendError } from '../../http/errors'
 import { createPoller } from '../../core/poll'
 import { sleep } from '../../core/clock'
@@ -137,6 +138,8 @@ export interface EnphasePluginDeps {
   store?: TokenStore
   /** Injected by tests: Enlighten session (charger). */
   cloudStore?: CloudStore
+  /** Injected by tests: the gateway certificate pin (otherwise a file under `.state/`). */
+  pinFile?: PinFile
 }
 
 export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin {
@@ -146,6 +149,11 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   let store: TokenStore | null = null
   let cloudStore: CloudStore | null = null
   let enlighten: EnlightenClient | null = null
+  /**
+   * Gateway certificate, pinned on first use. In its own file, not the token's: that one is optional
+   * (`ENPHASE_TOKEN_FILE` empty, token in `.env`), and the pin must survive a restart regardless.
+   */
+  let pin: TlsPin | null = null
   /** Gateway identity (`/info`, no token). Absent if it has not answered yet. */
   let gateway: { serial: string; software?: string } | null = null
   let token: (CheckedToken & { source: TokenSource }) | null = null
@@ -520,8 +528,11 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
         enlighten.setSession(cloud)
         log().info({ siteId: cloud.siteId }, 'Enlighten session restored')
       }
+      const pinFile = deps.pinFile ?? createPinFile(stateFile('enphase-tls-pin.json'), context.logger)
+      pin = new TlsPin(await pinFile.load(), (fp) => { void pinFile.save(fp) }, { device: 'IQ Gateway', logger: context.logger })
       client = new EnphaseClient({
         host: config.ENPHASE_HOST,
+        pin,
         ...(deps.gatewayFetch ? { fetchImpl: deps.gatewayFetch } : {}),
         logger: context.logger,
       })
@@ -631,6 +642,8 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
         if (!parsed.success) {
           return sendError(reply, 400, 'INVALID_BODY', 'send either { token } or { user, password }')
         }
+        // pairing again is what accepts a gateway whose certificate changed
+        pin!.clear()
         // the gateway may have been unreachable at startup: we retry, its serial number is what
         // lets us refuse a token issued for another gateway
         if (!gateway) await readGateway()
@@ -703,6 +716,9 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
 
     health(): PluginHealth {
       const keys = ['ENPHASE_HOST', 'ENPHASE_TOKEN', 'ENPHASE_TOKEN_FILE', 'ENPHASE_CLOUD_FILE']
+      if (pin?.changed) {
+        return { status: 'error', detail: 'Le certificat de la passerelle IQ Gateway a changé : connexion refusée. Appairer de nouveau accepte le nouveau certificat.', keys }
+      }
       if (!token) {
         return { status: 'needs_pairing', detail: lastError ?? 'no Enphase token: pair the gateway from Settings', keys }
       }

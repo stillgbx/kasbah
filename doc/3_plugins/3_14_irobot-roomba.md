@@ -1,6 +1,6 @@
 # Plugin iRobot (Roomba, courtier MQTT local)
 
-> Dernière mise à jour : 2026-10-06
+> Dernière mise à jour : 2026-10-24
 > Sources : `apps/server/src/plugins/irobot/{index,auth,discovery,mqtt,mapping,types}.ts`, tests `discovery.test.ts`, `mqtt.test.ts`, `mapping.test.ts`, `plugin.test.ts` (51 cas), fixtures `apps/server/src/plugins/irobot/__fixtures__/{shadows.ts,discovery.json}`, `apps/server/src/plugins/index.ts`, `apps/server/.env.example`, `apps/web/src/components/IrobotLinkCard.vue`, `apps/web/src/views/RobotsView.vue`, `apps/web/src/components/controls/VacuumControl.vue`, `apps/web/src/api/transport.ts`, commits 14dae06 et ec07f7e, `packages/shared/src/devices/{kinds,state}.ts`, `packages/mock-sim/src/behaviours/robots.ts`, journal de session `_generated-ai-doc/sessions/2026-09-19-irobot/journal.md` et captures `shadow.json` / `transitions.json` / `favori-capture.json`
 
 ## Le robot du parc, et ce que la phase 1 en publie
@@ -529,3 +529,14 @@ Rien n'a été modifié ici.
 Voir aussi : les leçons transposables dans [3_2_ecrire-un-plugin](3_2_ecrire-un-plugin.md), la sortie
 du tableau dans [3_3_fabricants-a-venir](3_3_fabricants-a-venir.md), et le kind `vacuum` dans
 [../1_architecture/1_1_contrat-appareils](../1_architecture/1_1_contrat-appareils.md).
+
+### Mise à jour 2026-10-24 — adresse de l'émetteur, certificat du robot épinglé
+
+Constat F7 : n'importe quel hôte pouvait répondre à la découverte UDP en indiquant une autre `ip` dans
+son message ; le serveur fermait le vrai lien et envoyait le mot de passe local du robot à cette adresse,
+sans contrôle du certificat. Désormais l'adresse est celle de l'**émetteur** du datagramme, jamais le
+champ `ip` du message, et un lien connecté n'est jamais remplacé sur la foi d'une réponse de découverte
+(la nouvelle adresse n'est essayée qu'une fois le lien tombé). Le certificat de chaque robot est épinglé
+dans `irobot-session.json` (champ `pin`, 0600). mqtt.js écrit son CONNECT avant la fin de la poignée de
+main : le serveur construit lui-même le `MqttClient` sur un flux bloqué (`cork`) jusqu'au contrôle.
+Relier de nouveau le compte efface l'épingle. Mécanisme commun : `apps/server/src/core/tls-pin.ts` (empreinte SHA-256 apprise au premier contact, contrôle sur le socket établi avant toute écriture ; reprise de session TLS coupée, car une session TLS 1.3 reprise n'expose pas de certificat ; un certificat absent est refusé). Rien n'a encore été essayé sur le vrai matériel : au premier démarrage, le journal doit montrer `device certificate pinned`. Une mise à jour de firmware qui change le certificat met le plugin en erreur jusqu'au ré-appairage : c'est voulu.

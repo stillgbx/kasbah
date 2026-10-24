@@ -1,8 +1,10 @@
 import type { Command, DeviceDescriptor, PluginHealth, PluginScene, SceneGroupKind, SceneRecall, SceneUpdate } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { stateFile } from '../../core/paths'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { connectSse, type FetchLike } from '../../core/sse'
+import { TlsPin, createPinFile, type PinFile } from '../../core/tls-pin'
 import { describeError, sendError } from '../../http/errors'
 import { HueClient } from './client'
 import { findBridge } from './discovery'
@@ -33,6 +35,8 @@ export type HueConfig = z.infer<typeof hueConfigSchema>
 export interface HuePluginDeps {
   /** Injection for the tests (simulated fetch). */
   fetchImpl?: FetchLike
+  /** Injection for the tests: the bridge certificate pin (otherwise a file under `.state/`). */
+  pinFile?: PinFile
 }
 
 export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
@@ -41,6 +45,8 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
   let client: HueClient | null = null
   let host: string | null = null
   let appKey: string | undefined
+  /** Bridge certificate, pinned on first use: the bridge has no other state file to keep it in. */
+  let pin: TlsPin | null = null
   let index: HueIndex = indexResources([], [], [])
   let groups = new Map<string, HueGroupedLight>()
   /** The bridge's zones (groupings that cross rooms): same shape as a room. */
@@ -57,7 +63,7 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
 
   function makeClient(): HueClient {
     return new HueClient({
-      host: host!, ...(appKey ? { appKey } : {}), insecureTls: config!.HUE_TLS_INSECURE, clock: ctx!.clock,
+      host: host!, ...(appKey ? { appKey } : {}), insecureTls: config!.HUE_TLS_INSECURE, pin: pin!, clock: ctx!.clock,
       logger: ctx!.logger, ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
     })
   }
@@ -229,6 +235,8 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
       ctx = c
       config = c.config as HueConfig   // already validated/transformed by the host via configSchema
       appKey = config.HUE_APP_KEY
+      const pinFile = deps.pinFile ?? createPinFile(stateFile('hue-tls-pin.json'), c.logger)
+      pin = new TlsPin(await pinFile.load(), (fp) => { void pinFile.save(fp) }, { device: 'Hue bridge', logger: c.logger })
       if (config.HUE_BRIDGE_HOST) host = config.HUE_BRIDGE_HOST
       else {
         try {
@@ -336,6 +344,8 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
       app.post('/pair', async (_req, reply) => {
         if (!client) return sendError(reply, 502, 'UPSTREAM_ERROR', lastError ?? 'Hue bridge host unknown (set HUE_BRIDGE_HOST)')
         try {
+          // pairing again is what accepts a bridge whose certificate changed
+          pin!.clear()
           const result = await client.pair()
           appKey = result.appKey
           await connectWithKey()
@@ -349,6 +359,7 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
 
     health(): PluginHealth {
       if (!host) return { status: 'error', detail: lastError ?? 'bridge not found' }
+      if (pin?.changed) return { status: 'error', detail: 'Le certificat du pont Hue a changé : connexion refusée. Appairer de nouveau accepte le nouveau certificat.' }
       if (!appKey) return { status: 'needs_pairing', detail: `press the link button on ${host} then call POST /api/plugins/hue/pair` }
       if (lastError) return { status: 'error', detail: lastError }
       if (sseDown) return { status: 'degraded', detail: 'event stream disconnected' }

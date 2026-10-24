@@ -15,7 +15,8 @@ export const discoveryPayloadSchema = z.looseObject({
   hostname: z.string().optional(),
   robotname: z.string().optional(),
   robotid: z.string().optional(),
-  ip: z.string().optional(),
+  /** Not read: the address is the datagram's sender (`discovery.ts`). */
+  ip: z.unknown().optional(),
   mac: z.unknown().optional(),
   sw: z.string().optional(),
   sku: z.string().optional(),
@@ -82,6 +83,8 @@ export const storedRobotSchema = z.object({
   password: z.string().min(1),
   name: z.string().nullable().default(null),
   sku: z.string().nullable().default(null),
+  /** Fingerprint of its broker certificate, pinned on first use (`core/tls-pin.ts`). */
+  pin: z.string().optional(),
 })
 export type StoredRobot = z.infer<typeof storedRobotSchema>
 

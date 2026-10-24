@@ -30,9 +30,9 @@ describe('parseDiscovery', () => {
     expect(parseDiscovery(JSON.stringify(vieux), '192.168.1.90')?.blid).toBe('3A7B0000000000000000000000000000')
   })
 
-  it('prefers the address the robot announces over the datagram one', () => {
+  it('takes the address of the datagram sender, never the one the payload announces', () => {
     const robot = parseDiscovery(JSON.stringify({ ...capture, ip: '192.168.1.99' }), '192.168.1.81')
-    expect(robot?.ip).toBe('192.168.1.99')
+    expect(robot?.ip).toBe('192.168.1.81')
   })
 
   it('ignores our own broadcast and anything that is not a robot', () => {
