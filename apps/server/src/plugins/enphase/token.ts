@@ -274,7 +274,7 @@ export function createTokenFile(path: string, logger?: Logger): TokenStore {
       return parsed.data.token
     },
     async save(token) {
-      try { await writeFileAtomic(path, `${JSON.stringify({ token }, null, 2)}\n`) }
+      try { await writeFileAtomic(path, `${JSON.stringify({ token }, null, 2)}\n`, { mode: 0o600 }) }
       catch (err) { logger?.warn({ err, path }, 'could not write Enphase token cache') }
     },
   }

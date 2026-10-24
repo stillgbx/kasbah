@@ -48,7 +48,7 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
   let netscapePath = opts.netscapePath
   if (!netscapePath && opts.cookieRaw) {
     netscapePath = join(tmpdir(), `kasbah-ytm-${randomBytes(8).toString('hex')}.netscape`)
-    await writeFile(netscapePath, toNetscape(opts.cookieRaw), 'utf8')
+    await writeFile(netscapePath, toNetscape(opts.cookieRaw), { encoding: 'utf8', mode: 0o600 })
   }
   const poBase = opts.poTokenUrl.replace(/\/$/, '')
   const pageUrl = `https://music.youtube.com/watch?v=${opts.videoId}`

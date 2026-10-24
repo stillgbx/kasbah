@@ -31,7 +31,7 @@ export function createCalendarsFile(path: string, logger?: Logger): CalendarsSto
       } catch { return [] }
     },
     async save(calendars) {
-      await writeFileAtomic(path, JSON.stringify({ calendars }, null, 2))
+      await writeFileAtomic(path, JSON.stringify({ calendars }, null, 2), { mode: 0o600 })
     },
   }
 }

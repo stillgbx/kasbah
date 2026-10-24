@@ -1,6 +1,6 @@
 # Plugin YouTube Music (non officiel)
 
-> Dernière mise à jour : 2026-10-20
+> Dernière mise à jour : 2026-10-24
 > Sources : `apps/server/src/plugins/ytmusic/{index,catalog,cookie,browserCookies,resolve,mapping,types}.ts` (`stream.ts` et `queue.ts` devenus `apps/server/src/music/{proxy,queue}.ts` le 2026-09-23), `apps/server/src/music/{player,sources,ytdlp}.ts`, `apps/server/src/core/playbackBridge.ts` (ex-`ytmusic/bridge.ts`), tests `apps/server/src/plugins/ytmusic/plugin.test.ts` et `apps/server/src/music/{proxy,queue}.test.ts` (ex-`ytmusic/{stream,queue}.test.ts`), `apps/server/src/app.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue` (ex-`YtmusicView.vue`), `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/composables/useMediaPosition.ts`, `apps/web/src/components/ui/{ArtThumb,artThumbLoader}.vue|ts`, `apps/web/src/components/music/ArtPlay.vue` (ex-`ui/PlayButton.vue`), `apps/web/src/components/YtmusicLinkCard.vue`, `apps/server/.env.example`, Music Assistant `providers/ytmusic` (référence)
 
 ## Avertissement
@@ -1291,3 +1291,12 @@ un générateur dont l'arrêt n'a pas eu lieu reste sur le port et est réutilis
 
 Sources : `apps/server/src/plugins/ytmusic/{index,potServer}.ts`, `plugin.test.ts`
 (describe « ytmusic PO Token generator »), `package.json`, `scripts/dev-pot.mjs`.
+
+### Mise à jour 2026-10-24 — le cookie écrit en 0600, et ses deux copies effacées au déliage
+
+Constats d'un audit de sécurité (F11, F29) : le cookie (toute la session Google) et sa copie Netscape
+pour yt-dlp étaient écrits avec les droits par défaut (0644 sous un umask 022), et « délier » n'effaçait
+que la copie brute. Désormais `cookie.ts`, `browserCookies.ts` et la copie temporaire de `resolve.ts`
+écrivent en 0600 (par `writeFileAtomic`, qui applique le mode à chaque écriture puisqu'il crée un
+nouveau fichier), et `clear()` efface aussi `<fichier>.netscape`. Test : `ytmusic/cookie.test.ts` (le test
+du mode est sauté sous Windows, où il ne veut rien dire).

@@ -1,8 +1,9 @@
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile, unlink } from 'node:fs/promises'
+import { writeFileAtomic } from '../../core/atomic-file'
 
 // YouTube Music cookie: pasted from Settings (like the Renault/MELCloud password), never in
-// `.env`, never logged. yt-dlp requires the Netscape format; InnerTube wants the raw string.
+// `.env`, never logged. yt-dlp requires the Netscape format; InnerTube wants the raw string. Both
+// copies are the whole Google session: written 0600, and both removed when the account is unlinked.
 
 /** Domain of the Music cookies (same as Music Assistant). */
 export const YTM_COOKIE_DOMAIN = '.youtube.com'
@@ -78,13 +79,14 @@ export function createCookieFile(filePath: string): CookieStore {
       }
     },
     async write(raw) {
-      await mkdir(dirname(filePath), { recursive: true })
-      await writeFile(filePath, raw, 'utf8')
+      await writeFileAtomic(filePath, raw, { mode: 0o600 })
     },
     async clear() {
-      try { await unlink(filePath) }
-      catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
+      for (const path of [filePath, `${filePath}.netscape`]) {
+        try { await unlink(path) }
+        catch (err) {
+          if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
+        }
       }
     },
   }
@@ -93,7 +95,6 @@ export function createCookieFile(filePath: string): CookieStore {
 /** Writes the Netscape file next to the raw cookie (same folder, `.netscape` suffix) for yt-dlp. */
 export async function writeNetscapeBeside(cookieFile: string, raw: string): Promise<string> {
   const netscapePath = `${cookieFile}.netscape`
-  await mkdir(dirname(netscapePath), { recursive: true })
-  await writeFile(netscapePath, toNetscape(raw), 'utf8')
+  await writeFileAtomic(netscapePath, toNetscape(raw), { mode: 0o600 })
   return netscapePath
 }

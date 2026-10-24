@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, unlink } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { writeFileAtomic } from '../../core/atomic-file'
 import { PluginError } from '../../core/plugin'
 import { fromNetscape, hasRequiredCookie } from './cookie'
 import type { SpawnFn } from '../../music/proxy'
@@ -101,6 +102,6 @@ export async function importCookiesFromBrowser(opts: {
       `no __Secure-3PAPISID in ${opts.browser} cookies — open music.youtube.com in a normal (non-private) ${opts.browser} window, stay logged in, quit, then retry`,
     )
   }
-  await writeFile(opts.netscapePath, netscape, 'utf8')
+  await writeFileAtomic(opts.netscapePath, netscape, { mode: 0o600 })
   return raw
 }

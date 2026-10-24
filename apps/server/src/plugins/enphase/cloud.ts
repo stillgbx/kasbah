@@ -50,7 +50,7 @@ export function createCloudFile(path: string, logger?: Logger): CloudStore {
       return parsed.data
     },
     async save(session) {
-      try { await writeFileAtomic(path, `${JSON.stringify(session, null, 2)}\n`) }
+      try { await writeFileAtomic(path, `${JSON.stringify(session, null, 2)}\n`, { mode: 0o600 }) }
       catch (err) { logger?.warn({ err, path }, 'could not write Enphase cloud session') }
     },
   }

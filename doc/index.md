@@ -80,13 +80,13 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_13 Mitsubishi MELCloud](3_plugins/3_13_mitsubishi-melcloud.md) | 2026-10-21 |
 | [3_14 iRobot (Roomba)](3_plugins/3_14_irobot-roomba.md) | 2026-10-24 |
 | [3_15 Sonos](3_plugins/3_15_sonos.md) | 2026-10-23 |
-| [3_16 YouTube Music (non officiel)](3_plugins/3_16_ytmusic.md) | 2026-10-20 |
+| [3_16 YouTube Music (non officiel)](3_plugins/3_16_ytmusic.md) | 2026-10-24 |
 | [3_17 PetKit](3_plugins/3_17_petkit.md) | 2026-10-06 |
 | [3_18 Tuya (ventilateur CREATE)](3_plugins/3_18_tuya.md) | 2026-10-06 |
 | [3_19 Radios (radio-browser.info)](3_plugins/3_19_radio.md) | 2026-10-07 |
 | [3_20 Mixcloud](3_plugins/3_20_mixcloud.md) | 2026-10-08 |
 | [3_21 TENS actiTENS mini (Web Bluetooth)](3_plugins/3_21_actitens-tens.md) | 2026-10-06 |
-| [3_22 Agenda (adresse iCal secrète)](3_plugins/3_22_agenda.md) | 2026-10-09 |
+| [3_22 Agenda (adresse iCal secrète)](3_plugins/3_22_agenda.md) | 2026-10-24 |
 | [3_23 TouteMonAnnée](3_plugins/3_23_toutemonannee.md) | 2026-10-19 |
 | [3_24 Claude (moteur de l'assistant)](3_plugins/3_24_claude.md) | 2026-10-11 |
 | [3_25 Transcription (la voix de l'assistant)](3_plugins/3_25_transcription.md) | 2026-10-12 |

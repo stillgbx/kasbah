@@ -1,6 +1,6 @@
 # Plugin Agenda (agendas Google par adresse iCal secrète)
 
-> Dernière mise à jour : 2026-10-09
+> Dernière mise à jour : 2026-10-24
 > Sources : `apps/server/src/plugins/agenda/{index,ics,store}.ts`, tests `apps/server/src/plugins/agenda/plugin.test.ts`, `apps/server/src/plugins/index.ts`, `apps/server/.env.example`, `apps/web/src/views/AgendaView.vue`, `apps/web/src/components/agenda/{AgendaMonth,AgendaTimeGrid,AgendaEventDialog}.vue`, `apps/web/src/components/AgendaLinkCard.vue`, `apps/web/src/lib/agenda.ts` (+ `agenda.test.ts`), `apps/web/src/stores/agenda.ts`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`
 
 ## Ce que c'est
@@ -123,3 +123,9 @@ lirait un jour de trop. Détail : `../1_architecture/1_7_serveur-mcp.md`. Non es
 (redémarrage nécessaire).
 
 Sources : `apps/server/src/mcp/server.ts`.
+
+### Mise à jour 2026-10-24 — fichier des agendas en 0600
+
+Les adresses iCal secrètes valent un mot de passe : le fichier des agendas (`agenda/store.ts`) est
+désormais écrit en 0600, comme les autres fichiers d'identifiants (constat F43 d'un audit de sécurité).
+Même correctif pour le jeton de passerelle et la session Enlighten d'Enphase (voir 3_7).

@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-24] update | Sécurité : fichiers d'identifiants en 0600, cookie YouTube Music effacé en entier
+
+**Déclencheur** : audit de sécurité de `apps/server`, constats F11, F26, F29, F31, F33, F43.
+
+**Pages modifiées** :
+- `3_plugins/3_16_ytmusic.md` - mise à jour datée : cookie et copie Netscape en 0600, les deux effacées au déliage.
+- `3_plugins/3_22_agenda.md` - mise à jour datée : fichier des agendas en 0600.
+- `3_plugins/3_7_enphase.md` - (dans la section du certificat) jeton de passerelle et session Enlighten en 0600.
+
+**Index** : catalogue mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-10-24] update | Sécurité : certificats des appareils épinglés au premier contact
 
 **Déclencheur** : audit de sécurité de `apps/server`, constats F7, F32, F37 (TLS non vérifié vers le pont Hue, la passerelle Enphase, le Roomba).
