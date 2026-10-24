@@ -40,49 +40,72 @@ const ACCESS_TTL_MS = 60 * 60_000
 const REFRESH_TTL_MS = 90 * 24 * 60 * 60_000
 const CODE_TTL_MS = 60_000
 const MAX_CLIENTS = 50
-const GLOBAL_WINDOW_MS = 15 * 60_000
-const GLOBAL_MAX_FAILURES = 10
+const CLIENT_WINDOW_MS = 15 * 60_000
+const CLIENT_MAX_FAILURES = 10
 const MAX_TRACKED_NAMES = 1000
 
 // --- sign-in attempts --------------------------------------------------------------------------
 
 /**
  * Both sign-in pages (application and MCP) go through the same guard, since the accounts are shared.
- * Two locks: a GLOBAL failure cap (behind a proxy, all requests have the same address) and the
- * lockout of an ACCOUNT after `maxFailures` consecutive failures, each less than `lockMs` after the
- * previous one. Tracked by the name typed, whether it exists or not: the lockout does not give the
- * accounts away. In memory: a restart unlocks everything. Sessions already open are not affected.
+ * Two locks: a failure cap per CLIENT address (`clientOf`), and the lockout of an ACCOUNT after
+ * `maxFailures` consecutive failures, each less than `lockMs` after the previous one. Tracked by the
+ * name typed, whether it exists or not: the lockout does not give the accounts away. In memory: a
+ * restart unlocks everything. Sessions already open are not affected.
+ *
+ * The cap used to be global (everything behind the proxy shares its address): ten wrong passwords
+ * from anyone locked every sign-in for a quarter of an hour. An attempt is counted as a failure
+ * BEFORE the password is checked, and given back on success: parallel attempts cannot all pass the
+ * check while the first scrypt is running.
  */
 export class LoginGuard {
-  private readonly global: number[] = []
+  private readonly clients = new Map<string, number[]>()
   private readonly names = new Map<string, { count: number; last: number }>()
 
   constructor(private readonly opts: { maxFailures: number; lockMs: number; now: () => number; logger?: Logger }) {}
 
-  /** `null` if the attempt is allowed; otherwise the instant when it will be again. */
-  blockedUntil(name: string): number | null {
+  /** `null`, the attempt then counted as a failure until `succeed`; otherwise the instant it is allowed again. */
+  attempt(name: string, client: string): number | null {
     const t = this.opts.now()
-    while (this.global.length && this.global[0]! <= t - GLOBAL_WINDOW_MS) this.global.shift()
-    if (this.global.length >= GLOBAL_MAX_FAILURES) return this.global[0]! + GLOBAL_WINDOW_MS
-    const n = this.names.get(name)
     const { maxFailures, lockMs } = this.opts
+    const recent = (this.clients.get(client) ?? []).filter((at) => at > t - CLIENT_WINDOW_MS)
+    if (recent.length >= CLIENT_MAX_FAILURES) return recent[0]! + CLIENT_WINDOW_MS
+    const n = this.names.get(name)
     if (maxFailures > 0 && n && n.count >= maxFailures && t - n.last < lockMs) return n.last + lockMs
+    remember(this.clients, client, [...recent, t])
+    remember(this.names, name, { count: n && t - n.last < lockMs ? n.count + 1 : 1, last: t })
     return null
   }
 
-  fail(name: string): void {
-    const t = this.opts.now()
-    this.global.push(t)
-    const prev = this.names.get(name)
-    const count = prev && t - prev.last < this.opts.lockMs ? prev.count + 1 : 1
-    this.names.delete(name)
-    this.names.set(name, { count, last: t })
-    if (count === this.opts.maxFailures) this.opts.logger?.warn({ username: name, minutes: this.opts.lockMs / 60_000 }, 'login locked for this account')
-    // Bound: the names tried longest ago go out (the Map keeps insertion order).
-    if (this.names.size > MAX_TRACKED_NAMES) this.names.delete(this.names.keys().next().value!)
+  /** The password was wrong: the attempt stays counted. */
+  failed(name: string): void {
+    if (this.names.get(name)?.count === this.opts.maxFailures) {
+      this.opts.logger?.warn({ username: name, minutes: this.opts.lockMs / 60_000 }, 'login locked for this account')
+    }
   }
 
-  succeed(name: string): void { this.names.delete(name) }
+  /** The password was right: the attempt is given back, and the account's count starts over. */
+  succeed(name: string, client: string): void {
+    this.names.delete(name)
+    this.clients.get(client)?.pop()
+  }
+}
+
+/** Moves `key` to the end with `value`; the keys tried longest ago go out (a Map keeps insertion order). */
+function remember<V>(map: Map<string, V>, key: string, value: V): void {
+  map.delete(key)
+  map.set(key, value)
+  if (map.size > MAX_TRACKED_NAMES) map.delete(map.keys().next().value!)
+}
+
+/**
+ * The client a sign-in comes from. Behind the NAS proxy, the last `X-Forwarded-For` entry: the proxy
+ * appends the address it received the request from, so a client cannot choose it. Without the
+ * header, the socket's peer.
+ */
+export function clientOf(req: FastifyRequest): string {
+  const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
+  return forwarded.at(-1) ?? req.socket.remoteAddress ?? ''
 }
 
 /** Refusal message for an attempt blocked until `until`. */
@@ -242,14 +265,14 @@ const DUMMY_HASH = 'scrypt$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
  * Checks a name and a password through the guard. `blocked`: refused without an attempt (the guard
  * is blocking); `null`: wrong pair; otherwise the account.
  */
-export async function checkLogin(guard: LoginGuard, users: () => Promise<UsersFile>, username: string, password: string):
+export async function checkLogin(guard: LoginGuard, users: () => Promise<UsersFile>, username: string, password: string, client: string):
   Promise<{ user: UsersFile['users'][number] } | { blocked: number } | null> {
-  const blocked = guard.blockedUntil(username)
+  const blocked = guard.attempt(username, client)
   if (blocked !== null) return { blocked }
   const user = (await users()).users.find((u) => u.name === username)
   const ok = await verifyPassword(password, user?.password ?? DUMMY_HASH)
-  if (!user || !ok) { guard.fail(username); return null }
-  guard.succeed(username)
+  if (!user || !ok) { guard.failed(username); return null }
+  guard.succeed(username, client)
   return { user }
 }
 
@@ -561,7 +584,7 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
         if (typeof checked === 'string') return htmlPage(reply, 400, `<p class="err">${esc(checked)}</p>`)
         const { params, client } = checked
         const { username = '', password = '' } = req.body as { username?: string; password?: string }
-        const result = await checkLogin(guard, currentUsers, username, password)
+        const result = await checkLogin(guard, currentUsers, username, password, clientOf(req))
         if (result && 'blocked' in result) return loginForm(reply, 429, params, client, lockedMessage(result.blocked, now()), username)
         if (!result) {
           logger.warn({ username }, 'mcp login refused')

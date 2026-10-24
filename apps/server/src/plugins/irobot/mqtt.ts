@@ -77,15 +77,31 @@ export function mergeShadow(base: RobotShadow, patch: unknown): RobotShadow {
   return out
 }
 
+/** The real shadow is a few levels deep; `mergeShadow` recurses once per level. */
+const MAX_DEPTH = 32
+
+/** Is `value` nested deeper than `max`? Walked without recursion: the input is what is in doubt. */
+function deeperThan(value: unknown, max: number): boolean {
+  const stack: [unknown, number][] = [[value, 0]]
+  while (stack.length) {
+    const [v, depth] = stack.pop()!
+    if (v === null || typeof v !== 'object') continue
+    if (depth >= max) return true
+    for (const child of Object.values(v)) stack.push([child, depth + 1])
+  }
+  return false
+}
+
 /**
  * Extracts the state fragment of a message. The robot publishes sometimes `{state:{reported:{…}}}`
  * (AWS shadow shape), sometimes the bare object on its own topics. Return `null` rather than throw:
- * an unexpected topic must not cut the link.
+ * an unexpected topic must not cut the link. A message nested beyond any real shadow is dropped
+ * too: merging it would overflow the stack.
  */
 export function extractReported(payload: string): unknown {
   let body: unknown
   try { body = JSON.parse(payload) } catch { return null }
-  if (body === null || typeof body !== 'object') return null
+  if (body === null || typeof body !== 'object' || deeperThan(body, MAX_DEPTH)) return null
   const state = (body as Record<string, unknown>).state
   if (state !== null && typeof state === 'object') {
     const reported = (state as Record<string, unknown>).reported
@@ -134,13 +150,18 @@ export function connectRobot(opts: RobotConnectionOptions): RobotConnection {
     opts.onConnected?.()
   })
 
+  // mqtt.js emits from its packet pump: an exception here would escape it and stop the process
   client.on('message', (_topic, payload) => {
-    const reported = extractReported(payload.toString())
-    if (reported === null) return
-    const next = mergeShadow(shadow, reported)
-    if (next === shadow) return
-    shadow = next
-    opts.onShadow?.(shadow)
+    try {
+      const reported = extractReported(payload.toString())
+      if (reported === null) return
+      const next = mergeShadow(shadow, reported)
+      if (next === shadow) return
+      shadow = next
+      opts.onShadow?.(shadow)
+    } catch (err) {
+      opts.logger?.warn({ err, blid: opts.blid }, 'iRobot message dropped')
+    }
   })
 
   client.on('close', () => {

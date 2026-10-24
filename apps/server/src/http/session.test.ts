@@ -229,6 +229,27 @@ it('never locks an account when the threshold is 0', async () => {
   expect((await login()).statusCode).toBe(303)
 })
 
+it('counts attempts sent at the same time: they cannot all slip past the lockout while scrypt runs', async () => {
+  const results = await Promise.all(Array.from({ length: 12 }, () => login('lou', 'faux')))
+  expect(results.filter((r) => r.statusCode === 401)).toHaveLength(3)
+  expect(results.filter((r) => r.statusCode === 429)).toHaveLength(9)
+})
+
+it('caps the failures per client, not for everyone: another address still signs in', async () => {
+  // the proxy appends the address it received the request from: an entry the client wrote comes first
+  const from = (ip: string, username: string, password: string) => req({
+    method: 'POST', url: '/login', origin: ORIGIN,
+    headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-forwarded-for': `198.51.100.7, ${ip}` },
+    payload: new URLSearchParams({ username, password }).toString(),
+  })
+  // ten wrong passwords on ten different names: no account reaches its own lockout
+  for (let i = 0; i < 10; i++) expect((await from('203.0.113.1', `nom-${i}`, 'faux')).statusCode).toBe(401)
+  expect((await from('203.0.113.1', 'lou', 'bon-mot-de-passe')).statusCode).toBe(429)
+  expect((await from('203.0.113.2', 'lou', 'bon-mot-de-passe')).statusCode).toBe(303)
+  clock += 15 * MINUTE + 1
+  expect((await from('203.0.113.1', 'lou', 'bon-mot-de-passe')).statusCode).toBe(303)
+})
+
 it('changes nothing on the local network', async () => {
   expect((await req({ method: 'GET', url: '/api/devices', host: 'kasbah:8787' })).statusCode).toBe(200)
   expect((await req({ method: 'GET', url: '/api/session', host: 'kasbah:8787' })).json()).toEqual({ user: null })

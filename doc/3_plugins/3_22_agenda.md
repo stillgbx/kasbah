@@ -129,3 +129,13 @@ Sources : `apps/server/src/mcp/server.ts`.
 Les adresses iCal secrètes valent un mot de passe : le fichier des agendas (`agenda/store.ts`) est
 désormais écrit en 0600, comme les autres fichiers d'identifiants (constat F43 d'un audit de sécurité).
 Même correctif pour le jeton de passerelle et la session Enlighten d'Enphase (voir 3_7).
+
+### Mise à jour 2026-10-24 (2) — description nettoyée sans retour arrière, flux plafonné
+
+Constat F41 : la suppression des balises HTML (`<[^>]+>`) revenait en arrière de façon quadratique sur une
+longue suite de `<` sans `>`, et tournait pour **chaque** occurrence d'une règle répétée, avant même le
+test de la période (une règle quotidienne ouverte depuis des décennies en parcourt des milliers). Une
+description piégée bloquait le serveur à chaque ouverture de l'agenda. Désormais : `<[^<>]*>` (linéaire),
+description tronquée à 20 000 caractères, nettoyage seulement pour une occurrence gardée, et flux refusé
+au-delà de 10 Mo (« agenda trop volumineux »). Test : une règle quotidienne depuis 1990 avec 100 000 `<`
+reste sous les 2 s.

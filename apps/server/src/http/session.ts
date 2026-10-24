@@ -5,7 +5,7 @@ import type { Logger } from 'pino'
 import { z } from 'zod'
 import { writeFileAtomic } from '../core/atomic-file'
 import { stateFile } from '../core/paths'
-import { checkLogin, esc, htmlPage, isPublicRequest, lockedMessage, pwTag, sha256, token, type LoginGuard, type UsersFile } from '../mcp/auth'
+import { checkLogin, clientOf, esc, htmlPage, isPublicRequest, lockedMessage, pwTag, sha256, token, type LoginGuard, type UsersFile } from '../mcp/auth'
 import { sendError } from './errors'
 
 // The application under the PUBLIC name (`MCP_PUBLIC_URL`, the NAS reverse proxy): a cookie session,
@@ -210,7 +210,7 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
           if (!isPublicRequest(req, publicHosts)) return reply.redirect('/')
           const { username = '', password = '', next } = (req.body ?? {}) as { username?: string; password?: string; next?: string }
           const back = safeNext(next)
-          const result = await checkLogin(guard, users, username, password)
+          const result = await checkLogin(guard, users, username, password, clientOf(req))
           if (result && 'blocked' in result) return form(reply, 429, back, lockedMessage(result.blocked, now()), username)
           if (!result) {
             logger.warn({ username }, 'app login refused')

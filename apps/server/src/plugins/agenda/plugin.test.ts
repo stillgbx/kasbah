@@ -125,6 +125,19 @@ describe('agenda ics', () => {
   it('refuses what is not a calendar', () => {
     expect(() => parseIcs('BEGIN:VCARD\r\nVERSION:3.0\r\nEND:VCARD')).toThrow()
   })
+
+  it('stays quick on a daily rule open for decades whose description is a long run of `<`', () => {
+    const trap = parseIcs([
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'BEGIN:VEVENT', 'UID:piege', 'DTSTAMP:20260101T000000Z',
+      'DTSTART:19900101T080000Z', 'DTEND:19900101T090000Z', 'RRULE:FREQ=DAILY', 'SUMMARY:Piège',
+      `DESCRIPTION:${'<'.repeat(100_000)}`, 'END:VEVENT', 'END:VCALENDAR',
+    ].join('\r\n'))
+    const t0 = performance.now()
+    const week = expandEvents(trap, 'c1', OCT_FROM, OCT_FROM + 7 * 86_400_000)
+    expect(performance.now() - t0).toBeLessThan(2_000)
+    expect(week).toHaveLength(7)
+    expect(week[0]!.description!.length).toBeLessThanOrEqual(20_000)
+  })
 })
 
 describe('agenda url', () => {

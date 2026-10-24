@@ -540,3 +540,11 @@ champ `ip` du message, et un lien connecté n'est jamais remplacé sur la foi d'
 dans `irobot-session.json` (champ `pin`, 0600). mqtt.js écrit son CONNECT avant la fin de la poignée de
 main : le serveur construit lui-même le `MqttClient` sur un flux bloqué (`cork`) jusqu'au contrôle.
 Relier de nouveau le compte efface l'épingle. Mécanisme commun : `apps/server/src/core/tls-pin.ts` (empreinte SHA-256 apprise au premier contact, contrôle sur le socket établi avant toute écriture ; reprise de session TLS coupée, car une session TLS 1.3 reprise n'expose pas de certificat ; un certificat absent est refusé). Rien n'a encore été essayé sur le vrai matériel : au premier démarrage, le journal doit montrer `device certificate pinned`. Une mise à jour de firmware qui change le certificat met le plugin en erreur jusqu'au ré-appairage : c'est voulu.
+
+### Mise à jour 2026-10-24 (2) — un message trop imbriqué est écarté
+
+Constat F39 : `mergeShadow` se rappelle une fois par niveau d'imbrication. Un message imbriqué sur des
+dizaines de milliers de niveaux, reçu deux fois, dépassait la pile ; l'exception sortait de la boucle de
+mqtt.js et arrêtait le serveur. `extractReported` écarte désormais un message plus profond que 32
+niveaux (parcours sans récursion), et le gestionnaire de messages ne laisse plus rien s'échapper vers
+mqtt.js (avertissement dans le journal). Test : `irobot/mqtt.test.ts`.

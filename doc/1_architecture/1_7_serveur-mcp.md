@@ -447,7 +447,7 @@ blocage d'un compte après trop d'échecs, paramétrable.
   s'installe dès cette page.
 
 **Gardien partagé (`mcp/auth.ts`, `LoginGuard`).** Les deux connexions (app et `/oauth/authorize`) y
-passent par `checkLogin`. Le plafond GLOBAL d'avant est conservé (10 échecs / 15 min, constantes
+passent par `checkLogin`. Le plafond GLOBAL d'avant est conservé *(Dépassé le 2026-10-24 : plafond par adresse de client, voir 1_13 Comptes et sessions.)* (10 échecs / 15 min, constantes
 `GLOBAL_*` : derrière un proxy toutes les requêtes ont la même adresse) et s'y ajoute le **blocage par
 compte** après `KASBAH_LOGIN_MAX_FAILURES` échecs d'affilée (défaut 5, 0 = jamais), chacun à moins de
 `KASBAH_LOGIN_LOCK_MINUTES` (défaut 15) du précédent. Bloqué **même avec le bon mot de passe** ; suivi

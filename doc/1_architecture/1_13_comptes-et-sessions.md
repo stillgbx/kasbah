@@ -1,6 +1,6 @@
 # Comptes et sessions
 
-> Dernière mise à jour : 2026-10-23
+> Dernière mise à jour : 2026-10-24
 > Sources : `apps/server/src/http/session.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/music/sources.ts`, `apps/server/src/plugins/claude/index.ts`, `apps/server/src/assistant/assistant.ts` ; pages citées plus bas
 
 Page de synthèse, écrite au lint du 2026-10-13 : le sujet était dispersé entre le serveur MCP, la
@@ -118,6 +118,9 @@ le même gardien :
 | Durée du blocage, et fenêtre de « d'affilée » | 15 min | `KASBAH_LOGIN_LOCK_MINUTES` |
 | Plafond global, toutes connexions confondues | 10 échecs en 15 min | non (derrière le proxy, tout a la même adresse) |
 
+*(Dépassé le 2026-10-24 : le plafond est désormais par adresse de client, et une tentative compte
+avant la vérification du mot de passe ; voir la section datée en bas de page.)*
+
 Le blocage vaut **même avec le bon mot de passe**, il est suivi par **nom saisi**, existant ou non (il ne
 trahit pas quels comptes existent), et il vit en mémoire : un redémarrage le lève. Détail :
 [5_1 Configuration](../5_setup/5_1_configuration-env.md), section du 2026-10-06 (soir).
@@ -167,3 +170,25 @@ Un jeton écrit avant ce changement n'a pas d'empreinte : il est **refusé**, et
 Claude, par exemple) se reconnecte une fois. L'accepter l'aurait lié au mot de passe du moment de son
 prochain rafraîchissement, ce qui annulait la protection. Les jetons d'exécution de l'assistant
 (`runToken`), en mémoire seulement, ne sont pas concernés. Tests : `mcp/auth.test.ts`.
+
+### Mise à jour 2026-10-24 - le plafond d'échecs par client, et les tentatives simultanées comptées
+
+Deux constats d'un audit de sécurité sur `LoginGuard` (`mcp/auth.ts`) :
+
+- **F28 : le plafond global se retournait contre la maison.** Dix mauvais mots de passe de n'importe qui,
+  sur n'importe quel nom, bloquaient pendant 15 minutes toutes les connexions à l'adresse publique, page de
+  l'app comme autorisation du MCP. Le plafond (10 échecs en 15 min) est maintenant **par client**
+  (`clientOf`) : la dernière entrée de `X-Forwarded-For`, celle que le proxy du NAS ajoute avec l'adresse
+  qui l'a contacté (un client ne peut pas la choisir), sinon l'adresse du socket. Si le proxy n'ajoutait
+  pas cet en-tête, toutes les requêtes auraient l'adresse du NAS : on retomberait sur le plafond global
+  d'avant. **À vérifier sur le vrai proxy** : qu'il ajoute bien `X-Forwarded-For` (sinon un client
+  pourrait aussi en écrire un et changer d'adresse à volonté pour essayer plus de noms).
+- **F17 : des tentatives envoyées en même temps passaient toutes.** Le contrôle avait lieu avant le
+  calcul scrypt (asynchrone), l'échec n'était noté qu'après : douze essais simultanés étaient tous
+  évalués. Désormais `attempt()` compte l'essai comme un échec **avant** la vérification, et `succeed()`
+  le rend.
+
+Inchangé : le blocage d'un compte après N échecs d'affilée reste commun à tous les clients (il protège le
+mot de passe) ; quelqu'un qui connaît un nom de compte peut donc encore le bloquer 15 minutes. Tests :
+`http/session.test.ts` (douze essais simultanés → trois refus 401 et neuf 429 ; un client bloqué, un
+autre qui se connecte).

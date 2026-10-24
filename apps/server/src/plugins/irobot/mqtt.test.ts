@@ -53,6 +53,15 @@ describe('extractReported', () => {
     expect(extractReported('pas du json')).toBeNull()
     expect(extractReported('"texte"')).toBeNull()
   })
+
+  it('drops a message nested far beyond a real shadow: merging it would overflow the stack', () => {
+    const deep = `${'{"a":'.repeat(100_000)}1${'}'.repeat(100_000)}`
+    expect(extractReported(deep)).toBeNull()
+    // what it guards against: the same message twice, the second merge recurses once per level
+    expect(() => mergeShadow(JSON.parse(deep) as Record<string, unknown>, JSON.parse(deep))).toThrow(RangeError)
+    // a real shadow, a few levels deep, still goes through
+    expect(extractReported('{"state":{"reported":{"cleanMissionStatus":{"phase":"run","mssnM":3}}}}')).toEqual({ cleanMissionStatus: { phase: 'run', mssnM: 3 } })
+  })
 })
 
 describe('connectRobot certificate pin', () => {

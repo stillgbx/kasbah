@@ -36,11 +36,18 @@ export interface AgendaPluginDeps {
 
 interface Feed { parsed: ParsedCalendar | null; fetchedAt: number | null; error: string | null }
 
+/** A family calendar weighs a few hundred KB; beyond this, the feed is refused rather than parsed. */
+const MAX_FEED_BYTES = 10 * 1024 * 1024
+
 const defaultFetch: FetchIcs = async (url, signal) => {
   const res = await fetch(url, { signal, headers: { accept: 'text/calendar' } })
   // the address does not go into the message: it is as good as a password
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.text()
+  const tooBig = new Error(`agenda trop volumineux (plus de ${MAX_FEED_BYTES / 1024 / 1024} Mo)`)
+  if (Number(res.headers.get('content-length') ?? 0) > MAX_FEED_BYTES) throw tooBig
+  const text = await res.text()
+  if (text.length > MAX_FEED_BYTES) throw tooBig
+  return text
 }
 
 /** `webcal://` is a calendar's subscription address; it is the same one over https. */

@@ -7,6 +7,18 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-24] update | Sécurité : robustesse (connexions, messages iRobot, descriptions iCal)
+
+**Déclencheur** : audit de sécurité de `apps/server`, constats F17, F28 (blocage des connexions), F39 (récursion iRobot), F41 (expression régulière iCal).
+
+**Pages modifiées** :
+- `1_architecture/1_13_comptes-et-sessions.md` - renvoi daté sur le plafond global et section : plafond par client (`clientOf`, dernière entrée de `X-Forwarded-For`), tentative comptée avant scrypt.
+- `1_architecture/1_7_serveur-mcp.md`, `5_setup/5_1_configuration-env.md` - renvois datés sur le plafond global.
+- `3_plugins/3_14_irobot-roomba.md` - mise à jour datée : message de plus de 32 niveaux écarté, gestionnaire qui ne laisse rien s'échapper.
+- `3_plugins/3_22_agenda.md` - mise à jour datée : regex linéaire, description tronquée et nettoyée seulement pour une occurrence gardée, flux plafonné à 10 Mo.
+
+**Index** : catalogues mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-10-24] update | Sécurité : un contenu extérieur lu interdit d'ouvrir un accès par le MCP
 
 **Déclencheur** : audit de sécurité de `apps/server`, constats F18, F19, F23 (injection d'instructions par l'agenda, l'école, la recherche musicale).

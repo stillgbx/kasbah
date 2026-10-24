@@ -1,6 +1,6 @@
 # Configuration (.env)
 
-> Dernière mise à jour : 2026-10-23
+> Dernière mise à jour : 2026-10-24
 > Sources : `apps/server/src/config/env.ts`, `apps/server/.env.example`, `apps/server/src/plugins/{mock,hue,tahoma,nest}/index.ts`, `apps/server/src/plugins/google_cast/{index,known}.ts`, `apps/server/src/plugins/google_cast/enrich/cover.ts`, `apps/server/src/plugins/google_cast/bravia.ts`, `apps/server/src/plugins/enphase/index.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/plugins/comap/index.ts`, `apps/server/src/plugins/sonos/index.ts`, `apps/server/src/plugins/ytmusic/index.ts`, `apps/server/src/core/paths.ts`, `apps/server/test/state-isolation.ts`, `apps/server/.env.example`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{mixcloud,radio}/index.ts`, `apps/server/src/core/automations/schedule.ts` (`TZ`), `apps/server/src/plugins/claude/index.ts`, `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/main.ts`, `.gitignore`, `apps/server/src/config/{catalog,properties}.ts`
 
 ## Où vivent les secrets
@@ -475,7 +475,7 @@ décrit donc un rôle plus étroit que le réel. Nouvelles variables (`mcpAuthCo
 | `KASBAH_LOGIN_MAX_FAILURES` | `5` | Échecs de connexion d'affilée qui bloquent un COMPTE (application et MCP partagent le compteur) ; `0` = jamais. Les échecs comptent par nom saisi, existant ou non. |
 | `KASBAH_LOGIN_LOCK_MINUTES` | `15` | Durée du blocage, et fenêtre dans laquelle deux échecs se suivent pour compter « d'affilée ». |
 
-Le plafond global (10 échecs en 15 minutes, toutes connexions confondues) est constant, non réglable.
+Le plafond global (10 échecs en 15 minutes, toutes connexions confondues) est constant, non réglable. *(Dépassé le 2026-10-24 : plafond par adresse de client, voir 1_13 Comptes et sessions.)*
 Le blocage est en mémoire : un redémarrage de Kasbah le lève ; les sessions déjà ouvertes ne sont pas
 touchées. `MUSIC_PUBLISH_BASE` devient **obligatoire** pour lancer une lecture sur une enceinte depuis
 l'adresse publique (voir la section du 2026-09-23 plus haut, et `5_2_production.md`).

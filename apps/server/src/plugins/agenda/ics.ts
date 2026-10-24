@@ -74,27 +74,30 @@ export function expandEvents(cal: ParsedCalendar, calendarId: string, from: numb
 function push(out: AgendaEvent[], calendarId: string, item: ICAL.Event, start: ICAL.Time, end: ICAL.Time | null, recurrence: ICAL.Time, from: number, to: number) {
   // a cancelled occurrence arrives as an exception with STATUS:CANCELLED
   if (String(item.component.getFirstPropertyValue('status') ?? '').toUpperCase() === 'CANCELLED') return
-  const base = {
-    id: `${calendarId}:${item.uid}:${recurrence.toString()}`,
-    calendarId,
-    title: item.summary?.trim() || '',
-    ...(item.location?.trim() ? { location: item.location.trim() } : {}),
-    ...(item.description?.trim() ? { description: plainText(item.description) } : {}),
-  }
+  let when: { allDay: true; start: string; end: string } | { allDay: false; start: number; end: number }
   if (start.isDate) {
     const startDay = start.toString()
     // RFC 5545: an all-day event without DTEND lasts one day
     const endDay = end && end.compare(start) > 0 ? end.toString() : nextDay(startDay)
     if (localMs(endDay) <= from || localMs(startDay) >= to) return
-    out.push({ ...base, allDay: true, start: startDay, end: endDay })
-    return
+    when = { allDay: true, start: startDay, end: endDay }
+  } else {
+    const s = start.toJSDate().getTime()
+    const f = end ? Math.max(s, end.toJSDate().getTime()) : s
+    // an appointment without duration stays visible at its time
+    if (f <= from && !(f === s && s >= from)) return
+    if (s >= to) return
+    when = { allDay: false, start: s, end: f }
   }
-  const s = start.toJSDate().getTime()
-  const f = end ? Math.max(s, end.toJSDate().getTime()) : s
-  // an appointment without duration stays visible at its time
-  if (f <= from && !(f === s && s >= from)) return
-  if (s >= to) return
-  out.push({ ...base, allDay: false, start: s, end: f })
+  // the text is cleaned only for an occurrence kept: a daily rule walks thousands before the period
+  out.push({
+    id: `${calendarId}:${item.uid}:${recurrence.toString()}`,
+    calendarId,
+    title: item.summary?.trim() || '',
+    ...(item.location?.trim() ? { location: item.location.trim() } : {}),
+    ...(item.description?.trim() ? { description: plainText(item.description) } : {}),
+    ...when,
+  })
 }
 
 /** Local midnight of a `YYYY-MM-DD` day (the server's time zone is the house's). */
@@ -111,12 +114,19 @@ function nextDay(day: string): string {
 
 const sortKey = (e: AgendaEvent) => (e.allDay ? localMs(e.start) - 1 : e.start)
 
-/** Google writes descriptions in light HTML: we keep the text and the line breaks. */
+/** Longer than any real note: the feed comes from outside, and the text is cleaned per occurrence. */
+const MAX_DESCRIPTION = 20_000
+
+/**
+ * Google writes descriptions in light HTML: we keep the text and the line breaks. `<[^<>]*>` and not
+ * `<[^>]+>`: on a long run of `<` without `>`, the latter backtracks quadratically and blocks the
+ * server.
+ */
 function plainText(html: string): string {
-  return html
+  return html.slice(0, MAX_DESCRIPTION)
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|li)>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
+    .replace(/<[^<>]*>/g, '')
     .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
