@@ -11,7 +11,7 @@ import type { SchoolFile, SchoolHomework, SchoolJournal, SchoolMessage, SchoolPo
 import type { SceneRegistry } from '../core/scene-registry'
 import type { AgendaEvent } from '../plugins/agenda/ics'
 import { REPEAT_MODES, type RepeatMode } from '../music/queue'
-import type { McpAuth } from './auth'
+import { sha256, type McpAuth } from './auth'
 import { actAsHeaders } from '../http/session'
 
 export interface McpDeps {
@@ -184,8 +184,20 @@ export function sensitiveActions(actions: AutomationAction[], classOf: (id: stri
   })
 }
 
-function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, created: number[]): McpServer {
+// Text written by third parties (a calendar's events, the school's posts, music titles) reaches the
+// agent through some tools and may carry instructions. After such a read, the same token cannot open
+// an access to the house or unlock a car for a while: the guard is here, not in the model. The
+// in-app assistant draws a token per request, so a fresh « ouvre le portail » is not affected.
+const EXTERNAL_WINDOW_MS = 30 * 60_000
+const EXTERNAL_REFUSAL = "refusé : un contenu extérieur (agenda, école ou recherche musicale) a été lu dans cette demande ; ouvrir un accès à la maison ou déverrouiller une voiture se fait alors depuis l'app de Kasbah, ou dans une nouvelle demande"
+const APP_ONLY = "cette automatisation ouvre un accès à la maison ou déverrouille une voiture : elle s'active et se lance depuis l'app de Kasbah seulement"
+
+/** Has this token read third-party content lately (`mark` when it does)? */
+interface ExternalReads { mark(): void; recent(): boolean }
+
+function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, created: number[], external: ExternalReads): McpServer {
   const server = new McpServer({ name: 'kasbah', version: '0.1.0' })
+  const classOf = (id: string) => { const e = deps.registry.get(id); return e ? deviceClassOf(e.descriptor) : null }
 
   // Music goes through the app's routes (source search, shared player): same validations, same
   // readable errors (source turned off, expired cookie), same address published to the speakers. An
@@ -234,13 +246,15 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
 
   server.registerTool('send_command', {
     title: 'Commander un appareil',
-    description: "Envoie une commande à un vrai appareil. Réussit à l'accusé du fabricant ; le nouvel état se relit avec get_device. La commande doit être permise par les capacités de l'appareil.",
+    description: "Envoie une commande à un vrai appareil. Réussit à l'accusé du fabricant ; le nouvel état se relit avec get_device. La commande doit être permise par les capacités de l'appareil. Ouvrir un portail, une porte de garage ou une fenêtre, ou déverrouiller une voiture, est refusé après la lecture d'un contenu extérieur (get_agenda, get_school, search_music) dans la même demande.",
     inputSchema: z.object({ deviceId: z.string(), command: commandSchema }),
     annotations: { readOnlyHint: false, openWorldHint: true },
   }, async ({ deviceId, command }) => {
     const entry = deps.registry.get(deviceId)
     if (!entry) return fail(`appareil inconnu "${deviceId}"`)
     assertCommandAllowed(entry.descriptor, command)
+    const opens = sensitiveActions([{ type: 'command', target: { type: 'devices', deviceIds: [entry.descriptor.id] }, command }], classOf)
+    if (opens.length && external.recent()) return fail(EXTERNAL_REFUSAL)
     await deps.host.execute(entry.descriptor.id, command)
     return json({ ok: true })
   })
@@ -281,6 +295,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     }),
     annotations: { readOnlyHint: true, openWorldHint: true },
   }, async ({ query, source, limit }) => {
+    external.mark()
     const q = encodeURIComponent(query)
     if (source === 'ytmusic') {
       const r = await call<{ tracks: YtmTrack[] }>('GET', `/api/plugins/ytmusic/search?q=${q}`)
@@ -331,6 +346,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     }),
     annotations: { readOnlyHint: true },
   }, async ({ section, includePast, includeHidden }) => {
+    external.mark()
     const data = await call<SchoolData>('GET', '/api/plugins/toutemonannee/school')
     if (!data.linked) return fail("TouteMonAnnée n'est pas relié : le relier dans la vue École de Kasbah")
     return json(schoolDigest(data, { today: localDay(new Date()), section, includePast, includeHidden }))
@@ -380,6 +396,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     }),
     annotations: { readOnlyHint: true },
   }, async ({ from, days }) => {
+    external.mark()
     const [y, m, d] = (from ?? localDay(new Date())).split('-').map(Number) as [number, number, number]
     const start = new Date(y, m - 1, d).getTime()
     const end = new Date(y, m - 1, d + days).getTime()
@@ -425,6 +442,9 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     return json(automations.filter(({ automation: a }) => !q || a.name.toLowerCase().includes(q) || a.id.toLowerCase().includes(q)).map(automationView))
   })
 
+  const automationOf = async (id: string) =>
+    (await call<{ automations: AutomationEntry[] }>('GET', '/api/automations')).automations.find((e) => e.automation.id === id)?.automation
+
   const safety = (risky: number[], wanted: boolean) => (risky.length && wanted
     ? { safety: { disabled: true, actions: risky, reason: "action sensible (accès à la maison, voiture) : enregistrée coupée, à activer dans l'app de Kasbah" } }
     : {})
@@ -433,8 +453,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
   const { name: nameSchema, trigger: triggerSchema, unless: unlessSchema, actions: actionsSchema } = automationBodySchema.shape
   const AUTOMATION_HELP = "trigger : heure fixe { type: 'time', at: { kind: 'clock', time: 'HH:MM' } }, passage du soleil { type: 'time', at: { kind: 'sun', event: dawn|sunrise|sunset|dusk, offsetMin (négatif = avant), notBefore, notAfter } } (days 0 = dimanche, dateRange facultatifs), ou état { type: 'state', when: prédicat, forMin } qui part quand le prédicat DEVIENT vrai. Une contrainte d'heure va dans unless, pas dans when. unless : prédicats combinés en OU, l'automatisation ne fait rien si l'un est vrai. actions, jouées dans l'ordre : commande du contrat (comme send_command) sur des appareils nommés (ids de list_devices) ou une sélection résolue au moment d'agir (kind, roomIds, levelIds, zoneIds : ids de la ressource kasbah://house) ; forMin = la commande inverse part au bout de N minutes ; ou recallScene (sceneId de list_scenes). Rend l'automatisation et son statut : health incomplete et missing signalent une référence qui n'existe pas (appareil, champ d'état, pièce), enregistrée quand même."
 
-  const classOf = (id: string) => { const e = deps.registry.get(id); return e ? deviceClassOf(e.descriptor) : null }
-  const SAFETY = "Une automatisation qui ouvre un portail, une porte de garage ou une fenêtre, déverrouille une voiture ou lance sa mise à jour logicielle est enregistrée COUPÉE (safety dans la réponse) : à activer dans l'app, ou par set_automation_enabled si l'utilisateur le demande expressément."
+  const SAFETY = "Une automatisation qui ouvre un portail, une porte de garage ou une fenêtre, déverrouille une voiture ou lance sa mise à jour logicielle est enregistrée COUPÉE (safety dans la réponse) : elle ne s'active et ne se lance que depuis l'app de Kasbah."
 
   server.registerTool('create_automation', {
     title: 'Créer une automatisation',
@@ -475,29 +494,34 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     if (!current) return fail(`automatisation inconnue "${id}" : voir list_automations`)
     const { id: _id, updatedAt: _u, byAssistant: _b, ...previous } = current
     const next = { ...previous, ...optional(changes) }
-    // the safeguard follows what the rule DOES; renaming, disabling or re-enabling alone does not touch it
+    // the safeguard follows what the rule DOES, and switching it on; renaming or disabling does not touch it
     const reshaped = changes.trigger !== undefined || changes.unless !== undefined || changes.actions !== undefined
-    const risky = reshaped ? sensitiveActions(next.actions, classOf) : []
+    const switchedOn = changes.enabled === true && !current.enabled
+    const risky = reshaped || switchedOn ? sensitiveActions(next.actions, classOf) : []
     const { automation } = await call<{ automation: AutomationEntry }>('PUT', `/api/automations/${encodeURIComponent(id)}`, risky.length ? { ...next, enabled: false } : next)
     return json({ ...automationView(automation), ...safety(risky, next.enabled), previous })
   })
 
   server.registerTool('run_automation', {
     title: 'Lancer une automatisation',
-    description: "Exécute TOUT DE SUITE les actions d'une automatisation (id venu de list_automations), sans attendre son déclencheur et SANS vérifier ses « sauf si ». Marche aussi sur une automatisation désactivée. Rend outcome (ok, partial, failed) et les erreurs action par action.",
+    description: "Exécute TOUT DE SUITE les actions d'une automatisation (id venu de list_automations), sans attendre son déclencheur et SANS vérifier ses « sauf si ». Marche aussi sur une automatisation désactivée, sauf si elle ouvre un accès à la maison ou déverrouille une voiture : celle-là se lance depuis l'app seulement. Rend outcome (ok, partial, failed) et les erreurs action par action.",
     inputSchema: z.object({ id: z.string() }),
     annotations: { readOnlyHint: false, openWorldHint: true },
   }, async ({ id }) => {
+    const rule = await automationOf(id)
+    if (rule && sensitiveActions(rule.actions, classOf).length) return fail(APP_ONLY)
     const { run } = await call<{ run: AutomationRun }>('POST', `/api/automations/${encodeURIComponent(id)}/run`)
     return json({ outcome: run.outcome, ...(run.errors.length ? { errors: run.errors } : {}) })
   })
 
   server.registerTool('set_automation_enabled', {
     title: 'Activer ou couper une automatisation',
-    description: "Active (enabled: true) ou coupe (enabled: false) une automatisation (id venu de list_automations) : coupée, son déclencheur ne la lance plus. Rien d'autre n'est modifié. Une automatisation coupée par le garde-fou (safety) ne s'active ici que si l'utilisateur l'a demandé expressément.",
+    description: "Active (enabled: true) ou coupe (enabled: false) une automatisation (id venu de list_automations) : coupée, son déclencheur ne la lance plus. Rien d'autre n'est modifié. Une automatisation qui ouvre un accès à la maison ou déverrouille une voiture ne s'active que depuis l'app.",
     inputSchema: z.object({ id: z.string(), enabled: z.boolean() }),
     annotations: { readOnlyHint: false, idempotentHint: true },
   }, async ({ id, enabled }) => {
+    const rule = enabled ? await automationOf(id) : undefined
+    if (rule && !rule.enabled && sensitiveActions(rule.actions, classOf).length) return fail(APP_ONLY)
     const { automation } = await call<{ automation: AutomationEntry }>('PATCH', `/api/automations/${encodeURIComponent(id)}`, { enabled })
     return json({ ok: true, id: automation.automation.id, enabled: automation.automation.enabled })
   })
@@ -700,9 +724,21 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
 
 export async function registerMcp(app: FastifyInstance, deps: McpDeps): Promise<void> {
   const userOf = (ctx: McpRequestContext) => (typeof ctx.authInfo?.extra?.user === 'string' ? ctx.authInfo.extra.user : null)
-  // one instance per request: the creation count lives here, for the whole server
+  // one instance per request: the creation count and the external reads live here, for the whole server
   const created: number[] = []
-  const handler = createMcpHandler((ctx) => buildServer(deps, app, userOf(ctx), created))
+  const readUntil = new Map<string, number>()
+  const externalReads = (ctx: McpRequestContext): ExternalReads => {
+    const key = String(ctx.authInfo?.extra?.tokenKey ?? '')
+    return {
+      mark() {
+        const t = Date.now()
+        for (const [k, until] of readUntil) if (until <= t) readUntil.delete(k)
+        readUntil.set(key, t + EXTERNAL_WINDOW_MS)
+      },
+      recent: () => (readUntil.get(key) ?? 0) > Date.now(),
+    }
+  }
+  const handler = createMcpHandler((ctx) => buildServer(deps, app, userOf(ctx), created, externalReads(ctx)))
   app.addHook('onClose', () => handler.close())
   await app.register(async (sub) => {
     const hosts = [...ALLOWED_HOSTS, ...deps.auth.publicHosts]
@@ -719,8 +755,10 @@ export async function registerMcp(app: FastifyInstance, deps: McpDeps): Promise<
           if (v !== undefined && k !== 'content-length') headers.set(k, Array.isArray(v) ? v.join(', ') : v)
         }
         const body = req.method === 'POST' ? JSON.stringify(req.body) : undefined
-        // `requireToken` set the token's account: this request's server acts in its name
-        const authInfo = { token: '', clientId: '', scopes: [], extra: { user: req.sessionUser } }
+        // `requireToken` set the token's account: this request's server acts in its name. The token's
+        // hash keys its external reads (`ExternalReads`).
+        const tokenKey = sha256(/^Bearer (\S+)$/i.exec(req.headers.authorization ?? '')?.[1] ?? '')
+        const authInfo = { token: '', clientId: '', scopes: [], extra: { user: req.sessionUser, tokenKey } }
         return reply.send(await handler.fetch(new Request(`http://${req.host}${req.url}`, { method: req.method, headers, body }), { authInfo }))
       },
     })

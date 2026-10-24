@@ -1,6 +1,6 @@
 # Serveur MCP (`/mcp`)
 
-> Dernière mise à jour : 2026-10-20
+> Dernière mise à jour : 2026-10-24
 > Sources : `apps/server/src/mcp/server.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/http/session.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/web/src/components/settings/McpUsersCard.vue`, `apps/server/src/mcp/auth.test.ts`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{ytmusic,mixcloud,radio}/index.ts`, `apps/server/src/mcp/server.test.ts`, `apps/server/src/app.ts` (`registerMcp`), `apps/server/package.json`, `README.md` (section « Serveur MCP »), arbre de travail du 2026-09-23 (après c9abf58), `apps/server/src/assistant/assistant.ts` ; arbre de travail NON COMMITÉ du 2026-10-09 (après 00397bc) : `apps/server/src/mcp/{server,server.test}.ts`, `README.md`, `packages/shared/src/shopping/shopping.ts` (2026-10-11)
 
 ## Ce que c'est
@@ -739,3 +739,29 @@ test pur de `sensitiveActions`. Contrôle négatif : garde-fou neutralisé → l
 
 Sources : `apps/server/src/mcp/{server,server.test}.ts`, `apps/server/src/http/{session,routes}.ts`,
 `apps/server/src/core/automations/engine.ts`, `packages/shared/src/automations/automation.ts`.
+
+### Mise à jour 2026-10-24 — un contenu extérieur lu interdit d'ouvrir un accès ; les automatisations sensibles, depuis l'app seulement
+
+Constats d'un audit de sécurité (F18, F19, F23) : du texte écrit par des tiers arrive tel quel à l'agent
+par `get_agenda` (titre, lieu, description d'un flux iCal), `get_school` (publications) et `search_music`
+(titres, tags), alors que `send_command` ouvrait le portail ou déverrouillait la voiture sans autre
+contrôle que les capacités, et que `set_automation_enabled` / `run_automation` défaisaient le garde-fou
+du 2026-10-15. Choix de l'utilisateur, garde **dans le serveur**, pas dans le modèle :
+
+- **Lecture extérieure** (`ExternalReads`, `apps/server/src/mcp/server.ts`) : ces trois outils marquent le
+  jeton qui les appelle (haché, en mémoire) pour 30 min. Pendant ce temps, `send_command` refuse ce que
+  `sensitiveActions` juge sensible (ouvrir portail, garage, fenêtre, appareil sans classe ; déverrouiller
+  une voiture ou lancer sa mise à jour), avec un message qui renvoie à l'app. Fermer et tout le reste
+  passent. L'assistant de l'app tire un jeton par demande (`runToken`) : « ouvre le portail » seul marche
+  toujours ; un client OAuth garde le marquage 30 min ou jusqu'au jeton suivant.
+- **Automatisations sensibles** : le MCP ne peut plus les activer (`set_automation_enabled`, ni
+  `update_automation` avec `enabled: true` sur une règle coupée, qui repasse par `sensitiveActions`) ni
+  les lancer (`run_automation`). Seule l'app le fait (route `PATCH /api/automations/:id`). La phrase
+  « ou par set_automation_enabled si l'utilisateur le demande expressément » (2026-10-15) est donc
+  dépassée.
+- Reste ouvert : `list_devices` / `get_device` rendent aussi des textes de tiers (titre joué par un
+  récepteur Cast) sans marquer le jeton ; marquer ces lectures aurait bloqué le cas courant (chercher l'id
+  du portail).
+
+Tests : `mcp/server.test.ts` (portail refusé après chacune des trois lectures, accepté avec un nouveau
+jeton ; activation et lancement refusés au MCP, acceptés par l'app).

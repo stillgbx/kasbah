@@ -221,9 +221,13 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
       name: 'Arrivée', trigger: { type: 'time', at: { kind: 'clock', time: '18:00' } }, actions: opens,
     } })))
     expect(r).toMatchObject({ enabled: false, safety: { disabled: true, actions: [1] } })
-    // renaming does not touch the safeguard; explicitly re-enabling does
+    // renaming does not touch the safeguard; the MCP can neither switch it on nor run it: the app can
     expect(JSON.parse(text(await client.callTool({ name: 'update_automation', arguments: { id: r.id, name: 'Arrivée du soir' } }))).enabled).toBe(false)
-    await client.callTool({ name: 'set_automation_enabled', arguments: { id: r.id, enabled: true } })
+    expect((await client.callTool({ name: 'set_automation_enabled', arguments: { id: r.id, enabled: true } })).isError).toBe(true)
+    expect(JSON.parse(text(await client.callTool({ name: 'update_automation', arguments: { id: r.id, enabled: true } }))).enabled).toBe(false)
+    expect((await client.callTool({ name: 'run_automation', arguments: { id: r.id } })).isError).toBe(true)
+    expect(kasbah.automations.get(r.id)!.automation.enabled).toBe(false)
+    await kasbah.app.inject({ method: 'PATCH', url: `/api/automations/${r.id}`, payload: { enabled: true } })
     expect(kasbah.automations.get(r.id)!.automation.enabled).toBe(true)
     // changing what it does disables it again
     const moved = JSON.parse(text(await client.callTool({ name: 'update_automation', arguments: { id: r.id, trigger: { type: 'time', at: { kind: 'clock', time: '19:00' } } } })))
@@ -276,6 +280,41 @@ describe.each<[string, VersionNegotiationMode]>([['2025', 'legacy'], ['2026-07-2
   it('serves the house as a resource', async () => {
     const r = await client.readResource({ uri: 'kasbah://house' })
     expect(JSON.parse((r.contents[0] as { text: string }).text).name).toBe(kasbah.house.house.name)
+  })
+})
+
+// The calendar, the school and music titles are written by third parties: after reading them, the
+// same token may not open an access to the house. A new token (the assistant's next request) may.
+describe('opening an access after reading third-party content', () => {
+  const connect = async () => {
+    const client = new Client({ name: 'test', version: '0' }, { versionNegotiation: { mode: 'legacy' } })
+    await client.connect(new StreamableHTTPClientTransport(url, { authProvider: (await signIn(url, LOGIN))! }))
+    return client
+  }
+
+  it('refuses to open the gate with the token that read the agenda, the school or a music search', async () => {
+    const gate = kasbah.registry.list().find((e) => e.descriptor.kind === 'cover' && e.descriptor.meta.cover?.deviceClass === 'gate')!.descriptor.id
+    const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!.descriptor.id
+    const open = { name: 'send_command', arguments: { deviceId: gate, command: { type: 'cover.open' } } }
+    for (const read of [
+      { name: 'get_agenda', arguments: {} }, { name: 'get_school', arguments: {} },
+      { name: 'search_music', arguments: { query: 'jazz', source: 'radio' } },
+    ]) {
+      const client = await connect()
+      expect((await client.callTool(open)).isError, read.name).toBeFalsy()
+      await client.callTool(read) // read, whether it succeeds or not
+      const refused = await client.callTool(open)
+      expect(refused.isError, read.name).toBe(true)
+      expect(text(refused), read.name).toMatch(/contenu extérieur/)
+      // the rest still works, closing included
+      expect((await client.callTool({ name: 'send_command', arguments: { deviceId: light, command: { type: 'light.set', on: true } } })).isError).toBeFalsy()
+      expect((await client.callTool({ name: 'send_command', arguments: { deviceId: gate, command: { type: 'cover.close' } } })).isError).toBeFalsy()
+      await client.close()
+      // another token: a new request
+      const next = await connect()
+      expect((await next.callTool(open)).isError, read.name).toBeFalsy()
+      await next.close()
+    }
   })
 })
 

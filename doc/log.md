@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-24] update | Sécurité : un contenu extérieur lu interdit d'ouvrir un accès par le MCP
+
+**Déclencheur** : audit de sécurité de `apps/server`, constats F18, F19, F23 (injection d'instructions par l'agenda, l'école, la recherche musicale).
+
+**Pages modifiées** :
+- `1_architecture/1_7_serveur-mcp.md` - mise à jour datée : `ExternalReads` (jeton marqué 30 min après `get_agenda`, `get_school`, `search_music`, `send_command` sensible refusé), automatisations sensibles activées et lancées depuis l'app seulement ; renvoi sur la phrase du 2026-10-15 dépassée.
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-24] update | Sécurité : fichiers d'identifiants en 0600, cookie YouTube Music effacé en entier
 
 **Déclencheur** : audit de sécurité de `apps/server`, constats F11, F26, F29, F31, F33, F43.
