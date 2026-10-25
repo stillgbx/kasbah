@@ -19,8 +19,8 @@ android {
         applicationId = "org.kasbah.auto"
         minSdk = 29
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.4"
+        versionCode = 5
+        versionName = "0.5"
     }
 
     // The debug build installs next to the Play Store one (signed with another key, it could not replace
