@@ -114,6 +114,8 @@ it('never redirects anywhere but the site after sign-in', async () => {
   for (const next of [
     '//evil.example/x', 'https://evil.example', '/\\evil.example', '/login', 'settings',
     '/\t/evil.example', '/\n/evil.example', '/\r\n/evil.example', '/\t\\evil.example', '/\t/login',
+    // the normalised path starts with `//`: the dot segment goes, the empty one stays
+    '/.//evil.example', '/%2e//evil.example', '/..//evil.example', '/.//kasbah.invalid//evil.example',
   ]) {
     expect((await login('lou', 'bon-mot-de-passe', next)).headers.location, next).toBe('/')
   }

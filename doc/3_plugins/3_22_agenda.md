@@ -1,6 +1,6 @@
 # Plugin Agenda (agendas Google par adresse iCal secrète)
 
-> Dernière mise à jour : 2026-10-24
+> Dernière mise à jour : 2026-10-25
 > Sources : `apps/server/src/plugins/agenda/{index,ics,store}.ts`, tests `apps/server/src/plugins/agenda/plugin.test.ts`, `apps/server/src/plugins/index.ts`, `apps/server/.env.example`, `apps/web/src/views/AgendaView.vue`, `apps/web/src/components/agenda/{AgendaMonth,AgendaTimeGrid,AgendaEventDialog}.vue`, `apps/web/src/components/AgendaLinkCard.vue`, `apps/web/src/lib/agenda.ts` (+ `agenda.test.ts`), `apps/web/src/stores/agenda.ts`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`
 
 ## Ce que c'est
@@ -147,3 +147,15 @@ machine elle-même (routes réservées au réseau local) et redirections compris
 servaient à sonder le réseau. Le flux passe désormais par `publicFetch` (`core/outbound.ts`) : un agenda
 servi depuis le réseau local (un NAS) est refusé, choix assumé (les agendas de la maison sont sur
 Internet).
+
+### Mise à jour 2026-10-25 — jours d'un événement bornés à ceux affichés
+
+Constat d'un audit de sécurité : `eventDays` (`apps/web/src/lib/agenda.ts`) parcourait un événement jour
+par jour, de son début à sa fin, sans limite, et `byDay` créait une entrée par jour. Le serveur ne garde
+que les occurrences qui chevauchent la fenêtre demandée, sans rogner leur durée : un VEVENT du
+1970-01-01 au 9999-12-31 glissé dans un flux abonné faisait environ 2,9 millions de tours et figeait
+l'onglet Agenda sur tous les postes, de nouveau à chaque rafraîchissement. `eventDays` et `byDay`
+prennent désormais `within` (premier et dernier jour affichés) et ne parcourent que ces jours ;
+`AgendaView` leur passe la grille visible. Sans `within`, rien ne change. Le serveur envoie toujours les
+dates entières (l'heure de début d'un événement commencé la veille reste juste) : il n'a pas été borné.
+Test : `agenda.test.ts` (« walks only the displayed days of an event that spans millennia »).

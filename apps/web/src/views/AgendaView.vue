@@ -65,7 +65,7 @@ useIntervalFn(() => {
 }, 5 * 60_000)
 
 const visible = computed(() => events.value.filter((e) => !hidden.value.includes(e.calendarId)))
-const perDay = computed(() => byDay(visible.value))
+const perDay = computed(() => byDay(visible.value, [days.value[0]!, days.value[days.value.length - 1]!]))
 const colors = computed(() => new Map(agenda.calendars.map((c) => [c.id, c.color])))
 const colorOf = (e: AgendaEvent) => colors.value.get(e.calendarId) ?? 'var(--muted)'
 

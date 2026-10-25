@@ -23,7 +23,7 @@ The plugin publishes no device: it does not appear in the 3D house. On the assis
 
 ## Connection
 
-No Google account is linked to Kasbah. For each calendar, Google provides a **secret address in iCal format**: the server reads it every 10 minutes. This address **gives access to the calendar to anyone who has it**: it is kept in `apps/server/.state/agenda-calendars.json` (outside the repository, outside `.env`), is no longer displayed after it is added and never comes back out through the API.
+No Google account is linked to Kasbah. For each calendar, Google provides a **secret address in iCal format**: the server reads it every 10 minutes. This address **gives access to the calendar to anyone who has it**: it is kept in `apps/server/.state/agenda-calendars.json` (outside the repository, outside `.env`), is no longer displayed after it is added and never comes back out through the API. When it is added, it does cross your local network in plain HTTP, since Kasbah is not served over HTTPS. To keep it off the network, add it from the public address (HTTPS) when Kasbah has one (`MCP_PUBLIC_URL`, see the README's **Remote access**).
 
 If Google stops answering, the last read stays displayed with a warning ("is not answering: showing the last read").
 

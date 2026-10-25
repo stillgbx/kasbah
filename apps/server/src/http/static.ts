@@ -7,6 +7,12 @@ import type { FastifyInstance } from 'fastify'
 const BUILD_ID_FILE = 'build-id.txt'
 
 /**
+ * No other site may frame the app: a framed page sends its own requests, with the app's origin,
+ * past the Origin check. `self` for `diag.html`, which frames it.
+ */
+const FRAME_HEADERS = { 'x-frame-options': 'SAMEORIGIN', 'content-security-policy': "frame-ancestors 'self'" }
+
+/**
  * Serves the web app build (prod) with SPA fallback: any GET request outside /api, /ws and /assets
  * returns index.html. Silent if the folder does not exist (dev mode, Vite serves the app).
  * A file missing from /assets (view of a replaced build, requested by a screen left open) is a
@@ -14,7 +20,11 @@ const BUILD_ID_FILE = 'build-id.txt'
  */
 export async function registerStatic(app: FastifyInstance, dir: string): Promise<boolean> {
   if (!existsSync(join(dir, 'index.html'))) return false
-  await app.register(fastifyStatic, { root: dir, wildcard: true, index: ['index.html'] })
+  await app.register(fastifyStatic, {
+    root: dir, wildcard: true, index: ['index.html'],
+    // also for the SPA fallback below: `sendFile` goes through it
+    setHeaders: (reply, path) => { if (path.endsWith('.html')) reply.headers(FRAME_HEADERS) },
+  })
   app.setNotFoundHandler((req, reply) => {
     if (req.method === 'GET' && !req.url.startsWith('/api') && !req.url.startsWith('/ws') && !req.url.startsWith('/assets/')) {
       return reply.type('text/html').sendFile('index.html')

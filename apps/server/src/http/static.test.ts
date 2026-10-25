@@ -38,6 +38,18 @@ describe('registerStatic', () => {
     expect(gone.statusCode).toBe(404)
     expect(gone.headers['content-type']).toMatch(/json/)
   })
+
+  it('lets no other site frame a page of the app', async () => {
+    await webBuild({ 'index.html': '<!doctype html><title>k</title>', 'diag.html': '<!doctype html>', 'assets/a.js': 'export {}' })
+    app = Fastify()
+    await registerStatic(app, dir)
+    for (const url of ['/', '/index.html', '/vehicles', '/diag.html']) {
+      const page = await app.inject({ method: 'GET', url })
+      expect(page.statusCode, url).toBe(200)
+      expect(page.headers['x-frame-options'], url).toBe('SAMEORIGIN')
+      expect(page.headers['content-security-policy'], url).toBe("frame-ancestors 'self'")
+    }
+  })
 })
 
 describe('readAppBuild', () => {

@@ -28,7 +28,7 @@ The plugin publishes no device: it does not appear in the 3D house.
 
 ## Connection
 
-TouteMonAnnée offers no third-party sign-in: the **account password** is required. It goes through the Kasbah server **only once**, when the account is linked, and is **never stored**. The server only keeps the **session cookies**, in `apps/server/.state/toutemonannee.json` (restricted permissions, outside the repository, outside `.env`); one of them reopens an expired session by itself. This file gives access to your account: treat it as a secret.
+TouteMonAnnée offers no third-party sign-in: the **account password** is required. It goes through the Kasbah server **only once**, when the account is linked, and is **never stored**. The server only keeps the **session cookies**, in `apps/server/.state/toutemonannee.json` (restricted permissions, outside the repository, outside `.env`); one of them reopens an expired session by itself. This file gives access to your account: treat it as a secret. The password does, however, cross your local network in plain HTTP, since Kasbah is not served over HTTPS. To keep it off the network, link the account from the public address (HTTPS) when Kasbah has one (`MCP_PUBLIC_URL`, see the README's **Remote access**).
 
 Reading is done by the server; screens never talk to the site directly. If the site refuses the session anyway, the view shows a banner, **keeps the last reading**, and the linking form reappears.
 

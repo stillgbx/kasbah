@@ -42,15 +42,24 @@ export function shift(mode: AgendaMode, anchor: Date, dir: 1 | -1): Date {
   return addDays(anchor, dir * (mode === 'week' ? 7 : 1))
 }
 
-/** The days (keys) that an occurrence touches. An appointment without a duration fits within its day. */
-export function eventDays(e: AgendaEvent): string[] {
+/**
+ * The days (keys) that an occurrence touches. An appointment without a duration fits within its day.
+ * With `within` (first and last displayed day), only those days: an event from a feed can span
+ * millennia, one day at a time.
+ */
+export function eventDays(e: AgendaEvent, within?: [first: Date, last: Date]): string[] {
   const out: string[] = []
   if (e.allDay) {
-    for (let d = fromKey(e.start); dayKey(d) < e.end; d = addDays(d, 1)) out.push(dayKey(d))
+    let d = fromKey(e.start)
+    if (within && d < within[0]) d = within[0]
+    for (; dayKey(d) < e.end && !(within && d > within[1]); d = addDays(d, 1)) out.push(dayKey(d))
     return out.length ? out : [e.start]
   }
-  const last = startOfDay(new Date(Math.max(e.start, e.end - 1)))
-  for (let d = startOfDay(new Date(e.start)); d <= last; d = addDays(d, 1)) out.push(dayKey(d))
+  let d = startOfDay(new Date(e.start))
+  let last = startOfDay(new Date(Math.max(e.start, e.end - 1)))
+  if (within && d < within[0]) d = within[0]
+  if (within && last > within[1]) last = within[1]
+  for (; d <= last; d = addDays(d, 1)) out.push(dayKey(d))
   return out
 }
 
@@ -61,11 +70,11 @@ export function isPast(e: AgendaEvent, now: number): boolean {
   return e.start < today && e.end <= today
 }
 
-/** Occurrences per day, whole days first, then by start time. */
-export function byDay(events: AgendaEvent[]): Map<string, AgendaEvent[]> {
+/** Occurrences per day, whole days first, then by start time; only the days of `within` when given. */
+export function byDay(events: AgendaEvent[], within?: [first: Date, last: Date]): Map<string, AgendaEvent[]> {
   const map = new Map<string, AgendaEvent[]>()
   for (const e of events) {
-    for (const k of eventDays(e)) {
+    for (const k of eventDays(e, within)) {
       const list = map.get(k)
       if (list) list.push(e)
       else map.set(k, [e])

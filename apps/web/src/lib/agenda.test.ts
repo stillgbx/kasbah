@@ -35,6 +35,16 @@ describe('agenda days of an event', () => {
     expect(eventDays(timed('z', at(2026, 10, 3, 9), at(2026, 10, 3, 9)))).toEqual(['2026-10-03'])
   })
 
+  it('walks only the displayed days of an event that spans millennia', () => {
+    const within: [Date, Date] = [new Date(2026, 9, 1), new Date(2026, 9, 3)]
+    expect(eventDays(allDay('x', '1970-01-01', '9999-12-31'), within)).toEqual(['2026-10-01', '2026-10-02', '2026-10-03'])
+    expect(eventDays(timed('y', at(1970, 1, 1), at(9999, 12, 31)), within)).toEqual(['2026-10-01', '2026-10-02', '2026-10-03'])
+    // inside the window, nothing changes
+    expect(eventDays(allDay('v', '2026-10-02', '2026-10-03'), within)).toEqual(['2026-10-02'])
+    expect(eventDays(timed('n', at(2026, 10, 3, 22), at(2026, 10, 4, 2)), within)).toEqual(['2026-10-03'])
+    expect([...byDay([allDay('x', '1970-01-01', '9999-12-31')], within).keys()]).toEqual(['2026-10-01', '2026-10-02', '2026-10-03'])
+  })
+
   it('lists all-day events first on each day, then by time', () => {
     const map = byDay([timed('b', at(2026, 10, 4, 9), at(2026, 10, 4, 10)), allDay('a', '2026-10-03', '2026-10-05'), timed('c', at(2026, 10, 4, 8), at(2026, 10, 4, 9))])
     expect(map.get('2026-10-04')!.map((e) => e.id)).toEqual(['a', 'c', 'b'])

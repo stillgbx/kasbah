@@ -23,7 +23,7 @@ No API key: everyone uses **their own Claude subscription**.
 1. On a computer where Claude Code is installed, run `claude setup-token` and sign in to claude.ai: the command prints a token `sk-ant-oat01-…` valid for **one year**.
 2. Paste it into **Settings → Plugins → claude**, then **Save**.
 
-When signed in (public address), the token is the one **for your account**; on the local network, the one **for the house**. For an instruction, Kasbah uses the token of the account that is asking, otherwise the house's, otherwise the `claude` sign-in already done on the server machine. The card says which one is in use. The token is kept by the server (in a file readable only by it) and **never goes back to the browser**. To remove the token: **Remove token**, then confirm.
+When signed in (public address), the token is the one **for your account**; on the local network, the one **for the house**. For an instruction, Kasbah uses the token of the account that is asking, otherwise the house's, otherwise the `claude` sign-in already done on the server machine. The card says which one is in use. The token is kept by the server (in a file readable only by it) and **never goes back to the browser**. To remove the token: **Remove token**, then confirm. Pasted in the interface, the token crosses your local network in plain HTTP, since Kasbah is not served over HTTPS. To keep it off the network, paste it from the public address (HTTPS) when Kasbah has one (`MCP_PUBLIC_URL`, see the README's **Remote access**).
 
 Anthropic's terms reserve a Claude account for one person: falling back to the house plan makes the other accounts run on it.
 

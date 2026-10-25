@@ -107,13 +107,14 @@ const INSTALL_HEAD = `
 /**
  * Return after sign-in: a path of THIS site only, never the sign-in page itself. Read as the browser
  * will read it: it drops tabs and line breaks and takes `\` for `/`, so `/<TAB>/evil.example` is
- * `//evil.example`, another site.
+ * `//evil.example`, another site. The normalised path can itself start with `//`: the dot segment of
+ * `/.//evil.example` goes, the empty one stays.
  */
 const safeNext = (raw: unknown): string => {
   if (typeof raw !== 'string' || !raw.startsWith('/')) return '/'
   const base = 'http://kasbah.invalid'
   const url = new URL(raw, base)
-  return url.origin === base && !url.pathname.startsWith('/login') ? url.pathname + url.search + url.hash : '/'
+  return url.origin === base && !url.pathname.startsWith('//') && !url.pathname.startsWith('/login') ? url.pathname + url.search + url.hash : '/'
 }
 
 export function createAppSession(deps: AppSessionDeps): AppSession {

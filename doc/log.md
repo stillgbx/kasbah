@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-25] update | Sécurité de l'app web : retour après connexion, cadre, secrets en clair, Agenda borné
+
+**Déclencheur** : audit Claude Security de `apps/web` (effort medium), quatre constats corrigés.
+
+**Pages modifiées** :
+- `1_architecture/1_13_comptes-et-sessions.md` - section datée : `safeNext` refuse un chemin normalisé en `//`, en-têtes anti-cadre sur les pages du build, cookie YouTube / jeton Claude / mot de passe TouteMonAnnée / adresse iCal documentés comme passant en clair ; zones non auditées.
+- `3_plugins/3_22_agenda.md` - section datée : jours d'un événement bornés à ceux affichés (`within`).
+
+**Index** : catalogues mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-10-24] update | Sécurité : le serveur ne va plus chercher d'adresse locale pour autrui ; mots de passe en clair documentés
 
 **Déclencheur** : audit de sécurité de `apps/server`, constats F24, F25, F27, F30 (requêtes vers des adresses choisies par d'autres) et F35 (mots de passe de comptes tiers en HTTP sur le réseau local).

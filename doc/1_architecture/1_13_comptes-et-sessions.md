@@ -1,7 +1,7 @@
 # Comptes et sessions
 
-> Dernière mise à jour : 2026-10-24
-> Sources : `apps/server/src/http/session.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/music/sources.ts`, `apps/server/src/plugins/claude/index.ts`, `apps/server/src/assistant/assistant.ts` ; pages citées plus bas
+> Dernière mise à jour : 2026-10-25
+> Sources : `apps/server/src/http/session.ts`, `apps/server/src/http/static.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/music/sources.ts`, `apps/server/src/plugins/claude/index.ts`, `apps/server/src/assistant/assistant.ts` ; pages citées plus bas
 
 Page de synthèse, écrite au lint du 2026-10-13 : le sujet était dispersé entre le serveur MCP, la
 configuration, les Réglages et le lecteur musique. Elle décrit l'état du code à cette date et renvoie aux
@@ -98,7 +98,8 @@ reste plus stricte (pas d'IP). Tests : `mcp/public-host.test.ts`.
   la connexion. `next` n'accepte qu'un chemin du site (ni `//`, ni `/\`, ni `/login`). *(Depuis le
   2026-10-23, `safeNext` le lit comme le navigateur, avec `new URL` : une tabulation ou un saut de ligne
   y sont retirés, donc `/<TAB>/evil.example` valait `//evil.example`, un autre site, et passait le test
-  de préfixe. Seul un résultat de même origine est gardé, rendu en chemin + requête + ancre.)*
+  de préfixe. Seul un résultat de même origine est gardé, rendu en chemin + requête + ancre.)* *(Complété le
+  2026-10-25 : le chemin normalisé lui-même ne doit pas commencer par `//`, voir plus bas.)*
 - **Ouverts sans session** : `/login`, `/logout`, `/manifest.webmanifest`, `/icons/*`, pour que l'app
   s'installe dès la page de connexion (le navigateur demande le manifest sans cookie).
 - **Origine exigée** (celle de `MCP_PUBLIC_URL`) sur toute écriture et toute demande de WebSocket, `/ws`
@@ -202,3 +203,31 @@ réseau qui écoute au bon moment le lit. Le serveur ne le garde pas (seul un je
 conservé). Parade : relier ces comptes depuis l'adresse publique (HTTPS, `MCP_PUBLIC_URL`). Écarté :
 refuser ces mots de passe reçus en HTTP, qui rendait la liaison impossible sans adresse publique. Les
 pages `docs/plugins/{renault,melcloud,irobot}.md` le disent.
+
+### Mise à jour 2026-10-25 - audit de l'app web : retour après connexion, cadre, secrets en clair
+
+Trois constats d'un audit de sécurité (Claude Security, périmètre `apps/web`, effort medium) touchent les
+sessions :
+
+- **`next` pouvait encore sortir du site.** La normalisation de `new URL` retire les segments `.` mais
+  garde les segments vides : `/.//evil.example` donnait le chemin `//evil.example`. La valeur passant deux
+  fois par `safeNext` (GET qui remplit le champ caché, puis POST), cette charge était neutralisée au
+  second passage, mais `/.//kasbah.invalid//evil.example` passait les deux (le premier rend
+  `//kasbah.invalid//evil.example`, de même origine que la base factice ; le second rend `//evil.example`)
+  et le 303 renvoyait la victime ailleurs juste après sa connexion. `safeNext` refuse désormais tout
+  chemin normalisé qui commence par `//` (`http/session.ts`) ; le test « never redirects anywhere but the
+  site » couvre ces formes.
+- **L'app n'interdisait pas d'être encadrée.** Seules les pages de `htmlPage` posaient `frame-ancestors`.
+  Une page étrangère pouvait charger l'app du réseau local dans une iframe transparente : ses requêtes
+  portent l'origine de l'app et passent le contrôle d'`Origin`, et le réseau local n'a pas de connexion,
+  d'où un clic détourné vers une vraie commande. Toute page HTML du build part maintenant avec
+  `X-Frame-Options: SAMEORIGIN` et `Content-Security-Policy: frame-ancestors 'self'` (`http/static.ts`,
+  option `setHeaders` de `@fastify/static`, que le repli SPA traverse aussi par `sendFile`). `'self'` et
+  non `'none'` : `diag.html` encadre l'app. Test : `http/static.test.ts`.
+- **D'autres secrets que les mots de passe de F35 passent en clair.** Le cookie YouTube Music (une
+  session Google), le jeton `claude setup-token`, le mot de passe TouteMonAnnée et l'adresse iCal secrète
+  traversent eux aussi le réseau local en HTTP au moment de la liaison. Même choix que F35 : documenté
+  sans changement de code, dans `docs/plugins/{ytmusic,claude-assistant,toutemonannee,agenda}.md`.
+
+Non audités en entier par ce passage : `components/settings` (dont `McpUsersCard.vue`),
+`components/heating`, `components/weather`, le routeur, `main.ts` et `three/HouseScene.ts`.

@@ -38,7 +38,7 @@ The **target speakers** are the **Google Cast** players (Chromecast, Cast-compat
 
 The Kasbah server queries YouTube Music with your cookie, then runs `yt-dlp` to find the audio stream of each track. `yt-dlp` needs a **PO Token**, a proof that YouTube increasingly requires: a small local service ("PO Token generator", port 4416) produces it. Nothing else leaves the house.
 
-The cookie is stored in `apps/server/.state/ytmusic-cookie.txt`, **never** in `.env`. A **Premium** account is expected for a real catalog (a family account will do). When the cookie expires, the card in Settings says so: repeat the same procedure.
+The cookie is stored in `apps/server/.state/ytmusic-cookie.txt`, **never** in `.env`. A **Premium** account is expected for a real catalog (a family account will do). When the cookie expires, the card in Settings says so: repeat the same procedure. The cookie is a Google session: pasted in the interface, it crosses your local network in plain HTTP, since Kasbah is not served over HTTPS. To keep it off the network, link it from the public address (HTTPS) when Kasbah has one (`MCP_PUBLIC_URL`, see the README's **Remote access**).
 
 ## Setup
 
