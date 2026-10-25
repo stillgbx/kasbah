@@ -65,6 +65,9 @@ const NAME_WEIGHT = 10
  */
 export const homePanelRequest = ref(0)
 
+/** The header's button, on every page: the Ctrl+K palette opens at each increment. */
+export const paletteRequest = ref(0)
+
 /** `withHome`: the palette lives on all pages, so the House page is a destination there. */
 export function useSearch(query: Ref<string>, { withHome = false } = {}) {
   const house = useHouseStore()

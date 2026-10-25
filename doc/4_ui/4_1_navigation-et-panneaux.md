@@ -1323,3 +1323,54 @@ murale et le téléphone n'ont pas les mêmes besoins).
 
 Sources : `apps/web/src/lib/navItems.ts` (+ test), `apps/web/src/components/layout/NavRail.vue`,
 `apps/web/src/stores/settings.ts`.
+
+### Mise à jour 2026-10-25 — l'assistant depuis toutes les pages : un bouton dans l'en-tête
+
+Demande : l'assistant n'était joignable que par la palette Ctrl+K et la barre de la vue Maison ;
+il doit l'être depuis n'importe quelle page, « en particulier sur mobile », et la seule zone commune
+est l'en-tête. Complète la mise à jour 2026-09-29 « palette Ctrl+K » : sa phrase « Tablette : pas
+de bouton pour l'ouvrir au doigt » disait vrai ce jour-là.
+
+- **Le bouton** (`layout/PageHeader.vue`) : une `.pill` à l'icône `sparkle` (52 × 40 px), libellé
+  `search.open` (« Rechercher ou demander à Kasbah »), posée **après le slot**, donc sur les 21 vues
+  d'un coup. Il ouvre la palette existante (recherche + « Demander à Kasbah » + micro), pas un
+  nouveau composant : il incrémente le signal `paletteRequest` (`composables/useSearch.ts`, à côté
+  de `homePanelRequest`), que `SearchPalette.vue` observe.
+- **Au doigt, pas de clavier** : ouverte par le bouton sous `pointer: coarse`, la palette ne donne
+  pas le focus au champ (`show(focusField)`) ; on touche le micro pour parler, ou le champ pour
+  taper. À la souris, et toujours par Ctrl+K, le focus est donné comme avant.
+- **Placement** :
+  - **Téléphone en portrait** : au bout de la ligne du titre (`order: -1`, titres en
+    `calc(100% - 52px - 8px)`), le slot reste dessous. La ligne était libre : hauteur d'en-tête
+    inchangée sur toutes les vues (mesurée bouton affiché / masqué).
+  - **Bureau** : tout à droite. Vue Maison : apparence, **assistant**, menu (`.home__menu { order: 1 }`
+    dans `HomeView.vue`) ; panneau ancré, le menu n'existe pas et l'assistant suit l'apparence.
+  - **Météo** (≤ 1100 px, où les lieux passent sous le titre) : en haut à droite, sur la ligne du
+    titre, les lieux dessous (`:deep(.page-header__ask) { order: -1 }` dans `WeatherView.vue`) — choix
+    de l'utilisateur, comme sur Courses ou École. Sans cela il tombait sur une troisième ligne
+    (128 → 178 px).
+- **Vue Maison, panneau ancré, 1000 à 1199 px** (`tightHeader`) : l'en-tête n'a que 532 px de
+  contenu à 1024 px. Titres (120 px au plus étroit) + onglets de niveau (349 px) + deux boutons
+  débordaient de 77 px et le bouton passait **sous le panneau**, inatteignable (il débordait déjà de
+  5 px sans lui). Les onglets passent en `dense` (297 px) **et** les espaces à 12 px : aucun des deux
+  seul ne suffit (25 et 53 px de trop). Choix de l'utilisateur contre deux autres : passer les
+  niveaux sous le titre dans cette bande, ou masquer le nom sur Maison. Ça tient au pixel près
+  avec les cinq onglets de la maison de démo ; une maison à plus de niveaux déborderait de nouveau.
+
+**Mesures** (`kasbah-mock`) : 375 × 812 tactile (bouton à 16 px du bord, aligné sur la colonne des
+pastilles de Maison), 853, 1000, 1024, 1200 et 1280 px. Bureau 1280 : aucun des 20 en-têtes ne change.
+
+**Restent** : de 1000 à 1023 px, le bouton empiète de 9 px au plus sur le bord du panneau (toujours
+cliquable) ; Ouvrants en largeur moyenne, dont la ligne de compteurs tenait déjà sur trois lignes
+(« Restent à reprendre » du 2026-09-29), en prend une de plus (91 → 110 px à 853 px). **Non joués** :
+thème clair (aucune couleur nouvelle : la `.pill` existante), l'anglais (libellé en `aria-label` et
+`title` seulement), le vrai téléphone.
+
+**Piège de test** : sous jsdom, le focus donné depuis le `watch` de `paletteRequest` ne tient pas
+(`document.activeElement` revient à `body` sans événement `blur`), alors qu'il tient dans le vrai
+navigateur. `SearchPalette.test.ts` vérifie donc l'appel (`vi.spyOn(HTMLInputElement.prototype,
+'focus')`), pas l'élément actif ; contrôle négatif fait (condition du pointeur inversée : 2 rouges).
+
+Sources : `apps/web/src/components/layout/{PageHeader,SearchPalette}.vue`,
+`apps/web/src/components/layout/SearchPalette.test.ts`, `apps/web/src/composables/useSearch.ts`,
+`apps/web/src/views/{HomeView,WeatherView}.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.

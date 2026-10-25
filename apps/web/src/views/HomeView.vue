@@ -47,6 +47,8 @@ const { t } = useI18n()
 const wide = useMediaQuery('(min-width: 1000px)')
 /** Phone in portrait: the level tabs go on their own row and share its width. */
 const phone = useMediaQuery('(max-width: 599px)')
+/** Panel docked on a narrow screen (laptop at 125 %): the header only holds with compact tabs (see `.home__header`). */
+const tightHeader = useMediaQuery('(min-width: 1000px) and (max-width: 1199px)')
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const labelLayer = ref<HTMLDivElement | null>(null)
@@ -434,11 +436,11 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
     </div>
     <div class="home__header">
       <PageHeader>
-        <Segmented class="home__floors" :model-value="house.floorTab" :options="floorTabs" :fill="phone" :dense="phone" @update:model-value="onTab" />
+        <Segmented class="home__floors" :model-value="house.floorTab" :options="floorTabs" :fill="phone" :dense="phone || tightHeader" @update:model-value="onTab" />
         <button type="button" class="pill" :title="$t('settings.appearance')" :aria-label="$t('settings.appearance')" @click="settings.cycleAppearance()">
           <StrokeIcon :name="themeIcon" :size="18" />
         </button>
-        <button v-if="!wide" type="button" class="pill" :data-on="panelOpen ? '1' : '0'" :aria-label="$t('home.openPanel')" @click="panelOpen = !panelOpen">
+        <button v-if="!wide" type="button" class="pill home__menu" :data-on="panelOpen ? '1' : '0'" :aria-label="$t('home.openPanel')" @click="panelOpen = !panelOpen">
           <StrokeIcon name="list" :size="18" />
         </button>
       </PageHeader>
@@ -554,6 +556,13 @@ const themeIcon = computed<IconName>(() => APPEARANCE_ICON[settings.appearance] 
 @media (pointer: coarse) and (max-width: 599px), (pointer: coarse) and (max-height: 500px) {
   .home { --ctl-span: var(--ctl-w); }
   .home__cluster { display: none; }
+}
+/* the header's assistant button (`PageHeader`, after the slot) sits between the appearance and the menu */
+.home__menu { order: 1; }
+/* panel docked on a narrow screen: titles, tabs, appearance and assistant fit in 532 px with
+   compact tabs AND 12 px gaps (measured at 1024 px, five tabs) — not with either alone */
+@media (min-width: 1000px) and (max-width: 1199px) {
+  .home__header > .page-header { gap: 12px; }
 }
 /* portrait: the level tabs take the row, next to the two pills */
 @media (max-width: 599px) {

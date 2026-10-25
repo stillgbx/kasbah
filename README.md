@@ -69,8 +69,8 @@ Les Tilleuls in eight of the thirteen rendering styles, at different times of da
 
 <img src="docs/screenshots/mobile-assistant.webp" alt="Home view on a phone, after an instruction to the assistant" width="300" align="right">
 
-In portrait, the rail moves to the bottom and the panel becomes a drawer. The search bar of the Home view
-also talks to the assistant (“Ask Kasbah”): it acts through Kasbah's tools, then says what it did. Here, it
+In portrait, the rail moves to the bottom and the panel becomes a drawer. The search bar of the Home view, and the
+✦ button in the header of every page, also talk to the assistant (“Ask Kasbah”): it acts through Kasbah's tools, then says what it did. Here, it
 retracted the terrace awning and turned on the pool light.
 
 <br clear="right">

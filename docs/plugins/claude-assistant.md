@@ -6,11 +6,11 @@
 | **Role** | engine of the "Ask Kasbah" assistant: an instruction in natural language, carried out by Claude with Kasbah's tools |
 | **Connection** | **Claude Code** (`claude -p`) run on the server machine, plugged into Kasbah's MCP server |
 | **Account** | each account's **Claude plan** (subscription, no API key), through a token from `claude setup-token` |
-| **Views** | Ctrl+K palette and Home view bar ("Ask Kasbah"), Settings → Plugins, Settings → Assistant (log) |
+| **Views** | Ctrl+K palette (or the header's ✦ button, on every page) and Home view bar ("Ask Kasbah"), Settings → Plugins, Settings → Assistant (log) |
 
 ## What the plugin does
 
-- **Ask Kasbah**: an instruction typed into search (Ctrl+K, or the Home view bar) — "turn everything off on the ground floor", "put France Inter on in the kitchen" — goes to Claude on the server, which acts through Kasbah's tools (devices, light scenes, music, radio, school, server status) and answers in one sentence. The tools in use are shown while it works.
+- **Ask Kasbah**: an instruction typed into search (Ctrl+K or the header's ✦ button, or the Home view bar) — "turn everything off on the ground floor", "put France Inter on in the kitchen" — goes to Claude on the server, which acts through Kasbah's tools (devices, light scenes, music, radio, school, server status) and answers in one sentence. The tools in use are shown while it works.
 - **Dictation**: with the [transcription](transcription.md) plugin, the instruction can be spoken into the microphone, and the answer can be read aloud.
 - **Log**: the last 200 instructions, from all accounts, in Settings → Assistant (visible from the local network only).
 
@@ -32,7 +32,7 @@ Anthropic's terms reserve a Claude account for one person: falling back to the h
 1. Install **Claude Code** on the machine that hosts Kasbah (the `claude` binary, in the server's `PATH` or given by `CLAUDE_BIN`).
 2. Tick **claude** in **Settings → Plugins**. The plugin's health states the version of `claude` and the model used, or that the binary cannot be found.
 3. Paste a token (see above), or have signed in once with `claude` on the server machine.
-4. Open search (Ctrl+K), type an instruction, choose **Ask Kasbah**.
+4. Open search (Ctrl+K, or the ✦ button at the top right), type an instruction, choose **Ask Kasbah**.
 
 ## Security
 

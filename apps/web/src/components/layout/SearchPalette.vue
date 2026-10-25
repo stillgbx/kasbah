@@ -4,13 +4,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAssistant } from '../../composables/useAssistant'
 import { useVoiceInput } from '../../composables/useVoiceInput'
-import { homePanelRequest, MIN_QUERY, useSearch, type SearchHit } from '../../composables/useSearch'
+import { homePanelRequest, MIN_QUERY, paletteRequest, useSearch, type SearchHit } from '../../composables/useSearch'
 import { normalize } from '../../lib/search'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import AssistantReply from './AssistantReply.vue'
 
 // Ctrl+K palette (Cmd+K on Mac): the House view's search, opened from any
-// page. Same engine, same rule — a result NAVIGATES, it never acts. The field is placed at a
+// page, by the shortcut or by the header's button (`paletteRequest`). Same engine, same rule — a result NAVIGATES, it never acts. The field is placed at a
 // fixed height and the list grows downward: nothing moves when the results change.
 //
 // The last line passes the input to the assistant ("Ask Kasbah"): it ACTS, and its answer
@@ -53,13 +53,16 @@ watch(query, (q) => {
   if (open.value && (phase.value === 'done' || phase.value === 'error') && q.trim() !== assistant.asked.value) assistant.reset()
 })
 
-function show() {
+/** `focusField` false: opened by finger, the keyboard stays down (the microphone or a touch on the field). */
+function show(focusField = true) {
   returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   open.value = true
   // the current or last answer, the instruction selected: the next keystroke replaces it
   if (phase.value !== 'idle') query.value = assistant.asked.value
-  void nextTick(() => { input.value?.focus(); if (phase.value !== 'idle') input.value?.select() })
+  if (focusField) void nextTick(() => { input.value?.focus(); if (phase.value !== 'idle') input.value?.select() })
 }
+
+watch(paletteRequest, () => { if (!open.value) show(!matchMedia('(pointer: coarse)').matches) })
 
 function close() {
   open.value = false

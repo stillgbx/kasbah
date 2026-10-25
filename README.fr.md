@@ -69,8 +69,8 @@ Les Tilleuls dans huit des treize styles de rendu, à différentes heures de la 
 
 <img src="docs/screenshots/mobile-assistant.webp" alt="Vue Maison sur téléphone, après une instruction à l'assistant" width="300" align="right">
 
-En portrait, le rail passe en bas et le panneau devient un tiroir. La barre de recherche de la vue Maison sert
-aussi à parler à l'assistant (« Demander à Kasbah ») : il agit par les outils de Kasbah, puis dit ce qu'il a
+En portrait, le rail passe en bas et le panneau devient un tiroir. La barre de recherche de la vue Maison, et le
+bouton ✦ de l'en-tête de chaque page, servent aussi à parler à l'assistant (« Demander à Kasbah ») : il agit par les outils de Kasbah, puis dit ce qu'il a
 fait. Ici, il a replié le store de la terrasse et allumé le projecteur de la piscine.
 
 <br clear="right">

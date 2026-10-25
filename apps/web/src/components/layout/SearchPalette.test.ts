@@ -5,7 +5,7 @@ import { parseHouse } from '@kasbah/shared'
 import demo from '../../../../../house/demo-house.json'
 import { setTransport } from '../../api'
 import type { AssistantEvent, Transport } from '../../api/transport'
-import { homePanelRequest } from '../../composables/useSearch'
+import { homePanelRequest, paletteRequest } from '../../composables/useSearch'
 import { useHouseStore } from '../../stores/house'
 import SearchPalette from './SearchPalette.vue'
 
@@ -51,6 +51,30 @@ describe('SearchPalette', () => {
     ctrlK(); await flushPromises()
     expect(w.find('.palette').exists()).toBe(false)
     w.unmount()
+  })
+
+  describe('header button', () => {
+    const pointer = (coarse: boolean) => vi.stubGlobal('matchMedia', (q: string) => ({ matches: coarse && q.includes('coarse') }))
+    const focus = vi.spyOn(HTMLInputElement.prototype, 'focus')
+    afterEach(() => { vi.unstubAllGlobals(); focus.mockClear() })
+
+    it('opens the palette with the field focused, by mouse', async () => {
+      pointer(false)
+      const { w } = await setup()
+      paletteRequest.value++; await flushPromises()
+      expect(w.find('.palette input').exists()).toBe(true)
+      expect(focus).toHaveBeenCalled()
+      w.unmount()
+    })
+
+    it('by finger, opens it without focusing the field: the keyboard stays down', async () => {
+      pointer(true)
+      const { w } = await setup()
+      paletteRequest.value++; await flushPromises()
+      expect(w.find('.palette input').exists()).toBe(true)
+      expect(focus).not.toHaveBeenCalled()
+      w.unmount()
+    })
   })
 
   it('from another page, goes back to the house BEFORE selecting, then opens the panel', async () => {

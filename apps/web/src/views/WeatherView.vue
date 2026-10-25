@@ -421,6 +421,9 @@ const tiles = computed<{ key: string; icon: IconName; value: string; label: stri
 @media (max-width: 1100px) {
   .wx-header { flex-wrap: wrap; row-gap: 10px; }
   .wx-header__places { flex: 1 1 100%; justify-content: space-between; }
+  /* the assistant button stays at the top right, on the title's line, the places under both */
+  .wx-header :deep(.page-header__titles) { order: -2; }
+  .wx-header :deep(.page-header__ask) { order: -1; }
 }
 .small { font-size: 12px; }
 .weather__grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 20px; }

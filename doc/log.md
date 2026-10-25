@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-25] update | L'assistant depuis toutes les pages : un bouton dans l'en-tête
+
+**Déclencheur** : demande « accessible depuis n'importe quelle page, et en particulier sur mobile » ; seule zone commune, l'en-tête.
+
+**Pages modifiées** :
+- `4_ui/4_1_navigation-et-panneaux.md` - section datée : bouton de `PageHeader` qui ouvre la palette (signal `paletteRequest`), sans focus au doigt, placement téléphone / bureau / Maison / Météo, onglets compacts de Maison entre 1000 et 1199 px, mesures, restes (1000-1023 px, Ouvrants) et piège jsdom du focus.
+- `1_architecture/1_9_assistant.md` - section datée : troisième point d'entrée, renvoi vers 4_1 ; `PageHeader.vue` ajouté aux sources.
+
+**Index** : catalogues mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-10-25] update | Graphique « Jour » : heures réelles au changement d’heure
 
 **Déclencheur** : `WaterConsumptionChart.test.ts` échoue le jour du passage à l’heure d’hiver ; la cause est dans `bucketSlots`, pas dans le test.

@@ -1,7 +1,7 @@
 # Assistant (« Demander à Kasbah »)
 
-> Dernière mise à jour : 2026-10-22
-> Sources : `apps/server/src/assistant/{assistant,engines}.ts`, tests `apps/server/src/assistant/assistant.test.ts`, `apps/server/src/mcp/auth.ts` (`runToken`), `apps/server/src/app.ts`, `apps/web/src/composables/useAssistant.ts`, `apps/web/src/components/layout/{AssistantReply,SearchPalette}.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.ts`, `apps/android/app/src/main/kotlin/org/kasbah/auto/VoiceScreen.kt`, session du 2026-10-22
+> Dernière mise à jour : 2026-10-25
+> Sources : `apps/server/src/assistant/{assistant,engines}.ts`, tests `apps/server/src/assistant/assistant.test.ts`, `apps/server/src/mcp/auth.ts` (`runToken`), `apps/server/src/app.ts`, `apps/web/src/composables/useAssistant.ts`, `apps/web/src/components/layout/{AssistantReply,SearchPalette,PageHeader}.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.ts`, `apps/android/app/src/main/kotlin/org/kasbah/auto/VoiceScreen.kt`, session du 2026-10-22
 
 ## Ce que c'est
 
@@ -132,3 +132,11 @@ L'appli Android Auto ([1_15](1_15_appli-android-auto.md)) est un deuxième clien
 `/api/assistant/ask` : bouton « Parler » sur l'écran de la voiture, micro de la voiture, transcription,
 instruction, réponse dite par `speak` (ou par la voix d'Android si la route refuse). Elle lit le flux
 NDJSON en entier et ne garde que les lignes `text` et `error` ; le cœur ne change pas.
+
+### Mise à jour 2026-10-25 — un bouton dans l'en-tête de toutes les pages
+
+Les points d'entrée de « L'app web » (palette Ctrl+K, barre de la vue Maison) gagnent un troisième :
+un bouton dans l'en-tête commun (`components/layout/PageHeader.vue`), sur toutes les vues, qui ouvre
+la même palette. Au doigt, il l'ouvre sans faire monter le clavier : le micro est à portée. Le cœur,
+les moteurs et `useAssistant` ne changent pas. Placement et mesures :
+[4_1 Navigation et panneaux](../4_ui/4_1_navigation-et-panneaux.md), mise à jour du 2026-10-25.
