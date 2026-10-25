@@ -1,6 +1,6 @@
 # Contrat des appareils (packages/shared)
 
-> Dernière mise à jour : 2026-10-21
+> Dernière mise à jour : 2026-10-25
 > Sources : `packages/shared/src/devices/{kinds,descriptor,state,command,rules,color}.ts`, `packages/shared/src/scenes/scene.ts`, `packages/shared/src/devices/activity.ts`, `packages/shared/src/house/geo.ts`
 
 ## Principe
@@ -1115,3 +1115,12 @@ Absent = inconnu, ou pas une zone d'une machine partagée. Lecteurs : vue Chauff
 (pastille « Machine en chauffe »), marqueurs 3D. Voir [3_13](../3_plugins/3_13_mitsubishi-melcloud.md).
 
 Sources : `packages/shared/src/devices/state.ts`.
+
+### Mise à jour 2026-10-25 — capacité `energy_history`
+
+Le kind `energy` gagne la capacité `energy_history` (`packages/shared/src/devices/kinds.ts`,
+`CAPABILITIES` et `KIND_CAPABILITIES.energy`) : le site garde des **totaux journaliers** et les sert à la
+demande, hors de l'état (qui ne porte que l'instant et les cumuls du jour). Elle n'est pas dans l'état
+diffusé : c'est `GET /api/devices/:id/energy-days` qui la porte, voir
+[1_3 Protocole REST/WS](1_3_protocole-rest-ws.md) et [1_14 Énergie](1_14_energie.md). Un plugin qui la
+déclare implémente le hook `energyDays?(externalId)`.

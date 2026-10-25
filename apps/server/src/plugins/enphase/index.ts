@@ -25,6 +25,10 @@ import {
 import {
   EnlightenClient, createCloudFile, openCloudSession, probeEvRaw, type CloudStore,
 } from './cloud'
+import { EnergyDays, addDays, createDaysFile, dayKey, keyStart as keyStartOf, lifetimeEnergySchema, type DayCounters, type DaysStore, type SitePower } from './days'
+import {
+  InverterDays, arrayLayoutSchema, createInverterDaysFile, deviceDataSchema, inverterEnergySchema, type InverterDaysStore,
+} from './inverterDays'
 
 // Enphase plugin: solar production, microinverters and batteries read from the IQ Gateway's LOCAL
 // API (no cloud quota, no dependency on the Internet once the token is in place).
@@ -62,6 +66,10 @@ export const enphaseConfigSchema = z.object({
    * again.
    */
   ENPHASE_CLOUD_FILE: z.string().trim().default(stateFile('enphase-cloud.json')),
+  /** The site's daily totals (`days.ts`), kept for the lifetime of the installation. Empty string = in memory only. */
+  ENPHASE_DAYS_FILE: z.string().trim().default(stateFile('enphase-days.json')),
+  /** Each micro-inverter's daily production (`inverterDays.ts`). Empty string = in memory only. */
+  ENPHASE_INVERTER_DAYS_FILE: z.string().trim().default(stateFile('enphase-inverter-days.json')),
   /** Meter rate: they measure in real time, it is what the Energy view shows. */
   ENPHASE_POLL_MS: z.coerce.number().int().min(2000).max(300_000).default(10_000),
   /**
@@ -80,6 +88,12 @@ const MODE_RESTORE_GAP_MS = 5_000
 const MODE_RESTORE_RETRY_MS = 15 * 60_000
 /** The app's mode only changes by hand: read every ten minutes, not on every read. */
 const PREFERENCE_TTL_MS = 10 * 60_000
+/** The daily history is written at most this often: a restart loses no more than that. */
+const DAYS_SAVE_MS = 5 * 60_000
+/** The inverters' counters (`/ivp/pdm/device_data`, ~50 KB): they only move when an inverter reports, every ~5 min. */
+const DEVICE_DATA_MS = 5 * 60_000
+/** Between two days asked of Enlighten during an inverter resync: ~345 calls, spread out. */
+const VENDOR_DAY_GAP_MS = 2_000
 
 /** Raw reading: what needs capturing once to write the mapping fixtures. */
 const RAW_PATHS = [
@@ -127,6 +141,17 @@ export interface TokenStatus {
   cloudLinked: boolean
   cloudFile: string | null
   siteId: string | undefined
+  /** The daily history: last synchronization with Enphase's, and how many days are kept. */
+  history: {
+    syncedAt: number | null; since: number | null; days: number; syncing: boolean; error: string | null
+    /** The micro-inverters' days: last full synchronization, and the one in progress (days done / to do). */
+    inverters: { syncedAt: number | null; done: number | null; total: number | null; error: string | null }
+    /**
+     * Each past day since commissioning, one letter per day from `from` (local midnight): `c`
+     * complete, `p` incomplete, `m` missing — the site and its inverters together, the worse wins.
+     */
+    coverage: { from: number; days: string } | null
+  }
 }
 
 export interface EnphasePluginDeps {
@@ -140,6 +165,10 @@ export interface EnphasePluginDeps {
   cloudStore?: CloudStore
   /** Injected by tests: the gateway certificate pin (otherwise a file under `.state/`). */
   pinFile?: PinFile
+  /** Injected by tests: the daily history (otherwise a file under `.state/`). */
+  daysStore?: DaysStore
+  /** Injected by tests: the inverters' daily history (otherwise a file under `.state/`). */
+  inverterDaysStore?: InverterDaysStore
 }
 
 export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin {
@@ -170,6 +199,18 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   /** The app's mode per charger, and when it was read (`preferenceOf`). */
   const preferences = new Map<string, { mode: string | undefined; at: number }>()
   let pollers: { stop(): void }[] = []
+  /** The site's daily totals: measured here, completed by Enphase's history. */
+  let days: EnergyDays | null = null
+  let daysStore: DaysStore | null = null
+  let daysSavedAt = 0
+  let syncing: Promise<void> | null = null
+  let syncError: string | null = null
+  let invDays: InverterDays | null = null
+  let invStore: InverterDaysStore | null = null
+  let deviceDataAt = 0
+  /** The inverter resync in progress: days done and to do. */
+  let invProgress: { done: number; total: number } | null = null
+  let invError: string | null = null
 
   const log = () => ctx!.logger
 
@@ -201,7 +242,121 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       cloudLinked: !!enlighten?.hasSession,
       cloudFile: config?.ENPHASE_CLOUD_FILE || null,
       siteId: enlighten?.current?.siteId,
+      history: historyStatus(),
     }
+  }
+
+  function historyStatus(): TokenStatus['history'] {
+    const snap = days && ctx ? days.snapshot(ctx.clock.now()) : null
+    return {
+      syncedAt: snap?.syncedAt ?? null, since: snap?.since ?? null, days: snap?.days.length ?? 0,
+      syncing: !!syncing, error: syncError,
+      inverters: {
+        syncedAt: invDays?.toJSON().syncedAt ?? null,
+        done: invProgress?.done ?? null, total: invProgress?.total ?? null, error: invError,
+      },
+      coverage: coverage(),
+    }
+  }
+
+  /** The state of every past day, site and inverters together (see `TokenStatus['history']`). */
+  function coverage(): TokenStatus['history']['coverage'] {
+    const since = days?.sinceKey
+    if (!days || !since || !ctx) return null
+    const now = ctx.clock.now()
+    const yesterday = addDays(dayKey(now), -1)
+    const rank = { c: 0, p: 1, m: 2 } as const
+    let out = ''
+    for (let k = since; k <= yesterday; k = addDays(k, 1)) {
+      const site = days.dayStatus(k, now)
+      const inv = invDays?.tracked ? invDays.dayStatus(k) : 'c'
+      out += rank[inv] > rank[site] ? inv : site
+    }
+    return { from: keyStartOf(since), days: out }
+  }
+
+  async function saveDays(force = false): Promise<void> {
+    const now = ctx!.clock.now()
+    if (!force && now - daysSavedAt < DAYS_SAVE_MS) return
+    daysSavedAt = now
+    if (days?.dirty && daysStore) await daysStore.save(days)
+    if (invDays?.dirty && invStore) await invStore.save(invDays)
+  }
+
+  /**
+   * Fetches each inverter's days from Enphase: the id ↔ serial map (`array_layout_x`), then ONE
+   * call per day since commissioning (`inverter_data_x/energy.json` only sums the range asked), two
+   * seconds apart, in the background. `force`: every day again; otherwise only the days that are not
+   * complete (missing, or watched only in part), so an interrupted run picks up where it stopped.
+   */
+  async function syncInverters(force: boolean): Promise<void> {
+    const inv = invDays
+    if (invProgress || !inv || !days || !enlighten?.hasSession) return
+    const since = days.snapshot(ctx!.clock.now()).since
+    if (since === null) return
+    invProgress = { done: 0, total: 0 }
+    invError = null
+    try {
+      const siteId = await ensureSiteId()
+      if (!siteId) throw new PluginError('NEEDS_PAIRING', 'no Enlighten site')
+      const serialOf = arrayLayoutSchema.parse(await enlighten.getJson(`/pv/systems/${siteId}/array_layout_x`, ctx!.signal))
+      const yesterday = addDays(dayKey(ctx!.clock.now()), -1)
+      const todo: string[] = []
+      for (let k = dayKey(since); k <= yesterday; k = addDays(k, 1)) if (force || inv.dayStatus(k) !== 'c') todo.push(k)
+      invProgress.total = todo.length
+      for (const key of todo) {
+        await sleep(ctx!.clock, VENDOR_DAY_GAP_MS, ctx!.signal)
+        if (ctx!.signal.aborted || invDays !== inv) return
+        const parsed = inverterEnergySchema.parse(await enlighten.getJson(
+          `/systems/${siteId}/inverter_data_x/energy.json?start_date=${key}&end_date=${key}`, ctx!.signal,
+        ))
+        inv.importVendorDay(key, parsed.production, serialOf, ctx!.clock.now())
+        invProgress.done++
+        if (invProgress.done % 20 === 0) await invStore?.save(inv)
+      }
+      inv.markSynced(ctx!.clock.now())
+      await invStore?.save(inv)
+      log().info({ days: todo.length }, 'Enphase inverter history synchronized')
+    } catch (err) {
+      invError = (err as Error).message
+      log().warn({ err }, 'Enphase inverter history not synchronized')
+      if (invStore) await invStore.save(inv)
+    } finally { invProgress = null }
+  }
+
+  /**
+   * Fetches Enphase's daily history: ONE call to Enlighten's private API, every day since
+   * commissioning. Made when the history is empty and on request only: afterwards the plugin
+   * counts the days itself.
+   */
+  function syncHistory(force = false): Promise<void> {
+    syncing ??= (async () => {
+      try {
+        const siteId = await ensureSiteId()
+        if (!siteId || !enlighten) {
+          throw new PluginError('NEEDS_PAIRING', 'the Enphase history needs the Enphase account: pair with it (a pasted gateway token is not enough)')
+        }
+        const parsed = lifetimeEnergySchema.safeParse(await enlighten.getJson(`/pv/systems/${siteId}/lifetime_energy`, ctx!.signal))
+        if (!parsed.success) throw new PluginError('UPSTREAM_ERROR', 'Enlighten lifetime_energy has an unexpected shape')
+        const result = days!.importVendor(parsed.data, ctx!.clock.now(), { onlyIncomplete: !force })
+        await saveDays(true)
+        syncError = null
+        log().info(result, 'Enphase energy history synchronized')
+        // the inverters follow, in the background: they need the commissioning date just read
+        void syncInverters(force)
+      } catch (err) {
+        syncError = (err as Error).message
+        throw err
+      }
+    })().finally(() => { syncing = null })
+    return syncing
+  }
+
+  /** The first synchronization, by itself: as soon as the history is empty and the account linked. */
+  function autoSync(): void {
+    if (!days || !enlighten?.hasSession) return
+    if (!days.synced) syncHistory().catch((err: unknown) => log().warn({ err }, 'Enphase energy history not synchronized'))
+    else if (invDays && !invDays.synced) void syncInverters(false)
   }
 
   /** Checks a token for THIS gateway, then adopts it: client, cache, current state. */
@@ -249,7 +404,10 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
    */
   async function pollMeters(): Promise<void> {
     const live = await get('/ivp/livedata/status', (j) => livedataSchema.parse(j))
-    ctx!.emitState(SITE_ID, toSitePatch(live))
+    const patch = toSitePatch(live)
+    ctx!.emitState(SITE_ID, patch)
+    days?.recordSite(patch as SitePower, ctx!.clock.now())
+    await saveDays()
     lastError = null
   }
 
@@ -273,7 +431,15 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     // the day's totals are ONLY in `production.json`, which is slow: this is where we pay for it,
     // once a minute, and not on every real-time measurement
     const report = await get('/production.json?details=1', (j) => productionSchema.parse(j))
-    ctx!.emitState(SITE_ID, toDailyPatch(report))
+    const daily = toDailyPatch(report)
+    ctx!.emitState(SITE_ID, daily)
+    days?.recordCounters(daily as DayCounters, now)
+    // each inverter's counters, at the pace its reports change; a failure costs only that reading
+    if (invDays && now - deviceDataAt >= DEVICE_DATA_MS) {
+      deviceDataAt = now
+      try { invDays.recordGateway(await get('/ivp/pdm/device_data', (j) => deviceDataSchema.parse(j)), now) }
+      catch (err) { log().debug({ err }, 'Enphase device_data unread') }
+    }
 
     // an inverter added or removed changes the list: we republish, otherwise its state would go to
     // a device the registry does not know
@@ -341,6 +507,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   function emitCharger(c: EvCharger): void {
     const sum = chargerSummaries.find((s) => s.serialNumber === c.sn)
     ctx!.emitState(c.sn, toChargerPatch(c, sum, preferences.get(c.sn)?.mode))
+    days?.recordChargerSession(c.sn, c.sessionWh, ctx!.clock.now())
   }
 
   async function pollChargers(): Promise<void> {
@@ -528,6 +695,13 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
         enlighten.setSession(cloud)
         log().info({ siteId: cloud.siteId }, 'Enlighten session restored')
       }
+      days = new EnergyDays({ siteGapMs: Math.max(2 * 60_000, 3 * config.ENPHASE_POLL_MS) })
+      daysStore = deps.daysStore ?? (config.ENPHASE_DAYS_FILE ? createDaysFile(config.ENPHASE_DAYS_FILE, context.logger) : null)
+      await daysStore?.load(days)
+      invDays = new InverterDays()
+      invStore = deps.inverterDaysStore ?? (config.ENPHASE_INVERTER_DAYS_FILE ? createInverterDaysFile(config.ENPHASE_INVERTER_DAYS_FILE, context.logger) : null)
+      await invStore?.load(invDays)
+      daysSavedAt = context.clock.now()
       const pinFile = deps.pinFile ?? createPinFile(stateFile('enphase-tls-pin.json'), context.logger)
       pin = new TlsPin(await pinFile.load(), (fp) => { void pinFile.save(fp) }, { device: 'IQ Gateway', logger: context.logger })
       client = new EnphaseClient({
@@ -593,6 +767,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
           clock: ctx!.clock, signal: ctx!.signal, logger: ctx!.logger,
         }))
       }
+      autoSync()
     },
 
     async execute(externalId, command: Command) {
@@ -614,6 +789,9 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     async stop() {
       for (const p of pollers) p.stop()
       pollers = []
+      await saveDays(true)
+      days = null
+      invDays = null
       client = null
       token = null
       gateway = null
@@ -659,6 +837,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
             })
             enlighten?.setSession(session)
             await cloudStore?.save(session)
+            autoSync()
             if (!gateway) {
               return sendError(reply, 502, 'UPSTREAM_ERROR', `cannot reach the gateway at ${config!.ENPHASE_HOST}: its serial number is needed to mint a token`)
             }
@@ -708,14 +887,39 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
        * Independent of the local token: pasting a gateway JWT is not enough, the account is needed.
        * A failing route is returned with its error instead of bringing down the whole reading.
        */
+      /**
+       * Synchronizes the daily history with Enphase's again (the "Resync" button): the days that
+       * are not complete are taken from Enphase — every day with `{ force: true }` —, today stays
+       * measured here.
+       */
+      app.post('/history/sync', async (req, reply) => {
+        if (!days || !ctx) return sendError(reply, 409, 'NEEDS_PAIRING', 'plugin not started')
+        // `force`: every day again ("Take everything again"); otherwise only the incomplete days
+        const force = z.object({ force: z.boolean().default(false) }).catch({ force: false }).parse(req.body ?? {}).force
+        try { await syncHistory(force) }
+        catch (err) {
+          const e = err as PluginError
+          return sendError(reply, e.code === 'NEEDS_PAIRING' ? 409 : 502, e.code ?? 'UPSTREAM_ERROR', e.message)
+        }
+        return status()
+      })
+
       app.get('/ev/raw', async (_req, reply) => {
         if (!enlighten?.hasSession) return sendError(reply, 409, 'NEEDS_PAIRING', 'pair with the Enphase account first (a pasted gateway token is not enough)')
         return probeEvRaw(enlighten, enlighten.current?.siteId, ctx?.signal)
       })
     },
 
+    /** The site's daily totals, as kept: never a new reading. */
+    async energyDays(externalId: string) {
+      if (externalId !== SITE_ID || !days) throw new PluginError('NOT_IMPLEMENTED', `no energy history for "${externalId}"`)
+      const now = ctx!.clock.now()
+      const inverters = invDays?.snapshot(now)
+      return { ...days.snapshot(now), ...(inverters ? { inverters } : {}) }
+    },
+
     health(): PluginHealth {
-      const keys = ['ENPHASE_HOST', 'ENPHASE_TOKEN', 'ENPHASE_TOKEN_FILE', 'ENPHASE_CLOUD_FILE']
+      const keys = ['ENPHASE_HOST', 'ENPHASE_TOKEN', 'ENPHASE_TOKEN_FILE', 'ENPHASE_CLOUD_FILE', 'ENPHASE_DAYS_FILE', 'ENPHASE_INVERTER_DAYS_FILE']
       if (pin?.changed) {
         return { status: 'error', detail: 'Le certificat de la passerelle IQ Gateway a changé : connexion refusée. Appairer de nouveau accepte le nouveau certificat.', keys }
       }

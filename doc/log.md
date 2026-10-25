@@ -16,6 +16,23 @@ Entrées les plus récentes en haut. Une session = une entrée.
 
 **Index** : catalogue mis à jour (1 ligne), index.md régénéré.
 
+## [2026-10-25] update | Vue Énergie : historique par période (jour par jour, site et onduleurs)
+
+**Déclencheur** : fonctionnalité codée dans la session (non commitée à l'écriture) : sélecteur Jour / Semaine / Mois / Année / Total, historique journalier persistant du plugin Enphase par le cloud et par nos relevés, par onduleur, resynchro, simulation.
+
+**Pages modifiées** :
+- `3_plugins/3_7_enphase.md` - section datée : modèle de jour (date locale, vendeur ou local), routes Enlighten privées, API v4 écartée, onduleurs (joules, somme par plage, rattrapage tout en jours), resynchro `c`/`p`/`m`, routes de plugin, variables, fichiers d'état ; lacune `.env.example` signalée.
+- `1_architecture/1_14_energie.md` - section datée avec note « Dépassé le 2026-10-25 » sur l'historique en mémoire (l'ancien texte est conservé).
+- `4_ui/4_4_vues-energie-vehicules.md` - section datée : sélecteur et découpage glissant / calendaire, flux sur une période sans point animé, cases d'onduleurs (unité une fois), carte des Réglages.
+- `1_architecture/1_1_contrat-appareils.md` - capacité `energy_history`.
+- `1_architecture/1_3_protocole-rest-ws.md` - route `energy-days` et routes de plugin de l'historique.
+- `3_plugins/3_0_simulation-mock.md` - site simulé : ~420 jours fabriqués, répartition entre panneaux.
+- `6_faq/6_0_pieges-outillage.md` - deux entrées : réécriture des chemins `/…` par Git Bash (`MSYS_NO_PATHCONV=1`) ; instance de module distincte après rechargement à chaud dans la preview.
+
+**Contradictions** : aucune entre code et wiki ; l'historique « 48 h, en mémoire » de 1_14 n'est plus le seul, signalé en place.
+
+**Index** : catalogues mis à jour (7 lignes dont 3 résumés de périmètre), index.md régénéré.
+
 ## [2026-10-25] update | L'assistant depuis toutes les pages : un bouton dans l'en-tête
 
 **Déclencheur** : demande « accessible depuis n'importe quelle page, et en particulier sur mobile » ; seule zone commune, l'en-tête.

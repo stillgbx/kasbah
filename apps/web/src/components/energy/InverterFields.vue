@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { DeviceEntry } from '@kasbah/shared'
 import { inverterGroups, isInverter, type InverterCell, type InverterGroup } from '../../lib/energy'
+import { energyUnit, formatEnergyTotal } from '../../lib/energyPeriods'
 import { formatPower } from '../../lib/format'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
@@ -12,7 +13,15 @@ import { useHouseStore } from '../../stores/house'
 // cell is the top-left module of the roof, and its background gauge says its share of peak: the
 // shaded panel, under a leaf or broken shows at a glance, at its place. In a flat list, you would
 // have had to read twenty serial numbers to find it.
-const props = defineProps<{ site: DeviceEntry }>()
+//
+// Over a PERIOD (`period`), each cell says what its inverter produced (Wh) instead of its power,
+// and its gauge compares it with the best of its array: the panel that lags behind over a month
+// shows at its place just as the shaded one does at noon. The record and ceiling marks, which are
+// powers, step aside.
+const props = defineProps<{
+  site: DeviceEntry
+  period?: { scale: string; wh: Map<string, number | null> } | null
+}>()
 const devices = useDevicesStore()
 const house = useHouseStore()
 const { t, locale } = useI18n()
@@ -20,6 +29,28 @@ const { t, locale } = useI18n()
 /** The inverters of THIS installation: power sensors published by the same plugin as the site. */
 const inverters = computed(() => devices.list.filter((e) => isInverter(e.descriptor, props.site.descriptor.pluginId)))
 const groups = computed(() => inverterGroups(house.arraysOf(props.site.descriptor.id), inverters.value))
+
+/** Device id → the inverter's external id (its serial), the key of the period's totals. */
+const externalOf = computed(() => new Map(inverters.value.map((e) => [e.descriptor.id, e.descriptor.externalId])))
+/** What the cell's inverter produced over the period; `null` = nothing measured. */
+const whOf = (c: InverterCell): number | null => (c.id ? props.period?.wh.get(externalOf.value.get(c.id) ?? '') ?? null : null)
+/** The best inverter of the array over the period: the scale of its gauges. */
+const bestWh = (g: InverterGroup) => Math.max(1, ...g.cells.map((c) => whOf(c) ?? 0))
+const groupWh = (g: InverterGroup) => g.cells.reduce((sum, c) => sum + (whOf(c) ?? 0), 0)
+/**
+ * One unit per array, from its best inverter: a cell is too narrow for "21,6 kWh", so it holds the
+ * number and the unit is written once, under the title.
+ */
+const unitOf = (g: InverterGroup) => energyUnit(bestWh(g))
+const cellValue = (g: InverterGroup, c: InverterCell): string => {
+  if (props.period) {
+    const wh = whOf(c)
+    if (wh === null) return '—'
+    const u = unitOf(g)
+    return new Intl.NumberFormat(locale.value, { minimumFractionDigits: u.digits, maximumFractionDigits: u.digits }).format(wh / u.div)
+  }
+  return c.available ? formatPower(c.watts, locale.value) : '—'
+}
 
 /** Same name as in the "Panel arrays" card: the JSON's, otherwise "Array n". */
 function label(g: InverterGroup): string {
@@ -29,13 +60,16 @@ function label(g: InverterGroup): string {
 function cellTitle(g: InverterGroup, c: InverterCell): string {
   const place = g.index === null ? t('energy.noSlot') : t('arrays.slot', { r: c.row, c: c.col })
   if (!c.id) return place
+  if (props.period) { const wh = whOf(c); return `${c.name} · ${place} · ${wh === null ? '—' : formatEnergyTotal(wh, locale.value)} · ${props.period.scale}` }
   const watts = c.available ? formatPower(c.watts, locale.value) : t('common.unavailable')
   const out = at(g, g.maxOutputW) ? ` · ${t('arrays.maxOutput')} ${formatPower(g.maxOutputW, locale.value)}` : ''
   const rec = at(g, c.maxW) ? ` · ${t('energy.maxReported')} ${formatPower(c.maxW, locale.value)}` : ''
   return `${c.name} · ${place} · ${watts}${out}${rec}`
 }
 /** Gauge of a cell: its power relative to the field's scale (`scaleW`). */
-const fill = (g: InverterGroup, c: InverterCell) => Math.min(1, Math.max(0, c.watts / g.scaleW))
+const fill = (g: InverterGroup, c: InverterCell) => (props.period
+  ? (whOf(c) ?? 0) / bestWh(g)
+  : Math.min(1, Math.max(0, c.watts / g.scaleW)))
 /**
  * Where to place a mark on the gauge (0 = unknown value, so no mark). The scale always contains
  * both marks: neither is discarded for exceeding, it is the scale that opens up.
@@ -51,10 +85,10 @@ const at = (g: InverterGroup, watts: number) => (watts > 0 ? Math.min(1, watts /
         <div class="group__head">
           <div class="group__title">{{ label(g) }}</div>
           <!-- tabular figures and minimum width: the total changes on its own without moving the title -->
-          <div class="muted group__total">{{ formatPower(g.totalW, locale) }}</div>
+          <div class="muted group__total">{{ period ? formatEnergyTotal(groupWh(g), locale) : formatPower(g.totalW, locale) }}</div>
         </div>
         <!-- the time scale under the title, like the other blocks of the view -->
-        <div class="muted group__sub">{{ $t('energy.instant') }}</div>
+        <div class="muted group__sub">{{ period ? `${period.scale} · ${unitOf(g).unit}` : $t('energy.instant') }}</div>
         <!-- The field grid: as many columns as it declares, row 1 at the top (the origin's, see
              `panelArrayDevices`). It scrolls horizontally rather than squeezing its cells when a
              field is wider than the card. -->
@@ -67,11 +101,11 @@ const at = (g: InverterGroup, watts: number) => (watts > 0 ? Math.min(1, watts /
                    when the two coincide — the inverter has already hit its maximum — only the
                    ceiling remains, and that is indeed what there is to say. Without them, a gauge
                    that stops at three quarters in fine weather reads as a module that is fading. -->
-              <span v-if="c.id && at(g, c.maxW)" class="cell__mark cell__mark--record" aria-hidden="true" :style="{ '--at': at(g, c.maxW) }" />
-              <span v-if="c.id && at(g, g.maxOutputW)" class="cell__mark cell__mark--max" aria-hidden="true" :style="{ '--at': at(g, g.maxOutputW) }" />
+              <span v-if="!period && c.id && at(g, c.maxW)" class="cell__mark cell__mark--record" aria-hidden="true" :style="{ '--at': at(g, c.maxW) }" />
+              <span v-if="!period && c.id && at(g, g.maxOutputW)" class="cell__mark cell__mark--max" aria-hidden="true" :style="{ '--at': at(g, g.maxOutputW) }" />
               <span class="cell__id">{{ c.label }}</span>
               <!-- a silent inverter is not worth 0 W: it reports nothing, and the dash says so -->
-              <span v-if="c.id" class="cell__w">{{ c.available ? formatPower(c.watts, locale) : '—' }}</span>
+              <span v-if="c.id" class="cell__w">{{ cellValue(g, c) }}</span>
             </div>
           </div>
         </div>

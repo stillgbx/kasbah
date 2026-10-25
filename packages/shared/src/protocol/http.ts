@@ -286,6 +286,64 @@ export const deviceConsumptionSchema = z.object({
 })
 export type ConsumptionPoint = z.infer<typeof consumptionPointSchema>
 export type DeviceConsumption = z.infer<typeof deviceConsumptionSchema>
+
+/**
+ * Daily energy totals of a site (`energy_history` capability), served on demand
+ * (`GET /api/devices/:id/energy-days`): what feeds the week, month, year and lifetime views. Each
+ * day carries what flowed DURING it, in Wh, never a meter reading. A field the source did not
+ * report is absent, not zero.
+ *
+ * `vendor`: the day comes from the vendor's cloud history; `local`: the server measured it while
+ * it ran — exact where the gateway keeps a day counter (production, consumption), integrated from
+ * the power readings otherwise. `partial`: a local day the server did not see whole, so its
+ * integrated fields fall short.
+ */
+export const energyDaySchema = z.object({
+  /** Local midnight that starts the day (ms epoch). */
+  t: z.number().int(),
+  source: z.enum(['vendor', 'local']),
+  partial: z.boolean().optional(),
+  productionWh: z.number().min(0).optional(),
+  consumptionWh: z.number().min(0).optional(),
+  /** Drawn from the grid, and sent to it. */
+  importWh: z.number().min(0).optional(),
+  exportWh: z.number().min(0).optional(),
+  /** Into the battery, and out of it. */
+  chargeWh: z.number().min(0).optional(),
+  dischargeWh: z.number().min(0).optional(),
+  /** Where the house's consumption came from: the three shares of the flow diagram's ring. */
+  solarHomeWh: z.number().min(0).optional(),
+  batteryHomeWh: z.number().min(0).optional(),
+  gridHomeWh: z.number().min(0).optional(),
+  /** What the charger(s) delivered. */
+  evseWh: z.number().min(0).optional(),
+})
+export const deviceEnergyDaysSchema = z.object({
+  deviceId: z.string(),
+  /** First day of operation as the vendor knows it (local midnight), `null` when never synced. */
+  since: z.number().int().nullable(),
+  /** Last synchronization with the vendor's history (ms epoch), `null` = never. */
+  syncedAt: z.number().int().nullable(),
+  /** From the oldest day to today. A day never measured is absent. */
+  days: z.array(energyDaySchema),
+  /**
+   * What each micro-inverter produced, day by day: `wh[i]` is the day `from` + i calendar days
+   * (local), `null` = not measured. `lifetimeWh`: the inverter's own counter since commissioning,
+   * exact even where the days are missing. Absent when the site has no inverter history.
+   */
+  inverters: z.object({
+    from: z.number().int(),
+    /** Last synchronization of the inverters' days with the vendor (ms epoch), `null` = never. */
+    syncedAt: z.number().int().nullable(),
+    devices: z.array(z.object({
+      externalId: z.string(),
+      lifetimeWh: z.number().min(0).optional(),
+      wh: z.array(z.number().min(0).nullable()),
+    })),
+  }).optional(),
+})
+export type EnergyDay = z.infer<typeof energyDaySchema>
+export type DeviceEnergyDays = z.infer<typeof deviceEnergyDaysSchema>
 export type DeviceJournal = z.infer<typeof deviceJournalSchema>
 
 /**

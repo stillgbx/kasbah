@@ -1,6 +1,6 @@
 # Vues Énergie et Véhicules
 
-> Dernière mise à jour : 2026-10-19
+> Dernière mise à jour : 2026-10-25
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Énergie (schéma de flux, onduleurs, champs de panneaux, tuiles), la vue Véhicules et la carte d'un véhicule (charge, limite, carte, réveil, climatisation, logiciel). Elle est née du découpage de
@@ -1046,3 +1046,17 @@ Mesuré dans la preview `kasbah-mock` à 1440 × 900 : carte de 533 px, inchang�
 exacte de la carte en sombre comme en clair ; repère de la même couleur que ceux de la batterie.
 
 Sources : `apps/web/src/views/VehiclesView.vue`.
+
+### Mise à jour 2026-10-25 — vue Énergie : l'historique par période
+
+**Le sélecteur** (`apps/web/src/views/EnergyView.vue`) : Instantané / Jour / Semaine / Mois / Année / Total, et à côté un découpage **Glissant / Calendaire**, grisé hors semaine, mois et année. Glissant = les 7 ou 31 derniers jours, les 12 derniers mois ; calendaire = depuis lundi, depuis le 1er, depuis janvier. Le calendaire existe pour **retrouver les chiffres de l'appli du fabricant**, qui compte ainsi ; le glissant reste le défaut. La donnée vient de `GET /api/devices/:id/energy-days` (voir [1_14 Énergie](../1_architecture/1_14_energie.md)).
+
+**Calcul des périodes.** `bucketSlots` (`apps/web/src/lib/consumption.ts`) reçoit une option `mode` (glissant par défaut : eau, chauffage et lumières n'ont pas bougé). `apps/web/src/lib/energyPeriods.ts` porte les totaux, les barres, `energyUnit`, `inverterTotals` et `formatEnergyTotal` : **MWh dès 1 000 kWh**, à la demande de l'utilisateur, pour ne pas écrire cinq chiffres.
+
+**Le schéma de flux sur une période** (`components/energy/EnergyFlow.vue`). Sur une période, les nœuds disent des **énergies** (kWh) au lieu de puissances, et l'anneau de la maison se dessine depuis `solarHomeWh` / `batteryHomeWh` / `gridHomeWh`. **Aucun point animé** : sur une période, le courant a circulé dans les deux sens (le réseau a donné et reçu, la batterie s'est chargée et vidée), une flèche mentirait. Un titre porte « · incomplet » quand un jour de la période manque ; un total ne se présente pas comme complet quand il ne l'est pas.
+
+**Les cases d'onduleurs** (`components/energy/InverterFields.vue`). Sur une période, chaque case montre le **cumul** de l'onduleur : le nombre seul, l'unité écrite **une fois** sous le titre du champ. Essayé d'abord avec l'unité dans chaque case : « 21,6 kWh » débordait d'une case de 52 px (principe « rien ne bouge », [4_0](4_0_langage-visuel.md)). La jauge est relative au meilleur du champ, et les repères record et plafond (qui parlent d'une puissance instantanée) sont masqués.
+
+**La carte Enphase des Réglages** (`components/EnphasePairingCard.vue`) : section « Historique » (dernière synchro, jours couverts), ligne « Onduleurs » avec l'avancement du rattrapage, **frise** mois × 31 colonnes (une case par jour, couleur selon l'état complet / incomplet / absent, lue dans `coverage.days`), bouton **Resynchroniser** et interrupteur « Tout reprendre » (= `force: true`), ligne « Reprendra N jours incomplets » qui dit à l'avance ce que le bouton va faire. Routes : [3_7 Enphase](../3_plugins/3_7_enphase.md).
+
+Libellés en fr et en (`apps/web/src/i18n/locales/`). Tests : `consumption.test.ts`, `energyPeriods.test.ts`, `EnphasePairingCard.test.ts`.

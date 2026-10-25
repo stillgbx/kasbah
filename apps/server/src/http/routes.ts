@@ -272,6 +272,14 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     return deps.host.consumption(entry.descriptor.id)
   })
 
+  // A site's daily energy totals: on demand, for those that declare the capability.
+  app.get<{ Params: { id: string } }>('/api/devices/:id/energy-days', async (req, reply) => {
+    const entry = deps.registry.get(req.params.id)
+    if (!entry) return sendError(reply, 404, 'NOT_FOUND', `unknown device "${req.params.id}"`)
+    if (!entry.descriptor.capabilities.includes('energy_history')) return sendError(reply, 400, 'KIND_MISMATCH', `device "${req.params.id}" keeps no energy history`)
+    return deps.host.energyDays(entry.descriptor.id)
+  })
+
   // Vendor scenes: reading, then recall. As for commands, the resulting state (which scene is
   // active) arrives through the WebSocket, not in the response.
   app.get('/api/scenes', async () => ({ scenes: deps.scenes.list() }))

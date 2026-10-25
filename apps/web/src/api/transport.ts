@@ -1,4 +1,4 @@
-import type { GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, PropertiesResponse, PropertyMode, NewPropertyBody, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor } from '@kasbah/shared'
+import type { GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEnergyDays, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, PropertiesResponse, PropertyMode, NewPropertyBody, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor } from '@kasbah/shared'
 
 // Abstraction of the server channel. Two implementations: HTTP + WebSocket (real) and in-process
 // simulation (tests, static demo without a server). Commands ALWAYS go through a request
@@ -76,6 +76,14 @@ export interface EnphaseTokenStatus {
   cloudLinked: boolean
   cloudFile: string | null
   siteId?: string
+  /** The site's daily history: last synchronization with Enphase's, and how many days are kept. */
+  history: {
+    syncedAt: number | null; since: number | null; days: number; syncing: boolean; error: string | null
+    /** The micro-inverters' days: last full synchronization, and the one in progress (days done / to do). */
+    inverters?: { syncedAt: number | null; done: number | null; total: number | null; error: string | null }
+    /** Every past day since commissioning, one letter each from `from`: `c` complete, `p` incomplete, `m` missing. */
+    coverage?: { from: number; days: string } | null
+  }
 }
 
 export type EnphasePairing = { token: string } | { user: string; password: string; force?: boolean }
@@ -563,6 +571,8 @@ export interface Transport {
   getReleaseNotes(deviceId: string, lang: string): Promise<DeviceReleaseNotes>
   /** Consumption history (liters per step, never a cumulative total) of a `water` device, in three series: hour, day, month. */
   getConsumption(deviceId: string): Promise<DeviceConsumption>
+  /** A site's daily energy totals (`energy_history` capability), on demand. */
+  getEnergyDays(deviceId: string): Promise<DeviceEnergyDays>
   sendCommand(deviceId: string, command: CommandInput): Promise<void>
   getScenes(): Promise<PluginSceneEntry[]>
   /** Recalls a vendor scene (fixed or animated palette). */
@@ -618,6 +628,8 @@ export interface Transport {
    * once to mint one and are not kept. `force` replaces a still-valid token.
    */
   pairEnphase(body: EnphasePairing): Promise<EnphaseTokenStatus>
+  /** Fetches Enphase's daily history again (the "Resync" button): the incomplete days, or every day with `force`. */
+  syncEnphaseHistory(force?: boolean): Promise<EnphaseTokenStatus>
   /** Where the Tesla setup stands (public key to place, domain registered, account linked). */
   teslaStatus(): Promise<TeslaStatus>
   /** Registers the domain with Tesla, once the public key is placed on it. */

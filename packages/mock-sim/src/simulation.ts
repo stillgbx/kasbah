@@ -3,7 +3,7 @@ import { shallowEqual } from '@kasbah/shared'
 import { systemClock, type Clock } from './clock'
 import { mulberry32, type Rng } from './rng'
 import { resolveScenario, type ScenarioName } from './scenarios'
-import { SimError, type AnySimDevice, type Scenario, type SimForecast, type SimReleaseNotes, type SimScene, type SimSiteMap, type TickCtx } from './types'
+import { SimError, type AnySimDevice, type Scenario, type SimEnergyDays, type SimForecast, type SimReleaseNotes, type SimScene, type SimSiteMap, type TickCtx } from './types'
 import { createWorld, tickWorld, type World } from './world'
 
 export interface SimulationOptions {
@@ -227,6 +227,25 @@ export class Simulation {
     if (!dev) throw new SimError('DEVICE_UNAVAILABLE', `unknown mock device "${externalId}"`)
     if (!dev.siteMap) throw new SimError('UNSUPPORTED_COMMAND', `${dev.descriptor.kind} has no site map`)
     return dev.siteMap()
+  }
+
+  /** Daily energy totals of a simulated site, up to the current simulated instant. */
+  energyDays(externalId: string): SimEnergyDays {
+    const dev = this.byId.get(externalId)
+    if (!dev) throw new SimError('DEVICE_UNAVAILABLE', `unknown mock device "${externalId}"`)
+    if (!dev.energyDays) throw new SimError('UNSUPPORTED_COMMAND', `${dev.descriptor.kind} has no energy history`)
+    const site = dev.energyDays(this.ctx(0))
+    // the simulated panels share the site's production, each with its own yield (orientation,
+    // shade), steady from one day to the next — like a real array where one module lags behind
+    const panels = this.devs.filter((d) => d.partOf === 'energy' && d.descriptor.kind === 'sensor')
+    if (!panels.length || !site.days.length) return site
+    const weight = panels.map((_, i) => 0.85 + 0.2 * ((Math.sin(i * 7.31) + 1) / 2))
+    const total = weight.reduce((a, b) => a + b, 0)
+    const devices = panels.map((p, i) => {
+      const wh = site.days.map((d) => (d.productionWh === undefined ? null : Math.round((d.productionWh * weight[i]!) / total)))
+      return { externalId: p.descriptor.externalId, lifetimeWh: wh.reduce<number>((a, v) => a + (v ?? 0), 0), wh }
+    })
+    return { ...site, inverters: { from: site.days[0]!.t, syncedAt: site.syncedAt, devices } }
   }
 
   private delay(ms: number): Promise<void> {

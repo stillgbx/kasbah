@@ -1,7 +1,7 @@
 # Plugin Enphase (production solaire, micro-onduleurs, batteries)
 
-> Dernière mise à jour : 2026-10-24
-> Sources : `apps/server/src/plugins/enphase/{index,client,token,cloud,mapping,types}.ts`, `apps/server/src/plugins/enphase/__fixtures__/gateway.ts`, tests `token.test.ts`, `mapping.test.ts`, `plugin.test.ts` et `cloud.test.ts`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/server/.env.example`, note technique du fabricant « Accessing IQ Gateway local APIs or local UI with token-based authentication » (2022-12-14), commits 3b4767a et a89ae3b
+> Dernière mise à jour : 2026-10-25
+> Sources : `apps/server/src/plugins/enphase/{index,client,token,cloud,mapping,types,days,inverterDays}.ts`, `apps/server/src/plugins/enphase/__fixtures__/gateway.ts`, tests `token.test.ts`, `mapping.test.ts`, `plugin.test.ts` et `cloud.test.ts`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/server/.env.example`, note technique du fabricant « Accessing IQ Gateway local APIs or local UI with token-based authentication » (2022-12-14), commits 3b4767a et a89ae3b
 
 ## Ce que le plugin lit, et ce qu'il ne peut pas lire
 
@@ -439,3 +439,63 @@ alors ré-appairer. Mécanisme commun : `apps/server/src/core/tls-pin.ts` (empre
 
 Constats F26, F31, F33 : le jeton de passerelle et la session Enlighten sont désormais écrits en 0600,
 comme les autres fichiers d'identifiants du serveur.
+
+### Mise à jour 2026-10-25 — l'historique journalier du site et de chaque onduleur
+
+**Pourquoi.** La vue Énergie ne savait montrer que l'instant et 48 h (`core/history.ts`, en mémoire). Les
+vues Semaine, Mois, Année et Total exigent des cumuls **par jour**, que la passerelle ne garde pas :
+elle ne connaît que les compteurs du jour (production, consommation) et la production à vie de chaque
+micro-onduleur. Le plugin tient donc lui-même un historique persistant (`apps/server/src/plugins/enphase/days.ts`,
+`inverterDays.ts`).
+
+**Le site** (`EnergyDays`, `.state/enphase-days.json`, variable `ENPHASE_DAYS_FILE`). Un jour est clé par
+sa date **locale** `AAAA-MM-JJ`, jamais par un instant : il dure 23 ou 25 h aux changements d'heure, une
+clé de date s'en moque. Deux sources par jour :
+- **le vendeur** : la route privée Enlighten `GET /pv/systems/{site}/lifetime_energy`, appelée avec la
+  session déjà tenue pour la borne. UN appel rend une valeur par jour depuis la mise en service
+  (`production`, `consumption`, `import`, `export`, `charge`, `discharge`, `solar_home`, `battery_home`,
+  `grid_home`, `evse`) ; `null` = non rapporté, et le champ reste absent du jour (jamais zéro) ;
+- **nos relevés** : compteurs du jour de la passerelle pour production et consommation (exacts, avec la
+  règle « un compteur pas encore remis à zéro dans les 15 min après minuit appartient à la veille ») ;
+  intégration de la puissance (livedata, 10 s) pour réseau, batterie et les trois parts de la maison
+  (**approché** : la passerelle ne tient aucun compteur fiable pour elles) ; énergie de session de la
+  borne pour la borne, le cloud ne donnant aucune puissance de borne. Un jour local est `partial` si le
+  serveur ne l'a pas vu en entier (aujourd'hui : depuis minuit seulement). **Aujourd'hui reste toujours
+  local**, même si le vendeur a déjà une valeur.
+
+**Écarté : l'API officielle v4** (inscription développeur, OAuth) : trop de démarches pour une donnée que
+la session Enlighten déjà tenue donne en un appel. Contrepartie : ce sont des routes **privées**, que le
+fabricant peut changer ; les schémas (`lifetimeEnergySchema`, `arrayLayoutSchema`, `inverterEnergySchema`)
+sont tolérants, une forme inattendue lève `UPSTREAM_ERROR` sans toucher au fichier.
+
+**Par onduleur** (`inverterDays.ts`, `.state/enphase-inverter-days.json`, `ENPHASE_INVERTER_DAYS_FILE`).
+- Passerelle : `/ivp/pdm/device_data` lu toutes les 5 min (`DEVICE_DATA_MS`, 50 Ko environ, les micros ne
+  rapportent pas plus souvent). Par micro `pcu` : `wattHours.today`, et `lifetime.joulesProduced`,
+  en **joules** (divisé par 3600 pour les Wh : piège de l'unité). Le cumul à vie est servi tel quel,
+  exact même quand des jours manquent.
+- Cloud : `GET /systems/{site}/inverter_data_x/energy.json?start_date&end_date` rend la **somme** par
+  onduleur sur la plage, pas des séries, avec pour clés l'id Enlighten à 9 chiffres. La correspondance
+  avec les numéros de série vient de `GET /pv/systems/{site}/array_layout_x`
+  (`arrays[].modules[].inverter.{inverter_id, serial_num}`).
+- **Rattrapage tout en jours** : un appel par jour, 2 s entre appels (`VENDOR_DAY_GAP_MS`), en arrière-plan,
+  après la synchro du site. Choix de l'utilisateur, contre un mélange « mois + 62 derniers jours »
+  (moins d'appels) : le motif détaillé n'est pas consigné.
+
+**Resynchro intelligente.** Chaque jour a un état : `c` complet, `p` incomplet, `m` absent. Site : complet
+si le vendeur ne l'a pas donné partiel, ou si le local l'a vu en entier ; onduleurs : complet si le
+vendeur l'a donné, ou si la passerelle a été lue à moins de 20 min de minuit (`WHOLE_DAY_SLACK_MS`). Par
+défaut on ne reprend que les jours non complets ; `force: true` reprend tout.
+- **Automatique seulement** quand l'historique est vide et le compte Enlighten lié : au démarrage, ou
+  juste après l'appairage par compte. Un appairage par jeton collé ne l'ouvre pas (pas de session
+  Enlighten, donc pas de route privée).
+- Sinon, à la demande : `POST /api/plugins/enphase/history/sync { force?: boolean }`, qui rend le même
+  état que `GET /api/plugins/enphase/token`.
+- `GET …/token` porte désormais `history { syncedAt, since, days, syncing, error, inverters { syncedAt,
+  done, total, error }, coverage { from, days: 'ccpm…' } }` : `coverage.days` est une chaîne d'un
+  caractère `c`/`p`/`m` par jour depuis `from`, que la carte des Réglages dessine en frise.
+
+**Variables** (`apps/server/.env.example`) : `ENPHASE_DAYS_FILE` et `ENPHASE_INVERTER_DAYS_FILE`, par
+défaut dans `.state/` ; ils s'ajoutent à `health().keys`.
+
+**Vérifié** sur la vraie installation : les routes privées ci-dessus ont été sondées avec la session
+déjà tenue. Aucune valeur de l'installation n'est consignée ici.

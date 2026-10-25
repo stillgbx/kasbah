@@ -59,17 +59,51 @@ function tolerance(period: ConsumptionPeriod, stepStart: number, prevStepStart: 
 }
 
 /**
- * Puts the received points into the last `PERIOD_STEPS[period]` expected steps, FROM OLDEST TO
- * MOST RECENT. A step with no point nearby stays `null`: it is a step never measured, not a
- * zero consumption. Matching is done by proximity (not strict equality of `t`) because
- * nothing in the contract guarantees that the server's clock lands exactly on the browser's hour.
+ * How a period is cut. `rolling`: the last steps up to now (the last 7 days, 31 days, 12 months).
+ * `calendar`: the current day, week (Monday first), month or year, whole — the steps still to come
+ * stay empty, and the totals compare with a vendor's app that counts "this month".
  */
-export function bucketSlots(points: readonly ConsumptionPoint[], period: ConsumptionPeriod, now = Date.now()): ConsumptionSlot[] {
+export type PeriodMode = 'rolling' | 'calendar'
+
+/** Starts of the steps of the CURRENT calendar period: 23 to 25 hours, 7 days, 28 to 31 days, 12 months. */
+function calendarStarts(period: ConsumptionPeriod, now: number): number[] {
+  const d = new Date(now); d.setHours(0, 0, 0, 0)
+  const starts: number[] = []
+  if (period === 'day') {
+    const end = new Date(d); end.setDate(end.getDate() + 1)
+    for (let t = d.getTime(); t < end.getTime(); t += 3600_000) starts.push(t)
+    return starts
+  }
+  if (period === 'week') d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  if (period === 'month') d.setDate(1)
+  if (period === 'year') d.setMonth(0, 1)
+  const count = period === 'week' ? 7 : period === 'year' ? 12 : new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+  for (let i = 0; i < count; i++) {
+    const s = new Date(d)
+    if (period === 'year') s.setMonth(i, 1)
+    else s.setDate(d.getDate() + i)
+    starts.push(s.getTime())
+  }
+  return starts
+}
+
+/**
+ * Puts the received points into the expected steps, FROM OLDEST TO MOST RECENT: the last
+ * `PERIOD_STEPS[period]` steps, or those of the current calendar period (`mode`). A step with no
+ * point nearby stays `null`: it is a step never measured, not a zero consumption. Matching is done
+ * by proximity (not strict equality of `t`) because nothing in the contract guarantees that the
+ * server's clock lands exactly on the browser's hour.
+ */
+export function bucketSlots(points: readonly ConsumptionPoint[], period: ConsumptionPeriod, now = Date.now(), mode: PeriodMode = 'rolling'): ConsumptionSlot[] {
   const count = PERIOD_STEPS[period]
   const latest = currentStepStart(period, now)
-  const starts = Array.from({ length: count }, (_, i) => stepBack(period, latest, count - 1 - i))
+  const starts = mode === 'calendar'
+    ? calendarStarts(period, now)
+    : Array.from({ length: count }, (_, i) => stepBack(period, latest, count - 1 - i))
+  // the step before the first one: what bounds its tolerance
+  const before = mode === 'calendar' ? starts[0]! - (starts[1]! - starts[0]!) : stepBack(period, latest, count)
   return starts.map((t, i) => {
-    const tol = tolerance(period, t, i > 0 ? starts[i - 1]! : stepBack(period, latest, count))
+    const tol = tolerance(period, t, i > 0 ? starts[i - 1]! : before)
     const hit = points.find((p) => Math.abs(p.t - t) <= tol)
     return { t, litres: hit ? hit.litres : null }
   })

@@ -1,6 +1,6 @@
 # Protocole REST et WebSocket
 
-> Dernière mise à jour : 2026-10-22
+> Dernière mise à jour : 2026-10-25
 > Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11), `apps/server/src/http/static.ts` (`appBuild`, 2026-10-13), `apps/server/src/http/system.ts` (2026-10-13), `apps/server/src/http/diag.ts` et `apps/web/public/diag.html`, `apps/web/src/lib/sceneProbe.ts` (2026-10-22)
 
 ## REST
@@ -809,3 +809,16 @@ Piège de vérification : dans la preview masquée, l'étape `frame` attend une 
 
 Sources : `apps/web/src/lib/sceneProbe.ts`, `apps/web/src/lib/sceneProbe.test.ts`,
 `apps/web/src/composables/useHouseScene.ts`, `apps/web/public/diag.html`.
+
+### Mise à jour 2026-10-25 — `GET /api/devices/:id/energy-days` et les routes de plugin de l'historique
+
+- `GET /api/devices/:id/energy-days` (`apps/server/src/http/routes.ts`) rend `deviceEnergyDaysSchema`
+  (`packages/shared/src/protocol/http.ts`) : `deviceId`, `since` (premier jour connu, minuit local, `null`
+  si jamais synchronisé), `syncedAt`, `days[]` (`t` = minuit local en ms, `source` `vendor`/`local`,
+  `partial?`, les champs `…Wh` absents quand non rapportés) et `inverters?` (`from`, `syncedAt`,
+  `devices[{ externalId, lifetimeWh?, wh[] }]`, `wh[i]` = jour `from` + i, `null` = non mesuré). Réservé aux
+  appareils qui déclarent `energy_history` (sinon 404 `NOT_FOUND` si l'appareil est inconnu, 400 `KIND_MISMATCH` s'il ne l'a pas ; hook plugin `energyDays`, relayé par
+  `PluginHost.energyDays`, `NOT_IMPLEMENTED` si le plugin n'a pas le hook). Les Wh sont ce qui a **circulé pendant** le jour, jamais un relevé de compteur.
+- Routes **de plugin** Enphase, sous `/api/plugins/enphase/` : `POST history/sync { force?: boolean }`
+  (reprend les jours non complets, tous si `force`) et l'état `history` ajouté à `GET token`. Détail dans
+  [3_7 Enphase](../3_plugins/3_7_enphase.md).

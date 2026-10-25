@@ -49,10 +49,10 @@ describe('descriptors', () => {
   it('the site declares storage because the installation has batteries', () => {
     const site = descriptors[0]!
     expect(site).toMatchObject({ id: 'enphase:site', externalId: 'site', kind: 'energy' })
-    expect(site.capabilities).toEqual(['production', 'consumption', 'grid', 'storage'])
+    expect(site.capabilities).toEqual(['production', 'consumption', 'grid', 'storage', 'energy_history'])
     // without a battery, the capability drops: the UI does not show an empty battery tile
     const noBattery = toDescriptors({ report, inverters, batteries: [] })
-    expect(noBattery[0]!.capabilities).toEqual(['production', 'consumption', 'grid'])
+    expect(noBattery[0]!.capabilities).toEqual(['production', 'consumption', 'grid', 'energy_history'])
     expect(noBattery).toHaveLength(21)
   })
 

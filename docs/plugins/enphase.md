@@ -21,6 +21,8 @@
 - Production is never shown below zero: the microinverters' standby draw at night does not count as consumption.
 - **Return to the previous mode**: a stop or a forced start from Kasbah puts the charger in "manual override". When the car reaches its limit or is unplugged, Kasbah restores the mode chosen in the app (for example green charging).
 - **Charger mode**: **Green** (on solar surplus only) or **Manual** (as soon as it is plugged in, from the grid if needed), chosen from the charger's panel (Home view), its row in the Energy view, or the assistant (MCP). The scheduled and smart modes are set in the Enphase app; neither button is then lit.
+- **History by period**: the Energy view switches between **Live**, **Day**, **Week**, **Month**, **Year** and **Lifetime**, cut **Rolling** (the last 7 or 31 days, the last 12 months) or **Calendar** (this week, this month, this year, to compare with the Enphase app). The flow diagram then shows energies instead of powers, and each panel slot shows what its microinverter produced over the period.
+- **Where the history comes from**: when the Enphase account is linked and nothing is kept yet, the server fetches Enphase's own history once — one value per day since commissioning, and the same day by day for each microinverter (one request per day, two seconds apart, in the background). From then on it counts the days itself from the gateway: production, consumption and each inverter exactly, grid and battery from the power readings (close, not exact).
 - **Visible manual override**: when the charger no longer follows its mode until it is unplugged, its panel says so and **Resume** gives it back; in the Energy view, its row shows "manual override" and the key of the current mode, in orange, gives it back.
 
 ## Connection
@@ -39,6 +41,7 @@
    - **Token**: create it on `entrez.enphaseenergy.com`, paste it, then validate.
 4. The card shows the token's role and its expiry. With less than 30 days left, the plugin's pill turns orange: **Renew the token** before then.
 5. For the charger: choose **Enphase account** and **Validate**. The button links the cloud session without creating a new token if the local token is still valid.
+6. The same card has a **Production history** section: a strip with one cell per day since commissioning (complete, incomplete, missing) and **Resync**, which takes again from Enphase only the days that are not complete — after a fresh install or a server outage. **Take everything again** redoes every day. Today is always counted by Kasbah.
 
 ## Configuration (`apps/server/.env`)
 
@@ -50,6 +53,8 @@ Nothing is required in the normal case.
 | `ENPHASE_TOKEN` | — | Optional bootstrap token (first start without an interface). Between it and the server's own, the one that expires last is kept |
 | `ENPHASE_TOKEN_FILE` | `apps/server/.state/enphase-token.json` | Where the server keeps the token. Empty: nothing is kept, you have to pair again at every start |
 | `ENPHASE_CLOUD_FILE` | `apps/server/.state/enphase-cloud.json` | Where the server keeps the charger's session. Empty: to be linked at every start |
+| `ENPHASE_DAYS_FILE` | `apps/server/.state/enphase-days.json` | The site's daily history. Empty: kept in memory only, lost at restart |
+| `ENPHASE_INVERTER_DAYS_FILE` | `apps/server/.state/enphase-inverter-days.json` | Each microinverter's daily history. Empty: in memory only |
 | `ENPHASE_POLL_MS` | `10000` | Meter polling interval (2,000 to 300,000 ms) |
 | `ENPHASE_SLOW_POLL_MS` | `60000` | Polling interval for inverters, batteries and charger (30,000 to 900,000 ms) |
 
@@ -61,6 +66,7 @@ Nothing is required in the normal case.
 - **Stopping the charger blocks it** until the next unplug, sun or not: Kasbah flags this under the button and restores the previous mode when it can. It normally returns by itself to the mode chosen in the app.
 - The charger does not say which car is plugged in.
 - Only one Enlighten site is read: the one chosen at pairing.
+- **History**: fetching Enphase's past needs the Enphase account; a pasted token only gives what Kasbah measures from then on. The grid and battery figures Kasbah measures itself are integrated from the power readings, so they differ by a few percent from Enphase's. A day when the server was stopped is marked incomplete until a resync.
 - Safe mode: if the charger is not connected to the gateway, it falls back to a reduced current. This is set in the Enphase app (Charger Connectivity), not in Kasbah.
 
 ## Further reading

@@ -1,4 +1,4 @@
-import type { Command, DeviceConsumption, DeviceDescriptor, DeviceEventKind, DeviceJournal, DeviceReleaseNotes, PluginHealth, PluginScene, SceneActivation, SceneRecall, SceneUpdate, SiteMap, StatePatch, WeatherForecast } from '@kasbah/shared'
+import type { Command, DeviceConsumption, DeviceDescriptor, DeviceEnergyDays, DeviceEventKind, DeviceJournal, DeviceReleaseNotes, PluginHealth, PluginScene, SceneActivation, SceneRecall, SceneUpdate, SiteMap, StatePatch, WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import type { z } from 'zod'
@@ -66,6 +66,8 @@ export type PluginSiteMap = Omit<SiteMap, 'deviceId'>
 export type PluginReleaseNotes = Omit<DeviceReleaseNotes, 'deviceId'>
 /** Consumption as a plugin returns it: the host adds the `deviceId` (see `deviceConsumptionSchema`). */
 export type PluginConsumption = Omit<DeviceConsumption, 'deviceId'>
+/** Daily energy totals as a plugin returns them: the host adds the `deviceId` (see `deviceEnergyDaysSchema`). */
+export type PluginEnergyDays = Omit<DeviceEnergyDays, 'deviceId'>
 
 /**
  * Toggleable sub-item of a plugin: a part of what it provides, which one may want or not without
@@ -127,6 +129,12 @@ export interface DevicePlugin {
    * `NOT_IMPLEMENTED`).
    */
   consumption?(externalId: string): Promise<PluginConsumption>
+  /**
+   * Daily energy totals of a site that declares the `energy_history` capability, served ON DEMAND
+   * (`GET /api/devices/:id/energy-days`). Same rule as the consumption: return the history kept up
+   * over the polls, never take a new reading.
+   */
+  energyDays?(externalId: string): Promise<PluginEnergyDays>
   /**
    * Release notes of a vehicle that declares the `release_notes` capability, served ON DEMAND
    * (`GET /api/devices/:id/release-notes`). Return the cache held by the plugin, never make a new

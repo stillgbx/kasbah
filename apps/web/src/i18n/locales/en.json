@@ -244,7 +244,17 @@
     "today": "Today", "selfConsumption": "self-consumption", "mix": "Where consumption comes from", "flowTitle": "Energy flows", "productionToday": "Production today", "kWhToday": "kWh produced",
     "charger": "Charger", "noData": "No energy device", "noHistory": "History fills up as the day goes on.",
     "instant": "Live", "localHistory": "Local history",
-    "maxReported": "Record", "invertersLoose": "Unassigned", "noSlot": "No slot"
+    "maxReported": "Record", "invertersLoose": "Unassigned", "noSlot": "No slot",
+    "periods": {"instant": "Live", "day": "Day", "week": "Week", "month": "Month", "year": "Year", "lifetime": "Lifetime"},
+    "modes": {"rolling": "Rolling", "calendar": "Calendar"},
+    "periodLabel": "Period",
+    "modeLabel": "How the period is cut",
+    "scale": {"rolling": {"week": "Last 7 days", "month": "Last 31 days", "year": "Last 12 months"}, "thisWeek": "This week", "lifetime": "Since {date}", "lifetimeUnknown": "Since the history began"},
+    "incomplete": "incomplete",
+    "periodCharged": "charged {e}",
+    "periodExported": "exported {e}",
+    "produced": "produced",
+    "noPeriodHistory": "No history for this period."
   },
   "camera": {
     "online": "Online", "classes": { "camera": "Camera", "doorbell": "Doorbell", "display": "Display" },
@@ -576,7 +586,27 @@
       "notStored": "No token file is configured (ENPHASE_TOKEN_FILE is empty): pairing will be lost when the server restarts.",
       "cloudLinked": "Enlighten account linked: the charger can be read. Session kept in {file}.",
       "cloudLinkedNoFile": "Enlighten account linked for this session only (ENPHASE_CLOUD_FILE is empty).",
-      "cloudNeeded": "To reach the charger, pair with the Enphase account: a pasted token does not open the cloud."
+      "cloudNeeded": "To reach the charger, pair with the Enphase account: a pasted token does not open the cloud.",
+      "history": {
+        "title": "Production history",
+        "never": "Enphase's history has not been fetched yet. Kasbah counts the days itself since it started.",
+        "synced": "{days} days since {since}, fetched from Enphase on {at}. Since then, Kasbah counts the days itself.",
+        "syncing": "Fetching Enphase's history…",
+        "resync": "Resync",
+        "resyncHint": "Takes the incomplete or missing days again from Enphase, after a fresh install or a server outage. \"Take everything again\" redoes every day. Today stays counted by Kasbah.",
+        "needsAccount": "To fetch Enphase's history, validate the Enphase account above: a pasted token does not open the cloud.",
+        "failed": "Last attempt failed: {message}",
+        "invertersNever": "Inverters: day-by-day history not fetched yet.",
+        "invertersProgress": "Inverters: {done} of {total} days fetched, one call per day…",
+        "invertersSynced": "Inverters: day by day fetched on {at}.",
+        "force": "Take everything again",
+        "willTake": "Will take {n} incomplete day again. | Will take {n} incomplete days again.",
+        "willTakeAll": "Will take {n} day again. | Will take all {n} days again.",
+        "allComplete": "Every day is complete: nothing to take again.",
+        "stripLabel": "State of each day since commissioning",
+        "legend": {"c": "complete", "p": "incomplete", "m": "missing"},
+        "done": "{days} days fetched."
+      }
     },
     "renault": {
       "title": "Renault",

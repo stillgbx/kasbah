@@ -1,4 +1,4 @@
-import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type DeviceState, type PluginHealth, type StatePatch, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceJournal, type DeviceReleaseNotes, type SiteMap, type WeatherForecast } from '@kasbah/shared'
+import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type DeviceState, type PluginHealth, type StatePatch, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceEnergyDays, type DeviceJournal, type DeviceReleaseNotes, type SiteMap, type WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import { chargeLimitReached, chargerToForce, chargerToStop, chargingRefuted } from './chargeCoordination'
@@ -351,6 +351,16 @@ export class PluginHost {
     if (!slot.plugin.consumption) throw new PluginError('NOT_IMPLEMENTED', `plugin "${pluginId}" has no consumption history`)
     const c = await withTimeout(slot.plugin.consumption(externalId), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `consumption ${deviceId}`)
     return { deviceId, ...c }
+  }
+
+  /** A site's daily energy totals; `NOT_IMPLEMENTED` if its plugin keeps none. */
+  async energyDays(deviceId: string): Promise<DeviceEnergyDays> {
+    const { pluginId, externalId } = parseDeviceId(deviceId)
+    const slot = this.slots.get(pluginId)
+    if (!slot || !slot.ctx) throw new PluginError('DEVICE_UNAVAILABLE', `plugin "${pluginId}" is not running`)
+    if (!slot.plugin.energyDays) throw new PluginError('NOT_IMPLEMENTED', `plugin "${pluginId}" has no energy history`)
+    const d = await withTimeout(slot.plugin.energyDays(externalId), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `energy days ${deviceId}`)
+    return { deviceId, ...d }
   }
 
   async recallScene(sceneId: string, recall: SceneRecall): Promise<void> {

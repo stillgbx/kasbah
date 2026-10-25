@@ -1,6 +1,6 @@
 # FAQ — pièges d'outillage
 
-> Dernière mise à jour : 2026-10-22
+> Dernière mise à jour : 2026-10-25
 > Sources : sessions des 2026-09-04 et 2026-09-08, `apps/web/src/stores/settings.ts`, `apps/web/vite.config.ts`, `apps/web/src/components/home/*.vue`, `apps/web/src/styles/app.css`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/views/EnergyView.vue`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/three/builders/details.ts`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/server/src/app.ts`, `apps/server/src/plugins/mixcloud/resolve.ts`, `apps/server/package.json`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `docs/plugins/claude-assistant.md`, session du 2026-10-08, `scripts/dev-server.mjs`, session du 2026-10-10, `apps/web/src/lib/maplibreWorker.ts`, session du 2026-10-13, `apps/android/dhu.cmd`, session du 2026-10-22
 
 ## Vuetify 4 : changer de thème
@@ -910,3 +910,24 @@ et sa variante `-dev`) : Vite ne la voit pas, le build ne contient pas le worker
   « n'est pas reconnu » après `cd`).
 - **Solution** : script en ASCII seul, sans `chcp`, fins de ligne CRLF, imposées par
   `apps/android/.gitattributes` (`*.cmd text eol=crlf`) ; appeler l'exécutable par `.\nom.exe`.
+
+## 2026-10-25 — `curl` sous Git Bash : l'argument `/pv/...` devient `C:/Program Files/Git/pv/...`
+
+- **Date** : 2026-10-25
+- **Symptôme** : une sonde `curl` vers une route de fabricant dont le chemin commence par `/` (`/pv/systems/…`)
+  ne part jamais : erreur de résolution d'un hôte à la fin tronquée (« …comc »), aucune requête vue côté serveur.
+- **Diagnostic** : Git Bash (MSYS) prend un argument qui commence par `/` pour un chemin Unix et le réécrit
+  en chemin Windows (`C:/Program Files/Git/pv/…`), y compris au milieu d'une URL passée en argument.
+- **Solution** : préfixer la commande de `MSYS_NO_PATHCONV=1`. Vaut pour tout appel qui passe des chemins
+  d'API en argument sous Git Bash.
+
+## 2026-10-25 — Preview : `import('/src/api/index.ts')` rend une AUTRE instance de module après un rechargement à chaud
+
+- **Date** : 2026-10-25
+- **Symptôme** : pour simuler un état serveur dans la preview, on remplace une fonction du module d'API
+  importé dynamiquement ; l'application ne bouge pas, comme si le remplacement n'avait jamais eu lieu.
+- **Diagnostic** : après un rechargement à chaud, Vite sert le module sous une URL `…?t=<horodatage>`. Un
+  `import('/src/api/index.ts')` sans ce paramètre charge une instance **distincte** de celle que l'application
+  utilise : le remplacement est fait sur une copie.
+- **Solution** : importer l'URL **exacte** servie, avec son `?t=`, lisible dans
+  `performance.getEntriesByType('resource')`.

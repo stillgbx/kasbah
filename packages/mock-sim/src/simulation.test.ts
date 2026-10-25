@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deviceStateSchema, weatherForecastSchema, type StateFor, type StatePatch } from '@kasbah/shared'
+import { deviceEnergyDaysSchema, deviceStateSchema, weatherForecastSchema, type StateFor, type StatePatch } from '@kasbah/shared'
 import { ManualClock } from './clock'
 import { Simulation } from './simulation'
 import { SimError } from './types'
@@ -263,5 +263,20 @@ describe('simulated weather', () => {
     expect(f.daily[0]!.t).toBe(MONDAY)
     expect(weatherForecastSchema.parse({ deviceId: 'mock:weather', ...f })).toBeTruthy()
     expect(() => sim.forecast('light-living')).toThrow(SimError)
+  })
+
+  it('gives the solar site over a year of daily totals that the shared schema accepts, today last and local', () => {
+    const sim = make()
+    const h = sim.energyDays('energy-site')
+    expect(deviceEnergyDaysSchema.parse({ deviceId: 'mock:energy-site', ...h })).toBeTruthy()
+    expect(h.days.length).toBeGreaterThan(365)
+    expect(h.since).toBe(h.days[0]!.t)
+    expect(h.days.at(-1)).toMatchObject({ source: 'local' })
+    // each simulated panel gets its share of the site, day by day
+    expect(h.inverters!.devices.length).toBeGreaterThan(0)
+    expect(h.inverters!.devices[0]!.wh).toHaveLength(h.days.length)
+    // the house is shared out without inventing energy: sun + battery + grid = what it took, at most
+    for (const d of h.days) expect(d.solarHomeWh! + (d.batteryHomeWh ?? 0) + d.gridHomeWh!).toBeLessThanOrEqual(d.consumptionWh! + 1)
+    expect(() => sim.energyDays('weather')).toThrow(SimError)
   })
 })

@@ -1,6 +1,6 @@
 # Simulation (`@kasbah/mock-sim` et plugin `mock`)
 
-> Dernière mise à jour : 2026-10-14
+> Dernière mise à jour : 2026-10-25
 > Sources : `packages/mock-sim/src/{simulation,scenarios,world,clock,rng,types}.ts`, `packages/mock-sim/src/behaviours/*.ts`, `apps/server/src/plugins/mock/index.ts`, `apps/web/src/api/mockTransport.ts`, `packages/mock-sim/src/behaviours/energy.ts`, `packages/mock-sim/src/demos.ts`, `packages/mock-sim/src/behaviours/camera.ts`
 
 ## Pourquoi un paquet séparé
@@ -487,3 +487,13 @@ La tondeuse déclare `confirm_error` : `mower.confirm_error` la remet à la stat
 elle était `errorConfirmable`, sinon refuse (`DEVICE_UNAVAILABLE`). La simulation ne met jamais le robot
 en erreur d'elle-même : pour voir le lien, injecter l'erreur dans le store du navigateur
 (`packages/mock-sim/src/behaviours/robots.ts`).
+
+### Mise à jour 2026-10-25 — le site simulé a un historique journalier
+
+Pour que la vue Énergie se teste sans vraie installation, le site simulé déclare `energy_history`
+(`packages/mock-sim/src/behaviours/energy.ts`). `simulatedDays` fabrique environ 420 jours plausibles
+(production saisonnière et nuageuse d'un jour à l'autre, consommation plus forte l'hiver, borne tous les quelques jours, maison répartie entre soleil, batterie et réseau ; bruit déterministe, donc les mêmes jours à chaque appel), et `Simulation.energyDays`
+(`simulation.ts`) répartit la production du jour entre les **panneaux simulés** (`partOf: 'energy'`), chacun avec
+un rendement propre et stable d'un jour à l'autre, comme un champ réel où un module traîne : de quoi
+remplir les cases d'onduleurs. Le plugin mock (`apps/server/src/plugins/mock/index.ts`, hook `energyDays`)
+et le transport en mémoire du navigateur (`apps/web/src/api/mockTransport.ts`) le servent. Rien n'est enregistré : la série est fabriquée à chaque appel, aujourd'hui s'arrêtant à l'heure simulée.

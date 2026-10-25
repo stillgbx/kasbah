@@ -1,7 +1,7 @@
 # Énergie : mesures, historique et charge des véhicules
 
-> Dernière mise à jour : 2026-10-13
-> Sources : `packages/shared/src/devices/state.ts` (`energyStateSchema`, `evChargerStateSchema`), `packages/shared/src/devices/rules.ts` (`estimateChargePowerW`), `apps/server/src/core/history.ts`, `apps/server/src/core/chargeCoordination.ts`, `apps/server/src/core/plugin-host.ts` (`execute`, `onVehicleState`, `checkChargingClaim`), `apps/server/src/http/routes.ts` (`/api/devices/:id/history`) ; pages citées plus bas
+> Dernière mise à jour : 2026-10-25
+> Sources : `packages/shared/src/devices/state.ts` (`energyStateSchema`, `evChargerStateSchema`), `packages/shared/src/devices/rules.ts` (`estimateChargePowerW`), `apps/server/src/core/history.ts`, `apps/server/src/core/chargeCoordination.ts`, `apps/server/src/core/plugin-host.ts` (`execute`, `onVehicleState`, `checkChargingClaim`), `apps/server/src/http/routes.ts` (`/api/devices/:id/history`, `/api/devices/:id/energy-days`), `apps/server/src/plugins/enphase/days.ts` ; pages citées plus bas
 
 Page de synthèse, écrite au lint du 2026-10-13 : l'énergie était décrite par morceaux dans le contrat,
 le serveur, les plugins Enphase, Tesla et Renault et la vue Énergie. Elle décrit l'état du code à cette
@@ -74,3 +74,27 @@ de l'utilisateur, en connaissance de cause. Voir [3_7 Enphase](../3_plugins/3_7_
   « soufflent » ce qu'ils font. Voir [1_12 Scène 3D : objets dessinés](1_12_scene-3d-objets.md).
 - **Simulation** : panneaux simulés et exclusion en cascade (décocher l'énergie retire toute
   l'installation solaire). Voir [3_0 Simulation](../3_plugins/3_0_simulation-mock.md).
+
+### Mise à jour 2026-10-25 — un historique journalier persistant, à côté de celui des 48 h
+
+> Dépassé le 2026-10-25 : la section « Historique : en mémoire, à l'heure » ci-dessus reste vraie pour
+> l'**heure** (`EnergyHistory`, 48 h, en mémoire), mais ce n'est plus le seul historique : un
+> historique **par jour**, persistant, couvre la période depuis la mise en service.
+
+Les vues Semaine, Mois, Année et Total de la vue Énergie ne peuvent pas se bâtir sur 48 h de seaux
+horaires. Le site porte donc la capacité `energy_history` (kind `energy`) et sert ses totaux journaliers à
+la demande par `GET /api/devices/:id/energy-days` (`deviceEnergyDaysSchema`, `packages/shared/src/protocol/http.ts`) :
+`since`, `syncedAt`, `days[]` (production, consommation, import, export, charge, décharge, trois parts de
+la maison, borne) et, facultatif, `inverters` (Wh par jour de chaque micro-onduleur). Un champ que la
+source n'a pas rapporté est **absent**, jamais zéro. Un jour porte sa `source` (`vendor` : historique du
+cloud ; `local` : mesuré par le serveur) et `partial` quand le serveur ne l'a pas vu en entier.
+
+Deux principes, dont le détail (routes Enlighten, resynchro, fichiers d'état) est dans
+[3_7 Enphase](../3_plugins/3_7_enphase.md) :
+- **Des jours clés par date locale**, pas par instant : 23 ou 25 h aux changements d'heure.
+- **Ce qui est exact, ce qui est approché** : production et consommation viennent des compteurs du jour de
+  la passerelle ; réseau, batterie et parts de la maison sont intégrés depuis la puissance (10 s), donc
+  approchés ; la borne vient de l'énergie de session. **Aujourd'hui reste toujours local.**
+
+Le mécanisme est générique côté serveur (hook `energyDays?(externalId)` d'un plugin, relayé par
+`PluginHost.energyDays`) ; seuls Enphase et la simulation le fournissent.

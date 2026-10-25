@@ -48,8 +48,9 @@ export const CAPABILITIES = [
   'clean', 'dock', 'battery', 'locate', 'mop', 'mow', 'park', 'schedule', 'journal', 'work_areas', 'stay_out_zones', 'site_map', 'confirm_error',
   // sensor
   'measure',
-  // energy
-  'production', 'consumption', 'grid', 'storage',
+  // energy — `energy_history`: the site keeps DAILY totals, served on demand
+  // (`GET /api/devices/:id/energy-days`) for the week, month, year and lifetime views
+  'production', 'consumption', 'grid', 'storage', 'energy_history',
   // ev_charger — `charge_mode`: the charger's mode is chosen (green charging, manual), as in
   // the vendor's app; the state says the current mode (`chargeMode`)
   'charge_control', 'charge_current', 'charge_mode',
@@ -97,7 +98,7 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   vacuum: ['clean', 'dock', 'battery', 'locate', 'mop'],
   mower: ['mow', 'park', 'battery', 'schedule', 'journal', 'work_areas', 'stay_out_zones', 'site_map', 'confirm_error'],
   sensor: ['measure'],
-  energy: ['production', 'consumption', 'grid', 'storage'],
+  energy: ['production', 'consumption', 'grid', 'storage', 'energy_history'],
   ev_charger: ['charge_control', 'charge_current', 'charge_mode'],
   vehicle: ['soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'charge_power', 'climate_precondition', 'release_notes', 'software_update'],
   camera: ['live_stream', 'chime'],

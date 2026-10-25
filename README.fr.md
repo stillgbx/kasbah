@@ -220,7 +220,7 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 | **Ouvrants** | Volets, stores, portails : position, favori « my », gestes d'ensemble (sécuriser / ouvrir la maison, volets d'une pièce). |
 | **Médias** | Lecteurs Cast et Sonos : transport, volume, pochette, relais son (barre HDMI ARC). |
 | **Caméras** | Vignettes et direct (MSE / ffmpeg). |
-| **Énergie** | Schéma de flux (solaire, maison, réseau, batterie), champs de panneaux, historique. |
+| **Énergie** | Schéma de flux (solaire, maison, réseau, batterie), champs de panneaux, historique par période (instantané, jour, semaine, mois, année, total ; glissant ou calendaire). |
 | **Eau** | Station de filtration, débit, consommables, historique. |
 | **Chauffage** | Zones et machine (pompe à chaleur), historique de fonctionnement. |
 | **Véhicules** | Charge, carte (plan / satellite), réveil, limite de charge, carrosserie 3D, suivi des km d'une LOA. |

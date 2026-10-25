@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useElementSize, usePreferredReducedMotion } from '@vueuse/core'
 import type { StateFor } from '@kasbah/shared'
 import { IDLE_W } from '../../lib/energy'
+import { formatEnergyTotal, type EnergyTotals } from '../../lib/energyPeriods'
 import { formatPercent, formatPower } from '../../lib/format'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import type { IconName } from '../../lib/strokeIcons'
@@ -21,8 +22,17 @@ import type { IconName } from '../../lib/strokeIcons'
 //
 // Nothing moves when a value changes: the nodes are permanent, the three ring shares are always
 // listed (even at zero), and an idle flow keeps its line, in grey.
+//
+// Over a PERIOD (`totals`), the same diagram tells what flowed: energies instead of powers, the
+// ring from what fed the house over the period, and no dot — over a day or a year the current went
+// both ways, a direction would lie. `scale` says which period, under the title.
 
-const props = defineProps<{ energy: StateFor<'energy'>; charger?: StateFor<'ev_charger'> | undefined }>()
+const props = defineProps<{
+  energy: StateFor<'energy'>
+  charger?: StateFor<'ev_charger'> | undefined
+  totals?: EnergyTotals | null
+  scale?: string
+}>()
 const { t, locale } = useI18n()
 /** Unique ids: two diagrams on a page must not share their paths. */
 const uid = useId()
@@ -61,6 +71,17 @@ interface Flow { key: NodeKey; direction: 'in' | 'out' | 'idle'; watts: number }
  */
 const flows = computed<Flow[]>(() => {
   const s = e.value
+  const tt = props.totals
+  if (tt) {
+    // over a period: a source is lit when something flowed through it, whatever the direction
+    const lit = (key: NodeKey, wh: number): Flow => (wh > 0 ? { key, direction: 'in', watts: 0 } : { key, direction: 'idle', watts: 0 })
+    return [
+      lit('solar', tt.productionWh ?? 0),
+      lit('grid', (tt.importWh ?? 0) + (tt.exportWh ?? 0)),
+      lit('battery', (tt.chargeWh ?? 0) + (tt.dischargeWh ?? 0)),
+      lit('charger', tt.evseWh ?? 0),
+    ]
+  }
   const flow = (key: NodeKey, towardsHouse: number): Flow =>
     Math.abs(towardsHouse) < IDLE_W
       ? { key, direction: 'idle', watts: 0 }
@@ -119,6 +140,18 @@ const pathId = (key: NodeKey) => `flow-${uid}-${key}`
  */
 const mix = computed(() => {
   const s = e.value
+  const tt = props.totals
+  if (tt) {
+    // over a period, the vendor (or the server's integration) already split the house
+    const parts = { solar: tt.solarHomeWh ?? 0, battery: tt.batteryHomeWh ?? 0, grid: tt.gridHomeWh ?? 0 }
+    const total = parts.solar + parts.battery + parts.grid
+    const share = (wh: number) => (total > 0 ? wh / total : 0)
+    return [
+      { key: 'solar' as const, label: t('home.solar'), part: share(parts.solar) },
+      { key: 'battery' as const, label: t('energy.battery'), part: share(parts.battery) },
+      { key: 'grid' as const, label: t('energy.grid'), part: share(parts.grid) },
+    ]
+  }
   // same threshold as the lines: a source under `IDLE_W` makes no dot move, so it must not
   // claim a share of the ring — "1% battery" without an electron was confusing
   const over = (w: number) => (w >= IDLE_W ? w : 0)
@@ -152,9 +185,29 @@ const arcs = computed(() => {
 
 interface NodeView { key: NodeKey; icon: IconName; value: string; label: string; hint: string; shown: boolean }
 
+/** An energy of the period, or a dash when no day carried it. */
+const wh = (v: number | undefined) => (v === undefined ? '—' : formatEnergyTotal(v, locale.value))
+
 const nodes = computed<NodeView[]>(() => {
   const s = e.value
   const battW = s.batteryW ?? 0
+  const tt = props.totals
+  const hasBattery = s.batterySoc !== undefined || s.batteryW !== undefined
+  if (tt) {
+    // the value is what came INTO the house's side (import, discharge), the hint what went the other way
+    return [
+      { key: 'solar', icon: 'solar', value: wh(tt.productionWh), label: t('energy.production'), hint: '', shown: true },
+      {
+        key: 'battery', icon: 'battery', value: wh(tt.dischargeWh), label: t('energy.battery'),
+        hint: tt.chargeWh !== undefined ? t('energy.periodCharged', { e: wh(tt.chargeWh) }) : '', shown: hasBattery,
+      },
+      {
+        key: 'grid', icon: 'grid', value: wh(tt.importWh), label: t('energy.grid'),
+        hint: tt.exportWh !== undefined ? t('energy.periodExported', { e: wh(tt.exportWh) }) : '', shown: true,
+      },
+      { key: 'charger', icon: 'charger', value: wh(tt.evseWh), label: t('energy.charger'), hint: '', shown: !!props.charger },
+    ]
+  }
   return [
     { key: 'solar', icon: 'solar', value: formatPower(s.productionW, locale.value), label: t('energy.production'), hint: '', shown: true },
     {
@@ -166,7 +219,7 @@ const nodes = computed<NodeView[]>(() => {
       hint: s.batteryW === undefined ? ''
         : idle('battery') ? t('energy.idle')
         : `${t(battW >= 0 ? 'energy.charging' : 'energy.discharging')} ${formatPower(Math.abs(battW), locale.value)}`,
-      shown: s.batterySoc !== undefined || s.batteryW !== undefined,
+      shown: hasBattery,
     },
     {
       key: 'grid', icon: 'grid', value: formatPower(Math.abs(s.gridW), locale.value),
@@ -188,7 +241,7 @@ const shown = (key: NodeKey) => nodes.value.find((n) => n.key === key)!.shown
          the row do not speak of the same time scale, and nothing said so. -->
     <div class="flow__head">
       <div class="flow__title">{{ $t('energy.flowTitle') }}</div>
-      <div class="muted flow__scale">{{ $t('energy.instant') }}</div>
+      <div class="muted flow__scale">{{ scale ?? $t('energy.instant') }}</div>
     </div>
     <!-- The frame clips, the scene keeps its minimum width: below it, the four nodes and the
          ring CANNOT fit side by side, and overlapped instead of being readable. -->
@@ -200,7 +253,7 @@ const shown = (key: NodeKey) => nodes.value.find((n) => n.key === key)!.shown
           </template>
           <!-- a single dot per active path, slow: it goes from the source to the house, or the reverse -->
           <template v-for="f in flows" :key="`dot-${f.key}`">
-            <g v-if="shown(f.key) && f.direction !== 'idle'" class="flow__dot">
+            <g v-if="shown(f.key) && f.direction !== 'idle' && !totals" class="flow__dot">
               <circle class="flow__halo" :r="DOT.halo" />
               <circle class="flow__core" :r="DOT.core" />
               <animateMotion v-if="reduced !== 'reduce'" :dur="duration(f.watts)" repeatCount="indefinite"
@@ -222,7 +275,7 @@ const shown = (key: NodeKey) => nodes.value.find((n) => n.key === key)!.shown
           </svg>
           <div class="hub__inner">
             <StrokeIcon class="hub__icon" name="home" :size="18" />
-            <span class="hub__value">{{ formatPower(e.consumptionW, locale) }}</span>
+            <span class="hub__value">{{ totals ? wh(totals.consumptionWh) : formatPower(e.consumptionW, locale) }}</span>
             <span class="muted hub__label">{{ $t('energy.house') }}</span>
           </div>
         </div>
@@ -312,7 +365,8 @@ const shown = (key: NodeKey) => nodes.value.find((n) => n.key === key)!.shown
 .node[data-on='1'] { border-color: var(--accent); }
 .node__icon { display: inline-flex; color: var(--muted); }
 .node[data-on='1'] .node__icon { color: var(--accent); }
-.node__value { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+/* never on two lines: a year in kWh ("1 426 kWh") folded its unit under the number */
+.node__value { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .node__label { font-size: 12px; }
 .node__hint { font-size: 11px; min-height: 1.2em; white-space: nowrap; }
 </style>

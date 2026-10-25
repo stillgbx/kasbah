@@ -280,6 +280,13 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       }
     },
     async getConsumption(deviceId) { return mockConsumption(deviceId) },
+    async getEnergyDays(deviceId) {
+      try { return { deviceId, ...sim.energyDays(deviceId.replace(/^mock:/, '')) } }
+      catch (err) {
+        if (err instanceof SimError) throw new ApiRequestError(STATUS[err.code] ?? 500, err.code, err.message)
+        throw err
+      }
+    },
     async placeDevice(id, placement) {
       // same logic as the server, in memory (nothing is written); the `house` message follows as in real life
       house = parseHouse(placeDeviceInJson(house, id, placement))
@@ -382,6 +389,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async nestAuthUrl() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Google account in mock mode') },
     async enphaseTokenStatus() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no IQ Gateway in mock mode') },
     async pairEnphase() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no IQ Gateway in mock mode') },
+    async syncEnphaseHistory() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no IQ Gateway in mock mode') },
     async teslaStatus() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Tesla account in mock mode') },
     async teslaRegister() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Tesla account in mock mode') },
     async teslaAuthUrl() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Tesla account in mock mode') },

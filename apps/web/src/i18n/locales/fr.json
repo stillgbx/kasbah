@@ -244,7 +244,17 @@
     "today": "Aujourd'hui", "selfConsumption": "autoconsommation", "mix": "Origine de la consommation", "flowTitle": "Flux d'énergie", "productionToday": "Production du jour", "kWhToday": "kWh produits",
     "charger": "Borne", "noData": "Aucun appareil énergie", "noHistory": "L'historique se remplit au fil de la journée.",
     "instant": "Instantané", "localHistory": "Historique local",
-    "maxReported": "Record", "invertersLoose": "Hors champ", "noSlot": "Aucun emplacement"
+    "maxReported": "Record", "invertersLoose": "Hors champ", "noSlot": "Aucun emplacement",
+    "periods": {"instant": "Instantané", "day": "Jour", "week": "Semaine", "month": "Mois", "year": "Année", "lifetime": "Total"},
+    "modes": {"rolling": "Glissant", "calendar": "Calendaire"},
+    "periodLabel": "Période",
+    "modeLabel": "Découpage de la période",
+    "scale": {"rolling": {"week": "7 derniers jours", "month": "31 derniers jours", "year": "12 derniers mois"}, "thisWeek": "Cette semaine", "lifetime": "Depuis le {date}", "lifetimeUnknown": "Depuis le début de l'historique"},
+    "incomplete": "incomplet",
+    "periodCharged": "chargé {e}",
+    "periodExported": "injecté {e}",
+    "produced": "produits",
+    "noPeriodHistory": "Aucun historique sur cette période."
   },
   "camera": {
     "online": "En ligne", "classes": { "camera": "Caméra", "doorbell": "Sonnette", "display": "Écran" },
@@ -576,7 +586,27 @@
       "notStored": "Aucun fichier de jeton n'est configuré (ENPHASE_TOKEN_FILE est vide) : l'appairage sera perdu au redémarrage du serveur.",
       "cloudLinked": "Compte Enlighten lié : la borne pourra être lue. Session gardée dans {file}.",
       "cloudLinkedNoFile": "Compte Enlighten lié pour cette session seulement (ENPHASE_CLOUD_FILE est vide).",
-      "cloudNeeded": "Pour la borne, appairer avec le compte Enphase : un jeton collé n'ouvre pas le cloud."
+      "cloudNeeded": "Pour la borne, appairer avec le compte Enphase : un jeton collé n'ouvre pas le cloud.",
+      "history": {
+        "title": "Historique de production",
+        "never": "L'historique d'Enphase n'a pas encore été récupéré. Kasbah compte les jours lui-même depuis sa mise en route.",
+        "synced": "{days} jours depuis le {since}, récupérés auprès d'Enphase le {at}. Depuis, Kasbah compte les jours lui-même.",
+        "syncing": "Récupération de l'historique d'Enphase…",
+        "resync": "Resynchroniser",
+        "resyncHint": "Reprend chez Enphase les jours incomplets ou absents, après une installation neuve ou un arrêt du serveur. « Tout reprendre » refait tous les jours. Aujourd'hui reste compté par Kasbah.",
+        "needsAccount": "Pour récupérer l'historique d'Enphase, validez le compte Enphase ci-dessus : un jeton collé n'ouvre pas le cloud.",
+        "failed": "Dernière tentative en échec : {message}",
+        "invertersNever": "Onduleurs : historique jour par jour pas encore récupéré.",
+        "invertersProgress": "Onduleurs : {done} jours sur {total} récupérés, un appel par jour…",
+        "invertersSynced": "Onduleurs : jour par jour récupérés le {at}.",
+        "force": "Tout reprendre",
+        "willTake": "Reprendra {n} jour incomplet. | Reprendra {n} jours incomplets.",
+        "willTakeAll": "Reprendra {n} jour. | Reprendra les {n} jours.",
+        "allComplete": "Tous les jours sont complets : rien à reprendre.",
+        "stripLabel": "État de chaque jour depuis la mise en service",
+        "legend": {"c": "complet", "p": "incomplet", "m": "absent"},
+        "done": "{days} jours récupérés."
+      }
     },
     "renault": {
       "title": "Renault",

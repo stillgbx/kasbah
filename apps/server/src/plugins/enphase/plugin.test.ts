@@ -12,6 +12,8 @@ import { createEnphasePlugin, enphaseConfigSchema } from './index'
 import { PANEL_STALE_MS } from './mapping'
 import type { TokenStore } from './token'
 import type { CloudStore, CloudSession } from './cloud'
+import type { DaysStore, EnergyDays } from './days'
+import type { InverterDays, InverterDaysStore } from './inverterDays'
 
 // IQ Gateway pairing. The point watched here: the Enphase account credentials PASS THROUGH the route
 // and vanish — they are neither cached, nor sent back to the UI, nor required in the configuration.
@@ -33,6 +35,12 @@ const FIXTURES: Record<string, unknown> = {
   '/ivp/livedata/status': LIVEDATA,
   '/ivp/ensemble/inventory': ENSEMBLE_INVENTORY,
   '/ivp/ensemble/power': ENSEMBLE_POWER,
+  // shape of the real gateway (D8.3), invented serials and values
+  '/ivp/pdm/device_data': {
+    '1001': { devName: 'pcu', sn: '100000000001', channels: [{ wattHours: { today: 1200, yesterday: 0, week: 0 }, lifetime: { joulesProduced: 3_600_000_000 } }] },
+    '1002': { devName: 'pcu', sn: '100000000002', channels: [{ wattHours: { today: 1100, yesterday: 0, week: 0 }, lifetime: { joulesProduced: 7_200_000_000 } }] },
+    deviceCount: 2,
+  },
 }
 
 function jwt(claims: Record<string, unknown>): string {
@@ -43,6 +51,9 @@ const token = (days: number, over: Record<string, unknown> = {}) => jwt({
   aud: SERIAL, enphaseUser: 'owner', username: 'toit@exemple.fr',
   exp: Math.floor((NOW + days * DAY) / 1000), ...over,
 })
+
+/** Enphase's daily history, invented: three whole days before today (NOW is the 11th). */
+const LIFETIME = { start_date: '2026-09-08', production: [1000, 2000, 3000, 4000], consumption: [500, null, 700, 800] }
 
 const response = (text: string, status = 200) => ({
   ok: status < 400, status, body: null,
@@ -80,6 +91,14 @@ function fakeCloud(minted = token(365)) {
     if (url.includes('/tokens')) return response(minted)
     if (url.includes('search_sites')) return response(JSON.stringify({ sites: [{ id: 1000001, title: 'Maison' }] }))
     if (url.includes('/users/self/token')) return response('{"token":"access-1"}')
+    if (url.includes('/pv/systems/1000001/lifetime_energy')) return response(JSON.stringify(LIFETIME))
+    if (url.includes('/pv/systems/1000001/array_layout_x')) return response(JSON.stringify({ arrays: [{ modules: [
+      { inverter: { inverter_id: 900000001, serial_num: '100000000001' } }, { inverter: { inverter_id: 900000002, serial_num: '100000000002' } },
+    ] }] }))
+    if (url.includes('/inverter_data_x/energy.json')) {
+      const day = Number(/start_date=\d{4}-\d{2}-(\d{2})/.exec(url)![1])
+      return response(JSON.stringify({ production: { 900000001: day * 100, 900000002: day * 100 + 1 } }))
+    }
     if (url.includes('/ev_chargers/status') && url.includes('/api/v2/')) return response(JSON.stringify({ data: {} }))
     if (url.includes('/ev_chargers/status')) return response(JSON.stringify(EVSE_STATUS))
     if (url.includes('/ev_chargers/summary')) return response(JSON.stringify(EVSE_SUMMARY))
@@ -99,6 +118,24 @@ function memoryStore(): TokenStore & { value: string | null } {
   return store
 }
 
+function memoryDays(): DaysStore & { saved: unknown } {
+  const store = {
+    saved: null as unknown,
+    load: async (days: EnergyDays) => { if (store.saved) days.restore(store.saved) },
+    save: async (days: EnergyDays) => { store.saved = JSON.parse(JSON.stringify(days)); days.dirty = false },
+  }
+  return store
+}
+
+function memoryInverters(): InverterDaysStore & { saved: unknown } {
+  const store = {
+    saved: null as unknown,
+    load: async (days: InverterDays) => { if (store.saved) days.restore(store.saved) },
+    save: async (days: InverterDays) => { store.saved = JSON.parse(JSON.stringify(days)); days.dirty = false },
+  }
+  return store
+}
+
 function memoryCloud(): CloudStore & { value: CloudSession | null } {
   const store = {
     value: null as CloudSession | null,
@@ -114,14 +151,18 @@ async function started(over: {
   cloud?: ReturnType<typeof fakeCloud>
   store?: ReturnType<typeof memoryStore>
   cloudStore?: ReturnType<typeof memoryCloud>
+  daysStore?: ReturnType<typeof memoryDays>
+  inverterDaysStore?: ReturnType<typeof memoryInverters>
   parts?: Record<string, boolean>
 } = {}) {
   const gateway = over.gateway ?? fakeGateway()
   const cloud = over.cloud ?? fakeCloud()
   const store = over.store ?? memoryStore()
   const cloudStore = over.cloudStore ?? memoryCloud()
+  const daysStore = over.daysStore ?? memoryDays()
+  const inverterDaysStore = over.inverterDaysStore ?? memoryInverters()
   const plugin = createEnphasePlugin({
-    gatewayFetch: gateway.fetchImpl, cloudFetch: cloud.fetchImpl, store, cloudStore,
+    gatewayFetch: gateway.fetchImpl, cloudFetch: cloud.fetchImpl, store, cloudStore, daysStore, inverterDaysStore,
   })
   const clock = new ManualClock(NOW)
   const ctx: PluginContext = {
@@ -135,7 +176,7 @@ async function started(over: {
   const app = Fastify()
   app.register(async (sub) => plugin.registerRoutes!(sub), { prefix: '/api/plugins/enphase' })
   await app.ready()
-  return { plugin, app, gateway, cloud, store, cloudStore, ctx, clock }
+  return { plugin, app, gateway, cloud, store, cloudStore, daysStore, inverterDaysStore, ctx, clock }
 }
 
 /** Lets in-flight promises resolve (the pollers run on the injected clock). */
@@ -165,7 +206,7 @@ describe('unpaired gateway', () => {
 
   it('the keys listed in Settings contain no account credential', async () => {
     const { plugin } = await started()
-    expect(plugin.health!().keys).toEqual(['ENPHASE_HOST', 'ENPHASE_TOKEN', 'ENPHASE_TOKEN_FILE', 'ENPHASE_CLOUD_FILE'])
+    expect(plugin.health!().keys).toEqual(['ENPHASE_HOST', 'ENPHASE_TOKEN', 'ENPHASE_TOKEN_FILE', 'ENPHASE_CLOUD_FILE', 'ENPHASE_DAYS_FILE', 'ENPHASE_INVERTER_DAYS_FILE'])
     expect(Object.keys(enphaseConfigSchema.shape)).not.toContain('ENPHASE_PASSWORD')
     expect(plugin.parts).toEqual([{ id: 'ev_charger', labelKey: 'kinds.ev_charger', enabledByDefault: true }])
   })
@@ -342,6 +383,118 @@ describe('raw reading (to write the mapping fixtures)', () => {
     expect(raw.hasAccessToken).toBe(true)
     expect(res.body).not.toContain('access-1')
     expect(cloud.calls.some((c) => c.url.includes('/ev_chargers/status') || c.url.includes('search_sites'))).toBe(true)
+  })
+})
+
+describe('daily history', () => {
+  const lifetimeCalls = (cloud: ReturnType<typeof fakeCloud>) => cloud.calls.filter((c) => c.url.includes('/lifetime_energy'))
+  const paired = async () => {
+    const t = token(300)
+    return started({ env: { ENPHASE_TOKEN: t }, gateway: fakeGateway({ accept: t }) })
+  }
+
+  it("an account pairing fetches Enphase's history once, today excluded, a null left out", async () => {
+    const { plugin, app, cloud, daysStore } = await started()
+    expect((await post(app, { user: 'u', password: 'p' })).statusCode).toBe(200)
+    await settle(); await settle()
+    expect(lifetimeCalls(cloud)).toHaveLength(1)
+    const history = await plugin.energyDays!('site')
+    expect(history.days.map((d) => [d.source, d.productionWh, d.consumptionWh])).toEqual([
+      ['vendor', 1000, 500], ['vendor', 2000, undefined], ['vendor', 3000, 700],
+    ])
+    expect(history.syncedAt).toBe(NOW)
+    expect(daysStore.saved).not.toBeNull()
+    expect((await get(app, '/token')).json()).toMatchObject({ history: { days: 3, syncedAt: NOW, syncing: false, error: null } })
+  })
+
+  it('at startup, a linked account and an empty history synchronize; a history already synced does not', async () => {
+    const cloudStore = memoryCloud()
+    cloudStore.value = { sessionId: 'sess-1', cookie: 'c', siteId: '1000001' }
+    const first = await started({ cloudStore, parts: { ev_charger: false } })
+    await first.plugin.start(); await settle(); await settle()
+    expect(lifetimeCalls(first.cloud)).toHaveLength(1)
+    await first.plugin.stop()
+
+    const again = await started({ cloudStore, daysStore: first.daysStore, parts: { ev_charger: false } })
+    await again.plugin.start(); await settle(); await settle()
+    expect(lifetimeCalls(again.cloud)).toHaveLength(0)
+    expect((await again.plugin.energyDays!('site')).days).toHaveLength(3)
+    await again.plugin.stop()
+  })
+
+  it('the button synchronizes again; without the account it says why', async () => {
+    const { app } = await started()
+    const refused = await app.inject({ method: 'POST', url: '/api/plugins/enphase/history/sync' })
+    expect(refused.statusCode).toBe(409)
+    expect(refused.json()).toMatchObject({ error: { code: 'NEEDS_PAIRING' } })
+    expect((await get(app, '/token')).json()).toMatchObject({ history: { error: expect.stringContaining('Enphase account') } })
+
+    await post(app, { user: 'u', password: 'p' })
+    await settle(); await settle()
+    const ok = await app.inject({ method: 'POST', url: '/api/plugins/enphase/history/sync' })
+    expect(ok.statusCode).toBe(200)
+    expect(ok.json()).toMatchObject({ history: { days: 3, error: null } })
+  })
+
+  it("the polls feed today's day: the gateway's counters for production and consumption", async () => {
+    const { plugin } = await paired()
+    await plugin.discover()
+    await plugin.start()
+    await settle()
+    const today = (await plugin.energyDays!('site')).days.at(-1)
+    expect(today).toMatchObject({ source: 'local' })
+    expect(today!.productionWh).toBeGreaterThan(0)
+    expect(today!.consumptionWh).toBeGreaterThan(0)
+    await plugin.stop()
+  })
+
+  it("then fetches each inverter's days, one call per day, through the id ↔ serial map", async () => {
+    const { plugin, app, cloud, clock, inverterDaysStore } = await started()
+    await post(app, { user: 'u', password: 'p' })
+    for (let i = 0; i < 8; i++) { clock.advance(2000); await settle(); await settle() }
+    const calls = cloud.calls.filter((c) => c.url.includes('/inverter_data_x/energy.json'))
+    // the 8th, 9th and 10th: from commissioning to yesterday (today is the 11th)
+    expect(calls.map((c) => /start_date=([\d-]+)/.exec(c.url)![1])).toEqual(['2026-09-08', '2026-09-09', '2026-09-10'])
+    const inv = (await plugin.energyDays!('site')).inverters!
+    expect(inv.devices.map((d) => d.wh.slice(0, 3))).toEqual([[800, 900, 1000], [801, 901, 1001]])
+    expect(inv.syncedAt).not.toBeNull()
+    expect(inverterDaysStore.saved).not.toBeNull()
+    expect((await get(app, '/token')).json()).toMatchObject({ history: { inverters: { done: null, error: null } } })
+  })
+
+  it("the gateway's polls give each inverter today's production and its lifetime counter", async () => {
+    const { plugin } = await paired()
+    await plugin.discover()
+    await plugin.start()
+    await settle()
+    const inv = (await plugin.energyDays!('site')).inverters!
+    expect(inv.devices).toEqual([
+      { externalId: '100000000001', lifetimeWh: 1_000_000, wh: [1200] },
+      { externalId: '100000000002', lifetimeWh: 2_000_000, wh: [1100] },
+    ])
+    await plugin.stop()
+  })
+
+  it('tells the state of every past day, and a smart resync asks Enphase only for the incomplete ones', async () => {
+    const { app, cloud, clock } = await started()
+    await post(app, { user: 'u', password: 'p' })
+    for (let i = 0; i < 8; i++) { clock.advance(2000); await settle(); await settle() }
+    // the 9th has no consumption from Enphase but production: complete; every day is there
+    expect((await get(app, '/token')).json()).toMatchObject({ history: { coverage: { days: 'ccc' } } })
+    const before = cloud.calls.filter((c) => c.url.includes('/inverter_data_x/energy.json')).length
+    const smart = await app.inject({ method: 'POST', url: '/api/plugins/enphase/history/sync', payload: {} })
+    expect(smart.statusCode).toBe(200)
+    for (let i = 0; i < 8; i++) { clock.advance(2000); await settle(); await settle() }
+    expect(cloud.calls.filter((c) => c.url.includes('/inverter_data_x/energy.json')).length).toBe(before)
+    // "Take everything again": every day is asked again
+    await app.inject({ method: 'POST', url: '/api/plugins/enphase/history/sync', payload: { force: true } })
+    for (let i = 0; i < 8; i++) { clock.advance(2000); await settle(); await settle() }
+    expect(cloud.calls.filter((c) => c.url.includes('/inverter_data_x/energy.json')).length).toBe(before + 3)
+  })
+
+  it('serves no history for another device', async () => {
+    const { plugin } = await paired()
+    await expect(plugin.energyDays!('482000000001')).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' })
   })
 })
 

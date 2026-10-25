@@ -81,7 +81,8 @@ export function toDescriptors(inv: Inventory): DeviceDescriptor[] {
   const hasStorage = inv.batteries.length > 0
   const site = descriptor(
     SITE_ID, 'energy', 'Installation solaire',
-    ['production', 'consumption', 'grid', ...(hasStorage ? (['storage'] as const) : [])],
+    // `energy_history`: the plugin keeps the site's daily totals (`days.ts`)
+    ['production', 'consumption', 'grid', ...(hasStorage ? (['storage'] as const) : []), 'energy_history'],
     { manufacturer: 'Enphase', model: 'IQ Gateway' },
   )
   const panels = inv.inverters.map((i) => descriptor(

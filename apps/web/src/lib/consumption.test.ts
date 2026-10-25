@@ -46,3 +46,29 @@ describe('bucketSlots', () => {
     expect(slots.filter((s) => s.litres !== null)).toHaveLength(24)
   })
 })
+
+describe('bucketSlots — calendar', () => {
+  // Wednesday 2026-06-17, 15:00 local
+  const now = new Date(2026, 5, 17, 15).getTime()
+  const day = (d: number, m = 5) => new Date(2026, m, d).getTime()
+
+  it('the week runs Monday to Sunday, the days to come stay empty', () => {
+    const points = [15, 16, 17].map((d) => ({ t: day(d), litres: d }))
+    const slots = bucketSlots(points, 'week', now, 'calendar')
+    expect(slots.map((s) => s.t)).toEqual([15, 16, 17, 18, 19, 20, 21].map((d) => day(d)))
+    expect(slots.map((s) => s.litres)).toEqual([15, 16, 17, null, null, null, null])
+  })
+
+  it('the month from the 1st to its last day, the year from January to December', () => {
+    expect(bucketSlots([], 'month', now, 'calendar').map((s) => s.t)).toEqual(Array.from({ length: 30 }, (_, i) => day(i + 1)))
+    const months = bucketSlots([{ t: day(1, 5), litres: 6 }], 'year', now, 'calendar')
+    expect(months.map((s) => s.t)).toEqual(Array.from({ length: 12 }, (_, m) => day(1, m)))
+    expect(months[5]!.litres).toBe(6)
+  })
+
+  it('rolling stays the default: the last 7 days end today', () => {
+    const slots = bucketSlots([], 'week', now)
+    expect(slots.at(-1)!.t).toBe(day(17))
+    expect(slots[0]!.t).toBe(day(11))
+  })
+})

@@ -220,7 +220,7 @@ On a large (landscape) screen, a three-column layout: the **rail** on the left, 
 | **Covers** | Shutters, blinds, gates: position, “my” favorite, house-wide actions (secure / open the house, a room's shutters). |
 | **Media** | Cast and Sonos players: transport, volume, artwork, audio relay (HDMI ARC soundbar). |
 | **Cameras** | Thumbnails and live view (MSE / ffmpeg). |
-| **Energy** | Flow diagram (solar, house, grid, battery), panel arrays, history. |
+| **Energy** | Flow diagram (solar, house, grid, battery), panel arrays, history by period (live, day, week, month, year, lifetime; rolling or calendar). |
 | **Water** | Filtration station, flow rate, consumables, history. |
 | **Heating** | Zones and machine (heat pump), operating history. |
 | **Vehicles** | Charging, map (street / satellite), wake-up, charge limit, 3D body, mileage tracking for a lease. |
