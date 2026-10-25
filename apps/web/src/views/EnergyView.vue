@@ -10,7 +10,7 @@ import EnergyFlow from '../components/energy/EnergyFlow.vue'
 import InverterFields from '../components/energy/InverterFields.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import { useHomeSummary } from '../composables/useHomeSummary'
-import type { PeriodMode } from '../lib/consumption'
+import { calendarTitle, type PeriodMode } from '../lib/consumption'
 import { findEnergySite } from '../lib/energy'
 import { ENERGY_PERIODS, MODE_PERIODS, formatEnergyTotal, inverterTotals, periodBars, periodTotals, type EnergyPeriod } from '../lib/energyPeriods'
 import { formatEnergy, formatPower } from '../lib/format'
@@ -89,10 +89,7 @@ const scale = computed(() => {
       : t('energy.scale.lifetimeUnknown')
   }
   if (mode.value === 'rolling') return t(`energy.scale.rolling.${p}`)
-  const d = new Date(now.value)
-  if (p === 'week') return t('energy.scale.thisWeek')
-  if (p === 'month') { const m = d.toLocaleDateString(locale.value, { month: 'long', year: 'numeric' }); return m.charAt(0).toUpperCase() + m.slice(1) }
-  return String(d.getFullYear())
+  return p === 'month' || p === 'year' ? calendarTitle(p, now.value, locale.value) : t('energy.scale.thisWeek')
 })
 /** The period as the inverters' cells show it: their own totals, under the same scale as the blocks above. */
 const inverterPeriod = computed(() => (periodic.value && days.value?.inverters

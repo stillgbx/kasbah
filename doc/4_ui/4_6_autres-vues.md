@@ -1,6 +1,6 @@
 # Autres vues : Météo, Robots, Eau, Chauffage, Animaux, Agenda, École, Courses, Automatisations
 
-> Dernière mise à jour : 2026-10-21
+> Dernière mise à jour : 2026-10-25
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre les vues propres à un domaine : Météo et radar, Robots (tondeuse, aspirateur), Eau, Chauffage, Animaux, Agenda, École, Courses, Automatisations. Elle est née du découpage de
@@ -1201,3 +1201,43 @@ toute la largeur de la ligne et fassent la même taille, placer le taux d'humidi
   (`min-height: 36px`) : mesuré, carte, touches et humidité immobiles entre chauffage, éco et arrêt.
 - Vérifié en mode simulé à 1280 / 853 / 375 px, clair et sombre, fr et en (le cas Nest à trois modes
   simulé en réduisant les modes du thermostat de démo dans le store). Test : `HeatingControl.test.ts`.
+
+### Mise à jour 2026-10-25 — Eau et Chauffage : découpage glissant ou calendaire
+
+Demande : le même choix **Glissant / Calendaire** que la vue Énergie
+([4_4](4_4_vues-energie-vehicules.md), même date) sur les autres graphes d'historique. Chaque graphe
+reçoit un second `Segmented` dense à côté du sélecteur de fenêtre, avec les libellés de l'Énergie
+(`energy.modes.*`, `energy.modeLabel`). Il est **grisé, jamais masqué**, pour les fenêtres qu'il ne
+change pas : les 48 h du chauffage, le jour de l'eau (et de la lumière, [4_3](4_3_vues-lumieres-ouvrants-cameras.md)),
+qui restent glissants. Glissant reste le défaut ; le choix n'est pas mémorisé.
+
+- **Calendaire** = semaine depuis lundi, mois depuis le 1er (28 à 31 pas), année depuis janvier,
+  par `bucketSlots(…, mode)` (`lib/consumption.ts`). Un pas **encore à venir** ne dessine rien : ni
+  barre, ni tiret « non mesuré » (le tiret garde son sens : un pas passé sans mesure).
+- **Titres** : le nom de la fenêtre, comme l'Énergie avec `scale`. Eau : la ligne du total devient
+  « Cette semaine : … », « Octobre 2026 : … », « 2026 : … » (`water.consumptionTotalIn`) ; Chauffage :
+  le sous-titre devient « Cette semaine », « Octobre 2026 », « 2026 ». Le mois et l'année viennent de
+  `calendarTitle()` (`lib/consumption.ts`), que la vue Énergie reprend aussi.
+- **Eau, mention « X jours sur N mesurés »** : N compte les pas **commencés**, sinon chaque mois
+  calendaire aurait dit « 25 sur 31 » le 25.
+- **Eau, totaux** : les compteurs semaine / mois de la station restent affichés tels quels dans les
+  deux modes ; leur nature calendaire ou glissante n'est toujours pas tranchée
+  ([3_12](../3_plugins/3_12_comap-proteo.md)). L'année calendaire somme les mois de janvier à maintenant.
+- **Chauffage, année calendaire** : les mois sommés côté client (`byMonth`) tombent pile sur les 1er
+  janvier → 1er décembre ; décembre de l'an passé n'entre pas (test `HeatingHistoryChart.test.ts`).
+- **Mise en page** : les sélecteurs passent sous le titre quand ils ne tiennent pas à côté, alignés au
+  début (un sélecteur plus large que la carte déborde à droite, jamais hors de l'écran à gauche). En
+  dessous de 560 px, l'en-tête du chauffage passe à la ligne : à 375 px il débordait déjà de 131 px
+  avant ce changement (titre, quatre fenêtres et chiffre sur une ligne insécable) ; il tient désormais
+  au zoom 1.
+
+Vérifié dans la preview `kasbah-mock` (réponses MELCloud injectées dans le transport, comme le
+2026-10-21) : cadres immobiles (écart 0 px, mesure `getBoundingClientRect`) entre toutes les fenêtres
+et les deux modes, à 1280 et 375 px, zooms 1 / 1,25 / 1,5, fr et en ; mois calendaire = 25 barres et
+6 jours vides le 25 octobre. **Reste** : le sélecteur de fenêtre à quatre choix est plus large que la
+carte à 375 px au zoom ≥ 1,25 (et celui du chauffage dans sa demi-carte à 1280 px au zoom ≥ 1,25, fr) ;
+c'était déjà le cas avant.
+
+Sources : `apps/web/src/components/water/WaterConsumptionChart.vue`,
+`apps/web/src/components/heating/HeatingHistoryChart.vue` (+ `HeatingHistoryChart.test.ts`),
+`apps/web/src/lib/consumption.ts` (+ `consumption.test.ts`), `apps/web/src/i18n/locales/{fr,en}.json`.

@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useIntervalFn } from '@vueuse/core'
 import type { HeatingPoint } from '../../api/transport'
-import { bucketSlots, type ConsumptionPeriod } from '../../lib/consumption'
+import { bucketSlots, calendarTitle, type ConsumptionPeriod, type PeriodMode } from '../../lib/consumption'
 import { formatRunTime, formatTemp } from '../../lib/format'
 import Segmented from '../ui/Segmented.vue'
 
@@ -18,7 +18,8 @@ import Segmented from '../ui/Segmented.vue'
 //
 // Four windows (asked for on 2026-10-21): 48 h and their hours, the week and the month in days,
 // the year in months. The server keeps a week of hours and thirteen months of days; the months
-// are summed here from the days.
+// are summed here from the days. The week, the month and the year cut rolling or calendar, as in the
+// Energy view (asked for on 2026-10-25).
 //
 // Nothing moves: the plot area has a FIXED height and each window always reserves its number of
 // steps, whether the history is empty, young or complete. A step never polled stays a dashed
@@ -31,6 +32,13 @@ type Range = 'h48' | 'week' | 'month' | 'year'
 const RANGES: readonly Range[] = ['h48', 'week', 'month', 'year']
 const range = ref<Range>('h48')
 const rangeOptions = computed(() => RANGES.map((r) => ({ value: r, label: t(`heating.history.ranges.${r}`) })))
+/** Rolling (the last 7 days, 31 days, 12 months) or calendar (this week, this month, this year): greyed
+ * rather than hidden for the 48 h, which it does not change — the row keeps its shape. */
+const mode = ref<PeriodMode>('rolling')
+const modeOptions = computed(() => (['rolling', 'calendar'] as const).map((m) => ({
+  value: m, label: t(`energy.modes.${m}`), disabled: range.value === 'h48',
+})))
+const calendar = computed(() => mode.value === 'calendar' && range.value !== 'h48')
 
 const HOURS = 48
 const HOUR_MS = 3_600_000
@@ -75,12 +83,19 @@ const slots = computed<Slot[]>(() => {
   const period: ConsumptionPeriod = range.value
   const months = period === 'year' ? byMonth(props.daily) : null
   const pts = months ?? props.daily
-  return bucketSlots(pts.map((p, i) => ({ t: p.t, litres: i })), period, now.value).map((s) => {
+  return bucketSlots(pts.map((p, i) => ({ t: p.t, litres: i })), period, now.value, mode.value).map((s) => {
     if (s.litres === null) return gap(s.t)
     const p = pts[s.litres]!
     const slot = slotOf(s.t, p, 24)
     return months ? { ...slot, hours: months[s.litres]!.hours } : slot
   })
+})
+
+/** Which window the chart covers, under its title. */
+const scale = computed(() => {
+  const r = range.value
+  if (!calendar.value || r === 'h48') return t(`heating.history.windows.${r}`)
+  return r === 'week' ? t('energy.scale.thisWeek') : calendarTitle(r, now.value, locale.value)
 })
 
 const VB_H = 100
@@ -142,9 +157,12 @@ function tickLabel(at: number): string {
     <div class="hist__head">
       <div>
         <div class="hist__title">{{ $t('heating.history.title') }}</div>
-        <div class="muted small">{{ $t(`heating.history.windows.${range}`) }}</div>
+        <div class="muted small">{{ scale }}</div>
       </div>
-      <Segmented v-model="range" :options="rangeOptions" dense class="hist__ranges" />
+      <div class="hist__ranges">
+        <Segmented v-model="range" :options="rangeOptions" dense />
+        <Segmented v-model="mode" :options="modeOptions" dense :label="$t('energy.modeLabel')" />
+      </div>
       <div class="hist__stat">
         <div class="hist__value">{{ empty ? '—' : runLabel }}</div>
         <div class="muted small">{{ $t('heating.history.run') }}</div>
@@ -155,8 +173,8 @@ function tickLabel(at: number): string {
       <p v-if="empty" class="muted small hist__empty">{{ $t('heating.history.filling', { min: Math.round(pollMs / 60000) }) }}</p>
       <svg v-else class="hist__svg" :viewBox="`0 0 ${vbW} ${VB_H}`" preserveAspectRatio="none" role="img"
            :aria-label="$t('heating.history.title')">
-        <!-- the steps never polled: a dash, not a bar at zero -->
-        <line v-for="(s, i) in slots" v-show="s.share === null" :key="`gap-${s.t}`"
+        <!-- the steps never polled: a dash, not a bar at zero; the steps still to come: nothing -->
+        <line v-for="(s, i) in slots" v-show="s.share === null && s.t <= now" :key="`gap-${s.t}`"
               class="hist__gap" :x1="i * 10 + 5" :x2="i * 10 + 5" :y1="VB_H - 4" :y2="VB_H" vector-effect="non-scaling-stroke" />
         <rect v-for="(s, i) in slots" v-show="s.share !== null" :key="`bar-${s.t}`"
               class="hist__bar" :x="i * 10 + 1.5" :width="7"
@@ -186,8 +204,10 @@ function tickLabel(at: number): string {
 .hist { padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
 .hist__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .hist__title { font-size: 15px; font-weight: 600; }
-/* between the title and the figure: the window chosen sits next to what it changes */
-.hist__ranges { flex: 0 1 auto; margin-left: auto; }
+/* between the title and the figure: the window chosen sits next to what it changes. The cut goes
+   under the windows when the two do not fit side by side: that depends on the width, never on the
+   choice. */
+.hist__ranges { flex: 0 1 auto; margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 8px; min-width: 0; }
 .hist__stat { flex: 0 0 auto; text-align: right; min-width: 7ch; }
 .hist__value { font-size: 20px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
 /* FIXED height: the frame moves neither when the history is empty, nor when it fills up.
@@ -211,4 +231,11 @@ function tickLabel(at: number): string {
 .swatch--defrost { background: #4aa3d2; }
 .swatch--booster { background: #d38b22; }
 .small { font-size: 12px; }
+/* On a phone the title, the selectors and the figure never fit on one line: the selectors take their
+   own line under the other two, aligned to the start so that one wider than the card overflows on
+   the right rather than off the left edge of the screen. */
+@media (max-width: 560px) {
+  .hist__head { flex-wrap: wrap; }
+  .hist__ranges { order: 1; flex-basis: 100%; margin-left: 0; justify-content: flex-start; }
+}
 </style>

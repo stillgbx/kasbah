@@ -900,7 +900,7 @@
     "syncedAgo": "Relevé {ago}", "syncedUnknown": "Date du relevé inconnue",
     "days": "{n} jour | {n} jour | {n} jours"
   },
-  "lightHistory": {"title": "Luminosité", "period": {"day": "Jour", "month": "Mois", "year": "Année"}, "peak": {"day": "Max sur 24 h : {value}", "month": "Max sur 31 jours : {value}", "year": "Max sur 12 mois : {value}"}, "empty": "L'historique se remplit au fil de la journée.", "noReading": "non mesuré"},
+  "lightHistory": {"title": "Luminosité", "period": {"day": "Jour", "month": "Mois", "year": "Année"}, "peak": {"day": "Max sur 24 h : {value}", "month": "Max sur 31 jours : {value}", "year": "Max sur 12 mois : {value}"}, "peakIn": "{scale} · max : {value}", "empty": "L'historique se remplit au fil de la journée.", "noReading": "non mesuré"},
   "water": {
     "noDevice": "Aucune station de traitement de l'eau active. Activez un plugin dans Réglages → Plugins.",
     "prefilter": "Préfiltre", "carbon1": "Filtre à charbon 1", "carbon2": "Filtre à charbon 2", "uvLamp": "Lampe UVc",
@@ -908,7 +908,7 @@
     "noAlert": "Aucune alerte", "warning": "Avertissement", "defect": "Défaut",
     "consumption": "Consommation d'eau",
     "period": { "day": "Jour", "week": "Semaine", "month": "Mois", "year": "Année" },
-    "consumptionTotal": "Total {period} : {value}",
+    "consumptionTotal": "Total {period} : {value}", "consumptionTotalIn": "{scale} : {value}",
     "noReading": "Pas de mesure",
     "consumptionEmpty": {
       "hourly": "Le suivi horaire démarre tout juste : revenez dans quelques heures pour voir la journée se dessiner.",

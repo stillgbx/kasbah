@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useElementSize, useIntervalFn } from '@vueuse/core'
 import type { DeviceConsumption } from '@kasbah/shared'
-import { bucketSlots, CONSUMPTION_PERIODS, frenchAverageDailyLitres, frenchAverageReference, niceAxisTicks, PERIOD_STEPS, seriesFor, slotsMax, slotsTotal, type ConsumptionPeriod, type ConsumptionSlot } from '../../lib/consumption'
+import { bucketSlots, calendarTitle, CONSUMPTION_PERIODS, frenchAverageDailyLitres, frenchAverageReference, niceAxisTicks, seriesFor, slotsMax, slotsTotal, type ConsumptionPeriod, type ConsumptionSlot, type PeriodMode } from '../../lib/consumption'
 import { formatVolume, formatVolumeAxisTick, volumeAxisUnit } from '../../lib/format'
 import Segmented from '../ui/Segmented.vue'
 
@@ -13,9 +13,9 @@ import Segmented from '../ui/Segmented.vue'
 // series of the contract; week and month share `daily`, only the number of columns changes.
 //
 // Nothing moves: `.chart__body` has a FIXED height, whether it shows the "it is filling up" message, or
-// bars — 24, 7, 31 or 12, never more nor fewer than what the period reserves. A step never
-// measured (server silence, history still young) stays a dotted vertical DASH: a full
-// bar would say "measured at 0 L", which would be false.
+// bars — 24, 7, 31 or 12, never more nor fewer than what the period reserves (28 to 31 for the calendar
+// month). A step never measured (server silence, history still young) stays a dotted vertical DASH: a
+// full bar would say "measured at 0 L", which would be false. A step still to come stays empty.
 
 const props = withDefaults(defineProps<{
   consumption: DeviceConsumption | null
@@ -38,6 +38,13 @@ const householdSize = computed(() => props.householdSize)
 
 const period = ref<ConsumptionPeriod>('day')
 const periodOptions = computed(() => CONSUMPTION_PERIODS.map((p) => ({ value: p, label: t(`water.period.${p}`) })))
+/** Rolling (the last 7 days, 31 days, 12 months) or calendar (this week, this month, this year): greyed
+ * rather than hidden for the day, which stays the last 24 hours — the row keeps its shape. */
+const mode = ref<PeriodMode>('rolling')
+const modeOptions = computed(() => (['rolling', 'calendar'] as const).map((m) => ({
+  value: m, label: t(`energy.modes.${m}`), disabled: period.value === 'day',
+})))
+const cutMode = computed<PeriodMode>(() => (period.value === 'day' ? 'rolling' : mode.value))
 
 /** The contract series that feeds the chosen period, and the key of the matching "it is starting" message. */
 const EMPTY_KEY: Record<ConsumptionPeriod, 'hourly' | 'daily' | 'monthly'> = { day: 'hourly', week: 'daily', month: 'daily', year: 'monthly' }
@@ -49,10 +56,13 @@ const empty = computed(() => series.value.length === 0)
 const now = ref(Date.now())
 useIntervalFn(() => { now.value = Date.now() }, 60_000)
 
-const slots = computed<ConsumptionSlot[]>(() => bucketSlots(series.value, period.value, now.value))
+const slots = computed<ConsumptionSlot[]>(() => bucketSlots(series.value, period.value, now.value, cutMode.value))
 /** Sum of the measured steps only: last resort when the station has not yet published the exact counter (see `exactTotalL`). */
 const total = computed(() => slotsTotal(slots.value))
 const measuredCount = computed(() => slots.value.filter((s) => s.litres !== null).length)
+/** Steps already begun: all of them in rolling mode, those up to today in calendar mode — a step still
+ * to come is neither measured nor missing. */
+const elapsedCount = computed(() => slots.value.filter((s) => s.t <= now.value).length)
 
 /** The station's exact counter for the chosen period; `null` for the year (no equivalent). */
 const exactTotalL = computed<number | null>(() => {
@@ -64,6 +74,13 @@ const exactTotalL = computed<number | null>(() => {
  * different figures for the same cell. */
 const displayTotalL = computed<number | null>(() => exactTotalL.value ?? (empty.value ? null : total.value))
 const totalText = computed(() => (displayTotalL.value === null ? '—' : formatVolume(displayTotalL.value, locale.value)))
+/** The total's line: the period in rolling mode, the calendar window by its name otherwise ("Octobre 2026"). */
+const totalLine = computed(() => {
+  const p = period.value
+  if (cutMode.value === 'rolling' || p === 'day') return t('water.consumptionTotal', { period: t(`water.period.${p}`), value: totalText.value })
+  const scale = p === 'week' ? t('energy.scale.thisWeek') : calendarTitle(p, now.value, locale.value)
+  return t('water.consumptionTotalIn', { scale, value: totalText.value })
+})
 
 /**
  * French average consumption marker (SISPEA 2023): `null` for the day period (an hourly line
@@ -87,7 +104,7 @@ const MISSING_H = 16
 /** Number of columns that carry a label, so as not to stack 31 unreadable dates. */
 const LABEL_EVERY: Record<ConsumptionPeriod, number> = { day: 4, week: 1, month: 5, year: 1 }
 
-interface BarGeom { i: number; x: number; barW: number; cx: number; baseline: number; known: boolean; barH: number }
+interface BarGeom { i: number; x: number; barW: number; cx: number; baseline: number; known: boolean; future: boolean; barH: number }
 
 const baseline = computed(() => Math.max(0, height.value - PAD_BOTTOM))
 const plotH = computed(() => Math.max(1, height.value - PAD_TOP - PAD_BOTTOM))
@@ -100,7 +117,7 @@ const barGeom = computed<BarGeom[]>(() => {
     const x = i * slotW + (slotW - barW) / 2
     const known = s.litres !== null
     const barH = known ? Math.max(3, (s.litres! / maxLitres.value) * plotH.value) : 0
-    return { i, x, barW, cx: x + barW / 2, baseline: baseline.value, known, barH }
+    return { i, x, barW, cx: x + barW / 2, baseline: baseline.value, known, future: s.t > now.value, barH }
   })
 })
 
@@ -170,7 +187,7 @@ const MEASURED_UNIT_KEY: Record<ConsumptionPeriod, 'hours' | 'days' | 'months'> 
  */
 const measuredFragment = computed(() => t(`water.measuredFragment.${MEASURED_UNIT_KEY[period.value]}`, {
   measured: measuredCount.value,
-  steps: PERIOD_STEPS[period.value],
+  steps: elapsedCount.value,
 }, measuredCount.value))
 
 /**
@@ -191,7 +208,7 @@ const summary = computed(() => t('water.chartSummary', {
  * teaches nothing and clutters — the disappearance only shortens the end of `.chart__total`,
  * never moves its height or position (see the template, `v-if` on `.chart__totalNote`).
  */
-const fullyMeasured = computed(() => measuredCount.value === PERIOD_STEPS[period.value])
+const fullyMeasured = computed(() => measuredCount.value === elapsedCount.value)
 const measuredNote = computed(() => (fullyMeasured.value ? '' : t('water.measuredNote', { fragment: measuredFragment.value })))
 </script>
 
@@ -199,10 +216,13 @@ const measuredNote = computed(() => (fullyMeasured.value ? '' : t('water.measure
   <section class="card chart" :aria-label="t('water.consumption')">
     <div class="chart__head">
       <div class="chart__title">{{ t('water.consumption') }}</div>
-      <Segmented v-model="period" :options="periodOptions" dense />
+      <div class="chart__controls">
+        <Segmented v-model="period" :options="periodOptions" dense />
+        <Segmented v-model="mode" :options="modeOptions" dense :label="t('energy.modeLabel')" />
+      </div>
     </div>
     <div class="muted chart__total">
-      {{ t('water.consumptionTotal', { period: t(`water.period.${period}`), value: totalText }) }}
+      {{ totalLine }}
       <span v-if="measuredNote" class="chart__totalNote">· {{ measuredNote }}</span>
     </div>
     <!-- French average marker: SAME text whatever the period (only depends on the
@@ -229,7 +249,7 @@ const measuredNote = computed(() => (fullyMeasured.value ? '' : t('water.measure
                 <line class="chart__baseline" x1="0" :y1="baseline" :x2="width" :y2="baseline" />
                 <template v-for="g in barGeom" :key="g.i">
                   <rect v-if="g.known" class="chart__bar" :x="g.x" :y="g.baseline - g.barH" :width="g.barW" :height="g.barH" rx="2"><title>{{ tooltip(slots[g.i]!) }}</title></rect>
-                  <line v-else class="chart__missing" :x1="g.cx" :y1="g.baseline" :x2="g.cx" :y2="g.baseline - MISSING_H"><title>{{ tooltip(slots[g.i]!) }}</title></line>
+                  <line v-else-if="!g.future" class="chart__missing" :x1="g.cx" :y1="g.baseline" :x2="g.cx" :y2="g.baseline - MISSING_H"><title>{{ tooltip(slots[g.i]!) }}</title></line>
                 </template>
                 <!-- French average marker: ON TOP OF the bars (stays visible even when exceeded),
                      background by color and dotting — never the full tint of a bar. -->
@@ -252,8 +272,12 @@ const measuredNote = computed(() => (fullyMeasured.value ? '' : t('water.measure
 
 <style scoped>
 .chart { padding: 18px 20px; display: flex; flex-direction: column; gap: 4px; }
-.chart__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.chart__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 .chart__title { font-weight: 600; font-size: 14px; }
+/* the selectors go under the title, and the cut under the periods, when they do not fit side by side:
+   the width decides, never the choice. Aligned to the start: a selector wider than the card then
+   overflows on the right, never off the left edge of the screen. */
+.chart__controls { display: flex; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
 .chart__total { font-size: 12px; font-variant-numeric: tabular-nums; }
 /* absent when everything is measured (v-if): only shortens the end of `.chart__total`, never changes
    its height or position — see `measuredNote`. */

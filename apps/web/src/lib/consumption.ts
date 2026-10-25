@@ -109,6 +109,15 @@ export function bucketSlots(points: readonly ConsumptionPoint[], period: Consump
   })
 }
 
+/** The current calendar month or year, as a chart title says it: "Octobre 2026", "2026". The week has
+ * its own sentence (`energy.scale.thisWeek`). */
+export function calendarTitle(period: 'month' | 'year', now: number, locale: string): string {
+  const d = new Date(now)
+  if (period === 'year') return String(d.getFullYear())
+  const m = d.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
+  return m.charAt(0).toUpperCase() + m.slice(1)
+}
+
 /** Sum of the measured steps of a window (absent steps count neither for nor against). */
 export function slotsTotal(slots: readonly ConsumptionSlot[]): number {
   return slots.reduce((sum, s) => sum + (s.litres ?? 0), 0)

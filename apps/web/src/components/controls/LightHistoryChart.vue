@@ -5,7 +5,7 @@ import { useElementSize, useIntervalFn } from '@vueuse/core'
 import type { DeviceDescriptor, StateFor } from '@kasbah/shared'
 import { getTransport } from '../../api'
 import type { LightHistory } from '../../api/transport'
-import { bucketSlots, niceAxisTicks, slotsMax, type ConsumptionPeriod } from '../../lib/consumption'
+import { bucketSlots, calendarTitle, niceAxisTicks, slotsMax, type ConsumptionPeriod, type PeriodMode } from '../../lib/consumption'
 import { formatSensor } from '../../lib/format'
 import Segmented from '../ui/Segmented.vue'
 
@@ -17,7 +17,8 @@ import Segmented from '../ui/Segmented.vue'
 // `litres`: we store lux in it, only the field name does not fit.
 //
 // Nothing moves: the plot has a FIXED height, and each period always reserves its number of
-// columns. A step never measured (server stopped) stays a dashed dash, not a bar at 0.
+// columns. A step never measured (server stopped) stays a dashed dash, not a bar at 0; a step still
+// to come (the calendar month or year) stays empty.
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'sensor'> }>()
 const { t, d, locale } = useI18n()
@@ -26,6 +27,13 @@ type Period = Extract<ConsumptionPeriod, 'day' | 'month' | 'year'>
 const PERIODS: readonly Period[] = ['day', 'month', 'year']
 const period = ref<Period>('day')
 const periodOptions = computed(() => PERIODS.map((p) => ({ value: p, label: t(`lightHistory.period.${p}`) })))
+/** Rolling (the last 31 days, 12 months) or calendar (this month, this year): greyed rather than hidden
+ * for the day, which stays the last 24 hours — the row keeps its shape. */
+const mode = ref<PeriodMode>('rolling')
+const modeOptions = computed(() => (['rolling', 'calendar'] as const).map((m) => ({
+  value: m, label: t(`energy.modes.${m}`), disabled: period.value === 'day',
+})))
+const cutMode = computed<PeriodMode>(() => (period.value === 'day' ? 'rolling' : mode.value))
 
 const history = ref<LightHistory | null>(null)
 async function load() {
@@ -44,7 +52,15 @@ const series = computed(() => {
   const pts = period.value === 'day' ? h.hourly : period.value === 'month' ? h.daily : h.monthly
   return pts.map((p) => ({ t: p.t, litres: p.maxLux }))
 })
-const slots = computed(() => bucketSlots(series.value, period.value, now.value))
+const slots = computed(() => bucketSlots(series.value, period.value, now.value, cutMode.value))
+/** The peak's sentence: the rolling window, or the calendar month or year by its name. */
+const peakText = computed(() => {
+  const value = peak.value === null ? '—' : lux(peak.value)
+  const p = period.value
+  return cutMode.value === 'calendar' && p !== 'day'
+    ? t('lightHistory.peakIn', { scale: calendarTitle(p, now.value, locale.value), value })
+    : t(`lightHistory.peak.${p}`, { value })
+})
 const known = computed(() => slots.value.filter((s) => s.litres !== null))
 const empty = computed(() => known.value.length === 0)
 const peak = computed(() => (empty.value ? null : Math.max(...known.value.map((s) => s.litres!))))
@@ -64,7 +80,7 @@ const bars = computed(() => {
   return slots.value.map((s, i) => {
     const x = i * slotW + (slotW - barW) / 2
     const barH = s.litres === null ? 0 : s.litres > 0 ? Math.max(2, (s.litres / maxLux.value) * plotH) : 0
-    return { i, x, barW, cx: x + barW / 2, known: s.litres !== null, barH }
+    return { i, x, barW, cx: x + barW / 2, known: s.litres !== null, future: s.t > now.value, barH }
   })
 })
 const gridlines = computed(() => {
@@ -93,8 +109,11 @@ function tooltip(i: number): string {
       <div class="lh__title">{{ t('lightHistory.title') }}</div>
       <div class="lh__now">{{ lux(state.value) }}</div>
     </div>
-    <Segmented v-model="period" :options="periodOptions" dense />
-    <div class="muted lh__peak">{{ t(`lightHistory.peak.${period}`, { value: peak === null ? '—' : lux(peak) }) }}</div>
+    <div class="lh__controls">
+      <Segmented v-model="period" :options="periodOptions" dense />
+      <Segmented v-model="mode" :options="modeOptions" dense :label="t('energy.modeLabel')" />
+    </div>
+    <div class="muted lh__peak">{{ peakText }}</div>
     <div class="lh__body">
       <div v-if="empty" class="muted lh__empty">{{ t('lightHistory.empty') }}</div>
       <div v-show="!empty" ref="stage" class="lh__stage">
@@ -102,7 +121,7 @@ function tooltip(i: number): string {
           <line v-for="y in gridlines" :key="y" class="lh__grid" x1="0" :y1="y" :x2="width" :y2="y" />
           <template v-for="b in bars" :key="b.i">
             <rect v-if="b.known" class="lh__bar" :x="b.x" :y="height - b.barH" :width="b.barW" :height="b.barH" rx="1.5"><title>{{ tooltip(b.i) }}</title></rect>
-            <line v-else class="lh__missing" :x1="b.cx" :y1="height" :x2="b.cx" :y2="height - MISSING_H"><title>{{ tooltip(b.i) }}</title></line>
+            <line v-else-if="!b.future" class="lh__missing" :x1="b.cx" :y1="height" :x2="b.cx" :y2="height - MISSING_H"><title>{{ tooltip(b.i) }}</title></line>
           </template>
         </svg>
       </div>
@@ -118,6 +137,8 @@ function tooltip(i: number): string {
 .lh__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .lh__title { font-size: 13px; font-weight: 600; }
 .lh__now { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* the cut goes under the periods when the two do not fit side by side: the width decides, never the choice */
+.lh__controls { display: flex; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
 .lh__peak { font-size: 12px; font-variant-numeric: tabular-nums; }
 /* FIXED height: neither the period nor the empty state changes it */
 .lh__body { height: 96px; position: relative; }

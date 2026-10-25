@@ -106,10 +106,10 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 
 | Vues | Dernière mise à jour |
 |---|---|
-| [4_3 Vues Lumières, Ouvrants et Caméras](4_ui/4_3_vues-lumieres-ouvrants-cameras.md) | 2026-10-20 |
+| [4_3 Vues Lumières, Ouvrants et Caméras](4_ui/4_3_vues-lumieres-ouvrants-cameras.md) | 2026-10-25 |
 | [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-25 |
 | [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-10-13 |
-| [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-10-21 |
+| [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-10-25 |
 | [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-10-25 |
 | [4_8 Mode édition et propriétés](4_ui/4_8_mode-edition-et-proprietes.md) | 2026-10-21 |
 <!-- section:4_ui:end -->

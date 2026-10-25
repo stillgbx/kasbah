@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bucketSlots, frenchAverageDailyLitres, frenchAverageReference } from './consumption'
+import { bucketSlots, calendarTitle, frenchAverageDailyLitres, frenchAverageReference } from './consumption'
 
 // French average consumption marker (SISPEA 2023, 145 L/person/day): pure functions,
 // covered independently of the chart that displays them (see WaterConsumptionChart.vue).
@@ -70,5 +70,16 @@ describe('bucketSlots — calendar', () => {
     const slots = bucketSlots([], 'week', now)
     expect(slots.at(-1)!.t).toBe(day(17))
     expect(slots[0]!.t).toBe(day(11))
+  })
+})
+
+describe('calendarTitle', () => {
+  const now = new Date(2026, 9, 25, 14).getTime()
+  it('names the month with a capital, in the locale', () => {
+    expect(calendarTitle('month', now, 'fr')).toBe('Octobre 2026')
+    expect(calendarTitle('month', now, 'en')).toBe('October 2026')
+  })
+  it('names the year by its number', () => {
+    expect(calendarTitle('year', now, 'fr')).toBe('2026')
   })
 })

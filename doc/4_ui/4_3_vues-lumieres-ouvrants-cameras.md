@@ -1,6 +1,6 @@
 # Vues Lumières, Ouvrants et Caméras
 
-> Dernière mise à jour : 2026-10-20
+> Dernière mise à jour : 2026-10-25
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre les vues Lumières, Ouvrants et Caméras (bandes par niveau, `RoomBands`), les contrôles d'ouvrant et la position favorite, les interrupteurs maîtres, les cartes et tuiles caméra. Elle est née du découpage de
@@ -897,3 +897,16 @@ Libellés (infobulle et `aria-label` seulement) : `rooms.shuttersOpen`, `rooms.s
 
 Sources : `apps/web/src/components/devices/RoomShutterKeys.vue` (+ `RoomShutterKeys.test.ts`),
 `apps/web/src/views/CoversView.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.
+
+## Mise à jour 2026-10-25 — Luminosité : découpage glissant ou calendaire
+
+Le graphe **Luminosité** (`LightHistoryChart.vue`) reçoit, à côté de Jour / Mois / Année, le même
+sélecteur **Glissant / Calendaire** que les vues Énergie, Eau et Chauffage (détail commun :
+[4_6](4_6_autres-vues.md), même date). Grisé pour le Jour, qui reste les 24 dernières heures.
+Calendaire = le mois depuis le 1er, l'année depuis janvier ; les pas à venir restent vides (ni barre
+ni tiret). La ligne du maximum nomme alors la fenêtre : « Octobre 2026 · max : … », « 2026 · max : … »
+(`lightHistory.peakIn`). Les deux sélecteurs partagent une ligne qui passe à la ligne selon la largeur,
+jamais selon le choix. Mesuré dans la preview `kasbah-mock` (fiche du volet solaire simulé) : cadre
+immobile et aucun débordement à 1280 et 375 px, zooms 1 / 1,25 / 1,5, fr et en.
+
+Sources : `apps/web/src/components/controls/LightHistoryChart.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.

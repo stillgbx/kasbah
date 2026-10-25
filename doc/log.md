@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-25] update | Eau, Chauffage, Luminosité : découpage glissant ou calendaire
+
+**Déclencheur** : demande de l'utilisateur, après la vue Énergie : le même choix Glissant / Calendaire sur les autres graphes d'historique.
+
+**Pages modifiées** :
+- `4_ui/4_6_autres-vues.md` - section datée : sélecteur sur les graphes Eau et Chauffage, fenêtres calendaires, pas à venir vides, titres de fenêtre, mise en page au téléphone, restes (sélecteur à quatre choix trop large aux forts zooms).
+- `4_ui/4_3_vues-lumieres-ouvrants-cameras.md` - section datée : le même sélecteur sur le graphe Luminosité.
+- `4_ui/4_4_vues-energie-vehicules.md` - phrase « eau, chauffage et lumières n'ont pas bougé » complétée d'un renvoi.
+
+**Index** : catalogue mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-10-25] update | Windows refuse le `rename` d'un fichier d'état ouvert
 
 **Déclencheur** : test du journal de l'assistant en échec à 5 s dans la suite complète (trois fois sur quatre), jamais seul ; cause : l'écriture perdue, pas lente.

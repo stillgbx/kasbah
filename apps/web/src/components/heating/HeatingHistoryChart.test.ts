@@ -47,6 +47,30 @@ describe('HeatingHistoryChart', () => {
     expect(w.find('.hist__value').text()).toBe('1 j 6 h')   // 12 + 12 + 6 hours
   })
 
+  /** Calendar cut: the week from Monday, the year from January (months still summed from the days);
+   * a step before today without data is a dash, a step still to come is left empty. */
+  it('cuts the calendar week from Monday and the year from January', async () => {
+    const shown = (w: Awaited<ReturnType<typeof show>>, sel: string) =>
+      w.findAll(sel).filter((e) => e.attributes('style')?.includes('display: none') !== true).length
+    const calendar = async (range: string, daily: HeatingPoint[]) => {
+      const w = await show(range, { daily })
+      await w.findAll('.segmented__item').find((b) => b.text() === 'Calendaire')!.trigger('click')
+      return w
+    }
+    // Sunday 18 belongs to last week; Monday 19 and Wednesday 21 (today) to this one
+    const week = await calendar('Semaine', [point(day(-3), 1), point(day(-2), 0.5), point(day(0), 0.25)])
+    expect(week.find('.hist__head .small').text()).toBe('Cette semaine')
+    expect(shown(week, '.hist__bar')).toBe(2)
+    expect(shown(week, '.hist__gap')).toBe(1)             // Tuesday; Thursday to Sunday are to come
+    expect(week.find('.hist__value').text()).toBe('18 h 00')
+    // December 2025 is last year; January and October 2026 make two bars, February to September dashes
+    const year = await calendar('Année', [point(new Date(2025, 11, 15).getTime(), 1), point(new Date(2026, 0, 10).getTime(), 0.5), point(day(0), 0.25)])
+    expect(year.find('.hist__head .small').text()).toBe('2026')
+    expect(shown(year, '.hist__bar')).toBe(2)
+    expect(shown(year, '.hist__gap')).toBe(8)
+    expect(year.find('.hist__value').text()).toBe('18 h 00')
+  })
+
   it('keeps the 48 h window on the hours', async () => {
     const hour = Math.floor(NOW / 3_600_000) * 3_600_000
     const w = await show('48 h', { points: [point(hour, 1), point(hour - 3_600_000, 0.5)] })

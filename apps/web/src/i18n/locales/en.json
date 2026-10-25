@@ -900,7 +900,7 @@
     "syncedAgo": "Read {ago}", "syncedUnknown": "Reading time unknown",
     "days": "{n} day | {n} day | {n} days"
   },
-  "lightHistory": {"title": "Brightness", "period": {"day": "Day", "month": "Month", "year": "Year"}, "peak": {"day": "24 h max: {value}", "month": "31-day max: {value}", "year": "12-month max: {value}"}, "empty": "The history fills up over the day.", "noReading": "not measured"},
+  "lightHistory": {"title": "Brightness", "period": {"day": "Day", "month": "Month", "year": "Year"}, "peak": {"day": "24 h max: {value}", "month": "31-day max: {value}", "year": "12-month max: {value}"}, "peakIn": "{scale} · max: {value}", "empty": "The history fills up over the day.", "noReading": "not measured"},
   "water": {
     "noDevice": "No water treatment station is active. Enable a plugin in Settings → Plugins.",
     "prefilter": "Prefilter", "carbon1": "Carbon filter 1", "carbon2": "Carbon filter 2", "uvLamp": "UV lamp",
@@ -908,7 +908,7 @@
     "noAlert": "No alert", "warning": "Warning", "defect": "Fault",
     "consumption": "Water consumption",
     "period": { "day": "Day", "week": "Week", "month": "Month", "year": "Year" },
-    "consumptionTotal": "{period} total: {value}",
+    "consumptionTotal": "{period} total: {value}", "consumptionTotalIn": "{scale}: {value}",
     "noReading": "No reading",
     "consumptionEmpty": {
       "hourly": "Hourly tracking has just started: check back in a few hours to see the day take shape.",
