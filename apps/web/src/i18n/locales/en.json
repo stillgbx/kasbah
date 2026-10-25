@@ -1070,6 +1070,8 @@
       "days": "Days",
       "periodFrom": "From (optional)",
       "periodTo": "To",
+      "clearPeriod": "Clear the date range",
+      "clearBounds": "Clear the time limits",
       "for": "For at least",
       "stateHint": "Fires when the condition BECOMES true. A time constraint goes in \"Unless\"."
     },

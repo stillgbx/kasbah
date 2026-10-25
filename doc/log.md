@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-25] update | Automatisations : vider la période et les bornes au téléphone
+
+**Déclencheur** : sur Android, impossible de retirer les dates de début et de fin d'une règle dupliquée ; le sélecteur natif ne vide pas son champ.
+
+**Pages modifiées** :
+- `1_architecture/1_8_automatisations.md` - section datée : bouton × au bout des lignes « Du / Au » et « Pas avant / Pas après », place réservée, vérifications et restes.
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-25] update | L'assistant depuis toutes les pages : un bouton dans l'en-tête
 
 **Déclencheur** : demande « accessible depuis n'importe quelle page, et en particulier sur mobile » ; seule zone commune, l'en-tête.

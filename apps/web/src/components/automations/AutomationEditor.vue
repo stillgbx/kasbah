@@ -270,6 +270,11 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
                 <input type="time" class="field" :value="trigger.at.notBefore ?? ''" @change="setAt({ notBefore: ($event.target as HTMLInputElement).value })"></label>
               <label class="pair"><span class="muted">{{ $t('automations.trigger.notAfter') }}</span>
                 <input type="time" class="field" :value="trigger.at.notAfter ?? ''" @change="setAt({ notAfter: ($event.target as HTMLInputElement).value })"></label>
+              <button type="button" class="key" :style="{ visibility: trigger.at.notBefore || trigger.at.notAfter ? 'visible' : 'hidden' }"
+                      :title="$t('automations.trigger.clearBounds')" :aria-label="$t('automations.trigger.clearBounds')"
+                      @click="setAt({ notBefore: undefined, notAfter: undefined })">
+                <StrokeIcon name="close" :size="14" />
+              </button>
             </div>
           </template>
           <DayPills :model-value="trigger.days" @update:model-value="setDays" />
@@ -278,6 +283,11 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
               <input type="date" class="field" :value="trigger.dateRange?.from ?? ''" @change="setRange('from', ($event.target as HTMLInputElement).value)"></label>
             <label class="pair"><span class="muted">{{ $t('automations.trigger.periodTo') }}</span>
               <input type="date" class="field" :value="trigger.dateRange?.to ?? ''" @change="setRange('to', ($event.target as HTMLInputElement).value)"></label>
+            <button type="button" class="key" :style="{ visibility: trigger.dateRange ? 'visible' : 'hidden' }"
+                    :title="$t('automations.trigger.clearPeriod')" :aria-label="$t('automations.trigger.clearPeriod')"
+                    @click="setRange('from', '')">
+              <StrokeIcon name="close" :size="14" />
+            </button>
           </div>
         </template>
 
@@ -366,5 +376,11 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
 .field--time { width: 9ch; flex: 0 0 auto; }
 .field--num { width: 6ch; flex: 0 0 auto; text-align: right; }
 .range { white-space: nowrap; }
+/* Clears a pair of bounds: a phone's native date or time picker cannot always empty its field. */
+.key {
+  flex: 0 0 auto; align-self: flex-end; display: grid; place-items: center; width: 30px; height: 30px; margin-bottom: 3px;
+  border-radius: 9px; border: 1px solid var(--line); background: transparent; color: var(--muted); transition: background .15s, color .15s;
+}
+.key:hover { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .hint { margin: 0; font-size: 12px; line-height: 16px; min-height: 32px; }
 </style>

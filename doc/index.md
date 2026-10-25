@@ -32,7 +32,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_5 Scène 3D (Three.js)](1_architecture/1_5_scene-3d.md) | 2026-10-13 |
 | [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-10-09 |
 | [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-10-24 |
-| [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-15 |
+| [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-25 |
 | [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-10-25 |
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-10-11 |
 | [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-10-22 |

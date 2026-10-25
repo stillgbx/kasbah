@@ -1080,6 +1080,8 @@
       "days": "Jours",
       "periodFrom": "Du (facultatif)",
       "periodTo": "Au",
+      "clearPeriod": "Effacer la période",
+      "clearBounds": "Effacer les bornes",
       "for": "Depuis au moins",
       "stateHint": "Part quand la condition DEVIENT vraie. Une contrainte d'heure se met dans « Sauf si »."
     },

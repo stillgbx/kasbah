@@ -1,6 +1,6 @@
 # Automatisations (règles « Quand / Sauf si / Alors »)
 
-> Dernière mise à jour : 2026-10-15
+> Dernière mise à jour : 2026-10-25
 > Sources : `packages/shared/src/automations/{predicate,automation,fields}.ts`, `packages/shared/src/house/{sun,geo}.ts`, `packages/shared/src/devices/activity.ts`, `apps/server/src/core/automations/{engine,schedule,evaluate,context,status,runner,store}.ts`, `apps/server/src/app.ts`, `apps/server/src/http/routes.ts`, `apps/server/src/ws/hub.ts`, `packages/mock-sim/src/behaviours/weather.ts`, `.gitignore`, tests listés en fin de page, arbre de travail NON COMMITÉ du 2026-09-23 (après 0f943a0)
 
 ## Ce que c'est, et pourquoi c'est le serveur qui s'en charge
@@ -447,3 +447,22 @@ bouton ; console vide.
 Sources : `packages/shared/src/automations/automation.ts`, `apps/server/src/core/automations/engine.ts`,
 `apps/server/src/http/routes.ts`, `apps/web/src/components/automations/{AutomationRow,AutomationEditor}.vue`,
 `apps/web/src/i18n/locales/{fr,en}.json`.
+
+### Mise à jour 2026-10-25 — un bouton pour vider la période et les bornes
+
+Signalé par l'utilisateur sur son téléphone Android : la copie d'une règle datée gardait sa période, sans
+moyen de la retirer. L'éditeur savait déjà retirer `dateRange` quand un des deux champs « Du / Au » est
+vidé (`setRange`), mais **le sélecteur natif de date ou d'heure d'un téléphone ne propose pas toujours
+d'« effacer »** : le champ se change, il ne se vide pas. Même piège pour « Pas avant / Pas après » d'une
+règle au soleil.
+
+Un bouton × (le `.key` des cartes d'action) termine chacune des deux lignes : il retire la période entière
+(les deux bornes vont ensemble dans le schéma), ou les deux bornes horaires (`setAt` avec `undefined`).
+Il n'apparaît que si la ligne porte une valeur, et sa place reste réservée (`visibility`) : rien ne bouge
+quand il apparaît. Libellés pour les lecteurs d'écran : « Effacer la période », « Effacer les bornes ».
+
+Vérifié dans le mode simulé à 375 px : bouton caché puis visible sans décalage (mesure géométrique), un
+vrai clic vide les champs, aucun débordement, console vide. Non vérifié : thème clair, et le vrai
+téléphone.
+
+Sources : `apps/web/src/components/automations/AutomationEditor.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.
