@@ -1514,3 +1514,29 @@ restent calendaires. Tests figés aux deux dates de changement d'heure (`consump
 échouent sous `Europe/Paris` et passent trivialement sous UTC. C'est l'inverse des automatisations,
 dont une échéance quotidienne doit garder l'heure d'horloge et avance donc d'un jour calendaire, jamais
 de 24 h (`../1_architecture/1_8_automatisations.md`).
+
+## 2026-10-25 — Windows refuse le `rename` d'un fichier d'état ouvert : l'écriture est perdue
+
+**Symptôme** : le test « keeps the instruction log… » de `apps/server/src/assistant/assistant.test.ts`
+échouait trois fois sur quatre dans la suite complète, toujours à 5,0 s (délai par défaut de vitest), et
+passait toujours lancé seul. Un délai d'attente porté à 5 s n'y changeait rien.
+
+**Diagnostic** : l'entrée du journal de l'assistant n'arrivait pas en retard, elle était **perdue**. Le
+test relisait `GET /api/assistant/log` toutes les 50 ms pendant que `appendLog` remplaçait le fichier
+par `writeFileAtomic` (`.tmp` puis `rename`). Sous Windows, un `rename` par-dessus un fichier qu'un
+autre descripteur tient ouvert (une lecture, l'antivirus) échoue en `EPERM` (ou `EACCES`, `EBUSY`) tant
+qu'il reste ouvert : mesuré sur le poste de développement, une boucle de lectures fait échouer 1 789
+renommages sur 2 000. `appendLog` avalait l'erreur (avertissement), et l'attente courait jusqu'au délai.
+Sous la charge de la suite, chaque lecture dure plus longtemps, d'où la collision. La production tourne
+sous Windows (`../5_setup/5_2_production.md`) : le même cas y perdait une entrée quand Réglages lisait
+le journal au moment où une instruction se terminait, et menace tout fichier d'état lu pendant qu'il
+est réécrit.
+
+**Solution** : deux correctifs. Le test attend l'écriture elle-même (`assistantLogWritten()`, exporté
+par `assistant.ts`) puis lit le journal une seule fois (commit `fceb698`). `writeFileAtomic` retente le
+`rename` refusé pour ces trois codes, sous Windows seulement, avec une attente de 10 à 100 ms, pendant
+2 s au plus, comme graceful-fs ; au-delà, ou pour toute autre erreur, il rejette comme avant (commit
+`ed55af8`, `../1_architecture/1_2_serveur-et-plugins.md`). Test rouge avant le correctif : un
+descripteur ouvert sur le fichier pendant l'écriture (`core/atomic-file.test.ts`). **Leçon** : sous
+Windows, « atomique » ne veut pas dire « toujours possible » ; une sonde qui interroge un fichier peut
+empêcher l'écriture qu'elle attend.

@@ -14,6 +14,28 @@ import { dirname, resolve } from 'node:path'
 
 const queues = new Map<string, Promise<void>>()
 
+// Windows refuses to `rename` over a file another handle has open (a reader, the antivirus):
+// EPERM, EACCES or EBUSY for as long as it stays open. Measured on 2026-10-25: a loop reading the
+// file made 1789 renames out of 2000 fail, and the write was lost (an assistant log entry, when
+// the log was read meanwhile). The rename is retried for a while, as graceful-fs does; past that,
+// the write rejects as before.
+const RENAME_RETRY_MS = 2000
+const RENAME_BUSY = new Set(['EPERM', 'EACCES', 'EBUSY'])
+
+async function renameRetrying(from: string, to: string): Promise<void> {
+  const start = Date.now()
+  for (let wait = 10; ; wait = Math.min(wait * 2, 100)) {
+    try {
+      await rename(from, to)
+      return
+    } catch (err) {
+      const busy = process.platform === 'win32' && RENAME_BUSY.has((err as NodeJS.ErrnoException).code ?? '')
+      if (!busy || Date.now() - start >= RENAME_RETRY_MS) throw err
+    }
+    await new Promise((resolve) => setTimeout(resolve, wait))
+  }
+}
+
 export interface AtomicWriteOptions {
   /** File permissions (`0o600` for a session or a token). */
   mode?: number
@@ -29,7 +51,7 @@ export function writeFileAtomic(path: string, text: string, options: AtomicWrite
     const tmp = `${path}.${process.pid}.tmp`
     await mkdir(dirname(path), { recursive: true })
     await writeFile(tmp, text, { encoding: 'utf8', ...options })
-    await rename(tmp, path)
+    await renameRetrying(tmp, path)
   }
   const next = (queues.get(key) ?? Promise.resolve()).then(run)
   const tail = next.catch(() => undefined)

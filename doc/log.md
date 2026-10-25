@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-25] update | Windows refuse le `rename` d'un fichier d'état ouvert
+
+**Déclencheur** : test du journal de l'assistant en échec à 5 s dans la suite complète (trois fois sur quatre), jamais seul ; cause : l'écriture perdue, pas lente.
+
+**Pages modifiées** :
+- `6_faq/6_1_pieges-runtime.md` - entrée datée : `rename` refusé en `EPERM` sous Windows sur un fichier ouvert (mesure 1 789 / 2 000), entrée du journal perdue, test qui attend l'écriture, `writeFileAtomic` qui retente 2 s.
+- `1_architecture/1_2_serveur-et-plugins.md` - section datée : retentative du `rename` sous Windows (codes, attente, limite, file).
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-25] update | Enphase : un jour sans rien chez Enphase est connu
 
 **Déclencheur** : première synchronisation réelle réussie, mais deux jours de mise en service restaient « absents » pour les onduleurs (Enphase répond vide) et étaient redemandés à chaque resynchro.

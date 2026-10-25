@@ -1,6 +1,6 @@
 # Serveur et hôte de plugins
 
-> Dernière mise à jour : 2026-10-11
+> Dernière mise à jour : 2026-10-25
 > Sources : `apps/server/src/{app,main}.ts`, `apps/server/src/core/*.ts`, `apps/server/src/plugins/index.ts`, `apps/server/src/core/scene-registry.ts`, `apps/server/src/core/{plugin,plugin-host,scene-seeder}.ts`, `packages/shared/src/house/schema.ts`, `apps/server/src/plugins/comap/{history,state}.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/core/playbackBridge.ts`, `apps/server/src/music/{player,sources}.ts`, `apps/server/src/core/automations/engine.ts`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/main.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/plugins/shopping/index.ts` (2026-10-11)
 
 ## Assemblage (`app.ts`)
@@ -439,6 +439,15 @@ plugins) ou erreur remontée à l'appelant (radio, agenda, Mixcloud, musique, `s
   plus une copie `.bak` (la maison relit aussi le fichier avant de le modifier).
 - **Tests** : `core/atomic-file.test.ts` (dix écritures rapprochées → la dernière, aucun `.tmp`
   restant ; un échec ne bloque pas la suivante) et le cas Tesla dans `plugins/tesla/state.test.ts`.
+
+### Mise à jour 2026-10-25 — `rename` retenté sous Windows
+
+Sous Windows, un `rename` par-dessus un fichier qu'un autre descripteur tient ouvert (une lecture,
+l'antivirus) échoue en `EPERM`, `EACCES` ou `EBUSY`, et l'écriture était perdue. `writeFileAtomic`
+retente ces trois codes, sous Windows seulement, avec une attente de 10 à 100 ms, pendant 2 s au plus ;
+au-delà, ou pour une autre erreur, il rejette comme avant. Pendant ces tentatives, les écritures
+suivantes du même chemin attendent dans la file. Cas et mesure : `../6_faq/6_1_pieges-runtime.md`
+(2026-10-25). Test : un descripteur ouvert sur le fichier pendant l'écriture (`core/atomic-file.test.ts`).
 
 ### Mise à jour 2026-10-08 — le mode démonstration et la bascule de propriété
 
