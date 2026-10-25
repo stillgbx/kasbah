@@ -55,13 +55,14 @@ describe('EnphasePairingCard — history', () => {
   })
 
   it('draws a cell per day and takes again only the incomplete ones, or every one with "Tout reprendre"', async () => {
-    const sync = fake({ ...base, history: { ...base.history, syncedAt: 1, coverage: { from: new Date(2026, 9, 29).getTime(), days: 'ccpm' } } })
+    const sync = fake({ ...base, history: { ...base.history, syncedAt: 1, coverage: { from: new Date(2026, 9, 28).getTime(), days: 'eccpm' } } })
     const w = await card()
-    expect(w.findAll('.strip__days .strip__day').map((c) => c.attributes('data-s'))).toEqual(['c', 'c', 'p', 'm'])
-    expect(w.findAll('.strip__row')).toHaveLength(2)   // 29-31 October, then 1 November
+    expect(w.findAll('.strip__days .strip__day').map((c) => c.attributes('data-s'))).toEqual(['e', 'c', 'c', 'p', 'm'])
+    expect(w.findAll('.strip__row')).toHaveLength(2)   // 28-31 October, then 1 November
+    // a day Enphase has nothing for is known: it is not taken again
     expect(w.find('.enp__history').text()).toContain('Reprendra 2 jours incomplets.')
     await w.find('.enp__force input').setValue(true)
-    expect(w.find('.enp__history').text()).toContain('Reprendra les 4 jours.')
+    expect(w.find('.enp__history').text()).toContain('Reprendra les 5 jours.')
     await resync(w).trigger('click')
     await flushPromises()
     expect(sync).toHaveBeenCalledWith(true)

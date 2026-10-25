@@ -41,7 +41,7 @@
    - **Token**: create it on `entrez.enphaseenergy.com`, paste it, then validate.
 4. The card shows the token's role and its expiry. With less than 30 days left, the plugin's pill turns orange: **Renew the token** before then.
 5. For the charger: choose **Enphase account** and **Validate**. The button links the cloud session without creating a new token if the local token is still valid.
-6. The same card has a **Production history** section: a strip with one cell per day since commissioning (complete, incomplete, missing) and **Resync**, which takes again from Enphase only the days that are not complete — after a fresh install or a server outage. **Take everything again** redoes every day. Today is always counted by Kasbah.
+6. The same card has a **Production history** section: a strip with one cell per day since commissioning (complete, nothing at Enphase, incomplete, missing) and **Resync**, which takes again from Enphase only the days that are not complete — after a fresh install or a server outage. **Take everything again** redoes every day. Today is always counted by Kasbah.
 
 ## Configuration (`apps/server/.env`)
 

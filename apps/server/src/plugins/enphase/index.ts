@@ -148,7 +148,8 @@ export interface TokenStatus {
     inverters: { syncedAt: number | null; done: number | null; total: number | null; error: string | null }
     /**
      * Each past day since commissioning, one letter per day from `from` (local midnight): `c`
-     * complete, `p` incomplete, `m` missing — the site and its inverters together, the worse wins.
+     * complete, `e` nothing at Enphase, `p` incomplete, `m` missing — the site and its inverters
+     * together, the worse wins.
      */
     coverage: { from: number; days: string } | null
   }
@@ -265,7 +266,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     if (!days || !since || !ctx) return null
     const now = ctx.clock.now()
     const yesterday = addDays(dayKey(now), -1)
-    const rank = { c: 0, p: 1, m: 2 } as const
+    const rank = { c: 0, e: 1, p: 2, m: 3 } as const
     let out = ''
     for (let k = since; k <= yesterday; k = addDays(k, 1)) {
       const site = days.dayStatus(k, now)
@@ -302,7 +303,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       const serialOf = arrayLayoutSchema.parse(await enlighten.getJson(`/pv/systems/${siteId}/array_layout_x`, ctx!.signal))
       const yesterday = addDays(dayKey(ctx!.clock.now()), -1)
       const todo: string[] = []
-      for (let k = dayKey(since); k <= yesterday; k = addDays(k, 1)) if (force || inv.dayStatus(k) !== 'c') todo.push(k)
+      for (let k = dayKey(since); k <= yesterday; k = addDays(k, 1)) if (force || !['c', 'e'].includes(inv.dayStatus(k))) todo.push(k)
       invProgress.total = todo.length
       for (const key of todo) {
         await sleep(ctx!.clock, VENDOR_DAY_GAP_MS, ctx!.signal)

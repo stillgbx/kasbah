@@ -60,6 +60,8 @@ const fileSchema = z.object({
   days: z.record(z.string(), z.object({
     source: z.enum(['vendor', 'local']),
     wh: z.record(z.string(), z.number()),
+    /** Vendor day: Enphase answered, with nothing for any inverter. Known, not to be asked again. */
+    empty: z.boolean().optional(),
     /** Local day: when the gateway was last read that day — its counters are whole if it was near midnight. */
     lastAt: z.number().optional(),
   })),
@@ -101,7 +103,7 @@ export class InverterDays {
   dayStatus(key: string): DayStatus {
     const d = this.data.days[key]
     if (!d) return 'm'
-    if (d.source === 'vendor') return 'c'
+    if (d.source === 'vendor') return d.empty ? 'e' : 'c'
     return (d.lastAt ?? 0) >= keyStart(addDays(key, 1)) - WHOLE_DAY_SLACK_MS ? 'c' : 'p'
   }
 
@@ -131,6 +133,9 @@ export class InverterDays {
   /**
    * One day from Enphase, its ids turned into serial numbers. Today is never taken (the gateway
    * sees it better); yesterday only where nothing local exists — the cloud may not have all of it yet.
+   * A day Enphase answers with nothing is remembered as known empty, so a resync does not ask for it
+   * again — except yesterday, which the cloud may simply not have received yet. Returns whether
+   * values were stored.
    */
   importVendorDay(key: string, production: Record<string, number | null>, serialOf: Map<string, string>, now: number): boolean {
     const today = dayKey(now)
@@ -141,7 +146,13 @@ export class InverterDays {
       const serial = serialOf.get(id)
       if (serial && typeof v === 'number' && v >= 0) wh[serial] = Math.round(v)
     }
-    if (Object.keys(wh).length === 0) return false
+    if (Object.keys(wh).length === 0) {
+      if (key < addDays(today, -1) && !this.data.days[key]) {
+        this.data.days[key] = { source: 'vendor', wh: {}, empty: true }
+        this.dirty = true
+      }
+      return false
+    }
     this.data.days[key] = { source: 'vendor', wh }
     this.dirty = true
     return true

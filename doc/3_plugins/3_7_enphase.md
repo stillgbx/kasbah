@@ -481,7 +481,7 @@ sont tolérants, une forme inattendue lève `UPSTREAM_ERROR` sans toucher au fic
   après la synchro du site. Choix de l'utilisateur, contre un mélange « mois + 62 derniers jours »
   (moins d'appels) : le motif détaillé n'est pas consigné.
 
-**Resynchro intelligente.** Chaque jour a un état : `c` complet, `p` incomplet, `m` absent. Site : complet
+**Resynchro intelligente.** Chaque jour a un état : `c` complet, `p` incomplet, `m` absent (et `e`, voir « Mise à jour 2026-10-25 (bis) »). Site : complet
 si le vendeur ne l'a pas donné partiel, ou si le local l'a vu en entier ; onduleurs : complet si le
 vendeur l'a donné, ou si la passerelle a été lue à moins de 20 min de minuit (`WHOLE_DAY_SLACK_MS`). Par
 défaut on ne reprend que les jours non complets ; `force: true` reprend tout.
@@ -499,3 +499,21 @@ défaut dans `.state/` ; ils s'ajoutent à `health().keys`.
 
 **Vérifié** sur la vraie installation : les routes privées ci-dessus ont été sondées avec la session
 déjà tenue. Aucune valeur de l'installation n'est consignée ici.
+
+### Mise à jour 2026-10-25 (bis) — un jour sans rien chez Enphase est connu, pas absent
+
+Première synchronisation réelle : réussie (site puis onduleurs jour par jour, sans erreur), mais les
+deux premiers jours restaient « absents » : `inverter_data_x/energy.json` répond pour eux sans aucune
+valeur d'onduleur (mise en service, les micro-onduleurs ne rapportaient pas encore). Chaque
+resynchro les redemandait, et la frise les montrait comme un trou à combler.
+
+Désormais un jour auquel Enphase répond **vide** est retenu comme tel (`empty: true` dans
+`.state/enphase-inverter-days.json`) et prend un quatrième état, `e` « rien chez Enphase »
+(`DayStatus` = `c` | `e` | `p` | `m`, rang croissant pour la frise : le pire l'emporte). La resynchro
+intelligente saute les jours `c` **et** `e` ; « Tout reprendre » les redemande. Exception : **la veille**
+n'est jamais retenue vide, le cloud peut simplement ne pas l'avoir reçue. Une réponse ultérieure avec
+des valeurs remplace le jour vide. La carte dessine `e` en gris discret, distinct du pointillé
+« absent », et ne le compte pas dans « Reprendra N jours ».
+
+Sources : `apps/server/src/plugins/enphase/{inverterDays,days,index}.ts`, tests `inverterDays.test.ts`
+et `plugin.test.ts`, `apps/web/src/components/EnphasePairingCard.vue` et son test.

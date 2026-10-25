@@ -78,3 +78,20 @@ describe('InverterDays', () => {
     expect(copy.snapshot(at(10, 13))).toEqual(inv.snapshot(at(10, 13)))
   })
 })
+
+describe('InverterDays — a day Enphase has nothing for', () => {
+  const serialOf = new Map([['900000001', '100000000001']])
+  it('is remembered as known empty, not asked again — except yesterday, which the cloud may not have yet', () => {
+    const inv = new InverterDays()
+    const now = at(12, 10)
+    expect(inv.importVendorDay('2026-06-05', {}, serialOf, now)).toBe(false)
+    expect(inv.importVendorDay('2026-06-06', { 900000001: null }, serialOf, now)).toBe(false)
+    expect(inv.importVendorDay('2026-06-11', {}, serialOf, now)).toBe(false)
+    expect(inv.dayStatus('2026-06-05')).toBe('e')
+    expect(inv.dayStatus('2026-06-06')).toBe('e')
+    expect(inv.dayStatus('2026-06-11')).toBe('m')
+    // a later answer with values replaces it
+    expect(inv.importVendorDay('2026-06-05', { 900000001: 50 }, serialOf, now)).toBe(true)
+    expect(inv.dayStatus('2026-06-05')).toBe('c')
+  })
+})

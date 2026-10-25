@@ -88,9 +88,10 @@ export function keyStart(key: string): number {
 /**
  * Where a past day stands: `c` complete (Enphase gave it, or the server watched it whole), `p`
  * incomplete (the server missed part of it, or the cloud had not received all of it yet), `m`
- * missing. A resync only takes again what is not complete.
+ * missing, `e` known empty (Enphase was asked and has nothing for it — the days of commissioning,
+ * before the inverters reported). A resync only takes again what is incomplete or missing.
  */
-export type DayStatus = 'c' | 'p' | 'm'
+export type DayStatus = 'c' | 'e' | 'p' | 'm'
 
 export function addDays(key: string, n: number): string {
   const [y, m, d] = key.split('-').map(Number) as [number, number, number]

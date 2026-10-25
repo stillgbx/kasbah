@@ -604,7 +604,7 @@
         "willTakeAll": "Reprendra {n} jour. | Reprendra les {n} jours.",
         "allComplete": "Tous les jours sont complets : rien à reprendre.",
         "stripLabel": "État de chaque jour depuis la mise en service",
-        "legend": {"c": "complet", "p": "incomplet", "m": "absent"},
+        "legend": {"c": "complet", "e": "rien chez Enphase", "p": "incomplet", "m": "absent"},
         "done": "{days} jours récupérés."
       }
     },

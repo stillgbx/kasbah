@@ -97,6 +97,8 @@ function fakeCloud(minted = token(365)) {
     ] }] }))
     if (url.includes('/inverter_data_x/energy.json')) {
       const day = Number(/start_date=\d{4}-\d{2}-(\d{2})/.exec(url)![1])
+      // commissioning day: the inverters had not reported yet, Enphase has nothing
+      if (day === 8) return response(JSON.stringify({ production: {} }))
       return response(JSON.stringify({ production: { 900000001: day * 100, 900000002: day * 100 + 1 } }))
     }
     if (url.includes('/ev_chargers/status') && url.includes('/api/v2/')) return response(JSON.stringify({ data: {} }))
@@ -456,7 +458,7 @@ describe('daily history', () => {
     // the 8th, 9th and 10th: from commissioning to yesterday (today is the 11th)
     expect(calls.map((c) => /start_date=([\d-]+)/.exec(c.url)![1])).toEqual(['2026-09-08', '2026-09-09', '2026-09-10'])
     const inv = (await plugin.energyDays!('site')).inverters!
-    expect(inv.devices.map((d) => d.wh.slice(0, 3))).toEqual([[800, 900, 1000], [801, 901, 1001]])
+    expect(inv.devices.map((d) => d.wh.slice(0, 3))).toEqual([[null, 900, 1000], [null, 901, 1001]])
     expect(inv.syncedAt).not.toBeNull()
     expect(inverterDaysStore.saved).not.toBeNull()
     expect((await get(app, '/token')).json()).toMatchObject({ history: { inverters: { done: null, error: null } } })
@@ -479,8 +481,8 @@ describe('daily history', () => {
     const { app, cloud, clock } = await started()
     await post(app, { user: 'u', password: 'p' })
     for (let i = 0; i < 8; i++) { clock.advance(2000); await settle(); await settle() }
-    // the 9th has no consumption from Enphase but production: complete; every day is there
-    expect((await get(app, '/token')).json()).toMatchObject({ history: { coverage: { days: 'ccc' } } })
+    // the 8th: nothing at Enphase for the inverters, known; the 9th has no consumption but production: complete
+    expect((await get(app, '/token')).json()).toMatchObject({ history: { coverage: { days: 'ecc' } } })
     const before = cloud.calls.filter((c) => c.url.includes('/inverter_data_x/energy.json')).length
     const smart = await app.inject({ method: 'POST', url: '/api/plugins/enphase/history/sync', payload: {} })
     expect(smart.statusCode).toBe(200)

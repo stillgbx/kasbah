@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-25] update | Enphase : un jour sans rien chez Enphase est connu
+
+**Déclencheur** : première synchronisation réelle réussie, mais deux jours de mise en service restaient « absents » pour les onduleurs (Enphase répond vide) et étaient redemandés à chaque resynchro.
+
+**Pages modifiées** :
+- `3_plugins/3_7_enphase.md` - section datée (bis) : état `e` « rien chez Enphase », sauté par la resynchro intelligente, jamais pour la veille ; renvoi depuis la liste des états.
+
+**Index** : rien à régénérer (date du catalogue déjà au 2026-10-25).
+
 ## [2026-10-25] update | Automatisations : vider la période et les bornes au téléphone
 
 **Déclencheur** : sur Android, impossible de retirer les dates de début et de fin d'une règle dupliquée ; le sélecteur natif ne vide pas son champ.

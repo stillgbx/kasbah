@@ -126,7 +126,8 @@ const syncing = ref(false)
 /** "Take everything again": every day, not only the incomplete ones. */
 const force = ref(false)
 
-type DayState = 'c' | 'p' | 'm'
+/** `e`: Enphase was asked and has nothing for the day (commissioning) — known, not taken again. */
+type DayState = 'c' | 'e' | 'p' | 'm'
 /**
  * The strip: one row per month, one cell per day, from commissioning to yesterday. A row always
  * has 31 columns: the first month starts at its day, and a short month leaves its end empty —
@@ -155,7 +156,7 @@ const dayTitle = (row: { key: number }, day: number, s: DayState) =>
 /** How many days the button will take again: the incomplete ones, or all of them when forced. */
 const toTake = computed(() => {
   const days = status.value?.history?.coverage?.days ?? ''
-  return force.value ? days.length : [...days].filter((c) => c !== 'c').length
+  return force.value ? days.length : [...days].filter((c) => c === 'p' || c === 'm').length
 })
 const takeText = computed(() => {
   if (!status.value?.history?.coverage) return ''
@@ -298,7 +299,7 @@ async function submit() {
           </div>
         </div>
         <div class="muted small strip__legend">
-          <span v-for="s in (['c', 'p', 'm'] as const)" :key="s" class="strip__key"><i class="strip__day" :data-s="s" />{{ stateLabel(s) }}</span>
+          <span v-for="s in (['c', 'e', 'p', 'm'] as const)" :key="s" class="strip__key"><i class="strip__day" :data-s="s" />{{ stateLabel(s) }}</span>
         </div>
       </div>
       <div class="enp__resync">
@@ -351,6 +352,8 @@ async function submit() {
 .strip__day { display: block; height: 8px; border-radius: 2px; }
 .strip__day[data-s='c'] { background: var(--accent); opacity: .8; }
 .strip__day[data-s='p'] { background: rgb(var(--v-theme-warning)); }
+/* known empty: nothing to fetch, nothing missing — a quiet grey, not the dashed "missing" */
+.strip__day[data-s='e'] { background: var(--muted); opacity: .35; }
 .strip__day[data-s='m'] { box-shadow: inset 0 0 0 1px var(--line); }
 .strip__legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; }
 .strip__key { display: inline-flex; align-items: center; gap: 6px; }

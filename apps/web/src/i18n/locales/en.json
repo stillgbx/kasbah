@@ -604,7 +604,7 @@
         "willTakeAll": "Will take {n} day again. | Will take all {n} days again.",
         "allComplete": "Every day is complete: nothing to take again.",
         "stripLabel": "State of each day since commissioning",
-        "legend": {"c": "complete", "p": "incomplete", "m": "missing"},
+        "legend": {"c": "complete", "e": "nothing at Enphase", "p": "incomplete", "m": "missing"},
         "done": "{days} days fetched."
       }
     },

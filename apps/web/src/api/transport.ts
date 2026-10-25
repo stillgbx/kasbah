@@ -81,7 +81,7 @@ export interface EnphaseTokenStatus {
     syncedAt: number | null; since: number | null; days: number; syncing: boolean; error: string | null
     /** The micro-inverters' days: last full synchronization, and the one in progress (days done / to do). */
     inverters?: { syncedAt: number | null; done: number | null; total: number | null; error: string | null }
-    /** Every past day since commissioning, one letter each from `from`: `c` complete, `p` incomplete, `m` missing. */
+    /** Every past day since commissioning, one letter each from `from`: `c` complete, `e` nothing at Enphase, `p` incomplete, `m` missing. */
     coverage?: { from: number; days: string } | null
   }
 }
