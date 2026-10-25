@@ -49,7 +49,7 @@ TUYA_DEVICES=[{"id":"<device-id>","key":"<local-key>","ip":"192.168.1.50","name"
 
 - **Only one model is supported** (CREATE light-fan, protocol 3.5); adding another Tuya device requires writing its mapping.
 - **Only three color temperatures**: the device ignores any intermediate value. No brightness variation.
-- The server must reach the fan over TCP on port 6668.
+- The server must reach the fan over TCP on port 6668. The Tuya app can show the fan online while Kasbah can't reach it: the app goes through the cloud. The plugin's health then gives the local connection error (unreachable host, refused connection, key changed).
 - Setting the speed **turns on** the fan; turning it off resets the timer to zero.
 - The local connection sometimes drops without warning: Kasbah reconnects by itself, and the state is picked up again on reconnection.
 - The key is in `.env` in clear text: protect that file.

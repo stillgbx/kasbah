@@ -180,6 +180,37 @@ describe('tuya plugin', () => {
     await plugin.stop()
   })
 
+  it('health shows the connection failure, warned once per reason, cleared on connect', async () => {
+    const clock = new ManualClock(0)
+    const { ctx, ctrl } = fakeContext(clock)
+    const warn = vi.spyOn(ctx.logger, 'warn')
+    const fake = fakeSocketFactory()
+    let reachable = false
+    fake.setConnect(async (s) => {
+      if (!reachable) throw new Error('connect EHOSTUNREACH 192.168.1.56:6668')
+      s.emit('data', { dps: CONNECT_FULL })
+    })
+    const plugin = createTuyaPlugin({ createSocket: fake.createSocket })
+    await plugin.init(ctx)
+    await plugin.start()
+    await flush()
+    clock.advance(100)
+    await flush(20)
+    expect(fake.sockets.length).toBeGreaterThanOrEqual(2)
+    expect(plugin.health?.()).toEqual({
+      status: 'degraded',
+      detail: `${DEVICE.name}: connect EHOSTUNREACH 192.168.1.56:6668`,
+    })
+    expect(warn).toHaveBeenCalledTimes(1)
+
+    reachable = true
+    clock.advance(100)
+    await flush(20)
+    expect(plugin.health?.()).toEqual({ status: 'ok' })
+    ctrl.abort()
+    await plugin.stop()
+  })
+
   it('health needs_pairing without devices', async () => {
     const clock = new ManualClock(0)
     const { ctx } = fakeContext(clock, [])

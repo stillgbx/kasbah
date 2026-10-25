@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-25] update | Tuya : la santé dit pourquoi la connexion locale échoue
+
+**Déclencheur** : ventilateur indisponible dans Kasbah, en ligne dans l'application Tuya ; la santé ne donnait que « no Tuya device connected ».
+
+**Pages modifiées** :
+- `3_plugins/3_18_tuya.md` - section datée : appli Tuya (cloud) ≠ joignable en local, `onConnectError`, `warn` une fois par raison, `connectErrors` par appareil, lecture des messages d'erreur.
+- `3_plugins/README.md` - résumé et date de la page.
+
+**Contradictions** : aucune relevée.
+
 ## [2026-10-25] update | Sécurité de l'appli Android Auto : hôte vérifié, préférences hors sauvegarde, récepteur de test protégé
 
 **Déclencheur** : scan Claude Security de `apps/android` (effort medium), trois constats corrigés.

@@ -1,6 +1,6 @@
 # Tuya — ventilateur-lumière CREATE (protocole local 3.5)
 
-> Dernière mise à jour : 2026-10-06
+> Dernière mise à jour : 2026-10-25
 > Sources : `apps/server/src/plugins/tuya/{index,client,mapping,types}.ts`,
 > `apps/server/src/plugins/tuya/__fixtures__/tuya.ts` (trames capturées),
 > `tools/tuya-probe.mts`, `tools/tuya-capture/`,
@@ -100,3 +100,26 @@ Sonde : `npx tsx --env-file=apps/server/.env tools/tuya-probe.mts`.
 `meta.manufacturer` : **`CREATE / Tuya`** (marque appareil + protocole), pas seulement `CREATE`.
 DP 23 confirmé en usage réel : **0 = 4000 K (froid), 1000 = 2700 K (chaud)** — voir tableau
 ci-dessus (corrigé après inversion constatée dans l'UI).
+
+### Mise à jour 2026-10-25 — la santé dit pourquoi la connexion échoue
+
+Symptôme rencontré sur la vraie maison : le plugin dit l'appareil indisponible, **l'application
+Tuya le dit en ligne**. Les deux ne se contredisent pas : l'application passe par le cloud Tuya, il
+suffit au ventilateur d'avoir internet ; Kasbah a besoin de le joindre **en local**, TCP 6668. Un
+ventilateur passé sur un autre segment (réseau invité ou IoT, isolation des clients au point
+d'accès) reste en ligne dans l'application et disparaît pour Kasbah.
+
+Jusqu'ici l'échec de `connect()` n'allait qu'au niveau `debug` et `lastError` n'était jamais rempli :
+la santé disait seulement « no Tuya device connected ». Désormais :
+
+- `DeviceSession` (`client.ts`) appelle `onConnectError(message)` à chaque tentative ratée et logue
+  en **`warn` une fois par raison nouvelle** (IP + message, jamais la clé) ; les reprises toutes les
+  ~700 ms pour la même raison restent en `debug`. Une connexion réussie remet la raison à zéro, un
+  nouvel échec reprévient.
+- Le plugin (`index.ts`) garde la dernière erreur **par appareil** (`connectErrors`), effacée à la
+  connexion. Détail de santé : `<nom>: <message>`, ajouté après « x/y connectés » si une partie
+  seulement répond.
+
+Lecture du message : `EHOSTUNREACH` ou délai dépassé → injoignable sur le réseau (adresse, segment,
+point d'accès) ; `ECONNREFUSED` → joignable mais refuse ; erreur de déchiffrement ou de poignée de
+main → la clé locale a changé (réappairage).

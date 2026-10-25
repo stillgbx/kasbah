@@ -51,6 +51,8 @@ export interface DeviceSessionOptions {
   reconnectMs?: number
   onDps: (dps: TuyaDps) => void
   onConnectionChange: (connected: boolean) => void
+  /** Reason of the last failed connection attempt (unreachable host, refused key…). */
+  onConnectError?: (message: string) => void
   logger?: { warn(obj: unknown, msg?: string): void; debug(obj: unknown, msg?: string): void }
 }
 
@@ -63,6 +65,7 @@ export class DeviceSession {
   private dps: TuyaDps = {}
   private running = false
   private loopPromise: Promise<void> | null = null
+  private lastConnectError: string | null = null
   private readonly reconnectMs: number
 
   constructor(private readonly opts: DeviceSessionOptions) {
@@ -166,6 +169,7 @@ export class DeviceSession {
       try {
         await sock.connect()
         if (!this.running || this.opts.signal.aborted) break
+        this.lastConnectError = null
         this.opts.onConnectionChange(true)
         await new Promise<void>((resolve) => {
           const done = () => {
@@ -177,7 +181,15 @@ export class DeviceSession {
           this.opts.signal.addEventListener('abort', done, { once: true })
         })
       } catch (err) {
-        this.opts.logger?.debug({ err: String(err) }, 'tuya connect failed')
+        const message = err instanceof Error ? err.message : String(err)
+        // Warn once per new reason, not on every ~700 ms retry.
+        if (message !== this.lastConnectError) {
+          this.opts.logger?.warn({ ip: this.opts.ip, err: message }, 'tuya connect failed')
+        } else {
+          this.opts.logger?.debug({ ip: this.opts.ip, err: message }, 'tuya connect failed')
+        }
+        this.lastConnectError = message
+        this.opts.onConnectError?.(message)
       } finally {
         this.opts.onConnectionChange(false)
         try { sock.disconnect() } catch { /* */ }

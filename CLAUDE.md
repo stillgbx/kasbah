@@ -140,7 +140,7 @@ tests, fixtures, `docs/`, the wiki `doc/`, commit messages.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **kasbah** (31195 symbols, 330303 relationships, 1032 execution flows).
+This project is indexed by GitNexus as **kasbah** (27845 symbols, 90316 relationships, 960 execution flows).
 
 > Index stale? Run `node .gitnexus/run.cjs analyze --index-only` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? Bootstrap with `npx`, `bunx`, or `pnpm dlx` — e.g. `bunx gitnexus@latest analyze` (npm 11 npx crash; #1939).
 

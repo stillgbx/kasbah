@@ -66,7 +66,8 @@ export function createTuyaPlugin(deps: TuyaPluginDeps = {}): DevicePlugin {
   /** Accumulated DPs per physical device. */
   const rawByPhysical = new Map<string, TuyaDps>()
   const connected = new Set<string>()
-  let lastError: string | null = null
+  /** Last connection failure per physical device, cleared once it connects. */
+  const connectErrors = new Map<string, string>()
 
   const createSocket = deps.createSocket ?? createTuyapiFactory()
 
@@ -86,8 +87,10 @@ export function createTuyaPlugin(deps: TuyaPluginDeps = {}): DevicePlugin {
   }
 
   function setPhysicalAvailable(physicalId: string, available: boolean): void {
-    if (available) connected.add(physicalId)
-    else connected.delete(physicalId)
+    if (available) {
+      connected.add(physicalId)
+      connectErrors.delete(physicalId)
+    } else connected.delete(physicalId)
     ctx!.setAvailable(lightExternalId(physicalId), available)
     ctx!.setAvailable(fanExternalId(physicalId), available)
   }
@@ -107,6 +110,7 @@ export function createTuyaPlugin(deps: TuyaPluginDeps = {}): DevicePlugin {
         logger: log(),
         onDps: (fragment) => publishFromDps(d.id, fragment),
         onConnectionChange: (up) => setPhysicalAvailable(d.id, up),
+        onConnectError: (message) => connectErrors.set(d.id, message),
       })
       sessions.set(d.id, session)
       session.start()
@@ -151,7 +155,7 @@ export function createTuyaPlugin(deps: TuyaPluginDeps = {}): DevicePlugin {
       // Closure that survives stop(): reset everything (iRobot / Tahoma lesson).
       await closeSessions()
       rawByPhysical.clear()
-      lastError = null
+      connectErrors.clear()
       devices = config.TUYA_DEVICES
       if (!devices.length) {
         log().info('TUYA_DEVICES empty: no Tuya device configured')
@@ -221,14 +225,19 @@ export function createTuyaPlugin(deps: TuyaPluginDeps = {}): DevicePlugin {
         return { status: 'needs_pairing', detail: 'set TUYA_DEVICES in the server environment' }
       }
       const up = connected.size
+      const errors = devices
+        .filter((d) => !connected.has(d.id) && connectErrors.has(d.id))
+        .map((d) => `${d.name}: ${connectErrors.get(d.id)}`)
+        .join('; ')
       if (up === 0) {
         return {
           status: 'degraded',
-          detail: lastError ?? `no Tuya device connected (${devices.length} configured)`,
+          detail: errors || `no Tuya device connected (${devices.length} configured)`,
         }
       }
       if (up < devices.length) {
-        return { status: 'degraded', detail: `${up}/${devices.length} Tuya devices connected` }
+        const summary = `${up}/${devices.length} Tuya devices connected`
+        return { status: 'degraded', detail: errors ? `${summary}; ${errors}` : summary }
       }
       return { status: 'ok' }
     },
