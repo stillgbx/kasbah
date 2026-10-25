@@ -61,6 +61,9 @@ function appendLog(entry: AssistantLogEntry, logger: Logger): Promise<void> {
   return logQueue
 }
 
+/** Resolves once the log entries already requested are written (tests). */
+export const assistantLogWritten = (): Promise<void> => logQueue
+
 /** Adds an event to the current log entry. */
 function record(entry: AssistantLogEntry, e: AssistantEvent): void {
   if (e.type === 'text') entry.answer = entry.answer ? `${entry.answer}\n${e.text}` : e.text

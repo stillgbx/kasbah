@@ -5,7 +5,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import pino from 'pino'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { describeError, sendError } from '../http/errors'
-import { registerAssistantRoutes, runAssistant, type AssistantDeps } from './assistant'
+import { assistantLogWritten, registerAssistantRoutes, runAssistant, type AssistantDeps } from './assistant'
 import { registerAssistantEngine, type AssistantEvent, type AssistantRun } from './engines'
 
 // The assistant core, exercised with a fake engine: the per-run token, ONE last word whatever happens
@@ -125,10 +125,12 @@ describe('routes', () => {
     await app.inject({ method: 'POST', url: '/api/assistant/ask', headers: { 'x-test-user': 'lou' }, payload: { text: 'Allume le salon' } })
     behave = async (run) => { run.emit({ type: 'error', code: 'MCP_UNAVAILABLE', message: 'Kasbah MCP failed' }) }
     await app.inject({ method: 'POST', url: '/api/assistant/ask', payload: { text: 'Éteins tout' } })
-    const log = async () => (await app.inject({ method: 'GET', url: '/api/assistant/log' })).json() as { entries: unknown[] }
-    // the log entry follows the end of the response: under the load of the full suite, it lags
-    await vi.waitFor(async () => expect((await log()).entries).toHaveLength(2), { timeout: 5000 })
-    const [last, first] = (await log()).entries
+    // The entry is written after the response ends. Reading the log only once it is written: on
+    // Windows, a `rename` over a file being read fails (EPERM), and a polled read lost the entry.
+    await assistantLogWritten()
+    const { entries } = (await app.inject({ method: 'GET', url: '/api/assistant/log' })).json() as { entries: unknown[] }
+    expect(entries).toHaveLength(2)
+    const [last, first] = entries
     expect(first).toMatchObject({
       user: 'lou', text: 'Allume le salon', answer: 'Le plafonnier du salon est allumé.', error: null,
       tools: [{ id: 't1', name: 'send_command', input: { deviceId: 'mock:light-living' }, ok: true }],
