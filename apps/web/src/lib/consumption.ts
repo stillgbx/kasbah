@@ -40,11 +40,15 @@ function currentStepStart(period: ConsumptionPeriod, now: number): Date {
   return d
 }
 
-/** Steps back `n` steps (hours, days or calendar months) from a step start. */
+/**
+ * Steps back `n` steps (hours, days or calendar months) from a step start. Hours are REAL hours,
+ * not wall-clock ones: the day the clocks go back, `setHours` spread the 24 bars over 25 hours and
+ * one measured hour had no bar; the day they go forward, two bars fell on the same instant.
+ */
 function stepBack(period: ConsumptionPeriod, from: Date, n: number): number {
+  if (period === 'day') return from.getTime() - n * 3600_000
   const d = new Date(from)
-  if (period === 'day') d.setHours(d.getHours() - n)
-  else if (period === 'year') d.setMonth(d.getMonth() - n)
+  if (period === 'year') d.setMonth(d.getMonth() - n)
   else d.setDate(d.getDate() - n)
   return d.getTime()
 }

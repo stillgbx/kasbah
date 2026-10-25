@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-25] update | Graphique « Jour » : heures réelles au changement d’heure
+
+**Déclencheur** : `WaterConsumptionChart.test.ts` échoue le jour du passage à l’heure d’hiver ; la cause est dans `bucketSlots`, pas dans le test.
+
+**Pages modifiées** :
+- `6_faq/6_1_pieges-runtime.md` - entrée datée : colonnes horaires reculées en heures d’horloge, une heure sans colonne ; heures en millisecondes, tests figés aux deux dates, renvoi aux automatisations (jour calendaire).
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-25] update | Rail : Lumières et Ouvrants d’abord, ordre réglable par appareil
 
 **Déclencheur** : sur téléphone, il fallait faire défiler la barre du bas pour atteindre les Ouvrants ; demande d’un ordre propre à chaque appareil (Maison et Réglages fixes).

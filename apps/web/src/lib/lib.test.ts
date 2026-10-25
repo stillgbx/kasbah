@@ -654,7 +654,8 @@ describe('isDaylight', () => {
 
 describe('consumption history (lib/consumption)', () => {
   const NOW = Date.now()
-  const hourStart = (offsetH: number) => { const d = new Date(NOW); d.setMinutes(0, 0, 0); d.setHours(d.getHours() - offsetH); return d.getTime() }
+  // real hours, as the server stamps them: `setHours` would fall twice on the same hour the day the clocks go back
+  const hourStart = (offsetH: number) => new Date(NOW).setMinutes(0, 0, 0) - offsetH * 3600_000
   const dayStart = (offsetD: number) => { const d = new Date(NOW); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - offsetD); return d.getTime() }
   const monthStart = (offsetM: number) => { const d = new Date(NOW); d.setDate(1); d.setHours(0, 0, 0, 0); d.setMonth(d.getMonth() - offsetM); return d.getTime() }
   const consumption = (over: Partial<DeviceConsumption> = {}): DeviceConsumption => ({ deviceId: 'comap:station', hourly: [], daily: [], monthly: [], ...over })
