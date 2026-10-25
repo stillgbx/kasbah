@@ -13,7 +13,11 @@ export interface NavItem { name: string; icon: IconName; label: string; local?: 
 
 export const NAV_ITEMS: NavItem[] = [
   { name: 'home', icon: 'home', label: 'nav.home' },
-  // weather right after the house: what we look at on arriving, before driving anything
+  // lights and covers right after the house: what we drive every day, reachable without scrolling
+  // the bottom bar on a phone
+  { name: 'lights', icon: 'light', label: 'nav.lights' },
+  { name: 'covers', icon: 'shutter', label: 'nav.covers' },
+  // weather after them: what we look at on arriving
   { name: 'weather', icon: 'cloudSun', label: 'nav.weather' },
   // the calendar with the weather: what we look at on arriving — what it is doing, what awaits us
   { name: 'agenda', icon: 'calendar', label: 'nav.agenda' },
@@ -21,10 +25,8 @@ export const NAV_ITEMS: NavItem[] = [
   { name: 'school', icon: 'school', label: 'nav.school' },
   // shopping with the calendar and school: the family's life, which we fill in and consult every day
   { name: 'shopping', icon: 'cart', label: 'nav.shopping', plugin: 'shopping' },
-  // music right after the weather: we start a track, we see the speaker in the 3D
+  // music: we start a track, we see the speaker in the 3D
   { name: 'music', icon: 'music', label: 'nav.music' },
-  { name: 'lights', icon: 'light', label: 'nav.lights' },
-  { name: 'covers', icon: 'shutter', label: 'nav.covers' },
   { name: 'media', icon: 'cast', label: 'nav.media' },
   { name: 'cameras', icon: 'camera', label: 'nav.cameras' },
   { name: 'energy', icon: 'bolt', label: 'nav.energy' },
@@ -50,3 +52,17 @@ export const NAV_ITEMS: NavItem[] = [
 /** The entries visible on this machine: neither non-activated local plugins, nor features turned off in the house. */
 export const visibleNavItems = (isEnabled: (id: LocalPluginId) => boolean, pluginOn: (id: string) => boolean = () => true) =>
   NAV_ITEMS.filter((it) => (!it.local || isEnabled(it.local)) && (!it.plugin || pluginOn(it.plugin)))
+
+/** The entries that keep their place whatever the order chosen on this device: House first, Settings last. */
+export const FIXED_NAV = ['home', 'settings']
+
+/**
+ * `items` in the order chosen on this device (`order`, view names). An entry the order does not name
+ * (a view added since it was saved) comes after the named ones, in the default order. An empty order
+ * is the default order.
+ */
+export function orderNavItems(items: NavItem[], order: readonly string[]): NavItem[] {
+  const rank = (it: NavItem) => { const i = order.indexOf(it.name); return i < 0 ? order.length + NAV_ITEMS.indexOf(it) : i }
+  const movable = items.filter((it) => !FIXED_NAV.includes(it.name)).sort((a, b) => rank(a) - rank(b))
+  return [...items.filter((it) => it.name === 'home'), ...movable, ...items.filter((it) => it.name === 'settings')]
+}

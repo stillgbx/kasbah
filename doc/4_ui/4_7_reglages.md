@@ -1,6 +1,6 @@
 # Vue Réglages
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-25
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Réglages : ses zones, la carte Plugins, les thèmes, le rendu 3D, les entrées locales au poste, les comptes, le calage sur la photo. Elle est née du découpage de
@@ -341,3 +341,31 @@ Le rechargement des écrans après le redémarrage reste celui du bandeau « Nou
 long élargissait la page de 263 px avant correction. Vérifié dans la preview (serveur de démonstration,
 réponses de l'API simulées dans la page pour les états en cours et en échec) : sombre 1280 px, clair
 375 px, fr et en.
+
+### Mise à jour 2026-10-25 — la carte « Barre de navigation »
+
+Dans la pile de gauche, sous Thème (`views/SettingsView.vue`), une carte **« Barre de navigation »**
+(`components/settings/NavOrderCard.vue`) règle l'ordre du rail **sur cet appareil** (localStorage,
+`kasbah.navOrder` ; mécanique dans [4_1_navigation-et-panneaux](4_1_navigation-et-panneaux.md), mise à
+jour du 2026-10-25). Maison et Réglages n'y figurent pas : ils restent à leur place.
+
+- Une ligne par vue que le rail montre : poignée, icône, libellé. On glisse par la **poignée**, même
+  geste que la liste des automatisations (pointeur suivi sur la fenêtre, `elementFromPoint`) ; le rail
+  suit dès le relâcher.
+- Une vue masquée sur ce poste (plugin local éteint, Courses éteintes dans la maison) n'est pas listée
+  mais **garde sa place** dans l'ordre enregistré : seules les vues listées échangent leurs places.
+- « Revenir à l'ordre par défaut » est toujours là, grisé sur l'ordre par défaut : rien ne bouge
+  quand l'ordre change.
+- Pas de déplacement au clavier, comme pour les automatisations.
+
+Placée à gauche plutôt qu'à droite : au-delà de 1500 px, la pile de droite montait à 1909 px avec
+elle, contre 1590 px pour celle de gauche (preview `kasbah-mock`, 1600 px).
+
+Vérifié dans la preview `kasbah-mock` : vrai glisser à la souris à 375 px, ordre gardé au rechargement,
+remise à zéro sans décalage, aucun débordement à 375 px en clair et sombre, fr et en, aucune erreur
+console. **Non joués** : zooms 1,25 / 1,5.
+
+i18n : `settings.navOrder`, `settings.navOrderHint`, `settings.navOrderMove`, `settings.navOrderReset`.
+
+Sources : `apps/web/src/components/settings/NavOrderCard.vue`, `apps/web/src/views/SettingsView.vue`,
+`apps/web/src/i18n/locales/{fr,en}.json`.

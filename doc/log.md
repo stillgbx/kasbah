@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-25] update | Rail : Lumières et Ouvrants d’abord, ordre réglable par appareil
+
+**Déclencheur** : sur téléphone, il fallait faire défiler la barre du bas pour atteindre les Ouvrants ; demande d’un ordre propre à chaque appareil (Maison et Réglages fixes).
+
+**Pages modifiées** :
+- `4_ui/4_1_navigation-et-panneaux.md` - section datée : nouvel ordre par défaut de `NAV_ITEMS`, `orderNavItems` et `kasbah.navOrder`, ordre par utilisateur écarté.
+- `4_ui/4_7_reglages.md` - section datée : carte « Barre de navigation » (`NavOrderCard`), glisser par poignée, vues masquées qui gardent leur place, placement mesuré dans la pile de gauche.
+
+**Index** : catalogue mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-10-25] update | Tuya : la santé dit pourquoi la connexion locale échoue
 
 **Déclencheur** : ventilateur indisponible dans Kasbah, en ligne dans l'application Tuya ; la santé ne donnait que « no Tuya device connected ».

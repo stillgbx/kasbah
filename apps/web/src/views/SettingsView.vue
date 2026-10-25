@@ -7,6 +7,7 @@ import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import AssistantCard from '../components/settings/AssistantCard.vue'
 import McpUsersCard from '../components/settings/McpUsersCard.vue'
+import NavOrderCard from '../components/settings/NavOrderCard.vue'
 import ServerUpdateCard from '../components/settings/ServerUpdateCard.vue'
 import OriginCalibration from '../components/settings/OriginCalibration.vue'
 import PluginSection from '../components/settings/PluginSection.vue'
@@ -34,7 +35,7 @@ import { styleById, type GradeLook, type RenderStyle } from '../three/styles'
 
 // Settings, in two parts: FIRST the settings, THEN the plugin list, full width
 // at the end of the page. The settings fit in three zones — a one-unit stack (appearance, language,
-// theme), the 3D rendering on two units because it alone carries enough to fill them, a one-unit
+// theme, navigation bar), the 3D rendering on two units because it alone carries enough to fill them, a one-unit
 // stack (fullscreen, GPS origin). The active plugins and their sub-items live in
 // house.json: they are choices of THE HOUSE, not of the screen, and they take effect without
 // restarting the server.
@@ -172,6 +173,12 @@ const houseStats = computed(() => {
                 <span class="theme__variant">{{ th.light ? variantLabel(th) : $t('settings.themeDarkOnly') }}</span>
               </button>
             </div>
+          </section>
+          <!-- the rail's order: a choice of THIS device, like the appearance -->
+          <section class="card block">
+            <div class="block__title">{{ $t('settings.navOrder') }}</div>
+            <div class="muted small">{{ $t('settings.navOrderHint') }}</div>
+            <NavOrderCard />
           </section>
         </div>
         <!-- the dense block: two units wide, and its content itself on two columns -->

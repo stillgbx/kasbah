@@ -88,6 +88,8 @@ export const useSettingsStore = defineStore('settings', () => {
   /** Declared household (Water view): compares consumption to the French average — a display preference, never written to house.json. */
   const householdSize = useLocalStorage<number>('kasbah.householdSize', 3)
   const cupGrams = useLocalStorage<number>('kasbah.cupGrams', CUP_GRAMS_DEFAULT)
+  /** Order of the rail's views on THIS device (view names, House and Settings excluded); empty = the default order. */
+  const navOrder = useLocalStorage<string[]>('kasbah.navOrder', [])
   const preferredDark = usePreferredDark()
   const weather = useWeather()
   const house = useHouseStore()
@@ -179,6 +181,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (Number.isFinite(v)) cupGrams.value = Math.min(CUP_GRAMS_MAX, Math.max(CUP_GRAMS_MIN, Math.round(v / CUP_GRAMS_STEP) * CUP_GRAMS_STEP))
   }
   function setHouseholdSize(v: number) { if (Number.isFinite(v)) householdSize.value = Math.min(HOUSEHOLD_SIZE_MAX, Math.max(HOUSEHOLD_SIZE_MIN, Math.round(v))) }
+  function setNavOrder(v: string[]) { navOrder.value = v }
   function toggleLocale() { locale.value = resolvedLocale.value === 'fr' ? 'en' : 'fr' }
 
   /** Applies the Vuetify theme + the palette's CSS tokens (data-theme, --bg, --accent…) on <html>. */
@@ -205,9 +208,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     appearance, theme, locale, isDark, wantDark, themeId, currentTheme, resolvedLocale, fullscreen,
-    sceneStyle, sceneAmbience, sceneQuality, sceneProjection, sceneAssets, sceneDebug, sceneTuning, savedSceneTuning, sceneTuningDirty, sceneTuningPreset, sceneTuningOpen, reliefEditing, terrainTab, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize, cupGrams,
+    sceneStyle, sceneAmbience, sceneQuality, sceneProjection, sceneAssets, sceneDebug, sceneTuning, savedSceneTuning, sceneTuningDirty, sceneTuningPreset, sceneTuningOpen, reliefEditing, terrainTab, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize, cupGrams, navOrder,
     setAppearance, cycleAppearance, setTheme, setLocale, toggleLocale, applyToVuetify, applyLocale,
-    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneProjection, setSceneAssets, setSceneDebug, setSceneTuning, resetSceneTuning, applySceneTuningPreset, saveSceneTuning, setSceneTuningOpen, setReliefEditing, setTerrainTab, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize, setCupGrams,
+    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneProjection, setSceneAssets, setSceneDebug, setSceneTuning, resetSceneTuning, applySceneTuningPreset, saveSceneTuning, setSceneTuningOpen, setReliefEditing, setTerrainTab, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize, setCupGrams, setNavOrder,
     appearances: APPEARANCES, themes: THEME_LIST, locales: LOCALES,
     styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, seasons: SEASON_MODES, sceneSeason, setSceneSeason, qualities: RENDER_QUALITIES, projections: SCENE_PROJECTIONS,
   }

@@ -96,12 +96,12 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 ## 4 — UI
 
 <!-- section:4_ui:begin (généré par scripts/wiki-index.mjs depuis 4_ui/README.md - ne pas éditer ici) -->
-Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-10-21).
+Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-10-25).
 
 | Socle | Dernière mise à jour |
 |---|---|
 | [4_0 Langage visuel](4_ui/4_0_langage-visuel.md) | 2026-10-06 |
-| [4_1 Navigation et panneaux](4_ui/4_1_navigation-et-panneaux.md) | 2026-10-21 |
+| [4_1 Navigation et panneaux](4_ui/4_1_navigation-et-panneaux.md) | 2026-10-25 |
 | [4_2 Thème et langues](4_ui/4_2_theme-et-langues.md) | 2026-10-06 |
 
 | Vues | Dernière mise à jour |
@@ -110,7 +110,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-19 |
 | [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-10-13 |
 | [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-10-21 |
-| [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-10-13 |
+| [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-10-25 |
 | [4_8 Mode édition et propriétés](4_ui/4_8_mode-edition-et-proprietes.md) | 2026-10-21 |
 <!-- section:4_ui:end -->
 

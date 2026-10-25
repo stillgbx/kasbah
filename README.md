@@ -228,7 +228,7 @@ On a large (landscape) screen, a three-column layout: the **rail** on the left, 
 | **Pets** | PetKit feeders and fountains: meals, dispensing, water, consumables. |
 | **TENS** | actiTENS electrostimulator over Bluetooth, from the browser; only appears on the computers where it is enabled. |
 | **Automations** | “When / Unless / Then” rules (see below). |
-| **Settings** | Theme, 3D rendering, plugins, setup cards, AI assistant accounts (MCP), edit mode, aligning the house on the aerial photo. |
+| **Settings** | Theme, order of the navigation bar on this device, 3D rendering, plugins, setup cards, AI assistant accounts (MCP), edit mode, aligning the house on the aerial photo. |
 
 ### 3D scene
 

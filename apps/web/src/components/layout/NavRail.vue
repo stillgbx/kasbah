@@ -5,8 +5,9 @@ import { pluginSettingsOf } from '@kasbah/shared'
 import { useEventListener, useResizeObserver } from '@vueuse/core'
 import { useHouseStore } from '../../stores/house'
 import StrokeIcon from '../ui/StrokeIcon.vue'
-import { NAV_ITEMS, visibleNavItems } from '../../lib/navItems'
+import { NAV_ITEMS, orderNavItems, visibleNavItems } from '../../lib/navItems'
 import { useLocalPluginsStore } from '../../stores/localPlugins'
+import { useSettingsStore } from '../../stores/settings'
 import { useAlertsStore } from '../../stores/alerts'
 import { usePropertiesStore } from '../../stores/properties'
 import PropertyList from './PropertyList.vue'
@@ -30,7 +31,9 @@ const localPlugins = useLocalPluginsStore()
 // a feature turned off in Settings (the shopping list) leaves the rail; before the house
 // arrives, its default applies (on): no entry popping up at load
 const pluginOn = (id: string) => pluginSettingsOf(house.house?.plugins ?? {}, id).enabled
-const items = computed(() => visibleNavItems(localPlugins.isEnabled, pluginOn).filter((it) => it.name !== 'settings'))
+// in the order chosen on this device (Settings → Navigation bar)
+const settings = useSettingsStore()
+const items = computed(() => orderNavItems(visibleNavItems(localPlugins.isEnabled, pluginOn), settings.navOrder).filter((it) => it.name !== 'settings'))
 const settingsItem = NAV_ITEMS.find((it) => it.name === 'settings')!
 
 // A pill on the icon of a view that has a pending alert. Being on the view is enough to see its

@@ -1,6 +1,6 @@
 # Navigation et panneaux
 
-> Dernière mise à jour : 2026-10-21
+> Dernière mise à jour : 2026-10-25
 > Sources : `apps/web/src/App.vue`, `apps/web/src/components/layout/*.vue`, `apps/web/src/views/*.vue`, `apps/web/src/components/home/*.vue`, `apps/web/src/components/controls/*.vue`, `apps/web/src/views/LightsView.vue`, `apps/web/src/components/home/PlacementControl.vue`, `apps/web/src/components/scenes/SceneChips.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/components/devices/RoomLightsToggle.vue`, `apps/web/src/views/CoversView.vue`, `apps/web/src/components/covers/CoverPill.vue`, `apps/web/src/lib/{cover,deviceState}.ts`, `apps/web/src/composables/useHomeSummary.ts`, `apps/web/src/components/devices/ForgetDeviceButton.vue`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `apps/web/src/lib/audioRouting.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/web/src/lib/energy.ts`, `apps/web/src/components/devices/RoomBrightness.vue`, `apps/web/src/components/devices/CoversMaster.vue`, `apps/web/src/components/devices/LightsMaster.vue`, `apps/web/src/composables/useRoomLights.ts`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/components/energy/InverterFields.vue`, `apps/web/src/components/TeslaLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/components/vehicles/VehicleTuning.vue`, `apps/web/src/lib/vehicleTuning.ts`, `apps/web/src/lib/map.ts`, `apps/web/src/components/controls/VehicleCard.vue`, `apps/web/src/components/vehicles/ChargeLimitCard.vue`, `apps/web/src/components/home/DevicePanel.vue`, `apps/web/src/components/settings/PluginSection.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/composables/useSearch.ts`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/web/src/lib/search.ts`, `apps/web/src/lib/navItems.ts`, `apps/web/src/views/HeatingView.vue`, `apps/web/src/components/heating/*.vue`, `apps/web/src/components/MelcloudLinkCard.vue`, `apps/web/src/components/home/OpeningPanel.vue`, `apps/web/src/components/home/RoomEditPanel.vue`, `apps/web/src/components/home/ParkingPanel.vue`, `apps/web/src/lib/deviceIcons.ts`, `apps/web/src/views/MusicView.vue`, `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/components/music/MixcloudBrowser.vue`, `apps/web/src/components/MixcloudLinkCard.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/views/{AutomationsView,AutomationEditView}.vue`, `apps/web/src/components/automations/*.vue`, `apps/web/src/components/layout/NavRail.vue` (`meta.nav`), `apps/web/src/components/controls/LightHistoryChart.vue`, `apps/web/src/components/weather/WeatherPlaces.vue`, `apps/web/src/composables/useMusicSession.ts`, `apps/web/src/lib/streamQuality.ts`, `apps/web/src/components/home/ReliefPanel.vue`, `apps/web/src/lib/ignRelief.ts`, `apps/web/src/lib/moon.ts`, `apps/web/src/components/vehicles/VehicleSoftware.vue`, `apps/web/src/components/layout/AssistantReply.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/components/ClaudeLinkCard.vue`, `apps/web/src/composables/useVoiceInput.ts`, `apps/web/src/stores/properties.ts`, `apps/web/src/components/layout/PropertyList.vue`, `apps/web/src/components/home/{HouseEditPanel,RoomShapeSection}.vue`, `apps/web/src/components/property/*.vue`, `apps/web/src/lib/onboarding.ts`, `apps/web/src/lib/geocode.ts`, `apps/web/src/views/ShoppingView.vue` (2026-10-11)
 
 ## Où sont les vues
@@ -1302,3 +1302,24 @@ machine chauffe sans dire quelle zone, voir [../3_plugins/3_13_mitsubishi-melclo
 Le résumé ajoute alors « chauffage en marche » (« heating on ») juste après la température, et
 **rien** à l'arrêt : « chauffage arrêté » tout l'été serait du bruit. La ligne défile déjà si elle
 déborde (`MarqueeText`). Vérifié en mode simulé, thermostat en chauffe puis à l'arrêt.
+
+### Mise à jour 2026-10-25 — l'ordre du rail : Lumières et Ouvrants d'abord, et un ordre par appareil
+
+Constat de l'utilisateur : sur téléphone, il fallait faire défiler la barre du bas pour atteindre les
+Ouvrants. **Ordre par défaut** de `NAV_ITEMS` (`lib/navItems.ts`) : Maison, **Lumières, Ouvrants,
+Météo**, puis Agenda, École, Courses, Musique, Médias et la suite dans leur ordre d'avant ;
+Automatisations et Réglages restent à la fin. À 375 px, les quatre premières entrées tiennent dans la
+barre sans défiler (mesuré au `getBoundingClientRect`).
+
+**Ordre propre à l'appareil.** `orderNavItems(items, order)` range les entrées selon
+`settings.navOrder` (clé `kasbah.navOrder`, localStorage, `stores/settings.ts`) : Maison toujours en
+tête, Réglages toujours au pied (`FIXED_NAV`), une vue que l'ordre enregistré ne nomme pas (ajoutée
+depuis) vient après les autres dans l'ordre par défaut, et un ordre vide est l'ordre par défaut.
+`NavRail.vue` l'applique au rail ; la recherche (`useSearch.ts`) garde l'ordre par défaut. L'ordre se
+règle dans Réglages → Barre de navigation ([4_7_reglages](4_7_reglages.md), mise à jour du 2026-10-25).
+
+**Écarté** : un ordre par utilisateur, côté serveur — l'utilisateur a choisi l'appareil (la tablette
+murale et le téléphone n'ont pas les mêmes besoins).
+
+Sources : `apps/web/src/lib/navItems.ts` (+ test), `apps/web/src/components/layout/NavRail.vue`,
+`apps/web/src/stores/settings.ts`.
