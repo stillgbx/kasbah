@@ -1,7 +1,7 @@
 # Appli Android Auto
 
-> Dernière mise à jour : 2026-10-23
-> Sources : `apps/android/app/src/test/kotlin/org/kasbah/auto/*Test.kt`, `apps/android/app/src/main/kotlin/org/kasbah/auto/{KasbahClient,MainActivity,KasbahCarAppService,AccessScreen,VoiceScreen,Voice,ProbeScreen,Approach}.kt`, `apps/android/app/src/debug/`, `apps/android/app/src/main/AndroidManifest.xml`, `apps/android/app/build.gradle.kts`, `apps/android/dhu.cmd`, `apps/android/.gitattributes`, `apps/server/src/http/session.ts`, `apps/server/src/plugins/transcription/index.ts`, portail `developer.renaultgroup.com`, session du 2026-10-22 (essais sur un téléphone Android et dans le simulateur DHU), `apps/android/keystore.properties.example`, `apps/android/app/build.gradle.kts` (signature), console Google Play (2026-10-23)
+> Dernière mise à jour : 2026-10-25
+> Sources : `apps/android/app/src/test/kotlin/org/kasbah/auto/*Test.kt`, `apps/android/app/src/main/kotlin/org/kasbah/auto/{KasbahClient,MainActivity,KasbahCarAppService,AccessScreen,VoiceScreen,Voice,ProbeScreen,Approach}.kt`, `apps/android/app/src/debug/`, `apps/android/app/src/main/AndroidManifest.xml`, `apps/android/app/src/main/res/xml/{backup_rules,data_extraction_rules}.xml`, bibliothèque `androidx.car.app:app` 1.7.0 (`HostValidator`, `hosts_allowlist_sample`), scan Claude Security du 2026-10-25, `apps/android/app/build.gradle.kts`, `apps/android/dhu.cmd`, `apps/android/.gitattributes`, `apps/server/src/http/session.ts`, `apps/server/src/plugins/transcription/index.ts`, portail `developer.renaultgroup.com`, session du 2026-10-22 (essais sur un téléphone Android et dans le simulateur DHU), `apps/android/keystore.properties.example`, `apps/android/app/build.gradle.kts` (signature), console Google Play (2026-10-23)
 
 Une appli Android, à côté de l'app web, qui met Kasbah sur l'écran de la voiture par **Android
 Auto** : le portail et les portes de garage, un relevé de ce que la voiture transmet, et la voix de
@@ -51,7 +51,8 @@ Deux autres pistes vues le même jour :
   pour « ouvrir la porte de garage ».
 - **Installée à la main**, jamais par le Play Store : mode développeur d'Android Auto, « Sources
   inconnues ». D'où `HostValidator.ALLOW_ALL_HOSTS_VALIDATOR` (`KasbahCarAppService.kt`) : la liste
-  des hôtes Android Auto de la bibliothèque est privée.
+  des hôtes Android Auto de la bibliothèque est privée. Depuis le 2026-10-25, ce validateur ne vaut plus
+  que pour la version debug, et cette liste se lit bien : voir la mise à jour « sécurité » en fin de page.
 - **Construire et installer** :
   `JAVA_HOME` = le JDK d'Android Studio (`jbr`), `ANDROID_HOME` = le SDK, puis
   `./gradlew assembleDebug` dans `apps/android` et `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
@@ -338,6 +339,7 @@ Pour tester sans rouler, la **version debug** a :
   à côté de la version du Play Store sans rien désinstaller ;
 - un récepteur `MockLocationReceiver` (`app/src/debug/`). Il déplace la position par un décalage depuis
   la maison, sans jamais de coordonnées dans la commande, ou bien simule l'entrée avec `--ez arrive true`.
+  Depuis le 2026-10-25, seul `adb` peut lui écrire (permission `DUMP`, voir la mise à jour « sécurité »).
 
 Pièges :
 - **Le géorepérage est refusé** (`ApiException` 1000, `GEOFENCE_NOT_AVAILABLE`) quand la « précision de
@@ -407,3 +409,58 @@ d'Android ; « Pas maintenant » ne demande rien.
 La position ne servant qu'au géorepérage, sur le téléphone, elle n'est pas « collectée » au sens de la
 fiche de sécurité des données. Version 0.4, `versionCode` 4 : le bundle signé contient bien
 `ACCESS_BACKGROUND_LOCATION` et pas le récepteur de test de la version debug.
+
+### Mise à jour 2026-10-25 — sécurité : hôte vérifié, préférences hors sauvegarde, récepteur de test protégé
+
+Trois trous trouvés par un scan Claude Security de `apps/android`, corrigés le même jour.
+
+**N'importe quelle appli du téléphone pouvait se faire passer pour la voiture.** Le service
+`KasbahCarAppService` est exporté sans permission (la Car App Library l'exige), et le seul contrôle de
+l'appelant est le `HostValidator`. Avec `ALLOW_ALL_HOSTS_VALIDATOR` en release, une appli sans aucune
+permission pouvait se lier au service, lire la grille des ouvrants et appuyer sur « Ouvrir » : la commande
+`cover.open` partait avec la session gardée, indiscernable d'un appui dans la voiture. Même chose pour
+l'écran « Parler » et donc l'assistant.
+
+- `createHostValidator()` garde le tout-venant **seulement si l'appli est débogable**
+  (`ApplicationInfo.FLAG_DEBUGGABLE` : `buildConfig` est éteint sous AGP 9, `BuildConfig.DEBUG` aurait
+  demandé de changer la configuration). Le simulateur DHU marche donc comme avant avec la version debug.
+- En release : `HostValidator.Builder(...).addAllowedHosts(androidx.car.app.R.array.hosts_allowlist_sample)`.
+  Contrairement à ce que disait le commentaire, **ce tableau est livré** dans la bibliothèque 1.7.0 (dans
+  son `R.txt`) : les empreintes de certificat de `com.google.android.projection.gearhead` (Android Auto)
+  et de l'hôte de gabarits d'Android Automotive de Google. Il n'est pas dans son `public.txt`, d'où
+  `@SuppressLint("PrivateResource")`. La bibliothèque accepte en plus l'appli elle-même, le système et un
+  détenteur de `android.car.permission.TEMPLATE_RENDERER`.
+- Effet de bord à connaître : si Google re-signait Android Auto d'une clé hors de cette liste, la version
+  release disparaîtrait de la voiture jusqu'à une mise à jour de la bibliothèque. Une version installée
+  par le partage interne de Play reste affichée : l'hôte est toujours Android Auto.
+
+**La session et la position de la maison partaient dans les sauvegardes.** Tout ce que l'appli garde est
+dans un seul fichier de préférences, `kasbah.xml` (`url`, `session`, `account`, `home`, `order`,
+`alert`), et le manifeste ne réglait rien : la sauvegarde automatique de Google et le transfert vers un
+nouveau téléphone le copiaient. Une copie restaurée ailleurs arrivait connectée, cookie
+`__Host-kasbah_session` compris.
+
+- `res/xml/data_extraction_rules.xml` (Android 12 et plus, `cloud-backup` et `device-transfer`) et
+  `res/xml/backup_rules.xml` (`fullBackupContent`, Android 10 et 11) excluent `kasbah.xml`.
+- `android:allowBackup="false"` écarté : pour une cible Android 12 ou plus, il n'arrête pas le transfert
+  d'appareil à appareil.
+- Conséquence : après une restauration ou sur un nouveau téléphone, l'appli démarre **déconnectée**, avec
+  l'ordre et l'alerte par défaut. Séparer les réglages sans secret dans un autre fichier demanderait une
+  migration : écarté. Une sauvegarde faite avant garde l'ancien cookie jusqu'à la suivante ; se
+  déconnecter puis se reconnecter l'invalide.
+
+**Le récepteur de test de la version debug écoutait toutes les applis.** `MockLocationReceiver` était
+exporté sans permission : une appli voisine pouvait fausser la position de **tout** le téléphone (quand
+l'appli debug a le droit `mock_location`), la mettre sur la maison, ou faire sortir l'alerte d'approche.
+
+- Le récepteur reste exporté mais exige **`android.permission.DUMP`** (`src/debug/AndroidManifest.xml`).
+  Le shell d'`adb` la détient ; une appli ordinaire ne peut pas l'obtenir (signature, privilégiée, ou
+  accordée par `adb shell pm grant`). Les commandes `adb shell am broadcast` ne changent pas.
+- `exported="false"` écarté : le shell (uid 2000) ne peut pas écrire à un récepteur non exporté d'une
+  autre appli sur un téléphone non rooté, ce qui casserait le mode de test.
+
+**Vérifié** : compilation release, `assembleDebug`, les 31 tests unitaires et le lint ; le manifeste
+empaqueté porte bien la liste des hôtes, les règles de sauvegarde et la permission `DUMP`. **Pas encore
+vérifié** sur un téléphone ni dans la voiture : que la version release apparaît toujours dans Android
+Auto, et que les commandes `adb` atteignent toujours le récepteur. Aucun test du projet ne couvre ces
+trois points.

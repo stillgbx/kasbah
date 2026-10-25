@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 and later. KasbahClient's preferences (shared_prefs/kasbah.xml) hold the session cookie and the
+  house position: neither the Google backup nor a transfer to a new phone takes them.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="kasbah.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="kasbah.xml" />
+    </device-transfer>
+</data-extraction-rules>

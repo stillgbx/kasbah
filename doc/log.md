@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-25] update | Sécurité de l'appli Android Auto : hôte vérifié, préférences hors sauvegarde, récepteur de test protégé
+
+**Déclencheur** : scan Claude Security de `apps/android` (effort medium), trois constats corrigés.
+
+**Pages modifiées** :
+- `1_architecture/1_15_appli-android-auto.md` - section datée : liste d'hôtes signés en release (`hosts_allowlist_sample`, tout-venant gardé pour la version debug), `kasbah.xml` exclu de la sauvegarde et du transfert, `MockLocationReceiver` réservé à `adb` par `DUMP` ; pistes écartées (`allowBackup="false"`, `exported="false"`) ; renvois ajoutés aux deux passages devenus inexacts.
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-25] update | Sécurité de l'app web : retour après connexion, cadre, secrets en clair, Agenda borné
 
 **Déclencheur** : audit Claude Security de `apps/web` (effort medium), quatre constats corrigés.

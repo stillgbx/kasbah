@@ -8,8 +8,13 @@
         tools:ignore="MockLocation,ProtectedPermissions" />
 
     <application>
+        <!--
+          Exported because `adb shell am broadcast` is refused by a receiver that is not, but only to
+          senders holding DUMP: adb's shell has it, an ordinary app cannot get it.
+        -->
         <receiver
             android:name=".MockLocationReceiver"
-            android:exported="true" />
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
     </application>
 </manifest>

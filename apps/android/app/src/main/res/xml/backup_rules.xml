@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 10 and 11, where the Google backup and a transfer to a new phone both follow these rules (Android 12
+  and later read data_extraction_rules.xml): KasbahClient's preferences, with the session cookie and the house
+  position, stay on the phone.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="kasbah.xml" />
+</full-backup-content>
