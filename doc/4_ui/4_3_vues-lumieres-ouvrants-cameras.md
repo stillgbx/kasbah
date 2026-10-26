@@ -933,3 +933,35 @@ reste jusqu'à ce que la vidéo joue (13,7 s), sans noir entre les deux. Côté 
 désormais de la mémoire et un direct rejoint une session ouverte en 4 ms :
 `../3_plugins/3_5_google-nest.md`, même date. Tests : `components/controls/CameraVideo.test.ts`
 (carte détail avec et sans vignette, tuile qui passe en direct).
+
+### Mise à jour 2026-10-26 (2) — caméra éteinte : l'image reste, mais elle le dit
+
+Retour de l'utilisateur, capture de la vue Caméras à l'appui : beaucoup de caméras éteintes, et la vue
+« reste figée et sans message sur les vignettes ». Le serveur savait pourtant qu'elles étaient
+éteintes (`inactive: true` dans `…/cameras/snapshots`). Mais `CameraVideo.vue` ne disait « Caméra
+inactive : pas de flux » que sur une tuile **sans** image ; avec une image, il n'affichait que son
+âge. Ce cas devient la règle depuis que les images figées sont rechargées au démarrage
+(`../3_plugins/3_5_google-nest.md`, même date).
+
+- **Tuile d'une caméra connue éteinte** : la dernière image reste, **assombrie** (opacité 0,35), sous
+  le message « Caméra inactive : pas de flux », l'âge en haut à droite.
+- **Direct qui échoue** : l'écran recopiait la raison brute (« Flux terminé · ffmpeg exited (…): Error
+  opening input files: Server returned 404 Not Found »). Elle devient une phrase (`camera.video.why.*`,
+  fr et en) : 404 → « La caméra ne diffuse pas : éteinte ou hors réseau » ; délai dépassé, connexion
+  refusée ou coupée → « Connexion à la caméra perdue » ; quota Google → « Google limite les demandes :
+  réessayez dans une minute ». Une raison inconnue garde le libellé seul (« Flux terminé », « Flux
+  indisponible ») ; la raison brute reste dans le journal du serveur. La dernière image reste aussi,
+  assombrie, derrière ce message.
+- **Revenir à l'aperçu** : après un direct en échec, la barre surligne déjà « Aperçu » (le flux est
+  fini), et l'appui ne faisait rien. Le message restait jusqu'au changement de vue. L'appui sur le
+  mode courant efface maintenant l'échec.
+
+Limite : une caméra **pas encore essayée** depuis le démarrage du serveur garde son image sans
+message ; la rotation ouvre une caméra toutes les 8 s, et il a fallu environ 80 s pour que les huit
+caméras éteintes de la maison soient signalées. Un direct sur une caméra éteinte met environ 14 s à
+échouer (ouverture de la session chez Google, puis 404).
+
+Vérifié sur la vraie maison : après la rotation, toutes les caméras éteintes assombries et signalées,
+la seule active normale ; direct sur une caméra éteinte → la phrase au bout de 14 s, puis Aperçu
+efface le message ; texte sans débordement dans une tuile de 397 px. Tests :
+`components/controls/CameraVideo.test.ts` (tuile inactive avec image, direct en 404, raison inconnue).

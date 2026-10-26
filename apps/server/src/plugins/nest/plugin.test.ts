@@ -489,6 +489,34 @@ describe('nest plugin', () => {
     await plugin.stop()
   })
 
+  it('cameras view: a camera marked inactive that gives an image again is no longer inactive', async () => {
+    const google = fakeGoogle()
+    const ffmpeg = fakeSpawn()
+    const { plugin, clock } = await linked(google, {}, ffmpeg)
+    const app = await routes(plugin)
+    const watch = async () => { await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' }); await settle() }
+    const opened = () => google.commands.filter((c) => c.command.endsWith('GenerateRtspStream')).map((c) => c.id)
+    await watch()
+    const id = opened()[0]!
+    // off: its stream dies before the first image
+    const first = ffmpeg.procs[0] as unknown as EventEmitter & { exitCode: number | null }
+    first.exitCode = 1
+    first.emit('exit', 1, null)
+    await settle()
+    const state = async () => ((await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots' })).json() as { snapshots: Record<string, { inactive?: boolean; at?: number }> }).snapshots[id]
+    expect(await state()).toMatchObject({ inactive: true })
+    // back on: once its delay is over it is tried again, and an image clears the mark on its own,
+    // before any MP4 header — a session opened by a live view gives images too, without a thumbnail hold
+    while (opened().filter((x) => x === id).length < 2) { clock.advance(8000); await watch() }
+    ffmpeg.procs[opened().lastIndexOf(id)]!.stdio[3]!.write(Buffer.from([0xff, 0xd8, 0xff, 0xda, 0x00, 0x04, 0x01, 0x00, 0x05, 0x12, 0xff, 0xd9]))
+    await settle()
+    const after = await state()
+    expect(after?.inactive).toBeUndefined()
+    expect(after?.at).toBe(clock.now())
+    await plugin.stop()
+    try { unlinkSync(join(tmpdir(), 'kasbah-nest-snapshots', `${id}.jpg`)) } catch { /* not saved */ }
+  })
+
   it('a 400 from Google on a command surfaces as UNSUPPORTED_COMMAND with Google’s message', async () => {
     const google = fakeGoogle({ commandStatus: 400 })
     const { plugin } = await linked(google)

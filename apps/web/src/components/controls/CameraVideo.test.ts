@@ -48,6 +48,53 @@ describe('CameraVideo', () => {
     expect(w.find('.cam__overlay').text()).toBe('Connexion au flux…')
   })
 
+  it('tile of a camera known to be off: its last image stays, dimmed, under the inactive message', async () => {
+    fake(undefined)
+    const at = Date.now() - AGO_MS
+    const w = mount(CameraVideo, { props: { deviceId: 'nest:cam1', autoplay: false, snapshotAt: at, inactive: true } })
+    expect(w.find('img.cam__snapshot').classes()).toContain('cam__snapshot--off')
+    expect(w.find('.cam__overlay').text()).toContain('Caméra inactive : pas de flux')
+    expect(w.find('.cam__msg--age').text()).toBe('il y a 12 s')
+    // an active camera's image speaks for itself: no message, not dimmed
+    await w.setProps({ inactive: false })
+    expect(w.find('img.cam__snapshot').classes()).not.toContain('cam__snapshot--off')
+    expect(w.find('.cam__overlay').text()).toBe('il y a 12 s')
+  })
+
+  it('a live stream that fails says why in words, over the dimmed image, and Preview clears it', async () => {
+    // this time the stream opens: MediaSource fires `sourceopen`, the WebSocket is a fake we drive
+    const sockets: { onmessage: ((ev: { data: unknown }) => void) | null; close: () => void }[] = []
+    vi.stubGlobal('MediaSource', class { readyState = 'open'; addEventListener(_: string, cb: () => void) { queueMicrotask(cb) } endOfStream() { /* closed */ } })
+    vi.stubGlobal('WebSocket', class { onmessage = null; onerror = null; onclose = null; binaryType = ''; constructor() { sockets.push(this) } close() { /* closed */ } })
+    fake(undefined)
+    const at = Date.now() - AGO_MS
+    const w = mount(CameraVideo, { props: { deviceId: 'nest:cam1', autoplay: false, snapshotAt: at } })
+    await w.findAll('.seg__btn')[2]!.trigger('click')                // Live
+    await flushPromises()
+    sockets[0]!.onmessage!({ data: JSON.stringify({ type: 'ended', reason: 'ffmpeg exited (3419392776): Error opening input files: Server returned 404 Not Found' }) })
+    await flushPromises()
+    const overlay = w.find('.cam__overlay').text()
+    expect(overlay).toContain('La caméra ne diffuse pas : éteinte ou hors réseau')
+    expect(overlay).not.toMatch(/ffmpeg|404/)
+    expect(w.find('img.cam__snapshot').classes()).toContain('cam__snapshot--off')
+    // the bar shows Preview (the stream is over): pressing it goes back to the plain thumbnail
+    await w.findAll('.seg__btn')[1]!.trigger('click')
+    expect(w.find('.cam__overlay').text()).toBe('il y a 12 s')
+    expect(w.find('img.cam__snapshot').classes()).not.toContain('cam__snapshot--off')
+  })
+
+  it('an unexplained end keeps the plain label, never the raw reason', async () => {
+    const sockets: { onmessage: ((ev: { data: unknown }) => void) | null }[] = []
+    vi.stubGlobal('MediaSource', class { readyState = 'open'; addEventListener(_: string, cb: () => void) { queueMicrotask(cb) } endOfStream() { /* closed */ } })
+    vi.stubGlobal('WebSocket', class { onmessage = null; onerror = null; onclose = null; binaryType = ''; constructor() { sockets.push(this) } close() { /* closed */ } })
+    fake(undefined)
+    const w = mount(CameraVideo, { props: { deviceId: 'nest:cam1' } })
+    await flushPromises()
+    sockets[0]!.onmessage!({ data: JSON.stringify({ type: 'ended', reason: 'relay ended: bad MP4 stream: invalid box' }) })
+    await flushPromises()
+    expect(w.find('.cam__overlay').text()).toBe('Flux terminé')
+  })
+
   it('tile: the thumbnail stays up when going live, until the video plays', async () => {
     const cameraSnapshots = fake(undefined)
     const at = Date.now() - AGO_MS

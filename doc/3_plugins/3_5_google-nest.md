@@ -696,3 +696,19 @@ premier fragment, qui couvre un groupe d'images.
 
 Test : `rtsp-relay.test.ts` (la liste ne porte plus que `rtsp_transport`, la ligne de commande n'a
 plus `nobuffer`).
+
+### Mise à jour 2026-10-26 (3) — une image efface la marque « inactive »
+
+Vu sur la vraie maison : une caméra revenue en ligne, image de 0 min et ouverte en direct, restait
+marquée `inactive`. La marque (`gridFailed`) ne s'effaçait qu'à l'en-tête reçu par la **prise** des
+vignettes (`acquireGrid`) ; une session ouverte par un direct n'a pas de prise. Désormais toute image
+reçue d'un relais de cette caméra (`snapshot.onImage`) l'efface : une image prouve qu'elle diffuse,
+quel que soit celui qui a ouvert la session. Côté interface, ce que montre une tuile de caméra
+éteinte : `../4_ui/4_3_vues-lumieres-ouvrants-cameras.md`, mise à jour 2026-10-26 (2).
+
+**Constat au passage, non traité** : avec un budget de sessions inférieur au nombre de caméras, une
+caméra en échec n'est jamais réessayée tant que d'autres tournent, car les caméras qui ont rendu
+leur place (rang 2) passent toujours avant les caméras en échec (rang 3). Sans effet chez
+l'utilisateur, dont le budget couvre toutes les caméras.
+
+Test : `plugin.test.ts` (« a camera marked inactive that gives an image again is no longer inactive »).

@@ -265,6 +265,7 @@
       "ago": "il y a {s} s", "agoMin": "il y a {m} min", "inactive": "Caméra inactive : pas de flux", "noSnapshot": "Pas encore d'image",
       "unsupported": "Ce navigateur ne peut pas lire ce flux", "play": "Voir la vidéo", "stop": "Arrêter la vidéo", "mute": "Couper le son", "unmute": "Activer le son",
       "mode": { "label": "Mode d'affichage", "off": "Arrêté", "preview": "Aperçu", "live": "Direct" }, "liveFull": "3 directs au maximum",
+      "why": { "off": "La caméra ne diffuse pas : éteinte ou hors réseau", "network": "Connexion à la caméra perdue", "quota": "Google limite les demandes : réessayez dans une minute" },
       "webrtcLater": "Cette caméra ne sert que du WebRTC, pas encore pris en charge."
     }
   },

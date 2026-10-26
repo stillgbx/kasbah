@@ -265,6 +265,7 @@
       "ago": "{s} s ago", "agoMin": "{m} min ago", "inactive": "Camera inactive: no stream", "noSnapshot": "No image yet",
       "unsupported": "This browser cannot play this stream", "play": "Watch video", "stop": "Stop video", "mute": "Mute", "unmute": "Unmute",
       "mode": { "label": "Display mode", "off": "Off", "preview": "Preview", "live": "Live" }, "liveFull": "3 live streams max",
+      "why": { "off": "The camera isn't streaming: turned off or offline", "network": "Lost the connection to the camera", "quota": "Google is limiting requests: try again in a minute" },
       "webrtcLater": "This camera only offers WebRTC, not supported yet."
     }
   },

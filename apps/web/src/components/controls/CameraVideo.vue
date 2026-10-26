@@ -32,7 +32,21 @@ const snapshotUrl = computed(() => (shownAt.value ? getTransport().cameraSnapsho
 const snapshotAgeS = computed(() => (shownAt.value ? Math.max(0, Math.round((now.value - shownAt.value) / 1000)) : 0))
 /** The video has really started: until then, the thumbnail covers the black of the player. */
 const frameShown = ref(false)
-const showSnapshot = computed(() => !!snapshotUrl.value && (status.value === 'idle' || status.value === 'connecting' || (status.value === 'playing' && !frameShown.value)))
+const showSnapshot = computed(() => !!snapshotUrl.value && (status.value !== 'playing' || !frameShown.value))
+/** No live picture to show (camera off, stream failed): the last image stays, dimmed under the message. */
+const snapshotDimmed = computed(() => (status.value === 'idle' && props.inactive) || status.value === 'ended' || status.value === 'error')
+/**
+ * Why a stream stopped, in words for people. The raw reason (ffmpeg's last line, Google's answer)
+ * is for the server log: "ffmpeg exited (…): Server returned 404 Not Found" said nothing to the user.
+ */
+const whyKey = computed(() => {
+  if (status.value !== 'ended' && status.value !== 'error') return null
+  const d = detail.value
+  if (/404|not found/i.test(d)) return 'off'
+  if (/rate limit|quota/i.test(d)) return 'quota'
+  if (/timed? ?out|connection (refused|reset)|unreachable|i\/o error|end of file|econn|enotfound/i.test(d)) return 'network'
+  return null
+})
 
 async function loadOwnSnapshot() {
   const deviceId = props.deviceId
@@ -168,7 +182,8 @@ function stop() { close(); status.value = 'idle' }
 type Mode = 'off' | 'preview' | 'live'
 const mode = computed<Mode>(() => (status.value === 'playing' || status.value === 'connecting' ? 'live' : props.paused ? 'off' : 'preview'))
 function setMode(m: Mode) {
-  if (m === mode.value) return
+  // a live stream that failed leaves the tile on "Preview" with its message: pressing it must clear the message
+  if (m === mode.value && (m === 'live' || status.value === 'idle')) return
   if (m === 'live') { if (!props.liveAllowed) return; start(); return }   // preview/stop: we cut the live stream if it was running
   stop()
   emit('snapshots', m === 'preview')
@@ -216,7 +231,8 @@ watch(() => mode.value === 'live', (live) => emit('live', live))
 <template>
   <div class="cam" :class="{ 'cam--tile': !autoplay }">
     <video ref="video" class="cam__video" :muted="muted" autoplay playsinline />
-    <img v-if="showSnapshot" :src="snapshotUrl!" class="cam__snapshot" alt="" />
+    <!-- a camera known to be off keeps its last image, dimmed under the message: frozen, but not silent -->
+    <img v-if="showSnapshot" :src="snapshotUrl!" class="cam__snapshot" :class="{ 'cam__snapshot--off': snapshotDimmed }" alt="" />
     <!-- state badge, always visible on a tile: live, preview or stopped -->
     <div v-if="!autoplay" class="cam__badge" :data-mode="mode">
       <span v-if="mode === 'live'" class="cam__dot" />{{ $t(`camera.video.mode.${mode}`) }}
@@ -224,8 +240,8 @@ watch(() => mode.value === 'live', (live) => emit('live', live))
     <div v-if="status !== 'playing'" class="cam__overlay">
       <span v-if="showSnapshot" class="cam__msg cam__msg--age">{{ snapshotAgeS >= 90 ? $t('camera.video.agoMin', { m: Math.round(snapshotAgeS / 60) }) : $t('camera.video.ago', { s: snapshotAgeS }) }}</span>
       <span v-if="status === 'connecting'" class="cam__msg">{{ $t('camera.video.connecting') }}</span>
-      <span v-else-if="status === 'idle' && !showSnapshot" class="cam__msg">{{ $t(inactive ? 'camera.video.inactive' : autoplay ? 'camera.video.stopped' : 'camera.video.noSnapshot') }}</span>
-      <span v-else-if="status !== 'idle'" class="cam__msg">{{ $t(`camera.video.${status}`) }}<span v-if="detail" class="cam__detail"> · {{ detail }}</span></span>
+      <span v-else-if="status === 'idle' && (!showSnapshot || inactive)" class="cam__msg">{{ $t(inactive ? 'camera.video.inactive' : autoplay ? 'camera.video.stopped' : 'camera.video.noSnapshot') }}</span>
+      <span v-else-if="status !== 'idle'" class="cam__msg">{{ whyKey ? $t(`camera.video.why.${whyKey}`) : $t(`camera.video.${status}`) }}<span v-if="status === 'unsupported' && detail" class="cam__detail"> · {{ detail }}</span></span>
     </div>
     <div class="cam__bar">
       <!-- detail card: live playback / stop -->
@@ -255,6 +271,7 @@ watch(() => mode.value === 'live', (live) => emit('live', live))
 .cam { position: relative; border-radius: 12px; overflow: hidden; background: #000; }
 .cam__video { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #000; }
 .cam__snapshot { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.cam__snapshot--off { opacity: .35; }
 .cam__msg--age { position: absolute; top: 8px; right: 8px; font-size: 11px; padding: 3px 7px; }
 .cam__overlay { position: absolute; inset: 0 0 44px 0; display: grid; place-items: center; color: #ddd; font-size: 13px; padding: 12px; text-align: center; pointer-events: none; }
 .cam__msg { background: rgba(0, 0, 0, .55); padding: 6px 10px; border-radius: 8px; }

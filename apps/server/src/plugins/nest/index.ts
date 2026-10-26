@@ -295,7 +295,10 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       onEnded: (reason) => void closeStream(externalId, `relay ended: ${reason}`),
       snapshot: {
         intervalMs: config!.NEST_SNAPSHOT_MS, width: SNAPSHOT_WIDTH,
-        onImage: (jpeg) => { snapshots.set(externalId, { jpeg, at: ctx!.clock.now(), savedAt: snapshots.get(externalId)?.savedAt }) },
+        onImage: (jpeg) => {
+          snapshots.set(externalId, { jpeg, at: ctx!.clock.now(), savedAt: snapshots.get(externalId)?.savedAt })
+          gridFailed.delete(externalId)                 // an image proves it streams, whoever opened the session (a live view too)
+        },
       },
       ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}),
     })
