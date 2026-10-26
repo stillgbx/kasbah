@@ -15,7 +15,7 @@ import { createCostGuard, detectQuality, lacksResources } from './core/post'
 import { parseCssColor } from './core/theme'
 import { defaultLook, defaultSceneTheme, RENDER_STYLES, rolesOf, styleById } from './styles'
 import { applyLook } from './builders/materials'
-import { dayFactor, fogDistance, resolveAmbience, sunDirection, weatherEffects, type AmbienceMode } from './core/ambience'
+import { dayFactor, fogDistance, fogRange, resolveAmbience, sunDirection, weatherEffects, type AmbienceMode } from './core/ambience'
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { levelLightUniforms, setLevelHeights } from './core/levelLight'
 import { heightMistUniforms, mistAmount } from './core/heightMist'
@@ -2540,6 +2540,18 @@ describe('weather in the scene', () => {
     expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0, visibilityM: 2000 })).toBe(220)
     // the thickest fog veils the house, it does not make it disappear
     expect(fogDistance({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0, visibilityM: 60 })).toBe(123)
+  })
+
+  it('stretches the fog with the camera, so a farther framing keeps the same veil on the house', () => {
+    const thick = { sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0, visibilityM: 60 }
+    const veil = (d: number) => { const r = fogRange(thick, d)!; return (d - r.near) / (r.far - r.near) }
+    expect(fogRange({ sunAltitudeDeg: 30, sunAzimuthDeg: 0, cloudiness: 0 }, 120)).toBeNull()
+    // the desktop's default framing, as before; closer, the same bounds
+    expect(fogRange(thick, 55)).toEqual({ near: 123 * 0.35, far: 123 })
+    expect(fogRange(thick, 20)).toEqual(fogRange(thick, 55))
+    // a phone in portrait, the garden framing: the house is no farther into the fog than at 55 m
+    expect(veil(115)).toBeCloseTo(veil(55))
+    expect(veil(120)).toBeLessThan(0.2)
   })
 
   it('ignores the reported visibility when nothing is in the air (overcast at 100 % humidity)', () => {

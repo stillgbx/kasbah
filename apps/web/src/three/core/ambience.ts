@@ -125,6 +125,22 @@ export function fogDistance(a: SceneAmbience): number | null {
   return FOG_MIN_M + a.visibilityM / 20
 }
 
+/** Camera distance (m) to the aimed point that `fogDistance` is set for: the desktop's default framing. */
+const FOG_CAMERA_REF_M = 55
+
+/**
+ * The scene fog's bounds for a camera `cameraDistance` m from the aimed point, or `null` without fog.
+ * Farther than the reference (a phone in portrait: 115 m, the garden framing: 120 m, the isometric
+ * view), the range stretches with the camera: the house keeps the same veil instead of sinking into
+ * the background. Closer, it stays as is.
+ */
+export function fogRange(a: SceneAmbience, cameraDistance: number): { near: number; far: number } | null {
+  const far = fogDistance(a)
+  if (far === null) return null
+  const k = Math.max(1, cameraDistance / FOG_CAMERA_REF_M)
+  return { near: far * 0.35 * k, far: far * k }
+}
+
 /**
  * 0 = pitch-dark night, 1 = broad daylight, and the whole twilight gradient in between. It is the only
  * number the styles need to blend their two palettes: between −6° (end of civil

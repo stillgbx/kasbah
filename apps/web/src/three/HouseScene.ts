@@ -22,7 +22,7 @@ import { setHeightMist } from './core/heightMist'
 import { materialOpacity, setLevelFade } from './core/levelFade'
 import { roomFocusUniforms, setRoomFocusShape, setRoomFocusStrength } from './core/roomFocus'
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, tiltBlurFactor, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
-import { dayFactor, fogDistance, sunDirection, type SceneAmbience } from './core/ambience'
+import { dayFactor, fogRange, sunDirection, type SceneAmbience } from './core/ambience'
 import { Bats } from './effects/bats'
 import { Disco } from './effects/disco'
 import { Parade } from './effects/parade'
@@ -3680,12 +3680,19 @@ export class HouseScene {
     // The fog is ALWAYS set, pushed back out of sight when the air is clear: three compiles one
     // program with and one without, and making it appear (visibility below 5 km) recompiled every
     // material — 2.1 s of frozen frame measured on the visibility slider in Settings (2026-09-25).
-    const far = fogDistance(this.ambience)
     const fog = this.scene.fog instanceof Fog ? this.scene.fog : (this.scene.fog = new Fog(backdrop, NO_FOG_M, NO_FOG_M))
     fog.color.copy(backdrop)
-    fog.near = far === null ? NO_FOG_M : far * 0.35
-    fog.far = far === null ? NO_FOG_M : far
+    this.updateFogRange()
     this.applyMist()
+  }
+
+  /** The fog's bounds follow the camera distance (`fogRange`): reread at every frame, they are only uniforms. */
+  private updateFogRange(): void {
+    const fog = this.scene.fog
+    if (!(fog instanceof Fog)) return
+    const range = fogRange(this.ambience, this.controls ? this.camera.position.distanceTo(this.controls.target) : 0)
+    fog.near = range?.near ?? NO_FOG_M
+    fog.far = range?.far ?? NO_FOG_M
   }
 
   /**
@@ -4362,6 +4369,7 @@ export class HouseScene {
     // three's counters reset to zero at every `render()`: with several renders per
     // frame, we must keep them ourselves to read a FRAME total and not that of the last pass.
     if (this.renderer) { this.renderer.info.autoReset = false; this.renderer.info.reset() }
+    this.updateFogRange()
     // the caustics first: the basin bottom reads them in this very frame
     if (this.renderer) this.caustics?.update(this.renderer)
     if (this.renderer) this.updateReflection(this.renderer, t0)

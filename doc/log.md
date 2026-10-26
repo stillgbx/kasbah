@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-26] update | Le brouillard météo s'étire avec la caméra
+
+**Déclencheur** : brouillard sur la vraie maison ; vue 3D grise sur téléphone et en vue « Jardin » sur ordinateur, lisible en vue « Tout » sur ordinateur.
+
+**Pages modifiées** :
+- `1_architecture/1_11_scene-3d-rendu.md` - section datée : distances de caméra mesurées (55 / 114 / 120 m), `fogRange` et `FOG_CAMERA_REF_M`, bornes relues à chaque image, décalage écarté ; renvois ajoutés à la section du 2026-10-14 et à la « conséquence connue » de l'isométrie.
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-25] update | Eau, Chauffage, Luminosité : découpage glissant ou calendaire
 
 **Déclencheur** : demande de l'utilisateur, après la vue Énergie : le même choix Glissant / Calendaire sur les autres graphes d'historique.

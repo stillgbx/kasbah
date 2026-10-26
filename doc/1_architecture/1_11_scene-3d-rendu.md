@@ -1,6 +1,6 @@
 # Scène 3D : rendu
 
-> Dernière mise à jour : 2026-10-22
+> Dernière mise à jour : 2026-10-26
 > Sources : sections reprises telles quelles de `1_5_scene-3d.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre le rendu de la scène : styles et thèmes, lumière du jour et de la nuit, ombres, météo (nuages, pluie, neige, brume), eau de la piscine, matières photo, chaîne d'image et étalonnage, tilt-shift, banc de réglage, performance GPU (passes, MSAA, shaders précompilés, voile de mesure). Elle est née du découpage de
@@ -871,6 +871,8 @@ d'Open-Meteo est une sortie de modèle, pas une mesure. Deux changements (`core/
   220 m), toujours `null` au-dessus de 5 km ; `applySky` garde `near = 0,35 × far`. Le brouillard le
   plus épais voile la maison et efface le jardin lointain sans la faire disparaître : la vue est un
   tableau de bord, pas une simulation.
+  Ces bornes valent pour une caméra à 55 m du point visé ; plus loin, elles s'étirent avec elle
+  (mise à jour 2026-10-26 en fin de page).
 
 Mesuré en preview (démo, brouillard forcé à 60 m, caméra à 55 m), écart-type de la luminance de
 l'image : 35,7 sans brouillard, 12 avec l'ancienne échelle (aplat gris), 36,9 avec la nouvelle.
@@ -1724,7 +1726,8 @@ Remplace la section « L'isométrie : des rails, pas une caméra de plus » (202
 - **Bornes de la molette** : `applyControlLimits` les multiplie par `tan(19°) / tan(10°)` ≈ 1,95 en
   isométrie, soit 8 à 234 m au lieu de 4 à 120 m. Hors isométrie, les valeurs sont inchangées.
 - **Conséquence connue** : la caméra est environ deux fois plus loin, donc un brouillard météo voile
-  un peu plus la maison en isométrie.
+  un peu plus la maison en isométrie. Corrigé le 2026-10-26 : les bornes du brouillard suivent la
+  distance de la caméra (fin de page).
 - Tests : « l'isométrie verrouille la plongée… » (champ de 20°, même hauteur montrée à l'aller et au
   retour).
 
@@ -2121,3 +2124,33 @@ Pistes non suivies : une 3D très allégée (gain incertain, le coût est aussi 
 
 Sources : `apps/web/src/three/core/post.ts` (`lacksResources`), `apps/web/src/composables/useHouseScene.ts`,
 `apps/web/src/views/HomeView.vue`, `apps/web/src/three/three.test.ts`.
+
+### Mise à jour 2026-10-26 — le brouillard s'étire avec la caméra
+
+**Symptôme** : un matin de brouillard sur la vraie maison, la vue 3D était un aplat gris sur
+téléphone, et sur ordinateur en vue « Jardin » ; la vue « Tout » sur ordinateur restait lisible.
+
+**Cause** : les bornes du `Fog` (`fogDistance`, 120 à 220 m, `near` = 0,35 × `far`) sont des
+distances à la caméra, réglées pour le cadrage par défaut du bureau. Mesuré en preview (démo) : caméra
+à **55 m** du point visé sur ordinateur, **114 m** sur téléphone en portrait (le cadrage tient la
+largeur de la maison dans un écran étroit), **120 m** en vue « Jardin ». Au brouillard le plus épais
+(`far` = 123 m), la maison était alors voilée à 96 %.
+
+**Correctif** : `fogRange(ambience, cameraDistance)` (`core/ambience.ts`) multiplie `near` et `far`
+par `max(1, distance / 55)`, `FOG_CAMERA_REF_M` = 55 m. La maison, au point visé, garde le même voile
+quel que soit le cadrage (téléphone, « Jardin », isométrie, molette) ; plus près que 55 m, rien ne
+change. `HouseScene.updateFogRange` relit la distance caméra → cible à chaque image (`render`) et
+dans `applySky` : ce ne sont que des uniforms, aucune recompilation (voir « le brouillard qui apparaît
+recompile tout » plus haut). En orthographique, la pose ne bouge pas au changement de projection :
+la distance reste celle de la profondeur du point visé, la même règle s'applique.
+
+Écarté : décaler les bornes de la distance en plus (au lieu de les multiplier). La maison aurait le
+même voile, mais le jardin au-delà s'effacerait aux mêmes mètres qu'au bureau, alors que la vue
+« Jardin » a justement le jardin pour sujet.
+
+Vérifié en preview (démo, brouillard forcé à 60 m) : téléphone 375 × 812, bornes 90-256 m, maison
+voilée mais lisible ; l'ancien réglage remis à la main redonne l'aplat gris ; « Jardin » sur
+ordinateur, bornes 94-268 m, jardin lisible. Test « stretches the fog with the camera… ».
+Sources : `apps/web/src/three/core/ambience.ts` (`fogRange`, `FOG_CAMERA_REF_M`),
+`apps/web/src/three/HouseScene.ts` (`updateFogRange`, `applySky`, `render`),
+`apps/web/src/three/three.test.ts`.
