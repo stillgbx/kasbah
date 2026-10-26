@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-26] update | Dev : le front suit le port du serveur, le clone de dev quitte le 8787 de la production
+
+**Déclencheur** : production installée dans son propre clone sur 8787 ; le clone de développement, sur la même machine et en mode Réel, passe sur un autre port, et son front proxyfiait vers 8787 en dur.
+
+**Pages modifiées** :
+- `5_setup/5_0_installation-et-scripts.md` — section « Mise à jour 2026-10-26 » : `serverPort` de `vite.config.ts` (environnement, puis `apps/server/.env`, puis 8787 ; `KASBAH_SERVER` gagne), `MUSIC_PUBLISH_BASE` sur le même port, prix accepté du mode Réel dans deux clones.
+
+**Index** : catalogue `5_setup` mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-26] update | Build web : un import introuvable arrête le build avant toute écriture
 
 **Déclencheur** : reproduction du build web de la mise à jour ratée : il échouait bien (code 1), mais après avoir vidé `dist/` et écrit des vues à import brut ; l'entrée FAQ du jour disait à tort qu'il réussissait.

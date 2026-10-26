@@ -1,6 +1,6 @@
 # Installation et scripts
 
-> Dernière mise à jour : 2026-10-20
+> Dernière mise à jour : 2026-10-26
 > Sources : `package.json` (racine et workspaces), `.claude/launch.json`, `apps/web/vite.config.ts`, `apps/server/src/config/env.ts`, `apps/server/src/main.ts`, `README.md`, `scripts/fetch-textures.mjs`, `.claude/launch.json`, `scripts/dev-server.mjs`, `scripts/supervisor.mjs`
 
 ## Prérequis
@@ -413,3 +413,24 @@ Les commits de la passe sont listés dans `.git-blame-ignore-revs` (GitHub l'app
 local : `git config blame.ignoreRevsFile .git-blame-ignore-revs`).
 
 Sources : les commits « Code comments: … » du 2026-10-20, `.git-blame-ignore-revs`, `CLAUDE.md` (§5).
+
+### Mise à jour 2026-10-26 — le front de dev suit le port du serveur
+
+Depuis que la production tourne dans son propre clone sur 8787 (`5_2_production.md`, mises à jour du
+2026-10-13 (bis) et du 2026-10-26), un clone de développement sur la même machine prend un autre port :
+`KASBAH_PORT=8788` dans **son** `apps/server/.env`, et `MUSIC_PUBLISH_BASE` sur le même port (sinon les
+enceintes iraient chercher la musique au serveur de production, qui ne connaît pas la session).
+
+Jusqu'ici, le front de `npm run dev` / `npm run house` proxyfiait sans `KASBAH_SERVER` vers
+`http://localhost:8787` en dur : il aurait parlé au serveur de **production**. `apps/web/vite.config.ts`
+(`serverPort`) lit maintenant le port comme le serveur le lit : `KASBAH_PORT` de l'environnement, puis
+celui de `apps/server/.env`, puis 8787. `KASBAH_SERVER` garde le dernier mot (configurations de
+`.claude/launch.json`, inchangées). Vérifié en chargeant la configuration : 8788 avec le `.env` du clone,
+9999 avec `KASBAH_PORT=9999`, 9787 avec `KASBAH_SERVER`.
+
+Rester en mode Réel dans les deux clones a un prix, accepté : les automatisations se déclenchent deux
+fois quand les deux serveurs tournent, et une reconnexion OAuth faite côté dev peut invalider les jetons
+copiés de la production (fabricants qui renouvellent le jeton à chaque usage). Les reconnexions se font
+côté production ; `NEST_REDIRECT_URI` reste sur l'adresse déclarée chez Google.
+
+Sources : `apps/web/vite.config.ts`, `apps/server/src/config/env.ts`, `apps/server/.env.example`.

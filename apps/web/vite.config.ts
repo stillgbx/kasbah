@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs'
 import { fileURLToPath, URL } from 'node:url'
+import { parseEnv } from 'node:util'
 import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vuetify from 'vite-plugin-vuetify'
@@ -9,7 +11,13 @@ import vuetify from 'vite-plugin-vuetify'
 // full stack launched at fixed addresses (cf. `.claude/launch.json`), and a preview pane
 // stuck on a port shows nothing if the front settled elsewhere. Failing is visible, sliding is not.
 const DEV_PORT = Number(process.env.PORT ?? 5173)
-const SERVER = process.env.KASBAH_SERVER ?? 'http://localhost:8787'
+// Without `KASBAH_SERVER`, the server's own port, read the way it reads it (environment, then
+// `apps/server/.env`, then 8787): a dev clone moved off 8787, the production's port, keeps its front.
+function serverPort(): string {
+  if (process.env.KASBAH_PORT) return process.env.KASBAH_PORT
+  try { return parseEnv(readFileSync(new URL('../server/.env', import.meta.url), 'utf8')).KASBAH_PORT ?? '8787' } catch { return '8787' }
+}
+const SERVER = process.env.KASBAH_SERVER ?? `http://localhost:${serverPort()}`
 const FIXED_PORT = process.env.PORT === undefined || process.env.KASBAH_SERVER !== undefined
 
 // Build identifier: written into the app (`__KASBAH_BUILD__`) and beside it (`build-id.txt`),
