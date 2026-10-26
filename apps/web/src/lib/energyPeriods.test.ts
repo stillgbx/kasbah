@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { EnergyDay, StateFor } from '@kasbah/shared'
-import { energyUnit, formatEnergyTotal, inverterPeaks, inverterTotals, periodBars, periodStart, periodTotals } from './energyPeriods'
+import type { DeviceEnergyDays, EnergyDay, StateFor } from '@kasbah/shared'
+import { energyUnit, formatEnergyTotal, inverterPeaks, inverterTotals, mergeRecentDays, periodBars, periodStart, periodTotals } from './energyPeriods'
 
 // Wednesday 2026-06-17, 15:00 local; days built with the Date constructor (any time zone).
 const now = new Date(2026, 5, 17, 15).getTime()
@@ -144,5 +144,40 @@ describe('inverterPeaks', () => {
     expect(inverterPeaks(inv, 'lifetime', 'rolling', now, null).get('C')).toBeNull()
     const quiet = { from: day(14), syncedAt: null, devices: [{ externalId: 'B', wh: [1, 1, 1, 1], peakW: [300, 250, null, null] }] }
     expect(inverterPeaks(quiet, 'day', 'rolling', now, null).get('B')).toBeNull()
+  })
+})
+
+describe('mergeRecentDays', () => {
+  // the whole history, the 14th to today (17th), then its last two days asked again a minute later
+  const full: DeviceEnergyDays = {
+    deviceId: 'site', since: day(14), syncedAt: 1,
+    days: [14, 15, 16, 17].map((d) => local(day(d))),
+    inverters: { from: day(14), syncedAt: 2, devices: [{ externalId: 'A', lifetimeWh: 900, wh: [1, 2, 3, 4], peakW: [10, 20, 30, 40] }] },
+  }
+  const recent: DeviceEnergyDays = {
+    deviceId: 'site', since: day(14), syncedAt: 1,
+    days: [local(day(16)), local(day(17), { productionWh: 1500 })],
+    inverters: { from: day(16), syncedAt: 2, devices: [{ externalId: 'A', lifetimeWh: 950, wh: [3, 9], peakW: [30, 45] }] },
+  }
+
+  it('replaces the last days and keeps the past', () => {
+    const m = mergeRecentDays(full, recent)!
+    expect(m.days.map((d) => d.productionWh)).toEqual([1000, 1000, 1000, 1500])
+    expect(m.inverters).toEqual({ from: day(14), syncedAt: 2, devices: [{ externalId: 'A', lifetimeWh: 950, wh: [1, 2, 3, 9], peakW: [10, 20, 30, 45] }] })
+  })
+
+  it('a whole history answered in place of the last days merges too (the in-process mock)', () => {
+    expect(mergeRecentDays(full, full)).toEqual(full)
+  })
+
+  it('refuses what does not fit, so the caller reloads everything', () => {
+    expect(mergeRecentDays(full, { ...recent, syncedAt: 3 })).toBeNull()                                   // a resync rewrote the past
+    expect(mergeRecentDays(full, { ...recent, inverters: { ...recent.inverters!, syncedAt: 5 } })).toBeNull()
+    const newcomer = { ...recent, inverters: { ...recent.inverters!, devices: [...recent.inverters!.devices, { externalId: 'B', wh: [1, 1], peakW: [5, 5] }] } }
+    expect(mergeRecentDays(full, newcomer)).toBeNull()                                                     // an inverter appeared
+    const tomorrow = { ...recent, inverters: { ...recent.inverters!, from: day(19) } }
+    expect(mergeRecentDays(full, tomorrow)).toBeNull()                                                     // a gap: the day changed
+    const firstPeaks = { ...full, inverters: { ...full.inverters!, devices: [{ externalId: 'A', wh: [1, 2, 3, 4] }] } }
+    expect(mergeRecentDays(firstPeaks, recent)).toBeNull()                                                 // the first peaks arrived
   })
 })

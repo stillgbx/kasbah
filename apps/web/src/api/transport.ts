@@ -571,8 +571,8 @@ export interface Transport {
   getReleaseNotes(deviceId: string, lang: string): Promise<DeviceReleaseNotes>
   /** Consumption history (liters per step, never a cumulative total) of a `water` device, in three series: hour, day, month. */
   getConsumption(deviceId: string): Promise<DeviceConsumption>
-  /** A site's daily energy totals (`energy_history` capability), on demand. */
-  getEnergyDays(deviceId: string): Promise<DeviceEnergyDays>
+  /** A site's daily energy totals (`energy_history` capability), on demand; `days`: only the last ones, today included. */
+  getEnergyDays(deviceId: string, days?: number): Promise<DeviceEnergyDays>
   sendCommand(deviceId: string, command: CommandInput): Promise<void>
   getScenes(): Promise<PluginSceneEntry[]>
   /** Recalls a vendor scene (fixed or animated palette). */

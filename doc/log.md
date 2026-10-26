@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-26] update | Vue Énergie : l'historique journalier rechargé par ses deux derniers jours
+
+**Déclencheur** : la vue Énergie rechargeait chaque minute l'historique entier (et désormais même en Instantané) ; sur des années d'historique de vingt onduleurs, des centaines de Ko par minute.
+
+**Pages modifiées** :
+- `1_architecture/1_14_energie.md` — paramètre `?days=n` de `GET /api/devices/:id/energy-days` (`recentEnergyDays`), découpé dans la route.
+- `4_ui/4_4_vues-energie-vehicules.md` — chargement entier à l'ouverture et au changement de jour, puis hier et aujourd'hui fusionnés (`mergeRecentDays`) ; cas où tout est rechargé.
+
+**Index** : catalogues déjà au 2026-10-26, index.md régénéré.
+
 ## [2026-10-26] update | Enphase : rattrapage des pics par 3 jours, une tranche en échec n'arrête plus rien
 
 **Déclencheur** : le premier rattrapage réel s'est arrêté sur un dépassement du délai cloud (une semaine prenait 11 à 13 s pour 15 s), et la frise, qui ne regardait que les Wh, disait tout complet : « Resynchroniser » restait grisé.

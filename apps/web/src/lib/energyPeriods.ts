@@ -178,6 +178,35 @@ export function inverterPeaks(
 }
 
 /**
+ * The whole history `full` brought up to date with its last days `recent` (`getEnergyDays(id, n)`):
+ * what `recent` holds replaces `full` from its first day on. `null` when the two do not fit — a
+ * resync rewrote the past (`syncedAt`), an inverter appeared, the days do not line up (the day
+ * changed in between) —: the caller then reloads the whole history.
+ */
+export function mergeRecentDays(full: DeviceEnergyDays, recent: DeviceEnergyDays): DeviceEnergyDays | null {
+  if (full.since !== recent.since || full.syncedAt !== recent.syncedAt) return null
+  const byDay = new Map(full.days.map((d) => [d.t, d]))
+  for (const d of recent.days) byDay.set(d.t, d)
+  const days = [...byDay.values()].sort((a, b) => a.t - b.t)
+  const fi = full.inverters, ri = recent.inverters
+  if (!fi && !ri) return { ...recent, days }
+  if (!fi || !ri || fi.syncedAt !== ri.syncedAt) return null
+  // where `recent` starts in `full`, in calendar days like `inverterTotals`
+  const day = new Date(fi.from)
+  let k = 0
+  while (day.getTime() < ri.from) { day.setDate(day.getDate() + 1); k++ }
+  if (day.getTime() !== ri.from) return null
+  const held = new Map(fi.devices.map((v) => [v.externalId, v]))
+  const devices: NonNullable<DeviceEnergyDays['inverters']>['devices'] = []
+  for (const v of ri.devices) {
+    const o = held.get(v.externalId)
+    if (!o || o.wh.length < k || !o.peakW !== !v.peakW) return null
+    devices.push({ ...v, wh: [...o.wh.slice(0, k), ...v.wh], ...(v.peakW ? { peakW: [...o.peakW!.slice(0, k), ...v.peakW] } : {}) })
+  }
+  return { ...recent, days, inverters: { ...ri, from: fi.from, devices } }
+}
+
+/**
  * A unit shared by a set of energies (the cells of an array): chosen from the largest, so the cells
  * hold a bare number and the unit is written once. `digits` keeps three significant figures.
  */

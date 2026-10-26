@@ -1,7 +1,7 @@
 # Énergie : mesures, historique et charge des véhicules
 
 > Dernière mise à jour : 2026-10-26
-> Sources : `packages/shared/src/devices/state.ts` (`energyStateSchema`, `evChargerStateSchema`), `packages/shared/src/devices/rules.ts` (`estimateChargePowerW`), `apps/server/src/core/history.ts`, `apps/server/src/core/chargeCoordination.ts`, `apps/server/src/core/plugin-host.ts` (`execute`, `onVehicleState`, `checkChargingClaim`), `apps/server/src/http/routes.ts` (`/api/devices/:id/history`, `/api/devices/:id/energy-days`), `apps/server/src/plugins/enphase/days.ts` ; pages citées plus bas
+> Sources : `packages/shared/src/devices/state.ts` (`energyStateSchema`, `evChargerStateSchema`), `packages/shared/src/devices/rules.ts` (`estimateChargePowerW`), `apps/server/src/core/history.ts`, `apps/server/src/core/chargeCoordination.ts`, `apps/server/src/core/plugin-host.ts` (`execute`, `onVehicleState`, `checkChargingClaim`), `apps/server/src/http/routes.ts` (`/api/devices/:id/history`, `/api/devices/:id/energy-days`), `apps/server/src/http/recentDays.ts`, `apps/server/src/plugins/enphase/days.ts` ; pages citées plus bas
 
 Page de synthèse, écrite au lint du 2026-10-13 : l'énergie était décrite par morceaux dans le contrat,
 le serveur, les plugins Enphase, Tesla et Renault et la vue Énergie. Elle décrit l'état du code à cette
@@ -109,3 +109,21 @@ la simulation le dérive des Wh du jour ([3_0](../3_plugins/3_0_simulation-mock.
 le record par période ([4_4](../4_ui/4_4_vues-energie-vehicules.md)).
 
 Sources : `packages/shared/src/protocol/http.ts`, `apps/server/src/plugins/enphase/inverterDays.ts` (`snapshot`).
+
+### Mise à jour 2026-10-26 (bis) — `?days=n` : seulement les derniers jours
+
+`GET /api/devices/:id/energy-days?days=n` ne rend que les **n derniers jours**, aujourd'hui compris
+(`recentEnergyDays`, `apps/server/src/http/recentDays.ts`) : `days[]` filtré, et pour chaque onduleur
+`wh` et `peakW` coupés, `inverters.from` avancé au premier jour gardé. Le découpage compte en jours de
+**calendrier** (jours de 23 ou 25 h aux changements d'heure), comme le reste de l'historique. `since`,
+`syncedAt` et `lifetimeWh` sont rendus tels quels. Sans `days` (ou non entier ≥ 1) : l'historique entier,
+comme avant.
+
+Le découpage se fait dans la **route**, une fois pour toutes : aucun plugin (Enphase, simulation) n'a à
+le connaître. Le transport web le passe en second argument de `getEnergyDays(id, days)` ; le mock en
+processus l'ignore et rend tout, ce que la fusion côté vue accepte
+([4_4](../4_ui/4_4_vues-energie-vehicules.md)).
+
+Pourquoi : des années d'historique de vingt onduleurs (Wh et pics) pèsent des centaines de Ko, et la vue
+Énergie les rechargeait en entier chaque minute. Tests : `recentDays.test.ts` (dont le passage à l'heure
+d'été).

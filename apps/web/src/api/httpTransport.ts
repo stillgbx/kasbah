@@ -93,7 +93,7 @@ export function createHttpTransport(base = ''): Transport {
     getSiteMap: (deviceId) => request(`${base}/api/devices/${encodeURIComponent(deviceId)}/map`, undefined, (j) => siteMapSchema.parse(j) as SiteMap),
     getReleaseNotes: (deviceId, lang) => request(`${base}/api/devices/${encodeURIComponent(deviceId)}/release-notes?lang=${encodeURIComponent(lang)}`, undefined, (j) => deviceReleaseNotesSchema.parse(j)),
     getConsumption: (deviceId) => request(`${base}/api/devices/${encodeURIComponent(deviceId)}/consumption`, undefined, (j) => deviceConsumptionSchema.parse(j) as DeviceConsumption),
-    getEnergyDays: (deviceId) => request(`${base}/api/devices/${encodeURIComponent(deviceId)}/energy-days`, undefined, (j) => deviceEnergyDaysSchema.parse(j) as DeviceEnergyDays),
+    getEnergyDays: (deviceId, days) => request(`${base}/api/devices/${encodeURIComponent(deviceId)}/energy-days${days ? `?days=${days}` : ''}`, undefined, (j) => deviceEnergyDaysSchema.parse(j) as DeviceEnergyDays),
     sendCommand: (deviceId, command: CommandInput) => request(
       `${base}/api/devices/${encodeURIComponent(deviceId)}/command`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(command) },

@@ -1085,3 +1085,23 @@ l'un contre l'autre.
 Vérifié dans la preview `kasbah-mock` à 1440×900 : un repère différent pour chaque période, aucune
 case ne bouge (mesure géométrique, 15 boîtes), console propre. Tests : `energyPeriods.test.ts`,
 `lib.test.ts`.
+
+### Mise à jour 2026-10-26 (bis) — l'historique journalier n'est plus rechargé en entier chaque minute
+
+Ce qui change pour « charge l'historique journalier même en Instantané » ci-dessus : `loadDays`
+(`views/EnergyView.vue`) charge l'historique **entier** à l'ouverture, au changement de site et au
+**changement de jour** ; ensuite, chaque minute, il ne demande que **hier et aujourd'hui**
+(`getEnergyDays(id, 2)`, route `?days=2`, [1_14](../1_architecture/1_14_energie.md)) et les fond dans ce
+qu'il tient (`mergeRecentDays`, `lib/energyPeriods.ts`). Hier est gardé : ses Wh et ses pics finissent
+d'arriver après minuit.
+
+`mergeRecentDays` rend `null` — et la vue recharge tout — quand les deux ne s'emboîtent pas :
+`syncedAt` du site ou des onduleurs changé (une resynchro a réécrit le passé), onduleur nouveau,
+`peakW` apparu ou disparu (les premiers pics), jours qui ne tombent pas juste (le jour a changé
+entre-temps). Conséquence à connaître : pendant un long rattrapage, les jours rattrapés n'apparaissent
+qu'à sa fin (`syncedAt` change alors) ou en rouvrant la vue.
+
+Vérifié dans la preview `kasbah-mock` : records présents à l'ouverture, identiques après le rechargement
+d'une minute (le mock rend tout, la fusion l'accepte), périodes intactes, console propre. Non joué : la
+requête `?days=2` en HTTP réel dans le navigateur (le serveur de démo n'avait pas de site solaire).
+Tests : `energyPeriods.test.ts` (`mergeRecentDays`).

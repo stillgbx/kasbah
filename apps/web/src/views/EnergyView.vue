@@ -12,7 +12,7 @@ import Segmented from '../components/ui/Segmented.vue'
 import { useHomeSummary } from '../composables/useHomeSummary'
 import { calendarTitle, type PeriodMode } from '../lib/consumption'
 import { findEnergySite } from '../lib/energy'
-import { ENERGY_PERIODS, MODE_PERIODS, formatEnergyTotal, inverterPeaks, inverterTotals, periodBars, periodTotals, type EnergyPeriod } from '../lib/energyPeriods'
+import { ENERGY_PERIODS, MODE_PERIODS, formatEnergyTotal, inverterPeaks, inverterTotals, mergeRecentDays, periodBars, periodTotals, type EnergyPeriod } from '../lib/energyPeriods'
 import { formatEnergy, formatPower } from '../lib/format'
 import { useDevicesStore } from '../stores/devices'
 
@@ -60,14 +60,31 @@ async function loadHistory() {
   try { points.value = (await getTransport().getHistory(id, 24)).points } catch { points.value = [] }
 }
 const days = ref<DeviceEnergyDays | null>(null)
-/** The daily history: the totals of a period, and the inverters' records, the instant's included. */
-async function loadDays() {
+/** Asked every minute once the whole history is held: today, and yesterday, which ends after midnight. */
+const RECENT_DAYS = 2
+/** Local midnight of the day the whole history was loaded: a new day reloads it whole. */
+let wholeDay = -1
+/**
+ * The daily history: the totals of a period, and the inverters' records, the instant's included.
+ * Whole at opening and on a new day, then only its last days, merged in: years of history from
+ * twenty inverters are hundreds of KB, and only today moves.
+ */
+async function loadDays(whole = false) {
   const id = energyEntry.value?.descriptor.id
   if (!id) return
-  try { days.value = await getTransport().getEnergyDays(id) } catch { days.value = null }
+  const today = new Date().setHours(0, 0, 0, 0)
+  try {
+    const held = days.value
+    if (!whole && held?.deviceId === id && wholeDay === today) {
+      const merged = mergeRecentDays(held, await getTransport().getEnergyDays(id, RECENT_DAYS))
+      if (merged) { days.value = merged; return }
+    }
+    days.value = await getTransport().getEnergyDays(id)
+    wholeDay = today
+  } catch { days.value = null }
 }
-onMounted(() => { void loadHistory(); void loadDays() })
-watch(() => energyEntry.value?.descriptor.id, () => { void loadHistory(); void loadDays() })
+onMounted(() => { void loadHistory(); void loadDays(true) })
+watch(() => energyEntry.value?.descriptor.id, () => { void loadHistory(); void loadDays(true) })
 let timer: ReturnType<typeof setInterval> | null = null
 onMounted(() => { timer = setInterval(() => { now.value = Date.now(); void loadHistory(); void loadDays() }, 60_000) })
 onBeforeUnmount(() => { if (timer) clearInterval(timer) })
