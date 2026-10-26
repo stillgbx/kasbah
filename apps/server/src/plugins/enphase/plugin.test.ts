@@ -450,15 +450,17 @@ describe('daily history', () => {
     expect(ok.json()).toMatchObject({ history: { days: 3, error: null } })
   })
 
-  it("the polls feed today's day: the gateway's counters for production and consumption", async () => {
-    const { plugin } = await paired()
+  it("the polls feed today's day: the inverters' production, and the consumption balanced around it", async () => {
+    const { plugin, ctx } = await paired()
     await plugin.discover()
     await plugin.start()
     await settle()
     const today = (await plugin.energyDays!('site')).days.at(-1)
-    expect(today).toMatchObject({ source: 'local' })
-    expect(today!.productionWh).toBeGreaterThan(0)
+    // the two inverters' day counters (1200 + 1100 Wh), never the gateway's own `whToday`
+    expect(today).toMatchObject({ source: 'local', productionWh: 2300 })
     expect(today!.consumptionWh).toBeGreaterThan(0)
+    const site = (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.filter(([id]) => id === 'site').map(([, p]) => p as Record<string, unknown>)
+    expect(site.find((p) => p.todayProductionWh !== undefined)).toMatchObject({ todayProductionWh: 2300, todayConsumptionWh: today!.consumptionWh })
     await plugin.stop()
   })
 

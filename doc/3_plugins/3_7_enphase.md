@@ -570,3 +570,32 @@ pas un plafond.
 [1_14](../1_architecture/1_14_energie.md).
 
 Sources : `apps/server/src/plugins/enphase/{inverterDays,index,mapping,types}.ts` et leurs tests.
+
+### Mise à jour 2026-10-26 (ter) — le jour ne se lit plus sur les compteurs `whToday` de la passerelle
+
+**Ce qui était faux.** « Nos relevés : compteurs du jour de la passerelle pour production et
+consommation (exacts…) », plus haut, ne tient plus. Vérifié sur la vraie installation : le compteur
+`eim` / `production` de `production.json` a **sauté** en un jour, triplant la production du jour alors
+que la somme des onduleurs et Enlighten s'accordaient ; son `whLifetime` a pris le même saut et son
+`whLastSevenDays` valait presque toute la production à vie. Les puissances (`wNow`) restaient justes.
+La consommation `total-consumption` en hérite, la passerelle la calculant comme production + réseau.
+Cause côté passerelle inconnue (signalée au support Enphase).
+
+**Désormais** (`days.ts`, `inverterDays.ts`, `index.ts`) :
+- **Production du jour** = la somme des compteurs du jour des micro-onduleurs (`/ivp/pdm/device_data`,
+  `wattHours.today`, lu toutes les 5 min) : `InverterDays.dayWh(jour)` → `EnergyDays.setProduction`,
+  pour aujourd'hui et hier (hier jusqu'à la remise à zéro des compteurs après minuit). C'est la même
+  grandeur que l'historique Enlighten des jours passés, à 1 % près.
+- **Consommation du jour** = **bilan** production + import − export + décharge − charge, réseau et
+  batterie intégrés depuis la puissance (`EnergyDays.balance`). Sans compte des onduleurs (lecture de
+  `device_data` en échec), production et consommation retombent sur l'intégration.
+- L'état du site (`todayProductionWh`, `todayConsumptionWh`) est publié depuis `EnergyDays.today` à chaque
+  relevé : l'historique, la vue Énergie et l'assistant disent le même chiffre.
+- `production.json` reste lu une fois par minute, **pour l'inventaire seulement**. `toDailyPatch` et la
+  règle « un compteur pas encore remis à zéro dans les 15 min après minuit appartient à la veille »
+  (`recordCounters`) sont supprimés : les compteurs des onduleurs portent leur propre règle
+  (`InverterDays.recordGateway`). Un ancien `counters.consumptionWh` dans le fichier est relu et ignoré.
+
+**À connaître** : après un redémarrage en cours de journée, la production reste juste (compteurs des
+onduleurs), la consommation ne compte que depuis le redémarrage ; le jour est alors incomplet, comme
+avant. Tests : `days.test.ts`, `plugin.test.ts` (« the polls feed today's day »).

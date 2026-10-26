@@ -127,3 +127,14 @@ processus l'ignore et rend tout, ce que la fusion côté vue accepte
 Pourquoi : des années d'historique de vingt onduleurs (Wh et pics) pèsent des centaines de Ko, et la vue
 Énergie les rechargeait en entier chaque minute. Tests : `recentDays.test.ts` (dont le passage à l'heure
 d'été).
+
+### Mise à jour 2026-10-26 (ter) — production du jour par les onduleurs, consommation par bilan
+
+Corrige « production et consommation viennent des compteurs du jour de la passerelle » ci-dessus,
+pour Enphase : le compteur `whToday` de la passerelle s'est révélé capable de sauter (vérifié sur la
+vraie installation, détail dans [3_7](../3_plugins/3_7_enphase.md)). La **production** d'un jour local
+est maintenant la somme des compteurs du jour des onduleurs ; la **consommation** est le bilan
+production + import − export + décharge − charge, réseau et batterie restant intégrés (donc approchés).
+L'état `energy` du site porte les mêmes valeurs (`todayProductionWh`, `todayConsumptionWh`), calculées
+par `EnergyDays.today`. « Aujourd'hui reste toujours local » tient toujours. Sources :
+`apps/server/src/plugins/enphase/days.ts`, `index.ts`.

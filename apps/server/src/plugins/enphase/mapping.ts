@@ -128,21 +128,6 @@ export function toSitePatch(live: Livedata | undefined, report?: ProductionRepor
 }
 
 /**
- * The day's totals: only `production.json` carries them, and it is slow — hence reading it at the
- * slow rate. `net-consumption` publishes a `whToday` of zero: it is the TOTAL consumption that must
- * be read, or else a day with no consumption would be shown.
- */
-export function toDailyPatch(report: ProductionReport): StatePatch {
-  const eim = pick(report.production, 'eim', 'production')
-  const total = pick(report.consumption, 'eim', 'total-consumption')
-  return {
-    kind: 'energy',
-    ...(eim?.whToday !== undefined ? { todayProductionWh: Math.round(eim.whToday) } : {}),
-    ...(total?.whToday !== undefined ? { todayConsumptionWh: Math.round(total.whToday) } : {}),
-  } as StatePatch
-}
-
-/**
  * Beyond this, an inverter is considered silent. They report every ~5 min; at night they go quiet,
  * so half an hour without a report means nightfall or a real failure.
  */

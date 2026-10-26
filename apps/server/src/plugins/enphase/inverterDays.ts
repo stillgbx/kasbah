@@ -204,6 +204,12 @@ export class InverterDays {
     this.dirty = true
   }
 
+  /** What all the inverters produced that day (Wh), `undefined` = no inverter known that day. */
+  dayWh(key: string): number | undefined {
+    const wh = Object.values(this.data.days[key]?.wh ?? {})
+    return wh.length > 0 ? wh.reduce((a, b) => a + b, 0) : undefined
+  }
+
   /** An inverter's record: its best daily peak over the whole history (W), `undefined` = none known. */
   recordOf(serial: string): number | undefined {
     let max: number | undefined

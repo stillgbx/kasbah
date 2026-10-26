@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-26] update | Enphase : le jour ne se lit plus sur les compteurs `whToday` de la passerelle
+
+**Déclencheur** : la vue Énergie affichait pour aujourd'hui une production trois fois supérieure à la somme des onduleurs ; le compteur `eim` de `production.json` avait sauté (vérifié sur la vraie installation, Enlighten et les onduleurs d'accord entre eux).
+
+**Pages modifiées** :
+- `3_plugins/3_7_enphase.md` — production du jour = somme des compteurs des onduleurs, consommation = bilan ; `toDailyPatch` et `recordCounters` supprimés ; ce qui était faux dans « nos relevés ».
+- `1_architecture/1_14_energie.md` — correction de « exact, approché » pour Enphase.
+
+**Index** : catalogues déjà au 2026-10-26, index.md régénéré.
+
 ## [2026-10-26] update | Vue Énergie : l'historique journalier rechargé par ses deux derniers jours
 
 **Déclencheur** : la vue Énergie rechargeait chaque minute l'historique entier (et désormais même en Instantané) ; sur des années d'historique de vingt onduleurs, des centaines de Ko par minute.

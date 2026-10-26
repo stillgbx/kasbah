@@ -6,7 +6,7 @@ import {
 import { EVSE_STATUS, EVSE_SUMMARY } from './__fixtures__/evse'
 import {
   PANEL_STALE_MS, batteriesOf, chargerSummariesOf, chargersOf, isBatteryAvailable, isPanelStale, productionW, toBatteryPatch,
-  toChargerDescriptors, toChargerPatch, toDailyPatch, toDescriptors, toPanelPatch, toSitePatch,
+  toChargerDescriptors, toChargerPatch, toDescriptors, toPanelPatch, toSitePatch,
 } from './mapping'
 import {
   ensembleInventorySchema, ensemblePowerSchema, invertersSchema, livedataSchema, productionSchema,
@@ -93,14 +93,6 @@ describe('site state', () => {
     // this fallback does not know the battery: it is only in `livedata`
     expect(p.batteryW).toBeUndefined()
     expect(p.batterySoc).toBeUndefined()
-  })
-
-  it("the day's Wh come from the production meter and the TOTAL consumption", () => {
-    const day = toDailyPatch(report) as Record<string, number>
-    expect(day.todayProductionWh).toBe(47127)
-    // `net-consumption` publishes a whToday of 0: reading it would have given zero consumption
-    expect(report.consumption.find((e) => e.measurementType === 'net-consumption')!.whToday).toBe(0)
-    expect(day.todayConsumptionWh).toBe(18516)
   })
 
   it('INVERTS the storage sign: the vendor counts positive when discharging', () => {

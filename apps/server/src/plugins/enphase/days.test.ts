@@ -71,21 +71,23 @@ describe('EnergyDays — local measurement', () => {
     expect(dayOf(days, at(10, 12))!.importWh).toBe(2400)
   })
 
-  it("the gateway's day counters win over the integration for production and consumption", () => {
+  it("the inverters' count is the day's production, and the consumption the balance around it", () => {
     const days = new EnergyDays(opts)
-    feed(days, at(10, 10), at(10, 10, 30), { productionW: 1000, consumptionW: 400, gridW: -600, batteryW: 0 })
-    days.recordCounters({ todayProductionWh: 4321, todayConsumptionWh: 1234 }, at(10, 10, 30))
-    expect(dayOf(days, at(10, 10))).toMatchObject({ productionWh: 4321, consumptionWh: 1234, exportWh: 300 })
+    // 1 kW of solar, 600 W exported, 200 W into the battery, for half an hour: the house takes 200 W
+    feed(days, at(10, 10), at(10, 10, 30), { productionW: 1000, consumptionW: 200, gridW: -600, batteryW: 200 })
+    days.setProduction('2026-06-10', 800)
+    // 800 produced − 300 exported − 100 charged = 400; the integration alone would have said 100
+    expect(dayOf(days, at(10, 10))).toMatchObject({ productionWh: 800, consumptionWh: 400, exportWh: 300, chargeWh: 100 })
+    expect(days.today(at(10, 10, 30))).toEqual({ productionWh: 800, consumptionWh: 400 })
   })
 
-  it('a counter not yet reset after midnight still belongs to yesterday', () => {
+  it('without the inverters, both come from the integration; a former gateway counter is ignored', () => {
     const days = new EnergyDays(opts)
-    days.recordCounters({ todayProductionWh: 30_000, todayConsumptionWh: 12_000 }, at(10, 23, 59))
-    days.recordCounters({ todayProductionWh: 30_000, todayConsumptionWh: 12_050 }, at(11, 0, 1))
-    days.recordCounters({ todayProductionWh: 0, todayConsumptionWh: 40 }, at(11, 0, 2))
-    days.recordCounters({ todayProductionWh: 0, todayConsumptionWh: 90 }, at(11, 0, 3))
-    expect(dayOf(days, at(10, 12))).toMatchObject({ productionWh: 30_000, consumptionWh: 12_050 })
-    expect(dayOf(days, at(11, 12))).toMatchObject({ productionWh: 0, consumptionWh: 90 })
+    feed(days, at(10, 10), at(10, 10, 30), { productionW: 1000, consumptionW: 400, gridW: -600, batteryW: 0 })
+    expect(days.today(at(10, 10, 30))).toEqual({ productionWh: 500, consumptionWh: 200 })
+    const old = new EnergyDays(opts)
+    old.restore({ version: 1, since: null, syncedAt: null, days: { '2026-06-10': { source: 'local', importWh: 1000, counters: { productionWh: 3000, consumptionWh: 99_999 } } } })
+    expect(old.today(at(10, 12))).toEqual({ productionWh: 3000, consumptionWh: 4000 })
   })
 
   it("counts what the charger's session grew by, and a new session from zero", () => {
@@ -119,8 +121,8 @@ describe('EnergyDays — vendor history', () => {
 
   it('replaces the local days before the last report, keeps those after it', () => {
     const days = new EnergyDays(opts)
-    days.recordCounters({ todayProductionWh: 111 }, at(2, 20))
-    days.recordCounters({ todayProductionWh: 333 }, at(3, 20))
+    days.setProduction('2026-06-02', 111)
+    days.setProduction('2026-06-03', 333)
     const now = at(4, 1)
     // the cloud last heard from the gateway on the 3rd, at 18:00: the 3rd is not complete there
     days.importVendor(lifetime('2026-06-01', [1000, 2000, 3000], { last_report_date: at(3, 18) / 1000 }), now)
@@ -139,7 +141,7 @@ describe('EnergyDays — vendor history', () => {
   it('local readings never overwrite a vendor day', () => {
     const days = new EnergyDays(opts)
     days.importVendor(lifetime('2026-06-01', [1000, 2000]), at(4, 12))
-    days.recordCounters({ todayProductionWh: 5 }, at(2, 12))
+    days.setProduction('2026-06-02', 5)
     expect(days.snapshot(at(4, 12)).days.find((d) => d.t === keyStart('2026-06-02'))).toMatchObject({ source: 'vendor', productionWh: 2000 })
   })
 
@@ -186,7 +188,7 @@ describe('EnergyDays — file', () => {
   it('restores what it saved, and refuses an unreadable file', () => {
     const days = new EnergyDays(opts)
     days.importVendor(lifetimeEnergySchema.parse({ start_date: '2026-06-01', production: [1000] }), at(2, 12))
-    days.recordCounters({ todayProductionWh: 50 }, at(2, 12))
+    days.setProduction('2026-06-02', 50)
     const copy = new EnergyDays(opts)
     expect(copy.restore(JSON.parse(JSON.stringify(days)))).toBe(true)
     expect(copy.synced).toBe(true)

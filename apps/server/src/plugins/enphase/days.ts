@@ -53,7 +53,10 @@ const storedDaySchema = z.object({
   partial: z.boolean().optional(),
   /** Local day: how long the power readings covered, to tell a whole day from a partial one. */
   coveredMs: z.number().optional(),
-  /** Local day: the gateway's day counters, which win over the integration. */
+  /**
+   * Local day: the inverters' count of the day's production, which wins over the integration.
+   * `consumptionWh` is a former gateway counter, still read in old files but ignored.
+   */
   counters: z.object({ productionWh: z.number().optional(), consumptionWh: z.number().optional() }).optional(),
   ...Object.fromEntries(ENERGY_FIELDS.map((f) => [f, z.number().optional()])) as Record<EnergyField, z.ZodOptional<z.ZodNumber>>,
 })
@@ -68,10 +71,7 @@ const daysFileSchema = z.object({
 type DaysFile = z.infer<typeof daysFileSchema>
 
 export interface SitePower { productionW?: number; consumptionW?: number; gridW?: number; batteryW?: number }
-export interface DayCounters { todayProductionWh?: number; todayConsumptionWh?: number }
 
-/** The gateway may not have reset its day counters yet a little after midnight. */
-const LATE_COUNTER_MS = 15 * 60_000
 /** A past local day covered for less than its length minus this is partial. */
 const PARTIAL_SLACK_MS = 30 * 60_000
 const HOUR_MS = 3_600_000
@@ -108,8 +108,6 @@ export class EnergyDays {
   private site: { at: number; power: Required<SitePower> } | null = null
   /** Each charger's last session energy. */
   private readonly chargers = new Map<string, number>()
-  /** Each day counter's last reading, and the day it was given to. */
-  private readonly lastCounters = new Map<keyof DayCounters, { key: string; value: number }>()
   /** Something changed since the last save. */
   dirty = false
 
@@ -220,24 +218,40 @@ export class EnergyDays {
   }
 
   /**
-   * The gateway's day counters. Read a little after midnight, they may still carry yesterday's
-   * total: a value that did not drop below yesterday's last one, in the first minutes, is
-   * yesterday's.
+   * A local day's production as its inverters counted it (the sum of their day counters, see
+   * `InverterDays.dayWh`): exact, it wins over the integration. Not the gateway's own day counter
+   * (`production.json`, `eim` `whToday`): it was seen to jump on a real installation, tripling a
+   * day's production while the inverters and Enlighten agreed — and the consumption it derives
+   * from it with it.
    */
-  recordCounters(c: DayCounters, at: number): void {
-    const key = dayKey(at)
-    const yesterday = addDays(key, -1)
-    const early = at - keyStart(key) < LATE_COUNTER_MS
-    for (const [counter, field] of [['todayProductionWh', 'productionWh'], ['todayConsumptionWh', 'consumptionWh']] as const) {
-      const v = c[counter]
-      if (v === undefined) continue
-      const last = this.lastCounters.get(counter)
-      const target = early && last?.key === yesterday && v >= last.value ? yesterday : key
-      this.lastCounters.set(counter, { key: target, value: v })
-      const d = this.day(target)
-      if (d.source !== 'local') continue
-      d.counters = { ...d.counters, [field]: v }
-      this.dirty = true
+  setProduction(key: string, wh: number): void {
+    const d = this.day(key)
+    if (d.source !== 'local') return
+    d.counters = { productionWh: wh }
+    this.dirty = true
+  }
+
+  /**
+   * A local day's production and consumption. With the inverters' count, the consumption is the
+   * balance around it: what the sun gave, plus what came from the grid and the battery, minus what
+   * went to them — the grid and battery shares integrated from the power readings. Without it, the
+   * integration of both.
+   */
+  private balance(d: StoredDay): { productionWh?: number; consumptionWh?: number } {
+    const production = d.counters?.productionWh
+    if (production === undefined) return { productionWh: d.productionWh, consumptionWh: d.consumptionWh }
+    const consumption = production + (d.importWh ?? 0) - (d.exportWh ?? 0) + (d.dischargeWh ?? 0) - (d.chargeWh ?? 0)
+    return { productionWh: production, consumptionWh: Math.max(0, consumption) }
+  }
+
+  /** Today's production and consumption as the history counts them: what the site's state says. */
+  today(now: number): { productionWh?: number; consumptionWh?: number } {
+    const d = this.data.days[dayKey(now)]
+    if (!d || d.source !== 'local') return {}
+    const b = this.balance(d)
+    return {
+      ...(b.productionWh !== undefined ? { productionWh: Math.round(b.productionWh) } : {}),
+      ...(b.consumptionWh !== undefined ? { consumptionWh: Math.round(b.consumptionWh) } : {}),
     }
   }
 
@@ -284,10 +298,11 @@ export class EnergyDays {
       const out: EnergyDay = { t, source: d.source }
       for (const f of ENERGY_FIELDS) if (d[f] !== undefined) out[f] = Math.round(d[f]!)
       if (d.source === 'local') {
-        if (d.counters?.productionWh !== undefined) out.productionWh = Math.round(d.counters.productionWh)
-        if (d.counters?.consumptionWh !== undefined) out.consumptionWh = Math.round(d.counters.consumptionWh)
+        const b = this.balance(d)
+        if (b.productionWh !== undefined) out.productionWh = Math.round(b.productionWh)
+        if (b.consumptionWh !== undefined) out.consumptionWh = Math.round(b.consumptionWh)
         // a past day must have been seen whole; today, since midnight (a restart at noon leaves its
-        // integrated fields short of the gateway's day counters)
+        // integrated fields, and the consumption balanced with them, short)
         if (this.partialLocal(key, d, now)) out.partial = true
       } else if (d.partial) out.partial = true
       return out

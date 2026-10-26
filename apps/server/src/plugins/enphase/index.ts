@@ -1,4 +1,4 @@
-import type { Command, DeviceDescriptor, PluginHealth, SettableChargeMode } from '@kasbah/shared'
+import type { Command, DeviceDescriptor, PluginHealth, SettableChargeMode, StatePatch } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
@@ -11,7 +11,7 @@ import { sleep } from '../../core/clock'
 import { EnphaseClient } from './client'
 import {
   batteriesOf, chargerSummariesOf, chargersOf, enabledChargingMode, isBatteryAvailable, isPanelStale, toBatteryPatch, toChargerDescriptors,
-  toChargerPatch, toDailyPatch, toDescriptors, toPanelPatch, toSitePatch, ENPHASE_CHARGE_MODE, SITE_ID, type EvCharger, type EvChargerSummary,
+  toChargerPatch, toDescriptors, toPanelPatch, toSitePatch, ENPHASE_CHARGE_MODE, SITE_ID, type EvCharger, type EvChargerSummary,
   type Inventory,
 } from './mapping'
 import {
@@ -25,7 +25,7 @@ import {
 import {
   EnlightenClient, createCloudFile, openCloudSession, probeEvRaw, type CloudStore,
 } from './cloud'
-import { EnergyDays, addDays, createDaysFile, dayKey, keyStart as keyStartOf, lifetimeEnergySchema, type DayCounters, type DaysStore, type SitePower } from './days'
+import { EnergyDays, addDays, createDaysFile, dayKey, keyStart as keyStartOf, lifetimeEnergySchema, type DaysStore, type SitePower } from './days'
 import {
   InverterDays, arrayLayoutSchema, createInverterDaysFile, deviceDataSchema, inverterEnergySchema, peaksOfTimeSeries,
   type InverterDaysStore,
@@ -513,17 +513,29 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       if (!isBatteryAvailable(b)) { ctx!.setAvailable(b.serial_num, false); continue }
       ctx!.emitState(b.serial_num, toBatteryPatch(b, power))
     }
-    // the day's totals are ONLY in `production.json`, which is slow: this is where we pay for it,
-    // once a minute, and not on every real-time measurement
+    // `production.json` is slow: read here, once a minute, for the inventory. Its day counters
+    // (`whToday`) are no longer read: they can jump (see `EnergyDays.setProduction`)
     const report = await get('/production.json?details=1', (j) => productionSchema.parse(j))
-    const daily = toDailyPatch(report)
-    ctx!.emitState(SITE_ID, daily)
-    days?.recordCounters(daily as DayCounters, now)
-    // each inverter's counters, at the pace its reports change; a failure costs only that reading
+    // each inverter's counters, at the pace its reports change; a failure costs only that reading.
+    // Their sum is the day's production, yesterday's too until its counters are reset after midnight
     if (invDays && now - deviceDataAt >= DEVICE_DATA_MS) {
       deviceDataAt = now
-      try { invDays.recordGateway(await get('/ivp/pdm/device_data', (j) => deviceDataSchema.parse(j)), now) }
-      catch (err) { log().debug({ err }, 'Enphase device_data unread') }
+      try {
+        invDays.recordGateway(await get('/ivp/pdm/device_data', (j) => deviceDataSchema.parse(j)), now)
+        for (const key of [addDays(dayKey(now), -1), dayKey(now)]) {
+          const wh = invDays.dayWh(key)
+          if (wh !== undefined) days?.setProduction(key, wh)
+        }
+      } catch (err) { log().debug({ err }, 'Enphase device_data unread') }
+    }
+    // today's totals as the history counts them: the inverters' production, the balance around it
+    const today = days?.today(now)
+    if (today?.productionWh !== undefined || today?.consumptionWh !== undefined) {
+      ctx!.emitState(SITE_ID, {
+        kind: 'energy',
+        ...(today.productionWh !== undefined ? { todayProductionWh: today.productionWh } : {}),
+        ...(today.consumptionWh !== undefined ? { todayConsumptionWh: today.consumptionWh } : {}),
+      } as StatePatch)
     }
     if (invDays && enlighten?.hasSession && now - peaksAt >= PEAKS_REFRESH_MS) {
       peaksAt = now
