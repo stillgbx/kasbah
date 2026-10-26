@@ -965,3 +965,18 @@ Vérifié sur la vraie maison : après la rotation, toutes les caméras éteinte
 la seule active normale ; direct sur une caméra éteinte → la phrase au bout de 14 s, puis Aperçu
 efface le message ; texte sans débordement dans une tuile de 397 px. Tests :
 `components/controls/CameraVideo.test.ts` (tuile inactive avec image, direct en 404, raison inconnue).
+
+### Mise à jour 2026-10-26 (3) — « Mise à jour de l'image… » pendant un essai
+
+Demande de l'utilisateur : sur la vue Caméras, un indicateur quand un flux est en train d'être mis à
+jour, « là l'utilisateur ne sait pas ce qu'il se passe ». Le serveur dit désormais `refreshing` pour
+une caméra dont il ouvre la session sans avoir encore d'image (`../3_plugins/3_5_google-nest.md`,
+mise à jour 2026-10-26 (4)) ; `CamerasView` le relaie et `CameraVideo` l'affiche au centre de la
+tuile : un **point qui pulse** (la même `cam__dot` que le badge Direct) suivi de « Mise à jour de
+l'image… » (`camera.video.refreshing`, fr et en). Pendant un nouvel essai d'une caméra éteinte, ce
+message remplace « Caméra inactive » : c'est l'essai qui parle, pas l'échec précédent. L'image reste
+assombrie tant que la caméra est connue inactive.
+
+Vérifié sur la vraie maison : le message apparaît pendant environ 15 s par caméra essayée (sondage de
+la vue toutes les 5 s, donc jusqu'à 5 s de décalage), animation `cam-pulse` active. Test :
+`components/controls/CameraVideo.test.ts` (message et point, retour à « Caméra inactive » ensuite).

@@ -465,6 +465,30 @@ describe('nest plugin', () => {
     } finally { unlinkSync(stale) }
   })
 
+  it('cameras view: after a restart, among cameras that all have an image, the newest image is reopened first', async () => {
+    // every camera kept its last image on disk: one off for days, one that streamed a minute ago
+    const dir = join(tmpdir(), 'kasbah-nest-snapshots')
+    mkdirSync(dir, { recursive: true })
+    const files = [['DEVICE5', 3 * 24 * 60], ['DEVICE2', 1], ['DEVICE8', 60]] as const
+    for (const [id, minutesAgo] of files) {
+      const file = join(dir, `${id}.jpg`)
+      writeFileSync(file, 'jpg')
+      const at = new Date(Date.now() - minutesAgo * 60_000)
+      utimesSync(file, at, at)
+    }
+    try {
+      const google = fakeGoogle()
+      const ffmpeg = fakeSpawn()
+      const { plugin, clock } = await linked(google, {}, ffmpeg)
+      const app = await routes(plugin)
+      const watch = async () => { await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' }); await settle() }
+      await watch()
+      for (let i = 0; i < 2; i++) { clock.advance(8000); await watch() }
+      expect(google.commands.filter((c) => c.command.endsWith('GenerateRtspStream')).map((c) => c.id)).toEqual(['DEVICE2', 'DEVICE8', 'DEVICE5'])
+      await plugin.stop()
+    } finally { for (const [id] of files) { try { unlinkSync(join(dir, `${id}.jpg`)) } catch { /* gone */ } } }
+  })
+
   it('cameras view: a camera whose stream dies before its first image is not retried right away', async () => {
     const google = fakeGoogle()
     const ffmpeg = fakeSpawn()
@@ -487,6 +511,34 @@ describe('nest plugin', () => {
     const list = (await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots' })).json() as { snapshots: Record<string, { inactive?: boolean }> }
     expect(list.snapshots.DEVICE8).toMatchObject({ inactive: true })
     await plugin.stop()
+  })
+
+  it('cameras view: a session says it is refreshing until its first image; a silent stream is closed and reopened', async () => {
+    const box = (type: string, body: Buffer = Buffer.alloc(0)) => { const h = Buffer.alloc(8); h.writeUInt32BE(body.length + 8, 0); h.write(type, 4, 'latin1'); return Buffer.concat([h, body]) }
+    const avcC = box('avcC', Buffer.from([1, 0x4d, 0x00, 0x20, 0xff, 0xe1, 0, 0]))
+    const header = Buffer.concat([box('ftyp', Buffer.from('isom')), box('moov', box('trak', box('stsd', box('avc1', Buffer.concat([Buffer.alloc(78), avcC])))))])
+    const fragment = Buffer.concat([box('moof', Buffer.alloc(16)), box('mdat', Buffer.alloc(64))])
+    const google = fakeGoogle()
+    const ffmpeg = fakeSpawn()
+    const { plugin, clock } = await linked(google, {}, ffmpeg)
+    const app = await routes(plugin)
+    const watch = async () => (await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' })).json() as { snapshots: Record<string, { refreshing?: boolean; live: boolean }> }
+    const opened = () => google.commands.filter((c) => c.command.endsWith('GenerateRtspStream')).map((c) => c.id)
+    await watch()
+    await settle()
+    const id = opened()[0]!
+    expect((await watch()).snapshots[id]).toMatchObject({ refreshing: true, live: true })
+    // the stream starts and gives an image: no longer refreshing
+    ffmpeg.procs[0]!.stdout.write(Buffer.concat([header, fragment]))
+    ffmpeg.procs[0]!.stdio[3]!.write(Buffer.from([0xff, 0xd8, 0xff, 0xda, 0x00, 0x04, 0x01, 0x00, 0x05, 0x12, 0xff, 0xd9]))
+    await settle()
+    expect((await watch()).snapshots[id]?.refreshing).toBeUndefined()
+    // then it goes silent: 20 s without a fragment and the session is closed, then reopened by the rotation
+    for (let t = 0; t < 32_000; t += 8000) { clock.advance(8000); await watch(); await settle() }
+    expect(ffmpeg.procs[0]!.kill).toHaveBeenCalled()
+    expect(opened().filter((x) => x === id)).toHaveLength(2)
+    await plugin.stop()
+    try { unlinkSync(join(tmpdir(), 'kasbah-nest-snapshots', `${id}.jpg`)) } catch { /* not saved */ }
   })
 
   it('cameras view: a camera marked inactive that gives an image again is no longer inactive', async () => {

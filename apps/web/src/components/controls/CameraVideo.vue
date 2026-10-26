@@ -15,7 +15,9 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // thumbnail (`paused`, emitted to the view which tells the server) and a play button starts the live stream.
 // While the live stream connects, the last thumbnail stays on screen with its age, until the video
 // really plays: the detail card asks the server for its date itself, the Cameras view passes it.
-const props = withDefaults(defineProps<{ deviceId: string; autoplay?: boolean; snapshotAt?: number | null; inactive?: boolean; paused?: boolean; liveAllowed?: boolean }>(), { autoplay: true, snapshotAt: null, inactive: false, paused: false, liveAllowed: true })
+// `refreshing` (Cameras view): the server is opening a session for this camera and has no image yet
+// — a pulsing message says so, otherwise an old image looked like a frozen screen.
+const props = withDefaults(defineProps<{ deviceId: string; autoplay?: boolean; snapshotAt?: number | null; inactive?: boolean; paused?: boolean; refreshing?: boolean; liveAllowed?: boolean }>(), { autoplay: true, snapshotAt: null, inactive: false, paused: false, refreshing: false, liveAllowed: true })
 const emit = defineEmits<{ snapshots: [enabled: boolean]; live: [active: boolean] }>()
 
 type Status = 'idle' | 'connecting' | 'playing' | 'unsupported' | 'ended' | 'error'
@@ -240,6 +242,7 @@ watch(() => mode.value === 'live', (live) => emit('live', live))
     <div v-if="status !== 'playing'" class="cam__overlay">
       <span v-if="showSnapshot" class="cam__msg cam__msg--age">{{ snapshotAgeS >= 90 ? $t('camera.video.agoMin', { m: Math.round(snapshotAgeS / 60) }) : $t('camera.video.ago', { s: snapshotAgeS }) }}</span>
       <span v-if="status === 'connecting'" class="cam__msg">{{ $t('camera.video.connecting') }}</span>
+      <span v-else-if="status === 'idle' && refreshing" class="cam__msg cam__msg--busy"><span class="cam__dot" />{{ $t('camera.video.refreshing') }}</span>
       <span v-else-if="status === 'idle' && (!showSnapshot || inactive)" class="cam__msg">{{ $t(inactive ? 'camera.video.inactive' : autoplay ? 'camera.video.stopped' : 'camera.video.noSnapshot') }}</span>
       <span v-else-if="status !== 'idle'" class="cam__msg">{{ whyKey ? $t(`camera.video.why.${whyKey}`) : $t(`camera.video.${status}`) }}<span v-if="status === 'unsupported' && detail" class="cam__detail"> · {{ detail }}</span></span>
     </div>
@@ -276,6 +279,7 @@ watch(() => mode.value === 'live', (live) => emit('live', live))
 .cam__overlay { position: absolute; inset: 0 0 44px 0; display: grid; place-items: center; color: #ddd; font-size: 13px; padding: 12px; text-align: center; pointer-events: none; }
 .cam__msg { background: rgba(0, 0, 0, .55); padding: 6px 10px; border-radius: 8px; }
 .cam__detail { opacity: .7; }
+.cam__msg--busy { display: inline-flex; align-items: center; gap: 7px; }
 .cam__bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 6px; padding: 6px 8px; background: linear-gradient(transparent, rgba(0, 0, 0, .6)); }
 .key {
   display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px;

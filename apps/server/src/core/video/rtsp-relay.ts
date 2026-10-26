@@ -44,10 +44,18 @@ export interface RtspRelayOptions {
   idleGraceMs?: number
   onIdle: () => void
   /**
-   * The relay stopped BY ITSELF (ffmpeg exited: camera off, stream refused). The caller must then
-   * free the source too — otherwise the session stays counted and is never returned (seen for real).
+   * The relay stopped BY ITSELF (ffmpeg exited: camera off, stream refused, or a stalled stream).
+   * The caller must then free the source too — otherwise the session stays counted and is never
+   * returned (seen for real).
    */
   onEnded?: (reason: string) => void
+  /**
+   * A started stream (header received) that delivers no fragment for this long is stopped as
+   * stalled. Seen for real: a camera that drops off the network leaves the vendor's server silent
+   * without closing the connection, and ffmpeg waited; the thumbnail only aged. No watchdog when
+   * left out.
+   */
+  stallMs?: number
   /**
    * JPEG thumbnail handed to `onImage` as soon as the stream starts, then every `intervalMs`. It
    * travels through a pipe, never through the disk: up to the caller to keep it in memory. It is the
@@ -59,6 +67,9 @@ export interface RtspRelayOptions {
   /** Injection for tests: replaces `spawn`. */
   spawnImpl?: typeof spawn
 }
+
+/** Longest silence of the network connection before ffmpeg gives up: 10 s, in microseconds. */
+const RTSP_IO_TIMEOUT_US = 10_000_000
 
 /** Erases the token of a stream URL (`?auth=…`) and the signed path before it. */
 export function redactStreamUrl(text: string): string {
@@ -76,11 +87,15 @@ export function redactStreamUrl(text: string): string {
  * No `fflags nobuffer`, here or on the command line: it makes ffmpeg throw away the packets read
  * while it analyses the stream, so the first keyframe was lost and the first picture came one group
  * of pictures later (measured on a real camera, see the Nest page of the wiki, 2026-10-26).
+ *
+ * `timeout` (microseconds) bounds each network read: by default there is none, and ffmpeg facing a
+ * server that keeps the connection open but sends nothing waited forever (measured against a silent
+ * local server: still waiting after 12 s without it, gone after 3 s with a 3 s timeout).
  */
 export function writeSourceList(url: string): string {
   const path = join(tmpdir(), `kasbah-rtsp-${randomBytes(8).toString('hex')}.ffconcat`)
   const quoted = url.replaceAll("'", "'\\''")
-  writeFileSync(path, `ffconcat version 1.0\nfile '${quoted}'\noption rtsp_transport tcp\n`, { mode: 0o600 })
+  writeFileSync(path, `ffconcat version 1.0\nfile '${quoted}'\noption rtsp_transport tcp\noption timeout ${RTSP_IO_TIMEOUT_US}\n`, { mode: 0o600 })
   return path
 }
 
@@ -111,6 +126,7 @@ export class RtspRelay {
   private pendingMoof: Buffer | undefined
   private readonly subscribers = new Set<RelaySubscriber>()
   private idleTimer: unknown = null
+  private stallTimer: unknown = null
   private ended: string | null = null
 
   constructor(private readonly opts: RtspRelayOptions) {}
@@ -254,6 +270,7 @@ export class RtspRelay {
         const ftyp = this.current!.ftyp
         this.init = { mime, data: ftyp ? Buffer.concat([ftyp, box.data]) : box.data }
         this.lastFragment = undefined
+        this.armStall()
         this.opts.logger?.info({ mime }, 'rtsp relay ready')
         this.broadcast({ kind: 'init', ...this.init })
         break
@@ -262,6 +279,7 @@ export class RtspRelay {
       case 'mdat':
         if (this.pendingMoof) {
           this.lastFragment = Buffer.concat([this.pendingMoof, box.data])
+          this.armStall()
           this.broadcast({ kind: 'fragment', data: this.lastFragment })
           this.pendingMoof = undefined
         }
@@ -287,6 +305,7 @@ export class RtspRelay {
         this.pendingMoof = undefined
         this.init = { mime, data: source.ftyp ? Buffer.concat([source.ftyp, source.moov]) : source.moov }
         this.lastFragment = Buffer.concat([moof, box.data])
+        this.armStall()
         this.opts.logger?.info({ mime }, 'rtsp relay switched source')
         this.broadcast({ kind: 'init', ...this.init })
         this.broadcast({ kind: 'fragment', data: this.lastFragment })
@@ -309,6 +328,17 @@ export class RtspRelay {
     if (this.idleTimer !== null) { this.opts.clock.clearTimeout(this.idleTimer); this.idleTimer = null }
   }
 
+  /** (Re)starts the stall countdown: called at the header and at each fragment of the current source. */
+  private armStall(): void {
+    const ms = this.opts.stallMs
+    if (ms === undefined || this.ended) return
+    if (this.stallTimer !== null) this.opts.clock.clearTimeout(this.stallTimer)
+    this.stallTimer = this.opts.clock.setTimeout(() => {
+      this.stallTimer = null
+      this.stop(`stalled: no picture for ${Math.round(ms / 1000)} s`)
+    }, ms)
+  }
+
   private broadcast(msg: RelayMessage): void {
     // a copy: a subscriber added by one of these calls already got this fragment as its replay
     for (const fn of [...this.subscribers]) fn(msg)
@@ -318,6 +348,7 @@ export class RtspRelay {
     if (this.ended) return
     this.ended = reason
     this.disarmIdle()
+    if (this.stallTimer !== null) { this.opts.clock.clearTimeout(this.stallTimer); this.stallTimer = null }
     this.opts.onEnded?.(reason)
     this.opts.logger?.info({ reason }, 'rtsp relay ended')
     this.broadcast({ kind: 'ended', reason })

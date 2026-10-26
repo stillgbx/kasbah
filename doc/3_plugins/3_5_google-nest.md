@@ -712,3 +712,52 @@ leur place (rang 2) passent toujours avant les caméras en échec (rang 3). Sans
 l'utilisateur, dont le budget couvre toutes les caméras.
 
 Test : `plugin.test.ts` (« a camera marked inactive that gives an image again is no longer inactive »).
+
+### Mise à jour 2026-10-26 (4) — flux bloqués : délai réseau de ffmpeg et surveillance du relais
+
+Retour de l'utilisateur : la vignette de la caméra du toit affichait plus de 70 s de retard, sans
+message. Au moment du relevé, le serveur la voyait inactive, sans session, image de 137 s : le flux
+s'était arrêté et la reconnexion avait échoué (404). Ce qui manquait, c'était de **voir** l'arrêt : le
+flux vient d'un serveur de Google qui relaie la caméra, et quand celle-ci décroche, ce serveur peut
+cesser d'envoyer sans fermer la connexion. ffmpeg attendait alors, son délai de lecture réseau RTSP
+(`timeout`) valant 0, c'est-à-dire aucun (`ffmpeg -h demuxer=rtsp`) ; la session restait comptée
+vivante et l'image vieillissait jusqu'à l'échéance de cinq minutes de Google. Le journal du serveur de
+l'utilisateur n'était pas disponible : la chronologie exacte de cette coupure reste une déduction.
+
+Deux parades (`core/video/rtsp-relay.ts`, `plugins/nest/index.ts`) :
+
+- **`option timeout 10000000`** (10 s, en microsecondes) dans la liste `concat`. Vérifié contre un
+  faux serveur RTSP local qui accepte la connexion et ne répond jamais : sans l'option, ffmpeg attend
+  encore au bout de 12 s (arrêté de force) ; avec 3 s, il abandonne seul en 3,2 s.
+- **Surveillance dans le relais** (`stallMs`, 20 s dans le plugin, `STREAM_STALL_MS`) : un flux
+  **démarré** (en-tête reçu) qui ne livre plus aucun fragment pendant ce délai est arrêté avec la
+  raison `stalled: no picture for 20 s` ; `onEnded` ferme la session, la rotation la rouvre au tour
+  suivant, et une caméra injoignable passe en inactive. Avant l'en-tête, pas de surveillance : c'est le
+  délai réseau de ffmpeg qui couvre l'attente. Sans `stallMs`, le relais ne surveille rien.
+
+**Indicateur de mise à jour** (demande de l'utilisateur : « l'utilisateur ne sait pas ce qu'il se
+passe ») : `…/cameras/snapshots` porte `refreshing: true` tant qu'une session de la caméra s'ouvre
+(`opening`) ou est ouverte sans avoir encore donné d'image (`StreamSession.gotImage`). La tuile
+l'affiche : voir `../4_ui/4_3_vues-lumieres-ouvrants-cameras.md`, mise à jour 2026-10-26 (3).
+
+Vérifié sur la vraie maison : chaque caméra éteinte affiche l'indicateur pendant son essai (environ
+15 s), puis « Caméra inactive » ; la caméra active se rafraîchit toutes les 10 s environ pendant 40 s,
+sans fausse détection de blocage ni erreur. Tests : `rtsp-relay.test.ts` (flux démarré puis muet,
+compte à rebours relancé par chaque fragment, pas de surveillance avant l'en-tête ; liste `concat` avec
+`timeout`), `plugin.test.ts` (« a session says it is refreshing until its first image; a silent stream
+is closed and reopened »).
+
+**Constat confirmé, non traité** : au démarrage, la rotation rouvre d'abord les caméras dont l'image
+est la plus **ancienne** (rang 0). Observé ce jour : la seule caméra active, à l'image la plus récente,
+passe en dernier, environ 70 s après l'ouverture de la vue.
+*(Traité le même jour : voir « Mise à jour 2026-10-26 (5) — au démarrage, l'image la plus récente d'abord ».)*
+
+### Mise à jour 2026-10-26 (5) — au démarrage, l'image la plus récente d'abord
+
+Demande de l'utilisateur, après le constat ci-dessus. Le rang 0 de la rotation (« a une vignette, pas
+encore rendue ») trie désormais par image **la plus récente d'abord** (`gridTick`) ; les autres rangs
+gardent la plus ancienne d'abord. Depuis que les dernières images sont gardées sur le disque, toutes
+les caméras ont une image au démarrage, et l'ordre par image la plus ancienne faisait passer une
+caméra éteinte depuis des jours avant celle qui diffusait une minute plus tôt. Une image récente est
+le meilleur indice qu'une caméra diffuse encore. Test : `plugin.test.ts` (« after a restart, among
+cameras that all have an image, the newest image is reopened first » : 1 min, puis 1 h, puis 3 jours).

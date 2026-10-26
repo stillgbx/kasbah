@@ -86,6 +86,29 @@ describe('RtspRelay', () => {
     expect((late.got[2] as { data: Buffer }).data.equals(fragment(2))).toBe(true)
   })
 
+  it('a started stream that goes silent is stopped as stalled; each fragment restarts the countdown', () => {
+    const clock = new ManualClock(0)
+    const ff = fakeFfmpeg()
+    const onEnded = vi.fn()
+    const relay = new RtspRelay({ ffmpegPath: 'ffmpeg', url: 'rtsps://cam/x', clock, onIdle: vi.fn(), onEnded, stallMs: 20_000, spawnImpl: ff.spawnImpl })
+    const a = collect()
+    relay.subscribe(a.fn)
+    relay.start()
+    // before the header (Google opening, RTSP connection), no watchdog: ffmpeg's own timeout covers it
+    clock.advance(60_000)
+    expect(relay.hasEnded).toBe(false)
+    ff.proc.stdout.write(Buffer.concat([FTYP, MOOV, fragment(1)]))
+    clock.advance(19_000)
+    ff.proc.stdout.write(fragment(2))
+    clock.advance(19_000)
+    expect(relay.hasEnded).toBe(false)
+    clock.advance(1000)
+    expect(relay.hasEnded).toBe(true)
+    expect(onEnded).toHaveBeenCalledWith('stalled: no picture for 20 s')
+    expect(ff.proc.kill).toHaveBeenCalledTimes(1)
+    expect(a.got.at(-1)).toEqual({ kind: 'ended', reason: 'stalled: no picture for 20 s' })
+  })
+
   it('stops ffmpeg and frees the source once the last viewer has been gone for the grace period', () => {
     const clock = new ManualClock(0)
     const { relay, proc, onIdle } = relayWith(clock)
@@ -204,7 +227,8 @@ describe('RtspRelay source address', () => {
     expect(args.join(' ')).not.toContain('auth=')
     const { list, text } = sourceOf(args)
     // no `fflags nobuffer`: it threw away the packets read while ffmpeg analyses the stream, first keyframe included
-    expect(text).toBe(['ffconcat version 1.0', "file 'rtsps://cam/x?auth=t'", 'option rtsp_transport tcp', ''].join('\n'))
+    // and a network timeout: without one, ffmpeg waited forever on a server that went silent
+    expect(text).toBe(['ffconcat version 1.0', "file 'rtsps://cam/x?auth=t'", 'option rtsp_transport tcp', 'option timeout 10000000', ''].join('\n'))
     if (process.platform !== 'win32') expect(statSync(list).mode & 0o777).toBe(0o600)
     proc.exitCode = 0
     proc.emit('exit', 0, null)

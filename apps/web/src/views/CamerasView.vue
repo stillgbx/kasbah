@@ -21,8 +21,12 @@ const devices = useDevicesStore()
 const cameras = computed(() => devices.list.filter((e) => e.state.kind === 'camera'))
 const streamable = (e: DeviceEntry) => e.descriptor.capabilities.includes('live_stream') && (e.descriptor.meta.camera?.protocols ?? []).includes('rtsp')
 
-/** By `deviceId`: date of the last thumbnail, and "inactive" if the camera's stream fails. */
-const snapshots = ref<Record<string, { at?: number; inactive?: boolean; paused?: boolean }>>({})
+/**
+ * By `deviceId`: date of the last thumbnail, "inactive" if the camera's stream fails, and
+ * "refreshing" while the server opens a session for it and no image has come yet.
+ */
+type TileState = { at?: number; inactive?: boolean; paused?: boolean; refreshing?: boolean }
+const snapshots = ref<Record<string, TileState>>({})
 // "Active" = a camera whose stream worked on the last try. Google does not expose the connectivity
 // of cameras (no Connectivity trait, unlike the thermostat): only the stream attempt says it, so
 // a camera that is off is only known as such (`inactive`) after a pass of the rotation.
@@ -41,11 +45,16 @@ function setLive(deviceId: string, active: boolean) {
 
 async function poll() {
   const plugins = [...new Set(cameras.value.filter(streamable).map((e) => e.descriptor.pluginId))]
-  const next: Record<string, { at?: number; inactive?: boolean; paused?: boolean }> = { ...snapshots.value }
+  const next: Record<string, TileState> = { ...snapshots.value }
   await Promise.all(plugins.map(async (pluginId) => {
     try {
       const list = await getTransport().cameraSnapshots(pluginId, true)
-      for (const [externalId, s] of Object.entries(list)) next[`${pluginId}:${externalId}`] = { ...(s.at !== undefined ? { at: s.at } : {}), ...(s.inactive ? { inactive: true } : {}), ...(s.paused ? { paused: true } : {}) }
+      for (const [externalId, s] of Object.entries(list)) {
+        next[`${pluginId}:${externalId}`] = {
+          ...(s.at !== undefined ? { at: s.at } : {}), ...(s.inactive ? { inactive: true } : {}), ...(s.paused ? { paused: true } : {}),
+          ...(s.refreshing ? { refreshing: true } : {}),
+        }
+      }
     } catch { /* server unreachable: we keep the known dates, the connection banner warns */ }
   }))
   snapshots.value = next
@@ -78,7 +87,7 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
           <!-- the tile takes its own line: in the 4th column it would be a postage stamp -->
           <CameraVideo v-if="streamable(entry) && entry.state.available" :device-id="entry.descriptor.id" :autoplay="false"
                        :snapshot-at="snapshots[entry.descriptor.id]?.at ?? null" :inactive="snapshots[entry.descriptor.id]?.inactive ?? false"
-                       :paused="snapshots[entry.descriptor.id]?.paused ?? false" :live-allowed="liveAllowed(entry.descriptor.id)" class="tile"
+                       :paused="snapshots[entry.descriptor.id]?.paused ?? false" :refreshing="snapshots[entry.descriptor.id]?.refreshing ?? false" :live-allowed="liveAllowed(entry.descriptor.id)" class="tile"
                        @snapshots="(enabled) => setSnapshots(entry.descriptor.id, enabled)" @live="(active) => setLive(entry.descriptor.id, active)" />
           <div v-else-if="!streamable(entry)" class="tile note muted">{{ entry.descriptor.capabilities.includes('live_stream') ? $t('camera.video.webrtcLater') : $t('camera.noStream') }}</div>
         </template>

@@ -512,7 +512,7 @@ export function createHttpTransport(base = ''): Transport {
     },
     cameraSnapshots: (pluginId, watch) => request(
       `${base}/api/plugins/${encodeURIComponent(pluginId)}/cameras/snapshots${watch ? '?watch=1' : ''}`, undefined,
-      (j) => (j as { snapshots: Record<string, { at?: number; live: boolean; inactive?: boolean; paused?: boolean }> }).snapshots,
+      (j) => (j as { snapshots: Record<string, { at?: number; live: boolean; inactive?: boolean; paused?: boolean; refreshing?: boolean }> }).snapshots,
     ),
     setCameraSnapshots: (deviceId, enabled) => {
       const { pluginId, externalId } = parseDeviceId(deviceId)

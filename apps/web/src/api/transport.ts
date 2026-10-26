@@ -858,7 +858,7 @@ export interface Transport {
    * Thumbnails of a plugin's cameras (`externalId` → date), and `watch` to signal that we are watching
    * the Cameras view: this is what keeps the thumbnail sessions alive on the server side.
    */
-  cameraSnapshots(pluginId: string, watch: boolean): Promise<Record<string, { at?: number; live: boolean; inactive?: boolean; paused?: boolean }>>
+  cameraSnapshots(pluginId: string, watch: boolean): Promise<Record<string, { at?: number; live: boolean; inactive?: boolean; paused?: boolean; refreshing?: boolean }>>
   /** Stops (`false`) or resumes (`true`) a camera's thumbnail on the Cameras view. */
   setCameraSnapshots(deviceId: string, enabled: boolean): Promise<void>
   /** URL of a camera's JPEG thumbnail; `at` is used to get around the browser cache. */

@@ -84,6 +84,12 @@ const STREAM_EXTEND_MS = 4 * 60_000
 const PUBSUB_MAX_MESSAGES = 20
 /** A relay without subscribers waits this long before stopping the session (view change, reconnection). */
 const STREAM_IDLE_MS = 8000
+/**
+ * A started stream without a fragment for this long is stalled (five groups of pictures of the
+ * doorbell): the session is closed, and the rotation tries again — a camera gone from the network
+ * then shows as inactive within seconds instead of freezing until Google's five-minute deadline.
+ */
+const STREAM_STALL_MS = 20_000
 /** Beyond this send backlog, a screen is no longer keeping up: we skip fragments rather than pile them up. */
 const WS_MAX_BUFFERED = 8 << 20
 /** Video stream ping: two beats without a pong and the screen is considered gone. */
@@ -118,7 +124,8 @@ const GRID_RETRY_MAX_MS = 15 * 60_000
 const GRID_OPEN_PER_TICK = 1
 const GRID_RATE_LIMIT_PAUSE_MS = 90_000
 
-interface StreamSession { relay: RtspRelay; url: string; extensionToken: string; extendTimer: unknown }
+/** `gotImage`: the session has given a thumbnail — until then, the Cameras view says it is updating. */
+interface StreamSession { relay: RtspRelay; url: string; extensionToken: string; extendTimer: unknown; gotImage: boolean }
 /** The Cameras view's hold on a session: a silent subscriber keeping it open for the time of a thumbnail. */
 interface GridHold { since: number; hold: RelaySubscriber }
 /** Camera whose stream failed: from when to retry, and how many failures in a row. */
@@ -291,18 +298,20 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     log().info({ externalId, expiresAt: started.expiresAt }, 'rtsp stream opened')
     const relay = new RtspRelay({
       ffmpegPath: config!.FFMPEG_PATH, url: started.streamUrls.rtspUrl, clock: ctx!.clock, logger: ctx!.logger,
-      idleGraceMs: STREAM_IDLE_MS, onIdle: () => void closeStream(externalId, 'no viewer left'),
+      idleGraceMs: STREAM_IDLE_MS, stallMs: STREAM_STALL_MS, onIdle: () => void closeStream(externalId, 'no viewer left'),
       onEnded: (reason) => void closeStream(externalId, `relay ended: ${reason}`),
       snapshot: {
         intervalMs: config!.NEST_SNAPSHOT_MS, width: SNAPSHOT_WIDTH,
         onImage: (jpeg) => {
           snapshots.set(externalId, { jpeg, at: ctx!.clock.now(), savedAt: snapshots.get(externalId)?.savedAt })
           gridFailed.delete(externalId)                 // an image proves it streams, whoever opened the session (a live view too)
+          const session = streams.get(externalId)
+          if (session?.relay === relay) session.gotImage = true
         },
       },
       ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}),
     })
-    const session: StreamSession = { relay, url: started.streamUrls.rtspUrl, extensionToken: started.streamExtensionToken, extendTimer: null }
+    const session: StreamSession = { relay, url: started.streamUrls.rtspUrl, extensionToken: started.streamExtensionToken, extendTimer: null, gotImage: false }
     // Extending is not enough: Google cuts the RTSP connection at the INITIAL deadline (observed:
     // frozen thumbnails then ffmpeg at end of stream right at `expiresAt`, extension or not). The new
     // `streamToken` is used to reopen the connection, and the relay switches to it without a gap.
@@ -439,7 +448,9 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     //     previous run (server restart) or whose session died — we KNOW they are streaming. Without
     //     this rank, after a restart the six cameras that were off (no thumbnail, hence "oldest")
     //     went first, and the three active ones showed an image several minutes old while we waited
-    //     for them;
+    //     for them. NEWEST image first within this rank: since the last images are kept on disk,
+    //     every camera has one, and a camera off for days (an image days old) went before the one
+    //     that streamed a minute ago — seen for real, the only active camera came last, 70 s in;
     //  1. never tried;
     //  2. given back by the rotation (oldest image first);
     //  3. failed, whose delay has just expired — six cameras that are off to retry would otherwise
@@ -449,7 +460,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       const tier = gridFailed.has(id) ? 3 : released !== undefined ? 2 : at !== undefined ? 0 : 1
       return [id, tier, Math.max(at ?? 0, released ?? 0)] as const
     })
-    dated.sort((a, b) => a[1] - b[1] || a[2] - b[2])
+    dated.sort((a, b) => a[1] - b[1] || (a[1] === 0 ? b[2] - a[2] : a[2] - b[2]))
     for (const [id] of dated.slice(0, free)) acquireGrid(id)
   }
 
@@ -602,11 +613,17 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       // (it is what keeps the sessions open; without a signal for 15 s, they close).
       app.get<{ Querystring: { watch?: string } }>('/cameras/snapshots', async (req) => {
         if (req.query.watch === '1' && client?.linked) watchGrid()
-        const list: Record<string, { at?: number; live: boolean; inactive?: boolean }> = {}
+        const list: Record<string, { at?: number; live: boolean; inactive?: boolean; paused?: boolean; refreshing?: boolean }> = {}
         for (const id of rtspCameraIds()) {
           const at = snapshotAt(id), failed = gridFailed.get(id), paused = gridPaused.has(id)
-          if (at === undefined && !failed && !paused) continue
-          list[id] = { ...(at !== undefined ? { at } : {}), live: streams.has(id), ...(failed ? { inactive: true } : {}), ...(paused ? { paused: true } : {}) }
+          // a session is being opened, or is open without having given an image yet: the view says it is updating
+          const session = streams.get(id)
+          const refreshing = opening.has(id) || (session !== undefined && !session.gotImage && !session.relay.hasEnded)
+          if (at === undefined && !failed && !paused && !refreshing) continue
+          list[id] = {
+            ...(at !== undefined ? { at } : {}), live: streams.has(id), ...(failed ? { inactive: true } : {}), ...(paused ? { paused: true } : {}),
+            ...(refreshing ? { refreshing: true } : {}),
+          }
         }
         return { snapshots: list, budget: config?.NEST_LIVE_BUDGET ?? 0, sessions: streams.size }
       })

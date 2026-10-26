@@ -95,6 +95,18 @@ describe('CameraVideo', () => {
     expect(w.find('.cam__overlay').text()).toBe('Flux terminé')
   })
 
+  it('tile: while the server opens a session, a pulsing message says the image is being updated', async () => {
+    fake(undefined)
+    const w = mount(CameraVideo, { props: { deviceId: 'nest:cam1', autoplay: false, snapshotAt: Date.now() - AGO_MS, inactive: true, refreshing: true } })
+    const busy = w.find('.cam__msg--busy')
+    expect(busy.text()).toBe('Mise à jour de l\'image…')
+    expect(busy.find('.cam__dot').exists()).toBe(true)
+    expect(w.find('.cam__overlay').text()).not.toContain('Caméra inactive')   // the retry speaks, not the last failure
+    await w.setProps({ refreshing: false })
+    expect(w.find('.cam__msg--busy').exists()).toBe(false)
+    expect(w.find('.cam__overlay').text()).toContain('Caméra inactive : pas de flux')
+  })
+
   it('tile: the thumbnail stays up when going live, until the video plays', async () => {
     const cameraSnapshots = fake(undefined)
     const at = Date.now() - AGO_MS
