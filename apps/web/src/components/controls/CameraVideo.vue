@@ -9,9 +9,9 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // Live video of a camera: the server relays the RTSP stream as fragmented MP4 over a WebSocket
 // (`core/video/rtsp-relay.ts`), and this component pushes it into a <video> through Media Source
 // Extensions. The first message is a JSON line announcing the codecs (MSE requires it before the
-// first byte), then the MP4 header, then the fragments — each starts with a key frame, so
-// we can decode from the first one received. We stay at the live edge: if the buffer gets more than
-// a few seconds ahead (background tab), we jump to the end rather than lag behind.
+// first byte), then the MP4 header, then the fragments: first everything since the last key frame
+// (we can only decode from one), then half a second at a time. We stay about a second behind the
+// live edge, and jump back near it whenever we drift (start, background tab, slow network).
 // `autoplay`: the live stream starts on its own (detail card). Otherwise (Cameras view) the tile shows the
 // last JPEG thumbnail the server keeps up to date, with its age; there, the stop button stops the
 // thumbnail (`paused`, emitted to the view which tells the server) and a play button starts the live stream.
@@ -78,14 +78,29 @@ const queue: { data: ArrayBuffer; init?: boolean }[] = []
 
 const KEEP_BEHIND_S = 30      // buffer kept behind the playhead (beyond that, we free it)
 const PRIME_DELAY_MS = 600    // margin before starting playback at the first fragment (see below)
+const EDGE_MARGIN_S = 0.5     // beyond one fragment, how far behind the live edge playback stays
+const CATCH_UP_S = 1.5        // drift tolerated beyond that before jumping back near the edge
 /**
- * Duration of the longest fragment received. The relay cuts at key frames, so a fragment = a group
- * of frames (4 s on the Nest doorbell), and it only arrives once complete: playback is NECESSARILY
- * one fragment behind the live stream. Settling closer would freeze the image between two fragments
- * — which is what a first setting of 0.3 s did: 0.3 s of video, 3.7 s of stall, in a loop.
+ * Duration of the longest fragment received. A fragment only arrives once complete, so playback is
+ * NECESSARILY one fragment behind the live stream: settling closer would freeze the image between two
+ * fragments — what a first setting of 0.3 s did with fragments of 4 s (0.3 s of video, 3.7 s of
+ * stall, in a loop). The relay now cuts every half second: the target lag is one fragment plus
+ * `EDGE_MARGIN_S`, about one second.
  */
-let fragmentS = 1
+let fragmentS = 0
 let lastEnd = 0
+const targetLagS = () => fragmentS + EDGE_MARGIN_S
+
+/**
+ * Jumps near the live edge. The server first replays everything since the last keyframe (up to a
+ * group of pictures, four seconds): playing it from its start would keep the whole delay, so we jump
+ * — the image skips ahead, which is the point (going from Preview to Live shows the live stream).
+ */
+function jumpToEdge(v: HTMLVideoElement) {
+  if (!v.buffered.length) return
+  const start = v.buffered.start(0), end = v.buffered.end(v.buffered.length - 1)
+  v.currentTime = Math.max(start, end - targetLagS())
+}
 
 function flush() {
   const sb = sourceBuffer, v = video.value
@@ -104,11 +119,11 @@ function trimAndCatchUp() {
   const v = video.value, sb = sourceBuffer
   if (!v || !sb || sb.updating || v.buffered.length === 0) return
   const start = v.buffered.start(0), end = v.buffered.end(v.buffered.length - 1)
-  // the first fragment already gives the duration of a group of frames; then each append confirms it
+  // the first fragment already gives a fragment's duration; then each append confirms it
   fragmentS = Math.max(fragmentS, Math.min(lastEnd > 0 ? end - lastEnd : end - start, 10))
   lastEnd = end
-  // more than two fragments behind (background tab): we come back to one fragment from the edge
-  if (end - v.currentTime > fragmentS * 2 + 2) v.currentTime = end - fragmentS - 0.5
+  // drifted too far behind (background tab, replayed run, slow network): back near the edge
+  if (end - v.currentTime > targetLagS() + CATCH_UP_S) jumpToEdge(v)
   if (v.currentTime - start > KEEP_BEHIND_S * 2) sb.remove(start, v.currentTime - KEEP_BEHIND_S)
 }
 
@@ -126,7 +141,7 @@ function start() {
   status.value = 'connecting'
   detail.value = ''
   if (props.autoplay) void loadOwnSnapshot()
-  fragmentS = 1
+  fragmentS = 0
   lastEnd = 0
   mediaSource = new MediaSource()
   objectUrl = URL.createObjectURL(mediaSource)
@@ -163,10 +178,9 @@ function start() {
       flush()
       if (status.value === 'connecting') {
         status.value = 'playing'
-        // The first fragment covers exactly one group of frames, and the next only arrives at the
-        // end of that group: starting right away means reaching the end of the buffer at the very
-        // moment the next one arrives — the slightest jitter freezes the image. Half a second of margin is enough.
-        setTimeout(() => { void v.play().catch(() => { /* playback on the next gesture */ }) }, PRIME_DELAY_MS)
+        // A short wait lets the replayed run (everything since the last keyframe) land, then playback
+        // starts one fragment and a half-second margin from the edge — not at the start of the run.
+        setTimeout(() => { jumpToEdge(v); void v.play().catch(() => { /* playback on the next gesture */ }) }, PRIME_DELAY_MS)
       }
     }
     ws.onerror = () => { if (status.value === 'connecting') fail('connection failed') }

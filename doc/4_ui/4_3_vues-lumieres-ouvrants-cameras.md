@@ -993,3 +993,13 @@ retirée.
 Vérifié sur la vraie vue Caméras, en français et en anglais : le badge d'âge tient dans la tuile, sur
 une ligne, sans toucher le badge de mode. Test : `CameraVideo.test.ts` (45 s, 12 min, 3 h, 6563 min →
 « il y a 5 j » ; Intl écrit des espaces insécables, que le test normalise).
+
+### Mise à jour 2026-10-26 (5) — Direct : on saute au direct
+
+Demande de l'utilisateur : se rapprocher du direct, et au passage d'Aperçu à Direct « afficher le
+direct même si ça provoque un saut d'image ». `CameraVideo.vue` démarre désormais la lecture à environ
+une seconde du bord (`jumpToEdge`), au lieu du début de ce que le serveur rejoue (tout depuis la
+dernière image clé, jusqu'à 4 s) : l'image saute en avant, c'est voulu. Mesuré sur la vraie maison :
+première image en 51 ms sur une caméra dont la vue tient déjà la session, lecture à 0,94 s en moyenne
+derrière la dernière image reçue, deux arrêts au saut initial puis aucun sur 30 s. Mécanique et
+chiffres : `../3_plugins/3_5_google-nest.md`, mise à jour 2026-10-26 (7).

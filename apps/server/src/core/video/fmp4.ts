@@ -60,3 +60,52 @@ export function mseMimeFromMoov(moov: Buffer): string | undefined {
   if (findBox(moov, 'mp4a')) codecs.push('mp4a.40.2')
   return `video/mp4; codecs="${codecs.join(', ')}"`
 }
+
+/** Child boxes of a box's payload (`start`..`end`), by type and position. */
+function childBoxes(data: Buffer, start: number, end: number): { type: string; body: number; end: number }[] {
+  const out: { type: string; body: number; end: number }[] = []
+  for (let i = start; i + 8 <= end;) {
+    const size = data.readUInt32BE(i)
+    if (size < 8 || i + size > end) break
+    out.push({ type: data.toString('latin1', i + 4, i + 8), body: i + 8, end: i + size })
+    i += size
+  }
+  return out
+}
+
+/** `sample_is_non_sync_sample` in the sample flags of `tfhd` / `trun`. */
+const NON_SYNC = 0x10000
+
+/**
+ * Does this fragment (`moof`, possibly followed by its `mdat`) start on a keyframe, so that a viewer
+ * can decode from it? Each track (`traf`) gives the flags of its first sample — in the `trun` when it
+ * carries `first_sample_flags` or per-sample flags, otherwise the `tfhd` default. ffmpeg marks the
+ * fragments it cut between two keyframes (`frag_duration`) with a non-sync default on the video
+ * track; audio samples are all sync. Unknown flags count as a keyframe: the safe reading for a
+ * stream cut at keyframes only.
+ */
+export function startsWithKeyframe(fragment: Buffer): boolean {
+  if (fragment.length < 8 || fragment.toString('latin1', 4, 8) !== 'moof') return true
+  const moofEnd = Math.min(fragment.readUInt32BE(0), fragment.length)
+  for (const traf of childBoxes(fragment, 8, moofEnd).filter((b) => b.type === 'traf')) {
+    const kids = childBoxes(fragment, traf.body, traf.end)
+    const tfhd = kids.find((b) => b.type === 'tfhd'), trun = kids.find((b) => b.type === 'trun')
+    if (!tfhd || !trun) continue
+    const tf = fragment.readUInt32BE(tfhd.body) & 0xffffff
+    let p = tfhd.body + 8                               // version/flags, track_ID
+    if (tf & 0x01) p += 8                               // base_data_offset
+    if (tf & 0x02) p += 4                               // sample_description_index
+    if (tf & 0x08) p += 4                               // default_sample_duration
+    if (tf & 0x10) p += 4                               // default_sample_size
+    const defaultFlags = tf & 0x20 ? fragment.readUInt32BE(p) : undefined
+    const rf = fragment.readUInt32BE(trun.body) & 0xffffff
+    let q = trun.body + 8                               // version/flags, sample_count
+    if (rf & 0x01) q += 4                               // data_offset
+    let first: number | undefined
+    if (rf & 0x04) first = fragment.readUInt32BE(q)     // first_sample_flags
+    else if (rf & 0x400) first = fragment.readUInt32BE(q + (rf & 0x100 ? 4 : 0) + (rf & 0x200 ? 4 : 0))
+    else first = defaultFlags
+    if (first !== undefined && first & NON_SYNC) return false
+  }
+  return true
+}

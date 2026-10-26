@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import type { Readable } from 'node:stream'
 import type { Logger } from 'pino'
 import type { Clock } from '../clock'
-import { Mp4BoxParser, mseMimeFromMoov, type Mp4Box } from './fmp4'
+import { Mp4BoxParser, mseMimeFromMoov, startsWithKeyframe, type Mp4Box } from './fmp4'
 import { JpegSplitter } from './jpeg'
 
 // RTSP → fragmented MP4 relay, to show in a browser a camera that only speaks RTSP (the house's
@@ -16,12 +16,13 @@ import { JpegSplitter } from './jpeg'
 // fragment sent to a subscriber is always the header (`ftyp` + `moov`), then the fragments
 // (`moof` + `mdat`) as they come.
 //
-// `frag_keyframe`: one fragment per group of pictures, so EACH fragment starts with a keyframe — a
-// subscriber arriving midway can decode from the first fragment received, without us having to
-// locate keyframes ourselves. The price: the fragment is only written at the NEXT keyframe, hence a
-// latency of one group of pictures (four seconds on the doorbell). So that a subscriber arriving
-// midway does not wait for the next one, it receives the LAST fragment right after the header: the
-// image is there at once, a group of pictures behind, as it would be anyway.
+// Fragments of half a second (`frag_duration`), and a new one at each keyframe (`frag_keyframe`).
+// A fragment is only sent once complete: with one fragment per group of pictures, as before, the
+// live stream was always a group of pictures late (four seconds on these cameras). Short fragments
+// bring it down to about half a second, but most of them no longer start on a keyframe, and a viewer
+// can only decode from one. So the relay keeps every fragment since the last keyframe
+// (`startsWithKeyframe`, read in the `moof`) and replays them to a subscriber arriving midway, right
+// after the header: the image is there at once, and the player jumps to the live edge.
 //
 // `rotateSource(url)`: the source may change address midway (at Google, an RTSP session expires
 // after five minutes and extending it gives a NEW token, to use on a new connection — the old one
@@ -31,7 +32,8 @@ import { JpegSplitter } from './jpeg'
 
 export type RelayMessage =
   | { kind: 'init'; mime: string; data: Buffer }
-  | { kind: 'fragment'; data: Buffer }
+  /** `key`: the fragment starts on a keyframe — a screen that skipped fragments resumes only on one. */
+  | { kind: 'fragment'; data: Buffer; key: boolean }
   | { kind: 'ended'; reason: string }
 export type RelaySubscriber = (msg: RelayMessage) => void
 
@@ -70,6 +72,10 @@ export interface RtspRelayOptions {
 
 /** Longest silence of the network connection before ffmpeg gives up: 10 s, in microseconds. */
 const RTSP_IO_TIMEOUT_US = 10_000_000
+/** Longest fragment: half a second, in microseconds — what the live stream lags by, at least. */
+const FRAGMENT_US = 500_000
+/** Fragments kept since the last keyframe, at most (a minute at half a second each). */
+const MAX_KEPT_FRAGMENTS = 120
 
 /** Erases the token of a stream URL (`?auth=…`) and the signed path before it. */
 export function redactStreamUrl(text: string): string {
@@ -121,8 +127,8 @@ export class RtspRelay {
   /** The replacement source, waiting for its header and its first fragment. */
   private next: Source | null = null
   private init: { mime: string; data: Buffer } | undefined
-  /** Last complete fragment of the current source, replayed to a subscriber arriving midway. */
-  private lastFragment: Buffer | undefined
+  /** Fragments of the current source since its last keyframe, replayed to a subscriber arriving midway. */
+  private sinceKeyframe: Buffer[] = []
   private pendingMoof: Buffer | undefined
   private readonly subscribers = new Set<RelaySubscriber>()
   private idleTimer: unknown = null
@@ -158,7 +164,17 @@ export class RtspRelay {
     this.subscribers.add(fn)
     this.disarmIdle()
     if (this.init) fn({ kind: 'init', ...this.init })
-    if (this.init && this.lastFragment) fn({ kind: 'fragment', data: this.lastFragment })
+    if (this.init) this.sinceKeyframe.forEach((data, i) => fn({ kind: 'fragment', data, key: i === 0 }))
+  }
+
+  /** A fragment of the current source: kept for latecomers (from its last keyframe on), then sent. */
+  private keep(data: Buffer): void {
+    const key = startsWithKeyframe(data)
+    if (key) this.sinceKeyframe = [data]
+    // without a keyframe for too long, the run would grow without end: dropped, a latecomer waits for the next one
+    else if (this.sinceKeyframe.length > 0) this.sinceKeyframe = this.sinceKeyframe.length < MAX_KEPT_FRAGMENTS ? [...this.sinceKeyframe, data] : []
+    this.armStall()
+    this.broadcast({ kind: 'fragment', data, key })
   }
 
   unsubscribe(fn: RelaySubscriber): void {
@@ -180,8 +196,8 @@ export class RtspRelay {
       '-flags', 'low_delay',
       '-protocol_whitelist', 'file,tcp,tls,rtsp,rtsps,rtp,udp,crypto',
       '-f', 'concat', '-safe', '0', '-i', list,
-      '-c', 'copy', '-f', 'mp4', '-movflags', 'empty_moov+default_base_moof+frag_keyframe', '-reset_timestamps', '1',
-      'pipe:1',
+      '-c', 'copy', '-f', 'mp4', '-movflags', 'empty_moov+default_base_moof+frag_keyframe', '-frag_duration', String(FRAGMENT_US),
+      '-reset_timestamps', '1', 'pipe:1',
     ]
     const snap = this.opts.snapshot
     if (snap) {
@@ -269,7 +285,7 @@ export class RtspRelay {
         if (!mime) { this.stop('unsupported codecs (no avcC in moov)'); return }
         const ftyp = this.current!.ftyp
         this.init = { mime, data: ftyp ? Buffer.concat([ftyp, box.data]) : box.data }
-        this.lastFragment = undefined
+        this.sinceKeyframe = []
         this.armStall()
         this.opts.logger?.info({ mime }, 'rtsp relay ready')
         this.broadcast({ kind: 'init', ...this.init })
@@ -278,10 +294,9 @@ export class RtspRelay {
       case 'moof': this.pendingMoof = box.data; break
       case 'mdat':
         if (this.pendingMoof) {
-          this.lastFragment = Buffer.concat([this.pendingMoof, box.data])
-          this.armStall()
-          this.broadcast({ kind: 'fragment', data: this.lastFragment })
+          const data = Buffer.concat([this.pendingMoof, box.data])
           this.pendingMoof = undefined
+          this.keep(data)
         }
         break
       default: break                                    // `sidx`, `mfra`…: nothing useful for MSE
@@ -304,11 +319,10 @@ export class RtspRelay {
         this.next = null
         this.pendingMoof = undefined
         this.init = { mime, data: source.ftyp ? Buffer.concat([source.ftyp, source.moov]) : source.moov }
-        this.lastFragment = Buffer.concat([moof, box.data])
-        this.armStall()
+        this.sinceKeyframe = []
         this.opts.logger?.info({ mime }, 'rtsp relay switched source')
         this.broadcast({ kind: 'init', ...this.init })
-        this.broadcast({ kind: 'fragment', data: this.lastFragment })
+        this.keep(Buffer.concat([moof, box.data]))      // ffmpeg starts its output on a keyframe
         if (old) this.kill(old)
         break
       }
@@ -355,6 +369,6 @@ export class RtspRelay {
     this.subscribers.clear()
     if (this.next) { this.kill(this.next); this.next = null }
     this.current = null
-    this.lastFragment = undefined
+    this.sinceKeyframe = []
   }
 }

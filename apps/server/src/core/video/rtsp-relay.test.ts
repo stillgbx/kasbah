@@ -17,6 +17,15 @@ const avcC = box('avcC', Buffer.from([1, 0x4d, 0x00, 0x20, 0xff, 0xe1, 0, 0]))
 const FTYP = box('ftyp', Buffer.from('isom'))
 const MOOV = box('moov', box('trak', box('stsd', box('avc1', [Buffer.alloc(78), avcC]))))
 const fragment = (n: number) => Buffer.concat([box('moof', Buffer.alloc(16, n)), box('mdat', Buffer.alloc(64, n))])
+/** A fragment as ffmpeg cuts them every half second: `key` starts on a keyframe, the others do not. */
+const u32 = (...values: number[]) => Buffer.concat(values.map((v) => { const b = Buffer.alloc(4); b.writeUInt32BE(v >>> 0); return b }))
+const cut = (n: number, key: boolean) => Buffer.concat([
+  box('moof', [box('mfhd', u32(0, n)), box('traf', [
+    box('tfhd', u32(0x20038, 1, 1024, 100, 0x1010000)),
+    key ? box('trun', u32(0x205, 1, 0, 0x2000000, 50)) : box('trun', u32(0x201, 1, 0, 50)),
+  ])]),
+  box('mdat', Buffer.alloc(32, n)),
+])
 /** A tiny JPEG: SOI, a table segment, the scan header, entropy-coded bytes, EOI. */
 const jpeg = (fill: number) => Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x04, 0x01, fill, 0xff, 0xda, 0x00, 0x04, 0x01, 0x00, fill, 0x12, 0xff, 0xd9])
 
@@ -73,6 +82,29 @@ describe('RtspRelay', () => {
     expect((b.got[2] as { data: Buffer }).data.equals(fragment(2))).toBe(true)
     expect(a.got).toHaveLength(3)
     expect(relay.subscriberCount).toBe(2)
+  })
+
+  it('cuts every half second, and replays to a latecomer everything since the last keyframe', () => {
+    const { relay, proc, spawnImpl } = relayWith(new ManualClock(0))
+    relay.start()
+    const args = (spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1] as string[]
+    expect(args[args.indexOf('-frag_duration') + 1]).toBe('500000')
+    const a = collect()
+    relay.subscribe(a.fn)
+    proc.stdout.write(Buffer.concat([FTYP, MOOV, cut(1, true), cut(2, false), cut(3, false)]))
+    expect(a.got.filter((m) => m.kind === 'fragment').map((m) => (m as { key: boolean }).key)).toEqual([true, false, false])
+    // a latecomer gets the header, then the run since the keyframe — it can decode from its start
+    const late = collect()
+    relay.subscribe(late.fn)
+    expect(late.got.map((m) => m.kind)).toEqual(['init', 'fragment', 'fragment', 'fragment'])
+    const sent = [cut(1, true), cut(2, false), cut(3, false)]
+    expect(late.got.slice(1).map((m, i) => (m as { data: Buffer }).data.equals(sent[i]!))).toEqual([true, true, true])
+    // a new keyframe starts a new run
+    proc.stdout.write(Buffer.concat([cut(4, true), cut(5, false)]))
+    const later = collect()
+    relay.subscribe(later.fn)
+    expect(later.got.slice(1).map((m) => (m as { key: boolean }).key)).toEqual([true, false])
+    expect((later.got[1] as { data: Buffer }).data.equals(cut(4, true))).toBe(true)
   })
 
   it('a subscriber added while a fragment is being handed out gets it once, as its replay', () => {

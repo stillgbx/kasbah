@@ -582,8 +582,8 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       })
 
       // A camera's video stream: a JSON header line (codecs), then the MP4 header and the fragments
-      // as binary. Each fragment starts with a keyframe: a screen arriving midway decodes from the
-      // first one, and a screen that is too slow can skip some.
+      // as binary. A screen arriving midway first receives the fragments since the last keyframe (it
+      // decodes from there), and a screen that is too slow can skip some, up to the next keyframe.
       app.get<{ Params: { id: string } }>('/cameras/:id/stream', { websocket: true }, (socket, req) => {
         const externalId = req.params.id
         const fail = (message: string) => { socket.send(JSON.stringify({ type: 'error', message })); socket.close(1008, message.slice(0, 120)) }
@@ -592,11 +592,16 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
         if (!streamProtocols(device).includes('rtsp')) return fail('this camera does not offer an RTSP stream')
         let relay: RtspRelay | null = null
         let closed = false
+        // A screen that skipped fragments (send backlog) can only resume on a keyframe: the fragments
+        // in between could not be decoded without the ones it missed.
+        let skipping = false
         const onMessage = (msg: RelayMessage) => {
           if (socket.readyState !== socket.OPEN) return
           if (msg.kind === 'init') { socket.send(JSON.stringify({ type: 'init', mime: msg.mime })); socket.send(msg.data, { binary: true }); return }
           if (msg.kind === 'ended') { socket.send(JSON.stringify({ type: 'ended', reason: msg.reason })); socket.close(1011, msg.reason.slice(0, 120)); return }
-          if (socket.bufferedAmount > WS_MAX_BUFFERED) return
+          if (socket.bufferedAmount > WS_MAX_BUFFERED) { skipping = true; return }
+          if (skipping && !msg.key) return
+          skipping = false
           socket.send(msg.data, { binary: true })
         }
         // a screen that disappears without closing (Wi-Fi cut) would leave the Google session and

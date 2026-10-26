@@ -802,3 +802,57 @@ libérée ; huit à jour sur neuf vers 77 s, la neuvième éteinte et signalée 
 le journal. Tests : `plugin.test.ts` (« the openings share Google's quota with every other command of
 the last minute » : quatre commandes de thermostat laissent deux ouvertures, la troisième attend la
 minute suivante) ; trois tests qui supposaient une ouverture par tour adaptés.
+
+### Mise à jour 2026-10-26 (7) — le direct à environ une seconde du bord : fragments d'une demi-seconde
+
+Question de l'utilisateur : pourquoi le direct a-t-il au moins 5 s de retard ? Puis la demande : s'en
+rapprocher, et au passage d'Aperçu à Direct montrer le direct même si l'image saute.
+
+**D'où venaient les secondes.** Avec `frag_keyframe` seul, un fragment par groupe d'images, soit 4 s
+sur ces caméras (mesuré ce jour : un fragment toutes les 4 s), et un fragment n'est envoyé qu'une fois
+complet ; le lecteur partait du début du fragment, plus 600 ms de marge ; plus le trajet caméra →
+Google → serveur. Le compromis était noté plus haut (« Le compromis de latence, à connaître ») : « pas
+fait, à décider si les 4 s gênent ». Et le rejeu du dernier fragment (mise à jour 2026-10-26) servait
+à un spectateur qui rejoint une session un fragment déjà vieux de 4 à 8 s, que le lecteur ne
+rattrapait qu'au-delà de 10 s de retard.
+
+**Ce qui change** :
+
+- **Fragments d'une demi-seconde** : `-frag_duration 500000` en plus de `frag_keyframe`
+  (`core/video/rtsp-relay.ts`). Relevé sur la vraie sortie de ffmpeg 9.0.2 : 8 fragments par groupe
+  d'images de 4 s ; celui qui commence par une image clé porte `first_sample_flags` « sync » dans son
+  `trun`, les autres s'en remettent aux drapeaux par défaut du `tfhd` de la piste vidéo, marqués
+  « non-sync » (`0x1010000`) ; l'audio est toujours « sync ».
+- **`startsWithKeyframe`** (`core/video/fmp4.ts`) lit ces drapeaux ; des drapeaux absents comptent
+  comme une image clé (la lecture sûre d'un flux coupé aux seules images clés).
+- **Rejeu depuis la dernière image clé** : le relais garde tous les fragments depuis la dernière image
+  clé (`sinceKeyframe`, 120 au plus) et les rejoue à qui arrive en cours de route ; le message
+  `fragment` porte `key`. Un écran trop lent qui saute des fragments (plus de 8 Mo en attente) ne
+  reprend qu'à une image clé : sauter un fragment sans image clé rendait les suivants indécodables.
+- **Lecteur** (`CameraVideo.vue`) : retard visé = un fragment + 0,5 s (`EDGE_MARGIN_S`), soit environ
+  1 s ; au démarrage, la lecture **saute** près du bord (`jumpToEdge`) au lieu de partir du début de
+  ce qui a été rejoué ; au-delà de 1,5 s de dérive en plus (`CATCH_UP_S`), elle y revient.
+
+**Mesuré sur une vraie caméra** :
+
+| | Avant | Après |
+|---|---|---|
+| Fragments | un toutes les 4 s | un toutes les 0,46 s (médiane) |
+| Lecture derrière la dernière image reçue | 4,6 à 8 s environ (un fragment et plus, d'après le code) | 0,94 s en moyenne (0,57 à 1,28) |
+| Aperçu → Direct sur une session ouverte | image immédiate, mais 4 à 8 s de retard | première image en 51 ms, à environ 1 s du bord |
+| Arrêts de lecture | — | 2 au saut initial, aucun sur 30 s ensuite |
+| Direct à froid, en régime | — | 1,26 s en moyenne derrière la dernière image reçue |
+
+Le retard réel par rapport à la scène ajoute le trajet caméra → Google → serveur, non mesurable sans
+horloge filmée ; il n'a pas changé.
+
+**Relevé au passage, non traité : un départ à froid de 19,6 s.** Sur une caméra sans piste audio dans
+son flux (en-tête `avc1.4D001F` seul), environ 6 s pour que Google rende la session, puis 14 s entre
+la session et l'en-tête MP4 (analyse du flux par ffmpeg), contre 4 s ce matin sur une caméra avec
+son. Hypothèse non vérifiée : ffmpeg attend une piste audio annoncée qui ne vient pas
+(`analyzeduration`, `probesize`).
+
+Tests : `fmp4.test.ts` (« startsWithKeyframe » sur les boîtes que ffmpeg écrit, drapeaux par
+échantillon, drapeaux absents), `rtsp-relay.test.ts` (coupe à 500 000 µs, rejeu depuis l'image clé,
+nouvelle série à l'image clé suivante). Le saut d'un écran lent jusqu'à l'image clé suivante n'est pas
+couvert par un test (route WebSocket).
