@@ -980,3 +980,16 @@ assombrie tant que la caméra est connue inactive.
 Vérifié sur la vraie maison : le message apparaît pendant environ 15 s par caméra essayée (sondage de
 la vue toutes les 5 s, donc jusqu'à 5 s de décalage), animation `cam-pulse` active. Test :
 `components/controls/CameraVideo.test.ts` (message et point, retour à « Caméra inactive » ensuite).
+
+### Mise à jour 2026-10-26 (4) — l'âge d'une vignette en heures et en jours
+
+Retour de l'utilisateur, capture à l'appui : « il y a 6563 min ». `CameraVideo.vue` garde les
+**secondes sous une minute** (la vignette se rafraîchit toutes les 10 s environ, et « maintenant »
+cacherait ce rythme), puis reprend `formatAgo` (`lib/format.ts`), l'âge relatif déjà utilisé par les
+robots, les véhicules et les automatisations : « il y a 12 min », « il y a 3 h », « hier », « il y a
+5 j » (en anglais « 35 min. ago », « 5 days ago »). La clé `camera.video.agoMin`, devenue inutile, est
+retirée.
+
+Vérifié sur la vraie vue Caméras, en français et en anglais : le badge d'âge tient dans la tuile, sur
+une ligne, sans toucher le badge de mode. Test : `CameraVideo.test.ts` (45 s, 12 min, 3 h, 6563 min →
+« il y a 5 j » ; Intl écrit des espaces insécables, que le test normalise).

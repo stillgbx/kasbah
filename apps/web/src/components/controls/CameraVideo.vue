@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
 import { parseDeviceId } from '@kasbah/shared'
+import { useI18n } from 'vue-i18n'
 import { getTransport } from '../../api'
+import { formatAgo } from '../../lib/format'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
 // Live video of a camera: the server relays the RTSP stream as fragmented MP4 over a WebSocket
@@ -19,6 +21,7 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // — a pulsing message says so, otherwise an old image looked like a frozen screen.
 const props = withDefaults(defineProps<{ deviceId: string; autoplay?: boolean; snapshotAt?: number | null; inactive?: boolean; paused?: boolean; refreshing?: boolean; liveAllowed?: boolean }>(), { autoplay: true, snapshotAt: null, inactive: false, paused: false, refreshing: false, liveAllowed: true })
 const emit = defineEmits<{ snapshots: [enabled: boolean]; live: [active: boolean] }>()
+const { t, locale } = useI18n()
 
 type Status = 'idle' | 'connecting' | 'playing' | 'unsupported' | 'ended' | 'error'
 const status = ref<Status>('idle')
@@ -32,6 +35,13 @@ const ownSnapshot = ref<{ deviceId: string; at: number } | null>(null)
 const shownAt = computed(() => props.snapshotAt ?? (ownSnapshot.value?.deviceId === props.deviceId ? ownSnapshot.value.at : null))
 const snapshotUrl = computed(() => (shownAt.value ? getTransport().cameraSnapshotUrl(props.deviceId, shownAt.value) : null))
 const snapshotAgeS = computed(() => (shownAt.value ? Math.max(0, Math.round((now.value - shownAt.value) / 1000)) : 0))
+/**
+ * Age of the thumbnail: in seconds under a minute (it refreshes every ~10 s, and "now" would hide
+ * that), then the app's usual relative age — "il y a 3 h", "hier", "il y a 4 j" rather than "il y a 6563 min".
+ */
+const snapshotAge = computed(() => (snapshotAgeS.value < 60 || !shownAt.value
+  ? t('camera.video.ago', { s: snapshotAgeS.value })
+  : formatAgo(shownAt.value, now.value, locale.value)))
 /** The video has really started: until then, the thumbnail covers the black of the player. */
 const frameShown = ref(false)
 const showSnapshot = computed(() => !!snapshotUrl.value && (status.value !== 'playing' || !frameShown.value))
@@ -240,7 +250,7 @@ watch(() => mode.value === 'live', (live) => emit('live', live))
       <span v-if="mode === 'live'" class="cam__dot" />{{ $t(`camera.video.mode.${mode}`) }}
     </div>
     <div v-if="status !== 'playing'" class="cam__overlay">
-      <span v-if="showSnapshot" class="cam__msg cam__msg--age">{{ snapshotAgeS >= 90 ? $t('camera.video.agoMin', { m: Math.round(snapshotAgeS / 60) }) : $t('camera.video.ago', { s: snapshotAgeS }) }}</span>
+      <span v-if="showSnapshot" class="cam__msg cam__msg--age">{{ snapshotAge }}</span>
       <span v-if="status === 'connecting'" class="cam__msg">{{ $t('camera.video.connecting') }}</span>
       <span v-else-if="status === 'idle' && refreshing" class="cam__msg cam__msg--busy"><span class="cam__dot" />{{ $t('camera.video.refreshing') }}</span>
       <span v-else-if="status === 'idle' && (!showSnapshot || inactive)" class="cam__msg">{{ $t(inactive ? 'camera.video.inactive' : autoplay ? 'camera.video.stopped' : 'camera.video.noSnapshot') }}</span>

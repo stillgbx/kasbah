@@ -262,7 +262,7 @@
     "stream": "Flux vidéo : {protocols}", "noStream": "Pas de flux vidéo déclaré",
     "video": {
       "connecting": "Connexion au flux…", "stopped": "Vidéo arrêtée", "ended": "Flux terminé", "error": "Flux indisponible",
-      "ago": "il y a {s} s", "agoMin": "il y a {m} min", "inactive": "Caméra inactive : pas de flux", "noSnapshot": "Pas encore d'image", "refreshing": "Mise à jour de l'image…",
+      "ago": "il y a {s} s", "inactive": "Caméra inactive : pas de flux", "noSnapshot": "Pas encore d'image", "refreshing": "Mise à jour de l'image…",
       "unsupported": "Ce navigateur ne peut pas lire ce flux", "play": "Voir la vidéo", "stop": "Arrêter la vidéo", "mute": "Couper le son", "unmute": "Activer le son",
       "mode": { "label": "Mode d'affichage", "off": "Arrêté", "preview": "Aperçu", "live": "Direct" }, "liveFull": "3 directs au maximum",
       "why": { "off": "La caméra ne diffuse pas : éteinte ou hors réseau", "network": "Connexion à la caméra perdue", "quota": "Google limite les demandes : réessayez dans une minute" },

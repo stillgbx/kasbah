@@ -107,6 +107,18 @@ describe('CameraVideo', () => {
     expect(w.find('.cam__overlay').text()).toContain('Caméra inactive : pas de flux')
   })
 
+  it('says the age of an old image in hours or days, not in thousands of minutes', async () => {
+    fake(undefined)
+    const age = async (ms: number) => {
+      const w = mount(CameraVideo, { props: { deviceId: 'nest:cam1', autoplay: false, snapshotAt: Date.now() - ms } })
+      return w.find('.cam__msg--age').text().replace(/\s/g, ' ')   // Intl writes non-breaking spaces
+    }
+    expect(await age(45_000)).toBe('il y a 45 s')
+    expect(await age(12 * 60_000)).toBe('il y a 12 min')
+    expect(await age(3 * 3_600_000)).toBe('il y a 3 h')
+    expect(await age(6563 * 60_000)).toBe('il y a 5 j')
+  })
+
   it('tile: the thumbnail stays up when going live, until the video plays', async () => {
     const cameraSnapshots = fake(undefined)
     const at = Date.now() - AGO_MS

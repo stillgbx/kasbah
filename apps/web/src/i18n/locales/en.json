@@ -262,7 +262,7 @@
     "stream": "Video stream: {protocols}", "noStream": "No video stream declared",
     "video": {
       "connecting": "Connecting to the stream…", "stopped": "Video stopped", "ended": "Stream ended", "error": "Stream unavailable",
-      "ago": "{s} s ago", "agoMin": "{m} min ago", "inactive": "Camera inactive: no stream", "noSnapshot": "No image yet", "refreshing": "Updating the image…",
+      "ago": "{s} s ago", "inactive": "Camera inactive: no stream", "noSnapshot": "No image yet", "refreshing": "Updating the image…",
       "unsupported": "This browser cannot play this stream", "play": "Watch video", "stop": "Stop video", "mute": "Mute", "unmute": "Unmute",
       "mode": { "label": "Display mode", "off": "Off", "preview": "Preview", "live": "Live" }, "liveFull": "3 live streams max",
       "why": { "off": "The camera isn't streaming: turned off or offline", "network": "Lost the connection to the camera", "quota": "Google is limiting requests: try again in a minute" },
