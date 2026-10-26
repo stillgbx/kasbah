@@ -1,6 +1,6 @@
 # Production
 
-> Dernière mise à jour : 2026-10-24
+> Dernière mise à jour : 2026-10-26
 > Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts` (2026-10-13)
 
 ## Build
@@ -280,6 +280,9 @@ arrière tout seul.
 service système : un service ne verrait ni son `PATH` (ffmpeg installé par winget) ni son profil. Dans
 un PowerShell ouvert dans le clone de production :
 
+*(Précisé le 2026-10-26 : ce PowerShell doit être ouvert **en administrateur**, et placé dans le clone
+par `Set-Location` avant le bloc. Voir « Mise à jour 2026-10-26 » en fin de page.)*
+
 ```powershell
 $cred = Get-Credential "$env:USERDOMAIN\$env:USERNAME"   # le mot de passe Windows, pas le code PIN
 $action = New-ScheduledTaskAction -Execute (Get-Command node).Source -Argument 'scripts\supervisor.mjs' -WorkingDirectory (Get-Location).Path
@@ -381,6 +384,9 @@ Ce premier essai a fait corriger deux défauts : le journal affiché était celu
 version, qui chassait l'erreur, et il gardait les codes de couleur du terminal. **Pas encore éprouvé** :
 la tâche planifiée Windows et le service systemd ci-dessus, à confirmer au premier déploiement.
 
+*(Mise à jour 2026-10-26 : la tâche planifiée Windows est éprouvée au premier déploiement, voir en fin
+de page. Le service systemd reste à éprouver.)*
+
 Sources : `scripts/supervisor.mjs`, `apps/server/src/http/system.ts` (+ test), `apps/server/src/main.ts`,
 `apps/server/src/app.ts`, `apps/server/src/http/session.ts`, `apps/web/src/components/settings/ServerUpdateCard.vue`.
 
@@ -401,3 +407,40 @@ puis `sudo mount -o remount,hidepid=2 /proc`. Sans autre compte local, rien à f
 *(Le même jour, F38 a été corrigé dans le code : le jeton ne passe plus par la ligne de commande
 de ffmpeg, voir `../3_plugins/3_5_google-nest.md`. `hidepid` reste une bonne pratique, mais n'est
 plus nécessaire pour ce jeton.)*
+
+## Mise à jour 2026-10-26 — la tâche planifiée Windows, éprouvée au premier déploiement
+
+**Symptôme.** Le bloc PowerShell de la mise à jour du 2026-10-13 (bis), lancé dans une console
+ordinaire, échoue sur `Register-ScheduledTask` : « Accès refusé », `HRESULT 0x80070005`
+(`PermissionDenied`).
+
+**Cause.** Enregistrer une tâche **au démarrage** (`-AtStartup`) avec un **mot de passe enregistré**
+(« Exécuter même si l'utilisateur n'est pas connecté ») demande les droits d'administrateur. Seul
+l'enregistrement les demande : la tâche, elle, tourne avec le compte de l'utilisateur (`-User`) et sans
+élévation (`-RunLevel Limited`), comme prévu.
+
+**Procédure corrigée.**
+1. Ouvrir PowerShell **en tant qu'administrateur**.
+2. Se placer dans le clone de production : `Set-Location <clone de production>`. Une console
+   administrateur s'ouvre dans `C:\Windows\system32`, et le bloc prend le dossier courant comme
+   dossier de travail de la tâche (`-WorkingDirectory (Get-Location).Path`) : sans cela, la tâche
+   chercherait `scripts\supervisor.mjs` dans `system32`.
+3. Lancer le bloc tel quel. Le suivi (`Get-Content logs\kasbah.log -Wait -Tail 50`) se fait dans une
+   console ordinaire.
+
+**Vérifié au premier déploiement, sur la vraie machine** (clone de production séparé du dépôt de
+développement) :
+- `Get-ScheduledTask -TaskName Kasbah` : état `Running`. `Get-ScheduledTaskInfo` rend
+  `LastTaskResult` 267009 : c'est `SCHED_S_TASK_RUNNING` (tâche en cours), pas une erreur ;
+- le serveur écoute sur 8787, tous les plugins démarrés dans `logs/kasbah.log` ;
+- `GET /api/system/version` rend `"supervised": true` et le commit en service.
+
+**Pas encore éprouvé** : une mise à jour réelle lancée depuis Réglages sur cette installation (au
+prochain commit poussé sur `main`), et le redémarrage de Windows sans ouverture de session.
+
+**Rappel.** Un clone de production lancé sans `KASBAH_HOUSE_FILE` sert les propriétés de
+`house/properties/` (mode « réel » par défaut dès qu'il y en a une, `apps/server/src/config/catalog.ts`) :
+recopier ce dossier depuis l'ancienne installation suffit, il n'y a pas de `house/maison.json` à poser.
+
+Sources : `scripts/supervisor.mjs`, `apps/server/src/http/system.ts`, `apps/server/src/config/properties.ts`,
+`apps/server/src/config/catalog.ts`.

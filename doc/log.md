@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-26] update | Production : la tâche planifiée Windows, éprouvée au premier déploiement
+
+**Déclencheur** : premier déploiement du superviseur sur la vraie machine ; `Register-ScheduledTask` refusé (« Accès refusé », 0x80070005) dans une console ordinaire.
+
+**Pages modifiées** :
+- `5_setup/5_2_production.md` — section « Mise à jour 2026-10-26 » : console administrateur pour enregistrer la tâche, `Set-Location` dans le clone avant le bloc (la console admin s'ouvre dans `system32`), ce qui a été vérifié (`Running`, `LastTaskResult` 267009 = en cours, `supervised: true`) et ce qui reste à éprouver ; renvois ajoutés sous le bloc PowerShell et sous « Pas encore éprouvé ».
+
+**Index** : catalogue `5_setup` mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-26] update | Enphase : le jour ne se lit plus sur les compteurs `whToday` de la passerelle
 
 **Déclencheur** : la vue Énergie affichait pour aujourd'hui une production trois fois supérieure à la somme des onduleurs ; le compteur `eim` de `production.json` avait sauté (vérifié sur la vraie installation, Enlighten et les onduleurs d'accord entre eux).
