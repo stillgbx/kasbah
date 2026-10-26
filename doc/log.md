@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-26] update | Build web : un import introuvable arrête le build avant toute écriture
+
+**Déclencheur** : reproduction du build web de la mise à jour ratée : il échouait bien (code 1), mais après avoir vidé `dist/` et écrit des vues à import brut ; l'entrée FAQ du jour disait à tort qu'il réussissait.
+
+**Pages modifiées** :
+- `6_faq/6_0_pieges-outillage.md` — entrée du 2026-10-26 : correction du diagnostic (échec après écriture), greffon `kasbah-fail-unresolved`, vérification.
+- `5_setup/5_2_production.md` — mise à jour du 2026-10-26 : précision sur le build web, qui ne touche plus à `dist/` quand il échoue.
+
+**Index** : catalogues déjà au 2026-10-26, index.md à jour.
+
 ## [2026-10-26] update | Production : `node_modules` recopié, et la mise à jour lancée sans Réglages
 
 **Déclencheur** : première mise à jour réelle depuis Réglages en échec au build (`Could not resolve "@kasbah/shared"`), sur un clone de production rempli par copie ; écrans cassés par le build web refait ; Réglages inaccessible.

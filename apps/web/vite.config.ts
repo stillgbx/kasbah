@@ -1,5 +1,5 @@
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vuetify from 'vite-plugin-vuetify'
 
@@ -17,11 +17,27 @@ const FIXED_PORT = process.env.PORT === undefined || process.env.KASBAH_SERVER !
 // differ and offers to reload. In dev, empty: Vite serves the up-to-date app, nothing to compare.
 const BUILD_ID = Date.now().toString(36)
 
+// An import nothing resolves stops the build HERE, before any file is written. Vite does fail on it
+// too, but only once Rolldown has already emptied `dist` and written chunks that keep the bare
+// `from "@kasbah/shared"`: every screen reloaded after a failed update (`scripts/supervisor.mjs`)
+// then broke. Seen with `node_modules` copied from another clone, its workspace junctions empty.
+const failUnresolved: Plugin = {
+  name: 'kasbah-fail-unresolved',
+  apply: 'build',
+  enforce: 'pre',
+  async resolveId(source, importer, options) {
+    if (!importer || source.startsWith('\0')) return null
+    const resolved = await this.resolve(source, importer, { ...options, skipSelf: true })
+    if (!resolved) this.error(`cannot resolve "${source}" from ${importer}`)
+    return resolved
+  },
+}
+
 // `base: '/'`: absolute paths, without which a reloaded `/automations/new` would look for its files under
 // `/automations/assets/`. The build is served by the Fastify server under / (SPA fallback).
 export default defineConfig(({ command }) => ({
   plugins: [
-    vue(), vuetify({ autoImport: true }),
+    failUnresolved, vue(), vuetify({ autoImport: true }),
     { name: 'kasbah-build-id', apply: 'build', generateBundle() { this.emitFile({ type: 'asset', fileName: 'build-id.txt', source: BUILD_ID }) } },
   ],
   define: { __KASBAH_BUILD__: JSON.stringify(command === 'build' ? BUILD_ID : '') },

@@ -954,3 +954,10 @@ et sa variante `-dev`) : Vite ne la voit pas, le build ne contient pas le worker
   -Body '{}' -UseBasicParsing` (sans `-ContentType` ni `-Body`, Fastify répond 415
   `FST_ERR_CTP_INVALID_MEDIA_TYPE`). Recette complète : `../5_setup/5_2_production.md`, mise à jour du
   2026-10-26.
+- **Correction du diagnostic (même jour, reproduit)** : le build web ne **réussit pas**, il échoue bien
+  (code 1, `Rolldown failed to resolve import "@kasbah/shared"`, visible aussi dans le journal de la mise à
+  jour ratée). Mais Vite ne lève cette erreur qu'**après** que Rolldown a vidé `dist/` et écrit les vues
+  avec l'import brut : un build web raté laissait donc un `dist/` cassé à la place du bon. Corrigé dans
+  `apps/web/vite.config.ts` (greffon `kasbah-fail-unresolved`) : un import que rien ne résout arrête le
+  build au moment de la résolution, avant toute écriture. Vérifié en remplaçant la jonction par un dossier
+  vide : code 1, `dist/` précédent intact ; build normal inchangé.

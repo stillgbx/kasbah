@@ -446,6 +446,9 @@ prochain commit poussé sur `main`), et le redémarrage de Windows sans ouvertur
   build serveur en échec (`Could not resolve "@kasbah/shared"`), retour en arrière en échec pour la même
   raison, serveur resté en service sur l'ancien commit, mais build web refait avec des imports bruts qui
   cassent les vues. Détail : `../6_faq/6_0_pieges-outillage.md`, entrée du 2026-10-26.
+  *(Précisé le même jour : le build web échouait lui aussi, mais après avoir écrit ses fichiers dans
+  `dist/`. Depuis le greffon `kasbah-fail-unresolved` de `apps/web/vite.config.ts`, un build web raté
+  ne touche plus à `dist/` : les écrans gardent la version en service.)*
 - **Correction** : `Stop-ScheduledTask -TaskName Kasbah` (une console ordinaire suffit pour arrêter et
   relancer la tâche ; seul l'enregistrement demande l'administrateur), `npm ci` dans le clone,
   `Start-ScheduledTask -TaskName Kasbah`.
