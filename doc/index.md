@@ -129,10 +129,10 @@ Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5
 ## 6 — FAQ
 
 <!-- section:6_faq:begin (généré par scripts/wiki-index.mjs depuis 6_faq/README.md - ne pas éditer ici) -->
-Pièges rencontrés et recettes : une entrée datée par incident (Date / Symptôme / Diagnostic / Solution). Résumés : [6_faq/README.md](6_faq/README.md) (2 pages, dernière mise à jour 2026-10-25).
+Pièges rencontrés et recettes : une entrée datée par incident (Date / Symptôme / Diagnostic / Solution). Résumés : [6_faq/README.md](6_faq/README.md) (2 pages, dernière mise à jour 2026-10-26).
 
 | Pages | Dernière mise à jour |
 |---|---|
-| [6_0 Pièges d'outillage](6_faq/6_0_pieges-outillage.md) | 2026-10-25 |
+| [6_0 Pièges d'outillage](6_faq/6_0_pieges-outillage.md) | 2026-10-26 |
 | [6_1 Pièges à l'exécution](6_faq/6_1_pieges-runtime.md) | 2026-10-25 |
 <!-- section:6_faq:end -->

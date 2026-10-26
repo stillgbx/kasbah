@@ -438,6 +438,34 @@ développement) :
 **Pas encore éprouvé** : une mise à jour réelle lancée depuis Réglages sur cette installation (au
 prochain commit poussé sur `main`), et le redémarrage de Windows sans ouverture de session.
 
+*(Le même soir : la mise à jour réelle est éprouvée, voir ci-dessous. Reste le redémarrage de Windows.)*
+
+**Première mise à jour réelle : échec, puis réussite.**
+- **Échec** : le clone de production avait été rempli par **copie** du dépôt de développement, `node_modules`
+  et `dist/` compris. Les jonctions `node_modules/@kasbah/*` y étaient devenues des dossiers vides :
+  build serveur en échec (`Could not resolve "@kasbah/shared"`), retour en arrière en échec pour la même
+  raison, serveur resté en service sur l'ancien commit, mais build web refait avec des imports bruts qui
+  cassent les vues. Détail : `../6_faq/6_0_pieges-outillage.md`, entrée du 2026-10-26.
+- **Correction** : `Stop-ScheduledTask -TaskName Kasbah` (une console ordinaire suffit pour arrêter et
+  relancer la tâche ; seul l'enregistrement demande l'administrateur), `npm ci` dans le clone,
+  `Start-ScheduledTask -TaskName Kasbah`.
+- **Réussite** : mise à jour de bout en bout en ~12 s, coupure ~9 s, arrêt propre (code 0).
+
+**Prérequis précisé.** `node_modules` ne se copie pas d'une installation à l'autre : `npm ci` dans le
+clone de production, avant le premier démarrage. Les fichiers hors dépôt de la liste du 2026-10-13 (bis)
+(`.env`, `.state/`, `house/properties/`, `_external/`) se recopient, eux.
+
+**Mettre à jour sans Réglages.** Quand la vue Réglages ne s'ouvre plus (build web cassé, par exemple),
+la même demande se fait depuis le poste serveur, dans une console ordinaire :
+
+```powershell
+Invoke-WebRequest http://localhost:8787/api/system/update -Method Post -ContentType 'application/json' -Body '{}' -UseBasicParsing
+```
+
+Réponse `202` ; l'avancement se lit dans `apps/server/.state/update-status.json` ou par
+`GET /api/system/update`. Sans `-ContentType` ni `-Body`, PowerShell envoie un `POST` en
+`application/x-www-form-urlencoded`, que Fastify refuse (415, `FST_ERR_CTP_INVALID_MEDIA_TYPE`).
+
 **Rappel.** Un clone de production lancé sans `KASBAH_HOUSE_FILE` sert les propriétés de
 `house/properties/` (mode « réel » par défaut dès qu'il y en a une, `apps/server/src/config/catalog.ts`) :
 recopier ce dossier depuis l'ancienne installation suffit, il n'y a pas de `house/maison.json` à poser.

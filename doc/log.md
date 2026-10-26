@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-26] update | Production : `node_modules` recopié, et la mise à jour lancée sans Réglages
+
+**Déclencheur** : première mise à jour réelle depuis Réglages en échec au build (`Could not resolve "@kasbah/shared"`), sur un clone de production rempli par copie ; écrans cassés par le build web refait ; Réglages inaccessible.
+
+**Pages modifiées** :
+- `6_faq/6_0_pieges-outillage.md` — entrée du 2026-10-26 : jonctions `node_modules/@kasbah/*` devenues des dossiers vides à la copie, build web qui réussit avec des imports bruts, `npm ci` serveur arrêté.
+- `5_setup/5_2_production.md` — suite de la mise à jour du 2026-10-26 : échec puis réussite (~12 s, coupure ~9 s), `npm ci` comme prérequis, `Stop-`/`Start-ScheduledTask` sans administrateur, commande `Invoke-WebRequest` de secours (avec `-ContentType` et `-Body`, sinon 415).
+
+**Index** : catalogue `6_faq` mis à jour (1 ligne, périmètre élargi), catalogue `5_setup` déjà au 2026-10-26, index.md régénéré.
+
 ## [2026-10-26] update | Production : la tâche planifiée Windows, éprouvée au premier déploiement
 
 **Déclencheur** : premier déploiement du superviseur sur la vraie machine ; `Register-ScheduledTask` refusé (« Accès refusé », 0x80070005) dans une console ordinaire.

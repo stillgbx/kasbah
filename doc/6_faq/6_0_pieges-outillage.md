@@ -1,7 +1,7 @@
 # FAQ — pièges d'outillage
 
-> Dernière mise à jour : 2026-10-25
-> Sources : sessions des 2026-09-04 et 2026-09-08, `apps/web/src/stores/settings.ts`, `apps/web/vite.config.ts`, `apps/web/src/components/home/*.vue`, `apps/web/src/styles/app.css`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/views/EnergyView.vue`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/three/builders/details.ts`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/server/src/app.ts`, `apps/server/src/plugins/mixcloud/resolve.ts`, `apps/server/package.json`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `docs/plugins/claude-assistant.md`, session du 2026-10-08, `scripts/dev-server.mjs`, session du 2026-10-10, `apps/web/src/lib/maplibreWorker.ts`, session du 2026-10-13, `apps/android/dhu.cmd`, session du 2026-10-22
+> Dernière mise à jour : 2026-10-26
+> Sources : sessions des 2026-09-04 et 2026-09-08, `apps/web/src/stores/settings.ts`, `apps/web/vite.config.ts`, `apps/web/src/components/home/*.vue`, `apps/web/src/styles/app.css`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/views/EnergyView.vue`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/three/builders/details.ts`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/server/src/app.ts`, `apps/server/src/plugins/mixcloud/resolve.ts`, `apps/server/package.json`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `docs/plugins/claude-assistant.md`, session du 2026-10-08, `scripts/dev-server.mjs`, session du 2026-10-10, `apps/web/src/lib/maplibreWorker.ts`, session du 2026-10-13, `apps/android/dhu.cmd`, session du 2026-10-22, `scripts/supervisor.mjs`, session du 2026-10-26
 
 ## Vuetify 4 : changer de thème
 
@@ -931,3 +931,26 @@ et sa variante `-dev`) : Vite ne la voit pas, le build ne contient pas le worker
   utilise : le remplacement est fait sur une copie.
 - **Solution** : importer l'URL **exacte** servie, avec son `?t=`, lisible dans
   `performance.getEntriesByType('resource')`.
+
+## 2026-10-26 — `node_modules` recopié d'un autre clone : `Could not resolve "@kasbah/shared"`
+
+- **Date** : 2026-10-26
+- **Symptôme** : sur un clone de production rempli par copie depuis le dépôt de développement, la
+  première mise à jour depuis Réglages échoue à « Construction » : esbuild rend 31 fois `Could not resolve
+  "@kasbah/shared"`, et le retour en arrière échoue pareil (« rollback failed »). Le serveur reste en service
+  sur l'ancien commit, mais les écrans rechargés affichent `Failed to resolve module specifier
+  "@kasbah/shared"` et une dizaine de vues, dont Réglages, ne s'ouvrent plus.
+- **Diagnostic** : npm relie les paquets du monorepo par des **jonctions** (`node_modules/@kasbah/shared`
+  → `packages/shared`, de même pour `mock-sim`, `server`, `web`). La copie de `node_modules` en a fait des
+  **dossiers vides**. Le serveur en service tournait sur un `dist/main.js` lui aussi copié : rien ne se
+  voyait avant le premier build fait dans le clone. Le build web, lui, **réussit** malgré le paquet
+  introuvable : Vite laisse l'import brut `from"@kasbah/shared"` dans les vues découpées, que le navigateur
+  refuse. D'où des écrans cassés alors que le serveur n'a jamais changé.
+- **Solution** : ne jamais copier `node_modules` d'un clone à l'autre ; dans le clone, serveur arrêté
+  (`Stop-ScheduledTask -TaskName Kasbah`, sans droits d'administrateur), `npm ci`, puis
+  `Start-ScheduledTask`. Contrôle : `Get-ChildItem node_modules\@kasbah` montre des `Junction` vers le
+  clone lui-même. Réglages étant cassé, relancer la mise à jour par l'API, depuis le poste serveur :
+  `Invoke-WebRequest http://localhost:8787/api/system/update -Method Post -ContentType 'application/json'
+  -Body '{}' -UseBasicParsing` (sans `-ContentType` ni `-Body`, Fastify répond 415
+  `FST_ERR_CTP_INVALID_MEDIA_TYPE`). Recette complète : `../5_setup/5_2_production.md`, mise à jour du
+  2026-10-26.
