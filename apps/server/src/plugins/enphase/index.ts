@@ -95,8 +95,11 @@ const DAYS_SAVE_MS = 5 * 60_000
 const DEVICE_DATA_MS = 5 * 60_000
 /** Between two days asked of Enlighten during an inverter resync: ~345 calls, spread out. */
 const VENDOR_DAY_GAP_MS = 2_000
-/** Days of peaks per call: a week answers in ~7 s (~290 KB), a month exceeds the cloud timeout. */
-const PEAK_CHUNK_DAYS = 7
+/**
+ * Days of peaks per call. A week took 7 s one morning and 11 to 13 s that afternoon, against the
+ * 15 s cloud timeout: three days keep a wide margin (~5 s), for twice as many calls.
+ */
+const PEAK_CHUNK_DAYS = 3
 /** Today's and yesterday's peaks, asked again at the pace of Enphase's quarter-hour series. */
 const PEAKS_REFRESH_MS = 15 * 60_000
 
@@ -295,9 +298,12 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     const yesterday = addDays(dayKey(now), -1)
     const rank = { c: 0, e: 1, p: 2, m: 3 } as const
     let out = ''
+    // a day whose peaks were never read is not whole either: shown incomplete, the resync takes it again
+    const peakless = new Set(invDays?.tracked ? invDays.peaklessDays(since, yesterday) : [])
     for (let k = since; k <= yesterday; k = addDays(k, 1)) {
       const site = days.dayStatus(k, now)
-      const inv = invDays?.tracked ? invDays.dayStatus(k) : 'c'
+      let inv = invDays?.tracked ? invDays.dayStatus(k) : 'c'
+      if (inv === 'c' && peakless.has(k)) inv = 'p'
       out += rank[inv] > rank[site] ? inv : site
     }
     return { from: keyStartOf(since), days: out }
@@ -374,16 +380,21 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
         invProgress.done++
         if (invProgress.done % 20 === 0) await invStore?.save(inv)
       }
+      // a slow answer costs its days only: they stay without peaks, and the next resync asks again
+      let failed = 0
+      let lastFailure = ''
       for (const [from, to] of chunks) {
         await sleep(ctx!.clock, VENDOR_DAY_GAP_MS, ctx!.signal)
         if (ctx!.signal.aborted || invDays !== inv) return
-        await importPeaks(inv, siteId, from, to)
+        try { await importPeaks(inv, siteId, from, to) }
+        catch (err) { failed++; lastFailure = (err as Error).message; log().debug({ err, from, to }, 'Enphase inverter peaks unread') }
         invProgress.done++
         if (invProgress.done % 5 === 0) await invStore?.save(inv)
       }
+      if (failed > 0) invError = `${failed}/${chunks.length} peak requests failed, last: ${lastFailure}`
       inv.markSynced(ctx!.clock.now())
       await invStore?.save(inv)
-      log().info({ days: todo.length, peakCalls: chunks.length }, 'Enphase inverter history synchronized')
+      log().info({ days: todo.length, peakCalls: chunks.length, peakFailures: failed }, 'Enphase inverter history synchronized')
     } catch (err) {
       invError = (err as Error).message
       log().warn({ err }, 'Enphase inverter history not synchronized')

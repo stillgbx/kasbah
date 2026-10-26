@@ -534,8 +534,9 @@ fixture de capture, et `mapping.test.ts` vérifie qu'il ne ressort jamais.
 Réponse : `{ "AAAA-MM-JJ": { "<id Enlighten>": { POWR: [[epoch s, W moyen sur le quart d'heure, 900], …] } }, haiku: … }`,
 soit 96 points par jour et **tous les onduleurs en un appel**. Les clés qui ne sont pas des jours
 (`haiku`, et `date` dans la variante `?date=`) sont ignorées (`peaksOfTimeSeries`). Mesuré : 7 jours en
-un appel ≈ 7 s et 290 Ko ; **31 jours dépassent le délai cloud de 15 s**, d'où des tranches d'une
-semaine (`PEAK_CHUNK_DAYS`). Écartée : `/systems/{site}/inverters/{id}/time_series_x?stat=POWR&date=`,
+un appel ≈ 7 s et 290 Ko ; **31 jours dépassent le délai cloud de 15 s**. La même semaine a pris
+11 à 13 s l'après-midi du même jour, et le premier rattrapage réel a échoué sur un dépassement : les
+tranches sont donc de **3 jours** (`PEAK_CHUNK_DAYS`, ≈ 5 s, deux fois plus d'appels). Écartée : `/systems/{site}/inverters/{id}/time_series_x?stat=POWR&date=`,
 qui coûte un appel par onduleur (elle donne en plus DCV, DCA, ACV, ACHZ et TMPI, dont on n'a pas
 l'usage). La correspondance id ↔ série reste `array_layout_x`, lue une fois (`serialOf`).
 
@@ -546,10 +547,14 @@ avant hier (même réserve que pour les Wh : le cloud n'a peut-être pas reçu l
 l'historique.
 
 **Rattrapage.** Dans `syncInverters`, **après** les Wh : les jours sans pic sont regroupés en runs
-consécutifs de 7 jours au plus (`peakChunks`), un appel chacun, 2 s entre appels, comptés dans la
-progression « Onduleurs » de la carte Réglages. `force: true` reprend tous les pics. Au démarrage,
-`autoSync` relance la synchro si des pics manquent (`peaksMissing`) : une installation déjà
-synchronisée rattrape seule, environ 50 appels depuis sa mise en service. **Aujourd'hui et hier** sont
+consécutifs de 3 jours au plus (`peakChunks`), un appel chacun, 2 s entre appels, comptés dans la
+progression « Onduleurs » de la carte Réglages. `force: true` reprend tous les pics. **Une tranche en
+échec ne coûte que ses jours** : la boucle continue, l'erreur dit « N/M peak requests failed, last: … ».
+Dans la frise (`coverage`), un jour dont les Wh sont complets mais qui n'a pas de pic compte comme
+**incomplet** (`p`) : sans ça, tout paraissait complet et « Resynchroniser » restait grisé, sans moyen
+de reprendre les pics manquants. Au démarrage, `autoSync` relance la synchro si des pics manquent
+(`peaksMissing`) : une installation déjà synchronisée rattrape seule, environ 115 appels depuis sa mise
+en service. **Aujourd'hui et hier** sont
 redemandés toutes les 15 min (`PEAKS_REFRESH_MS`) tant que le compte Enlighten est lié : c'est le
 seul appel cloud régulier ajouté.
 

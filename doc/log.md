@@ -7,6 +7,13 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-26] update | Enphase : rattrapage des pics par 3 jours, une tranche en échec n'arrête plus rien
+
+**Déclencheur** : le premier rattrapage réel s'est arrêté sur un dépassement du délai cloud (une semaine prenait 11 à 13 s pour 15 s), et la frise, qui ne regardait que les Wh, disait tout complet : « Resynchroniser » restait grisé.
+
+**Pages modifiées** :
+- `3_plugins/3_7_enphase.md` — tranches de 3 jours, échec par tranche, jour sans pic compté incomplet dans la frise.
+
 ## [2026-10-26] update | Enphase : le record d'un onduleur vient de l'historique, plus de `maxReportWatts`
 
 **Déclencheur** : le `maxReportWatts` de la passerelle n'est pas un record (il oublie ses pics en quelques jours, vérifié sur la vraie installation) ; les records viennent désormais du cloud Enlighten (série au quart d'heure) et suivent la période de la vue Énergie. Changement de code non commité au moment de l'écriture.

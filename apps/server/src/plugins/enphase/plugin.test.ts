@@ -81,7 +81,7 @@ function fakeGateway(opts: { infoDown?: boolean; accept?: string; failing?: stri
 }
 
 /** Fake Enphase cloud: session then exchange, as the vendor's technical note describes them. */
-function fakeCloud(minted = token(365)) {
+function fakeCloud(minted = token(365), opts: { seriesFails?: boolean } = {}) {
   const calls: { url: string; body: string; method: string }[] = []
   const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
     calls.push({ url, body: String(init?.body ?? ''), method: init?.method ?? 'GET' })
@@ -102,6 +102,7 @@ function fakeCloud(minted = token(365)) {
       return response(JSON.stringify({ production: { 900000001: day * 100, 900000002: day * 100 + 1 } }))
     }
     if (url.includes('/inverter_data_x/time_series.json')) {
+      if (opts.seriesFails) throw new TypeError('fetch failed')
       // each day of the range: a quarter-hour peak of day × 10 W, nothing on commissioning day
       const [, from, to] = /start_date=([\d-]+)&end_date=([\d-]+)/.exec(url)!
       const out: Record<string, unknown> = { haiku: '' }
@@ -510,6 +511,19 @@ describe('daily history', () => {
     expect(cloud.calls.filter((c) => c.url.includes('/inverter_data_x/energy.json')).length).toBe(before + 3)
   })
 
+  it('a peak request that fails costs its days only: shown incomplete, the Wh still synchronized', async () => {
+    const { app, plugin, clock } = await started({ cloud: fakeCloud(token(365), { seriesFails: true }) })
+    await post(app, { user: 'u', password: 'p' })
+    for (let i = 0; i < 8; i++) { clock.advance(2000); await settle(); await settle() }
+    const inv = (await plugin.energyDays!('site')).inverters!
+    expect(inv.devices.map((d) => d.wh.slice(0, 3))).toEqual([[null, 900, 1000], [null, 901, 1001]])
+    expect(inv.syncedAt).not.toBeNull()
+    // the 8th has nothing at Enphase (its Wh say so); the 9th and 10th lack their peaks: incomplete, so "Resync" has work
+    expect((await get(app, '/token')).json()).toMatchObject({
+      history: { coverage: { days: 'epp' }, inverters: { done: null, error: expect.stringContaining('1/1 peak requests failed') } },
+    })
+  })
+
   it('serves no history for another device', async () => {
     const { plugin } = await paired()
     await expect(plugin.energyDays!('482000000001')).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' })
@@ -882,9 +896,9 @@ describe('gateway certificate pin', () => {
 })
 
 describe('peakChunks', () => {
-  it('groups consecutive days a week at most, and breaks on a gap', () => {
-    const keys = ['2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-05', '2026-09-06', '2026-09-09']
-    expect(peakChunks(keys)).toEqual([['2026-08-30', '2026-09-05'], ['2026-09-06', '2026-09-06'], ['2026-09-09', '2026-09-09']])
+  it('groups consecutive days three at most, and breaks on a gap', () => {
+    const keys = ['2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-09']
+    expect(peakChunks(keys)).toEqual([['2026-08-30', '2026-09-01'], ['2026-09-02', '2026-09-03'], ['2026-09-09', '2026-09-09']])
     expect(peakChunks([])).toEqual([])
   })
 })
