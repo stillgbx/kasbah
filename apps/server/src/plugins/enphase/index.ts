@@ -27,7 +27,8 @@ import {
 } from './cloud'
 import { EnergyDays, addDays, createDaysFile, dayKey, keyStart as keyStartOf, lifetimeEnergySchema, type DayCounters, type DaysStore, type SitePower } from './days'
 import {
-  InverterDays, arrayLayoutSchema, createInverterDaysFile, deviceDataSchema, inverterEnergySchema, type InverterDaysStore,
+  InverterDays, arrayLayoutSchema, createInverterDaysFile, deviceDataSchema, inverterEnergySchema, peaksOfTimeSeries,
+  type InverterDaysStore,
 } from './inverterDays'
 
 // Enphase plugin: solar production, microinverters and batteries read from the IQ Gateway's LOCAL
@@ -94,6 +95,28 @@ const DAYS_SAVE_MS = 5 * 60_000
 const DEVICE_DATA_MS = 5 * 60_000
 /** Between two days asked of Enlighten during an inverter resync: ~345 calls, spread out. */
 const VENDOR_DAY_GAP_MS = 2_000
+/** Days of peaks per call: a week answers in ~7 s (~290 KB), a month exceeds the cloud timeout. */
+const PEAK_CHUNK_DAYS = 7
+/** Today's and yesterday's peaks, asked again at the pace of Enphase's quarter-hour series. */
+const PEAKS_REFRESH_MS = 15 * 60_000
+
+/** Every day key of `from`..`to`, inclusive. */
+function dayKeysBetween(from: string, to: string): string[] {
+  const out: string[] = []
+  for (let k = from; k <= to; k = addDays(k, 1)) out.push(k)
+  return out
+}
+
+/** Sorted day keys grouped into runs of consecutive days, at most `PEAK_CHUNK_DAYS` each: `[from, to]`. */
+export function peakChunks(keys: readonly string[]): [string, string][] {
+  const out: [string, string][] = []
+  for (const k of keys) {
+    const last = out.at(-1)
+    if (last && addDays(last[1], 1) === k && addDays(last[0], PEAK_CHUNK_DAYS - 1) >= k) last[1] = k
+    else out.push([k, k])
+  }
+  return out
+}
 
 /** Raw reading: what needs capturing once to write the mapping fixtures. */
 const RAW_PATHS = [
@@ -209,6 +232,10 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   let invDays: InverterDays | null = null
   let invStore: InverterDaysStore | null = null
   let deviceDataAt = 0
+  /** Enlighten inverter id → serial number (`array_layout_x`), read once. */
+  let serialOf: Map<string, string> | null = null
+  let peaksAt = 0
+  let peaksBusy = false
   /** The inverter resync in progress: days done and to do. */
   let invProgress: { done: number; total: number } | null = null
   let invError: string | null = null
@@ -284,11 +311,41 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     if (invDays?.dirty && invStore) await invStore.save(invDays)
   }
 
+  async function inverterSerials(siteId: string): Promise<Map<string, string>> {
+    serialOf ??= arrayLayoutSchema.parse(await enlighten!.getJson(`/pv/systems/${siteId}/array_layout_x`, ctx!.signal))
+    return serialOf
+  }
+
+  /** Each inverter's peaks over `from`..`to` (day keys): one call to the quarter-hour series. */
+  async function importPeaks(inv: InverterDays, siteId: string, from: string, to: string): Promise<void> {
+    const serials = await inverterSerials(siteId)
+    const peaks = peaksOfTimeSeries(await enlighten!.getJson(
+      `/systems/${siteId}/inverter_data_x/time_series.json?start_date=${from}&end_date=${to}`, ctx!.signal,
+    ))
+    for (let k = from; k <= to; k = addDays(k, 1)) inv.importVendorPeaks(k, peaks.get(k) ?? {}, serials, ctx!.clock.now())
+  }
+
+  /** Today's peaks so far, and yesterday's last ones: a failure waits for the next quarter hour. */
+  async function refreshPeaks(): Promise<void> {
+    const inv = invDays
+    if (peaksBusy || invProgress || !inv || !enlighten?.hasSession) return
+    peaksBusy = true
+    try {
+      const siteId = await ensureSiteId()
+      if (!siteId) return
+      const today = dayKey(ctx!.clock.now())
+      await importPeaks(inv, siteId, addDays(today, -1), today)
+    } catch (err) {
+      log().debug({ err }, 'Enphase inverter peaks not refreshed')
+    } finally { peaksBusy = false }
+  }
+
   /**
    * Fetches each inverter's days from Enphase: the id ↔ serial map (`array_layout_x`), then ONE
    * call per day since commissioning (`inverter_data_x/energy.json` only sums the range asked), two
    * seconds apart, in the background. `force`: every day again; otherwise only the days that are not
    * complete (missing, or watched only in part), so an interrupted run picks up where it stopped.
+   * The peaks follow, a week per call, for the days that have none (all of them with `force`).
    */
   async function syncInverters(force: boolean): Promise<void> {
     const inv = invDays
@@ -300,24 +357,33 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     try {
       const siteId = await ensureSiteId()
       if (!siteId) throw new PluginError('NEEDS_PAIRING', 'no Enlighten site')
-      const serialOf = arrayLayoutSchema.parse(await enlighten.getJson(`/pv/systems/${siteId}/array_layout_x`, ctx!.signal))
+      const serials = await inverterSerials(siteId)
       const yesterday = addDays(dayKey(ctx!.clock.now()), -1)
       const todo: string[] = []
       for (let k = dayKey(since); k <= yesterday; k = addDays(k, 1)) if (force || !['c', 'e'].includes(inv.dayStatus(k))) todo.push(k)
-      invProgress.total = todo.length
+      const peakless = force ? dayKeysBetween(dayKey(since), yesterday) : inv.peaklessDays(dayKey(since), yesterday)
+      const chunks = peakChunks(peakless)
+      invProgress.total = todo.length + chunks.length
       for (const key of todo) {
         await sleep(ctx!.clock, VENDOR_DAY_GAP_MS, ctx!.signal)
         if (ctx!.signal.aborted || invDays !== inv) return
         const parsed = inverterEnergySchema.parse(await enlighten.getJson(
           `/systems/${siteId}/inverter_data_x/energy.json?start_date=${key}&end_date=${key}`, ctx!.signal,
         ))
-        inv.importVendorDay(key, parsed.production, serialOf, ctx!.clock.now())
+        inv.importVendorDay(key, parsed.production, serials, ctx!.clock.now())
         invProgress.done++
         if (invProgress.done % 20 === 0) await invStore?.save(inv)
       }
+      for (const [from, to] of chunks) {
+        await sleep(ctx!.clock, VENDOR_DAY_GAP_MS, ctx!.signal)
+        if (ctx!.signal.aborted || invDays !== inv) return
+        await importPeaks(inv, siteId, from, to)
+        invProgress.done++
+        if (invProgress.done % 5 === 0) await invStore?.save(inv)
+      }
       inv.markSynced(ctx!.clock.now())
       await invStore?.save(inv)
-      log().info({ days: todo.length }, 'Enphase inverter history synchronized')
+      log().info({ days: todo.length, peakCalls: chunks.length }, 'Enphase inverter history synchronized')
     } catch (err) {
       invError = (err as Error).message
       log().warn({ err }, 'Enphase inverter history not synchronized')
@@ -353,11 +419,18 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     return syncing
   }
 
+  /** Whether a past day has no peaks yet: an install synchronized before peaks were kept catches up by itself. */
+  function peaksMissing(): boolean {
+    const since = days?.sinceKey
+    if (!since || !invDays) return false
+    return invDays.peaklessDays(since, addDays(dayKey(ctx!.clock.now()), -1)).length > 0
+  }
+
   /** The first synchronization, by itself: as soon as the history is empty and the account linked. */
   function autoSync(): void {
     if (!days || !enlighten?.hasSession) return
     if (!days.synced) syncHistory().catch((err: unknown) => log().warn({ err }, 'Enphase energy history not synchronized'))
-    else if (invDays && !invDays.synced) void syncInverters(false)
+    else if (invDays && (!invDays.synced || peaksMissing())) void syncInverters(false)
   }
 
   /** Checks a token for THIS gateway, then adopts it: client, cache, current state. */
@@ -423,7 +496,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     const now = ctx!.clock.now()
     for (const inv of inverters as Inverter[]) {
       if (isPanelStale(inv, now)) ctx!.setAvailable(inv.serialNumber, false)
-      else ctx!.emitState(inv.serialNumber, toPanelPatch(inv))
+      else ctx!.emitState(inv.serialNumber, toPanelPatch(inv, invDays?.recordOf(inv.serialNumber)))
     }
     for (const b of batteries) {
       if (!isBatteryAvailable(b)) { ctx!.setAvailable(b.serial_num, false); continue }
@@ -440,6 +513,10 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       deviceDataAt = now
       try { invDays.recordGateway(await get('/ivp/pdm/device_data', (j) => deviceDataSchema.parse(j)), now) }
       catch (err) { log().debug({ err }, 'Enphase device_data unread') }
+    }
+    if (invDays && enlighten?.hasSession && now - peaksAt >= PEAKS_REFRESH_MS) {
+      peaksAt = now
+      void refreshPeaks()
     }
 
     // an inverter added or removed changes the list: we republish, otherwise its state would go to

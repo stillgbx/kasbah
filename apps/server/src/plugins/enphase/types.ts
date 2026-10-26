@@ -33,7 +33,6 @@ export const inverterSchema = z.object({
   /** Last report (epoch SECONDS): it is what tells whether an inverter has gone silent. */
   lastReportDate: z.number(),
   lastReportWatts: z.number(),
-  maxReportWatts: z.number().optional(),
 })
 export const invertersSchema = z.array(inverterSchema)
 export type Inverter = z.infer<typeof inverterSchema>

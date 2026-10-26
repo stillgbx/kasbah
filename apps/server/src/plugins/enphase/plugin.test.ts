@@ -8,7 +8,7 @@ import type { FetchLike } from '../../core/sse'
 import { selfSignedCertificate, startTlsServer, type TestCertificate } from '../../core/test-tls'
 import { ENSEMBLE_INVENTORY, ENSEMBLE_POWER, INVERTERS, LIVEDATA, PRODUCTION } from './__fixtures__/gateway'
 import { EVSE_PREFERENCE, EVSE_STATUS, EVSE_SUMMARY } from './__fixtures__/evse'
-import { createEnphasePlugin, enphaseConfigSchema } from './index'
+import { createEnphasePlugin, enphaseConfigSchema, peakChunks } from './index'
 import { PANEL_STALE_MS } from './mapping'
 import type { TokenStore } from './token'
 import type { CloudStore, CloudSession } from './cloud'
@@ -100,6 +100,17 @@ function fakeCloud(minted = token(365)) {
       // commissioning day: the inverters had not reported yet, Enphase has nothing
       if (day === 8) return response(JSON.stringify({ production: {} }))
       return response(JSON.stringify({ production: { 900000001: day * 100, 900000002: day * 100 + 1 } }))
+    }
+    if (url.includes('/inverter_data_x/time_series.json')) {
+      // each day of the range: a quarter-hour peak of day × 10 W, nothing on commissioning day
+      const [, from, to] = /start_date=([\d-]+)&end_date=([\d-]+)/.exec(url)!
+      const out: Record<string, unknown> = { haiku: '' }
+      for (let d = Number(from!.slice(8)); d <= Number(to!.slice(8)); d++) {
+        out[`${from!.slice(0, 8)}${String(d).padStart(2, '0')}`] = d === 8 ? {} : {
+          900000001: { POWR: [[0, 0, 900], [900, d * 10, 900]] }, 900000002: { POWR: [[0, 0, 900], [900, d * 10 + 1, 900]] },
+        }
+      }
+      return response(JSON.stringify(out))
     }
     if (url.includes('/ev_chargers/status') && url.includes('/api/v2/')) return response(JSON.stringify({ data: {} }))
     if (url.includes('/ev_chargers/status')) return response(JSON.stringify(EVSE_STATUS))
@@ -459,6 +470,11 @@ describe('daily history', () => {
     expect(calls.map((c) => /start_date=([\d-]+)/.exec(c.url)![1])).toEqual(['2026-09-08', '2026-09-09', '2026-09-10'])
     const inv = (await plugin.energyDays!('site')).inverters!
     expect(inv.devices.map((d) => d.wh.slice(0, 3))).toEqual([[null, 900, 1000], [null, 901, 1001]])
+    // then the peaks, the three days in ONE call to the quarter-hour series
+    const series = cloud.calls.filter((c) => c.url.includes('/inverter_data_x/time_series.json') && c.url.includes('start_date=2026-09-08'))
+    expect(series).toHaveLength(1)
+    expect(series[0]!.url).toContain('end_date=2026-09-10')
+    expect(inv.devices.map((d) => d.peakW!.slice(0, 3))).toEqual([[null, 90, 100], [null, 91, 101]])
     expect(inv.syncedAt).not.toBeNull()
     expect(inverterDaysStore.saved).not.toBeNull()
     expect((await get(app, '/token')).json()).toMatchObject({ history: { inverters: { done: null, error: null } } })
@@ -862,5 +878,13 @@ describe('gateway certificate pin', () => {
     await plugin.stop()
     await app.close()
     await server.close()
+  })
+})
+
+describe('peakChunks', () => {
+  it('groups consecutive days a week at most, and breaks on a gap', () => {
+    const keys = ['2026-08-30', '2026-08-31', '2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-05', '2026-09-06', '2026-09-09']
+    expect(peakChunks(keys)).toEqual([['2026-08-30', '2026-09-05'], ['2026-09-06', '2026-09-06'], ['2026-09-09', '2026-09-09']])
+    expect(peakChunks([])).toEqual([])
   })
 })

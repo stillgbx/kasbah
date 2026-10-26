@@ -154,6 +154,30 @@ export function inverterTotals(
 }
 
 /**
+ * Each inverter's record over the period: its highest daily peak (W), `null` = no peak known. A
+ * quarter-hour average for every day, so the record of a day and that of a year compare.
+ */
+export function inverterPeaks(
+  inv: DeviceEnergyDays['inverters'], period: EnergyPeriod, mode: PeriodMode, now: number, since: number | null,
+): Map<string, number | null> {
+  const out = new Map<string, number | null>()
+  if (!inv) return out
+  const from = periodStart(period, mode, now, since)
+  const today = midnight(now).getTime()
+  for (const d of inv.devices) {
+    let max: number | null = null
+    const day = new Date(inv.from)
+    for (const v of d.peakW ?? []) {
+      const t = day.getTime()
+      if (v !== null && t >= from && t <= today && (max === null || v > max)) max = v
+      day.setDate(day.getDate() + 1)
+    }
+    out.set(d.externalId, max)
+  }
+  return out
+}
+
+/**
  * A unit shared by a set of energies (the cells of an array): chosen from the largest, so the cells
  * hold a bare number and the unit is written once. `digits` keeps three significant figures.
  */

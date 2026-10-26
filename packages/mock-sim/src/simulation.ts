@@ -243,7 +243,9 @@ export class Simulation {
     const total = weight.reduce((a, b) => a + b, 0)
     const devices = panels.map((p, i) => {
       const wh = site.days.map((d) => (d.productionWh === undefined ? null : Math.round((d.productionWh * weight[i]!) / total)))
-      return { externalId: p.descriptor.externalId, lifetimeWh: wh.reduce<number>((a, v) => a + (v ?? 0), 0), wh }
+      // the day's peak from its energy: a half sine over ~10 h of daylight puts it at wh·π/20
+      const peakW = wh.map((v) => (v === null ? null : Math.round((v * Math.PI) / 20)))
+      return { externalId: p.descriptor.externalId, lifetimeWh: wh.reduce<number>((a, v) => a + (v ?? 0), 0), wh, peakW }
     })
     return { ...site, inverters: { from: site.days[0]!.t, syncedAt: site.syncedAt, devices } }
   }

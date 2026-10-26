@@ -62,8 +62,6 @@ export interface InverterCell {
   col: number
   watts: number
   available: boolean
-  /** The inverter's record (W, 0 = it publishes none): its highest value ever reported. */
-  maxW: number
 }
 
 /**
@@ -82,8 +80,8 @@ export interface InverterGroup {
   /** Peak of one of the array's modules (Wp), as declared. */
   peakW: number
   /**
-   * Scale of the array's gauges: the greatest of the three values at play — module peak,
-   * inverter output power, best record of its inverters. Without it, a marker higher
+   * Scale of the array's gauges: the greater of module peak and inverter output power (the
+   * view widens it to the records of the period it shows). Without it, a marker higher
    * than the glass's peak disappeared without a word: an IQ8P at 480 W under a
    * 450 Wp module, and the ceiling was nowhere.
    */
@@ -128,8 +126,6 @@ function toCell(key: string, row: number, col: number, entry: DeviceEntry | unde
     // a mute inverter (at night, or broken) is not worth zero: it says nothing, and the cell says so
     watts: state?.available ? state.value : 0,
     available: !!state?.available,
-    // the record survives unavailability: it does not describe the instant, and the night does not erase it
-    maxW: state?.maxValue ?? 0,
   }
 }
 
@@ -160,7 +156,7 @@ export function inverterGroups(arrays: readonly PanelArray[], inverters: readonl
       cells.push(cell)
     }
     if (bound > 0) {
-      const scaleW = Math.max(a.panel.peakW, a.maxOutputW, ...cells.map((c) => c.maxW))
+      const scaleW = Math.max(a.panel.peakW, a.maxOutputW)
       groups.push({ id: a.id, name: a.name ?? null, index, rows: a.rows, cols: a.cols, cells, totalW, peakW: a.panel.peakW, maxOutputW: a.maxOutputW, scaleW })
     }
   })
@@ -173,7 +169,7 @@ export function inverterGroups(arrays: readonly PanelArray[], inverters: readonl
     // module, and no clipping — nobody says which inverters are behind.
     groups.push({
       id: '', name: null, index: null, rows: loose.length, cols: 1, cells: loose, totalW: sumW(loose),
-      peakW: PANEL_PEAK_W, maxOutputW: 0, scaleW: Math.max(PANEL_PEAK_W, ...loose.map((c) => c.maxW)),
+      peakW: PANEL_PEAK_W, maxOutputW: 0, scaleW: PANEL_PEAK_W,
     })
   }
   return groups

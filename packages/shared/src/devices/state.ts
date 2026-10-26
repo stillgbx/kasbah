@@ -196,9 +196,9 @@ export const sensorStateSchema = z.object({
   kind: z.literal('sensor'), ...base,
   value: z.number(),
   /**
-   * Highest value ever reported by the device, when IT keeps it (an Enphase microinverter
-   * publishes its `maxReportWatts`). A record, not a characteristic: it says what has
-   * happened, never what the device can do. Absent = the device does not say.
+   * The device's record: the highest value known, kept by the device or by its plugin (an Enphase
+   * microinverter: the best daily peak of the plugin's history). A record, not a characteristic:
+   * it says what has happened, never what the device can do. Absent = no record known.
    */
   maxValue: z.number().optional(),
 })

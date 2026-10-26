@@ -132,14 +132,10 @@ describe('site state', () => {
 })
 
 describe('solar panel state', () => {
-  it('returns the power of the last report', () => {
-    // …and the RECORD the gateway keeps for it: what it has already delivered, never its datasheet
-    expect(toPanelPatch(inverters[0]!)).toEqual({ kind: 'sensor', value: inverters[0]!.lastReportWatts, maxValue: inverters[0]!.maxReportWatts })
-    // the real installation's records range from 418 to 440 W: no plateau, so no clipping to infer
-    const records = inverters.map((i) => i.maxReportWatts!)
-    expect(new Set(records).size).toBeGreaterThan(1)
-    // an inverter that publishes no record does not get an invented one
-    expect(toPanelPatch({ ...inverters[0]!, maxReportWatts: undefined })).toEqual({ kind: 'sensor', value: inverters[0]!.lastReportWatts })
+  it('returns the power of the last report, and the record of the history when there is one', () => {
+    expect(toPanelPatch(inverters[0]!, 321)).toEqual({ kind: 'sensor', value: inverters[0]!.lastReportWatts, maxValue: 321 })
+    // the gateway's `maxReportWatts` (still in the capture) is no record: it is never published
+    expect(toPanelPatch(inverters[0]!)).toEqual({ kind: 'sensor', value: inverters[0]!.lastReportWatts })
   })
 
   it('an inverter silent for more than half an hour becomes unavailable, with no invented zero', () => {

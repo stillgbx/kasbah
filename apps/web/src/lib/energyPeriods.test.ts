@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { EnergyDay, StateFor } from '@kasbah/shared'
-import { energyUnit, formatEnergyTotal, inverterTotals, periodBars, periodStart, periodTotals } from './energyPeriods'
+import { energyUnit, formatEnergyTotal, inverterPeaks, inverterTotals, periodBars, periodStart, periodTotals } from './energyPeriods'
 
 // Wednesday 2026-06-17, 15:00 local; days built with the Date constructor (any time zone).
 const now = new Date(2026, 5, 17, 15).getTime()
@@ -121,5 +121,28 @@ describe('energyUnit', () => {
     expect(energyUnit(23_600)).toEqual({ unit: 'kWh', div: 1000, digits: 1 })
     expect(energyUnit(428_000)).toEqual({ unit: 'kWh', div: 1000, digits: 0 })
     expect(energyUnit(1_430_000)).toEqual({ unit: 'MWh', div: 1_000_000, digits: 2 })
+  })
+})
+
+describe('inverterPeaks', () => {
+  // the 14th to today (17th): A peaked on the 14th, B has no peak known on the 16th
+  const inv = { from: day(14), syncedAt: null, devices: [
+    { externalId: 'A', wh: [1, 1, 1, 1], peakW: [320, 240, 180, 130] },
+    { externalId: 'B', wh: [1, 1, 1, 1], peakW: [300, 250, null, 260] },
+    { externalId: 'C', wh: [1, 1, 1, 1] },
+  ] }
+
+  it("the record of a period is the best daily peak inside it", () => {
+    expect(inverterPeaks(inv, 'day', 'rolling', now, null).get('A')).toBe(130)
+    const week = inverterPeaks(inv, 'week', 'calendar', now, null)   // Monday 15th → today
+    expect(week.get('A')).toBe(240)
+    expect(week.get('B')).toBe(260)
+    expect(inverterPeaks(inv, 'lifetime', 'rolling', now, day(14)).get('A')).toBe(320)
+  })
+
+  it('an inverter without peaks has no record, not zero', () => {
+    expect(inverterPeaks(inv, 'lifetime', 'rolling', now, null).get('C')).toBeNull()
+    const quiet = { from: day(14), syncedAt: null, devices: [{ externalId: 'B', wh: [1, 1, 1, 1], peakW: [300, 250, null, null] }] }
+    expect(inverterPeaks(quiet, 'day', 'rolling', now, null).get('B')).toBeNull()
   })
 })

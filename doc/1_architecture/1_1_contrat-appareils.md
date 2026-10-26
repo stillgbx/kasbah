@@ -1,6 +1,6 @@
 # Contrat des appareils (packages/shared)
 
-> Dernière mise à jour : 2026-10-25
+> Dernière mise à jour : 2026-10-26
 > Sources : `packages/shared/src/devices/{kinds,descriptor,state,command,rules,color}.ts`, `packages/shared/src/scenes/scene.ts`, `packages/shared/src/devices/activity.ts`, `packages/shared/src/house/geo.ts`
 
 ## Principe
@@ -420,6 +420,20 @@ Un record ne s'efface pas quand l'appareil se tait : la nuit rend un onduleur in
 record reste. Sources : `packages/shared/src/devices/state.ts`,
 `apps/server/src/plugins/enphase/mapping.ts`.
 
+### Mise à jour 2026-10-26 — `maxValue` n'est plus forcément tenu par l'appareil
+
+> Corrige la section précédente : « la plus haute valeur jamais rapportée par l'appareil, quand c'est
+> LUI qui la tient » reposait sur `maxReportWatts`, qui n'est pas un record (voir
+> [3_7 Enphase](../3_plugins/3_7_enphase.md), même date). Le reste de la section (un record n'est pas
+> une caractéristique, il survit à l'indisponibilité) tient toujours.
+
+`SensorState.maxValue` reste « le record de l'appareil », mais **tenu par l'appareil OU par son
+plugin**. Pour un micro-onduleur Enphase, c'est le plugin qui le calcule (meilleur pic quotidien de
+son historique, `InverterDays.recordOf`) et le publie via `toPanelPatch(inverter, record?)`. Absent =
+« aucun record connu » : sans compte Enlighten lié, donc sans historique, mieux vaut pas de repère
+qu'un faux. `maxReportWatts` n'est plus publié (le test de `mapping.test.ts` le vérifie).
+
+Sources : `packages/shared/src/devices/state.ts`, `apps/server/src/plugins/enphase/mapping.ts`.
 
 ### Mise à jour 2026-09-13 — ce qu'un véhicule connecté dit aussi (`VehicleState`)
 

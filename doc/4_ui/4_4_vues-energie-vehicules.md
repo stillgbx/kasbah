@@ -1,6 +1,6 @@
 # Vues Énergie et Véhicules
 
-> Dernière mise à jour : 2026-10-25
+> Dernière mise à jour : 2026-10-26
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Énergie (schéma de flux, onduleurs, champs de panneaux, tuiles), la vue Véhicules et la carte d'un véhicule (charge, limite, carte, réveil, climatisation, logiciel). Elle est née du découpage de
@@ -1060,3 +1060,28 @@ Sources : `apps/web/src/views/VehiclesView.vue`.
 **La carte Enphase des Réglages** (`components/EnphasePairingCard.vue`) : section « Historique » (dernière synchro, jours couverts), ligne « Onduleurs » avec l'avancement du rattrapage, **frise** mois × 31 colonnes (une case par jour, couleur selon l'état complet / incomplet / absent, lue dans `coverage.days`), bouton **Resynchroniser** et interrupteur « Tout reprendre » (= `force: true`), ligne « Reprendra N jours incomplets » qui dit à l'avance ce que le bouton va faire. Routes : [3_7 Enphase](../3_plugins/3_7_enphase.md).
 
 Libellés en fr et en (`apps/web/src/i18n/locales/`). Tests : `consumption.test.ts`, `energyPeriods.test.ts`, `EnphasePairingCard.test.ts`.
+
+### Mise à jour 2026-10-26 — cases d'onduleurs : le record suit la période
+
+Ce qui change dans « Les cases d'onduleurs » ci-dessus : les repères record (vert) et plafond (jaune)
+**ne sont plus masqués sur une période**. Ils restent sur l'échelle en **W** (0 → max de la crête du
+module, du plafond et des records), même quand la jauge montre des Wh : les deux repères se lisent
+l'un contre l'autre.
+
+- **Le repère vert suit le sélecteur** (`inverterPeaks`, `lib/energyPeriods.ts`) : le plus haut pic
+  quotidien de l'onduleur sur Jour, Semaine, Mois, Année ou Total ; en **Instantané**, le record de
+  tout l'historique, pour comparer la puissance du moment au meilleur jamais atteint. Source des pics :
+  `peakW` de `energy-days` ([1_14](../1_architecture/1_14_energie.md)), eux-mêmes lus dans le cloud
+  ([3_7](../3_plugins/3_7_enphase.md), même date).
+- **Infobulle** : « … · Record xxx W », aussi sur une période.
+- **`EnergyView` charge l'historique journalier même en Instantané** (avant : seulement sur une
+  période), sans quoi le repère n'a rien à montrer au premier affichage.
+- **`InverterCell.maxW` supprimé** (`lib/energy.ts`) : le record ne vient plus de l'état live
+  (`maxValue`) mais de l'historique, par période. `scaleW` = max(crête, plafond) ; la vue l'élargit aux
+  records (`scaleOf` dans `InverterFields.vue`) pour qu'aucun repère ne sorte de la case.
+- Une puissance instantanée peut dépasser le record (il est en moyenne 15 min) : la jauge passe alors
+  au-dessus du repère vert, c'est normal.
+
+Vérifié dans la preview `kasbah-mock` à 1440×900 : un repère différent pour chaque période, aucune
+case ne bouge (mesure géométrique, 15 boîtes), console propre. Tests : `energyPeriods.test.ts`,
+`lib.test.ts`.

@@ -12,7 +12,7 @@ import Segmented from '../components/ui/Segmented.vue'
 import { useHomeSummary } from '../composables/useHomeSummary'
 import { calendarTitle, type PeriodMode } from '../lib/consumption'
 import { findEnergySite } from '../lib/energy'
-import { ENERGY_PERIODS, MODE_PERIODS, formatEnergyTotal, inverterTotals, periodBars, periodTotals, type EnergyPeriod } from '../lib/energyPeriods'
+import { ENERGY_PERIODS, MODE_PERIODS, formatEnergyTotal, inverterPeaks, inverterTotals, periodBars, periodTotals, type EnergyPeriod } from '../lib/energyPeriods'
 import { formatEnergy, formatPower } from '../lib/format'
 import { useDevicesStore } from '../stores/devices'
 
@@ -60,15 +60,14 @@ async function loadHistory() {
   try { points.value = (await getTransport().getHistory(id, 24)).points } catch { points.value = [] }
 }
 const days = ref<DeviceEnergyDays | null>(null)
-/** Only while a period is shown: the instant does not need the daily history. */
+/** The daily history: the totals of a period, and the inverters' records, the instant's included. */
 async function loadDays() {
   const id = energyEntry.value?.descriptor.id
-  if (!id || !periodic.value) return
+  if (!id) return
   try { days.value = await getTransport().getEnergyDays(id) } catch { days.value = null }
 }
-onMounted(loadHistory)
+onMounted(() => { void loadHistory(); void loadDays() })
 watch(() => energyEntry.value?.descriptor.id, () => { void loadHistory(); void loadDays() })
-watch(periodic, loadDays)
 let timer: ReturnType<typeof setInterval> | null = null
 onMounted(() => { timer = setInterval(() => { now.value = Date.now(); void loadHistory(); void loadDays() }, 60_000) })
 onBeforeUnmount(() => { if (timer) clearInterval(timer) })
@@ -94,6 +93,13 @@ const scale = computed(() => {
 /** The period as the inverters' cells show it: their own totals, under the same scale as the blocks above. */
 const inverterPeriod = computed(() => (periodic.value && days.value?.inverters
   ? { scale: scale.value, wh: inverterTotals(days.value.inverters, period.value, mode.value, now.value, since.value) }
+  : null))
+/**
+ * Each inverter's record (W) for the green mark of its cell: over the period chosen, and over the
+ * whole history at the instant, where it compares with the live power.
+ */
+const inverterRecords = computed(() => (days.value?.inverters
+  ? inverterPeaks(days.value.inverters, periodic.value ? period.value : 'lifetime', mode.value, now.value, since.value)
   : null))
 const scaleNoted = computed(() => (totals.value?.incomplete ? `${scale.value} · ${t('energy.incomplete')}` : scale.value))
 
@@ -191,7 +197,7 @@ const chartTotal = computed(() => (periodic.value && period.value !== 'day'
 
       <!-- What each inverter produces, array by array: the view told the house's production, not
            that of a module. -->
-      <InverterFields v-if="energyEntry" :site="energyEntry" :period="inverterPeriod" />
+      <InverterFields v-if="energyEntry" :site="energyEntry" :period="inverterPeriod" :records="inverterRecords" />
 
       <!-- The devices, as in the Lights and Covers views: this is where the site,
            the batteries and the charger are placed. The panels are deliberately absent — a module

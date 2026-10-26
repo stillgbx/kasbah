@@ -7,6 +7,22 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-26] update | Enphase : le record d'un onduleur vient de l'historique, plus de `maxReportWatts`
+
+**Déclencheur** : le `maxReportWatts` de la passerelle n'est pas un record (il oublie ses pics en quelques jours, vérifié sur la vraie installation) ; les records viennent désormais du cloud Enlighten (série au quart d'heure) et suivent la période de la vue Énergie. Changement de code non commité au moment de l'écriture.
+
+**Pages modifiées** :
+- `3_plugins/3_7_enphase.md` - section datée : ce qui était faux, nouvelle route `time_series.json` (mesures de méthode, route écartée), `peakW` stocké, rattrapage par tranches de 7 jours, rafraîchissement 15 min, source unique et pourquoi
+- `1_architecture/1_1_contrat-appareils.md` - `maxValue` tenu par l'appareil ou son plugin ; renvoi corrigeant la section du 2026-09-13
+- `1_architecture/1_14_energie.md` - `peakW` dans `energy-days`
+- `4_ui/4_4_vues-energie-vehicules.md` - repères record et plafond visibles sur une période, record qui suit le sélecteur, `maxW` supprimé
+- `1_architecture/1_12_scene-3d-objets.md` - le repère record de la scène montre le vrai record ; il peut être dépassé
+- `3_plugins/3_0_simulation-mock.md` - `peakW` simulé
+
+**Contradiction signalée** : les sections du 2026-09-13 de `3_7` et `3_0` (« meilleur moment de l'année », record tenu comme `maxReportWatts`) ne sont pas réécrites ; la mise à jour du jour les corrige par renvoi. `3_0` : le record live simulé (`maxValue`) n'est pas aligné sur le `peakW` simulé.
+
+**Index** : catalogues mis à jour (6 lignes), index.md régénéré.
+
 ## [2026-10-26] update | Caméras Nest : vignettes en mémoire, première image tout de suite, direct rejoint sans attente
 
 **Déclencheur** : demande de l'utilisateur : première image d'un flux trop lente, surtout sur la vue Caméras, images très anciennes après une longue pause, et le moins d'écritures disque possible (serveur sous Windows).

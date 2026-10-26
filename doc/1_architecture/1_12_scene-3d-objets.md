@@ -1,6 +1,6 @@
 # Scène 3D : objets dessinés
 
-> Dernière mise à jour : 2026-10-21
+> Dernière mise à jour : 2026-10-26
 > Sources : sections reprises telles quelles de `1_5_scene-3d.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre ce que la scène dessine : marqueurs et formes d'appareils (onde sonore, écrans et pochettes, ventilateur, enceintes), modules photovoltaïques et coffrets de batterie, véhicules et carrosseries, tondeuse et son journal, places de stationnement, menuiseries et Velux, détail architectural, terrain en relief et son contour, calque du jardin. Elle est née du découpage de
@@ -213,6 +213,12 @@ disparaître sans un mot.
 
 `SceneTheme` gagne donc `warning` et `success`, lus comme les autres couleurs dans les variables
 Vuetify du thème courant (`--v-theme-warning`, `--v-theme-success`).
+
+*Mise à jour 2026-10-26* : aucun code de la scène n'a changé, mais ce que le repère vert dit a changé.
+`SensorState.maxValue` n'est plus le `maxReportWatts` de la passerelle (qui oublie ses pics en quelques
+jours) mais le vrai record de l'historique du plugin, en moyenne sur 15 min
+([3_7](../3_plugins/3_7_enphase.md)). Une puissance instantanée peut donc le dépasser : la jauge monte
+alors au-dessus du repère vert, qui n'est pas un plafond.
 
 **Deux pistes essayées puis abandonnées**, notées ici pour ne pas les reprendre : un ANNEAU de
 progression autour du disque d'icône de la pilule (refusé parce que la pilule se réduit à un point

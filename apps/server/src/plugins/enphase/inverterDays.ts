@@ -9,6 +9,10 @@ import { addDays, dayKey, keyStart, type DayStatus } from './days'
 // Enphase's history fetched on a resync — here one call per day (`inverter_data_x/energy.json`
 // only returns a sum over the range asked), spaced out by the caller.
 //
+// Each inverter's peak of the day comes from Enphase only (`inverter_data_x/time_series.json`, a
+// quarter-hour average power): one source for every day, so the peak of a day and that of a year
+// compare. Fetched a week per call on a resync, and today with yesterday every quarter of an hour.
+//
 // Local days come from each inverter's day counter (`/ivp/pdm/device_data`, `wattHours.today`),
 // exact; its counter since commissioning (`lifetime.joulesProduced`) is served as is for the
 // lifetime, which stays exact even where days are missing.
@@ -53,6 +57,29 @@ export const arrayLayoutSchema = z.object({
 /** `inverter_data_x/energy.json`: what each inverter (by Enlighten id) produced over the range, in Wh. */
 export const inverterEnergySchema = z.object({ production: z.record(z.string(), z.number().nullable()) }).passthrough()
 
+/**
+ * `inverter_data_x/time_series.json?start_date&end_date`: day key → each inverter's (Enlighten id)
+ * highest point of `POWR`, `[epoch s, W averaged over the quarter hour, 900]`. The answer also
+ * carries keys that are not days (`haiku`), skipped.
+ */
+export function peaksOfTimeSeries(raw: unknown): Map<string, Record<string, number>> {
+  const out = new Map<string, Record<string, number>>()
+  if (!raw || typeof raw !== 'object') return out
+  for (const [key, day] of Object.entries(raw)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || !day || typeof day !== 'object') continue
+    const peaks: Record<string, number> = {}
+    for (const [id, series] of Object.entries(day)) {
+      const powr = (series as { POWR?: unknown } | null)?.POWR
+      if (!Array.isArray(powr)) continue
+      let max = -1
+      for (const p of powr) if (Array.isArray(p) && typeof p[1] === 'number' && p[1] > max) max = p[1]
+      if (max >= 0) peaks[id] = max
+    }
+    out.set(key, peaks)
+  }
+  return out
+}
+
 const fileSchema = z.object({
   version: z.literal(1),
   syncedAt: z.number().nullable(),
@@ -67,6 +94,8 @@ const fileSchema = z.object({
   })),
   /** Each inverter's counter since commissioning, last read. */
   lifetimeWh: z.record(z.string(), z.number()),
+  /** Day key → each inverter's peak (W, by serial number); `{}` = Enphase had nothing that day. */
+  peakW: z.record(z.string(), z.record(z.string(), z.number())).default({}),
 })
 type InverterFile = z.infer<typeof fileSchema>
 
@@ -79,7 +108,7 @@ const LATE_COUNTER_MS = 15 * 60_000
 const WHOLE_DAY_SLACK_MS = 20 * 60_000
 
 export class InverterDays {
-  private data: InverterFile = { version: 1, syncedAt: null, days: {}, lifetimeWh: {} }
+  private data: InverterFile = { version: 1, syncedAt: null, days: {}, lifetimeWh: {}, peakW: {} }
   /** Each inverter's last day counter, and the day it was given to. */
   private readonly last = new Map<string, { key: string; value: number }>()
   dirty = false
@@ -158,10 +187,47 @@ export class InverterDays {
     return true
   }
 
+  /**
+   * One day of peaks from Enphase, its ids turned into serial numbers. An empty answer is kept as
+   * known empty only before yesterday: the cloud may not have received the recent days yet.
+   */
+  importVendorPeaks(key: string, peaks: Record<string, number>, serialOf: Map<string, string>, now: number): void {
+    const today = dayKey(now)
+    if (key > today) return
+    const w: Record<string, number> = {}
+    for (const [id, v] of Object.entries(peaks)) {
+      const serial = serialOf.get(id)
+      if (serial) w[serial] = Math.round(v)
+    }
+    if (Object.keys(w).length === 0 && key >= addDays(today, -1)) return
+    this.data.peakW[key] = w
+    this.dirty = true
+  }
+
+  /** An inverter's record: its best daily peak over the whole history (W), `undefined` = none known. */
+  recordOf(serial: string): number | undefined {
+    let max: number | undefined
+    for (const day of Object.values(this.data.peakW)) {
+      const w = day[serial]
+      if (w !== undefined && (max === undefined || w > max)) max = w
+    }
+    return max
+  }
+
+  /** The days of `from`..`to` (keys, inclusive) whose peaks were never asked of Enphase. */
+  peaklessDays(from: string, to: string): string[] {
+    const out: string[] = []
+    for (let k = from; k <= to; k = addDays(k, 1)) if (!this.data.peakW[k]) out.push(k)
+    return out
+  }
+
   markSynced(now: number): void { this.data.syncedAt = now; this.dirty = true }
 
   /** Day by day from the first day known to today, per inverter — the shape of the contract. */
-  snapshot(now: number): { from: number; syncedAt: number | null; devices: { externalId: string; lifetimeWh?: number; wh: (number | null)[] }[] } | undefined {
+  snapshot(now: number): {
+    from: number; syncedAt: number | null
+    devices: { externalId: string; lifetimeWh?: number; wh: (number | null)[]; peakW?: (number | null)[] }[]
+  } | undefined {
     const keys = Object.keys(this.data.days).sort()
     const serials = new Set<string>([...Object.keys(this.data.lifetimeWh), ...keys.flatMap((k) => Object.keys(this.data.days[k]!.wh))])
     if (serials.size === 0) return undefined
@@ -169,6 +235,7 @@ export class InverterDays {
     const first = keys[0] ?? today
     const span: string[] = []
     for (let k = first; k <= today; k = addDays(k, 1)) span.push(k)
+    const peaks = Object.keys(this.data.peakW).length > 0
     return {
       from: keyStart(first),
       syncedAt: this.data.syncedAt,
@@ -176,6 +243,7 @@ export class InverterDays {
         externalId: serial,
         ...(this.data.lifetimeWh[serial] !== undefined ? { lifetimeWh: this.data.lifetimeWh[serial] } : {}),
         wh: span.map((k) => this.data.days[k]?.wh[serial] ?? null),
+        ...(peaks ? { peakW: span.map((k) => this.data.peakW[k]?.[serial] ?? null) } : {}),
       })),
     }
   }

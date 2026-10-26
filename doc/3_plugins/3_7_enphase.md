@@ -1,6 +1,6 @@
 # Plugin Enphase (production solaire, micro-onduleurs, batteries)
 
-> Dernière mise à jour : 2026-10-25
+> Dernière mise à jour : 2026-10-26
 > Sources : `apps/server/src/plugins/enphase/{index,client,token,cloud,mapping,types,days,inverterDays}.ts`, `apps/server/src/plugins/enphase/__fixtures__/gateway.ts`, tests `token.test.ts`, `mapping.test.ts`, `plugin.test.ts` et `cloud.test.ts`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/server/.env.example`, note technique du fabricant « Accessing IQ Gateway local APIs or local UI with token-based authentication » (2022-12-14), commits 3b4767a et a89ae3b
 
 ## Ce que le plugin lit, et ce qu'il ne peut pas lire
@@ -517,3 +517,51 @@ des valeurs remplace le jour vide. La carte dessine `e` en gris discret, distinc
 
 Sources : `apps/server/src/plugins/enphase/{inverterDays,days,index}.ts`, tests `inverterDays.test.ts`
 et `plugin.test.ts`, `apps/web/src/components/EnphasePairingCard.vue` et son test.
+
+### Mise à jour 2026-10-26 — `maxReportWatts` oublie ses pics : le record vient de notre historique
+
+**Ce qui était faux.** La section du 2026-09-13 (et `1_1`) tenaient `maxReportWatts` pour le maximum
+« jamais rapporté », « le meilleur moment de l'année », un record qui ne s'efface pas. Vérifié sur la
+vraie installation : **la passerelle oublie ses pics en quelques jours**. Les pics d'été avaient
+disparu un mois plus tard ; certains onduleurs gardaient encore le pic de la veille, donc ce n'est pas
+non plus exactement le pic du jour : c'est un maximum sur une fenêtre récente, de durée inconnue. Ce
+qui reste vrai de l'ancienne section : ce n'est pas la puissance nominale (`maxOutputW` se déclare à
+la main). Le champ n'est plus publié (retiré de `inverterSchema`, `types.ts`) ; il reste dans la
+fixture de capture, et `mapping.test.ts` vérifie qu'il ne ressort jamais.
+
+**La nouvelle source.** Route privée Enlighten, avec la session déjà tenue :
+`GET /systems/{site}/inverter_data_x/time_series.json?start_date=AAAA-MM-JJ&end_date=AAAA-MM-JJ`.
+Réponse : `{ "AAAA-MM-JJ": { "<id Enlighten>": { POWR: [[epoch s, W moyen sur le quart d'heure, 900], …] } }, haiku: … }`,
+soit 96 points par jour et **tous les onduleurs en un appel**. Les clés qui ne sont pas des jours
+(`haiku`, et `date` dans la variante `?date=`) sont ignorées (`peaksOfTimeSeries`). Mesuré : 7 jours en
+un appel ≈ 7 s et 290 Ko ; **31 jours dépassent le délai cloud de 15 s**, d'où des tranches d'une
+semaine (`PEAK_CHUNK_DAYS`). Écartée : `/systems/{site}/inverters/{id}/time_series_x?stat=POWR&date=`,
+qui coûte un appel par onduleur (elle donne en plus DCV, DCA, ACV, ACHZ et TMPI, dont on n'a pas
+l'usage). La correspondance id ↔ série reste `array_layout_x`, lue une fois (`serialOf`).
+
+**Stockage.** `.state/enphase-inverter-days.json` gagne `peakW: { jour: { série: W } }` (défaut `{}` :
+un ancien fichier se relit). `importVendorPeaks` retient un jour vide comme « connu vide » seulement
+avant hier (même réserve que pour les Wh : le cloud n'a peut-être pas reçu les derniers jours) ;
+`peaklessDays` liste les jours sans pic ; `recordOf(serie)` rend le meilleur pic quotidien de tout
+l'historique.
+
+**Rattrapage.** Dans `syncInverters`, **après** les Wh : les jours sans pic sont regroupés en runs
+consécutifs de 7 jours au plus (`peakChunks`), un appel chacun, 2 s entre appels, comptés dans la
+progression « Onduleurs » de la carte Réglages. `force: true` reprend tous les pics. Au démarrage,
+`autoSync` relance la synchro si des pics manquent (`peaksMissing`) : une installation déjà
+synchronisée rattrape seule, environ 50 appels depuis sa mise en service. **Aujourd'hui et hier** sont
+redemandés toutes les 15 min (`PEAKS_REFRESH_MS`) tant que le compte Enlighten est lié : c'est le
+seul appel cloud régulier ajouté.
+
+**Une seule source, choix délibéré.** Quart d'heure pour tous les jours, sans mélanger avec les pics
+instantanés de la passerelle : une moyenne sur 15 min est environ 10 % sous un pic instantané, un
+record « Jour » (instantané) et un record « Mois » (quart d'heure) n'auraient pas été comparables.
+Conséquence à connaître : la puissance instantanée d'un onduleur peut dépasser son record. Ce n'est
+pas un plafond.
+
+**Sans compte Enlighten lié** : pas d'historique, donc pas de record (`toPanelPatch` ne publie pas
+`maxValue`). Affichage : [4_4](../4_ui/4_4_vues-energie-vehicules.md) ; contrat :
+[1_1](../1_architecture/1_1_contrat-appareils.md) ; protocole : `peakW` dans
+[1_14](../1_architecture/1_14_energie.md).
+
+Sources : `apps/server/src/plugins/enphase/{inverterDays,index,mapping,types}.ts` et leurs tests.

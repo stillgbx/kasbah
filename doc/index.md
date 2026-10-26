@@ -25,7 +25,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | Pages | Dernière mise à jour |
 |---|---|
 | [1_0 Monorepo et flux de données](1_architecture/1_0_monorepo-et-flux.md) | 2026-10-20 |
-| [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-10-25 |
+| [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-10-26 |
 | [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-10-25 |
 | [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-10-25 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-10-06 |
@@ -36,9 +36,9 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-10-25 |
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-10-11 |
 | [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-10-26 |
-| [1_12 Scène 3D : objets dessinés](1_architecture/1_12_scene-3d-objets.md) | 2026-10-21 |
+| [1_12 Scène 3D : objets dessinés](1_architecture/1_12_scene-3d-objets.md) | 2026-10-26 |
 | [1_13 Comptes et sessions](1_architecture/1_13_comptes-et-sessions.md) | 2026-10-25 |
-| [1_14 Énergie](1_architecture/1_14_energie.md) | 2026-10-25 |
+| [1_14 Énergie](1_architecture/1_14_energie.md) | 2026-10-26 |
 | [1_15 Appli Android Auto](1_architecture/1_15_appli-android-auto.md) | 2026-10-25 |
 <!-- section:1_architecture:end -->
 
@@ -61,7 +61,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 
 | Socle | Dernière mise à jour |
 |---|---|
-| [3_0 Simulation (mock-sim et plugin mock)](3_plugins/3_0_simulation-mock.md) | 2026-10-25 |
+| [3_0 Simulation (mock-sim et plugin mock)](3_plugins/3_0_simulation-mock.md) | 2026-10-26 |
 | [3_2 Écrire un plugin](3_plugins/3_2_ecrire-un-plugin.md) | 2026-10-20 |
 | [3_3 Fabricants à venir](3_plugins/3_3_fabricants-a-venir.md) | 2026-10-06 |
 
@@ -71,7 +71,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_4 Somfy TaHoma](3_plugins/3_4_somfy-tahoma.md) | 2026-10-24 |
 | [3_5 Google Nest (caméras, sonnettes)](3_plugins/3_5_google-nest.md) | 2026-10-26 |
 | [3_6 Google Cast](3_plugins/3_6_google-cast.md) | 2026-10-24 |
-| [3_7 Enphase](3_plugins/3_7_enphase.md) | 2026-10-25 |
+| [3_7 Enphase](3_plugins/3_7_enphase.md) | 2026-10-26 |
 | [3_8 Tesla (Fleet API)](3_plugins/3_8_tesla.md) | 2026-10-20 |
 | [3_9 Renault (Gigya + Kamereon)](3_plugins/3_9_renault.md) | 2026-10-24 |
 | [3_10 Open-Meteo](3_plugins/3_10_open-meteo.md) | 2026-10-09 |
@@ -107,7 +107,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | Vues | Dernière mise à jour |
 |---|---|
 | [4_3 Vues Lumières, Ouvrants et Caméras](4_ui/4_3_vues-lumieres-ouvrants-cameras.md) | 2026-10-26 |
-| [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-25 |
+| [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-26 |
 | [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-10-13 |
 | [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-10-25 |
 | [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-10-25 |

@@ -149,15 +149,14 @@ export function toDailyPatch(report: ProductionReport): StatePatch {
 export const PANEL_STALE_MS = 30 * 60_000
 
 /**
- * A solar panel's state: the power of its last report, as is, and the record the gateway keeps for
- * it (`maxReportWatts`). That record is NOT the inverter's maximum output power: observed on a real
- * installation, it ranges from 418 to 440 W from one inverter to another, with no plateau — it is
- * the best moment of the year, not the datasheet.
+ * A solar panel's state: the power of its last report, as is, and its `record` — the best daily
+ * peak of the plugin's history (`InverterDays.recordOf`), a quarter-hour average. Not the gateway's
+ * `maxReportWatts`: that one forgets its peaks within days (verified on a real installation, a
+ * summer's peaks gone a month later), a recent maximum and not a record. Without history, no record.
  */
-export function toPanelPatch(inverter: Inverter): StatePatch {
+export function toPanelPatch(inverter: Inverter, record?: number): StatePatch {
   const patch = { kind: 'sensor', value: Math.round(inverter.lastReportWatts) } as StatePatch & { maxValue?: number }
-  // `maxReportWatts` is optional in the response: without it, no invented record
-  if (inverter.maxReportWatts !== undefined) patch.maxValue = Math.round(inverter.maxReportWatts)
+  if (record !== undefined) patch.maxValue = record
   return patch
 }
 

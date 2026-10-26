@@ -329,7 +329,9 @@ export const deviceEnergyDaysSchema = z.object({
   /**
    * What each micro-inverter produced, day by day: `wh[i]` is the day `from` + i calendar days
    * (local), `null` = not measured. `lifetimeWh`: the inverter's own counter since commissioning,
-   * exact even where the days are missing. Absent when the site has no inverter history.
+   * exact even where the days are missing. `peakW`: the day's highest power, same indexing (W,
+   * `null` = not known), absent when the source keeps no peaks. Absent when the site has no
+   * inverter history.
    */
   inverters: z.object({
     from: z.number().int(),
@@ -339,6 +341,7 @@ export const deviceEnergyDaysSchema = z.object({
       externalId: z.string(),
       lifetimeWh: z.number().min(0).optional(),
       wh: z.array(z.number().min(0).nullable()),
+      peakW: z.array(z.number().min(0).nullable()).optional(),
     })),
   }).optional(),
 })

@@ -1,6 +1,6 @@
 # Énergie : mesures, historique et charge des véhicules
 
-> Dernière mise à jour : 2026-10-25
+> Dernière mise à jour : 2026-10-26
 > Sources : `packages/shared/src/devices/state.ts` (`energyStateSchema`, `evChargerStateSchema`), `packages/shared/src/devices/rules.ts` (`estimateChargePowerW`), `apps/server/src/core/history.ts`, `apps/server/src/core/chargeCoordination.ts`, `apps/server/src/core/plugin-host.ts` (`execute`, `onVehicleState`, `checkChargingClaim`), `apps/server/src/http/routes.ts` (`/api/devices/:id/history`, `/api/devices/:id/energy-days`), `apps/server/src/plugins/enphase/days.ts` ; pages citées plus bas
 
 Page de synthèse, écrite au lint du 2026-10-13 : l'énergie était décrite par morceaux dans le contrat,
@@ -98,3 +98,14 @@ Deux principes, dont le détail (routes Enlighten, resynchro, fichiers d'état) 
 
 Le mécanisme est générique côté serveur (hook `energyDays?(externalId)` d'un plugin, relayé par
 `PluginHost.energyDays`) ; seuls Enphase et la simulation le fournissent.
+
+### Mise à jour 2026-10-26 — `inverters.devices[].peakW`
+
+`deviceEnergyDaysSchema.inverters.devices[]` gagne `peakW?: (number | null)[]` : le plus haut point de
+puissance du jour de chaque micro-onduleur, **indexé comme `wh`** (jour `from` + i, W, `null` = inconnu).
+Absent quand la source ne garde pas de pics. Enphase le remplit depuis la série au quart d'heure du
+cloud (moyenne sur 15 min, une seule source pour tous les jours : [3_7](../3_plugins/3_7_enphase.md)) ;
+la simulation le dérive des Wh du jour ([3_0](../3_plugins/3_0_simulation-mock.md)). La vue Énergie en tire
+le record par période ([4_4](../4_ui/4_4_vues-energie-vehicules.md)).
+
+Sources : `packages/shared/src/protocol/http.ts`, `apps/server/src/plugins/enphase/inverterDays.ts` (`snapshot`).

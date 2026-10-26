@@ -337,18 +337,11 @@ describe("inverters arranged by array", () => {
 
   it('opens the scale rather than discarding a marker that exceeds the module\'s peak', () => {
     // an IQ8P (480 W) under a 450 Wp module: the ceiling was higher than the peak, and
-    // disappeared without a word. Same for a record above both.
+    // disappeared without a word. The records widen it in the view, from the period's history.
     const small = { ...array('pv', 1, 1, ['enphase:a']), panel: { width: 1.13, height: 1.76, peakW: 450 } } as PanelArray
     expect(inverterGroups([small], [inv('a', 200)])[0]!.scaleW).toBe(480)
-    expect(inverterGroups([small], [inv('a', 200, true, 495)])[0]!.scaleW).toBe(495)
-  })
-
-  it('keeps each inverter\'s RECORD, the one the gateway holds, even when it goes quiet', () => {
-    const [g] = inverterGroups([array('pv', 2, 1, ['enphase:a', 'enphase:b'])], [inv('a', 250, true, 431), inv('b', 0, false, 438)])
-    expect(g!.cells.map((c) => c.maxW)).toEqual([431, 438])
-    // an inverter that publishes none: 0, and the Energy view then marks no record
-    const [none] = inverterGroups([array('pv', 1, 1, ['enphase:c'])], [inv('c', 100)])
-    expect(none!.cells[0]!.maxW).toBe(0)
+    // the gateway's `maxReportWatts` is no record (it forgets within days): it no longer stretches the scale
+    expect(inverterGroups([small], [inv('a', 200, true, 495)])[0]!.scaleW).toBe(480)
   })
 
   it('an array without an inverter makes no card, and an id the plugin no longer publishes leaves an empty cell', () => {

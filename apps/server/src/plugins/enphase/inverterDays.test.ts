@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { InverterDays, arrayLayoutSchema, deviceDataSchema } from './inverterDays'
+import { InverterDays, arrayLayoutSchema, deviceDataSchema, peaksOfTimeSeries } from './inverterDays'
 import { keyStart } from './days'
 
 // Local times built with the Date constructor: the tests hold in any time zone.
@@ -93,5 +93,55 @@ describe('InverterDays — a day Enphase has nothing for', () => {
     // a later answer with values replaces it
     expect(inv.importVendorDay('2026-06-05', { 900000001: 50 }, serialOf, now)).toBe(true)
     expect(inv.dayStatus('2026-06-05')).toBe('c')
+  })
+})
+
+describe('InverterDays — peaks of the day', () => {
+  const serialOf = new Map([['900000001', '100000000001'], ['900000002', '100000000002']])
+  /** `inverter_data_x/time_series.json` over a range, shape of the real answer, invented values. */
+  const series = peaksOfTimeSeries({
+    '2026-06-10': {
+      900000001: { POWR: [[1781071200, 0, 900], [1781074800, 312.4, 900], [1781078400, 250.1, 900]] },
+      900000002: { POWR: [[1781071200, 0, 900], [1781074800, 298.6, 900]] },
+    },
+    '2026-06-11': { 900000001: { POWR: [] } },
+    haiku: 'not a day',
+  })
+
+  it('keeps the highest quarter hour of each inverter, day by day, and skips what is not a day', () => {
+    expect([...series.keys()]).toEqual(['2026-06-10', '2026-06-11'])
+    expect(series.get('2026-06-10')).toEqual({ 900000001: 312.4, 900000002: 298.6 })
+    expect(series.get('2026-06-11')).toEqual({})
+  })
+
+  it('serves them by serial alongside the Wh, and only asks again for the days that have none', () => {
+    const inv = new InverterDays()
+    const now = at(12, 10)
+    inv.importVendorDay('2026-06-10', { 900000001: 1800, 900000002: 1700 }, serialOf, now)
+    expect(inv.snapshot(now)!.devices[0]).not.toHaveProperty('peakW')   // no peak kept yet: the payload is unchanged
+    inv.importVendorPeaks('2026-06-10', series.get('2026-06-10')!, serialOf, now)
+    inv.importVendorPeaks('2026-06-12', { 900000001: 140 }, serialOf, now)   // today, so far
+    const snap = inv.snapshot(now)!
+    expect(snap.devices[0]!.peakW).toEqual([312, null, 140])
+    expect(snap.devices[1]!.peakW).toEqual([299, null, null])
+    expect(inv.peaklessDays('2026-06-09', '2026-06-11')).toEqual(['2026-06-09', '2026-06-11'])
+    // the record is the best day of the whole history; an inverter never seen has none
+    expect(inv.recordOf('100000000001')).toBe(312)
+    expect(inv.recordOf('100000000002')).toBe(299)
+    expect(inv.recordOf('100000000009')).toBeUndefined()
+  })
+
+  it('an empty day is known empty before yesterday only: the cloud may not have the recent days yet', () => {
+    const inv = new InverterDays()
+    const now = at(12, 10)
+    inv.importVendorPeaks('2026-06-05', {}, serialOf, now)
+    inv.importVendorPeaks('2026-06-11', {}, serialOf, now)
+    expect(inv.peaklessDays('2026-06-05', '2026-06-11')).toEqual(['2026-06-06', '2026-06-07', '2026-06-08', '2026-06-09', '2026-06-10', '2026-06-11'])
+  })
+
+  it('restores a file written before peaks were kept', () => {
+    const inv = new InverterDays()
+    expect(inv.restore({ version: 1, syncedAt: null, days: {}, lifetimeWh: {} })).toBe(true)
+    expect(inv.peaklessDays('2026-06-10', '2026-06-10')).toEqual(['2026-06-10'])
   })
 })

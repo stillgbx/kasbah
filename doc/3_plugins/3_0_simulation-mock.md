@@ -1,6 +1,6 @@
 # Simulation (`@kasbah/mock-sim` et plugin `mock`)
 
-> Dernière mise à jour : 2026-10-25
+> Dernière mise à jour : 2026-10-26
 > Sources : `packages/mock-sim/src/{simulation,scenarios,world,clock,rng,types}.ts`, `packages/mock-sim/src/behaviours/*.ts`, `apps/server/src/plugins/mock/index.ts`, `apps/web/src/api/mockTransport.ts`, `packages/mock-sim/src/behaviours/energy.ts`, `packages/mock-sim/src/demos.ts`, `packages/mock-sim/src/behaviours/camera.ts`
 
 ## Pourquoi un paquet séparé
@@ -497,3 +497,11 @@ Pour que la vue Énergie se teste sans vraie installation, le site simulé décl
 un rendement propre et stable d'un jour à l'autre, comme un champ réel où un module traîne : de quoi
 remplir les cases d'onduleurs. Le plugin mock (`apps/server/src/plugins/mock/index.ts`, hook `energyDays`)
 et le transport en mémoire du navigateur (`apps/web/src/api/mockTransport.ts`) le servent. Rien n'est enregistré : la série est fabriquée à chaque appel, aujourd'hui s'arrêtant à l'heure simulée.
+
+### Mise à jour 2026-10-26 — `peakW` simulé par panneau
+
+`Simulation.energyDays` (`packages/mock-sim/src/simulation.ts`) donne aussi `peakW` pour chaque panneau,
+dérivé des Wh du jour : un demi-sinus sur environ 10 h de jour met le pic à `wh·π/20`. De quoi voir un
+repère « record » différent par période dans la vue Énergie sans vraie installation
+([4_4](../4_ui/4_4_vues-energie-vehicules.md)). Le record **live** des panneaux simulés (`maxValue`,
+section du 2026-09-13) est inchangé : il ne suit donc pas ce `peakW`.
