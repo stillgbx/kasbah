@@ -42,10 +42,11 @@ export interface AtomicWriteOptions {
 }
 
 /**
- * Writes `text` to `path`, after the writes already queued on that path. Rejects if the disk
- * refuses: up to the caller to choose between a warning and an error. A failure does not block the queue.
+ * Writes `text` (or raw bytes) to `path`, after the writes already queued on that path. Rejects if
+ * the disk refuses: up to the caller to choose between a warning and an error. A failure does not
+ * block the queue.
  */
-export function writeFileAtomic(path: string, text: string, options: AtomicWriteOptions = {}): Promise<void> {
+export function writeFileAtomic(path: string, text: string | Uint8Array, options: AtomicWriteOptions = {}): Promise<void> {
   const key = resolve(path)
   const run = async () => {
     const tmp = `${path}.${process.pid}.tmp`

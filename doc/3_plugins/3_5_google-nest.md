@@ -1,7 +1,7 @@
 # Plugin Google Nest (caméras, sonnettes)
 
-> Dernière mise à jour : 2026-10-24
-> Sources : `apps/server/src/plugins/nest/{index,client,mapping,types}.ts`, `apps/server/src/plugins/nest/__fixtures__/sdm.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/server/.env.example`, `apps/web/src/components/NestLinkCard.vue`, demande de l'utilisateur du 2026-09-09
+> Dernière mise à jour : 2026-10-26
+> Sources : `apps/server/src/plugins/nest/{index,client,mapping,types}.ts`, `apps/server/src/core/video/{rtsp-relay,jpeg}.ts`, `apps/server/src/plugins/nest/__fixtures__/sdm.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/server/.env.example`, `apps/web/src/components/NestLinkCard.vue`, demande de l'utilisateur du 2026-09-09
 
 ## Ce que l'utilisateur veut, et par étapes
 
@@ -322,6 +322,7 @@ sur le relais ; `GET …/cameras/<id>/snapshot.jpg` sert le fichier, `…/camera
 offre trois états — **Arrêté** (`PUT …/cameras/<id>/snapshots { enabled:false }`, la caméra sort de la
 rotation jusqu'à `enabled:true`, retenu en mémoire), **Aperçu** (l'image et son âge), **Direct** (la
 vidéo) — dans une barre segmentée, avec un badge d'état ; `CamerasView` sonde les dates.
+*(Dépassé le 2026-10-26 : le JPEG ne s'écrit plus sur le disque à chaque image ; il passe par un tube et vit en mémoire, avec une image figée sur le disque de temps en temps, et `fps` est remplacé par `select` — voir « Mise à jour 2026-10-26 — vignettes en mémoire, première image tout de suite, direct rejoint sans attente ».)*
 
 **Trois directs au plus.** Un direct passe par `openStream` **sans** consulter le budget (seule la
 rotation des vignettes le respecte) : neuf directs, ce sont neuf sessions Google épinglées et neuf
@@ -586,8 +587,112 @@ et lance `-protocol_whitelist file,tcp,tls,rtsp,rtsps,rtp,udp,crypto -f concat -
 liste blanche est obligatoire, sinon le démuxeur `concat` n'ouvre que `file,crypto,data`. Les options
 RTSP vont dans la liste, où elles s'appliquent au flux ouvert (`-rtsp_transport` sur la ligne de
 commande ne viserait que le démuxeur `concat`).
+*(Dépassé le 2026-10-26 : `option fflags nobuffer` a quitté la liste, et `-fflags nobuffer` la ligne de commande — voir « Mise à jour 2026-10-26 (2) — `fflags nobuffer` retiré ».)*
 
 Vérifié avec ffmpeg 9.0.2 sur un clip local (même sortie MP4 fragmentée qu'avec l'ancienne commande :
 5 fragments des deux côtés ; le relais réel rend l'en-tête puis les 5 fragments, et la liste est effacée).
 **Reste à vérifier sur une vraie caméra** : l'image s'affiche, et `ps -ef | grep ffmpeg` sur le serveur
 ne montre plus `auth=`.
+
+### Mise à jour 2026-10-26 — vignettes en mémoire, première image tout de suite, direct rejoint sans attente
+
+Demande de l'utilisateur : la première image d'un flux arrivait lentement, surtout sur la vue
+Caméras, et après une longue pause la vue montrait des images très anciennes. Il voulait aussi
+**éviter d'écrire sur le disque** : tout en mémoire, une image « figée » sur le disque de temps en
+temps. Le serveur de la maison tourne **sous Windows**, ce qui écarte un dossier en tmpfs.
+
+**Vignettes en mémoire** (`core/video/rtsp-relay.ts`, `core/video/jpeg.ts`, `plugins/nest/index.ts`).
+ffmpeg n'écrit plus de fichier : sa sortie vignette part en `-f image2pipe -c:v mjpeg pipe:3`, un
+quatrième tube que Node lui ouvre (vérifié sous Windows avec ffmpeg 9.0.2). `JpegSplitter` découpe le
+flux en images entières en suivant les segments JPEG jusqu'au balayage (SOS), car `FF D9` peut
+apparaître dans une table ; des octets illisibles sont sautés jusqu'à l'image suivante. Le relais
+remet chaque image au plugin (`snapshot.onImage`), qui garde **la dernière par caméra** en mémoire
+(quelques dizaines de Ko chacune). `GET …/snapshot.jpg` et `…/cameras/snapshots` lisent la mémoire. Le
+`-y` de ffmpeg, qui ne servait qu'à réécrire le fichier, disparaît.
+
+**Image figée sur le disque**, dans le même dossier `<tmp>/kasbah-nest-snapshots/` : à la fermeture
+de la session (l'image qui reste à l'écran), toutes les 5 min (`SNAPSHOT_SAVE_MS`) pour une image qui
+a changé, et à l'arrêt du plugin. L'écriture passe par `writeFileAtomic` (`core/atomic-file.ts`, qui
+accepte désormais des octets) puis `utimes` : la date du fichier est **celle de l'image**. Au
+démarrage, `loadSnapshots` les recharge en mémoire avec cette date, ce qui garde l'ordre de rotation
+« caméras qui ont déjà donné une image d'abord ». Avant, ffmpeg réécrivait le fichier à chaque image
+(toutes les 10 s par caméra tant que la vue était ouverte) ; c'est maintenant de l'ordre d'une
+écriture par caméra et par session.
+
+**Première vignette tout de suite** : `fps=1/10` est remplacé par
+`select='isnan(prev_selected_t)+gte(t-prev_selected_t\,10)'` et `-threads 1`. Deux causes de retard,
+mesurées sur une source de test avec ffmpeg 9.0.2 :
+- le filtre `fps` ne rend sa première image qu'après une fois et demie l'intervalle (13,6 s à 10 s) ;
+- l'encodeur JPEG en plusieurs fils ne livre une image qu'une fois **la suivante** choisie : chaque
+  vignette avait donc un intervalle de retard sur sa date. Avec un seul fil (`-threads 1`, coût
+  négligeable à une image toutes les 10 s), la première sort en 25 ms et plus aucune n'est décalée.
+
+Sur une vraie caméra, la première vignette arrive environ **2,4 s après l'en-tête MP4**, contre une
+quinzaine de secondes après l'ouverture du flux auparavant.
+
+**Direct rejoint sans attente** : le relais garde le **dernier fragment** et l'envoie à un abonné qui
+arrive en cours de route, juste après l'en-tête. Mesuré sur une vraie caméra : un second spectateur
+(ou le passage d'Aperçu à Direct sur une caméra dont la vue tient déjà la session) a une image en
+**4 ms**, au lieu d'attendre le fragment suivant (jusqu'à un groupe d'images, 4 s sur la sonnette).
+Au passage, la diffusion parcourt une copie de la liste des abonnés : un abonné ajouté pendant la
+remise d'un fragment l'aurait reçu deux fois (une fois rejoué, une fois diffusé).
+
+**Côté web**, voir `../4_ui/4_3_vues-lumieres-ouvrants-cameras.md` (mise à jour du 2026-10-26) : la
+dernière vignette reste affichée pendant la connexion du direct.
+
+**Mesures sur une vraie caméra, session froide** : en-tête MP4 à 7,6–8,5 s de la demande (dont
+environ 4 s entre la session Google ouverte et l'en-tête : connexion RTSP et analyse du flux par
+ffmpeg), premier fragment environ 6 s après l'en-tête, puis un toutes les 4 s.
+
+**Piste relevée, non appliquée : `option fflags nobuffer` de la liste `concat`.** Sur un clip local,
+cette option fait **jeter les paquets lus pendant l'analyse initiale** du flux : la première image
+décodée tombe à 1,73 s au lieu de 0 (sans les lignes `option`, ou avec `rtsp_transport` seul : 0 s).
+Sur une caméra réelle, cela peut faire perdre la première image clé, donc retarder d'un groupe
+d'images (4 s sur la sonnette) la première vignette comme le premier fragment — cohérent avec les
+6 s mesurées entre l'en-tête et le premier fragment, pour des groupes de 4 s. Pour ce relais (copie
+en fragments à l'image clé), retirer l'option ne devrait pas ajouter de retard au direct : la lecture
+garde un fragment de retard dans les deux cas. Non changé, parce que l'option avait été posée exprès
+et que l'effet n'est vérifiable que sur une vraie caméra.
+*(Appliqué le même jour, après mesure sur une vraie caméra : voir « Mise à jour 2026-10-26 (2) — `fflags nobuffer` retiré ».)*
+
+**Constat au passage, préexistant** : le rang 0 de la rotation (« a une vignette, pas encore rendue »)
+trie par **image la plus ancienne d'abord**. Quand toutes les caméras ont une image sur le disque, les
+caméras éteintes depuis des jours (images de plusieurs jours) passent donc avant la seule active.
+Non traité.
+
+Tests : `jpeg.test.ts` (fin d'image au-delà d'un `FF D9` dans une table, bourrage, marqueur de reprise,
+coupures arbitraires, octets illisibles), `rtsp-relay.test.ts` (arguments de la sortie vignette et
+quatrième tube, images remises entières, dernier fragment rejoué, abonné ajouté pendant la diffusion),
+`plugin.test.ts` (« thumbnails live in memory; the disk gets the last one every five minutes and at
+close, and a restart finds it »). Vérifié aussi avec le vrai ffmpeg sur un clip local (trois vignettes
+pour 25 s, dernier fragment rejoué identique) et sur la vraie maison (images rechargées au démarrage,
+mesures ci-dessus).
+
+### Mise à jour 2026-10-26 (2) — `fflags nobuffer` retiré : première image du direct 4 s plus tôt
+
+Suite de la piste relevée plus haut, à la demande de l'utilisateur : retirer l'option et mesurer sur
+une vraie caméra, avant et après.
+
+**Il y avait deux `nobuffer`, pas un.** Sur un clip local, `-fflags nobuffer` passé sur la ligne de
+commande s'applique au démuxeur `concat` et jette **lui aussi** les paquets lus pendant l'analyse
+(première image décodée à 1,73 s au lieu de 0), comme `option fflags nobuffer` dans la liste. Les deux
+sont retirés (`core/video/rtsp-relay.ts`, `writeSourceList` et les arguments de `launch`). `-flags
+low_delay`, drapeau du décodeur, reste : seul, il garde la première image (0 s).
+
+**Mesures sur une vraie caméra**, trois sessions froides de chaque côté (délais depuis la demande du
+flux, la session précédente refermée entre deux essais) :
+
+| | En-tête MP4 | Première vignette | Premier fragment | Deuxième fragment |
+|---|---|---|---|---|
+| avant | 7,4 – 8,0 s | 9,7 – 10,1 s | 13,6 – 14,1 s | 17,5 – 18,2 s |
+| après | 7,5 – 7,8 s | 7,7 – 8,0 s | 9,6 – 9,8 s | 13,7 – 13,9 s |
+
+L'en-tête ne bouge pas : il dépend de Google, de la connexion RTSP et de l'analyse du flux, que
+l'option n'abrège pas. La **première vignette** arrive environ 2,1 s plus tôt, 0,2 s après l'en-tête.
+Le **premier fragment**, c'est-à-dire la première image du direct, arrive environ **4,1 s plus tôt** :
+il ne faut plus attendre l'image clé suivante, puisque la première n'est plus jetée. Le retard du
+direct en régime établi reste d'un fragment, dans les deux cas : la lecture démarre au début du
+premier fragment, qui couvre un groupe d'images.
+
+Test : `rtsp-relay.test.ts` (la liste ne porte plus que `rtsp_transport`, la ligne de commande n'a
+plus `nobuffer`).

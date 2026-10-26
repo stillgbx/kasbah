@@ -17,6 +17,8 @@ const avcC = box('avcC', Buffer.from([1, 0x4d, 0x00, 0x20, 0xff, 0xe1, 0, 0]))
 const FTYP = box('ftyp', Buffer.from('isom'))
 const MOOV = box('moov', box('trak', box('stsd', box('avc1', [Buffer.alloc(78), avcC]))))
 const fragment = (n: number) => Buffer.concat([box('moof', Buffer.alloc(16, n)), box('mdat', Buffer.alloc(64, n))])
+/** A tiny JPEG: SOI, a table segment, the scan header, entropy-coded bytes, EOI. */
+const jpeg = (fill: number) => Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x04, 0x01, fill, 0xff, 0xda, 0x00, 0x04, 0x01, 0x00, fill, 0x12, 0xff, 0xd9])
 
 /** Fake ffmpeg: a process whose stdout and exit we drive. */
 function fakeFfmpeg() {
@@ -50,7 +52,7 @@ describe('RtspRelay', () => {
     const args = (spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1] as string[]
     expect(args).toEqual(expect.arrayContaining(['-f', 'concat', '-c', 'copy', '-f', 'mp4', 'pipe:1']))
     expect(sourceOf(args).text).toContain('option rtsp_transport tcp')
-    expect(args[0]).toBe('-y')                          // the thumbnail is rewritten in place
+    expect(args).not.toContain('nobuffer')
     expect(args[args.indexOf('-movflags') + 1]).toContain('frag_keyframe')
     // the header arrives in arbitrary chunks
     const head = Buffer.concat([FTYP, MOOV, fragment(1)])
@@ -60,13 +62,28 @@ describe('RtspRelay', () => {
     expect((a.got[0] as { mime: string }).mime).toBe('video/mp4; codecs="avc1.4D0020"')
     expect((a.got[0] as { data: Buffer }).data.equals(Buffer.concat([FTYP, MOOV]))).toBe(true)
     expect((a.got[1] as { data: Buffer }).data.equals(fragment(1))).toBe(true)
-    // a subscriber arriving midway first receives the header, then the following fragments
+    // a subscriber arriving midway first receives the header and the LAST fragment (an image at
+    // once, without waiting for the next keyframe), then the following fragments
     const b = collect()
     relay.subscribe(b.fn)
-    proc.stdout.write(fragment(2))
     expect(b.got.map((m) => m.kind)).toEqual(['init', 'fragment'])
+    expect((b.got[1] as { data: Buffer }).data.equals(fragment(1))).toBe(true)
+    proc.stdout.write(fragment(2))
+    expect(b.got.map((m) => m.kind)).toEqual(['init', 'fragment', 'fragment'])
+    expect((b.got[2] as { data: Buffer }).data.equals(fragment(2))).toBe(true)
     expect(a.got).toHaveLength(3)
     expect(relay.subscriberCount).toBe(2)
+  })
+
+  it('a subscriber added while a fragment is being handed out gets it once, as its replay', () => {
+    const { relay, proc } = relayWith(new ManualClock(0))
+    const late = collect()
+    relay.subscribe((m) => { if (m.kind === 'fragment' && late.got.length === 0) relay.subscribe(late.fn) })
+    relay.start()
+    proc.stdout.write(Buffer.concat([FTYP, MOOV, fragment(1), fragment(2)]))
+    expect(late.got.map((m) => m.kind)).toEqual(['init', 'fragment', 'fragment'])
+    expect((late.got[1] as { data: Buffer }).data.equals(fragment(1))).toBe(true)
+    expect((late.got[2] as { data: Buffer }).data.equals(fragment(2))).toBe(true)
   })
 
   it('stops ffmpeg and frees the source once the last viewer has been gone for the grace period', () => {
@@ -97,17 +114,41 @@ describe('RtspRelay', () => {
     expect(late.got).toEqual([{ kind: 'ended', reason: 'no viewer left' }])
   })
 
-  it('adds a periodic JPEG snapshot output when asked, without touching the MP4 relay', () => {
+  it('adds a JPEG snapshot output through a fourth pipe when asked, without touching the MP4 relay', () => {
     const ff = fakeFfmpeg()
+    const images = new PassThrough()
+    Object.assign(ff.proc, { stdio: [null, ff.proc.stdout, ff.proc.stderr, images] })
+    const onImage = vi.fn()
     const relay = new RtspRelay({
       ffmpegPath: 'ffmpeg', url: 'rtsps://cam/x', clock: new ManualClock(0), onIdle: vi.fn(), spawnImpl: ff.spawnImpl,
-      snapshot: { path: '/tmp/cam.jpg', intervalMs: 10_000, width: 480 },
+      snapshot: { intervalMs: 10_000, width: 480, onImage },
     })
     relay.start()
-    const args = (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1] as string[]
+    const [, args, options] = (ff.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]! as [string, string[], { stdio: string[] }]
     const mp4 = args.indexOf('pipe:1')
-    expect(args.slice(mp4 + 1)).toEqual(['-map', '0:v:0', '-vf', 'fps=1/10,scale=480:-2', '-q:v', '4', '-update', '1', '-atomic_writing', '1', '-f', 'image2', '/tmp/cam.jpg'])
+    // the first decoded frame at once, then one per interval; a single encoder thread, otherwise
+    // each image only comes out when the next one is chosen
+    expect(args.slice(mp4 + 1)).toEqual([
+      '-map', '0:v:0', '-vf', "select='isnan(prev_selected_t)+gte(t-prev_selected_t\\,10)',scale=480:-2",
+      '-fps_mode', 'vfr', '-threads', '1', '-q:v', '4', '-f', 'image2pipe', '-c:v', 'mjpeg', 'pipe:3',
+    ])
     expect(args.slice(0, mp4)).toEqual(expect.arrayContaining(['-c', 'copy']))
+    expect(options.stdio).toEqual(['ignore', 'pipe', 'pipe', 'pipe'])
+    // images are handed over whole, wherever the chunks are cut
+    const a = jpeg(0x0a), b = jpeg(0x0b), two = Buffer.concat([a, b])
+    images.write(two.subarray(0, 5))
+    images.write(two.subarray(5, a.length + 3))
+    expect(onImage).toHaveBeenCalledTimes(1)
+    images.write(two.subarray(a.length + 3))
+    expect(onImage.mock.calls.map(([img]) => (img as Buffer).toString('hex'))).toEqual([a.toString('hex'), b.toString('hex')])
+  })
+
+  it('without a snapshot, ffmpeg gets no fourth pipe', () => {
+    const { relay, spawnImpl } = relayWith(new ManualClock(0))
+    relay.start()
+    const [, args, options] = (spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]! as [string, string[], { stdio: string[] }]
+    expect(options.stdio).toEqual(['ignore', 'pipe', 'pipe'])
+    expect(args).not.toContain('pipe:3')
   })
 
   it('a relay that never gets a viewer reports itself idle after the grace period', () => {
@@ -162,7 +203,8 @@ describe('RtspRelay source address', () => {
     const args = (spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1] as string[]
     expect(args.join(' ')).not.toContain('auth=')
     const { list, text } = sourceOf(args)
-    expect(text).toBe(['ffconcat version 1.0', "file 'rtsps://cam/x?auth=t'", 'option rtsp_transport tcp', 'option fflags nobuffer', ''].join('\n'))
+    // no `fflags nobuffer`: it threw away the packets read while ffmpeg analyses the stream, first keyframe included
+    expect(text).toBe(['ffconcat version 1.0', "file 'rtsps://cam/x?auth=t'", 'option rtsp_transport tcp', ''].join('\n'))
     if (process.platform !== 'win32') expect(statSync(list).mode & 0o777).toBe(0o600)
     proc.exitCode = 0
     proc.emit('exit', 0, null)

@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-26] update | Caméras Nest : vignettes en mémoire, première image tout de suite, direct rejoint sans attente
+
+**Déclencheur** : demande de l'utilisateur : première image d'un flux trop lente, surtout sur la vue Caméras, images très anciennes après une longue pause, et le moins d'écritures disque possible (serveur sous Windows).
+
+**Pages modifiées** :
+- `3_plugins/3_5_google-nest.md` - section datée : vignettes par `pipe:3` gardées en mémoire, image figée sur le disque (fermeture, 5 min, arrêt) et rechargée au démarrage, `select` + `-threads 1` (causes du retard mesurées), dernier fragment rejoué, mesures sur une vraie caméra, piste `fflags nobuffer` relevée, ordre du rang 0 de la rotation relevé ; renvoi « Dépassé » sous l'ancienne description du JPEG réécrit sur le disque. Seconde section datée : `fflags nobuffer` retiré (liste `concat` et ligne de commande), mesures avant / après sur une vraie caméra ; renvois sous la description de la liste `concat` du 2026-10-24 et sous la piste.
+- `4_ui/4_3_vues-lumieres-ouvrants-cameras.md` - section datée : la dernière vignette reste affichée pendant la connexion du direct, jusqu'à ce que la vidéo joue.
+
+**Index** : catalogues mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-10-26] update | Le brouillard météo s'étire avec la caméra
 
 **Déclencheur** : brouillard sur la vraie maison ; vue 3D grise sur téléphone et en vue « Jardin » sur ordinateur, lisible en vue « Tout » sur ordinateur.

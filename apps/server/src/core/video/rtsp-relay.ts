@@ -3,9 +3,11 @@ import { randomBytes } from 'node:crypto'
 import { unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { Readable } from 'node:stream'
 import type { Logger } from 'pino'
 import type { Clock } from '../clock'
 import { Mp4BoxParser, mseMimeFromMoov, type Mp4Box } from './fmp4'
+import { JpegSplitter } from './jpeg'
 
 // RTSP → fragmented MP4 relay, to show in a browser a camera that only speaks RTSP (the house's
 // whole Nest device set). ONE ffmpeg process per watched camera, whatever the number of screens: it
@@ -17,7 +19,9 @@ import { Mp4BoxParser, mseMimeFromMoov, type Mp4Box } from './fmp4'
 // `frag_keyframe`: one fragment per group of pictures, so EACH fragment starts with a keyframe — a
 // subscriber arriving midway can decode from the first fragment received, without us having to
 // locate keyframes ourselves. The price: the fragment is only written at the NEXT keyframe, hence a
-// latency of one group of pictures (one to two seconds on these cameras).
+// latency of one group of pictures (four seconds on the doorbell). So that a subscriber arriving
+// midway does not wait for the next one, it receives the LAST fragment right after the header: the
+// image is there at once, a group of pictures behind, as it would be anyway.
 //
 // `rotateSource(url)`: the source may change address midway (at Google, an RTSP session expires
 // after five minutes and extending it gives a NEW token, to use on a new connection — the old one
@@ -45,12 +49,13 @@ export interface RtspRelayOptions {
    */
   onEnded?: (reason: string) => void
   /**
-   * JPEG thumbnail written to `path` every `intervalMs` (atomic write: the reader never sees a
-   * half-written file). It is the only output that DECODES the video — the MP4 relay only copies —
-   * hence a few percent of CPU per camera, whatever the interval: decoding covers every frame, the
-   * interval only picks the ones that get encoded.
+   * JPEG thumbnail handed to `onImage` as soon as the stream starts, then every `intervalMs`. It
+   * travels through a pipe, never through the disk: up to the caller to keep it in memory. It is the
+   * only output that DECODES the video — the MP4 relay only copies — hence a few percent of CPU per
+   * camera, whatever the interval: decoding covers every frame, the interval only picks the ones
+   * that get encoded.
    */
-  snapshot?: { path: string; intervalMs: number; width: number }
+  snapshot?: { intervalMs: number; width: number; onImage: (jpeg: Buffer) => void }
   /** Injection for tests: replaces `spawn`. */
   spawnImpl?: typeof spawn
 }
@@ -67,11 +72,15 @@ export function redactStreamUrl(text: string): string {
  * on its command line, any local account would read it (`ps`, `/proc/<pid>/cmdline`). ffmpeg reads
  * its `-i` from nowhere else (`-/i file` is refused: `-i` separates the inputs), hence a one-entry
  * `concat` list. The RTSP options go with the entry: they apply to the stream the list opens.
+ *
+ * No `fflags nobuffer`, here or on the command line: it makes ffmpeg throw away the packets read
+ * while it analyses the stream, so the first keyframe was lost and the first picture came one group
+ * of pictures later (measured on a real camera, see the Nest page of the wiki, 2026-10-26).
  */
 export function writeSourceList(url: string): string {
   const path = join(tmpdir(), `kasbah-rtsp-${randomBytes(8).toString('hex')}.ffconcat`)
   const quoted = url.replaceAll("'", "'\\''")
-  writeFileSync(path, `ffconcat version 1.0\nfile '${quoted}'\noption rtsp_transport tcp\noption fflags nobuffer\n`, { mode: 0o600 })
+  writeFileSync(path, `ffconcat version 1.0\nfile '${quoted}'\noption rtsp_transport tcp\n`, { mode: 0o600 })
   return path
 }
 
@@ -84,6 +93,7 @@ function removeSourceList(path: string): void {
 interface Source {
   proc: ChildProcessWithoutNullStreams
   parser: Mp4BoxParser
+  jpegs: JpegSplitter
   ftyp?: Buffer
   moov?: Buffer
   moof?: Buffer
@@ -96,6 +106,8 @@ export class RtspRelay {
   /** The replacement source, waiting for its header and its first fragment. */
   private next: Source | null = null
   private init: { mime: string; data: Buffer } | undefined
+  /** Last complete fragment of the current source, replayed to a subscriber arriving midway. */
+  private lastFragment: Buffer | undefined
   private pendingMoof: Buffer | undefined
   private readonly subscribers = new Set<RelaySubscriber>()
   private idleTimer: unknown = null
@@ -130,6 +142,7 @@ export class RtspRelay {
     this.subscribers.add(fn)
     this.disarmIdle()
     if (this.init) fn({ kind: 'init', ...this.init })
+    if (this.init && this.lastFragment) fn({ kind: 'fragment', data: this.lastFragment })
   }
 
   unsubscribe(fn: RelaySubscriber): void {
@@ -147,9 +160,8 @@ export class RtspRelay {
   private launch(url: string): Source {
     const list = writeSourceList(url)
     const args = [
-      // `-y`: the thumbnail is rewritten in place; without it ffmpeg refuses an existing file and stops
-      '-y', '-hide_banner', '-loglevel', 'warning', '-nostdin',
-      '-fflags', 'nobuffer', '-flags', 'low_delay',
+      '-hide_banner', '-loglevel', 'warning', '-nostdin',
+      '-flags', 'low_delay',
       '-protocol_whitelist', 'file,tcp,tls,rtsp,rtsps,rtp,udp,crypto',
       '-f', 'concat', '-safe', '0', '-i', list,
       '-c', 'copy', '-f', 'mp4', '-movflags', 'empty_moov+default_base_moof+frag_keyframe', '-reset_timestamps', '1',
@@ -157,15 +169,23 @@ export class RtspRelay {
     ]
     const snap = this.opts.snapshot
     if (snap) {
+      // `select` keeps the first decoded frame then one per interval: `fps=1/10` only gave its first
+      // image after one and a half intervals (measured with ffmpeg 9.0.2). `-threads 1`: with several
+      // threads the JPEG encoder only hands an image over once the NEXT one is chosen, so every image
+      // came one interval late — measured, and gone with a single thread.
+      const everyS = Math.max(1, Math.round(snap.intervalMs / 1000))
       args.push(
-        '-map', '0:v:0', '-vf', `fps=1/${Math.max(1, Math.round(snap.intervalMs / 1000))},scale=${snap.width}:-2`,
-        '-q:v', '4', '-update', '1', '-atomic_writing', '1', '-f', 'image2', snap.path,
+        '-map', '0:v:0', '-vf', `select='isnan(prev_selected_t)+gte(t-prev_selected_t\\,${everyS})',scale=${snap.width}:-2`,
+        '-fps_mode', 'vfr', '-threads', '1', '-q:v', '4', '-f', 'image2pipe', '-c:v', 'mjpeg', 'pipe:3',
       )
     }
     const spawnImpl = this.opts.spawnImpl ?? spawn
-    const proc = spawnImpl(this.opts.ffmpegPath, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }) as unknown as ChildProcessWithoutNullStreams
-    const source: Source = { proc, parser: new Mp4BoxParser(), stderrTail: '' }
+    const stdio: ('ignore' | 'pipe')[] = snap ? ['ignore', 'pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe']
+    const proc = spawnImpl(this.opts.ffmpegPath, args, { stdio, windowsHide: true }) as unknown as ChildProcessWithoutNullStreams
+    const source: Source = { proc, parser: new Mp4BoxParser(), jpegs: new JpegSplitter(), stderrTail: '' }
     proc.stdout.on('data', (chunk: Buffer) => this.onData(source, chunk))
+    const images = (proc.stdio as unknown[] | undefined)?.[3] as Readable | undefined
+    images?.on('data', (chunk: Buffer) => this.onImageData(source, chunk))
     // ffmpeg only writes to stderr when something is wrong (`-loglevel warning`): the tail is kept for diagnosis
     proc.stderr.on('data', (chunk: Buffer) => {
       // ffmpeg copies the URL into its messages, access token included: it is erased before logging
@@ -217,6 +237,14 @@ export class RtspRelay {
     }
   }
 
+  /** Thumbnails: only those of the current source; a replacement's become valid once it takes over. */
+  private onImageData(source: Source, chunk: Buffer): void {
+    if (source !== this.current) return
+    const dropped = source.jpegs.dropped
+    for (const jpeg of source.jpegs.push(chunk)) this.opts.snapshot?.onImage(jpeg)
+    if (source.jpegs.dropped > dropped) this.opts.logger?.warn({ bytes: source.jpegs.dropped - dropped }, 'unreadable bytes in the thumbnail stream')
+  }
+
   private onCurrentBox(box: Mp4Box): void {
     switch (box.type) {
       case 'ftyp': this.current!.ftyp = box.data; break
@@ -225,6 +253,7 @@ export class RtspRelay {
         if (!mime) { this.stop('unsupported codecs (no avcC in moov)'); return }
         const ftyp = this.current!.ftyp
         this.init = { mime, data: ftyp ? Buffer.concat([ftyp, box.data]) : box.data }
+        this.lastFragment = undefined
         this.opts.logger?.info({ mime }, 'rtsp relay ready')
         this.broadcast({ kind: 'init', ...this.init })
         break
@@ -232,7 +261,8 @@ export class RtspRelay {
       case 'moof': this.pendingMoof = box.data; break
       case 'mdat':
         if (this.pendingMoof) {
-          this.broadcast({ kind: 'fragment', data: Buffer.concat([this.pendingMoof, box.data]) })
+          this.lastFragment = Buffer.concat([this.pendingMoof, box.data])
+          this.broadcast({ kind: 'fragment', data: this.lastFragment })
           this.pendingMoof = undefined
         }
         break
@@ -256,9 +286,10 @@ export class RtspRelay {
         this.next = null
         this.pendingMoof = undefined
         this.init = { mime, data: source.ftyp ? Buffer.concat([source.ftyp, source.moov]) : source.moov }
+        this.lastFragment = Buffer.concat([moof, box.data])
         this.opts.logger?.info({ mime }, 'rtsp relay switched source')
         this.broadcast({ kind: 'init', ...this.init })
-        this.broadcast({ kind: 'fragment', data: Buffer.concat([moof, box.data]) })
+        this.broadcast({ kind: 'fragment', data: this.lastFragment })
         if (old) this.kill(old)
         break
       }
@@ -279,7 +310,8 @@ export class RtspRelay {
   }
 
   private broadcast(msg: RelayMessage): void {
-    for (const fn of this.subscribers) fn(msg)
+    // a copy: a subscriber added by one of these calls already got this fragment as its replay
+    for (const fn of [...this.subscribers]) fn(msg)
   }
 
   private finish(reason: string): void {
@@ -292,5 +324,6 @@ export class RtspRelay {
     this.subscribers.clear()
     if (this.next) { this.kill(this.next); this.next = null }
     this.current = null
+    this.lastFragment = undefined
   }
 }

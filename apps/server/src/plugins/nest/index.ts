@@ -3,10 +3,11 @@ import type { FastifyInstance } from 'fastify'
 import { randomBytes } from 'node:crypto'
 import type { spawn } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
+import { readdir, readFile, stat, utimes } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { writeFileAtomic } from '../../core/atomic-file'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { createPoller } from '../../core/poll'
 import type { FetchLike } from '../../core/sse'
@@ -96,6 +97,12 @@ const GRID_DWELL_MS = 20_000
 /** Width of the JPEG thumbnails. */
 const SNAPSHOT_WIDTH = 480
 /**
+ * Thumbnails live in memory; the disk only gets the last image of each camera — when its session
+ * closes, every five minutes while it runs, and when the plugin stops — so that a restart shows it
+ * again. One image every 10 s per camera rewritten on disk was what this avoids.
+ */
+const SNAPSHOT_SAVE_MS = 5 * 60_000
+/**
  * A camera whose stream fails (off, on standby: Google gives the URL, its server answers 404) is not
  * retried right away — otherwise the rotation would ask for it again every 5 s and exhaust the
  * Google quota. Wait doubled on each failure, capped.
@@ -116,6 +123,8 @@ interface StreamSession { relay: RtspRelay; url: string; extensionToken: string;
 interface GridHold { since: number; hold: RelaySubscriber }
 /** Camera whose stream failed: from when to retry, and how many failures in a row. */
 interface GridFailure { retryAt: number; failures: number; reason: string }
+/** A camera's last thumbnail, and the date of the one last saved to disk (`undefined`: never). */
+interface Snapshot { jpeg: Buffer; at: number; savedAt?: number }
 
 export interface NestPluginDeps {
   /** Injection for tests (simulated fetch). */
@@ -159,7 +168,10 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
   /** Cameras whose thumbnail the user stopped from the view (stop button): out of rotation until resumed. */
   const gridPaused = new Set<string>()
   let gridTimer: unknown = null
-  /** Folder of the JPEG thumbnails (one per camera, rewritten in place by ffmpeg). */
+  /** Last thumbnail of each camera, by externalId: in memory, saved to disk now and then. */
+  const snapshots = new Map<string, Snapshot>()
+  let snapshotSaveTimer: unknown = null
+  /** Folder where the last thumbnail of each camera outlives the server (file date = image date). */
   const snapshotDir = join(tmpdir(), 'kasbah-nest-snapshots')
   const snapshotPath = (externalId: string) => join(snapshotDir, `${externalId}.jpg`)
   /** `state`s issued by /auth/url and expected on return: a linking is only accepted if we started it. */
@@ -281,7 +293,10 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       ffmpegPath: config!.FFMPEG_PATH, url: started.streamUrls.rtspUrl, clock: ctx!.clock, logger: ctx!.logger,
       idleGraceMs: STREAM_IDLE_MS, onIdle: () => void closeStream(externalId, 'no viewer left'),
       onEnded: (reason) => void closeStream(externalId, `relay ended: ${reason}`),
-      snapshot: { path: snapshotPath(externalId), intervalMs: config!.NEST_SNAPSHOT_MS, width: SNAPSHOT_WIDTH },
+      snapshot: {
+        intervalMs: config!.NEST_SNAPSHOT_MS, width: SNAPSHOT_WIDTH,
+        onImage: (jpeg) => { snapshots.set(externalId, { jpeg, at: ctx!.clock.now(), savedAt: snapshots.get(externalId)?.savedAt }) },
+      },
       ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}),
     })
     const session: StreamSession = { relay, url: started.streamUrls.rtspUrl, extensionToken: started.streamExtensionToken, extendTimer: null }
@@ -312,6 +327,7 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     const started = session.relay.ready
     session.relay.stop(reason)
     log().info({ externalId, reason }, 'rtsp stream closed')
+    await saveSnapshot(externalId)                      // the image that stays on screen from now on
     // A session whose stream never started (camera off: Google gives the URL, its server answers
     // 404) has nothing to release — and each command counts in Google's per-minute quota, which seven
     // cameras that are off, restarted together, are enough to exhaust. It expires on its own in five minutes.
@@ -331,10 +347,34 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     return [...entries].filter(([, d]) => isCamera(d) && streamProtocols(d).includes('rtsp')).map(([id]) => id)
   }
 
-  /** Date of a camera's thumbnail (file mtime), or `undefined` without a thumbnail. */
-  async function snapshotAt(externalId: string): Promise<number | undefined> {
-    try { return Math.round((await stat(snapshotPath(externalId))).mtimeMs) }
-    catch { return undefined }
+  /** Date of a camera's thumbnail, or `undefined` without a thumbnail. */
+  const snapshotAt = (externalId: string): number | undefined => snapshots.get(externalId)?.at
+
+  /** Writes a camera's last thumbnail to disk if it changed since the last save; never throws. */
+  async function saveSnapshot(externalId: string): Promise<void> {
+    const s = snapshots.get(externalId)
+    if (!s || s.savedAt === s.at) return
+    s.savedAt = s.at                                    // before writing: a second call meanwhile has nothing to do
+    try {
+      await writeFileAtomic(snapshotPath(externalId), s.jpeg)
+      await utimes(snapshotPath(externalId), new Date(s.at), new Date(s.at))
+    } catch (err) { log().warn({ err, externalId }, 'thumbnail not saved to disk') }
+  }
+
+  const saveSnapshots = () => Promise.all([...snapshots.keys()].map(saveSnapshot))
+
+  /** Thumbnails left by the previous run, back in memory with the date of their image. */
+  async function loadSnapshots(): Promise<void> {
+    let names: string[]
+    try { names = await readdir(snapshotDir) } catch { return }
+    await Promise.all(names.filter((n) => n.endsWith('.jpg')).map(async (name) => {
+      const externalId = name.slice(0, -'.jpg'.length)
+      try {
+        const [jpeg, info] = await Promise.all([readFile(join(snapshotDir, name)), stat(join(snapshotDir, name))])
+        const at = Math.round(info.mtimeMs)
+        if (!snapshots.has(externalId)) snapshots.set(externalId, { jpeg, at, savedAt: at })
+      } catch { /* gone meanwhile */ }
+    }))
   }
 
   function gridFailure(externalId: string, reason: string): void {
@@ -401,11 +441,11 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
     //  2. given back by the rotation (oldest image first);
     //  3. failed, whose delay has just expired — six cameras that are off to retry would otherwise
     //     make the only working one wait more than a minute (seen: "82 s ago" on an active camera).
-    const dated = await Promise.all(candidates.map(async (id) => {
-      const at = await snapshotAt(id), released = gridReleasedAt.get(id)
+    const dated = candidates.map((id) => {
+      const at = snapshotAt(id), released = gridReleasedAt.get(id)
       const tier = gridFailed.has(id) ? 3 : released !== undefined ? 2 : at !== undefined ? 0 : 1
       return [id, tier, Math.max(at ?? 0, released ?? 0)] as const
-    }))
+    })
     dated.sort((a, b) => a[1] - b[1] || a[2] - b[2])
     for (const [id] of dated.slice(0, free)) acquireGrid(id)
   }
@@ -433,6 +473,8 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       config = c.config as NestConfig                    // already validated/transformed by the host
       if (!config.NEST_PROJECT_ID || !config.NEST_CLIENT_ID || !config.NEST_CLIENT_SECRET) return
       mkdirSync(snapshotDir, { recursive: true })
+      await loadSnapshots()
+      snapshotSaveTimer = c.clock.setInterval(() => void saveSnapshots(), SNAPSHOT_SAVE_MS)
       client = new NestClient({
         projectId: config.NEST_PROJECT_ID, clientId: config.NEST_CLIENT_ID, clientSecret: config.NEST_CLIENT_SECRET,
         redirectUri: config.NEST_REDIRECT_URI, clock: c.clock, logger: c.logger,
@@ -484,6 +526,8 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       eventsPoller = null
       stopGrid()
       await Promise.all([...streams.keys()].map((id) => closeStream(id, 'plugin stopped')))
+      if (snapshotSaveTimer !== null) { ctx?.clock.clearInterval(snapshotSaveTimer); snapshotSaveTimer = null }
+      await saveSnapshots()
       client = null
     },
 
@@ -555,15 +599,13 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       // (it is what keeps the sessions open; without a signal for 15 s, they close).
       app.get<{ Querystring: { watch?: string } }>('/cameras/snapshots', async (req) => {
         if (req.query.watch === '1' && client?.linked) watchGrid()
-        const ids = rtspCameraIds()
-        const dates = await Promise.all(ids.map(async (id) => [id, await snapshotAt(id)] as const))
-        const snapshots: Record<string, { at?: number; live: boolean; inactive?: boolean }> = {}
-        for (const [id, at] of dates) {
-          const failed = gridFailed.get(id), paused = gridPaused.has(id)
+        const list: Record<string, { at?: number; live: boolean; inactive?: boolean }> = {}
+        for (const id of rtspCameraIds()) {
+          const at = snapshotAt(id), failed = gridFailed.get(id), paused = gridPaused.has(id)
           if (at === undefined && !failed && !paused) continue
-          snapshots[id] = { ...(at !== undefined ? { at } : {}), live: streams.has(id), ...(failed ? { inactive: true } : {}), ...(paused ? { paused: true } : {}) }
+          list[id] = { ...(at !== undefined ? { at } : {}), live: streams.has(id), ...(failed ? { inactive: true } : {}), ...(paused ? { paused: true } : {}) }
         }
-        return { snapshots, budget: config?.NEST_LIVE_BUDGET ?? 0, sessions: streams.size }
+        return { snapshots: list, budget: config?.NEST_LIVE_BUDGET ?? 0, sessions: streams.size }
       })
 
       // A tile's stop button: the thumbnail of THIS camera stops (its session is released, the image
@@ -581,12 +623,9 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       app.get<{ Params: { id: string } }>('/cameras/:id/snapshot.jpg', async (req, reply) => {
         const device = entries.get(req.params.id)
         if (!device || !isCamera(device)) return sendError(reply, 404, 'NOT_FOUND', `unknown Nest camera ${req.params.id}`)
-        try {
-          const [buf, at] = await Promise.all([readFile(snapshotPath(req.params.id)), snapshotAt(req.params.id)])
-          return reply.type('image/jpeg').header('cache-control', 'no-store').header('x-kasbah-snapshot-at', String(at ?? '')).send(buf)
-        } catch {
-          return sendError(reply, 404, 'NOT_FOUND', 'no snapshot yet')
-        }
+        const s = snapshots.get(req.params.id)
+        if (!s) return sendError(reply, 404, 'NOT_FOUND', 'no snapshot yet')
+        return reply.type('image/jpeg').header('cache-control', 'no-store').header('x-kasbah-snapshot-at', String(s.at)).send(s.jpeg)
       })
 
       // Last raw list received from Google: used to capture a real fixture (see __fixtures__).

@@ -1,6 +1,6 @@
 import type { spawn } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { mkdirSync, readFileSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -14,7 +14,7 @@ import { DEVICES_RESPONSE, SDM_403, THERMOSTAT, TOKEN_INVALID_GRANT, TOKEN_OK, T
 import { createNestPlugin, nestConfigSchema } from './index'
 
 const flush = async () => { for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0)) }
-/** Like `flush`, but also lets the thumbnails' `fs.stat` calls through (real file system). */
+/** Like `flush`, but also lets the thumbnails' disk reads and writes through (real file system). */
 const settle = () => new Promise((r) => setTimeout(r, 25))
 /** Grace period of a relay without subscribers (the plugin's STREAM_IDLE_MS). */
 const GRID_GRACE = 8000
@@ -88,11 +88,12 @@ function fakeGoogle(opts: { devices?: unknown; devicesStatus?: number; refreshSt
   return { fetchImpl, calls, tokenBodies, commands, listCalls, pushEvent, acks }
 }
 
-/** Fake ffmpeg: we only count the launches and the stops. */
+/** Fake ffmpeg: we count the launches and the stops; `stdio[3]` lets a test hand out a thumbnail. */
 function fakeSpawn() {
-  const procs: { kill: ReturnType<typeof vi.fn> }[] = []
+  const procs: { kill: ReturnType<typeof vi.fn>; stdout: PassThrough; stdio: (PassThrough | null)[] }[] = []
   const spawnImpl = vi.fn(() => {
-    const proc = Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), exitCode: null as number | null, kill: vi.fn() })
+    const stdout = new PassThrough(), stderr = new PassThrough()
+    const proc = Object.assign(new EventEmitter(), { stdout, stderr, stdio: [null, stdout, stderr, new PassThrough()], exitCode: null as number | null, kill: vi.fn() })
     proc.kill.mockImplementation(() => { proc.exitCode = 0; proc.emit('exit', null, 'SIGTERM'); return true })
     procs.push(proc)
     return proc
@@ -289,7 +290,7 @@ describe('nest plugin', () => {
     expect(google.commands.filter((c) => rtsp(c) === 'GenerateRtspStream').map((c) => c.id).sort()).toEqual(['DEVICE2', 'DEVICE5', 'DEVICE8'])
     expect(ffmpeg.procs).toHaveLength(3)
     const args = (ffmpeg.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1] as string[]
-    expect(args).toEqual(expect.arrayContaining(['-update', '1', '-f', 'image2']))
+    expect(args).toEqual(expect.arrayContaining(['-f', 'image2pipe', 'pipe:3']))
     expect(plugin.health!().detail).toContain('3 live stream(s)')
     // without a written thumbnail (no real ffmpeg), the list is empty but the route answers
     expect(await (await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots' })).json()).toMatchObject({ snapshots: {}, budget: 10, sessions: 3 })
@@ -398,6 +399,50 @@ describe('nest plugin', () => {
     expect(opened().filter((id) => id === first)).toHaveLength(2)
     expect((await app.inject({ method: 'PUT', url: '/api/plugins/nest/cameras/DEVICE8/snapshots', payload: { enabled: 'yes' } })).statusCode).toBe(400)
     await plugin.stop()
+  })
+
+  it('cameras view: thumbnails live in memory; the disk gets the last one every five minutes and at close, and a restart finds it', async () => {
+    const jpeg = (fill: number) => Buffer.from([0xff, 0xd8, 0xff, 0xda, 0x00, 0x04, 0x01, 0x00, fill, 0x12, 0xff, 0xd9])
+    const google = fakeGoogle()
+    const ffmpeg = fakeSpawn()
+    const { plugin, clock } = await linked(google, {}, ffmpeg)
+    const app = await routes(plugin)
+    await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' })
+    await settle()
+    const id = google.commands.find((c) => c.command.endsWith('GenerateRtspStream'))!.id
+    const file = join(tmpdir(), 'kasbah-nest-snapshots', `${id}.jpg`)
+    const onDisk = () => { try { return readFileSync(file).toString('hex') } catch { return null } }
+    const mtime = () => Math.round(statSync(file).mtimeMs)
+    try {
+      expect(onDisk()).toBeNull()
+      // an image from ffmpeg: served at once, from memory, with its date — nothing written yet
+      ffmpeg.procs[0]!.stdio[3]!.write(jpeg(1))
+      await settle()
+      const atA = clock.now()
+      const served = await app.inject({ method: 'GET', url: `/api/plugins/nest/cameras/${id}/snapshot.jpg` })
+      expect(served.statusCode).toBe(200)
+      expect(served.rawPayload.toString('hex')).toBe(jpeg(1).toString('hex'))
+      expect((await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots' })).json().snapshots[id]).toMatchObject({ at: atA })
+      expect(onDisk()).toBeNull()
+      // five minutes later, still watched: the last image goes to disk, dated like the image
+      while (clock.now() < 5 * 60_000) { clock.advance(8000); await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' }); await settle() }
+      expect(onDisk()).toBe(jpeg(1).toString('hex'))
+      expect(mtime()).toBe(atA)
+      // a newer image stays in memory until the session closes (here: the plugin stops)
+      ffmpeg.procs[0]!.stdio[3]!.write(jpeg(2))
+      await settle()
+      const atB = clock.now()
+      expect(onDisk()).toBe(jpeg(1).toString('hex'))
+      await plugin.stop()
+      expect(onDisk()).toBe(jpeg(2).toString('hex'))
+      expect(mtime()).toBe(atB)
+      // the next run shows it again, with the date of the image
+      const next = await linked(fakeGoogle(), {}, fakeSpawn())
+      const app2 = await routes(next.plugin)
+      expect((await app2.inject({ method: 'GET', url: `/api/plugins/nest/cameras/${id}/snapshot.jpg` })).rawPayload.toString('hex')).toBe(jpeg(2).toString('hex'))
+      expect((await app2.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots' })).json().snapshots[id]).toMatchObject({ at: atB })
+      await next.plugin.stop()
+    } finally { try { unlinkSync(file) } catch { /* not written */ } }
   })
 
   it('cameras view: after a restart, a camera that gave an image last time is reopened before the others', async () => {

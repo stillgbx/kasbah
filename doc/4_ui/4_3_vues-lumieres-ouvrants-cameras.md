@@ -1,6 +1,6 @@
 # Vues Lumières, Ouvrants et Caméras
 
-> Dernière mise à jour : 2026-10-25
+> Dernière mise à jour : 2026-10-26
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre les vues Lumières, Ouvrants et Caméras (bandes par niveau, `RoomBands`), les contrôles d'ouvrant et la position favorite, les interrupteurs maîtres, les cartes et tuiles caméra. Elle est née du découpage de
@@ -910,3 +910,26 @@ jamais selon le choix. Mesuré dans la preview `kasbah-mock` (fiche du volet sol
 immobile et aucun débordement à 1280 et 375 px, zooms 1 / 1,25 / 1,5, fr et en.
 
 Sources : `apps/web/src/components/controls/LightHistoryChart.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.
+
+### Mise à jour 2026-10-26 — la dernière vignette pendant la connexion du direct
+
+Ouvrir un direct demandait de regarder un lecteur noir marqué « Connexion au flux… » pendant 7 à
+14 s sur une session froide (mesuré sur une vraie caméra). `CameraVideo.vue` garde désormais la
+**dernière vignette**, avec son âge en haut à droite, pendant toute la connexion, et ne la retire
+qu'à l'événement `playing` de la vidéo, quand une image décodée la remplace vraiment. L'en-tête MP4
+arrive en effet plusieurs secondes avant le premier fragment : l'état « lecture » commence avant
+qu'il y ait une image à montrer.
+
+- **Vue Caméras** : la tuile a déjà la date de sa vignette (`snapshotAt`, sondée par la vue) ; passer
+  d'Aperçu à Direct ne fait donc plus disparaître l'image.
+- **Carte détail** : elle n'a pas cette date ; `CameraVideo` la lit lui-même au lancement du direct
+  (`cameraSnapshots(plugin, false)`, **sans** `watch`, donc sans tenir les sessions des vignettes). La
+  date retenue porte l'id de la caméra : un composant réutilisé pour une autre caméra ne montre pas
+  l'image de la précédente.
+- Sans vignette connue, rien ne change : lecteur noir et message de connexion.
+
+Vérifié sur la vraie maison, vue Caméras : image et « Connexion au flux… » de 0 à 7,2 s, puis l'image
+reste jusqu'à ce que la vidéo joue (13,7 s), sans noir entre les deux. Côté serveur, l'image vient
+désormais de la mémoire et un direct rejoint une session ouverte en 4 ms :
+`../3_plugins/3_5_google-nest.md`, même date. Tests : `components/controls/CameraVideo.test.ts`
+(carte détail avec et sans vignette, tuile qui passe en direct).

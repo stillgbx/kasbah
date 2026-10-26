@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue'
+import { parseDeviceId } from '@kasbah/shared'
 import { getTransport } from '../../api'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
@@ -12,6 +13,8 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // `autoplay`: the live stream starts on its own (detail card). Otherwise (Cameras view) the tile shows the
 // last JPEG thumbnail the server keeps up to date, with its age; there, the stop button stops the
 // thumbnail (`paused`, emitted to the view which tells the server) and a play button starts the live stream.
+// While the live stream connects, the last thumbnail stays on screen with its age, until the video
+// really plays: the detail card asks the server for its date itself, the Cameras view passes it.
 const props = withDefaults(defineProps<{ deviceId: string; autoplay?: boolean; snapshotAt?: number | null; inactive?: boolean; paused?: boolean; liveAllowed?: boolean }>(), { autoplay: true, snapshotAt: null, inactive: false, paused: false, liveAllowed: true })
 const emit = defineEmits<{ snapshots: [enabled: boolean]; live: [active: boolean] }>()
 
@@ -22,8 +25,23 @@ const muted = ref(true)
 const video = ref<HTMLVideoElement | null>(null)
 const now = ref(Date.now())
 let ageTimer: ReturnType<typeof setInterval> | null = null
-const snapshotUrl = computed(() => (props.snapshotAt ? getTransport().cameraSnapshotUrl(props.deviceId, props.snapshotAt) : null))
-const snapshotAgeS = computed(() => (props.snapshotAt ? Math.max(0, Math.round((now.value - props.snapshotAt) / 1000)) : 0))
+/** Thumbnail date read by the detail card itself (the Cameras view passes `snapshotAt`), for the camera it was read for. */
+const ownSnapshot = ref<{ deviceId: string; at: number } | null>(null)
+const shownAt = computed(() => props.snapshotAt ?? (ownSnapshot.value?.deviceId === props.deviceId ? ownSnapshot.value.at : null))
+const snapshotUrl = computed(() => (shownAt.value ? getTransport().cameraSnapshotUrl(props.deviceId, shownAt.value) : null))
+const snapshotAgeS = computed(() => (shownAt.value ? Math.max(0, Math.round((now.value - shownAt.value) / 1000)) : 0))
+/** The video has really started: until then, the thumbnail covers the black of the player. */
+const frameShown = ref(false)
+const showSnapshot = computed(() => !!snapshotUrl.value && (status.value === 'idle' || status.value === 'connecting' || (status.value === 'playing' && !frameShown.value)))
+
+async function loadOwnSnapshot() {
+  const deviceId = props.deviceId
+  const { pluginId, externalId } = parseDeviceId(deviceId)
+  try {
+    const at = (await getTransport().cameraSnapshots(pluginId, false))[externalId]?.at
+    if (at !== undefined && deviceId === props.deviceId) ownSnapshot.value = { deviceId, at }
+  } catch { /* no thumbnail: the player stays black while it connects, as before */ }
+}
 
 let ws: WebSocket | null = null
 let mediaSource: MediaSource | null = null
@@ -81,6 +99,7 @@ function start() {
   close()
   status.value = 'connecting'
   detail.value = ''
+  if (props.autoplay) void loadOwnSnapshot()
   fragmentS = 1
   lastEnd = 0
   mediaSource = new MediaSource()
@@ -130,6 +149,7 @@ function start() {
 }
 
 function close() {
+  frameShown.value = false
   ws?.close()
   ws = null
   queue.length = 0
@@ -165,17 +185,20 @@ function resume() {
   if (v && status.value === 'playing' && !document.hidden && v.paused) void v.play().catch(() => { /* gesture required */ })
 }
 function onPause() { setTimeout(resume, 300) }
+function onPlaying() { if (status.value === 'playing') frameShown.value = true }
 function toggleMute() { muted.value = !muted.value; if (video.value) video.value.muted = muted.value }
 
 onMounted(() => {
   document.addEventListener('visibilitychange', resume)
   video.value?.addEventListener('pause', onPause)
+  video.value?.addEventListener('playing', onPlaying)
   ageTimer = setInterval(() => { now.value = Date.now() }, 1000)
   if (props.autoplay) start()
 })
 onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', resume)
   video.value?.removeEventListener('pause', onPause)
+  video.value?.removeEventListener('playing', onPlaying)
   if (ageTimer) clearInterval(ageTimer)
   close()
 })
@@ -193,16 +216,16 @@ watch(() => mode.value === 'live', (live) => emit('live', live))
 <template>
   <div class="cam" :class="{ 'cam--tile': !autoplay }">
     <video ref="video" class="cam__video" :muted="muted" autoplay playsinline />
-    <img v-if="status === 'idle' && snapshotUrl" :src="snapshotUrl" class="cam__snapshot" alt="" />
+    <img v-if="showSnapshot" :src="snapshotUrl!" class="cam__snapshot" alt="" />
     <!-- state badge, always visible on a tile: live, preview or stopped -->
     <div v-if="!autoplay" class="cam__badge" :data-mode="mode">
       <span v-if="mode === 'live'" class="cam__dot" />{{ $t(`camera.video.mode.${mode}`) }}
     </div>
     <div v-if="status !== 'playing'" class="cam__overlay">
+      <span v-if="showSnapshot" class="cam__msg cam__msg--age">{{ snapshotAgeS >= 90 ? $t('camera.video.agoMin', { m: Math.round(snapshotAgeS / 60) }) : $t('camera.video.ago', { s: snapshotAgeS }) }}</span>
       <span v-if="status === 'connecting'" class="cam__msg">{{ $t('camera.video.connecting') }}</span>
-      <span v-else-if="status === 'idle' && snapshotUrl" class="cam__msg cam__msg--age">{{ snapshotAgeS >= 90 ? $t('camera.video.agoMin', { m: Math.round(snapshotAgeS / 60) }) : $t('camera.video.ago', { s: snapshotAgeS }) }}</span>
-      <span v-else-if="status === 'idle'" class="cam__msg">{{ $t(inactive ? 'camera.video.inactive' : autoplay ? 'camera.video.stopped' : 'camera.video.noSnapshot') }}</span>
-      <span v-else class="cam__msg">{{ $t(`camera.video.${status}`) }}<span v-if="detail" class="cam__detail"> · {{ detail }}</span></span>
+      <span v-else-if="status === 'idle' && !showSnapshot" class="cam__msg">{{ $t(inactive ? 'camera.video.inactive' : autoplay ? 'camera.video.stopped' : 'camera.video.noSnapshot') }}</span>
+      <span v-else-if="status !== 'idle'" class="cam__msg">{{ $t(`camera.video.${status}`) }}<span v-if="detail" class="cam__detail"> · {{ detail }}</span></span>
     </div>
     <div class="cam__bar">
       <!-- detail card: live playback / stop -->
