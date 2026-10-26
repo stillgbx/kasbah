@@ -70,8 +70,21 @@ export interface RtspRelayOptions {
   spawnImpl?: typeof spawn
 }
 
-/** Longest silence of the network connection before ffmpeg gives up: 10 s, in microseconds. */
-const RTSP_IO_TIMEOUT_US = 10_000_000
+/**
+ * Longest silence of the network connection before ffmpeg gives up: 20 s, in microseconds. Not
+ * less: for some cameras (those without audio, here) Google's server takes 10 s to describe the
+ * stream — measured twice on two cameras, 10.2 s with a 20 s timeout as with a 10 s one, and a 3 s
+ * timeout made them fail.
+ */
+const RTSP_IO_TIMEOUT_US = 20_000_000
+/**
+ * How long, and how many bytes, ffmpeg analyses the stream before writing its header: 0.5 s and
+ * 32 KB instead of its defaults. The description of the stream (SDP) already gives the codecs; the
+ * default analysis added 1.8 to 3.4 s to every cold start, the bounded one 0.2 to 0.5 s (measured on
+ * three cameras). ffmpeg then warns it cannot estimate the frame rate: a copy does not need it.
+ */
+const ANALYZE_US = 500_000
+const PROBE_BYTES = 32_768
 /** Longest fragment: half a second, in microseconds — what the live stream lags by, at least. */
 const FRAGMENT_US = 500_000
 /** Fragments kept since the last keyframe, at most (a minute at half a second each). */
@@ -97,11 +110,13 @@ export function redactStreamUrl(text: string): string {
  * `timeout` (microseconds) bounds each network read: by default there is none, and ffmpeg facing a
  * server that keeps the connection open but sends nothing waited forever (measured against a silent
  * local server: still waiting after 12 s without it, gone after 3 s with a 3 s timeout).
+ * `analyzeduration` and `probesize` bound the analysis of the stream before the header: see above.
  */
 export function writeSourceList(url: string): string {
   const path = join(tmpdir(), `kasbah-rtsp-${randomBytes(8).toString('hex')}.ffconcat`)
   const quoted = url.replaceAll("'", "'\\''")
-  writeFileSync(path, `ffconcat version 1.0\nfile '${quoted}'\noption rtsp_transport tcp\noption timeout ${RTSP_IO_TIMEOUT_US}\n`, { mode: 0o600 })
+  const options = [`rtsp_transport tcp`, `timeout ${RTSP_IO_TIMEOUT_US}`, `analyzeduration ${ANALYZE_US}`, `probesize ${PROBE_BYTES}`]
+  writeFileSync(path, `ffconcat version 1.0\nfile '${quoted}'\n${options.map((o) => `option ${o}\n`).join('')}`, { mode: 0o600 })
   return path
 }
 

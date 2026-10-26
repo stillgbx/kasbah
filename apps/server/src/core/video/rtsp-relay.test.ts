@@ -259,8 +259,12 @@ describe('RtspRelay source address', () => {
     expect(args.join(' ')).not.toContain('auth=')
     const { list, text } = sourceOf(args)
     // no `fflags nobuffer`: it threw away the packets read while ffmpeg analyses the stream, first keyframe included
-    // and a network timeout: without one, ffmpeg waited forever on a server that went silent
-    expect(text).toBe(['ffconcat version 1.0', "file 'rtsps://cam/x?auth=t'", 'option rtsp_transport tcp', 'option timeout 10000000', ''].join('\n'))
+    // a network timeout (without one, ffmpeg waited forever on a server that went silent; 20 s, as
+    // Google takes 10 s to describe some streams) and a bounded analysis (seconds off every cold start)
+    expect(text).toBe([
+      'ffconcat version 1.0', "file 'rtsps://cam/x?auth=t'", 'option rtsp_transport tcp', 'option timeout 20000000',
+      'option analyzeduration 500000', 'option probesize 32768', '',
+    ].join('\n'))
     if (process.platform !== 'win32') expect(statSync(list).mode & 0o777).toBe(0o600)
     proc.exitCode = 0
     proc.emit('exit', 0, null)

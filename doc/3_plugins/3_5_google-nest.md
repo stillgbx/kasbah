@@ -851,8 +851,48 @@ son flux (en-tête `avc1.4D001F` seul), environ 6 s pour que Google rende la ses
 la session et l'en-tête MP4 (analyse du flux par ffmpeg), contre 4 s ce matin sur une caméra avec
 son. Hypothèse non vérifiée : ffmpeg attend une piste audio annoncée qui ne vient pas
 (`analyzeduration`, `probesize`).
+*(Infirmée le même jour : ce sont environ 10 s du serveur de Google avant la description du flux — voir « Mise à jour 2026-10-26 (8) ».)*
 
 Tests : `fmp4.test.ts` (« startsWithKeyframe » sur les boîtes que ffmpeg écrit, drapeaux par
 échantillon, drapeaux absents), `rtsp-relay.test.ts` (coupe à 500 000 µs, rejeu depuis l'image clé,
 nouvelle série à l'image clé suivante). Le saut d'un écran lent jusqu'à l'image clé suivante n'est pas
 couvert par un test (route WebSocket).
+
+### Mise à jour 2026-10-26 (8) — départ à froid : où passe le temps, analyse du flux bornée
+
+Suite du départ à froid de 19,6 s relevé plus haut, à la demande de l'utilisateur (qui juge le direct
+« en gros à 2 s », contre environ 1 s dans l'appli Nest, laquelle passe par l'API privée de Google).
+
+**Mesuré sur les neuf caméras** (script hors dépôt : `GenerateRtspStream`, puis ffmpeg avec les options
+du relais en journal détaillé, heure de chaque étape) :
+
+| Étape | Caméras avec son | Caméras sans son (deux) |
+|---|---|---|
+| Google rend la session | 3,4 à 4,3 s (deux fois 9,5 et 12,3 s) | 3,6 à 5,0 s |
+| Connexion RTSP jusqu'à la description du flux (SDP) | 2,0 à 2,8 s | **10,2 à 10,3 s**, à chaque essai |
+| Analyse du flux par ffmpeg jusqu'à l'en-tête | 1,8 s environ | 0,2 à 3,4 s |
+
+L'hypothèse notée plus haut (ffmpeg qui attendrait une piste audio absente) est **fausse** : pour ces
+deux caméras, c'est le serveur RTSP de Google qui met une dizaine de secondes à décrire le flux. Ce
+n'est pas le délai réseau de ffmpeg : avec 20 s comme avec 10 s, la description arrive à 10,2 s ; avec
+3 s, ces caméras **échouent**. Rien à faire de notre côté pour ces 10 s.
+
+**Deux changements** (`core/video/rtsp-relay.ts`, `writeSourceList`) :
+
+- **Délai réseau porté de 10 à 20 s** (`RTSP_IO_TIMEOUT_US`) : 10 s passaient de justesse (10,2 s)
+  pour ces caméras. La surveillance des flux bloqués (20 s après l'en-tête) ne change pas.
+- **Analyse du flux bornée** : `option analyzeduration 500000` et `option probesize 32768` dans la
+  liste `concat`. La description du flux donne déjà les codecs ; l'analyse par défaut ajoutait 1,8 à
+  3,4 s, la bornée 0,2 à 0,5 s (mesuré sur trois caméras, avec et sans son). ffmpeg avertit alors
+  « not enough frames to estimate rate » : sans effet sur une copie.
+
+Vérifié sur la vraie maison : premières vignettes fraîches à 6,1 – 6,6 s de l'arrivée sur la vue pour
+les caméras avec son (environ 11 s ce matin), 14,3 et 15,3 s pour les deux sans son (les 10 s de
+Google) ; direct lu normalement sur les deux caméras sans son (1280 × 720, `avc1.4D001F`) et sur une
+avec son (1152 × 864, vidéo et audio), lecture fluide, aucune erreur au journal. Test :
+`rtsp-relay.test.ts` (contenu de la liste `concat`).
+
+**Le direct à environ 2 s** contre environ 1 s dans l'appli Nest : il reste un fragment d'au plus
+0,5 s, la marge de 0,5 s du lecteur et le trajet caméra → Google → serveur. Des fragments de 0,25 s et
+une marge plus courte gagneraient 0,3 à 0,5 s au prix d'arrêts plus fréquents sur un réseau
+irrégulier : non fait, à décider si la seconde gêne.

@@ -447,8 +447,8 @@ describe('nest plugin', () => {
       expect(onDisk()).toBeNull()
       // five minutes later, still watched: the last image goes to disk, dated like the image
       while (clock.now() < 5 * 60_000) { clock.advance(8000); await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' }); await settle() }
-      expect(onDisk()).toBe(jpeg(1).toString('hex'))
-      expect(mtime()).toBe(atA)
+      // the periodic save is not awaited by anyone: under the load of the full suite, 25 ms were not always enough
+      await vi.waitFor(() => { expect(onDisk()).toBe(jpeg(1).toString('hex')); expect(mtime()).toBe(atA) }, { timeout: 3000 })
       // a newer image stays in memory until the session closes (here: the plugin stops)
       ffmpeg.procs[0]!.stdio[3]!.write(jpeg(2))
       await settle()
