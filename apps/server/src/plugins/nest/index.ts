@@ -116,12 +116,16 @@ const SNAPSHOT_SAVE_MS = 5 * 60_000
 const GRID_RETRY_MIN_MS = 3 * 60_000
 const GRID_RETRY_MAX_MS = 15 * 60_000
 /**
- * Google limits commands to about ten per minute and per user (observed: nine openings at once then
- * retries earned a "Rate limited" on ALL commands, the list included). So ONE opening per 8 s tick —
- * ten cameras in 80 s, then nothing but the extensions — and a global pause as soon as Google
- * complains.
+ * Google limits commands to 10 per minute and per user, every kind together: openings, extensions,
+ * stops, thermostat (documented; observed: nine openings at once then retries earned a "Rate
+ * limited" on ALL commands, the list included). Measured on the real account, 2026-10-26: a burst of
+ * 6 openings went through whole, and Google then refused for about thirty seconds once a seventh had
+ * passed. So the thumbnails open as many cameras at once as keep the last minute's commands (counted
+ * by the client, whoever sent them) at 6 — six cameras together when the view opens, the next ones as
+ * the minute frees up — leaving 4 for the thermostat, the extensions and the stops. And a global
+ * pause as soon as Google complains all the same.
  */
-const GRID_OPEN_PER_TICK = 1
+const GRID_COMMANDS_PER_MINUTE = 6
 const GRID_RATE_LIMIT_PAUSE_MS = 90_000
 
 /** `gotImage`: the session has given a thumbnail — until then, the Cameras view says it is updating. */
@@ -440,10 +444,11 @@ export function createNestPlugin(deps: NestPluginDeps = {}): DevicePlugin {
       for (const [id, h] of gridHeld) if (now - h.since >= GRID_DWELL_MS) releaseGrid(id)
     }
     if (now < gridCooldownUntil) return
-    const free = Math.min(GRID_OPEN_PER_TICK, budget - streams.size - [...gridHeld.keys()].filter((id) => !streams.has(id)).length)
+    const allowance = GRID_COMMANDS_PER_MINUTE - (client?.commandsWithin(60_000) ?? GRID_COMMANDS_PER_MINUTE)   // no client (stopped): nothing to open
+    const free = Math.min(allowance, budget - streams.size - [...gridHeld.keys()].filter((id) => !streams.has(id)).length)
     if (free <= 0) return
     const candidates = ids.filter((id) => !streams.has(id) && !gridHeld.has(id) && !gridPaused.has(id) && (gridFailed.get(id)?.retryAt ?? 0) <= now)
-    // Order, with one opening per tick (Google quota):
+    // Order, the openings being rationed by Google's quota:
     //  0. cameras that have a thumbnail but have not yet been given back by the rotation: those of a
     //     previous run (server restart) or whose session died — we KNOW they are streaming. Without
     //     this rank, after a restart the six cameras that were off (no thumbnail, hence "oldest")

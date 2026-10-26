@@ -280,13 +280,11 @@ describe('nest plugin', () => {
     const { plugin, clock } = await linked(google, {}, ffmpeg)
     const app = await routes(plugin)
     const rtsp = (c: { command: string }) => c.command.split('.').pop()
-    // three RTSP cameras in the fixture (the WebRTC one is ignored), budget 10: three sessions, but
-    // ONE opening per 8 s tick (Google quota), hence three ticks
+    // three RTSP cameras in the fixture (the WebRTC one is ignored), budget 10: three sessions, all
+    // opened at once — three commands, well within the six a minute allowed to the thumbnails
     const r1 = await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' })
     expect(r1.statusCode).toBe(200)
     await settle()
-    expect(google.commands.filter((c) => rtsp(c) === 'GenerateRtspStream')).toHaveLength(1)
-    for (let i = 0; i < 2; i++) { clock.advance(8000); await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' }); await settle() }
     expect(google.commands.filter((c) => rtsp(c) === 'GenerateRtspStream').map((c) => c.id).sort()).toEqual(['DEVICE2', 'DEVICE5', 'DEVICE8'])
     expect(ffmpeg.procs).toHaveLength(3)
     const args = (ffmpeg.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![1] as string[]
@@ -306,6 +304,26 @@ describe('nest plugin', () => {
     // Google command to release them (they expire on their own)
     expect(google.commands.filter((c) => rtsp(c) === 'StopRtspStream')).toHaveLength(0)
     expect(plugin.health!().detail).not.toContain('live stream')
+    await plugin.stop()
+  })
+
+  it('cameras view: the openings share Google\'s quota with every other command of the last minute', async () => {
+    const google = fakeGoogle()
+    const ffmpeg = fakeSpawn()
+    const { plugin, clock } = await linked(google, {}, ffmpeg)
+    const app = await routes(plugin)
+    const opened = () => google.commands.filter((c) => c.command.endsWith('GenerateRtspStream')).map((c) => c.id)
+    const watch = async () => { await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' }); await settle() }
+    // four thermostat commands just before: of the six commands a minute left to the thumbnails, two remain
+    for (const t of [19, 19.5, 20, 20.5]) await plugin.execute('DEVICE3', { type: 'climate.set_target_temp', targetTempC: t })
+    await watch()
+    expect(opened()).toHaveLength(2)
+    // the third camera waits until the thermostat commands are more than a minute old
+    for (let t = 0; t < 56_000; t += 8000) { clock.advance(8000); await watch() }
+    expect(opened()).toHaveLength(2)
+    clock.advance(8000)
+    await watch()
+    expect(opened()).toHaveLength(3)
     await plugin.stop()
   })
 
@@ -338,18 +356,21 @@ describe('nest plugin', () => {
     const ffmpeg = fakeSpawn()
     const { plugin, clock } = await linked(google, {}, ffmpeg)
     const app = await routes(plugin)
-    // budget 10 for three cameras: no rotation, the sessions last (opened at 0, 8 and 16 s)
+    // budget 10 for three cameras: no rotation, the sessions last (all three opened at once)
     await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' })
     await settle()
-    expect(ffmpeg.procs).toHaveLength(1)
+    expect(ffmpeg.procs).toHaveLength(3)
+    const opened = google.commands.filter((c) => c.command.endsWith('GenerateRtspStream')).map((c) => c.id)
     for (let t = 0; t < 4 * 60_000; t += 8000) { clock.advance(8000); await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' }); await settle() }
-    // at 4 min, only the first session is extended
-    expect(google.commands.filter((c) => c.command.endsWith('ExtendRtspStream')).map((c) => c.id)).toEqual([google.commands[0]!.id])
-    // a second ffmpeg is launched on the URL carrying the new token; the old one stays until the handover
-    expect(ffmpeg.procs).toHaveLength(4)
-    const args = (ffmpeg.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[3]![1] as string[]
-    // the address goes to ffmpeg in a `concat` list, never on its command line
-    expect(readFileSync(args[args.indexOf('-i') + 1]!, 'utf8')).toContain(`file 'rtsps://stream.google/${google.commands[0]!.id}?auth=tok2'`)
+    // at 4 min, each session is extended
+    expect(google.commands.filter((c) => c.command.endsWith('ExtendRtspStream')).map((c) => c.id).sort()).toEqual([...opened].sort())
+    // a second ffmpeg per session is launched on the URL carrying the new token; the old ones stay until the handover
+    expect(ffmpeg.procs).toHaveLength(6)
+    const lists = (ffmpeg.spawnImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.slice(3).map(([, args]) => {
+      const a = args as string[]
+      return readFileSync(a[a.indexOf('-i') + 1]!, 'utf8')            // the address goes to ffmpeg in a `concat` list, never on its command line
+    })
+    expect(lists.some((text) => text.includes(`file 'rtsps://stream.google/${opened[0]}?auth=tok2'`))).toBe(true)
     expect(ffmpeg.procs[0]!.kill).not.toHaveBeenCalled()
     await plugin.stop()
   })
@@ -460,7 +481,7 @@ describe('nest plugin', () => {
       const app = await routes(plugin)
       await app.inject({ method: 'GET', url: '/api/plugins/nest/cameras/snapshots?watch=1' })
       await settle()
-      expect(google.commands.filter((c) => c.command.endsWith('GenerateRtspStream')).map((c) => c.id)).toEqual(['DEVICE5'])
+      expect(google.commands.filter((c) => c.command.endsWith('GenerateRtspStream')).map((c) => c.id)[0]).toBe('DEVICE5')
       await plugin.stop()
     } finally { unlinkSync(stale) }
   })

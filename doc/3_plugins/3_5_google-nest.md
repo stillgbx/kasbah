@@ -761,3 +761,44 @@ les caméras ont une image au démarrage, et l'ordre par image la plus ancienne 
 caméra éteinte depuis des jours avant celle qui diffusait une minute plus tôt. Une image récente est
 le meilleur indice qu'une caméra diffuse encore. Test : `plugin.test.ts` (« after a restart, among
 cameras that all have an image, the newest image is reopened first » : 1 min, puis 1 h, puis 3 jours).
+
+### Mise à jour 2026-10-26 (6) — plusieurs caméras d'un coup : le quota mesuré
+
+Question de l'utilisateur : pourquoi mettre à jour les caméras l'une après l'autre, pourquoi pas
+toutes en même temps, « avec des threads » ? Ce n'est pas une limite du serveur (rien n'y est bloquant,
+chaque caméra a déjà son propre ffmpeg) mais le **quota de Google**.
+
+**Ce que Google documente** ([limites Device Access](https://developers.google.com/nest/device-access/project/limits),
+valeurs données pour le bac à sable, pas de chiffres pour l'usage commercial) : `devices.executeCommand`
+à **10 par minute, par projet et par utilisateur**, toutes commandes et tous appareils confondus ;
+5 par minute par commande et par appareil ; 30 par minute ou 100 par heure par caméra ; `devices.list`
+à 5 par minute. Ouvrir, prolonger et arrêter un flux sont des commandes, comme celles du thermostat ;
+un dépassement rend « Rate limited » (`RESOURCE_EXHAUSTED`).
+
+**Ce qui a été mesuré** sur le vrai compte (script hors dépôt, `GenerateRtspStream` en rafale, sessions
+laissées expirer pour ne pas dépenser d'arrêts) :
+
+- rafale de 8 après une période calme mais pas totalement reposée : **7 acceptées**, 1 refusée, puis
+  3 suivantes refusées ; une nouvelle tentative acceptée 21 s plus tard ;
+- après 100 s de repos, rafale de 6 : **6 acceptées** ; une 7e acceptée à 12 s ; puis des refus
+  jusqu'à 42 s, et ensuite une commande acceptée toutes les 6 à 7 s environ (les 10 par minute
+  documentées).
+
+Ce n'est donc pas une simple fenêtre d'une minute : Google accepte une rafale d'environ 6 à 7, puis
+fait attendre une trentaine de secondes. Deux essais seulement, et le serveur de la maison partageait
+le même quota pendant la mesure : à prendre comme un ordre de grandeur.
+
+**Ce qui change** (`plugins/nest/{client,index}.ts`). `NestClient` note l'heure de chaque commande
+envoyée, refusée ou non (`commandsWithin(ms)`). La rotation des vignettes n'ouvre plus une caméra par
+tour de 8 s (`GRID_OPEN_PER_TICK`, retiré) mais autant qu'en permet un plafond de
+**`GRID_COMMANDS_PER_MINUTE` = 6** commandes sur la dernière minute, toutes origines confondues :
+six caméras d'un coup à l'arrivée sur la vue, les suivantes à mesure que la minute se libère. Il reste
+4 commandes de marge pour le thermostat, les prolongations (une par session toutes les 4 min) et les
+arrêts. La pause globale de 90 s sur « Rate limited » reste en place.
+
+Vérifié sur la vraie maison : six caméras ouvertes ensemble, leurs six images fraîches en 10 s environ
+(la sixième venait vers 50 s auparavant) ; les trois autres ouvertes vers 57 s, quand la minute s'est
+libérée ; huit à jour sur neuf vers 77 s, la neuvième éteinte et signalée ; aucun refus de Google dans
+le journal. Tests : `plugin.test.ts` (« the openings share Google's quota with every other command of
+the last minute » : quatre commandes de thermostat laissent deux ouvertures, la troisième attend la
+minute suivante) ; trois tests qui supposaient une ouverture par tour adaptés.

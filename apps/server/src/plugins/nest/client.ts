@@ -49,6 +49,8 @@ export class NestClient {
   private refreshToken: string | undefined
   private accessToken: string | undefined
   private accessTokenExpiresAt = 0
+  /** Send times of the commands, for the caller to stay under Google's per-minute quota. */
+  private commandTimes: number[] = []
 
   constructor(private readonly opts: NestClientOptions) {
     this.refreshToken = opts.refreshToken
@@ -178,8 +180,20 @@ export class NestClient {
     return r.data
   }
 
+  /**
+   * How many commands were sent in the last `ms`, refused ones included: every kind (streams,
+   * thermostat) shares Google's quota of 10 commands per minute and per user.
+   */
+  commandsWithin(ms: number): number {
+    const since = this.opts.clock.now() - ms
+    return this.commandTimes.filter((t) => t > since).length
+  }
+
   /** `POST …/devices/<id>:executeCommand`. Resolves on Google's ack (200) with its `results`, if any. */
   async executeCommand(externalId: string, command: string, params: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+    const now = this.opts.clock.now()
+    this.commandTimes = this.commandTimes.filter((t) => t > now - 10 * 60_000)
+    this.commandTimes.push(now)
     const raw = await this.request('POST', `${this.devicesPath()}/${encodeURIComponent(externalId)}:executeCommand`, { command, params }, signal)
     const r = sdmCommandResponseSchema.safeParse(raw)
     return r.success ? r.data.results : undefined
