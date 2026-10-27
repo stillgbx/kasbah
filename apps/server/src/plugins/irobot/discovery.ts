@@ -74,6 +74,11 @@ export function broadcastAddresses(interfaces: NodeJS.Dict<os.NetworkInterfaceIn
 export interface DiscoverOptions {
   /** Listening time. A robot answers within a few tens of milliseconds; 4 s covers a wake-up. */
   timeoutMs?: number
+  /**
+   * Address also probed directly (`IROBOT_HOST`): a robot on another subnet (IoT network), which a
+   * broadcast never reaches. It answers a unicast probe the same way (verified on the real robot).
+   */
+  host?: string
   signal?: AbortSignal
   logger?: Logger
 }
@@ -109,7 +114,7 @@ export async function discoverRobots(opts: DiscoverOptions = {}): Promise<Discov
 
     socket.bind(PORT, () => {
       try { socket.setBroadcast(true) } catch { /* some stacks refuse, we try anyway */ }
-      const targets = broadcastAddresses()
+      const targets = [...(opts.host ? [opts.host] : []), ...broadcastAddresses()]
       for (let n = 0; n < 3; n++) {
         timers.push(setTimeout(() => {
           for (const t of targets) socket.send(PROBE, PORT, t, () => { /* UDP loss: harmless */ })

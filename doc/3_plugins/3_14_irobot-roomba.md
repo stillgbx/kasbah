@@ -1,6 +1,6 @@
 # Plugin iRobot (Roomba, courtier MQTT local)
 
-> Dernière mise à jour : 2026-10-24
+> Dernière mise à jour : 2026-10-27
 > Sources : `apps/server/src/plugins/irobot/{index,auth,discovery,mqtt,mapping,types}.ts`, tests `discovery.test.ts`, `mqtt.test.ts`, `mapping.test.ts`, `plugin.test.ts` (51 cas), fixtures `apps/server/src/plugins/irobot/__fixtures__/{shadows.ts,discovery.json}`, `apps/server/src/plugins/index.ts`, `apps/server/.env.example`, `apps/web/src/components/IrobotLinkCard.vue`, `apps/web/src/views/RobotsView.vue`, `apps/web/src/components/controls/VacuumControl.vue`, `apps/web/src/api/transport.ts`, commits 14dae06 et ec07f7e, `packages/shared/src/devices/{kinds,state}.ts`, `packages/mock-sim/src/behaviours/robots.ts`, journal de session `_generated-ai-doc/sessions/2026-09-19-irobot/journal.md` et captures `shadow.json` / `transitions.json` / `favori-capture.json`
 
 ## Le robot du parc, et ce que la phase 1 en publie
@@ -548,3 +548,22 @@ dizaines de milliers de niveaux, reçu deux fois, dépassait la pile ; l'excepti
 mqtt.js et arrêtait le serveur. `extractReported` écarte désormais un message plus profond que 32
 niveaux (parcours sans récursion), et le gestionnaire de messages ne laisse plus rien s'échapper vers
 mqtt.js (avertissement dans le journal). Test : `irobot/mqtt.test.ts`.
+
+### Mise à jour 2026-10-27 — `IROBOT_HOST` : un robot sur un autre sous-réseau
+
+La découverte par diffusion (section « Découverte : une diffusion UDP, aucune adresse à configurer »)
+ne traverse pas un routeur : un robot placé sur un réseau séparé (réseau des objets connectés, VLAN)
+n'est plus trouvé, alors que le serveur peut encore lui parler en MQTT. `IROBOT_HOST`, facultative,
+donne l'adresse du robot : elle est interrogée **directement**, en plus des adresses de diffusion
+(`discoverRobots({ host })`, `apps/server/src/plugins/irobot/discovery.ts`). La diffusion continue :
+un robot du même réseau reste suivi s'il change d'adresse, et la clé ne sert que pour l'autre cas.
+
+Vérifié sur le vrai robot, encore sur le réseau du serveur : un `irobotmcs` envoyé à son adresse
+reçoit la même carte d'identité qu'en diffusion, trois fois sur trois. Le passage à travers le routeur
+reste à constater le jour où le robot change de réseau. Il demande que le pare-feu laisse le serveur
+joindre le robot sur UDP/5678 et TCP/8883, et une réservation DHCP pour que l'adresse tienne. Le reste
+ne change pas : l'adresse retenue est celle de l'émetteur de la réponse, et le certificat épinglé
+protège le mot de passe local si quelqu'un d'autre répond.
+
+Test : `plugin.test.ts`, « also probes IROBOT_HOST directly (robot on another subnet) » (la clé est
+transmise à la découverte ; une valeur vide vaut absence), rouge si on retire le branchement.

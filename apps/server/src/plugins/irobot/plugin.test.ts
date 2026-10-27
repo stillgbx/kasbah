@@ -159,6 +159,18 @@ describe('iRobot plugin — account linking', () => {
     expect(h.link.connectImpl).toHaveBeenCalledWith(expect.objectContaining({ blid: BLID, password: ':1:mot-de-passe-local', ip: '192.168.1.81' }))
   })
 
+  it('also probes IROBOT_HOST directly (robot on another subnet)', async () => {
+    const h = harness()
+    const discoverImpl = vi.fn(async () => [ROBOT])
+    const plugin = createIrobotPlugin({ fetchImpl: h.cloud.fetchImpl, sessionStore: memoryStore(), discoverImpl, connectImpl: h.link.connectImpl as never })
+    await plugin.init({ ...h.ctx, config: irobotConfigSchema.parse({ IROBOT_SESSION_FILE: '', IROBOT_HOST: '192.168.40.81' }) })
+    const app = Fastify()
+    plugin.registerRoutes!(app)
+    await app.inject({ method: 'POST', url: '/login', payload: { email: 'moi@exemple.fr', password: 'secret' } })
+    expect(discoverImpl).toHaveBeenCalledWith(expect.objectContaining({ host: '192.168.40.81' }))
+    expect(irobotConfigSchema.parse({ IROBOT_HOST: '' }).IROBOT_HOST).toBeUndefined()
+  })
+
   it('NEVER returns a password in the status', async () => {
     const h = harness()
     await h.plugin.init(h.ctx)

@@ -1,6 +1,6 @@
 # Configuration (.env)
 
-> Dernière mise à jour : 2026-10-24
+> Dernière mise à jour : 2026-10-27
 > Sources : `apps/server/src/config/env.ts`, `apps/server/.env.example`, `apps/server/src/plugins/{mock,hue,tahoma,nest}/index.ts`, `apps/server/src/plugins/google_cast/{index,known}.ts`, `apps/server/src/plugins/google_cast/enrich/cover.ts`, `apps/server/src/plugins/google_cast/bravia.ts`, `apps/server/src/plugins/enphase/index.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/plugins/comap/index.ts`, `apps/server/src/plugins/sonos/index.ts`, `apps/server/src/plugins/ytmusic/index.ts`, `apps/server/src/core/paths.ts`, `apps/server/test/state-isolation.ts`, `apps/server/.env.example`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{mixcloud,radio}/index.ts`, `apps/server/src/core/automations/schedule.ts` (`TZ`), `apps/server/src/plugins/claude/index.ts`, `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/main.ts`, `.gitignore`, `apps/server/src/config/{catalog,properties}.ts`
 
 ## Où vivent les secrets
@@ -601,3 +601,32 @@ Sources : `apps/server/.env.example`, `apps/server/src/main.ts`, `apps/server/sr
 Lue par `mcpAuthConfigSchema` (`apps/server/src/mcp/auth.ts`), comme `MCP_PUBLIC_URL`. Le pourquoi
 (DNS rebinding, contrôle de l'`Origin` sur le réseau local) : `../1_architecture/1_13_comptes-et-sessions.md`,
 section du 2026-10-23 (soir).
+
+### Mise à jour 2026-10-27 — `IROBOT_HOST`, et les clés à revoir quand le réseau local change
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `IROBOT_HOST` | *(vide)* | Adresse du robot iRobot, interrogée directement en plus de la diffusion. Seulement pour un robot sur un autre sous-réseau que le serveur (réseau des objets, VLAN). Détail : `../3_plugins/3_14_irobot-roomba.md`, mise à jour du 2026-10-27. |
+
+**Changer la plage d'adresses du réseau local**, vécu sur la vraie maison. Les clés qui portent une
+adresse sont `HUE_BRIDGE_HOST`, `TAHOMA_HOST`, `ENPHASE_HOST`, `COMAP_HOST`, `TUYA_DEVICES`,
+`HORMANN_DOORS`, `IROBOT_HOST`, et celles qui portent l'adresse **du serveur** : `CAST_MDNS_INTERFACE`,
+`SONOS_SSDP_INTERFACE` et `MUSIC_PUBLISH_BASE` (sans elle, plus de lecture sur les enceintes). Kasbah
+ne lit son `.env` qu'au démarrage : relancer la tâche ou le service après la modification. Ce qui a
+coûté du temps :
+
+- un nom en `.local` (`TAHOMA_HOST`, `envoy.local`) peut cesser de se résoudre : mettre l'adresse IP ;
+- un appareil dont l'adresse fixe est saisie **dans l'appareil** ne prend jamais la nouvelle plage et
+  disparaît des baux DHCP : il faut le repasser en DHCP depuis sa propre configuration ;
+- des appareils gardent l'ancienne adresse jusqu'au renouvellement de leur bail : redémarrer le
+  routeur force les clients Wi-Fi à en redemander une ;
+- hors du `.env`, la règle du proxy inverse (`MCP_PUBLIC_URL`) et la redirection de ports du routeur
+  pointent aussi vers des adresses du réseau local.
+
+Le réseau local doit être dans une plage **privée** (`10.0.0.0/8`, `172.16.0.0/12`,
+`192.168.0.0/16`). Dans une plage publique, `isPublicIp` (`apps/server/src/core/outbound.ts`) prend
+le routeur, le NAS et les objets pour des adresses d'Internet, et `publicFetch` ne les protège plus
+d'une adresse choisie par un tiers (flux d'agenda, pochette, document d'un client OAuth).
+
+Sources : `apps/server/src/plugins/irobot/{index,discovery}.ts`, `apps/server/.env.example`,
+`apps/server/src/core/outbound.ts`.

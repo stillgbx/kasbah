@@ -57,7 +57,7 @@ La maison décrite en JSON : format et validation, géométrie dérivée (murs, 
 ## 3 — Plugins
 
 <!-- section:3_plugins:begin (généré par scripts/wiki-index.mjs depuis 3_plugins/README.md - ne pas éditer ici) -->
-Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (27 pages, dernière mise à jour 2026-10-26).
+Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (27 pages, dernière mise à jour 2026-10-27).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -78,7 +78,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_11 Husqvarna Automower](3_plugins/3_11_husqvarna-automower.md) | 2026-10-14 |
 | [3_12 COMAP Proteo 2](3_plugins/3_12_comap-proteo.md) | 2026-10-06 |
 | [3_13 Mitsubishi MELCloud](3_plugins/3_13_mitsubishi-melcloud.md) | 2026-10-21 |
-| [3_14 iRobot (Roomba)](3_plugins/3_14_irobot-roomba.md) | 2026-10-24 |
+| [3_14 iRobot (Roomba)](3_plugins/3_14_irobot-roomba.md) | 2026-10-27 |
 | [3_15 Sonos](3_plugins/3_15_sonos.md) | 2026-10-24 |
 | [3_16 YouTube Music (non officiel)](3_plugins/3_16_ytmusic.md) | 2026-10-24 |
 | [3_17 PetKit](3_plugins/3_17_petkit.md) | 2026-10-06 |
@@ -117,12 +117,12 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 ## 5 — Setup
 
 <!-- section:5_setup:begin (généré par scripts/wiki-index.mjs depuis 5_setup/README.md - ne pas éditer ici) -->
-Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5_setup/README.md) (3 pages, dernière mise à jour 2026-10-26).
+Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5_setup/README.md) (3 pages, dernière mise à jour 2026-10-27).
 
 | Pages | Dernière mise à jour |
 |---|---|
 | [5_0 Installation et scripts](5_setup/5_0_installation-et-scripts.md) | 2026-10-26 |
-| [5_1 Configuration (.env)](5_setup/5_1_configuration-env.md) | 2026-10-24 |
+| [5_1 Configuration (.env)](5_setup/5_1_configuration-env.md) | 2026-10-27 |
 | [5_2 Production](5_setup/5_2_production.md) | 2026-10-26 |
 <!-- section:5_setup:end -->
 

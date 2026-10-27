@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-27] update | iRobot : `IROBOT_HOST` pour un robot sur un autre sous-réseau
+
+**Déclencheur** : préparation d'un réseau séparé pour les objets connectés (VLAN), où la diffusion UDP de la découverte iRobot ne passe plus ; renumérotation du réseau local de la vraie maison le même jour.
+
+**Pages modifiées** :
+- `3_plugins/3_14_irobot-roomba.md` — section « Mise à jour 2026-10-27 » : `IROBOT_HOST` interrogée directement en plus de la diffusion, réponse en envoi direct vérifiée sur le vrai robot, ce qui reste à constater à travers le routeur, test.
+- `5_setup/5_1_configuration-env.md` — section « Mise à jour 2026-10-27 » : `IROBOT_HOST`, clés à revoir quand la plage du réseau local change, pièges rencontrés, plage privée obligatoire (`isPublicIp`).
+
+**Index** : catalogues `3_plugins` et `5_setup` mis à jour (1 ligne chacun), index.md régénéré.
+
 ## [2026-10-26] update | Dev : le front suit le port du serveur, le clone de dev quitte le 8787 de la production
 
 **Déclencheur** : production installée dans son propre clone sur 8787 ; le clone de développement, sur la même machine et en mode Réel, passe sur un autre port, et son front proxyfiait vers 8787 en dur.

@@ -66,6 +66,11 @@ export const irobotConfigSchema = z.object({
   IROBOT_SCAN_MS: z.coerce.number().int().min(15_000).max(3_600_000).default(120_000),
   /** Listening time of a scan. A robot answers within a few tens of milliseconds. */
   IROBOT_SCAN_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(4_000),
+  /**
+   * Robot address, probed directly on top of the broadcast. Only needed when the robot sits on
+   * another subnet than the server (IoT network): a broadcast does not cross a router.
+   */
+  IROBOT_HOST: z.string().trim().transform((s) => (s === '' ? undefined : s)).optional(),
 })
 export type IrobotConfig = z.infer<typeof irobotConfigSchema>
 
@@ -167,7 +172,7 @@ export function createIrobotPlugin(deps: IrobotPluginDeps = {}): DevicePlugin {
    * address changed by DHCP, and marking unavailable the one that no longer answers.
    */
   async function scanOnce(): Promise<void> {
-    const found = await discover_({ timeoutMs: config!.IROBOT_SCAN_TIMEOUT_MS, signal: ctx?.signal, logger: ctx?.logger })
+    const found = await discover_({ timeoutMs: config!.IROBOT_SCAN_TIMEOUT_MS, host: config!.IROBOT_HOST, signal: ctx?.signal, logger: ctx?.logger })
     for (const robot of found) {
       const previous = onNetwork.get(robot.blid)
       // address changed: the link points to the old one, we rebuild it — but never at the expense of

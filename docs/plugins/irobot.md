@@ -43,6 +43,7 @@ Everything is optional and no secret goes in there.
 | `IROBOT_COUNTRY` | `FR` | Account country code (two letters) |
 | `IROBOT_SCAN_MS` | `120000` | Pace of the network scan that finds a robot (15,000 to 3,600,000 ms) |
 | `IROBOT_SCAN_TIMEOUT_MS` | `4000` | How long a scan listens |
+| `IROBOT_HOST` | *(none)* | Robot address, probed directly on top of the broadcast. Only for a robot on another network than the server (IoT network, VLAN); give it a DHCP reservation |
 | `IROBOT_DISCOVERY_URL`, `IROBOT_APP_ID`, `IROBOT_USER_AGENT` | vendor values | Change only if iRobot moves its API |
 
 ## Limitations
@@ -50,7 +51,7 @@ Everything is optional and no secret goes in there.
 - The robot **does not report its position** and does not provide its map locally: nothing to place in the 3D view beyond its dock. No choice of rooms to clean, no wear counters for consumables.
 - **Only one local session at a time**: while Kasbah holds the link with the robot, another application that wants to talk to it locally on the same network may be refused. The iRobot app normally goes through the cloud and is not affected (case not verified with the app itself).
 - **Return to dock while cleaning**: Kasbah sends a pause then, a few seconds later, the return to dock (otherwise the robot ignores the command). So it takes about 3 to 7 seconds before it moves.
-- The robot must be reachable by UDP broadcast (port 5678) on the server's network: a guest network or a separate VLAN keeps it from being found.
+- The robot is found by UDP broadcast (port 5678) on the server's network. On a separate network (IoT network, VLAN), set `IROBOT_HOST`, and let the server reach the robot on UDP 5678 and TCP 8883. A guest network that isolates its clients stays out of reach.
 - Unknown error codes are displayed as "Error N".
 - Tested with a single robot (a Roomba Combo); several robots are planned but untested.
 
