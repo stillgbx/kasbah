@@ -1,9 +1,11 @@
-# Kasbah
+<a href="https://youtu.be/eeAIOqT7iPQ"><img src="docs/screenshots/banner.webp" alt="Kasbah — Your whole home. One app."></a>
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/stillgbx)
 
 *English · [Français](README.fr.md)*
+
+▶ **[Watch the video](https://youtu.be/eeAIOqT7iPQ)** (YouTube)
 
 A web app (**tablet, computer, phone**) that shows the house and garden in **3D** (mouse and touch) and lets you **see and control the connected devices** placed in its rooms: lights, fans, covers, players, cameras, heating, robots, water, solar power, vehicles and pets. On top of that: music (YouTube Music, Mixcloud, radio), weather, the family calendar, the school homework diary, and automations run by the server.
 
