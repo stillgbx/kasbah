@@ -1,6 +1,6 @@
 # Production
 
-> Dernière mise à jour : 2026-10-26
+> Dernière mise à jour : 2026-10-28
 > Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts` (2026-10-13)
 
 ## Build
@@ -475,3 +475,23 @@ recopier ce dossier depuis l'ancienne installation suffit, il n'y a pas de `hous
 
 Sources : `scripts/supervisor.mjs`, `apps/server/src/http/system.ts`, `apps/server/src/config/properties.ts`,
 `apps/server/src/config/catalog.ts`.
+
+## Mise à jour 2026-10-28 — notifications push : HTTPS exigé, un service worker, deux fichiers d'état
+
+- **Contexte sécurisé obligatoire.** Les notifications (Web Push) ne marchent que par l'**adresse
+  publique HTTPS** (`MCP_PUBLIC_URL`, voir la mise à jour du 2026-10-06 (soir)) ou `localhost`. Par
+  `http://<poste>:8787` depuis un autre écran, la carte Réglages → Notifications le dit et ne
+  propose rien. Sur iPhone, seulement l'app **installée sur l'écran d'accueil** (iOS 16.4 ou plus).
+- **Un service worker existe désormais** : `apps/web/public/sw.js`, servi à la racine. Il ne fait que
+  les notifications (pas de cache, pas de mode hors ligne). La phrase de la mise à jour PWA du
+  2026-09-23, « plus besoin de service worker », reste vraie pour l'**installation** ; elle ne vaut pas
+  pour les notifications.
+- **Fichiers d'état** (dossier `.state/`, non versionnés) : `push.json` (clés VAPID **dont la clé
+  privée**, et abonnements) et `push-alerts.json` (ids des alertes déjà notifiées, pour qu'un
+  redémarrage ne renvoie rien). Supprimer `push.json` crée de nouvelles clés : les écrans se
+  réabonnent à leur prochaine ouverture. L'émission sort du serveur vers le service de push du
+  navigateur (via `publicFetch`) : le serveur doit pouvoir joindre Internet.
+
+Détail : [1_16 Notifications push](../1_architecture/1_16_notifications-push.md).
+
+Sources : `apps/web/public/sw.js`, `apps/server/src/core/push/{service,alerts}.ts`, `apps/server/src/app.ts`.

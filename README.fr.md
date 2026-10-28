@@ -228,7 +228,7 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 | **Animaux** | Mangeoires et fontaines PetKit : repas, distribution, eau, consommables. |
 | **TENS** | Électrostimulateur actiTENS en Bluetooth, depuis le navigateur ; n'apparaît que sur les postes où il est activé. |
 | **Automatisations** | Règles « Quand / Sauf si / Alors » (voir plus bas). |
-| **Réglages** | Thème, ordre de la barre de navigation sur cet appareil, rendu 3D, plugins, cartes de mise en route, comptes des assistants IA (MCP), mode édition, calage de la maison sur la photo aérienne. |
+| **Réglages** | Thème, ordre de la barre de navigation sur cet appareil, notifications, rendu 3D, plugins, cartes de mise en route, comptes des assistants IA (MCP), mode édition, calage de la maison sur la photo aérienne. |
 
 ### Scène 3D
 
@@ -248,9 +248,18 @@ Des règles **Quand / Sauf si / Alors**, exécutées par le **serveur** (un écr
 
 - **Quand** : une heure, un moment solaire (lever, coucher…) ou un changement d'état d'un appareil, éventuellement maintenu un certain temps ;
 - **Sauf si** : plages horaires, jours, dates, état d'un appareil, véhicule présent ou garé à une place, appareil allumé dans une pièce ;
-- **Alors** : une commande sur des appareils nommés ou sur une sélection (tous les volets d'un niveau…), avec un fondu pour les lumières Hue, ou le rappel d'une ambiance.
+- **Alors** : une commande sur des appareils nommés ou sur une sélection (tous les volets d'un niveau…), avec un fondu pour les lumières Hue, le rappel d'une ambiance, ou l'envoi d'une notification.
 
 Elles s'écrivent sur le contrat d'appareil, jamais sur un fabricant : un plugin désactivé rend la règle incomplète sans rien supprimer. Elles vivent dans `<maison>.automations.json`, à côté du fichier de la maison.
+
+### Notifications
+
+Le serveur envoie des **notifications push** (Web Push) aux téléphones et ordinateurs qui les ont activées dans **Réglages → Notifications**, même l'app fermée :
+
+- les **alertes** de la maison, une fois chacune, quand elles apparaissent : robot en défaut, croquettes ou eau à remettre, consommable à changer, vigilance météo orange ou rouge, pneu sous-gonflé, mise à jour proposée par un véhicule, plugin à appairer ou en panne qui dure ;
+- les messages de l'action **Envoyer une notification** des automatisations, titrés du nom de la règle.
+
+Chaque appareil choisit ses catégories (Véhicules, Robots, Animaux, Météo, Plugins, Automatisations), et un appui ouvre la vue concernée. Les navigateurs ne le permettent qu'en **HTTPS** : par l'adresse publique (voir [Accès depuis l'extérieur](#accès-depuis-lextérieur)), pas par `http://<ip>:8787`. Sur iPhone, ajoutez d'abord l'app à l'écran d'accueil.
 
 ## Plugins
 

@@ -8,6 +8,7 @@ import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import AssistantCard from '../components/settings/AssistantCard.vue'
 import McpUsersCard from '../components/settings/McpUsersCard.vue'
 import NavOrderCard from '../components/settings/NavOrderCard.vue'
+import PushCard from '../components/settings/PushCard.vue'
 import ServerUpdateCard from '../components/settings/ServerUpdateCard.vue'
 import OriginCalibration from '../components/settings/OriginCalibration.vue'
 import PluginSection from '../components/settings/PluginSection.vue'
@@ -333,6 +334,12 @@ const houseStats = computed(() => {
           <v-switch :model-value="localPlugins.isEnabled('tens')" hide-details density="compact"
                     @update:model-value="(v: boolean | null) => localPlugins.setEnabled('tens', v === true)" />
         </div>
+      </section>
+      <!-- THIS device's push notifications: the house's alerts and the automations' messages -->
+      <section class="card block settings__plugins">
+        <div class="block__title">{{ $t('push.title') }}</div>
+        <p class="muted small plugins__hint">{{ $t('push.hint') }}</p>
+        <PushCard />
       </section>
       <!-- who opens Kasbah through the public address, and connects an assistant (Claude…) to the MCP server -->
       <section class="card block settings__plugins">

@@ -4,6 +4,7 @@ import App from './App.vue'
 import { i18n } from './i18n'
 import { router } from './router'
 import { vuetify } from './plugins/vuetify'
+import { usePushStore } from './stores/push'
 import { useSettingsStore } from './stores/settings'
 import './styles/app.css'
 
@@ -16,3 +17,5 @@ settings.applyToVuetify(vuetify.theme)
 settings.applyLocale(i18n)
 
 app.mount('#app')
+// push notifications: the service worker, and this screen's subscription sent again
+void usePushStore(pinia).init()

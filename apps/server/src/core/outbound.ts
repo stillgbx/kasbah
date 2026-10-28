@@ -42,8 +42,13 @@ const publicLookup: LookupFunction = (hostname, options, callback) => {
 const dispatcher = new Agent({ connect: { lookup: publicLookup } })
 const MAX_REDIRECTS = 5
 
-/** `fetch` that only reaches public addresses, redirects included. `redirect: 'error'` refuses them. */
-export async function publicFetch(url: string, init: { signal?: AbortSignal; headers?: Record<string, string>; redirect?: 'follow' | 'error' } = {}) {
+/**
+ * `fetch` that only reaches public addresses, redirects included. `redirect: 'error'` refuses them
+ * (a `POST` should: a followed redirect would resend its body elsewhere).
+ */
+export async function publicFetch(url: string, init: {
+  signal?: AbortSignal; headers?: Record<string, string>; redirect?: 'follow' | 'error'; method?: 'GET' | 'POST'; body?: Uint8Array
+} = {}) {
   let current = url
   for (let hop = 0; ; hop++) {
     const { hostname } = new URL(current)

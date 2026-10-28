@@ -1,6 +1,6 @@
 # Protocole REST et WebSocket
 
-> Dernière mise à jour : 2026-10-25
+> Dernière mise à jour : 2026-10-28
 > Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11), `apps/server/src/http/static.ts` (`appBuild`, 2026-10-13), `apps/server/src/http/system.ts` (2026-10-13), `apps/server/src/http/diag.ts` et `apps/web/public/diag.html`, `apps/web/src/lib/sceneProbe.ts` (2026-10-22)
 
 ## REST
@@ -822,3 +822,20 @@ Sources : `apps/web/src/lib/sceneProbe.ts`, `apps/web/src/lib/sceneProbe.test.ts
 - Routes **de plugin** Enphase, sous `/api/plugins/enphase/` : `POST history/sync { force?: boolean }`
   (reprend les jours non complets, tous si `force`) et l'état `history` ajouté à `GET token`. Détail dans
   [3_7 Enphase](../3_plugins/3_7_enphase.md).
+
+### Mise à jour 2026-10-28 — `/api/push/*` (notifications push)
+
+Quatre routes (`apps/server/src/http/push.ts`, schémas dans `packages/shared/src/push/push.ts`), derrière
+la session comme le reste (le compte de l'abonnement est `req.sessionUser`, `null` sur le réseau local) :
+
+- `GET /api/push/key` → `{ publicKey }` : clé VAPID du serveur, que le navigateur passe à `subscribe`.
+- `PUT /api/push/subscription` `{ subscription, categories, lang }` : abonne cet écran, ou change ses
+  catégories et sa langue (même endpoint = mise à jour). Le client le renvoie à chaque ouverture.
+- `DELETE /api/push/subscription` `{ endpoint }` : désabonne ; un abonnement inconnu est déjà parti,
+  réponse `{ ok: true }` quand même.
+- `POST /api/push/test` `{ endpoint }` : un essai à cet écran seul, quelles que soient ses
+  catégories. 404 `NOT_FOUND` si l'abonnement est inconnu, **502 `UPSTREAM_ERROR`** si le service de
+  push refuse.
+
+Pas de message WebSocket : un abonnement est propre à un écran, rien à diffuser aux autres. Page de
+fond : [1_16 Notifications push](1_16_notifications-push.md).

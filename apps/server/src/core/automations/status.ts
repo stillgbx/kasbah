@@ -46,6 +46,7 @@ export function computeStatus(a: Automation, ctx: EvalContext, scenes: Pick<Scen
   if (a.trigger.type === 'state') predicate(a.trigger.when)
   a.unless.forEach(predicate)
   for (const action of a.actions) {
+    if (action.type === 'notify') continue
     if (action.type === 'recallScene') {
       if (!scenes.get(action.sceneId)) add({ kind: 'scene', id: action.sceneId })
       continue

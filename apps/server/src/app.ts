@@ -13,6 +13,8 @@ import { Bus } from './core/bus'
 import { systemClock, type Clock } from './core/clock'
 import type { PluginFactory } from './core/plugin'
 import { PluginHost } from './core/plugin-host'
+import { AlertNotifier } from './core/push/alerts'
+import { PushService } from './core/push/service'
 import { stateFile } from './core/paths'
 import { DeviceRegistry } from './core/registry'
 import { SceneRegistry } from './core/scene-registry'
@@ -20,6 +22,7 @@ import { SceneSeeder } from './core/scene-seeder'
 import { ShoppingService, shoppingPathFor } from './core/shopping'
 import { EnergyHistory } from './core/history'
 import { registerDiagRoutes } from './http/diag'
+import { registerPushRoutes } from './http/push'
 import { registerRoutes } from './http/routes'
 import { registerSystemRoutes, type SystemRoutesDeps } from './http/system'
 import { actAsHook, createAppSession, sessionConfigSchema } from './http/session'
@@ -99,6 +102,15 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   // mutated in place by `updateHouseFile`, so this read always sees the current value.
   const settingsOf = (pluginId: string) => pluginSettingsOf(house.house.plugins, pluginId)
   const history = new EnergyHistory(bus, clock)
+  // Push notifications: the subscribed screens, the alerts of the house, the "Notify" action.
+  const push = new PushService({
+    path: stateFile('push.json'),
+    subject: mcpConfig.MCP_PUBLIC_URL ?? 'mailto:kasbah@localhost',
+    accounts: async () => (await mcpAuth.users()).users.map((u) => u.name),
+    logger: opts.logger.child({ component: 'push' }),
+    now: () => clock.now(),
+  })
+  await push.load()
   const host = new PluginHost({
     settingsOf,
     site: () => house.house.origin,
@@ -114,8 +126,13 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   const automations = new AutomationEngine({
     store: createAutomationsFile(automationsPathFor(house.path), { readOnly: !!opts.readOnly }),
     reverts: createRevertsFile(stateFile('automation-reverts.json')),
-    registry, scenes, host, house, bus, clock, logger: opts.logger.child({ component: 'automations' }),
+    registry, scenes, host, house, bus, clock, push, logger: opts.logger.child({ component: 'automations' }),
   })
+  const alerts = new AlertNotifier({
+    bus, registry, health: () => host.health(), push, clock, path: stateFile('push-alerts.json'),
+    logger: opts.logger.child({ component: 'push' }),
+  })
+  await alerts.start()
   // Shopping list: a file next to the house, read before the hub, whose snapshot carries it.
   const shopping = new ShoppingService(shoppingPathFor(house.path), { readOnly: !!opts.readOnly })
   await shopping.load()
@@ -145,6 +162,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
 
   registerRoutes(app, { registry, scenes, host, house, hub, history, automations, shopping, startedAt: clock.now(), ...(opts.properties ? { properties: opts.properties } : {}) })
   host.registerRoutes(app)
+  registerPushRoutes(app, push)
   registerSystemRoutes(app, { supervisor: opts.supervisor, statusFile: stateFile('update-status.json') })
   registerDiagRoutes(app, opts.logger.child({ component: 'diag' }))
   await registerMcp(app, { registry, scenes, host, house, auth: mcpAuth })
@@ -180,6 +198,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     startPlugins: () => host.startAll(),
     async close() {
       automations.close()                 // nothing fires anymore during shutdown
+      await alerts.close()
       setPlaybackBridge(null)
       music.stop()
       await host.stopAll()

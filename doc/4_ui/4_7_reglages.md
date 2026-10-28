@@ -1,6 +1,6 @@
 # Vue Réglages
 
-> Dernière mise à jour : 2026-10-25
+> Dernière mise à jour : 2026-10-28
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Réglages : ses zones, la carte Plugins, les thèmes, le rendu 3D, les entrées locales au poste, les comptes, le calage sur la photo. Elle est née du découpage de
@@ -369,3 +369,28 @@ i18n : `settings.navOrder`, `settings.navOrderHint`, `settings.navOrderMove`, `s
 
 Sources : `apps/web/src/components/settings/NavOrderCard.vue`, `apps/web/src/views/SettingsView.vue`,
 `apps/web/src/i18n/locales/{fr,en}.json`.
+
+### Mise à jour 2026-10-28 — la carte « Notifications »
+
+Nouvelle section pleine largeur, **après « Plugins locaux »** (`SettingsView.vue`, composant
+`components/settings/PushCard.vue`, store `stores/push.ts`). Elle règle les notifications de **cet
+appareil** ; le mécanisme est dans [1_16 Notifications push](../1_architecture/1_16_notifications-push.md).
+
+- Un interrupteur « Sur cet appareil » (demande la permission du navigateur, abonne, ou désabonne).
+- Six **catégories** en pilules (véhicules, robots, animaux, météo, plugins, automatisations), toutes
+  actives par défaut, mémorisées dans `localStorage` (`kasbah.push.categories`). Elles sont **toujours
+  affichées, grisées hors abonnement** : rien n'apparaît ni ne disparaît quand l'état change.
+- Un bouton « Envoyer un essai » (`POST /api/push/test`).
+- Quand l'appareil ne peut pas s'abonner, la carte dit pourquoi : contexte non sécurisé (il faut
+  l'adresse publique HTTPS, pas `http://<poste>:8787`), iPhone hors app installée sur l'écran
+  d'accueil, navigateur sans Web Push. **Sous 700 px la ligne d'état réserve deux lignes** pour que
+  rien ne bouge d'un message à l'autre (règle « rien ne bouge »).
+
+Vérifié dans la preview `kasbah-demo` : fr et en, 1440 et 375 px sans débordement, rien ne bouge
+entre activé / désactivé / refusé. **Non joués** : thème sombre, zooms 1,25 et 1,5, et un vrai
+abonnement sur un vrai appareil (le navigateur intégré refuse les notifications).
+
+i18n : clés `push.*` et `automations.editor.{message,messagePlaceholder,notifyHint}`.
+
+Sources : `apps/web/src/components/settings/PushCard.vue`, `apps/web/src/stores/push.ts`,
+`apps/web/src/views/SettingsView.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.

@@ -1,6 +1,7 @@
 import { assertCommandAllowed, CommandNotAllowedError, inverseCommand, type Automation, type AutomationRun, type Command, type DeviceId } from '@kasbah/shared'
 import { PluginError } from '../plugin'
 import type { PluginHost } from '../plugin-host'
+import type { PushService } from '../push/service'
 import type { SceneRegistry } from '../scene-registry'
 import type { EvalContext } from './context'
 import { resolveTarget } from './evaluate'
@@ -17,6 +18,8 @@ import { resolveTarget } from './evaluate'
 export interface RunnerDeps {
   host: Pick<PluginHost, 'execute' | 'recallScene'>
   scenes: Pick<SceneRegistry, 'get'>
+  /** Push notifications (the "Notify" action); absent = refused. */
+  push?: Pick<PushService, 'send'>
 }
 
 type RunError = AutomationRun['errors'][number]
@@ -48,6 +51,16 @@ export async function runActions(a: Automation, by: AutomationRun['by'], ctx: Ev
   let attempted = 0
 
   for (const [i, action] of a.actions.entries()) {
+    if (action.type === 'notify') {
+      attempted++
+      if (!deps.push) { errors.push({ action: i, code: 'NOT_IMPLEMENTED', message: 'no push notifications on this server' }); continue }
+      // no subscribed screen is not a failure: nobody asked to be told
+      try {
+        const r = await deps.push.send('automations', () => ({ title: a.name, body: action.message, tag: `automation|${a.id}`, url: '/' }))
+        if (r.failed && !r.sent) errors.push({ action: i, code: 'UPSTREAM_ERROR', message: `notification not delivered to ${r.failed} screen(s)` })
+      } catch (err) { errors.push({ action: i, code: codeOf(err), message: (err as Error).message }) }
+      continue
+    }
     if (action.type === 'recallScene') {
       attempted++
       const entry = deps.scenes.get(action.sceneId)

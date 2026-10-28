@@ -20,19 +20,19 @@ Vision du projet, principes structurants et vocabulaire commun. Résumés : [0_o
 ## 1 — Architecture
 
 <!-- section:1_architecture:begin (généré par scripts/wiki-index.mjs depuis 1_architecture/README.md - ne pas éditer ici) -->
-Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses. Résumés : [1_architecture/README.md](1_architecture/README.md) (16 pages, dernière mise à jour 2026-10-26).
+Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses, notifications push. Résumés : [1_architecture/README.md](1_architecture/README.md) (17 pages, dernière mise à jour 2026-10-28).
 
 | Pages | Dernière mise à jour |
 |---|---|
 | [1_0 Monorepo et flux de données](1_architecture/1_0_monorepo-et-flux.md) | 2026-10-20 |
 | [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-10-26 |
 | [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-10-25 |
-| [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-10-25 |
+| [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-10-28 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-10-06 |
 | [1_5 Scène 3D (Three.js)](1_architecture/1_5_scene-3d.md) | 2026-10-13 |
 | [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-10-09 |
 | [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-10-24 |
-| [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-25 |
+| [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-28 |
 | [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-10-25 |
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-10-11 |
 | [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-10-26 |
@@ -40,6 +40,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_13 Comptes et sessions](1_architecture/1_13_comptes-et-sessions.md) | 2026-10-25 |
 | [1_14 Énergie](1_architecture/1_14_energie.md) | 2026-10-26 |
 | [1_15 Appli Android Auto](1_architecture/1_15_appli-android-auto.md) | 2026-10-25 |
+| [1_16 Notifications push](1_architecture/1_16_notifications-push.md) | 2026-10-28 |
 <!-- section:1_architecture:end -->
 
 ## 2 — Maison
@@ -96,7 +97,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 ## 4 — UI
 
 <!-- section:4_ui:begin (généré par scripts/wiki-index.mjs depuis 4_ui/README.md - ne pas éditer ici) -->
-Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-10-26).
+Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-10-28).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -110,20 +111,20 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-26 |
 | [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-10-13 |
 | [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-10-25 |
-| [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-10-25 |
+| [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-10-28 |
 | [4_8 Mode édition et propriétés](4_ui/4_8_mode-edition-et-proprietes.md) | 2026-10-21 |
 <!-- section:4_ui:end -->
 
 ## 5 — Setup
 
 <!-- section:5_setup:begin (généré par scripts/wiki-index.mjs depuis 5_setup/README.md - ne pas éditer ici) -->
-Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5_setup/README.md) (3 pages, dernière mise à jour 2026-10-27).
+Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5_setup/README.md) (3 pages, dernière mise à jour 2026-10-28).
 
 | Pages | Dernière mise à jour |
 |---|---|
 | [5_0 Installation et scripts](5_setup/5_0_installation-et-scripts.md) | 2026-10-26 |
 | [5_1 Configuration (.env)](5_setup/5_1_configuration-env.md) | 2026-10-27 |
-| [5_2 Production](5_setup/5_2_production.md) | 2026-10-26 |
+| [5_2 Production](5_setup/5_2_production.md) | 2026-10-28 |
 <!-- section:5_setup:end -->
 
 ## 6 — FAQ

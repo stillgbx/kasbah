@@ -246,6 +246,14 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
       <Segmented dense fill :model-value="a.recall.mode" :options="recallModes" :label="$t('automations.editor.recallMode')"
                  @update:model-value="(m: SceneRecallMode) => a.type === 'recallScene' && emit('update:modelValue', { ...a, recall: { ...a.recall, mode: m } })" />
     </template>
+
+    <!-- pushed on each keystroke: a redraw by a server message finds the field's own text -->
+    <template v-else-if="a.type === 'notify'">
+      <v-textarea :model-value="a.message" :label="$t('automations.editor.message')" :placeholder="$t('automations.editor.messagePlaceholder')"
+                  rows="3" no-resize maxlength="200" density="compact" variant="outlined" hide-details
+                  @update:model-value="(v: string) => emit('update:modelValue', { ...a, message: v } as ActionDraft)" />
+      <div class="muted act__hint">{{ $t('automations.editor.notifyHint') }}</div>
+    </template>
   </div>
 </template>
 
@@ -271,6 +279,7 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
 .act__toggle:disabled { opacity: .45; }
 .act__for { display: flex; align-items: center; gap: 8px; min-height: 36px; }
 .act__range { white-space: nowrap; }
+.act__hint { font-size: 12px; }
 .act__except-kind { flex: 1 1 0; min-width: 0; }
 .act__unit { flex: 0 1 92px; min-width: 64px; }
 .act__param { display: flex; align-items: center; gap: 6px; min-height: 36px; }

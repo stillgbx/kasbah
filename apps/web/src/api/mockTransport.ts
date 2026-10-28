@@ -478,6 +478,11 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async systemVersion() { return { supervised: false, running: { sha: '0000000000000000000000000000000000000000', subject: 'Démonstration', date: new Date(0).toISOString() }, available: [], error: null } },
     async systemUpdateStatus() { return { status: null } },
     async systemUpdate() { throw new ApiRequestError(409, 'NOT_SUPERVISED', 'no supervisor in mock mode') },
+    // no server, hence no push service to subscribe to
+    async pushKey() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no push notifications in mock mode') },
+    async pushSubscribe() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no push notifications in mock mode') },
+    async pushUnsubscribe() {},
+    async pushTest() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no push notifications in mock mode') },
     async agendaCalendars() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
     async agendaAddCalendar() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
     async agendaUpdateCalendar() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no calendar in mock mode') },
@@ -560,7 +565,10 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       const a = knownAutomation(id)
       const errors: AutomationRun['errors'] = []
       for (const [i, action] of a.actions.entries()) {
-        if (action.type !== 'command') { errors.push({ action: i, code: 'NOT_IMPLEMENTED', message: 'no vendor scenes in mock mode' }); continue }
+        if (action.type !== 'command') {
+          errors.push({ action: i, code: 'NOT_IMPLEMENTED', message: action.type === 'notify' ? 'no push notifications in mock mode' : 'no vendor scenes in mock mode' })
+          continue
+        }
         const t = action.target
         const ids = t.type === 'devices' ? t.deviceIds
           : descriptors.filter((d) => d.kind === t.kind && (!t.deviceClass || deviceClassOf(d) === t.deviceClass)).map((d) => d.id)

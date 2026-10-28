@@ -1,6 +1,6 @@
 # Automatisations (règles « Quand / Sauf si / Alors »)
 
-> Dernière mise à jour : 2026-10-25
+> Dernière mise à jour : 2026-10-28
 > Sources : `packages/shared/src/automations/{predicate,automation,fields}.ts`, `packages/shared/src/house/{sun,geo}.ts`, `packages/shared/src/devices/activity.ts`, `apps/server/src/core/automations/{engine,schedule,evaluate,context,status,runner,store}.ts`, `apps/server/src/app.ts`, `apps/server/src/http/routes.ts`, `apps/server/src/ws/hub.ts`, `packages/mock-sim/src/behaviours/weather.ts`, `.gitignore`, tests listés en fin de page, arbre de travail NON COMMITÉ du 2026-09-23 (après 0f943a0)
 
 ## Ce que c'est, et pourquoi c'est le serveur qui s'en charge
@@ -466,3 +466,27 @@ vrai clic vide les champs, aucun débordement, console vide. Non vérifié : th�
 téléphone.
 
 Sources : `apps/web/src/components/automations/AutomationEditor.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.
+
+### Mise à jour 2026-10-28 — l'action « Envoyer une notification » (`notify`)
+
+Troisième type d'action, après `command` et `recallScene` : `{ type: 'notify', message }`, message de
+1 à 200 caractères (`packages/shared/src/automations/automation.ts`). Le mécanisme d'ensemble (Web
+Push, abonnements, catégories) est dans [1_16 Notifications push](1_16_notifications-push.md).
+
+- **Exécution** (`core/automations/runner.ts`) : envoi à la catégorie `automations`, titre = nom de la
+  règle, tag `automation|<id>` (une règle qui se redéclenche remplace sa notification), url `/`.
+  Le moteur reçoit le `PushService` (`push` dans ses dépendances, `app.ts`).
+- **Aucun abonné n'est pas un échec** : personne n'a demandé à être prévenu. Si **tous** les envois
+  sont refusés, l'action est en `UPSTREAM_ERROR` ; sans service de push, `NOT_IMPLEMENTED`.
+- **Destinataires** : tous les abonnés de la catégorie, pas de choix par compte (décision de
+  l'utilisateur, 2026-10-28).
+- **Statut** : `core/automations/status.ts` ignore l'action, elle ne référence aucun appareil, donc ne
+  peut rendre la règle `incomplete`.
+- **Mode simulé** : `mockTransport` répond `NOT_IMPLEMENTED` (« no push notifications in mock mode »).
+- **Éditeur** (`ActionEditor.vue`, `AutomationEditor.vue`) : action « Envoyer une notification » avec
+  un `v-textarea` dont le texte est **poussé à chaque frappe** (`update:modelValue` direct, pas à la
+  perte de focus) : un champ qui ne pousse qu'à la fin est réécrit par le message WS qui redessine
+  l'éditeur, c'est le piège déjà documenté plus haut. Résumé de la règle : « notifier « … » ».
+
+Sources : `apps/server/src/core/automations/{runner,status}.ts`, `apps/server/src/core/automations/runner.test.ts`,
+`apps/web/src/components/automations/{ActionEditor,AutomationEditor}.vue`, `apps/web/src/lib/automations.ts`, `apps/web/src/api/mockTransport.ts`.

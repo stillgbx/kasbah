@@ -432,6 +432,10 @@ export function createHttpTransport(base = ''): Transport {
     systemVersion: (refresh) => request(`${base}/api/system/version${refresh ? '?refresh=1' : ''}`, undefined, (j) => j as SystemVersion),
     systemUpdateStatus: () => request(`${base}/api/system/update`, undefined, (j) => j as { status: UpdateStatus | null }),
     systemUpdate: () => request(`${base}/api/system/update`, { method: 'POST' }, (j) => j as { status: UpdateStatus }),
+    pushKey: () => request(`${base}/api/push/key`, undefined, (j) => j as { publicKey: string }),
+    pushSubscribe: (body) => request(`${base}/api/push/subscription`, json('PUT', body), () => undefined),
+    pushUnsubscribe: (endpoint) => request(`${base}/api/push/subscription`, json('DELETE', { endpoint }), () => undefined),
+    pushTest: (endpoint) => request(`${base}/api/push/test`, json('POST', { endpoint }), () => undefined),
     agendaCalendars: () => request(`${base}/api/plugins/agenda/calendars`, undefined, (j) => j as { calendars: AgendaCalendar[] }),
     agendaAddCalendar: (body) => request(
       `${base}/api/plugins/agenda/calendars`,

@@ -137,6 +137,7 @@ const predicateItems = computed(() => PREDICATE_TYPES.map((x) => ({ value: x, ti
 const actionItems = computed(() => [
   { value: 'command' as const, title: t('automations.action.command') },
   ...(scenes.count ? [{ value: 'recallScene' as const, title: t('automations.action.recallScene') }] : []),
+  { value: 'notify' as const, title: t('automations.action.notify') },
 ])
 const addUnless = (type: Predicate['type']) => { draft.value.unless = [...draft.value.unless, blankPredicate(type)] }
 const setUnless = (i: number, p: Predicate) => { draft.value.unless = draft.value.unless.map((x, k) => (k === i ? p : x)) }

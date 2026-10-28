@@ -228,7 +228,7 @@ On a large (landscape) screen, a three-column layout: the **rail** on the left, 
 | **Pets** | PetKit feeders and fountains: meals, dispensing, water, consumables. |
 | **TENS** | actiTENS electrostimulator over Bluetooth, from the browser; only appears on the computers where it is enabled. |
 | **Automations** | “When / Unless / Then” rules (see below). |
-| **Settings** | Theme, order of the navigation bar on this device, 3D rendering, plugins, setup cards, AI assistant accounts (MCP), edit mode, aligning the house on the aerial photo. |
+| **Settings** | Theme, order of the navigation bar on this device, notifications, 3D rendering, plugins, setup cards, AI assistant accounts (MCP), edit mode, aligning the house on the aerial photo. |
 
 ### 3D scene
 
@@ -248,9 +248,18 @@ Light scenes come from the **plugins** (Hue: static scenes and animated palettes
 
 - **When**: a time, a solar event (sunrise, sunset…) or a change in a device's state, optionally held for a while;
 - **Unless**: time ranges, days, dates, a device's state, a vehicle present or parked in a spot, a device on in a room;
-- **Then**: a command on named devices or on a selection (all the shutters on a level…), with a fade for Hue lights, or recalling a light scene.
+- **Then**: a command on named devices or on a selection (all the shutters on a level…), with a fade for Hue lights, recalling a light scene, or sending a notification.
 
 They are written against the device contract, never against a vendor: a disabled plugin leaves the rule incomplete without deleting anything. They live in `<house>.automations.json`, next to the house file.
+
+### Notifications
+
+The server sends **push notifications** (Web Push) to the phones and computers that turned them on in **Settings → Notifications**, even with the app closed:
+
+- the house's **alerts**, once each, when they appear: a robot in fault, food or water to refill, a consumable to change, an orange or red weather warning, an under-inflated tire, a software update for a vehicle, a plugin that needs pairing or keeps failing;
+- the messages of the automations' **Send a notification** action, titled with the rule's name.
+
+Each device picks its categories (Vehicles, Robots, Pets, Weather, Plugins, Automations), and a tap opens the matching view. Browsers only allow it over **HTTPS**: through the public address (see [Remote access](#remote-access)), not `http://<ip>:8787`. On iPhone, add the app to the home screen first.
 
 ## Plugins
 

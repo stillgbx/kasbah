@@ -7,6 +7,25 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-28] update | Notifications push (Web Push) : alertes de la maison et action d'automatisation `notify`
+
+**Déclencheur** : demande de notifications sur le bureau et le téléphone (alertes de la maison, messages d'automatisations) ; fonctionnalité codée dans l'arbre de travail, NON COMMITÉE au moment de l'écriture.
+
+**Pages modifiées** :
+- `1_architecture/1_8_automatisations.md` — section « Mise à jour 2026-10-28 » : action `notify`, aucun abonné n'est pas un échec, tous refusés = `UPSTREAM_ERROR`, statut inchangé, champ poussé à chaque frappe.
+- `1_architecture/1_3_protocole-rest-ws.md` — section datée : les quatre routes `/api/push/*`, 502 si le service de push refuse, pas de message WS.
+- `4_ui/4_7_reglages.md` — section datée : carte « Notifications » (interrupteur, six catégories, essai, raisons d'impossibilité, deux lignes réservées sous 700 px).
+- `5_setup/5_2_production.md` — section datée : HTTPS obligatoire, iPhone en app installée, service worker désormais présent (nuance sur « plus besoin de service worker »), `.state/push.json` et `push-alerts.json`.
+
+**Pages créées** :
+- `1_architecture/1_16_notifications-push.md` — le mécanisme d'ensemble : pourquoi pas de bibliothèque (garde anti-SSRF), règle « une notification quand l'alerte apparaît », oublis à 10 min et 7 jours, contraintes, pistes écartées (ntfy), ce qui n'a pas été joué.
+
+**Contradiction signalée** : aucune stricte. Nuance : `5_setup/5_2_production.md` (PWA, 2026-09-23) dit « plus besoin de service worker » ; vrai pour l'installation, plus pour les notifications (noté dans la mise à jour du jour).
+
+**Trous** : aucun vrai envoi jusqu'à un navigateur réel, thème sombre et zooms 1,25 / 1,5 non joués ; en-têtes de cache de `sw.js` en production non vérifiés.
+
+**Index** : catalogues `1_architecture` (1 ligne ajoutée, 2 dates, introduction), `4_ui` et `5_setup` (1 date chacun), index.md régénéré.
+
 ## [2026-10-27] update | iRobot : `IROBOT_HOST` pour un robot sur un autre sous-réseau
 
 **Déclencheur** : préparation d'un réseau séparé pour les objets connectés (VLAN), où la diffusion UDP de la découverte iRobot ne passe plus ; renumérotation du réseau local de la vraie maison le même jour.

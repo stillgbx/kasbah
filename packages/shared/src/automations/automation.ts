@@ -94,6 +94,11 @@ export const actionSchema = z.discriminatedUnion('type', [
    */
   z.object({ type: z.literal('command'), target: targetSchema, command: commandSchema, forMin: z.number().int().positive().max(1440).optional() }),
   z.object({ type: z.literal('recallScene'), sceneId: sceneIdSchema, recall: automationRecallSchema }),
+  /**
+   * A push notification to the screens subscribed to the `automations` category, titled with the
+   * automation's name.
+   */
+  z.object({ type: z.literal('notify'), message: z.string().trim().min(1).max(200) }),
   // Iteration 2: { type: 'system.run', name } (allowlist from the .env); { type: 'webhook', url }
 ])
 export type AutomationAction = z.infer<typeof actionSchema>

@@ -238,6 +238,7 @@ export function describeTarget(target: Target, names: NameContext, t: Translate)
 
 export function describeAction(a: ActionDraft, names: NameContext, t: Translate): string {
   if (a.type === 'recallScene') return t('automations.summary.scene', { name: names.sceneName(a.sceneId) })
+  if (a.type === 'notify') return t('automations.summary.notify', { message: a.message.trim() })
   const key = choiceOf(a.command)?.key
   const verb = key ? t(`automations.command.${key}`, { n: paramOf(a.command) ?? '' }) : a.command.type
   const fade = a.command.type === 'light.set' && a.command.transitionMs ? ` · ${t('automations.summary.fade', { d: fadeLabel(a.command.transitionMs) })}` : ''
@@ -345,9 +346,11 @@ export function blankPredicate(type: Predicate['type'], today = new Date()): Pre
   }
 }
 
-/** A new action: turn on lights to choose, or recall a light scene to choose. */
+/** A new action: turn on lights to choose, recall a light scene to choose, or a message to write. */
 export function blankAction(type: ActionDraft['type']): ActionDraft {
-  return type === 'recallScene'
-    ? { type, sceneId: '', recall: { mode: 'static' } }
-    : { type, target: { type: 'devices', deviceIds: [] }, command: { type: 'light.set', on: true } }
+  switch (type) {
+    case 'recallScene': return { type, sceneId: '', recall: { mode: 'static' } }
+    case 'notify': return { type, message: '' }
+    case 'command': return { type, target: { type: 'devices', deviceIds: [] }, command: { type: 'light.set', on: true } }
+  }
 }

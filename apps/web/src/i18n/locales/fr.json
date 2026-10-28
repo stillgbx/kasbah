@@ -802,6 +802,7 @@
     "smaller": "Réduire", "bigger": "Agrandir",
     "saveError": "Place non enregistrée : {message}"
   },
+  "push": { "title": "Notifications", "hint": "Les alertes de la maison (robots, animaux, météo, véhicules, plugins en panne) et les messages des automatisations, sur cet appareil, même l'app fermée.", "thisDevice": "Sur cet appareil", "on": "Activées : choisissez ce qui arrive ici.", "off": "Désactivées.", "denied": "Refusées par le navigateur : les autoriser dans les réglages du site.", "unsupported": {"insecure": "Disponibles par l'adresse publique (HTTPS) seulement, pas par le réseau local.", "install": "Sur iPhone : ajoutez d'abord l'app à l'écran d'accueil, puis ouvrez-la de là.", "browser": "Ce navigateur ne reçoit pas de notifications."}, "categories": "Ce qui arrive ici", "category": {"vehicles": "Véhicules", "robots": "Robots", "pets": "Animaux", "weather": "Météo", "plugins": "Plugins", "automations": "Automatisations"}, "test": "Envoyer un essai", "error": "Notifications : {message}" },
   "serverUpdate": { "title": "Mise à jour du serveur", "hint": "Récupère la dernière version publiée (branche main), la construit et redémarre le serveur : quelques secondes de coupure, une à deux minutes quand les dépendances changent. Si une étape échoue, la version précédente est remise en service. Depuis le réseau local seulement.", "running": "En service", "upToDate": "À jour.", "available": "{n} mise à jour disponible | {n} mise à jour disponible | {n} mises à jour disponibles", "check": "Vérifier", "update": "Mettre à jour", "started": "Mise à jour lancée.", "notSupervised": "Serveur lancé sans son superviseur (npm start, npm run dev) : la mise à jour se fait à la main. Voir la page Production du wiki.", "lanOnly": "La mise à jour se lance depuis le réseau local.", "gitError": "Dépôt injoignable : {message}", "inProgress": "Mise à jour en cours…", "done": "Dernière mise à jour le {date}.", "failed": "Échec à l’étape « {step} ».", "rolledBack": "La version précédente a été remise en service.", "notRolledBack": "Le retour à la version précédente a échoué aussi : voir le journal.", "interrupted": "Mise à jour interrompue : le superviseur s’est arrêté en route.", "supervisorChanged": "Le superviseur lui-même a changé : relancer sa tâche, ou la machine, pour le prendre en compte.", "log": "Journal", "steps": { "fetch": "Récupération", "deps": "Dépendances", "build": "Construction", "restart": "Redémarrage", "rollback": "Retour en arrière" } },
   "mcpUsers": {
     "title": "Comptes",
@@ -1008,6 +1009,7 @@
       "all": "chaque {what}",
       "wholeHouse": "toute la maison",
       "exceptRooms": "(sauf pièces avec {what} en marche)",
+      "notify": "notifier « {message} »",
       "scene": "ambiance {name}"
     },
     "predicate": {
@@ -1080,7 +1082,7 @@
       "speed": "Vitesse"
     },
     "op": { "eq": "=", "ne": "≠", "gt": ">", "gte": "≥", "lt": "<", "lte": "≤" },
-    "action": { "command": "Commander des appareils", "recallScene": "Rappeler une ambiance" },
+    "action": { "command": "Commander des appareils", "recallScene": "Rappeler une ambiance", "notify": "Envoyer une notification" },
     "target": { "devices": "Appareils choisis", "selector": "Sélection", "except": "Sauf pièces avec…" },
     "command": {
       "light": { "on": "Allumer", "off": "Éteindre", "brightness": "Allumer à {n} %" },
@@ -1159,6 +1161,7 @@
       "urlPlaceholder": "https://…",
       "scene": "Ambiance",
       "noScene": "Aucune ambiance",
+      "message": "Message", "messagePlaceholder": "Le portail est encore ouvert", "notifyHint": "Titrée du nom de l'automatisation, envoyée aux appareils abonnés à « Automatisations » (Réglages → Notifications).",
       "recallMode": "Mode",
       "missing": {
         "name": "Il manque un nom.",
