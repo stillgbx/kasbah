@@ -1,6 +1,6 @@
 # Appli Android Auto
 
-> Dernière mise à jour : 2026-10-25
+> Dernière mise à jour : 2026-10-28
 > Sources : `apps/android/app/src/test/kotlin/org/kasbah/auto/*Test.kt`, `apps/android/app/src/main/kotlin/org/kasbah/auto/{KasbahClient,MainActivity,KasbahCarAppService,AccessScreen,VoiceScreen,Voice,ProbeScreen,Approach}.kt`, `apps/android/app/src/debug/`, `apps/android/app/src/main/AndroidManifest.xml`, `apps/android/app/src/main/res/xml/{backup_rules,data_extraction_rules}.xml`, bibliothèque `androidx.car.app:app` 1.7.0 (`HostValidator`, `hosts_allowlist_sample`), scan Claude Security du 2026-10-25, `apps/android/app/build.gradle.kts`, `apps/android/dhu.cmd`, `apps/android/.gitattributes`, `apps/server/src/http/session.ts`, `apps/server/src/plugins/transcription/index.ts`, portail `developer.renaultgroup.com`, session du 2026-10-22 (essais sur un téléphone Android et dans le simulateur DHU), `apps/android/keystore.properties.example`, `apps/android/app/build.gradle.kts` (signature), console Google Play (2026-10-23)
 
 Une appli Android, à côté de l'app web, qui met Kasbah sur l'écran de la voiture par **Android
@@ -94,6 +94,9 @@ unique (RTS) qui ne dit jamais sa position.
 - **Icône de l'appli** : le logo du site (`apps/web/public/icons/icon-maskable.svg`) en icône
   adaptative, fond `#0d1420`. Les vecteurs `ic_launcher_foreground.xml` et `ic_kasbah_logo.xml` sont
   **générés** depuis les SVG (polygones → chemins, `rgba()` → `#AARRGGBB`) : modifier le SVG, pas le XML.
+  *(Mise à jour 2026-10-28 : le générateur n'est pas versionné ; pour le logo sans fenêtres (version 0.6), les
+  mêmes retouches ont été portées à la main dans les SVG et dans les deux XML — voir
+  [5_2 Production](../5_setup/5_2_production.md), « Mise à jour 2026-10-28 (bis) ».)*
 - **Deux noms, deux icônes** (demande de l'utilisateur : la PWA installée s'appelle aussi « Kasbah »,
   même logo). Sur le téléphone, l'appli s'appelle **« Kasbah Auto »** (`android:label` de
   l'application) et son icône porte une **pastille turquoise à voiture** dans le coin libre en haut à

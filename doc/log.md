@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-28] update | Logo sans fenêtres, deux coutures d'arêtes corrigées, appli Android 0.6
+
+**Déclencheur** : la tour du logo perd ses fenêtres (idée venue d'une vidéo de démo) ; l'utilisateur a ensuite signalé un défaut sur l'arête de la tour.
+
+**Pages modifiées** :
+- `5_setup/5_2_production.md` — section « Mise à jour 2026-10-28 (bis) » : fenêtres retirées (web et Android), liseré sous les créneaux (dessus de tour peint avant les faces), point turquoise sur l'arête centrale (dessus du cube coupé avant l'arête), pièges pour refaire les PNG avec Chrome sans interface (fenêtre ≥ 500 px et facteur d'échelle, chemins à `/`, PowerShell) ; renvoi depuis le paragraphe de l'icône.
+- `1_architecture/1_15_appli-android-auto.md` — note : générateur des XML non versionné, retouches portées à la main, version 0.6.
+
+**Index** : catalogues `1_architecture` (1 date) et `5_setup` (date déjà du jour), index.md régénéré.
+
 ## [2026-10-28] update | Notifications push (Web Push) : alertes de la maison et action d'automatisation `notify`
 
 **Déclencheur** : demande de notifications sur le bureau et le téléphone (alertes de la maison, messages d'automatisations) ; fonctionnalité codée dans l'arbre de travail, NON COMMITÉE au moment de l'écriture.

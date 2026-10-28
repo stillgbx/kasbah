@@ -85,6 +85,8 @@ script jetable (non versionné) puis rasterisée par Chrome sans interface
 `icon.svg` / `icon-maskable.svg` puis refaire les PNG de la même façon ; Chrome garde en cache
 l'icône d'une app déjà installée (désinstaller puis réinstaller).
 
+*(Mise à jour 2026-10-28 : la tour n'a plus de fenêtres, et refaire les PNG a ses pièges — voir la section « Mise à jour 2026-10-28 (bis) » en fin de page.)*
+
 ### Mise à jour 2026-10-04 — prérequis d'une machine neuve
 
 Ce qu'il faut installer sur la machine du serveur avant `npm run build && npm start` (Node, git,
@@ -495,3 +497,40 @@ Sources : `scripts/supervisor.mjs`, `apps/server/src/http/system.ts`, `apps/serv
 Détail : [1_16 Notifications push](../1_architecture/1_16_notifications-push.md).
 
 Sources : `apps/web/public/sw.js`, `apps/server/src/core/push/{service,alerts}.ts`, `apps/server/src/app.ts`.
+
+## Mise à jour 2026-10-28 (bis) — logo sans fenêtres, deux coutures, et refaire les PNG
+
+**La tour perd ses fenêtres.** Les cinq polygones sombres (`rgba(13,20,32,0.85)`, `#d90d1420` côté
+Android) sont retirés partout où le logo est dessiné : `icon.svg`, `icon-maskable.svg`, les quatre PNG,
+et les drawables Android `ic_kasbah_logo.xml` (écran de l'appli) et `ic_launcher_foreground.xml`
+(icône, repris par `ic_launcher_logo` et `ic_launcher_foreground_badged`). Les deux familles de
+coordonnées diffèrent : `ic_kasbah_logo` suit `icon.svg`, `ic_launcher_foreground` suit
+`icon-maskable.svg`.
+
+Sans les fenêtres, deux défauts de couture se voyaient sur les arêtes :
+
+- **Liseré sombre sous les créneaux.** Le dessus de la tour (`#8f5f35`) était peint après les deux
+  faces ; son contour de 0,6 débordait sur le haut des murs et ressortait sous le bord lissé des
+  créneaux, qui sont dans le prolongement des murs. Il est maintenant peint **avant** les faces.
+- **Point turquoise sur l'arête centrale.** Le dessus du cube était d'abord peint en entier, y compris
+  sous la tour (jusqu'à x = 184,4 pour une arête à 193,9) : la couture lissée entre les deux faces de
+  la tour laissait voir le turquoise à cette hauteur. Ce premier polygone s'arrête désormais à
+  x = 205 (`icon.svg`) / 215 (`icon-maskable.svg`), sous la face droite, avant l'arête.
+
+Règle générale : une forme cachée par la tour ne doit pas passer sous une arête **intérieure** de
+celle-ci, la couture entre deux faces adjacentes n'étant jamais tout à fait opaque.
+
+**Refaire les PNG avec Chrome sans interface :**
+
+- Une fenêtre de moins de ~500 px rend une image tronquée (192 et 180 sortent coupés). On rend
+  toujours en `--window-size=512,512` et on réduit par `--force-device-scale-factor` : 0,375 pour
+  `icon-192.png`, 0,3515625 pour `apple-touch-icon.png` (180).
+- `apple-touch-icon.png` vient de `icon-maskable.svg` (fond plein, iOS arrondit lui-même) ;
+  `icon-512.png` et `icon-192.png` de `icon.svg` (coins transparents).
+- Depuis Git Bash, donner à `--screenshot=` un chemin à barres obliques (`D:/…/icon-192.png`) : avec
+  des antislashs, Chrome n'a parfois rien écrit (« Unsupported screenshot image file type »). Depuis
+  PowerShell, `chrome.exe` rend la main avant d'écrire le fichier : rien n'est produit.
+- Pour juger une arête, rendre le SVG dans une page HTML à `width: 8192px` décalée sur la zone
+  (×16) : un défaut de couture est invisible à 512.
+
+Sources : `apps/web/public/icons/`, `apps/android/app/src/main/res/drawable/{ic_kasbah_logo,ic_launcher_foreground}.xml`.
