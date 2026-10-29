@@ -26,6 +26,14 @@
             "port": 8090
         },
         {
+            // The static demo as GitHub Pages serves it under /kasbah/demo/: build it first
+            // (`npm run build:demo -w @kasbah/web`), then open http://localhost:8091/kasbah/demo/.
+            "name": "kasbah-demo-static",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run", "preview", "-w", "@kasbah/web", "--", "--mode", "demo", "--port", "8091", "--strictPort"],
+            "port": 8091
+        },
+        {
             "name": "kasbah",
             "runtimeExecutable": "npm",
             "runtimeArgs": ["run", "dev"],

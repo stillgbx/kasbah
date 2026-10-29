@@ -1,7 +1,7 @@
 # Production
 
 > Dernière mise à jour : 2026-10-29
-> Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts`, `site/`, `.github/workflows/pages.yml` (2026-10-29)
+> Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts`, `site/`, `.github/workflows/pages.yml`, `apps/web/src/stores/push.ts` (2026-10-29)
 
 ## Build
 
@@ -581,3 +581,43 @@ Une page publique qui se partage (X, Discord, README), montre la vidéo, et port
   (`python -m http.server 8090 --directory site`), puis la page à 375 px et sur bureau.
 
 Sources : `site/`, `.github/workflows/pages.yml`, `.claude/launch.json`, `_generated-ai-doc/plan-site-android-nest.md` §1 (non versionné).
+
+### Mise à jour 2026-10-29 — la démo web sur Pages (`/kasbah/demo/`)
+
+But : voir l'app sans rien installer, depuis le bouton **Try the demo** / **Essayer la démo** du site.
+C'est l'app web elle-même, sur la simulation in-process (`../3_plugins/3_0_simulation-mock.md`), pas
+une maquette.
+
+- **Build** : `npm run build:demo -w @kasbah/web` = `vite build --mode demo`. Le mode `demo` de
+  `apps/web/vite.config.ts` pose `base` = `/kasbah/demo/`, sort dans `apps/web/dist-demo/` (ignoré par
+  git ; le `dist/` que sert le serveur n'est pas touché) et force `import.meta.env.VITE_INPROCESS_MOCK`
+  à `'1'` par `define`. Pas de fichier `.env.demo` : `.env*` est ignoré par git, il ne partirait pas en CI.
+- **Ce que la démo n'emporte pas** (plugin `kasbah-demo` du même fichier) : `sw.js` (push), `diag.html`
+  (il poste au serveur) et le manifeste d'installation (lien retiré de la page). Le store `push` se
+  déclare non pris en charge en démo (`apps/web/src/stores/push.ts`) : sans ça, il enregistrait
+  `/sw.js` **à la racine du domaine** `stillgbx.github.io`, que partagent toutes les pages Pages du compte.
+- **Content-Security-Policy en `<meta>`** : Pages n'envoie pas d'en-têtes. Scripts du site seuls
+  (`'wasm-unsafe-eval'` pour le lecteur `.om` du radar, `worker-src blob:` pour MapLibre), styles
+  `'unsafe-inline'` (Vue et Vuetify posent des attributs `style`), `connect-src` et `img-src` limités
+  au site et à cinq hôtes de données : `tiles.openfreemap.org`, `data.geopf.fr`, `api.rainviewer.com`,
+  `tilecache.rainviewer.com`, `openmeteo.s3.amazonaws.com` (cartes, radar, IGN). `photon.komoot.io`
+  (repli de la recherche d'adresse) reste bloqué. Vérifié dans le navigateur : l'accueil ne sort pas
+  du site, la page Météo ne sort que vers ces hôtes ; un hôte retiré de la liste est bloqué.
+- **Workflow durci** (`.github/workflows/pages.yml`) : déclenché aussi par `apps/web/**`,
+  `packages/shared/**`, `packages/mock-sim/**`, `house/demos/**`, `package-lock.json`. Deux jobs : le
+  build (jeton `contents: read`, `checkout` sans identifiants persistés, `npm ci --ignore-scripts`)
+  puis le déploiement, seul à avoir `pages: write` et `id-token: write`, qui n'exécute aucun code du
+  dépôt ni de npm. Actions épinglées par SHA de commit (dernier correctif des versions majeures déjà
+  utilisées). `configure-pages` retiré : il ne sert qu'aux générateurs qui lisent l'URL de base.
+  `npm ci --ignore-scripts` puis `build:demo` vérifiés sur un checkout propre (Windows).
+- **`site/404.html`** : Pages le sert pour toute adresse absente du site ; une page profonde de la
+  démo rechargée ou partagée (`/kasbah/demo/weather`) y est renvoyée vers `/kasbah/demo/`, faute
+  d'`index.html` à cette adresse. Liens absolus, puisque la page s'affiche à n'importe quelle adresse.
+  Non vérifié sur Pages au moment de l'écrire.
+- **Données privées** : le contenu construit passé contre `.private-denylist` (55 règles, aucune trouvée).
+- **Politique de confidentialité** : la section « This website » / « Ce site » décrit la démo (tout dans
+  le navigateur, réglages dans le stockage local, les hôtes des cartes et du radar).
+- **Vérifier en local** : `npm run build:demo -w @kasbah/web`, puis la config `kasbah-demo-static` de
+  `.claude/launch.json` (`vite preview --mode demo`, port 8091) et `http://localhost:8091/kasbah/demo/`.
+
+Sources : `apps/web/vite.config.ts`, `apps/web/package.json`, `apps/web/src/stores/push.ts`, `.github/workflows/pages.yml`, `site/404.html`, `site/privacy.html`, `site/fr/privacy.html`, `.claude/launch.json`.

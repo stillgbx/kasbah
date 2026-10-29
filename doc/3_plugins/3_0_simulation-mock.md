@@ -1,7 +1,7 @@
 # Simulation (`@kasbah/mock-sim` et plugin `mock`)
 
-> Dernière mise à jour : 2026-10-26
-> Sources : `packages/mock-sim/src/{simulation,scenarios,world,clock,rng,types}.ts`, `packages/mock-sim/src/behaviours/*.ts`, `apps/server/src/plugins/mock/index.ts`, `apps/web/src/api/mockTransport.ts`, `packages/mock-sim/src/behaviours/energy.ts`, `packages/mock-sim/src/demos.ts`, `packages/mock-sim/src/behaviours/camera.ts`
+> Dernière mise à jour : 2026-10-29
+> Sources : `apps/web/src/api/demoProperties.ts`, `packages/mock-sim/src/{simulation,scenarios,world,clock,rng,types}.ts`, `packages/mock-sim/src/behaviours/*.ts`, `apps/server/src/plugins/mock/index.ts`, `apps/web/src/api/mockTransport.ts`, `packages/mock-sim/src/behaviours/energy.ts`, `packages/mock-sim/src/demos.ts`, `packages/mock-sim/src/behaviours/camera.ts`
 
 ## Pourquoi un paquet séparé
 
@@ -505,3 +505,18 @@ dérivé des Wh du jour : un demi-sinus sur environ 10 h de jour met le pic à `
 repère « record » différent par période dans la vue Énergie sans vraie installation
 ([4_4](../4_ui/4_4_vues-energie-vehicules.md)). Le record **live** des panneaux simulés (`maxValue`,
 section du 2026-09-13) est inchangé : il ne suit donc pas ce `peakW`.
+
+### Mise à jour 2026-10-29 — Les Embruns en premier, Les Tilleuls déplacée
+
+- **Propriété par défaut du transport in-process** : `activeDemoProperty()`
+  (`apps/web/src/api/demoProperties.ts`) ouvre **Les Embruns** (la maison à toit plat) quand le
+  navigateur n'a rien mémorisé, au lieu de la première de la liste (Les Tilleuls). C'est la maison
+  d'accueil de la démo publiée sur GitHub Pages (`../5_setup/5_2_production.md`). L'ordre de la liste
+  ne change pas ; le serveur en mode démo garde son propre défaut.
+- **Origine des Tilleuls** : 47.309069, 5.046007, à une quarantaine de mètres de l'ancienne, à la
+  demande de l'utilisateur, dans `house/demos/tilleuls.json` **et** dans `TILLEULS` de
+  `packages/mock-sim/src/demos.ts` (sinon la voiture simulée se gare à côté de la maison). La règle du
+  commentaire de `demos.ts` tient toujours : un lieu public, jamais la maison de quelqu'un.
+  L'ancienne `HOME` (47.309343, 5.045591) reste celle de la maison démo historique
+  (`demo-house.json`, ses deux exemplaires, `scenarios.ts`, l'exemple de `docs/house-json.md`) et
+  des tests qui l'emploient comme valeur quelconque : rien à changer de ce côté.

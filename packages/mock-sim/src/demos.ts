@@ -21,7 +21,7 @@ import { camera } from './behaviours/camera'
 // that the map frames both (3 km rule of `lib/map.ts`).
 
 /** Origins of the houses: `origin` of `house/demos/tilleuls.json` and `embruns.json` (heading 0). */
-const TILLEULS = { lat: 47.309343, lon: 5.045591 }
+const TILLEULS = { lat: 47.309069, lon: 5.046007 }
 const TILLEULS_WORK = { lat: 47.3216, lon: 5.0415 }
 const EMBRUNS = { lat: 47.1135, lon: -2.1215 }
 const EMBRUNS_WORK = { lat: 47.1153, lon: -2.104 }

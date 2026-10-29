@@ -20,7 +20,8 @@ export type PushUnsupported = 'insecure' | 'install' | 'browser'
 const SW_URL = '/sw.js'
 
 function unsupportedReason(): PushUnsupported | null {
-  if (typeof window === 'undefined') return 'browser'
+  // The static demo has neither the service worker nor a server to subscribe to.
+  if (typeof window === 'undefined' || import.meta.env.VITE_INPROCESS_MOCK === '1') return 'browser'
   if (!window.isSecureContext) return 'insecure'
   if ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window) return null
   // iOS only exposes Web Push to an app installed on the home screen

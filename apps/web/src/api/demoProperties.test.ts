@@ -9,12 +9,12 @@ import { activeDemoProperty, DEMO_PROPERTIES, demoPropertiesResponse, rememberDe
 describe('demo properties (in-process)', () => {
   beforeEach(() => localStorage.clear())
 
-  it('starts on the first property and remembers the chosen one', () => {
-    expect(activeDemoProperty().id).toBe('tilleuls')
+  it('starts on Les Embruns and remembers the chosen one', () => {
+    expect(activeDemoProperty().id).toBe('embruns')
     rememberDemoProperty('belvedere')
     expect(activeDemoProperty().id).toBe('belvedere')
     rememberDemoProperty('ailleurs')
-    expect(activeDemoProperty().id).toBe('tilleuls')
+    expect(activeDemoProperty().id).toBe('embruns')
   })
 
   const transport = () => {
@@ -35,6 +35,7 @@ describe('demo properties (in-process)', () => {
   })
 
   it('names the property in the snapshot and recalls a simulated scene', async () => {
+    rememberDemoProperty('tilleuls')
     const t = transport()
     const msgs: ServerMessage[] = []
     const off = t.connect({ onMessage: (m) => msgs.push(m), onStatus: () => {} })

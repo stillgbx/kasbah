@@ -24,12 +24,14 @@ const property = (raw: { id: string; name: string } & DemoMeta): DemoProperty =>
 export const DEMO_PROPERTIES: readonly DemoProperty[] = [property(tilleuls as never), property(embruns as never), property(belvedere as never)]
 
 const KEY = 'kasbah.demoProperty'
+/** The first house a visitor of the static demo sees: Les Embruns, the flat-roofed one. */
+const DEFAULT_ID = 'embruns'
 
-/** The demo property remembered by THIS browser; the first one if none is remembered (or if storage is missing). */
+/** The demo property remembered by THIS browser; Les Embruns if none is remembered (or if storage is missing). */
 export function activeDemoProperty(): DemoProperty {
   let id: string | null = null
-  try { id = localStorage.getItem(KEY) } catch { /* storage unavailable: the first one */ }
-  return DEMO_PROPERTIES.find((p) => p.id === id) ?? DEMO_PROPERTIES[0]!
+  try { id = localStorage.getItem(KEY) } catch { /* storage unavailable: the default one */ }
+  return DEMO_PROPERTIES.find((p) => p.id === id) ?? DEMO_PROPERTIES.find((p) => p.id === DEFAULT_ID)!
 }
 
 export function rememberDemoProperty(id: string): void {

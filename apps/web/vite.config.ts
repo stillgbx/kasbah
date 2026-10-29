@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath, URL } from 'node:url'
 import { parseEnv } from 'node:util'
 import { defineConfig, type Plugin } from 'vite'
@@ -41,15 +42,56 @@ const failUnresolved: Plugin = {
   },
 }
 
+// `--mode demo` (`npm run build:demo`): the static demo GitHub Pages serves under /kasbah/demo/
+// (`.github/workflows/pages.yml`), on the in-process simulation. Nothing a server would answer is kept:
+// the push service worker, the browser diagnostics page (it posts to the server) and the install
+// manifest. Pages sets no headers, so the Content-Security-Policy is a <meta>: scripts from this site
+// only, and data from the map, radar and IGN hosts the weather, vehicle and house views read
+// (src/lib/map.ts, arome.ts, ign*.ts, geocode.ts, components/weather/RainRadar.vue).
+const DEMO_BASE = '/kasbah/demo/'
+const DEMO_DATA_HOSTS = 'https://tiles.openfreemap.org https://data.geopf.fr https://api.rainviewer.com https://tilecache.rainviewer.com https://openmeteo.s3.amazonaws.com'
+const DEMO_CSP = [
+  "default-src 'self'",
+  // MapLibre's worker is a blob; the radar's file reader is WebAssembly.
+  "script-src 'self' 'wasm-unsafe-eval'",
+  "worker-src 'self' blob:",
+  // Vue and Vuetify set style attributes at run time.
+  "style-src 'self' 'unsafe-inline'",
+  `img-src 'self' data: blob: ${DEMO_DATA_HOSTS}`,
+  "font-src 'self' data:",
+  "media-src 'self' data: blob:",
+  `connect-src 'self' data: blob: ${DEMO_DATA_HOSTS}`,
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'none'",
+].join('; ')
+function demoPage(): Plugin {
+  let outDir = ''
+  return {
+    name: 'kasbah-demo',
+    apply: (_, env) => env.command === 'build' && env.mode === 'demo',
+    configResolved(config) { outDir = config.build.outDir },
+    transformIndexHtml: (html) => html
+      .replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${DEMO_CSP}" />`)
+      .replace(/\n\s*<link rel="manifest"[^>]*>/, ''),
+    closeBundle() {
+      for (const file of ['sw.js', 'diag.html', 'manifest.webmanifest']) rmSync(join(outDir, file), { force: true })
+    },
+  }
+}
+
 // `base: '/'`: absolute paths, without which a reloaded `/automations/new` would look for its files under
 // `/automations/assets/`. The build is served by the Fastify server under / (SPA fallback).
-export default defineConfig(({ command }) => ({
+export default defineConfig(({ command, mode }) => ({
   plugins: [
-    failUnresolved, vue(), vuetify({ autoImport: true }),
+    failUnresolved, vue(), vuetify({ autoImport: true }), demoPage(),
     { name: 'kasbah-build-id', apply: 'build', generateBundle() { this.emitFile({ type: 'asset', fileName: 'build-id.txt', source: BUILD_ID }) } },
   ],
-  define: { __KASBAH_BUILD__: JSON.stringify(command === 'build' ? BUILD_ID : '') },
-  base: '/',
+  define: {
+    __KASBAH_BUILD__: JSON.stringify(command === 'build' ? BUILD_ID : ''),
+    ...(mode === 'demo' ? { 'import.meta.env.VITE_INPROCESS_MOCK': JSON.stringify('1') } : {}),
+  },
+  base: mode === 'demo' ? DEMO_BASE : '/',
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   // MapLibre loads its worker through `new URL('./maplibre-gl-worker.mjs', import.meta.url)`: once
   // pre-bundled in `.vite/deps`, this URL no longer points to anything, the worker does not start and
@@ -71,6 +113,7 @@ export default defineConfig(({ command }) => ({
     },
   },
   build: {
+    outDir: mode === 'demo' ? 'dist-demo' : 'dist',
     target: 'es2022',
     rollupOptions: {
       output: {
