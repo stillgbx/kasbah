@@ -107,7 +107,8 @@
   local storage. It is hosted by GitHub Pages.</p>
   <p>The <a href="demo/">demo</a> runs entirely in your browser, on simulated devices: it sends nothing to the
   publisher or to any server of yours. It keeps its own choices (the property shown, the theme, the language…)
-  in your browser's local storage. Its maps and weather radar load their images and data from
+  in your browser's local storage. If you tap its microphone, your browser asks for it; what it hears stays
+  in the page and is dropped, since the demo answers with one of its sample requests instead. Its maps and weather radar load their images and data from
   <code>tiles.openfreemap.org</code>, <code>data.geopf.fr</code> (IGN), <code>rainviewer.com</code> and
   Open-Meteo (<code>openmeteo.s3.amazonaws.com</code>), which see your IP address like any website you visit;
   nothing else leaves the page.</p>

@@ -1,7 +1,7 @@
 # Assistant (« Demander à Kasbah »)
 
-> Dernière mise à jour : 2026-10-25
-> Sources : `apps/server/src/assistant/{assistant,engines}.ts`, tests `apps/server/src/assistant/assistant.test.ts`, `apps/server/src/mcp/auth.ts` (`runToken`), `apps/server/src/app.ts`, `apps/web/src/composables/useAssistant.ts`, `apps/web/src/components/layout/{AssistantReply,SearchPalette,PageHeader}.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.ts`, `apps/android/app/src/main/kotlin/org/kasbah/auto/VoiceScreen.kt`, session du 2026-10-22
+> Dernière mise à jour : 2026-10-29
+> Sources : `apps/web/src/api/demoAssistant.ts`, `apps/server/src/assistant/{assistant,engines}.ts`, tests `apps/server/src/assistant/assistant.test.ts`, `apps/server/src/mcp/auth.ts` (`runToken`), `apps/server/src/app.ts`, `apps/web/src/composables/useAssistant.ts`, `apps/web/src/components/layout/{AssistantReply,SearchPalette,PageHeader}.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.ts`, `apps/android/app/src/main/kotlin/org/kasbah/auto/VoiceScreen.kt`, session du 2026-10-22
 
 ## Ce que c'est
 
@@ -140,3 +140,39 @@ un bouton dans l'en-tête commun (`components/layout/PageHeader.vue`), sur toute
 la même palette. Au doigt, il l'ouvre sans faire monter le clavier : le micro est à portée. Le cœur,
 les moteurs et `useAssistant` ne changent pas. Placement et mesures :
 [4_1 Navigation et panneaux](../4_ui/4_1_navigation-et-panneaux.md), mise à jour du 2026-10-25.
+
+### Mise à jour 2026-10-29 — un assistant simulé dans la démo sans serveur
+
+La démo publiée sur Pages (`../5_setup/5_2_production.md`) n'a ni transcription ni Claude. À la demande
+de l'utilisateur, elle montre quand même le micro et l'assistant, avec **trois demandes d'exemple à
+conditions** plutôt que des ordres simples (`apps/web/src/api/demoAssistant.ts`) :
+
+| Demande | Ce que fait la simulation |
+|---|---|
+| Allume les lumières, sauf dans les pièces où les volets sont ouverts | allume les lumières des pièces dont aucun volet, brise-soleil ou rideau n'est ouvert |
+| Ferme les volets des chambres et éteins leurs lumières | pièces « Chambre… » / « Suite… » : volets, brise-soleil, rideaux fermés, lumières éteintes |
+| Mets une ambiance cinéma dans le séjour | séjour ou salon : lumières à 20 %, volets fermés |
+
+- **Le micro écoute vraiment** (fin de phrase détectée comme ailleurs), puis l'enregistrement est jeté :
+  `transcribe` rend une des trois demandes, tirée au hasard sans répéter la précédente, précédée de
+  « Mode démo, transcription remplacée : » (« Demo mode, transcription replaced: »), comme l'a voulu
+  l'utilisateur pour que personne ne croie à une vraie transcription.
+- **L'exécution** suit le placement des appareils dans les pièces de la maison (`house.devices[].roomId`) :
+  les trois demandes ont de quoi agir dans les trois maisons de démo (vérifié par test), et les réponses
+  ne nomment aucune pièce, puisque leurs noms changent d'une maison à l'autre. La réponse affiche une
+  ligne `list_devices` puis une ligne `send_command` par appareil, comme une vraie course.
+- **Les réponses dites** viennent d'enregistrements : `apps/web/demo/voice/<demande>.<langue>.mp3`
+  (`lights`, `bedrooms`, `movie` × `en`, `fr`), copiés à côté du build de démo (`voice/`). Voix
+  standard d'un modèle, jamais une voix clonée : les fichiers sont publics. `transcriptionStatus`
+  ne déclare `speech` que si le premier fichier répond en `audio/*` (une page de repli HTML ne compte
+  pas) : sans les fichiers, la réponse reste écrite, sans message d'erreur. Fichiers pas encore livrés
+  au moment de l'écrire.
+- **Une instruction tapée** lance la demande si c'est l'une des trois (dans l'une ou l'autre langue),
+  sinon la démo invite à toucher le micro. La langue est celle de l'app (`<html lang>`, posée par le
+  store des réglages).
+- **Seule la démo l'active** : option `demoAssistant` de `createMockTransport`, passée par
+  `demoTransport()` (`apps/web/src/api/index.ts`). GitNexus classe la fabrique en CRITIQUE (812
+  appelants directs, presque tous des tests) : sans l'option, rien ne change (micro caché, réponse fixe).
+- **Tests** : `demoAssistant.test.ts` (8) ; contrôle négatif fait (la détection des volets ouverts
+  cassée fait échouer le test des pièces exclues). Vérifié dans la démo construite par une instruction
+  tapée ; la dictée elle-même non jouée (le panneau navigateur de Claude Code bloque le micro).

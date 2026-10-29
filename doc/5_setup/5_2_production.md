@@ -617,6 +617,8 @@ une maquette.
 - **Données privées** : le contenu construit passé contre `.private-denylist` (55 règles, aucune trouvée).
 - **Politique de confidentialité** : la section « This website » / « Ce site » décrit la démo (tout dans
   le navigateur, réglages dans le stockage local, les hôtes des cartes et du radar).
+- **Voix de l'assistant simulé** : le même plugin copie `apps/web/demo/voice/` (sans son README) dans
+  `voice/` à côté du build ; détails dans `../1_architecture/1_9_assistant.md`, mise à jour du 2026-10-29.
 - **Aperçu des liens** : le même plugin pose dans la page de démo le titre, la description, les balises
   Open Graph et la carte `summary_large_image` de X. L'image, `site/assets/og-demo.jpg` (1200 × 630,
   ~100 Ko), est un rendu des Embruns en coupe recadré, avec un bandeau « Kasbah / Live demo – try it in

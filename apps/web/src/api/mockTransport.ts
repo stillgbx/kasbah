@@ -2,6 +2,7 @@ import { addShoppingItems, clearCheckedShoppingItems, EMPTY_SHOPPING_LIST, remov
 import { SimError, Simulation, solarGeometry, type ScenarioName } from '@kasbah/mock-sim'
 import demoHouse from '@kasbah/shared/demo-house.json'
 import { createMockSchool } from './mockSchool'
+import { DEMO_ONLY_MIC, DEMO_REQUESTS, demoClipOf, demoLang, demoPlan, demoRequestOf, demoTranscript, type DemoLang, type DemoRequestId } from './demoAssistant'
 import { ApiRequestError, type Transport, type TransportHandlers, type WeatherPlace } from './transport'
 
 const MOCK_PLACES: WeatherPlace[] = [
@@ -14,7 +15,12 @@ const MOCK_PLACES: WeatherPlace[] = [
 // Serverless transport: the same simulation as the server `mock` plugin, in the tab.
 // Used for component tests and a static demo (VITE_INPROCESS_MOCK=1).
 
-const STATUS: Record<string, number> = { UNSUPPORTED_COMMAND: 400, DEVICE_UNAVAILABLE: 503, UPSTREAM_ERROR: 502, TIMEOUT: 504 }
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/** A recording of the demo assistant, beside the demo build (`voice/`, copied by `vite.config.ts`). */
+const demoClipUrl = (id: DemoRequestId, lang: DemoLang) => `${import.meta.env.BASE_URL}voice/${id}.${lang}.mp3`
+
+const STATUS: Record<string, number> ={ UNSUPPORTED_COMMAND: 400, DEVICE_UNAVAILABLE: 503, UPSTREAM_ERROR: 502, TIMEOUT: 504 }
 
 export interface MockTransportOptions {
   scenario?: ScenarioName
@@ -26,6 +32,11 @@ export interface MockTransportOptions {
    * with no switching possible.
    */
   properties?: { list(): PropertiesResponse; select(id: string): void }
+  /**
+   * The demo's microphone and assistant (`demoAssistant.ts`): three sample requests that act on the
+   * simulation, answered aloud from recordings. Absent: no microphone, a fixed reply.
+   */
+  demoAssistant?: boolean
 }
 
 const HOUR_MS = 3_600_000
@@ -450,19 +461,51 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async claudeAccount() { return { user: null, savedAt: null, house: false } },
     async claudeSetToken() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Claude in mock mode') },
     async claudeClearToken() { return { user: null, savedAt: null, house: false } },
-    async assistantAsk(_text, onEvent) {
-      await new Promise((r) => setTimeout(r, 400))
-      onEvent({ type: 'text', text: "Mode démo : l'assistant a besoin du serveur Kasbah." })
-      onEvent({ type: 'done', ms: 400 })
+    async assistantAsk(text, onEvent) {
+      const t0 = Date.now()
+      await wait(400)
+      const request = opts.demoAssistant ? demoRequestOf(text) : null
+      if (!opts.demoAssistant) onEvent({ type: 'text', text: "Mode démo : l'assistant a besoin du serveur Kasbah." })
+      else if (!request) onEvent({ type: 'text', text: DEMO_ONLY_MIC[demoLang()] })
+      else {
+        // the tool lines of a real run: the devices read, then one command each
+        onEvent({ type: 'tool', id: 'demo-list', name: 'list_devices', input: {} })
+        onEvent({ type: 'tool_result', id: 'demo-list', ok: true })
+        for (const [i, step] of demoPlan(request.id, house, entries()).entries()) {
+          await wait(150)
+          onEvent({ type: 'tool', id: `demo-${i}`, name: 'send_command', input: step })
+          let ok = true
+          try { await sim.execute(step.deviceId.replace(/^mock:/, ''), commandSchema.parse(step.command)) } catch { ok = false }
+          onEvent({ type: 'tool_result', id: `demo-${i}`, ok })
+        }
+        onEvent({ type: 'text', text: DEMO_REQUESTS[request.id][request.lang].answer })
+      }
+      onEvent({ type: 'done', ms: Date.now() - t0 })
     },
     async assistantLog() { return { entries: [] } },
-    // no transcription engine here: the microphone is not shown
-    async transcriptionStatus() { return { ready: false, provider: null, speech: false, autoSend: false } },
-    async speak() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no speech in mock mode') },
+    // no transcription engine here: the microphone is only shown for the demo's sample requests, which
+    // speak when their recordings were built with the demo (an HTML fallback is not one)
+    async transcriptionStatus() {
+      if (!opts.demoAssistant) return { ready: false, provider: null, speech: false, autoSend: false }
+      const speech = await fetch(demoClipUrl('lights', 'en'), { method: 'HEAD' })
+        .then((r) => r.ok && (r.headers.get('content-type') ?? '').startsWith('audio/'), () => false)
+      return { ready: true, provider: 'demo', speech, autoSend: true }
+    },
+    async speak(text) {
+      const clip = opts.demoAssistant ? demoClipOf(text) : null
+      if (!clip) throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no speech in mock mode')
+      const r = await fetch(demoClipUrl(clip.id, clip.lang))
+      if (!r.ok) throw new ApiRequestError(r.status, 'NOT_FOUND', `no recording for "${clip.id}"`)
+      return r.blob()
+    },
     async transcriptionVoices() { return { voices: [] } },
     async transcriptionSettings() { return { user: null, voice: null, houseVoice: null, defaultVoice: null } },
     async setTranscriptionVoice(voice) { return { user: null, voice, houseVoice: voice, defaultVoice: null } },
-    async transcribe() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no transcription in mock mode') },
+    // the demo hears nothing: the recording is dropped and replaced by a sample request
+    async transcribe() {
+      if (!opts.demoAssistant) throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no transcription in mock mode')
+      return { text: demoTranscript(demoLang()), ms: 0 }
+    },
     // MCP accounts: in memory, a demonstration account
     async mcpUsers() { return { users: mcpUsers.map((name) => ({ name })) } },
     async mcpSetUser(name) {

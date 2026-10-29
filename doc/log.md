@@ -7,15 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
-## [2026-10-29] update | Démo web statique sur GitHub Pages, Les Embruns en accueil, Les Tilleuls déplacée
+## [2026-10-29] update | Démo web statique sur GitHub Pages, Les Embruns en accueil, Les Tilleuls déplacée, assistant simulé
 
 **Déclencheur** : préparation de la publication Play de l'appli Android ; l'utilisateur veut une démo visible sans rien installer, sur le site Pages, « en faisant attention à la sécurité ».
 
 **Pages modifiées** :
 - `5_setup/5_2_production.md` — section « Mise à jour 2026-10-29 — la démo web sur Pages » : `build --mode demo`, ce que la démo n'emporte pas (push, diagnostic, manifeste), CSP en `<meta>` et ses cinq hôtes de données, workflow en deux jobs (build sans droits ni scripts d'installation, déploiement seul à écrire, actions épinglées par SHA), `404.html`, vérification locale ; puis l'aperçu des liens de la démo (balises Open Graph et carte X, image `og-demo.jpg` avec bandeau « Live demo »).
+- `1_architecture/1_9_assistant.md` — section « Mise à jour 2026-10-29 — un assistant simulé dans la démo sans serveur » : trois demandes à conditions, transcription remplacée et annoncée comme telle, exécution pièce par pièce, réponses enregistrées (fichiers à venir), option `demoAssistant` réservée à la démo.
 - `3_plugins/3_0_simulation-mock.md` — section « Mise à jour 2026-10-29 » : Les Embruns par défaut du transport in-process, nouvelle origine des Tilleuls (maison et simulation), l'ancienne `HOME` gardée pour la maison démo historique.
 
-**Index** : catalogues `3_plugins` (1 date) et `5_setup` (1 résumé), index.md régénéré.
+**Index** : catalogues `1_architecture` (1 résumé), `3_plugins` (1 date) et `5_setup` (1 résumé), index.md régénéré.
 
 ## [2026-10-29] update | Nest : appli OAuth publiée sans validation, liaison depuis un autre poste
 

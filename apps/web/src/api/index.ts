@@ -21,7 +21,7 @@ export function getTransport(): Transport {
 function demoTransport(): Transport {
   const p = activeDemoProperty()
   return createMockTransport({
-    timeScale: 30, scenario: p.scenario, house: parseHouse(p.house),
+    timeScale: 30, scenario: p.scenario, house: parseHouse(p.house), demoAssistant: true,
     properties: { list: () => demoPropertiesResponse(activeDemoProperty().id), select: rememberDemoProperty },
   })
 }

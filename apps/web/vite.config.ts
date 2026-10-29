@@ -1,4 +1,4 @@
-import { readFileSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath, URL } from 'node:url'
 import { parseEnv } from 'node:util'
@@ -95,6 +95,9 @@ function demoPage(): Plugin {
       .replace(/\n\s*<link rel="manifest"[^>]*>/, ''),
     closeBundle() {
       for (const file of ['sw.js', 'diag.html', 'manifest.webmanifest']) rmSync(join(outDir, file), { force: true })
+      // the demo assistant's spoken answers (src/api/demoAssistant.ts), for this build only
+      const voice = fileURLToPath(new URL('./demo/voice', import.meta.url))
+      if (existsSync(voice)) cpSync(voice, join(outDir, 'voice'), { recursive: true, filter: (f) => !f.endsWith('.md') })
     },
   }
 }
