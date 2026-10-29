@@ -31,12 +31,19 @@ Cameras must be attached to a **Google account**: an old Nest account has to be 
 
 **On the Kasbah side:**
 
-3. In `apps/server/.env`: `NEST_PROJECT_ID`, `NEST_CLIENT_ID`, `NEST_CLIENT_SECRET` (and `NEST_REDIRECT_URI` if the server does not listen on port 8787).
+3. In `apps/server/.env`: `NEST_PROJECT_ID`, `NEST_CLIENT_ID`, `NEST_CLIENT_SECRET` (and `NEST_REDIRECT_URI` if the server does not listen on port 8787, or to link from another computer, see below).
 4. Tick **Nest** in **Settings → Plugins**, and restart the server. The plugin goes to **"Pairing required"**.
 5. In the Nest section: **Link the Google account**. Google's consent screen opens in a new tab: this is where you **choose the cameras shared** with Kasbah.
 6. On return, the page shows `NEST_REFRESH_TOKEN=…`. Copy it into `apps/server/.env` so it survives a restart: the server never writes that file. The plugin already works; **Refresh** makes the cameras appear.
 
 **Link the account again** (same button) to change the shared cameras.
+
+**Linking from another computer**: after the consent screen, Google sends your browser to `NEST_REDIRECT_URI`. The default, `localhost:8787`, therefore only works in a browser on the server machine. From anywhere else, use the public address (HTTPS) when Kasbah has one (see the README's **Remote access**):
+
+- add `https://maison.example.org/api/plugins/nest/auth/callback` to the OAuth client's **authorized redirect URIs** (Google refuses `http` except on `localhost`), and its domain to the **authorized domains** of the consent screen's Branding page;
+- set the same value in `NEST_REDIRECT_URI`, restart the server, then link the account.
+
+Without a public address, the link can still be finished by hand: the browser lands on a `http://localhost:8787/…/auth/callback?…` page that does not load. In the address bar, replace `http://localhost:8787` with the address you open Kasbah on, keep the rest, and open it within a few minutes, without restarting the server in between.
 
 **Optional, real-time doorbell**: Google only pushes the ring through Pub/Sub.
 

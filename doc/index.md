@@ -58,7 +58,7 @@ La maison décrite en JSON : format et validation, géométrie dérivée (murs, 
 ## 3 — Plugins
 
 <!-- section:3_plugins:begin (généré par scripts/wiki-index.mjs depuis 3_plugins/README.md - ne pas éditer ici) -->
-Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (27 pages, dernière mise à jour 2026-10-27).
+Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (27 pages, dernière mise à jour 2026-10-29).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -70,7 +70,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 |---|---|
 | [3_1 Philips Hue](3_plugins/3_1_philips-hue.md) | 2026-10-24 |
 | [3_4 Somfy TaHoma](3_plugins/3_4_somfy-tahoma.md) | 2026-10-24 |
-| [3_5 Google Nest (caméras, sonnettes)](3_plugins/3_5_google-nest.md) | 2026-10-26 |
+| [3_5 Google Nest (caméras, sonnettes)](3_plugins/3_5_google-nest.md) | 2026-10-29 |
 | [3_6 Google Cast](3_plugins/3_6_google-cast.md) | 2026-10-24 |
 | [3_7 Enphase](3_plugins/3_7_enphase.md) | 2026-10-26 |
 | [3_8 Tesla (Fleet API)](3_plugins/3_8_tesla.md) | 2026-10-20 |

@@ -1,7 +1,7 @@
 # Plugin Google Nest (caméras, sonnettes)
 
-> Dernière mise à jour : 2026-10-26
-> Sources : `apps/server/src/plugins/nest/{index,client,mapping,types}.ts`, `apps/server/src/core/video/{rtsp-relay,jpeg}.ts`, `apps/server/src/plugins/nest/__fixtures__/sdm.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/server/.env.example`, `apps/web/src/components/NestLinkCard.vue`, demande de l'utilisateur du 2026-09-09
+> Dernière mise à jour : 2026-10-29
+> Sources : `apps/server/src/plugins/nest/{index,client,mapping,types}.ts`, `apps/server/src/core/video/{rtsp-relay,jpeg}.ts`, `apps/server/src/plugins/nest/__fixtures__/sdm.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/server/.env.example`, `apps/web/src/components/NestLinkCard.vue`, `docs/plugins/nest.md`, demande de l'utilisateur du 2026-09-09
 
 ## Ce que l'utilisateur veut, et par étapes
 
@@ -85,6 +85,55 @@ dans la console : tant que l'écran de consentement OAuth du projet Google Cloud
 l'application en **In production** (écran de consentement OAuth ; pour un usage personnel, Google
 affiche seulement un avertissement « application non vérifiée »), puis relier le compte une dernière
 fois depuis Réglages. Le plugin n'y peut rien : il ne fait que relayer le refus.
+
+### Mise à jour 2026-10-29 — statut « Test » constaté, appli publiée sans validation
+
+La console confirmait la cause : *Google Auth Platform* → *Audience* affichait l'état de publication
+**Test**. Ce qu'il a fallu pour publier, dans la console de 2026 :
+
+- le bouton **Publier l'application** reste grisé tant que la page **Branding** n'est pas complète.
+  Le nom de l'appli et les deux e-mails ne suffisaient pas : la console a aussi réclamé la **page
+  d'accueil** et la **politique de confidentialité**, puis le **domaine autorisé** de chacun de ces
+  liens (en plus de celui de l'URI de redirection). Google ne demande la preuve de propriété de ces
+  domaines (Search Console) qu'au moment d'une validation ;
+- **pas de logo** : un logo oblige à faire valider la marque, et il ne s'affiche de toute façon pas
+  sur une appli non validée ;
+- la boîte « Transférer en production ? » annonce une validation nécessaire à cause de la portée
+  sensible `sdm.service`. Elle n'est **pas bloquante** : l'appli passe « En production » non validée,
+  avec l'écran « Google n'a pas validé cette application » au consentement (*Paramètres avancés* →
+  *Accéder à …*) et un plafond de 100 utilisateurs sur la vie du projet. Home Assistant fait de même :
+  chaque utilisateur publie son propre projet sans le faire valider.
+
+« Disponible pour tous les utilisateurs disposant d'un compte Google » ne donne à un inconnu accès qu'à
+ses propres données. Encore faut-il qu'il obtienne l'URL que génère le serveur, que son `state` à usage
+unique soit attendu, et que le compte soit relié au projet Device Access.
+
+Les jetons émis pendant la phase Test gardent leur limite de 7 jours : le compte a été relié de nouveau
+après la publication. L'absence d'expiration reste à constater d'ici le 2026-11-12.
+
+Une appli commune à toutes les installations a été écartée. Elle supposerait un projet Device Access
+**commercial** (le mode Sandbox plafonne à 25 comptes), une validation OAuth, un relais pour la
+redirection (une URI par serveur) et un `client_secret` partagé, donc public dans un dépôt ouvert. La
+seule parade serait un service central qui détient les jetons de tout le monde, l'inverse du « chacun
+son serveur ».
+
+### Mise à jour 2026-10-29 — relier le compte depuis un autre poste
+
+Après le consentement, Google renvoie **le navigateur** (pas un serveur de Google) vers
+`NEST_REDIRECT_URI`, et `/auth/callback` échange le code en redonnant la même URI
+(`config.NEST_REDIRECT_URI`, `index.ts`). La valeur par défaut, `http://localhost:8787/…`, ne marche
+donc que depuis un navigateur ouvert sur la machine du serveur. Deux voies, décrites dans
+`docs/plugins/nest.md` :
+
+- **adresse publique** (HTTPS) : l'URI `https://<adresse>/api/plugins/nest/auth/callback` déclarée
+  dans les URI de redirection autorisées du client web (Google refuse `http` hors `localhost`), son
+  domaine dans les domaines autorisés de la page Branding, la même valeur dans `NEST_REDIRECT_URI`,
+  serveur redémarré avant de lancer la liaison. C'est la voie retenue sur la vraie maison ;
+- **recopie à la main** : garder `localhost`, et une fois le consentement donné, remplacer
+  `http://localhost:8787` par l'adresse de Kasbah dans la barre d'adresse de la page de retour, qui ne
+  s'ouvre pas. L'échange réussit, puisque l'URI déclarée est identique à celle de la demande. Il faut
+  le faire vite (le code expire en quelques minutes) et sans redémarrer, car les `state` attendus ne
+  vivent qu'en mémoire (`pendingStates`).
 
 ## Mappage (`mapping.ts`, pur)
 

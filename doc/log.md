@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-29] update | Nest : appli OAuth publiée sans validation, liaison depuis un autre poste
+
+**Déclencheur** : chantier 3 du plan site / Android / Nest — le compte Nest était à relier tous les 7 jours ; l'utilisateur demandait aussi si une appli Google commune à toutes les installations était possible.
+
+**Pages modifiées** :
+- `3_plugins/3_5_google-nest.md` — deux sections « Mise à jour 2026-10-29 » : statut « Test » constaté puis publication non validée (ce que réclame la page Branding, pas de logo, avertissement non bloquant, appli commune écartée et pourquoi), et la liaison depuis un autre poste (URI publique en HTTPS déclarée, ou recopie de l'URL de retour). L'absence d'expiration reste à constater d'ici le 2026-11-12.
+- `docs/plugins/nest.md` (hors wiki) — paragraphe « Linking from another computer ».
+
+**Index** : catalogue `3_plugins` (1 date), index.md régénéré.
+
 ## [2026-10-29] update | Site vitrine sur GitHub Pages (EN + FR) et politique de confidentialité de l'appli Android
 
 **Déclencheur** : chantier 1 du plan site / Android / Nest — une page à partager, et l'URL de politique de confidentialité qu'exige Google Play.
