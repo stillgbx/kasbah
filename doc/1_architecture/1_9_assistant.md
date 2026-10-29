@@ -166,7 +166,10 @@ conditions** plutôt que des ordres simples (`apps/web/src/api/demoAssistant.ts`
   standard d'un modèle, jamais une voix clonée : les fichiers sont publics. `transcriptionStatus`
   ne déclare `speech` que si le premier fichier répond en `audio/*` (une page de repli HTML ne compte
   pas) : sans les fichiers, la réponse reste écrite, sans message d'erreur. Fichiers pas encore livrés
-  au moment de l'écrire.
+  au moment de l'écrire ; livrés le soir même : générés par l'utilisateur dans VoiceStudio (WAV 24 kHz
+  mono, 3,4 à 5 s), convertis par `ffmpeg -ac 1 -b:a 64k` (27 à 41 Ko chacun, ~200 Ko les six).
+  Vérifié dans la démo construite : servis en `audio/mpeg`, chargés comme son malgré la CSP, durées
+  justes ; la lecture après une vraie dictée reste à essayer hors du panneau navigateur.
 - **Une instruction tapée** lance la demande si c'est l'une des trois (dans l'une ou l'autre langue),
   sinon la démo invite à toucher le micro. La langue est celle de l'app (`<html lang>`, posée par le
   store des réglages).
