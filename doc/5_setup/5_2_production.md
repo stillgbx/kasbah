@@ -561,6 +561,10 @@ Une page publique qui se partage (X, Discord, README), montre la vidéo, et port
   ré-encodées par ffmpeg en WebP (1280 px, ~20 à 60 Ko chacune). `og-image.png` (1200 × 630, aperçu des
   liens) est un rendu des Embruns recadré sur la 3D, assombri en dégradé, avec le logo et le titre
   posés par `drawtext` en Segoe UI (ffmpeg ne lit pas le `woff2`). Le site pèse ~440 Ko hors cette image.
+  Remplacée le jour même par `og-card.png` : la carte titre de la vidéo (logo, « Kasbah », « Your
+  whole home. One app. ») recadrée de 16:9 en 1200 × 630, choisie par l'utilisateur parce que l'aperçu
+  d'un lien doit montrer la marque, la piscine restant l'affiche de la vidéo. Un **nouveau nom de
+  fichier** plutôt que l'ancien écrasé : Discord et X gardent l'image d'une URL en cache.
 - **YouTube choisit seul la qualité** de la vidéo intégrée, d'après la taille du lecteur et le débit ;
   `vq=hd1080` dans l'URL est ignoré depuis des années.
 - **Politique de confidentialité** : écrite d'après le code de `apps/android` (ce que garde
