@@ -468,16 +468,20 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       if (!opts.demoAssistant) onEvent({ type: 'text', text: "Mode démo : l'assistant a besoin du serveur Kasbah." })
       else if (!request) onEvent({ type: 'text', text: DEMO_ONLY_MIC[demoLang()] })
       else {
-        // the tool lines of a real run: the devices read, then one command each
+        // the tool lines of a real run, at a pace that can be followed: the devices read, then one
+        // command each, its line shown before it is sent and checked once done
         onEvent({ type: 'tool', id: 'demo-list', name: 'list_devices', input: {} })
+        await wait(700)
         onEvent({ type: 'tool_result', id: 'demo-list', ok: true })
         for (const [i, step] of demoPlan(request.id, house, entries()).entries()) {
-          await wait(150)
+          await wait(250)
           onEvent({ type: 'tool', id: `demo-${i}`, name: 'send_command', input: step })
+          await wait(450)
           let ok = true
           try { await sim.execute(step.deviceId.replace(/^mock:/, ''), commandSchema.parse(step.command)) } catch { ok = false }
           onEvent({ type: 'tool_result', id: `demo-${i}`, ok })
         }
+        await wait(400)
         onEvent({ type: 'text', text: DEMO_REQUESTS[request.id][request.lang].answer })
       }
       onEvent({ type: 'done', ms: Date.now() - t0 })

@@ -5,6 +5,7 @@ import type { AssistantAction, AssistantPhase } from '../../composables/useAssis
 import { useDevicesStore } from '../../stores/devices'
 import { useScenesStore } from '../../stores/scenes'
 import type { IconName } from '../../lib/strokeIcons'
+import MarqueeText from '../ui/MarqueeText.vue'
 import PulseDot from '../ui/PulseDot.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
@@ -99,7 +100,7 @@ const errorText = computed(() => {
   <div class="reply" aria-live="polite">
     <div class="reply__asked">
       <StrokeIcon name="sparkle" :size="16" />
-      <span class="reply__askedtext">{{ asked }}</span>
+      <MarqueeText class="reply__askedtext" :text="asked" />
       <button v-if="closable" type="button" class="reply__close" :aria-label="$t('assistant.close')" :title="$t('assistant.close')"
               @mousedown.prevent @click="emit('close')">
         <StrokeIcon name="close" :size="16" />
@@ -150,7 +151,8 @@ const errorText = computed(() => {
 }
 .reply__asked { flex: none; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; min-width: 0; }
 .reply__asked > :first-child { flex: none; color: var(--accent); }
-.reply__askedtext { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* a long instruction (a dictated sentence, the demo's replaced transcription) scrolls instead of being cut */
+.reply__askedtext { flex: 1 1 0; min-width: 0; }
 /* the cross, in the line's height (negative margins): it enlarges nothing */
 .reply__close {
   flex: none; width: 32px; height: 32px; margin: -8px -10px -8px 0; border: 0; border-radius: 999px; background: transparent;

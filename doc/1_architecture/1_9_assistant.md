@@ -176,3 +176,11 @@ conditions** plutôt que des ordres simples (`apps/web/src/api/demoAssistant.ts`
 - **Tests** : `demoAssistant.test.ts` (8) ; contrôle négatif fait (la détection des volets ouverts
   cassée fait échouer le test des pièces exclues). Vérifié dans la démo construite par une instruction
   tapée ; la dictée elle-même non jouée (le panneau navigateur de Claude Code bloque le micro).
+- **Retouches après essai de l'utilisateur, le même jour** : l'instruction affichée en tête de la
+  réponse était coupée par des points de suspension, et le préfixe de démo en mangeait la place : la
+  demande ne se voyait plus. `AssistantReply.vue` la passe en `MarqueeText` (défilement lent avec
+  fondu, la règle de l'app pour un texte trop long) ; c'est vrai aussi pour le vrai assistant (barre,
+  palette, journal de Réglages), où une longue dictée était coupée de même. En-tête inchangé : 18 px
+  de haut, même largeur qu'avant, à 1280, 1024 et 853 px de large (zooms 1, 1,25, 1,5). Et les lignes
+  défilaient trop vite pour être lues : chaque commande s'affiche, puis se coche 0,45 s plus tard,
+  une toutes les 0,7 s environ ; réponse au bout de ~6 s pour six commandes, l'ordre d'une vraie course.

@@ -13,7 +13,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 
 **Pages modifiées** :
 - `5_setup/5_2_production.md` — section « Mise à jour 2026-10-29 — la démo web sur Pages » : `build --mode demo`, ce que la démo n'emporte pas (push, diagnostic, manifeste), CSP en `<meta>` et ses cinq hôtes de données, workflow en deux jobs (build sans droits ni scripts d'installation, déploiement seul à écrire, actions épinglées par SHA), `404.html`, vérification locale ; puis l'aperçu des liens de la démo (balises Open Graph et carte X, image `og-demo.jpg` avec bandeau « Live demo »).
-- `1_architecture/1_9_assistant.md` — section « Mise à jour 2026-10-29 — un assistant simulé dans la démo sans serveur » : trois demandes à conditions, transcription remplacée et annoncée comme telle, exécution pièce par pièce, réponses enregistrées (fichiers à venir), option `demoAssistant` réservée à la démo.
+- `1_architecture/1_9_assistant.md` — section « Mise à jour 2026-10-29 — un assistant simulé dans la démo sans serveur » : trois demandes à conditions, transcription remplacée et annoncée comme telle, exécution pièce par pièce, réponses enregistrées (fichiers à venir), option `demoAssistant` réservée à la démo ; puis, après essai, l'instruction qui défile (`MarqueeText`) et un rythme lisible des lignes.
 - `3_plugins/3_0_simulation-mock.md` — section « Mise à jour 2026-10-29 » : Les Embruns par défaut du transport in-process, nouvelle origine des Tilleuls (maison et simulation), l'ancienne `HOME` gardée pour la maison démo historique.
 
 **Index** : catalogues `1_architecture` (1 résumé), `3_plugins` (1 date) et `5_setup` (1 résumé), index.md régénéré.
