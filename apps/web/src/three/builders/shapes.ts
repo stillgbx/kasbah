@@ -55,6 +55,7 @@ export function planarFaces(faces: readonly Vec3[][]): BufferGeometry {
   const positions: number[] = []
   const uvs: number[] = []
   for (const face of faces) {
+    if (face.length < 3) continue
     const { to2 } = faceFrame(face)
     for (let i = 1; i + 1 < face.length; i++) {
       for (const p of [face[0]!, face[i]!, face[i + 1]!]) {

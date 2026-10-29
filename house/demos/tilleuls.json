@@ -630,6 +630,44 @@
       ]
     },
     {
+      "id": "abri",
+      "levelId": "rdc",
+      "name": "Abri de jardin",
+      "kind": "garage",
+      "polygon": [
+        [
+          26,
+          3
+        ],
+        [
+          29,
+          3
+        ],
+        [
+          29,
+          5.5
+        ],
+        [
+          26,
+          5.5
+        ]
+      ],
+      "style": {
+        "floor": "concrete"
+      },
+      "openings": [
+        {
+          "id": "porte-abri",
+          "type": "door",
+          "segment": 0,
+          "offset": 1.05,
+          "width": 0.9,
+          "height": 2,
+          "name": "Porte de l'abri"
+        }
+      ]
+    },
+    {
       "id": "chambre-1",
       "levelId": "etage",
       "name": "Chambre 1",
@@ -1530,13 +1568,27 @@
       }
     ]
   },
-  "roof": {
-    "type": "gable",
-    "levelId": "etage",
-    "ridgeAxis": "x",
-    "pitch": 35,
-    "overhang": 0.4
-  },
+  "roofs": [
+    {
+      "id": "toit-maison",
+      "type": "gable",
+      "levelId": "etage",
+      "ridgeAxis": "x",
+      "pitch": 35,
+      "overhang": 0.4
+    },
+    {
+      "id": "toit-abri",
+      "type": "shed",
+      "rooms": [
+        "abri"
+      ],
+      "eaves": 2.2,
+      "pitch": 12,
+      "yaw": 0,
+      "overhang": 0.2
+    }
+  ],
   "arrays": [
     {
       "id": "pv-sud",

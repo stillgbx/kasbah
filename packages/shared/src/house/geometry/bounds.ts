@@ -58,7 +58,7 @@ export function zoneBounds(house: House, zoneId: string): AABB3 | null {
   return fromPolygon(zone.polygon, house.site.elevation + lo, house.site.elevation + hi + 0.1)
 }
 
-/** Footprint of the roof slab alone: the roof level is framed on it, not on the whole building. */
+/** Footprint of a roof alone: the roof level is framed on it, not on the whole building. */
 export function roofBounds(roof: RoofDescriptor): AABB3 {
   return fromPolygon(roof.outline, roof.zBase, roof.zRidge)
 }
@@ -68,24 +68,24 @@ export function siteBounds(house: House): AABB3 {
   return fromPolygon(house.site.terrain, house.site.elevation + lo, house.site.elevation + hi)
 }
 
-export function houseBounds(house: House, defaults: HouseDefaults, roof?: RoofDescriptor): AABB3 {
+export function houseBounds(house: House, defaults: HouseDefaults, roofs: readonly RoofDescriptor[] = []): AABB3 {
   let b = siteBounds(house)
   for (const level of house.levels) {
     const lb = levelBounds(house, level.id, defaults)
     if (lb) b = unionBounds(b, lb)
   }
-  if (roof) b = unionBounds(b, fromPolygon(roof.outline, roof.zBase, roof.zRidge))
+  for (const roof of roofs) b = unionBounds(b, roofBounds(roof))
   return b
 }
 
 /** "Built" footprint (levels + roof, without the terrain) — for the default view centered on the house. */
-export function buildingBounds(house: House, defaults: HouseDefaults, roof?: RoofDescriptor): AABB3 {
+export function buildingBounds(house: House, defaults: HouseDefaults, roofs: readonly RoofDescriptor[] = []): AABB3 {
   let b = emptyBounds()
   for (const level of house.levels) {
     const lb = levelBounds(house, level.id, defaults)
     if (lb) b = unionBounds(b, lb)
   }
-  if (roof) b = unionBounds(b, fromPolygon(roof.outline, roof.zBase, roof.zRidge))
+  for (const roof of roofs) b = unionBounds(b, roofBounds(roof))
   return isEmptyBounds(b) ? siteBounds(house) : b
 }
 

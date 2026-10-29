@@ -1,7 +1,7 @@
 # Géométrie : murs, ouvertures, sols, toit
 
-> Dernière mise à jour : 2026-10-06
-> Sources : `packages/shared/src/house/geometry/{walls,floors,site,roof,bounds,vec2,surface,index}.ts`, tests `walls.test.ts`, `vec2.test.ts`, `house.test.ts`, `surface-openings.test.ts`, `house/fit-survey.mjs`, `packages/shared/src/house/openings.ts`, `packages/shared/src/house/geometry/types.ts`, `packages/shared/src/house/geometry/relief.ts`, `relief.test.ts`
+> Dernière mise à jour : 2026-10-29
+> Sources : `packages/shared/src/house/geometry/{walls,floors,site,roof,bounds,vec2,surface,index}.ts`, `roof.test.ts`, tests `walls.test.ts`, `vec2.test.ts`, `house.test.ts`, `surface-openings.test.ts`, `house/fit-survey.mjs`, `packages/shared/src/house/openings.ts`, `packages/shared/src/house/geometry/types.ts`, `packages/shared/src/house/geometry/relief.ts`, `relief.test.ts`
 
 ## Pas de CSG, pas de Shape à trous
 
@@ -42,8 +42,10 @@ largeur, hauteur, épaisseur — utilisés pour les vitrages et les lames de vol
 - **Toit** (`roof.ts`) : emprise = `roof.outline` ou `level.outline` ou bbox des pièces murées
   agrandie de l'épaisseur extérieure, puis débord par `offsetPolygon`. `flat` → dalle 20 cm ;
   `gable` → deux versants + deux pignons (faces planes absolues), faîte sur l'axe le plus long par défaut.
+
+*(Dépassé le 2026-10-29 : une maison peut porter plusieurs toits (`computeRoofs`), avec deux types de plus (`shed`, `hip`) et une emprise déduite des pièces couvertes ; voir « Mise à jour 2026-10-29 — plusieurs toits ». Le paragraphe ci-dessus décrit le toit unique : il reste vrai pour un fichier qui écrit l'ancien `roof`, et `computeRoof` y garde la même règle d'emprise.)*
 - **Bornes** (`bounds.ts`) : AABB absolues de pièce, niveau, zone, bâtiment (sans terrain) et maison
-  (avec terrain et toit) pour le cadrage caméra.
+  (avec terrain et toit) pour le cadrage caméra. *(Depuis le 2026-10-29, `houseBounds` et `buildingBounds` prennent la liste des toits.)*
 
 *(Dépassé le 2026-09-26 : le terrain n'est plus toujours plat — `site.relief` le déforme (`packages/shared/src/house/geometry/relief.ts`) ; voir « Mise à jour 2026-09-26 — le relief du terrain (`relief.ts`) ». Sans relief, ces polygones restent plats.)*
 
@@ -615,3 +617,70 @@ Deux fonctions pures ajoutées pour l'édition du contour du terrain (contexte :
 Tests : `vec2.test.ts`, `relief.test.ts`.
 
 Sources : `packages/shared/src/house/geometry/{vec2,relief}.ts` (arbre de travail non commité après 1ce4a91).
+
+### Mise à jour 2026-10-29 — plusieurs toits : `computeRoofs`, 1 et 4 pans, `eaves`
+
+**Pourquoi.** Un seul `roof` ne sait pas dire « la maison a son toit, le garage accolé est plus bas et a
+le sien, l'abri de jardin un troisième ». La règle du 2026-09-25 (`room.height` = plafond, aucun mur ne
+descend) avait écarté de faire porter la hauteur d'enveloppe par la pièce, et l'hypothèse du
+2026-09-12 (ter) disait qu'une seconde hauteur « se modéliserait par un niveau propre ou une toiture
+dédiée ». C'est la seconde voie qui est prise : **c'est le toit, l'enveloppe, qui fixe la hauteur des murs**,
+pas le plafond. La règle du 25/09 n'est donc pas défaite : `room.height` reste le plafond et ne fait descendre
+aucun mur.
+
+**Une liste, un toit par volume.** `computeRoofs(house, defaults)` (`geometry/roof.ts`) rend un
+`RoofDescriptor[]` dans l'ordre du fichier ; `HouseGeometry.roof` devient **`roofs`**, toujours un tableau.
+`roofsOf(house)` lit `roofs` s'il est non vide, sinon l'ancien `[roof]` : un fichier ancien se calcule
+comme avant (Embruns et la fixture de test restent à `roof`, chemin de compatibilité testé). Le
+descripteur gagne `id?`, `levelId`, `rooms` (les pièces couvertes) et `eaves?`.
+
+**Types.** `flat`, `gable`, et deux nouveaux : `shed` (1 pan) et `hip` (4 pans). Les toits en pente se
+posent sur le **rectangle aux axes de la maison** qui englobe l'emprise (`pitchedFaces`) : une maison en L
+est deux volumes, donc deux toits, et non un toit en L. Le `shed` descend vers `yaw` (multiples de 90°, convention des appareils, 0 = +y, défaut 180,
+donc vers −y) ; ses côtés qui quittent l'égout sortent en pignons triangulaires, son bord haut en mur
+quadrilatère, comme faces verticales du descripteur. `ridgeAxis` ne vaut que pour `gable` ; un `hip` prend
+toujours le grand côté pour faîte, et dégénère en pyramide sur un carré.
+
+**Emprise.**
+- `outline` explicite gagne ; sans `outline`, `rooms` (ids de pièces murées) donne leur rectangle ;
+  sans les deux, comportement d'avant (`level.outline`, puis rectangle des pièces murées) — `coverOf`.
+- Pour `rooms`, chaque côté du rectangle reçoit le **mur extérieur et le débord**, sauf un côté qui
+  jouxte une pièce murée d'un autre volume dont les murs montent **au moins aussi haut** (bande de 2 ×
+  épaisseur de cloison + 5 cm, recouvrement minimal d'1 cm², pour qu'un simple coin qui touche ne compte pas) :
+  le mur est alors mitoyen, et le toit s'arrête contre sa face. **Au-dessus d'un voisin plus bas, il garde
+  son débord** : la maison déborde sur le garage (`roomsFootprint`, test « a lower garage against the house »).
+- `levelId` absent : niveau des `rooms`, sinon le plus haut (`roofLevel`). `mainRoof(roofs)` = le toit le
+  plus haut, qui sert au cadrage du niveau-toit et aux panneaux.
+
+**`eaves` et les murs.** `eaves` (au-dessus du sol du niveau, défaut = hauteur du niveau) donne la
+hauteur d'égout : `computeWalls(level, rooms, defaults, eaves)` arrête les murs des pièces couvertes
+là (`eavesByRoom`). C'est ce qui permet un garage plus bas que la maison **sur le même niveau**. Un mur
+mitoyen (`interior`) monte avec la plus haute des deux pièces : `computeWalls` sonde la pièce d'en face
+comme `classifySegments`, et au-dessus du toit bas ce mur est la façade du volume haut. `collectHoles`
+reçoit désormais la hauteur du mur pour que les trous ne dépassent pas un mur abaissé.
+
+**Fenêtres de toit.** `roofUnder(roofs, x, y)` (`geometry/surface.ts`) rend le toit le **plus haut** sous
+un point : il sert au trou, à `OpeningRect`, à la validation et à la pose au doigt ; `roofHolesOf(house,
+roof, roofs)` ne perce que le toit situé sous la fenêtre. Le cas qui le motive : deux toits qui se
+recouvrent en plan (maison au-dessus du garage) ; le test « a roof window takes the HIGHER roof » le fixe.
+
+**Validation** (`validate.ts`) : `id` de toit dupliqué (même espace d'ids que le reste, un toit ne peut
+pas porter le nom d'une pièce), pièce inconnue, sans murs ou sur un autre niveau que le toit ; `roof` et
+`roofs` ensemble refusés. Une `roof-window` doit être dans une pièce d'un niveau qui porte un toit (sans
+toit, le plus haut niveau, comme avant).
+
+**Édition de structure** (`structure.ts`) : un toit qui nomme ses pièces perd celles qui sont supprimées ou
+ne sont plus murées, et disparaît avec la dernière ; un toit sans `rooms` suit toujours le dernier niveau
+habité, comme l'ancien toit unique. Panneaux : la pente d'un champ neuf est celle du toit sous son
+centre (`roofAtPoint`), non plus `roof.pitch`.
+
+**Écarté** : un concept de « bâtiments » (`buildings[]` avec leurs niveaux). Il ne se justifie que si une
+annexe a ses propres étages ou un sol à une autre cote ; il s'ajouterait plus tard sans défaire `roofs`.
+Deux niveaux ne peuvent toujours pas partager une élévation.
+
+Tests : `geometry/roof.test.ts` (nouveau, 1 et 4 pans, garage plus bas, fenêtre de toit, lecture de
+l'ancien `roof`, refus). Format : `2_0_format-house-json.md` (même date) ; scène :
+`../1_architecture/1_5_scene-3d.md` (même date).
+
+Sources : `packages/shared/src/house/geometry/{roof,walls,surface,bounds,types}.ts`,
+`packages/shared/src/house/{schema,validate,structure}.ts`.

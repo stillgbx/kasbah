@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { defineStore } from 'pinia'
-  import { applyHouseEditToJson, insertVertex, rectRoomAt, roomAgainstWall, type NewLevelSide, type RoomKind, mergeAppearancePatch, moveVertex, openingLabel, pushWall, removeVertex, roomShape, safeParseHouse, setEdgeLength, autoPlaceDevices, computeRoof, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roomHeight, slotFromPoint, slotFromSurfacePoint, surfaceFootprint, withPanelArrays, type DeviceDescriptor, type HouseEditPatch, type HouseIssue, type Shapes, type SurveyDoc, type DeviceEntry, type Finish, type DeviceKind, type DevicePlacement, type GardenItem, type GardenItemPatch, type GardenKind, type GeoOrigin, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Relief, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
+  import { applyHouseEditToJson, insertVertex, rectRoomAt, roomAgainstWall, type NewLevelSide, type RoomKind, mergeAppearancePatch, moveVertex, openingLabel, pushWall, removeVertex, roomShape, safeParseHouse, setEdgeLength, autoPlaceDevices, computeRoofs, fitHeight, fitParkingGap, houseIdForDevice, isSurfaceOpening, longestEdgeYawDeg, indexHouse, isPlaced, mainRoof, newOpeningDims, newParkingSize, openingLimits, openingSill, panelArrayDevices, panelOf, parkingGaps, parkingHost, pointInPolygon, resolveDefaults, resolveDeviceLevelId, roofAtPoint, roofUnder, roomHeight, slotFromPoint, slotFromSurfacePoint, surfaceFootprint, withPanelArrays, type DeviceDescriptor, type HouseEditPatch, type HouseIssue, type Shapes, type SurveyDoc, type DeviceEntry, type Finish, type DeviceKind, type DevicePlacement, type GardenItem, type GardenItemPatch, type GardenKind, type GeoOrigin, type House, type HouseDevice, type HouseIndex, type Level, type Opening, type OpeningPatch, type OpeningType, type PanelArray, type PanelArrayPatch, type Parking, type ParkingPatch, type ParkingSide, type PlaceableDevice, type PlacedHouseDevice, type Relief, type Room, type SceneTuning, type Vec2, type Vec3, type Zone } from '@kasbah/shared'
 import { getTransport } from '../api'
 import type { JournalPoint } from '../lib/journal'
 import { i18n, t } from '../i18n'
@@ -1014,7 +1014,7 @@ export const useHouseStore = defineStore('house', () => {
   function panelBaseZ(levelId: string): number {
     const h = house.value
     if (!h) return 0
-    const roof = computeRoof(h, resolveDefaults(h.defaults))
+    const roof = mainRoof(computeRoofs(h, resolveDefaults(h.defaults)))
     if (!roof) return 0
     const elevation = index.value?.levelsById.get(levelId)?.elevation ?? 0
     const top = roof.type === 'flat' ? roof.zRidge : roof.zBase
@@ -1077,14 +1077,16 @@ export const useHouseStore = defineStore('house', () => {
     // The array faces where its INSTALLATION faces: we orient the gateway toward the south as we
     // orient its panels, and the array no longer has a reason to go in another direction.
     const yaw = index.value?.devicesByBinding.get(siteDeviceId)?.yaw ?? 0
+    const h = house.value
+    const roof = h ? roofUnder(computeRoofs(h, resolveDefaults(h.defaults)), x, y) : undefined
     const ok = await writeArray(id, {
       name: t('arrays.field', { n: arraysOf(siteDeviceId).length + 1 }),
       siteId: siteDeviceId,
       levelId, origin: [x, y, panelBaseZ(levelId)], rows: 2, cols: 5, yaw,
-      // The array HUGS the roof: the support's slope comes from the roofing — 0 on a flat roof (the
-      // schema still gives a default slope to `roof`, which means nothing there). The tilt
+      // The array HUGS the roof: the support's slope is that of the roofing under its centre — 0 on a
+      // flat roof (the schema still gives it a default pitch, which means nothing there). The tilt
       // of the MODULES, for its part, is not invented: it is the frame, and we do not know what is mounted.
-      slope: house.value?.roof?.type === 'gable' ? house.value.roof.pitch : 0,
+      slope: roof && roof.type !== 'flat' ? Math.round((roofAtPoint(roof, x, y)?.slope ?? 0) * 100) / 100 : 0,
     })
     if (ok) startEditingArray(id, siteDeviceId)
     return ok
@@ -1201,7 +1203,8 @@ export const useHouseStore = defineStore('house', () => {
     gardenFocus.value = false
     // Roof window: stay on the roof level (otherwise the roof hides and the handle seems to be on the ground).
     if (sel.opening.type === 'roof-window' && house.value) {
-      const roofDesc = computeRoof(house.value, resolveDefaults(house.value.defaults))
+      const roofs = computeRoofs(house.value, resolveDefaults(house.value.defaults))
+      const roofDesc = roofUnder(roofs, sel.opening.x ?? 0, sel.opening.y ?? 0) ?? mainRoof(roofs)
       const roofTab = roofDesc
         ? house.value.levels.find((l) => l.elevation >= roofDesc.zBase - 1e-3)
         : undefined
@@ -1237,7 +1240,7 @@ export const useHouseStore = defineStore('house', () => {
     if (isSurfaceOpening(sel.opening.type)) {
       // a Velux on a roof slope slides on its FOOTPRINT at the targeted point: heading of the descent, length
       // shortened by the slope (`surfaceFootprint`) — it can thus approach the wall at its true size
-      const roofDesc = sel.opening.type === 'roof-window' ? computeRoof(house.value, resolveDefaults(house.value.defaults)) : undefined
+      const roofDesc = sel.opening.type === 'roof-window' ? roofUnder(computeRoofs(house.value, resolveDefaults(house.value.defaults)), xy[0], xy[1]) : undefined
       const fp = surfaceFootprint({
         type: sel.opening.type, x: xy[0], y: xy[1], yaw: sel.opening.yaw ?? 0, width: sel.opening.width, height: sel.opening.height,
       }, roofDesc)
@@ -1315,7 +1318,7 @@ export const useHouseStore = defineStore('house', () => {
       // Switches to the roof level to see and tap the roofing (from a floor, the roof is hidden).
       const h = house.value
       if (h) {
-        const roofDesc = computeRoof(h, resolveDefaults(h.defaults))
+        const roofDesc = mainRoof(computeRoofs(h, resolveDefaults(h.defaults)))
         const roofTab = roofDesc
           ? h.levels.find((l) => l.elevation >= roofDesc.zBase - 1e-3)
           : undefined
@@ -1371,7 +1374,7 @@ export const useHouseStore = defineStore('house', () => {
         let planHeight = dims.height
         if (armed.type === 'roof-window') {
           // on a roof slope: heading of the descent, length seen from the sky shortened by the slope
-          const fp = surfaceFootprint({ type: armed.type, x: xy[0], y: xy[1], yaw: 180, width: dims.width, height: dims.height }, computeRoof(house.value, defaults))
+          const fp = surfaceFootprint({ type: armed.type, x: xy[0], y: xy[1], yaw: 180, width: dims.width, height: dims.height }, roofUnder(computeRoofs(house.value, defaults), xy[0], xy[1]))
           yaw = fp.yaw
           planHeight = fp.height
         }

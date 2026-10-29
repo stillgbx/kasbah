@@ -1,6 +1,6 @@
 # Scène 3D (Three.js)
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-29
 > Sources : `apps/web/src/three/HouseScene.ts`, `apps/web/src/three/core/*.ts`, `apps/web/src/three/builders/*.ts`, `apps/web/src/three/markers/*.ts`, `apps/web/src/composables/useHouseScene.ts`, `apps/web/src/three/markers/DeviceMarker.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/lib/audioRouting.ts`, `packages/shared/src/house/panels.ts`, `apps/web/src/lib/orientation.ts`, `apps/web/src/three/markers/markers.ts`, `apps/web/src/three/core/theme.ts`, `apps/web/src/three/styles/*.ts`, `apps/web/src/three/textures/{procedural,assets}.ts`, `apps/web/src/three/core/layers.ts`, `packages/shared/src/house/openings.ts`, `apps/web/src/three/core/cameraFit.ts`, `apps/web/src/three/effects/water.ts`, `apps/web/src/three/effects/disco.ts`, `apps/web/src/three/effects/parade.ts`, `apps/web/src/three/builders/parking.ts`, `packages/shared/src/house/sun.ts`, `apps/web/src/three/builders/terrain.ts`, `apps/web/src/three/relief/reliefEditor.ts`, `apps/web/src/three/effects/roam.ts`, `apps/web/src/three/effects/bats.ts`, `apps/web/src/three/garden/gardenLayer.ts`
 
 ## Pages filles
@@ -273,6 +273,8 @@ Le bâti entier laissait la dalle petite et lointaine, alors que c'est elle qu'o
 d'une chambre : niveau `toit` en vue d'ensemble, pièce `chambre1` quand le toit est masqué). En mode
 `headless`, aucun rendu n'a lieu — donc **les matrices monde ne sont jamais à jour** et tout
 `intersectObjects` renvoie vide. Il faut appeler `scene.updateMatrixWorld(true)` avant de piquer.
+
+*(Dépassé le 2026-10-29 : `nodes.roof` est devenu `nodes.roofs`, un mesh par toit, et `roofLevel()` n’est plus qu’un cas ; voir « Mise à jour 2026-10-29 — plusieurs toits ».)*
 
 Le fil d'Ariane et le panneau qui découlent de ce `levelTap` sont décrits dans
 `../4_ui/4_1_navigation-et-panneaux.md` et `1_4_app-web.md`.
@@ -1115,3 +1117,48 @@ Mesuré dans la preview simulée (7 pièces) : ~9 ms par pas de glissement, dont
 le store ; non mesuré sur la maison réelle.
 
 Sources : `apps/web/src/three/{shape/roomShapeEditor,HouseScene}.ts`, `apps/web/src/composables/useHouseScene.ts`.
+
+### Mise à jour 2026-10-29 — plusieurs toits : un mesh par toit, des pignons en façade
+
+Contexte : `house.roofs[]` remplace le toit unique (`../2_maison/2_0_format-house-json.md` et
+`../2_maison/2_1_geometrie.md`, même date). `HouseNodes.roof` devient **`roofs: Mesh[]`**, un mesh par
+toit dans l'ordre du fichier, sur `HouseScene` et `builders/buildHouse.ts`.
+
+**Visibilité par niveau.** Avant, un seul `liftTo('roof', …)` : le toit apparaissait en vue d'ensemble et
+depuis le niveau qu'il porte. Désormais chaque toit `i` a le sien, `liftTo('roof:i', …)`, visible en vue
+d'ensemble et depuis les niveaux posés **à sa hauteur d'égout ou au-dessus** (`focused.elevation ≥
+zBase`). Sur la démo des Tilleuls, depuis l'Étage la maison n'a plus de toit et l'abri de jardin garde le
+sien ; au RDC aucun toit ne s'affiche. `applyLevelFocus` est rappelé après la reconstruction (`rebuildRoof`)
+parce qu'un mesh neuf naît en place et le niveau focalisé peut devoir le cacher.
+
+**Toucher un toit.** `pick()` lance le rayon sur tous les toits visibles (`shownRoofs()`), et ouvre
+`roofLevelOf(roof)` : le **plus bas niveau** posé à l'égout du toit ou au-dessus. Même effet qu'au
+2026-09-12 (quinquies) : on obtient ce qu'on voit. `mainRoof()` (le toit le plus haut) reste la référence
+du **niveau-toit** déclaré pour les panneaux (cadrage, caméra) ; `roofUnder` choisit le toit d'une fenêtre
+de toit (trou, cadrage de la fenêtre depuis le niveau qui montre SON toit).
+
+**Les faces verticales sortent du toit.** Pignons d'un 2 pans, côtés et haut mur d'un 1 pan : sur demande
+de l'utilisateur (« ces côtés sont en fait des murs »), `buildRoofMesh` les retire du mesh de tuiles
+(`isWallFace` : aire en plan nulle) et les met dans un enfant **`roof:gables`**, au matériau de **façade**
+(`finishMaterial(mats, 'facade', house.style.facade)` s'il existe, sinon `mats.wall`). L'index des faces
+reste celui du descripteur (le trou d'une fenêtre de toit nomme sa face par index : la face-mur devient
+une liste vide, elle n'est pas supprimée). Conséquence : **un changement de finition de façade refait
+aussi les toits** (`updateBuilding` : `facadeChanged || roofs différents → rebuildRoof`).
+
+**Planches de rive** (`buildRoofDetails`, `builders/details.ts`) : elles ne suivent plus que les arêtes
+posées sur le **contour du rectangle** du toit (égout, rives, haut d'un 1 pan). Ni faîtage ni arêtiers
+(ils sont à l'intérieur du rectangle). Cela remplace l'ancienne règle « pas de planche sur le faîtage »
+(`a[2] ≥ zRidge`), propre au 2 pans.
+
+**Piège : les observateurs de `useHouseScene.ts` ne regardaient que `h.roof`.** `sameShell`,
+`sameShellButOpenings` et `sameShellButBuilding` comparent une photographie JSON de la maison pour décider
+si la scène se redessine, et de combien. Aucun ne lisait `roofs` : une modification de `roofs` aurait été
+jugée « même enveloppe » et **la scène ne se serait pas redessinée**, sans erreur. Ils comparent maintenant
+`h.roofs` et `h.roof`. À refaire pour tout nouveau champ de la maison qui change la géométrie.
+
+Vérifié dans la preview simulée sur la démo Tilleuls (abri, vue Étage, 4 pans essayé en direct sur la
+maison, pignons en enduit), sans erreur console. Tests : `three.test.ts`, `builders/shapes.test.ts`,
+`builders/roofWindow.test.ts`.
+
+Sources : `apps/web/src/three/{HouseScene,builders/buildHouse,builders/details,builders/shapes}.ts`,
+`apps/web/src/composables/useHouseScene.ts`, `apps/web/src/stores/house.ts`.

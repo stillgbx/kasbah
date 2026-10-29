@@ -38,6 +38,19 @@ export function roofAtPoint(
   return { z: roof.zBase, slope: 0 }
 }
 
+/**
+ * The roof over (x, y): the HIGHEST one when several overlap in plan (a lean-to under the eaves of
+ * the house). `undefined` off every roof.
+ */
+export function roofUnder(roofs: readonly RoofDescriptor[], x: number, y: number): RoofDescriptor | undefined {
+  let best: { roof: RoofDescriptor; z: number } | undefined
+  for (const roof of roofs) {
+    const at = roofAtPoint(roof, x, y)
+    if (at && (!best || at.z > best.z)) best = { roof, z: at.z }
+  }
+  return best?.roof
+}
+
 /** Default heading of a roof window at the given point: direction of the slope's descent. */
 export function defaultRoofYaw(roof: RoofDescriptor, x: number, y: number): number {
   const at = roofAtPoint(roof, x, y)
@@ -98,7 +111,7 @@ function asSurfaceOpening(o: Opening): o is Opening & { x: number; y: number; ya
  * holes to pierce in the slabs. The roof holes are collected separately (`roofHolesOf`).
  */
 export function computeSurfaceOpenings(
-  level: Level, roomsOnLevel: readonly Room[], defaults: HouseDefaults, roof: RoofDescriptor | undefined,
+  level: Level, roomsOnLevel: readonly Room[], defaults: HouseDefaults, roofs: readonly RoofDescriptor[],
 ): { openings: OpeningRect[]; floorHoles: Map<string, FloorHole[]> } {
   const openings: OpeningRect[] = []
   const floorHoles = new Map<string, FloorHole[]>()
@@ -129,6 +142,7 @@ export function computeSurfaceOpenings(
       }
 
       // roof-window
+      const roof = roofUnder(roofs, o.x, o.y)
       if (!roof) continue
       const at = roofAtPoint(roof, o.x, o.y)
       if (!at) continue
@@ -151,12 +165,13 @@ export function computeSurfaceOpenings(
   return { openings, floorHoles }
 }
 
-/** Roof holes for all the `roof-window`s of the house. */
-export function roofHolesOf(house: House, roof: RoofDescriptor): RoofHole[] {
+/** Holes of `roof` for the `roof-window`s of the house it is the roof under (`roofUnder` among `roofs`). */
+export function roofHolesOf(house: House, roof: RoofDescriptor, roofs: readonly RoofDescriptor[] = [roof]): RoofHole[] {
   const holes: RoofHole[] = []
   for (const room of house.rooms) {
     for (const o of room.openings) {
       if (o.type !== 'roof-window' || !asSurfaceOpening(o)) continue
+      if (roofUnder(roofs, o.x, o.y) !== roof) continue
       const at = roofAtPoint(roof, o.x, o.y)
       if (!at) continue
       const fp = surfaceFootprint(o, roof)

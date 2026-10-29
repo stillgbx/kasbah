@@ -1,7 +1,7 @@
 # Format house.json : décisions et validation
 
-> Dernière mise à jour : 2026-10-20
-> Sources : `packages/shared/src/house/{schema,validate,lookup,geo}.ts`, `docs/house-json.md`, `house/demo-house.json`, `packages/shared/src/house/autoplace.ts`, `house/fit-survey.mjs`, `house/maison.json`, `packages/shared/src/house/place.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/panels.ts`, `packages/shared/src/house/openings.ts`, `packages/shared/src/house/parking.ts`, `packages/shared/src/house/geometry/relief.ts` (`site.relief`), `house/demos/*.json`, `apps/server/src/config/properties.ts`, `packages/shared/src/house/structure.ts`, `packages/shared/src/house/newHouse.ts`
+> Dernière mise à jour : 2026-10-29
+> Sources : `packages/shared/src/house/{schema,validate,lookup,geo}.ts`, `docs/house-json.md`, `house/demo-house.json`, `packages/shared/src/house/autoplace.ts`, `house/fit-survey.mjs`, `house/maison.json`, `packages/shared/src/house/place.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/panels.ts`, `packages/shared/src/house/openings.ts`, `packages/shared/src/house/parking.ts`, `packages/shared/src/house/geometry/relief.ts` (`site.relief`), `house/demos/*.json`, `apps/server/src/config/properties.ts`, `packages/shared/src/house/structure.ts`, `packages/shared/src/house/newHouse.ts`, `packages/shared/src/house/geometry/roof.ts` (`roofs`)
 
 La **référence complète du format** (champs, exemples) est `docs/house-json.md`. Cette page
 explique les décisions et ce que la validation garantit.
@@ -1202,7 +1202,7 @@ choisie pour exercer un pan différent du format :
 
 | Fichier | Propriété | Ce qu'elle exerce |
 |---|---|---|
-| `tilleuls.json` | « Les Tilleuls » (Dijon, origine sur le cours du Général-de-Gaulle, cap 0) | R+1, toit à deux pans, garage double (deux portes de garage liées par `openingId`), terrasse d'étage posée sur le garage (pièce `terrace` au niveau étage, sol à partir de la face extérieure), pièce `stairs`, home cinéma, relief (grille de 4 m), 25 éléments de jardin, places (deux au garage avec `levelId: rdc`, allée, bases tondeuse et aspirateur), fenêtre de toit motorisée (cover `window` liée à une `roof-window`), champ 2×6 en toiture (`slope` 35), façade enduit teinté. 17 pièces, 56 appareils. |
+| `tilleuls.json` | « Les Tilleuls » (Dijon, origine sur le cours du Général-de-Gaulle, cap 0) | R+1, toit à deux pans (depuis le 2026-10-29 : `roofs`, plus un abri de jardin détaché sous un toit à un pan, voir la mise à jour de cette date), garage double (deux portes de garage liées par `openingId`), terrasse d'étage posée sur le garage (pièce `terrace` au niveau étage, sol à partir de la face extérieure), pièce `stairs`, home cinéma, relief (grille de 4 m), 25 éléments de jardin, places (deux au garage avec `levelId: rdc`, allée, bases tondeuse et aspirateur), fenêtre de toit motorisée (cover `window` liée à une `roof-window`), champ 2×6 en toiture (`slope` 35), façade enduit teinté. 17 pièces, 56 appareils. |
 | `embruns.json` | « Les Embruns » (Pornic, bord du golf, cap 0) | plain-pied en L à toit plat : `outline` en L **explicite** (sans lui la boîte englobante couvrirait l'angle), séjour en L ouvert sur la cuisine (`walls` à `none`, arête coupée par un point colinéaire), couloir dont l'arête est coupée en (6, 10) (mitoyenne puis façade), puits de lumière, brise-soleil `blind` avec `tilt`, voile d'ombrage, carport, portail coulissant, deux rangées sur châssis (`tilt` 15). 9 pièces, 33 appareils. |
 | `belvedere.json` | « Le Belvédère » (Lille, Grand-Place) | appartement au 4e étage (élévation 12,2 m), balcon (`balcony`), ni toit, ni jardin, ni véhicule, façade brique. 8 pièces, 26 appareils. |
 
@@ -1397,3 +1397,61 @@ même piège : ne pas envoyer `''` pour dire « pas de changement ».
 
 Usage et affichage : `../4_ui/4_4_vues-energie-vehicules.md` (même date). Sources :
 `packages/shared/src/house/{schema,place}.ts`, `place.test.ts`.
+
+### Mise à jour 2026-10-29 — `roofs[]` : plusieurs toits, un par volume
+
+**Pourquoi.** Une maison avec un garage accolé plus bas, ou un abri détaché, ne tient pas sous un
+toit unique. `house.roofs: Roof[]` (défaut `[]`) en porte **un par volume du bâtiment** (maison, garage
+accolé, annexe détachée). Les règles de calcul sont dans `2_1_geometrie.md` (même date) ; ici, ce que le
+fichier écrit et ce que la validation garantit (`roofSchema`, `packages/shared/src/house/schema.ts`).
+
+**Compatibilité.** L'ancien `roof` unique reste lu : `roofsOf(house)` rend `roofs` s'il est non vide, sinon
+`[roof]`. **Un fichier qui porte les deux est refusé** (message : « write roofs or the former roof, not both ») :
+refus plutôt qu'une règle de priorité : un fichier n'a qu'une source de vérité pour ses toits, sans quoi
+l'édition de structure ne saurait pas lequel des deux tenir à jour. Les maisons neuves
+(`newHouse.ts`, `kind: 'house'`) s'écrivent avec `roofs`. Les mises à jour datées plus haut qui disent
+`roof.levelId` décrivent le toit unique : elles valent pour un fichier à `roof`, et pour chaque entrée de
+`roofs` quand elle écrit `levelId`.
+
+**Champs d'un toit.**
+
+| Champ | Sens |
+|---|---|
+| `type` | `flat`, `shed` (1 pan), `gable` (2 pans), `hip` (4 pans). Les deux derniers nouveaux, `shed` et `hip` |
+| `id` | facultatif ; unique dans **toute** la maison comme tout id (un toit ne peut pas s'appeler comme une pièce) |
+| `levelId` | facultatif ; défaut = niveau de ses `rooms`, sinon le plus haut |
+| `rooms` | ids de pièces murées couvertes : le toit prend leur rectangle, plus mur extérieur et débord sur chaque côté de façade |
+| `outline` | emprise explicite, gagne sur `rooms` ; sans `rooms` ni `outline` : `level.outline`, puis rectangle des pièces murées (comportement d'avant) |
+| `eaves` | hauteur d'égout au-dessus du sol du niveau (m), défaut = hauteur du niveau ; les murs des pièces couvertes s'y arrêtent |
+| `pitch`, `overhang` | inchangés (pente 5 à 75°, défaut 30 ; débord, défaut 0,3 m) |
+| `ridgeAxis` | `gable` seulement ; un `hip` prend toujours le grand côté |
+| `yaw` | `shed` : sens où le pan DESCEND, multiples de 90°, convention des appareils (0 = +y), défaut 180 |
+
+Un toit en pente se pose sur le **rectangle aux axes de la maison** qui englobe l'emprise : une maison en
+L s'écrit avec deux toits (deux volumes). Un côté de l'emprise qui jouxte une pièce d'un autre volume dont
+les murs montent au moins aussi haut ne reçoit ni mur ni débord ; au-dessus d'un voisin plus bas, il garde
+son débord.
+
+**Ce que `eaves` n'est pas.** Cela ne revient pas sur la décision du 2026-09-25 : `room.height` est le
+plafond et ne fait descendre aucun mur. La hauteur d'enveloppe vient du toit, pas de la pièce.
+
+**Validation** (`validate.ts`) : `roofs[].id` dupliqué ; `levelId` inconnu ; `rooms[]` qui nomme une pièce
+inconnue, sans murs, ou d'un autre niveau que celui du toit. Une `roof-window` doit appartenir à une pièce
+d'un niveau qui porte un toit (sans toit, le plus haut niveau, comme avant). Complète la phrase de
+2026-09-19 (« pièce du niveau déclaré par `roof.levelId` ») : le niveau est désormais celui d'**un** des toits.
+
+**Édition de structure** (`structure.ts`, voir 2026-10-10) : un toit qui nomme ses `rooms` perd celles
+supprimées ou devenues non murées, et disparaît avec la dernière ; un toit sans `rooms` suit toujours
+le dernier niveau habité. Un niveau qui porte un toit (`levelId`) reste « non vide » pour la suppression.
+
+**Démo.** `house/demos/tilleuls.json` passe à `roofs` : `toit-maison` (`gable`, étage, pente 35°) et
+`toit-abri` (`shed`) sur un **abri de jardin détaché** nouveau (`abri`, pièce `garage`, 3 × 2,5 m, pente 12°
+descendant vers le nord, égout à 2,20 m, une porte). Embruns et la fixture `demo-house.json` gardent
+l'ancien `roof` : c'est le chemin de compatibilité, couvert par les tests. Tests : `house.test.ts`,
+`newHouse.test.ts`, `structure.test.ts`, `demos.test.ts`, `geometry/roof.test.ts`.
+
+**Écarté** : un concept de « bâtiments » (`buildings[]` avec leurs niveaux), utile seulement si une annexe
+a ses propres étages ou un sol à une autre cote. Il s'ajouterait sans revenir sur `roofs`.
+
+Référence publique : section « Roofs » de `docs/house-json.md`. Sources : `packages/shared/src/house/{schema,validate,structure,newHouse}.ts`,
+`packages/shared/src/house/geometry/roof.ts`.

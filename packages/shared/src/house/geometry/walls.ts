@@ -167,8 +167,8 @@ function extendAcross(A: WallSegment, B: WallSegment, cornersA: SegmentCorners, 
 /** Holes of the edge: its openings + those of the rooms facing it (mirror), merged. */
 export function collectHoles(
   room: Room, seg: WallSegment, roomsOnLevel: readonly Room[], level: Level, defaults: HouseDefaults,
+  H = wallHeight(room, level, defaults),
 ): Hole[] {
-  const H = wallHeight(room, level, defaults)
   const holes: Hole[] = []
   for (const o of room.openings) {
     if (o.segment === undefined || o.offset === undefined || o.segment !== seg.index) continue
@@ -346,26 +346,40 @@ export function openingCentre(o: OpeningRect): Vec3 {
 
 export interface WallsResult { prisms: WallPrism[]; openings: OpeningRect[] }
 
-/** Walls and opening rectangles of a level (level-local z). */
-export function computeWalls(level: Level, roomsOnLevel: readonly Room[], defaults: HouseDefaults): WallsResult {
+/**
+ * Walls and opening rectangles of a level (level-local z).
+ *
+ * `eaves`: per room, the eaves height of the roof that covers it, when that roof writes one — its
+ * walls stop there instead of at the level. A PARTITION rises with the higher of its two rooms: it
+ * is one wall, and above the lower roof it is the facade of the higher volume.
+ */
+export function computeWalls(
+  level: Level, roomsOnLevel: readonly Room[], defaults: HouseDefaults, eaves?: ReadonlyMap<string, number>,
+): WallsResult {
   const prisms: WallPrism[] = []
   const openings: OpeningRect[] = []
   const plans: SegmentPlan[] = []
-  for (const room of roomsOnLevel) {
-    if (!isWalled(room)) continue
+  const own = (room: Room) => eaves?.get(room.id) ?? wallHeight(room, level, defaults)
+  const walled = roomsOnLevel.filter(isWalled)
+  for (const room of walled) {
     const segs = classifySegments(room, roomsOnLevel, defaults)
     const corners = miterCorners(segs)
     for (const seg of segs) {
       if (seg.kind === 'none') continue
       const c = corners[seg.index]!
-      const height = wallHeight(room, level, defaults)
+      let height = own(room)
+      if (seg.kind === 'interior' && eaves?.size) {
+        const probe = add(add(seg.a, scale(seg.d, seg.L / 2)), scale(seg.n, 2 * defaults.interiorWallThickness + PROBE_MARGIN))
+        const other = walled.find((r) => r.id !== room.id && pointInPolygon(probe, r.polygon))
+        if (other) height = Math.max(height, own(other))
+      }
       plans.push({ room, seg, kind: seg.kind, corners: c, height, u0: -c.startExt, u1: seg.L + c.endExt })
     }
   }
   trimCrossRoomOverlaps(plans)
   for (const plan of plans) {
     const { room, seg, kind, corners, height: H } = plan
-    const holes = collectHoles(room, seg, roomsOnLevel, level, defaults)
+    const holes = collectHoles(room, seg, roomsOnLevel, level, defaults, H)
     for (const piece of splitWall(seg.L, H, holes)) {
       // the end piece takes the plan bound (facade overhang, or corner trimming)
       const u0 = piece.u0 <= EPS ? plan.u0 : Math.max(piece.u0, plan.u0)

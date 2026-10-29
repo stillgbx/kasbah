@@ -24,7 +24,10 @@ The file describes the house and garden; it is validated when the server starts 
   "rooms": [ /* see below */ ],
   "site": { "elevation": 0, "terrain": [[…]], "zones": [ { "id": "lawn", "name": "Lawn", "kind": "lawn", "polygon": [[…]] } ] },
   "devices": [ /* see below */ ],
-  "roof": { "type": "gable", "levelId": "upstairs", "ridgeAxis": "x", "pitch": 35, "overhang": 0.4 }
+  "roofs": [
+    { "id": "roof-house", "type": "gable", "levelId": "upstairs", "ridgeAxis": "x", "pitch": 35, "overhang": 0.4 },
+    { "id": "roof-garage", "type": "shed", "rooms": ["garage"], "eaves": 2.4, "pitch": 10, "yaw": 270 }
+  ]
 }
 ```
 
@@ -33,7 +36,7 @@ The file describes the house and garden; it is validated when the server starts 
 - `elevation`: `z` of the finished floor (absolute). Put the ground floor **above** the terrain (`0.2` if the terrain is at `0`) so that floor and terrain don't merge.
 - `shortName` (optional): short label for the level tab (“GF”).
 - `height`: ceiling height (default `defaults.levelHeight`).
-- `outline` (optional): outer footprint, used by the roof. Otherwise the bounding box of the walled rooms, enlarged by the exterior wall thickness.
+- `outline` (optional): outer footprint, used by a roof that names neither `rooms` nor `outline`. Otherwise the bounding box of the walled rooms, enlarged by the exterior wall thickness.
 - `roomOrder` (optional): display order of the level's rooms (ids). Rooms missing from the list follow in alphabetical order. Written by drag and drop in the Lights view; delete the key to go back to alphabetical order. Levels themselves read from top to bottom in lists (the level tabs, on the other hand, go up).
 
 ### Rooms (`rooms`)
@@ -103,9 +106,18 @@ Device ids from the `mock` plugin are stable (`mock:light-living`, `mock:cover-k
 
 There is no `scenes` section any more (removed on 2026-10-06: nothing executed it any longer). A `scenes` key left in an old file is ignored on load, then disappears the next time the server writes the file. Light scenes come from the plugins (Hue) and are recalled from the Home panel or an automation.
 
-### Roof (`roof`)
+### Roofs (`roofs`)
 
-`flat` (a slab over the footprint) or `gable` (two slopes); `pitch` in degrees, `ridgeAxis` (`x` or `y`, default: the longer side), `overhang` in meters. Hidden as soon as a level is focused.
+One roof per **volume** of the building: the main house, an attached garage, a detached outbuilding each get theirs. A house in L is two volumes, so two roofs.
+
+- `type`: `flat` (a slab over the footprint), `shed` (one slope), `gable` (two slopes and two gables) or `hip` (four slopes, the ridge along the longer side, a point on a square). The pitched roofs are drawn on the rectangle, in the house axes, that encloses their footprint.
+- `levelId`: the level whose walls carry the roof (default: the level of its `rooms`, otherwise the highest level).
+- Footprint: `rooms` (ids of walled rooms on that level) takes their rectangle, plus the exterior wall and the overhang on each facade side. A side that abuts a room of another volume whose walls rise at least as high gets neither: the roof stops against that wall. Or `outline`, an explicit polygon (outer face of the walls), which wins. Without either, the level's `outline`, then the bounding box of its walled rooms.
+- `eaves` (optional): height of the eaves above the floor of the level (default: the level height). The walls of the covered rooms stop there: this is how a garage is lower than the house on the same level. A partition shared with a higher volume rises with it.
+- `pitch` in degrees; `ridgeAxis` (`x` or `y`, `gable` only, default: the longer side); `yaw` (`shed` only): the direction the slope **descends** toward, in multiples of 90° and in the device convention (0 = +y, default 180); `overhang` in meters.
+- `id` (optional): unique in the house, like every id.
+
+The former single `"roof": { … }` is still read as a one-roof list; a file carries `roof` or `roofs`, not both. A roof is hidden as soon as a level below it is focused.
 
 ## Measured survey (`meta.survey`)
 

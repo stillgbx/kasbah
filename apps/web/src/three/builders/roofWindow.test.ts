@@ -8,7 +8,7 @@ import { createMaterials } from './materials'
 import { defaultLook, defaultSceneTheme } from '../styles'
 
 const geo = computeHouseGeometry(parseHouse(demo))
-const roof = geo.roof!
+const roof = geo.roofs[0]!
 const velux = geo.levels.flatMap((l) => l.openings).find((o) => o.host === 'roof')!
 const mats = createMaterials(defaultSceneTheme(), defaultLook())
 
@@ -44,7 +44,7 @@ describe('roof window glazing', () => {
     const pane = buildPane(rect, mats)
     pane.updateMatrixWorld()
     const n = new Vector3(0, 0, 1).transformDirection(pane.matrixWorld)
-    expect(n.angleTo(faceNormal(g2.roof!.faces[0]!))).toBeLessThan(1e-6)
+    expect(n.angleTo(faceNormal(g2.roofs[0]!.faces[0]!))).toBeLessThan(1e-6)
   })
 
   it('fills the roof hole exactly: same size, same place, in the plane of the slope', () => {

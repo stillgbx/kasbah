@@ -1,6 +1,6 @@
 import type { Material, Object3D } from 'three'
 import { BoxGeometry, BufferAttribute, BufferGeometry, Float32BufferAttribute, Group, Mesh } from 'three'
-import type { Finish, HouseGeometry, LevelGeometry, OpeningRect, WallPrism } from '@kasbah/shared'
+import type { Finish, HouseGeometry, LevelGeometry, OpeningRect, RoofDescriptor, Vec3, WallPrism } from '@kasbah/shared'
 import { buildDetails, buildRoofDetails, isGlazed } from './details'
 import { finishMaterial, type MaterialSet } from './materials'
 import { WATER_DEPTH_ATTRIBUTE } from '../effects/water'
@@ -42,7 +42,8 @@ export interface HouseNodes {
   ground: Mesh
   /** Vertical edge of a terrain WITH RELIEF, down to the infinite ground; `null` on a flat terrain. */
   skirt: Mesh | null
-  roof: Mesh | null
+  /** One mesh per roof, in the order of `geometry.roofs`. */
+  roofs: Mesh[]
   /** Outdoor markers (garden). */
   outdoorMarkers: Group
 }
@@ -282,12 +283,9 @@ export function buildHouse(geometry: HouseGeometry, mats: MaterialSet, dressed?:
     root.add(nodes.group)
   }
 
-  let roof: Mesh | null = null
-  if (geometry.roof) {
-    roof = buildRoofMesh(geometry.roof, mats)
-    root.add(roof)
-  }
-  const nodes: HouseNodes = { root, levels, site, zones, terrain, ground, skirt: null, roof, outdoorMarkers }
+  const roofs = geometry.roofs.map((r) => buildRoofMesh(r, mats, geometry.facade))
+  for (const roof of roofs) root.add(roof)
+  const nodes: HouseNodes = { root, levels, site, zones, terrain, ground, skirt: null, roofs, outdoorMarkers }
   if (geometry.terrain.relief) shapeTerrain(nodes, geometry, mats)
   return nodes
 }
@@ -341,23 +339,48 @@ export function shapeTerrain(nodes: HouseNodes, geometry: Pick<HouseGeometry, 't
   }
 }
 
-/** Roof mesh (flat or pitched), Velux holes included. */
+/** A vertical face of a pitched roof (gable, high wall of a single slope): masonry, not roofing. */
+function isWallFace(face: readonly Vec3[]): boolean {
+  let area = 0
+  for (let i = 0; i < face.length; i++) {
+    const p = face[i]!, q = face[(i + 1) % face.length]!
+    area += p[0] * q[1] - q[0] * p[1]
+  }
+  return Math.abs(area) < 1e-9
+}
+
+/**
+ * Roof mesh (flat or pitched), Velux holes included. The slopes take the roofing; the gables and
+ * the high wall of a single slope are walls, in the facade's material (`facade` = the house finish).
+ */
 export function buildRoofMesh(
-  roof: NonNullable<HouseGeometry['roof']>, mats: MaterialSet,
+  roof: RoofDescriptor, mats: MaterialSet, facade?: Finish,
 ): Mesh {
   const holes = roof.holes ?? []
+  // the wall faces leave the roofing mesh, their index stays: a hole names its face by index
+  const slopes = roof.faces.map((f) => (isWallFace(f) ? [] : f))
   const g = roof.type === 'flat'
     ? (holes.length > 0
       ? extrudePolygonWithHoles(roof.outline, holes.map((h) => h.polygon), roof.zBase, roof.zRidge)
       : extrudePolygon(roof.outline, roof.zBase, roof.zRidge))
     : (holes.some((h) => h.faceIndex !== undefined)
-      ? planarFacesWithHoles(roof.faces, holes)
-      : planarFaces(roof.faces))
+      ? planarFacesWithHoles(slopes, holes)
+      : planarFaces(slopes))
   const roofMat = roof.type === 'flat' ? mats.roofFlat : mats.roof
   const mesh = new Mesh(g, roofMat)
   mesh.name = 'roof'
   mesh.castShadow = true
   mesh.userData = { role: 'roof', material: roofMat }
+  const wallFaces = roof.faces.filter(isWallFace)
+  if (wallFaces.length > 0) {
+    const wallMat = facade ? finishMaterial(mats, 'facade', facade) : mats.wall
+    const gables = new Mesh(planarFaces(wallFaces), wallMat)
+    gables.name = 'roof:gables'
+    gables.castShadow = true
+    gables.receiveShadow = true
+    gables.userData = { role: 'roof', material: wallMat }
+    mesh.add(gables)
+  }
   for (const d of buildRoofDetails(roof, mats)) mesh.add(d)
   return mesh
 }

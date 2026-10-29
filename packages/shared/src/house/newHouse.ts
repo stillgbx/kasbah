@@ -55,7 +55,7 @@ export function newHouseJson(id: string, input: NewHouseInput): Record<string, u
     rooms: [{ id: 'piece-1', levelId: 'rdc', name: input.roomName, polygon: FIRST_ROOM.map((p) => [p[0], p[1]]), openings: [] }],
     site: { elevation: 0, terrain, zones: [], parkings: [], garden: [] },
     devices: [],
-    ...(input.kind === 'house' ? { roof: { type: 'flat', levelId: 'rdc' } } : {}),
+    ...(input.kind === 'house' ? { roofs: [{ type: 'flat', levelId: 'rdc' }] } : {}),
     plugins: {},
     ...(input.kind === 'apartment' ? { meta: { kind: 'apartment' } } : {}),
   }

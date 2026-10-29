@@ -1,6 +1,6 @@
 import type { Footprint, ReliefGrid } from './relief'
 import type { Vec2 } from './vec2'
-import type { Finish, FloorStyle, OpeningMaterial, OpeningType, RoomKind, ZoneKind } from '../schema'
+import type { Finish, FloorStyle, OpeningMaterial, OpeningType, RoofType, RoomKind, ZoneKind } from '../schema'
 
 // PURE geometric descriptors (no three dependency): this is the tested contract.
 // The web-side builders transform them into BufferGeometry without thinking.
@@ -96,10 +96,18 @@ export interface RoofHole {
 }
 
 export interface RoofDescriptor {
-  type: 'flat' | 'gable'
+  /** `roofs[].id` when written. */
+  id?: string
+  type: RoofType
+  /** Level whose walls carry the roof. */
+  levelId: string
+  /** Walled rooms under the roof, on `levelId`. */
+  rooms: string[]
+  /** Written eaves height (above the floor of `levelId`): the walls of `rooms` stop there. */
+  eaves?: number
   /** Footprint enlarged by the overhang (plan). */
   outline: Vec2[]
-  /** Absolute z of the base of the roof (top of the walls of the last level). */
+  /** Absolute z of the base of the roof (top of the walls it covers). */
   zBase: number
   /** Absolute z of the highest point. */
   zRidge: number
@@ -128,7 +136,8 @@ export interface HouseGeometry {
   levels: LevelGeometry[]
   terrain: TerrainDescriptor
   zones: ZoneDescriptor[]
-  roof?: RoofDescriptor
+  /** One per volume (`house.roofs`), in the order of the file. */
+  roofs: RoofDescriptor[]
   /** Finish of the facade (`house.style.facade`); absent = that of the style. */
   facade?: Finish
   /** ABSOLUTE bounding box of everything (levels, terrain, roof). */

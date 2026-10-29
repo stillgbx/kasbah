@@ -2,7 +2,7 @@ import { resolveDefaults, type HouseDefaults } from '../defaults'
 import type { Finish, House, Room } from '../schema'
 import { houseBounds } from './bounds'
 import { computeFloors, computeLabelAnchors } from './floors'
-import { computeRoof } from './roof'
+import { computeRoofs } from './roof'
 import { terrainFootprints, terrainPads } from './relief'
 import { computeTerrain, computeZones } from './site'
 import { computeSurfaceOpenings, roofHolesOf } from './surface'
@@ -29,13 +29,15 @@ function wallFinishesOf(rooms: readonly Room[]): { wallFinishes?: Record<string,
 
 export function computeHouseGeometry(house: House, defaultsOverride?: HouseDefaults): HouseGeometry {
   const defaults = defaultsOverride ?? resolveDefaults(house.defaults)
-  const roofBase = computeRoof(house, defaults)
+  const roofBases = computeRoofs(house, defaults)
+  const eaves = new Map<string, number>()
+  for (const roof of roofBases) if (roof.eaves !== undefined) for (const id of roof.rooms) eaves.set(id, roof.eaves)
   const levels: LevelGeometry[] = [...house.levels]
     .sort((a, b) => a.elevation - b.elevation)
     .map((level) => {
       const rooms = house.rooms.filter((r) => r.levelId === level.id)
-      const { prisms, openings: wallOpenings } = computeWalls(level, rooms, defaults)
-      const { openings: surfaceOpenings, floorHoles } = computeSurfaceOpenings(level, rooms, defaults, roofBase)
+      const { prisms, openings: wallOpenings } = computeWalls(level, rooms, defaults, eaves)
+      const { openings: surfaceOpenings, floorHoles } = computeSurfaceOpenings(level, rooms, defaults, roofBases)
       return {
         levelId: level.id,
         elevation: level.elevation,
@@ -47,15 +49,13 @@ export function computeHouseGeometry(house: House, defaultsOverride?: HouseDefau
         ...wallFinishesOf(rooms),
       }
     })
-  const roof = roofBase
-    ? { ...roofBase, holes: roofHolesOf(house, roofBase) }
-    : undefined
+  const roofs = roofBases.map((roof) => ({ ...roof, holes: roofHolesOf(house, roof, roofBases) }))
   return {
     levels,
     terrain: computeTerrain(house.site, terrainPads(house), terrainFootprints(house, defaults)),
     zones: computeZones(house.site),
-    ...(roof ? { roof } : {}),
+    roofs,
     ...(house.style?.facade ? { facade: house.style.facade } : {}),
-    bounds: houseBounds(house, defaults, roof),
+    bounds: houseBounds(house, defaults, roofs),
   }
 }

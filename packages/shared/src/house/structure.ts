@@ -169,14 +169,32 @@ export function applyStructureToJson(input: Json, patch: StructurePatch, shapes:
     })
   }
 
-  // -- the roof follows the highest level that has walled rooms (before the check of the removed
-  //    levels: the floor that is emptied then removed is no longer the one that carries the roof)
-  let roof = isObject(doc.roof) ? doc.roof : null
+  // -- the roofs (`roofs`, or the former single `roof`). One that names its rooms stays on them and
+  //    loses those that are removed or no longer walled — with none left, it goes. The others follow
+  //    the highest level that has walled rooms (before the check of the removed levels: the floor that
+  //    is emptied then removed is no longer the one that carries the roof)
+  const many = Array.isArray(doc.roofs) && doc.roofs.length > 0
+  let roofs = (many ? (doc.roofs as unknown[]).filter(isObject) : isObject(doc.roof) ? [doc.roof] : [])
   const moved = !!(patch.newLevels?.length || patch.removeLevels?.length || patch.newRooms?.length || removed.size)
-  if (roof && moved) {
-    const walled = new Set(rooms.filter((r) => WALLED.has((r.kind as string | undefined) ?? 'room')).map((r) => r.levelId))
-    const high = levels.filter((l) => walled.has(l.id)).sort((a, b) => (b.elevation as number) - (a.elevation as number))[0]
-    if (high && high.id !== roof.levelId) roof = doc.roof = { ...roof, levelId: high.id }
+  const walledIds = new Set(rooms.filter((r) => WALLED.has((r.kind as string | undefined) ?? 'room')).map((r) => r.id as string))
+  const high = levels.filter((l) => rooms.some((r) => r.levelId === l.id && walledIds.has(r.id as string)))
+    .sort((a, b) => (b.elevation as number) - (a.elevation as number))[0]
+  let roofsTouched = false
+  roofs = roofs.flatMap((roof) => {
+    if (Array.isArray(roof.rooms)) {
+      const kept = (roof.rooms as string[]).filter((id) => walledIds.has(id))
+      if (kept.length === roof.rooms.length) return [roof]
+      roofsTouched = true
+      return kept.length > 0 ? [{ ...roof, rooms: kept }] : []
+    }
+    if (!moved || !high || high.id === roof.levelId) return [roof]
+    roofsTouched = true
+    return [{ ...roof, levelId: high.id }]
+  })
+  if (roofsTouched) {
+    if (many) doc.roofs = roofs
+    else if (roofs[0]) doc.roof = roofs[0]
+    else delete doc.roof
   }
 
   // -- removed levels: only empty ones (no room, no device, array, spot or roof on it)
@@ -187,7 +205,7 @@ export function applyStructureToJson(input: Json, patch: StructurePatch, shapes:
     if ((patch.newLevels ?? []).some((l) => l.id === id)) continue
     if (!levels.some((l) => l.id === id)) throw new PlacementError(`unknown level "${id}"`)
     const holds = rooms.some((r) => r.levelId === id) || devices.some((d) => d.levelId === id)
-      || parkings.some((p) => p.levelId === id) || arrays.some((a) => a.levelId === id) || roof?.levelId === id
+      || parkings.some((p) => p.levelId === id) || arrays.some((a) => a.levelId === id) || roofs.some((r) => r.levelId === id)
     if (holds) { blocking.push(`${id} : niveau non vide`); continue }
     levels = levels.filter((l) => l.id !== id)
   }

@@ -12,7 +12,7 @@ describe('newHouseJson', () => {
     const h = parseHouse(newHouseJson('lac', input))
     expect(h.rooms[0]!.polygon).toEqual(FIRST_ROOM)
     expect(h.site.terrain).toEqual([[-12.5, -8], [17.5, -8], [17.5, 12], [-12.5, 12]])
-    expect(h.roof).toMatchObject({ type: 'flat', levelId: 'rdc' })
+    expect(h.roofs).toMatchObject([{ type: 'flat', levelId: 'rdc' }])
     expect(h.plugins).toEqual({})
     expect(() => computeHouseGeometry(h)).not.toThrow()
   })
@@ -20,7 +20,7 @@ describe('newHouseJson', () => {
   it('an apartment: no roof, a 2 m margin around the room, its type retained', () => {
     const raw = newHouseJson('apt', { ...input, kind: 'apartment', terrain: undefined })
     const h = parseHouse(raw)
-    expect(h.roof).toBeUndefined()
+    expect(h.roofs).toEqual([])
     expect(h.site.terrain).toEqual([[-2, -2], [7, -2], [7, 6], [-2, 6]])
     expect(h.meta).toEqual({ kind: 'apartment' })
   })

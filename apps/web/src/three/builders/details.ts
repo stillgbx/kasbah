@@ -282,8 +282,9 @@ function board(a: Vec3, b: Vec3, out: Vec2): BufferGeometry {
 }
 
 /**
- * The roof detail. Gable roof: a FASCIA board under each slope edge that is not
- * the ridge (eaves and gable verges) — it is the visible thickness of a roof that has none
+ * The roof detail. Pitched roof: a FASCIA board under each slope edge that runs along the border of
+ * the roof (eaves, gable verges, the high edge of a single slope) — never on the ridge nor on the hips,
+ * which are inside it. It is the visible thickness of a roof that has none
  * (`faces` is a set of planes, `thickness` 0). Flat roof: a PARAPET, a low wall in the walls'
  * material that runs around the slab, coped like the walls.
  */
@@ -301,6 +302,10 @@ export function buildRoofDetails(roof: RoofDescriptor, mats: MaterialSet): Mesh[
     out.push(wall, cap)
   } else {
     const parts: BufferGeometry[] = []
+    const pts = roof.faces.flat()
+    const lo = [Math.min(...pts.map((p) => p[0])), Math.min(...pts.map((p) => p[1]))]
+    const hi = [Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))]
+    const onBorder = (a: Vec3, b: Vec3) => [0, 1].some((k) => [lo[k]!, hi[k]!].some((v) => Math.abs(a[k]! - v) < EPS && Math.abs(b[k]! - v) < EPS))
     for (const face of roof.faces) {
       // a gable is vertical: its ground footprint has no area
       let area = 0
@@ -313,7 +318,7 @@ export function buildRoofDetails(roof: RoofDescriptor, mats: MaterialSet): Mesh[
       const cy = face.reduce((s, p) => s + p[1], 0) / face.length
       for (let i = 0; i < face.length; i++) {
         const a = face[i]!, b = face[(i + 1) % face.length]!
-        if (a[2] >= roof.zRidge - EPS && b[2] >= roof.zRidge - EPS) continue   // the ridge has no fascia
+        if (!onBorder(a, b)) continue                                           // ridge, hips
         const L = Math.hypot(b[0] - a[0], b[1] - a[1])
         if (L < EPS) continue
         let out2: Vec2 = [(b[1] - a[1]) / L, -(b[0] - a[0]) / L]

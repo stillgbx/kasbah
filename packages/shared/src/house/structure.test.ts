@@ -11,7 +11,7 @@ import type { Vec2 } from './geometry/vec2'
 type Room = { id: string; levelId: string; name: string; kind?: string; polygon: Vec2[]; walls?: { segment: number; kind?: string }[] }
 type Level = { id: string; name: string; elevation: number; height?: number; roomOrder?: string[] }
 type Device = { id: string; roomId?: string; levelId?: string; openingId?: string; position?: number[] }
-type Doc = { rooms: Room[]; levels: Level[]; devices: Device[]; roof?: { levelId?: string }; meta?: { survey?: unknown } }
+type Doc = { rooms: Room[]; levels: Level[]; devices: Device[]; roof?: { levelId?: string }; roofs?: { levelId?: string; rooms?: string[] }[]; meta?: { survey?: unknown } }
 const as = (d: unknown) => d as Doc
 const room = (d: unknown, id: string) => as(d).rooms.find((r) => r.id === id)
 const level = (d: unknown, id: string) => as(d).levels.find((l) => l.id === id)
@@ -136,6 +136,21 @@ describe('removing', () => {
     expect(blocking).toEqual([])
     expect(level(doc, 'etage')).toBeUndefined()
     expect(as(doc).roof?.levelId).toBe('rdc')
+  })
+
+  it('roofs: one that names its rooms keeps the others and goes with the last; one without follows the floor', () => {
+    const { roof, ...rest } = demo
+    const twoRoofs = { ...rest, roofs: [{ ...roof, levelId: 'etage' }, { id: 'toit-cuisine', type: 'shed', rooms: ['cuisine', 'salon'], eaves: 2.4 }] }
+    const kept = applyHouseEditToJson(twoRoofs, { removeRooms: ['salon'] })
+    expect(kept.blocking).toEqual([])
+    expect(as(kept.doc).roofs![1]!.rooms).toEqual(['cuisine'])
+    expect(() => parseHouse(kept.doc)).not.toThrow()
+    const { doc, blocking } = applyHouseEditToJson(twoRoofs, {
+      removeRooms: ['chambre1', 'chambre2', 'sdb', 'palier', 'cuisine', 'salon'], removeLevels: ['etage'],
+    })
+    expect(blocking).toEqual([])
+    expect(as(doc).roofs).toEqual([{ ...roof, levelId: 'rdc' }])
+    expect(() => parseHouse(doc)).not.toThrow()
   })
 })
 

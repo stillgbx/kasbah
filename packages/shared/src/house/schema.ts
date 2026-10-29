@@ -482,12 +482,37 @@ export type HouseDevice = z.infer<typeof houseDeviceSchema>
 export type PlacedHouseDevice = HouseDevice & { position: z.infer<typeof vec3Schema> }
 export const isPlaced = (d: HouseDevice): d is PlacedHouseDevice => d.position !== undefined
 
+/** `flat` = slab; `shed` = one slope; `gable` = two slopes and two gables; `hip` = four slopes. */
+export const ROOF_TYPES = ['flat', 'shed', 'gable', 'hip'] as const
+export type RoofType = (typeof ROOF_TYPES)[number]
+
+/**
+ * One roof covers one VOLUME of the building: the main house, an attached garage, a detached
+ * outbuilding each get theirs. The pitched roofs are drawn on the rectangle (house axes) that
+ * encloses their footprint: a house in L is two volumes, so two roofs.
+ */
 export const roofSchema = z.object({
-  type: z.enum(['flat', 'gable']),
+  id: idSchema.optional(),
+  type: z.enum(ROOF_TYPES),
+  /** Level whose walls carry the roof; absent = the highest level. */
   levelId: idSchema.optional(),
+  /**
+   * Rooms covered (on `levelId`): the footprint is their rectangle, enlarged by the exterior walls
+   * on the facade sides only — the side that abuts another room stops at its own wall.
+   */
+  rooms: z.array(idSchema).min(1).optional(),
+  /** Explicit footprint (outer face of the walls), used as written. Wins over `rooms`. */
   outline: polygonSchema.optional(),
+  /**
+   * Height of the eaves above the floor of `levelId` (m); absent = the level height. The walls of the
+   * covered rooms stop there: it is how a garage is lower than the house on the same level.
+   */
+  eaves: z.number().positive().optional(),
   pitch: z.number().min(5).max(75).default(30),
+  /** Axis of the ridge of a `gable`; absent = the longest side (a `hip` always takes the longest). */
   ridgeAxis: z.enum(['x', 'y']).optional(),
+  /** `shed`: direction toward which the slope DESCENDS, same convention as a device `yaw` (0 = +y). */
+  yaw: z.number().multipleOf(90).default(180),
   overhang: z.number().min(0).default(0.3),
 })
 export type Roof = z.infer<typeof roofSchema>
@@ -705,6 +730,8 @@ export const houseSchema = z.object({
   rooms: z.array(roomSchema),
   site: siteSchema,
   devices: z.array(houseDeviceSchema).default([]),
+  roofs: z.array(roofSchema).default([]),
+  /** Former single roof, still read (`roofsOf`); a file carries `roof` or `roofs`, not both. */
   roof: roofSchema.optional(),
   arrays: z.array(panelArraySchema).default([]),
   /** Plugins of this house: which are active, and their sub-items. */

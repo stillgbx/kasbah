@@ -102,21 +102,22 @@ describe('demo house surface openings', () => {
     const geo = computeHouseGeometry(house)
     const floorHoles = geo.levels.flatMap((l) => l.floors).filter((f) => f.holes && f.holes.length > 0)
     expect(floorHoles.length).toBeGreaterThan(0)
-    expect(geo.roof?.holes?.length).toBeGreaterThan(0)
+    expect(geo.roofs[0]?.holes?.length).toBeGreaterThan(0)
     const surfaceRects = geo.levels.flatMap((l) => l.openings).filter((o) => o.host !== 'wall')
     expect(surfaceRects.some((o) => o.host === 'floor')).toBe(true)
     expect(surfaceRects.some((o) => o.host === 'roof')).toBe(true)
-    if (geo.roof) {
-      const at = roofAtPoint(geo.roof, velux!.x!, velux!.y!)
+    const roof = geo.roofs[0]
+    if (roof) {
+      const at = roofAtPoint(roof, velux!.x!, velux!.y!)
       expect(at).not.toBeNull()
-      expect(defaultRoofYaw(geo.roof, velux!.x!, velux!.y!)).toBe(180)          // south slope: the descent goes toward −y
+      expect(defaultRoofYaw(roof, velux!.x!, velux!.y!)).toBe(180)          // south slope: the descent goes toward −y
     }
   })
 
   it('a roof-window on a slope follows it: downhill cap, length shortened by cos(slope)', async () => {
     const { default: raw } = await import('./__fixtures__/demo-house.json')
     const house = parseHouse(raw) as House
-    const roof = computeHouseGeometry(house).roof!
+    const roof = computeHouseGeometry(house).roofs[0]!
     const cos35 = Math.cos((35 * Math.PI) / 180)
     // south slope: the written heading (0, toward the ridge) yields to the descent (180)
     const south = surfaceFootprint({ type: 'roof-window', x: 2.45, y: 3.1, yaw: 0, width: 1, height: 1.2 }, roof)

@@ -2,8 +2,8 @@ import type { z } from 'zod'
 import { resolveDefaults } from './defaults'
 import { houseSchema, isSurfaceOpening, type House } from './schema'
 import { dist } from './geometry/vec2'
-import { computeRoof } from './geometry/roof'
-import { surfaceFootprint } from './geometry/surface'
+import { computeRoofs, roofLevel, roofsOf, topLevel } from './geometry/roof'
+import { roofUnder, surfaceFootprint } from './geometry/surface'
 import type { RoofDescriptor } from './geometry/types'
 import { classifySegments, isWalled, openingSill, roomHeight } from './geometry/walls'
 import { surfaceFitsInPolygon, surfaceRectsOverlap } from './openings'
@@ -22,14 +22,14 @@ export class HouseValidationError extends Error {
 function crossRefs(house: House, ctx: z.RefinementCtx) {
   const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: 'custom', path, message })
   const defaults = resolveDefaults(house.defaults)
-  // The roof is only computed if a Velux asks for it. The house is being validated: a roof
+  // The roofs are only computed if a Velux asks for it. The house is being validated: a roof
   // that cannot be computed yet lets the Velux be judged on its written dimensions (the previous check).
-  let roofMemo: { value: RoofDescriptor | undefined } | undefined
-  const roof = (): RoofDescriptor | undefined => {
-    if (!roofMemo) {
-      try { roofMemo = { value: computeRoof(house, defaults) } } catch { roofMemo = { value: undefined } }
+  let roofsMemo: RoofDescriptor[] | undefined
+  const roofs = (): RoofDescriptor[] => {
+    if (!roofsMemo) {
+      try { roofsMemo = computeRoofs(house, defaults) } catch { roofsMemo = [] }
     }
-    return roofMemo.value
+    return roofsMemo
   }
   const seen = new Map<string, string>()
   const unique = (id: string, path: (string | number)[]) => {
@@ -44,6 +44,7 @@ function crossRefs(house: House, ctx: z.RefinementCtx) {
   house.site.garden.forEach((g, i) => unique(g.id, ['site', 'garden', i, 'id']))
   house.devices.forEach((d, i) => unique(d.id, ['devices', i, 'id']))
   house.arrays.forEach((a, i) => unique(a.id, ['arrays', i, 'id']))
+  house.roofs.forEach((r, i) => { if (r.id) unique(r.id, ['roofs', i, 'id']) })
   house.rooms.forEach((r, ri) => r.openings.forEach((o, oi) => unique(o.id, ['rooms', ri, 'openings', oi, 'id'])))
 
   const levels = new Map(house.levels.map((l) => [l.id, l]))
@@ -67,16 +68,18 @@ function crossRefs(house: House, ctx: z.RefinementCtx) {
     const segs = isWalled(room) ? classifySegments(room, roomsOnLevel, defaults) : null
     const bySegment = new Map<number, { u0: number; u1: number; id: string }[]>()
     const surfaceList: { x: number; y: number; yaw: number; width: number; height: number; id: string; type: string }[] = []
-    const roofLevelId = house.roof?.levelId ?? [...house.levels].sort((a, b) => b.elevation - a.elevation)[0]?.id
+    // without a roof, the level a roof would take: the highest
+    const roofLevelIds = new Set(roofsOf(house).flatMap((r) => roofLevel(house, r)?.id ?? []))
+    if (roofLevelIds.size === 0) roofLevelIds.add(topLevel(house.levels).id)
     room.openings.forEach((o, oi) => {
       const path = ['rooms', ri, 'openings', oi]
       if (isSurfaceOpening(o.type)) {
         if (o.x === undefined || o.y === undefined || o.yaw === undefined) return // schema already reported
-        if (o.type === 'roof-window' && roofLevelId && room.levelId !== roofLevelId) {
-          issue(path, `roof-window must belong to a room on the roof level ("${roofLevelId}")`)
+        if (o.type === 'roof-window' && !roofLevelIds.has(room.levelId)) {
+          issue(path, `roof-window must belong to a room on a roof level ("${[...roofLevelIds].join('", "')}")`)
         }
         // a Velux on a slope is judged on its footprint seen from the sky (length shortened by the slope)
-        const fp = surfaceFootprint({ type: o.type, x: o.x, y: o.y, yaw: o.yaw, width: o.width, height: o.height }, o.type === 'roof-window' ? roof() : undefined)
+        const fp = surfaceFootprint({ type: o.type, x: o.x, y: o.y, yaw: o.yaw, width: o.width, height: o.height }, o.type === 'roof-window' ? roofUnder(roofs(), o.x, o.y) : undefined)
         if (!surfaceFitsInPolygon([fp.x, fp.y], fp.yaw, fp.width, fp.height, room.polygon)) {
           issue(path, `surface opening does not fit inside room polygon`)
         }
@@ -141,7 +144,19 @@ function crossRefs(house: House, ctx: z.RefinementCtx) {
     })
   })
 
-  if (house.roof?.levelId && !levels.has(house.roof.levelId)) issue(['roof', 'levelId'], `unknown level "${house.roof.levelId}"`)
+  if (house.roof && house.roofs.length > 0) issue(['roof'], 'write `roofs` or the former `roof`, not both')
+  const roofPath = house.roofs.length > 0 ? 'roofs' : 'roof'
+  roofsOf(house).forEach((roof, i) => {
+    const path = roofPath === 'roofs' ? ['roofs', i] : ['roof']
+    if (roof.levelId && !levels.has(roof.levelId)) issue([...path, 'levelId'], `unknown level "${roof.levelId}"`)
+    const level = roofLevel(house, roof)
+    roof.rooms?.forEach((id, ri) => {
+      const room = rooms.get(id)
+      if (!room) issue([...path, 'rooms', ri], `unknown room "${id}"`)
+      else if (!isWalled(room)) issue([...path, 'rooms', ri], `room "${id}" has no walls`)
+      else if (level && room.levelId !== level.id) issue([...path, 'rooms', ri], `room "${id}" is on level "${room.levelId}", not "${level.id}"`)
+    })
+  })
 }
 
 export const houseSchemaStrict = houseSchema.superRefine(crossRefs)

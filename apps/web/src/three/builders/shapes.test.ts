@@ -30,7 +30,7 @@ afterEach(() => { vi.restoreAllMocks() })
 
 describe('planarFacesWithHoles', () => {
   it('the demo pitched roof, pierced by its Velux windows, merges all its faces', () => {
-    const roof = computeHouseGeometry(parseHouse(demo)).roof
+    const roof = computeHouseGeometry(parseHouse(demo)).roofs[0]
     if (roof?.type !== 'gable') throw new Error('the demo has a pitched roof')
     const holes = (roof.holes ?? []).filter((h) => h.faceIndex !== undefined && h.corners)
     expect(holes.length).toBeGreaterThan(0)
@@ -48,7 +48,7 @@ describe('planarFacesWithHoles', () => {
   })
 
   it('lays UVs in meters in the plane of each roof slope: u along the eaves, v going up', () => {
-    const roof = computeHouseGeometry(parseHouse(demo)).roof
+    const roof = computeHouseGeometry(parseHouse(demo)).roofs[0]
     if (roof?.type !== 'gable') throw new Error('the demo has a pitched roof')
     const holes = (roof.holes ?? []).filter((h) => h.faceIndex !== undefined && h.corners)
     for (const g of [planarFaces(roof.faces), planarFacesWithHoles(roof.faces, holes)]) {

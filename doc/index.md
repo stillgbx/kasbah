@@ -29,7 +29,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-10-25 |
 | [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-10-28 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-10-06 |
-| [1_5 Scène 3D (Three.js)](1_architecture/1_5_scene-3d.md) | 2026-10-13 |
+| [1_5 Scène 3D (Three.js)](1_architecture/1_5_scene-3d.md) | 2026-10-29 |
 | [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-10-09 |
 | [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-10-24 |
 | [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-28 |
@@ -46,12 +46,12 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 ## 2 — Maison
 
 <!-- section:2_maison:begin (généré par scripts/wiki-index.mjs depuis 2_maison/README.md - ne pas éditer ici) -->
-La maison décrite en JSON : format et validation, géométrie dérivée (murs, ouvertures, sols, toit), jardin. Résumés : [2_maison/README.md](2_maison/README.md) (3 pages, dernière mise à jour 2026-10-20).
+La maison décrite en JSON : format et validation, géométrie dérivée (murs, ouvertures, sols, toit), jardin. Résumés : [2_maison/README.md](2_maison/README.md) (3 pages, dernière mise à jour 2026-10-29).
 
 | Pages | Dernière mise à jour |
 |---|---|
-| [2_0 Format house.json : décisions et validation](2_maison/2_0_format-house-json.md) | 2026-10-20 |
-| [2_1 Géométrie : murs, ouvertures, sols, toit](2_maison/2_1_geometrie.md) | 2026-10-06 |
+| [2_0 Format house.json : décisions et validation](2_maison/2_0_format-house-json.md) | 2026-10-29 |
+| [2_1 Géométrie : murs, ouvertures, sols, toit](2_maison/2_1_geometrie.md) | 2026-10-29 |
 | [2_2 Jardin : arbres, buissons, pierres](2_maison/2_2_jardin.md) | 2026-10-06 |
 <!-- section:2_maison:end -->
 

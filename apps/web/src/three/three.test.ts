@@ -3,7 +3,8 @@ import './textures/prebake' // bakes the materials at import, outside the first 
 import { BackSide, Box3, BoxGeometry, type OrthographicCamera, type PerspectiveCamera, type BufferGeometry, CylinderGeometry, type Material, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshStandardMaterial, type Object3D, type ShaderMaterial, ShaderLib, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
 import { computeHouseGeometry, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type OpeningRect, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
-import { buildHouse, buildLevel, countTriangles } from './builders/buildHouse'
+import tilleuls from '../../../../house/demos/tilleuls.json'
+import { buildHouse, buildLevel, buildRoofMesh, countTriangles } from './builders/buildHouse'
 import { buildDetails, buildRoofDetails, isGlazed } from './builders/details'
 import { alignedToLongestEdge, extrudePolygon } from './builders/shapes'
 import { createSurfaceTextures, type SurfaceTexture } from './textures/procedural'
@@ -196,7 +197,7 @@ describe('builders', () => {
     expect(nodes.levels.get('rdc')!.floors.size).toBe(3)
     expect(nodes.levels.get('rdc')!.panes.length).toBeGreaterThan(0)
     expect(nodes.zones.size).toBe(4)
-    expect(nodes.roof).not.toBeNull()
+    expect(nodes.roofs).toHaveLength(1)
     expect(nodes.root.rotation.x).toBeCloseTo(-Math.PI / 2)
     expect(nodes.levels.get('etage')!.group.position.z).toBeCloseTo(3.05)
     expect(countTriangles(nodes.root)).toBeGreaterThan(100)
@@ -1147,6 +1148,37 @@ describe('tap on the roof', () => {
     lookDown()
     scene.focusLevel('etage')
     expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'room', roomId: 'chambre1' })
+  })
+})
+
+describe('several roofs', () => {
+  // Les Tilleuls: the gable roof of the house (eaves at the top of the upper floor) and the single slope
+  // of the garden shed (eaves at 2.2 m above the ground floor), one mesh each.
+  const scene = new HouseScene(document.createElement('canvas'), { headless: true })
+  scene.load(parseHouse(tilleuls))
+  scene.resize(600, 600)
+  const roofs = () => (scene as unknown as { nodes: { roofs: Mesh[] } }).nodes.roofs
+  const shown = () => roofs().map((r) => r.visible)
+
+  it('one mesh per roof, each shown from the levels at its eaves or above', () => {
+    expect(roofs()).toHaveLength(2)
+    scene.focusLevel(null)
+    expect(shown()).toEqual([true, true])
+    scene.focusLevel('rdc')
+    expect(shown()).toEqual([false, false])
+    scene.focusLevel('etage')
+    expect(shown()).toEqual([false, true])          // the shed sits below the upper floor
+    scene.focusLevel('toit')
+    expect(shown()).toEqual([true, true])
+  })
+
+  it('a tap on the shed roof leads to the lowest level that shows it', () => {
+    scene.focusLevel(null)
+    scene.camera.position.set(27.5, 30, -4.2)
+    scene.camera.lookAt(27.5, 0, -4.25)
+    scene.camera.updateMatrixWorld(true)
+    scene.scene.updateMatrixWorld(true)
+    expect(scene.pick({ x: 0, y: 0 })).toEqual({ kind: 'level', levelId: 'etage' })
   })
 })
 
@@ -2381,23 +2413,48 @@ describe('roof and pool', () => {
   const mats = createMaterials(defaultSceneTheme(), defaultLook())
 
   it('a gable roof receives fascia boards under its eaves and its gables, never at the ridge', () => {
-    const [fascia] = buildRoofDetails(geometry.roof!, mats)
+    const [fascia] = buildRoofDetails(geometry.roofs[0]!, mats)
     expect(fascia!.name).toBe('roof:fascia')
     expect(fascia!.material).toBe(mats.frame)
     fascia!.geometry.computeBoundingBox()
-    expect(fascia!.geometry.boundingBox!.max.z).toBeLessThanOrEqual(geometry.roof!.zRidge + 1e-6) // the verges rise to the ridge, nothing above
-    expect(fascia!.geometry.boundingBox!.min.z).toBeCloseTo(geometry.roof!.zBase - 0.18, 3)  // hanging below the eaves
+    expect(fascia!.geometry.boundingBox!.max.z).toBeLessThanOrEqual(geometry.roofs[0]!.zRidge + 1e-6) // the verges rise to the ridge, nothing above
+    expect(fascia!.geometry.boundingBox!.min.z).toBeCloseTo(geometry.roofs[0]!.zBase - 0.18, 3)  // hanging below the eaves
+  })
+
+  it('the gables are walls: in the facade material (or its finish), out of the roofing mesh', () => {
+    const roof = buildRoofMesh(geometry.roofs[0]!, mats)
+    const gables = roof.children.find((c) => c.name === 'roof:gables') as Mesh
+    expect(gables.material).toBe(mats.wall)
+    const normals = roof.geometry.getAttribute('normal') as BufferAttribute
+    for (let i = 0; i < normals.count; i++) expect(Math.abs(normals.getZ(i))).toBeGreaterThan(0.5)   // the tiles keep the slopes only
+    expect((gables.geometry.getAttribute('position') as BufferAttribute).count).toBe(2 * 3)    // two gable triangles
+    const dressed = buildRoofMesh(geometry.roofs[0]!, mats, parseHouse(tilleuls).style!.facade!)
+    expect((dressed.children.find((c) => c.name === 'roof:gables') as Mesh).material).not.toBe(mats.wall)
+  })
+
+  it('a hip roof receives its boards along the eaves only, none along the hips', () => {
+    const hip = computeHouseGeometry(parseHouse({ ...demo, roof: { ...demo.roof, type: 'hip' } })).roofs[0]!
+    const [fascia] = buildRoofDetails(hip, mats)
+    const xs = hip.outline.map((p) => p[0]), ys = hip.outline.map((p) => p[1])
+    const lo = [Math.min(...xs), Math.min(...ys)], hi = [Math.max(...xs), Math.max(...ys)]
+    const pos = fascia!.geometry.getAttribute('position') as BufferAttribute
+    let worst = 0
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i)
+      worst = Math.max(worst, Math.min(Math.abs(x - lo[0]!), Math.abs(x - hi[0]!), Math.abs(y - lo[1]!), Math.abs(y - hi[1]!)))
+    }
+    expect(worst).toBeLessThan(0.3)                 // every board hugs the border of the roof
   })
 
   it('a flat roof receives a parapet in the walls\' material, coped, and a slab that is not tiled', () => {
-    const flat = { ...geometry.roof!, type: 'flat' as const, zRidge: geometry.roof!.zBase + 0.2, faces: [] }
+    const flat = { ...geometry.roofs[0]!, type: 'flat' as const, zRidge: geometry.roofs[0]!.zBase + 0.2, faces: [] }
     const meshes = buildRoofDetails(flat, mats)
     expect(meshes.map((m) => m.name)).toEqual(['roof:parapet', 'roof:parapet-cap'])
     expect(meshes[0]!.material).toBe(mats.wall)
     meshes[1]!.geometry.computeBoundingBox()
     expect(meshes[1]!.geometry.boundingBox!.max.z).toBeCloseTo(flat.zRidge + 0.35 + 0.005, 3)
-    const nodes = buildHouse({ ...geometry, roof: flat }, mats)
-    expect(nodes.roof!.material).toBe(mats.roofFlat)
+    const nodes = buildHouse({ ...geometry, roofs: [flat] }, mats)
+    expect(nodes.roofs[0]!.material).toBe(mats.roofFlat)
     expect(mats.roofFlat.map).not.toBe(mats.roof.map)
   })
 

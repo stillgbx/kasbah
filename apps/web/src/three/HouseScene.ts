@@ -7,9 +7,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import {
   boundsCenter, buildingBounds, computeHouseGeometry, deviceFloorZ, emptyReliefGrid, extendReliefGrid, isFlatRelief, parseRelief, serializeRelief, terrainHeight, geoDistance, HOME_RADIUS_M, indexHouse, longestEdgeYawDeg, offsetPolygon, pointInPolygon, resolveDefaults, resolveDeviceLevelId, sitePosition,
-  roofBounds, roomBounds, zoneBounds, openingCentre, openingGaps, openingLabel, planLength, surfaceAxes, surfaceGaps,
+  mainRoof, roofBounds, roofUnder, roomBounds, zoneBounds, openingCentre, openingGaps, openingLabel, planLength, surfaceAxes, surfaceGaps,
   assignParkings, atRest, mirekToRgb, xyToRgb, parkingGaps, parkingHost, parkingLabel, PARKING_SIDES,
-  type DeviceDescriptor, type FinishId, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type Parking, type ParkingFix, type ParkingSide, type PlacedHouseDevice, type Relief, type ReliefGrid, type Vec2, type Vec3,
+  type DeviceDescriptor, type FinishId, type DeviceState, type House, type HouseDevice, type HouseGeometry, type HouseIndex, type Level, type OpeningRect, type Parking, type ParkingFix, type ParkingSide, type PlacedHouseDevice, type Relief, type RoofDescriptor, type ReliefGrid, type Vec2, type Vec3,
 } from '@kasbah/shared'
 import { applyLook, backdropColor, createMaterials, disposeMaterials, type MaterialSet } from './builders/materials'
 import type { SurfaceRole } from './textures/procedural'
@@ -916,7 +916,7 @@ export class HouseScene {
     // terrain): on a wide plot, the same 2048 map spent most of its texels
     // on empty lawn. The cast shadows stay covered: in the light's
     // frame, the shadow of a box fits exactly in that box's footprint.
-    const b = boundsToWorldBox(buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roof))
+    const b = boundsToWorldBox(buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roofs))
     // …and the GARDEN: a tree outside the structure had no shadow, and that of a large tree was cut
     // at the edge of the frame. Same map, more area: the house's shadows lose sharpness.
     const garden = this.garden.worldBounds()
@@ -1303,19 +1303,14 @@ export class HouseScene {
     this.loop.invalidate()
   }
 
-  /** Redoes the roof mesh (Velux holes) without touching the levels or the camera. */
+  /** Redoes the roof meshes (Velux holes) without touching the levels or the camera. */
   private rebuildRoof(): void {
     if (!this.nodes) return
-    const old = this.nodes.roof
-    if (old) {
-      old.removeFromParent()
-      disposeObject3D(old, new Set<Material>(this.materials.all))
-      this.nodes.roof = null
-    }
-    if (!this.geometry?.roof) return
-    const roof = buildRoofMesh(this.geometry.roof, this.materials)
-    this.nodes.root.add(roof)
-    this.nodes.roof = roof
+    const shared = new Set<Material>(this.materials.all)
+    for (const old of this.nodes.roofs) { old.removeFromParent(); disposeObject3D(old, shared) }
+    this.nodes.roofs = (this.geometry?.roofs ?? []).map((r) => buildRoofMesh(r, this.materials, this.geometry?.facade))
+    for (const roof of this.nodes.roofs) this.nodes.root.add(roof)
+    this.applyLevelFocus()                 // a new mesh starts in place: the focused level may hide it
   }
 
   /**
@@ -1458,7 +1453,7 @@ export class HouseScene {
       cy /= room.polygon.length
       parent = level.group
     } else {
-      const outline = this.geometry?.roof?.outline
+      const outline = this.mainRoof?.outline
       if (!outline?.length) return
       for (const [x, y] of outline) { cx += x; cy += y }
       cx /= outline.length
@@ -1468,7 +1463,7 @@ export class HouseScene {
       if (!parent) return
       // above the roof slab, in the roof level's frame (local z)
       const elev = roofLvl?.elevation ?? 0
-      z = (this.geometry?.roof?.zBase ?? elev) - elev + 0.05
+      z = (this.mainRoof?.zBase ?? elev) - elev + 0.05
     }
     const shape = new Shape()
     shape.moveTo(0, 0.18)
@@ -1497,8 +1492,8 @@ export class HouseScene {
     this.raycaster.setFromCamera(new Vector2(ndc.x, ndc.y), this.camera)
     // Roof window: we aim at the roof mesh, room or not (placed from the Roof tab).
     if (type === 'roof-window') {
-      if (!this.nodes?.roof) return null
-      const hit = this.raycaster.intersectObject(this.nodes.roof, false)[0]
+      if (!this.nodes?.roofs.length) return null
+      const hit = this.raycaster.intersectObjects(this.nodes.roofs, false)[0]
       return hit ? [hit.point.x, -hit.point.z] : null
     }
     const levelId = this.house?.rooms.find((r) => r.id === roomId)?.levelId
@@ -1525,15 +1520,15 @@ export class HouseScene {
   focusOpening(openingId: string, animate = true): void {
     const rect = this.openingRect(openingId)
     if (!rect || !this.house) return
-    // Roof window: frame from the Roof tab (otherwise the roof disappears and one thinks it is on the floor).
+    const centre = openingCentre(rect)
+    // Roof window: frame from the level that shows ITS roof (otherwise the roof disappears and one thinks it is on the floor).
     if (rect.host === 'roof') {
-      const roofLvl = this.roofLevel()
+      const roofLvl = this.roofLevelOf(roofUnder(this.geometry?.roofs ?? [], centre[0], centre[1]))
       if (roofLvl && this.focusedLevelId !== roofLvl.id) this.focusLevel(roofLvl.id)
     } else if (this.focusedLevelId !== rect.levelId) {
       this.focusLevel(rect.levelId)
     }
     const elevation = this.geometry?.levels.find((l) => l.levelId === rect.levelId)?.elevation ?? 0
-    const centre = openingCentre(rect)
     const cx = centre[0], cy = centre[1]
     const z = elevation + centre[2]
     // Frame the opening AND ITS DIMENSIONS, not just the opening: a fixed box around the opening
@@ -1709,9 +1704,7 @@ export class HouseScene {
       if (!level.group.visible) continue
       for (const floor of level.floors.values()) { targets.push(floor); floorLevel.set(floor, levelId) }
     }
-    const roof = this.nodes.roof
-    const roofLevel = roof?.visible ? this.roofLevel() : undefined
-    if (roof && roofLevel) { targets.push(roof); floorLevel.set(roof, roofLevel.id) }
+    for (const { mesh, level } of this.shownRoofs()) { targets.push(mesh); floorLevel.set(mesh, level.id) }
     const hit = this.raycaster.intersectObjects(targets, false)[0]
     if (!hit) return null
     return { xy: [hit.point.x, -hit.point.z], levelId: floorLevel.get(hit.object) ?? null }   // world (x, y, z) → house (x, z, -y)
@@ -1980,7 +1973,7 @@ export class HouseScene {
         for (const m of mat ? (Array.isArray(mat) ? mat : [mat]) : []) { materialOpacity(m).value = RELIEF_HOUSE_OPACITY; this.reliefFaded.add(m) }
       })
       for (const level of this.nodes.levels.values()) fade(level.group)
-      if (this.nodes.roof) fade(this.nodes.roof)
+      for (const roof of this.nodes.roofs) fade(roof)
     }
     if (this.labelRenderer) this.labelRenderer.domElement.style.visibility = on ? 'hidden' : ''
     this.invalidateShadows()
@@ -3051,9 +3044,13 @@ export class HouseScene {
       for (const m of this.markers.values()) if (m.object.parent === nodes.markers) pills.push([m, focused?.id === id])
     }
     this.fadePills(pills)
-    // the roof shows in the overview and from the level it carries (the roof declared as a
-    // level, for its panels); from an upper floor, it would hide the rooms
-    if (this.nodes.roof) this.liftTo('roof', () => this.nodes?.roof ?? undefined, 0, !focused || this.isRoofLevel(focused), this.topBelow(this.geometry?.roof?.zBase ?? 0))
+    // each roof shows in the overview and from the levels at its eaves or above (the roof declared as a
+    // level, for its panels; the floor above a lower garage); from below, it would hide the rooms
+    this.nodes.roofs.forEach((_, i) => {
+      const roof = this.geometry?.roofs[i]
+      if (!roof) return
+      this.liftTo(`roof:${i}`, () => this.nodes?.roofs[i], 0, !focused || focused.elevation >= roof.zBase - 1e-3, this.topBelow(roof.zBase))
+    })
     // garden: pills visible — except a GPS stuck UNDER the focused floor (same XY as a
     // room of that floor, lower). A car without a space thus ended up poking through the upper floor.
     for (const m of this.markers.values()) {
@@ -3207,20 +3204,39 @@ export class HouseScene {
   /** The Three nodes of a level (tests, diagnostics). */
   nodesOf(levelId: string): LevelNodes | undefined { return this.nodes?.levels.get(levelId) }
 
-  /** Level placed at the roof's height or above: the roof belongs to it, it does not hide it. */
+  /** The highest roof: the one a roof level (declared for its panels) is framed on. */
+  private get mainRoof(): RoofDescriptor | undefined {
+    return mainRoof(this.geometry?.roofs ?? [])
+  }
+
+  /** Level placed at the main roof's height or above: the roof belongs to it, it does not hide it. */
   private isRoofLevel(level: Level): boolean {
-    const roof = this.geometry?.roof
+    const roof = this.mainRoof
     return !!roof && level.elevation >= roof.zBase - 1e-3
   }
 
-  /** The level the roof carries, if it is declared (for its panels, its camera…). */
+  /** The level the main roof carries, if it is declared (for its panels, its camera…). */
   private roofLevel(): Level | undefined {
-    return this.house?.levels.find((l) => this.isRoofLevel(l))
+    return this.roofLevelOf(this.mainRoof)
+  }
+
+  /** The lowest level at a roof's eaves or above: the one it shows from, and that a tap on it opens. */
+  private roofLevelOf(roof: RoofDescriptor | undefined): Level | undefined {
+    if (!roof || !this.house) return undefined
+    return [...this.house.levels].sort((a, b) => a.elevation - b.elevation).find((l) => l.elevation >= roof.zBase - 1e-3)
+  }
+
+  /** The visible roof meshes that have a level to open. */
+  private shownRoofs(): { mesh: Mesh; level: Level }[] {
+    return (this.nodes?.roofs ?? []).flatMap((mesh, i) => {
+      const level = mesh.visible ? this.roofLevelOf(this.geometry?.roofs[i]) : undefined
+      return level ? [{ mesh, level }] : []
+    })
   }
 
   resetView(animate = true): void {
     if (!this.house || !this.geometry) return
-    const box = boundsToWorldBox(buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roof))
+    const box = boundsToWorldBox(buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roofs))
     box.expandByScalar(2)
     this.flyTo(box, DEFAULT_AZIMUTH, DEFAULT_POLAR, animate, 1.1)
   }
@@ -3318,7 +3334,7 @@ export class HouseScene {
     // the roof level is framed ON the roof (it has neither room nor outline to frame otherwise): framing
     // the whole structure left it small and distant, whereas it is what one came to see
     const level = this.house.levels.find((l) => l.id === levelId)
-    const roof = level && this.isRoofLevel(level) ? this.geometry.roof : undefined
+    const roof = level && this.isRoofLevel(level) ? this.mainRoof : undefined
     const box = boundsToWorldBox(roof ? roofBounds(roof) : buildingBounds(this.house, resolveDefaults(this.house.defaults)))
     const { azimuth } = this.currentSpherical()
     this.flyTo(box, azimuth, roof ? ROOF_POLAR : (52 * Math.PI) / 180, animate, 1.15)
@@ -3552,9 +3568,9 @@ export class HouseScene {
     const hitWall = this.raycaster.intersectObjects(walls, false)[0]
     // The roof hides what it covers: a tap on it goes to the level that carries it, never to the room
     // that cannot be seen below (otherwise the roof disappeared in favor of the upper floor).
-    const roofNode = this.nodes.roof
-    const roofLevel = roofNode?.visible ? this.roofLevel() : undefined
-    const hitRoof = roofNode && roofLevel ? this.raycaster.intersectObject(roofNode, false)[0] : undefined
+    const roofs = this.shownRoofs()
+    const hitRoof = this.raycaster.intersectObjects(roofs.map((r) => r.mesh), false)[0]
+    const roofLevel = roofs.find((r) => r.mesh === hitRoof?.object)?.level
     // A device UNDER a floor (car in the garage under the bedroom) is farther than the floor:
     // it is only taken if it is the closest — otherwise one touches the floor one sees.
     const deviceWins = !!hitDevice
@@ -3587,7 +3603,7 @@ export class HouseScene {
     for (const nodes of this.nodes.levels.values()) {
       if (nodes.group.visible && nodes.markers.visible) built.push(...nodes.floors.values(), ...nodes.walls)
     }
-    if (this.nodes.roof?.visible) built.push(this.nodes.roof)
+    built.push(...this.nodes.roofs.filter((r) => r.visible))
     return this.raycaster.intersectObjects(built, false)[0]?.distance ?? Infinity
   }
 
@@ -3904,7 +3920,7 @@ export class HouseScene {
     if (this.bats && this.bats.count === n && this.bats.object.parent === this.nodes.root) { this.bats.setColor(this.look.bats!.color); return }
     this.removeBats()
     const b = this.geometry.bounds
-    const built = this.house ? buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roof) : b
+    const built = this.house ? buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roofs) : b
     const bats = new Bats({
       terrain: this.geometry.terrain.polygon,
       building: { min: [built.min[0], built.min[1]], max: [built.max[0], built.max[1]] },
@@ -3957,7 +3973,7 @@ export class HouseScene {
     if (!kind || this.quality === 'low' || !this.nodes || !this.geometry || !this.house) { this.removeParade(); return }
     if (this.parade && this.parade.kind === kind && this.parade.object.parent === this.nodes.root) return
     this.removeParade()
-    const built = buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roof)
+    const built = buildingBounds(this.house, resolveDefaults(this.house.defaults), this.geometry.roofs)
     const parade = new Parade(kind, {
       terrain: this.geometry.terrain.polygon,
       building: { min: [built.min[0], built.min[1]], max: [built.max[0], built.max[1]] },
@@ -4176,7 +4192,8 @@ export class HouseScene {
     const was = new Map(before?.levels.map((l) => [l.levelId, levelKey(l)]))
     const facadeChanged = JSON.stringify(before?.facade ?? null) !== JSON.stringify(this.geometry.facade ?? null)
     for (const l of this.geometry.levels) if (facadeChanged || was.get(l.levelId) !== levelKey(l)) this.rebuildLevelNodes(l.levelId)
-    if (JSON.stringify(before?.roof) !== JSON.stringify(this.geometry.roof)) this.rebuildRoof()
+    // the gables wear the facade: a new finish redoes the roofs too
+    if (facadeChanged || JSON.stringify(before?.roofs) !== JSON.stringify(this.geometry.roofs)) this.rebuildRoof()
     if (JSON.stringify(before?.terrain.footprints) !== JSON.stringify(this.geometry.terrain.footprints)) this.shapeTerrainNow()
     if (devicesMoved) { this.buildMarkers(); this.updateStates(this.states, true) }
     this.applyMaterials()                  // the photos of a finish that was just chosen

@@ -297,7 +297,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
 
 /** Same shell (levels, rooms, site, roof, defaults, appearance): only `devices` may differ. */
 function sameShell(a: House, b: House): boolean {
-  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, h.site, h.roof, h.defaults, h.style])
+  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, h.site, h.roofs, h.roof, h.defaults, h.style])
   return shell(a) === shell(b)
 }
 
@@ -307,7 +307,7 @@ function sameShell(a: House, b: House): boolean {
  * every finger movement. This case has its own path (`updateOpenings`).
  */
 function sameShellButOpenings(a: House, b: House): boolean {
-  const shell = (h: House) => JSON.stringify([h.levels, h.rooms.map((r) => ({ ...r, openings: [] })), h.site, h.roof, h.defaults, h.style])
+  const shell = (h: House) => JSON.stringify([h.levels, h.rooms.map((r) => ({ ...r, openings: [] })), h.site, h.roofs, h.roof, h.defaults, h.style])
   return shell(a) === shell(b)
 }
 
@@ -317,13 +317,13 @@ function sameShellButOpenings(a: House, b: House): boolean {
  * follow their center. Neither the site, nor the declared roof, nor the defaults, nor the level elevation.
  */
 function sameShellButBuilding(a: House, b: House): boolean {
-  const shell = (h: House) => JSON.stringify([h.levels.map((l) => ({ ...l, outline: null })), h.rooms.map((r) => [r.id, r.levelId]), h.site, h.roof, h.defaults])
+  const shell = (h: House) => JSON.stringify([h.levels.map((l) => ({ ...l, outline: null })), h.rooms.map((r) => [r.id, r.levelId]), h.site, h.roofs, h.roof, h.defaults])
   return shell(a) === shell(b)
 }
 
 /** Same shell except the TERRAIN (relief, outline): saving it must not recenter the camera. */
 function sameShellButRelief(a: House, b: House): boolean {
-  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, relief: null, terrain: null }, h.roof, h.defaults])
+  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, relief: null, terrain: null }, h.roofs, h.roof, h.defaults])
   return shell(a) === shell(b)
 }
 
@@ -333,12 +333,12 @@ function sameShellButRelief(a: House, b: House): boolean {
  * movement, the same trap as the openings. This case has its own path (`updateParkings`).
  */
 function sameShellButParkings(a: House, b: House): boolean {
-  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, parkings: [] }, h.roof, h.defaults])
+  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, parkings: [] }, h.roofs, h.roof, h.defaults])
   return shell(a) === shell(b)
 }
 
 /** Same shell except the GARDEN (trees, bushes, stones): dragging them does not reload the house. */
 function sameShellButGarden(a: House, b: House): boolean {
-  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, garden: [] }, h.roof, h.defaults])
+  const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, garden: [] }, h.roofs, h.roof, h.defaults])
   return shell(a) === shell(b)
 }

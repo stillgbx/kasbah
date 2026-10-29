@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { MAX_OPENING_LEAVES, MIN_OPENING_DIM, MIN_OPENING_LEAVES, OPENING_MATERIALS, OPENING_TYPES, computeRoof, fitGap, fitHeight, fitSurfaceGap, fitWidth, isSurfaceOpening, openingGaps, openingLabel, openingLeaves, openingSill, resolveDefaults, surfaceFootprint, surfaceGaps, type OpeningType, type ParkingSide, type Room } from '@kasbah/shared'
+import { MAX_OPENING_LEAVES, MIN_OPENING_DIM, MIN_OPENING_LEAVES, OPENING_MATERIALS, OPENING_TYPES, computeRoofs, fitGap, fitHeight, fitSurfaceGap, fitWidth, isSurfaceOpening, openingGaps, openingLabel, openingLeaves, openingSill, resolveDefaults, roofUnder, surfaceFootprint, surfaceGaps, type OpeningType, type ParkingSide, type Room } from '@kasbah/shared'
 import { canTakeOpening } from '../../lib/cover'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
@@ -101,7 +101,7 @@ const sill = computed(() => {
 const footprint = computed(() => {
   const o = opening.value, h = house.house
   if (!o || !h || !isSurfaceOpening(o.type) || o.x === undefined || o.y === undefined || o.yaw === undefined) return null
-  const roof = o.type === 'roof-window' ? computeRoof(h, resolveDefaults(h.defaults)) : undefined
+  const roof = o.type === 'roof-window' ? roofUnder(computeRoofs(h, resolveDefaults(h.defaults)), o.x, o.y) : undefined
   return surfaceFootprint({ type: o.type, x: o.x, y: o.y, yaw: o.yaw, width: o.width, height: o.height }, roof)
 })
 /** The opening as the measurements see it in plan (heading and length of its footprint). */

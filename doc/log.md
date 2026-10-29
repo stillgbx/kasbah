@@ -7,6 +7,19 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-29] update | Plusieurs toits par maison (`roofs[]`), toits à 1 et 4 pans
+
+**Déclencheur** : changement de code livré dans le même commit (format, géométrie, scène 3D) : une maison peut porter un toit par volume (maison, garage accolé plus bas, abri détaché). Demande liée de l'utilisateur : que les pignons s'affichent comme des murs de façade.
+
+**Pages modifiées** :
+- `2_maison/2_1_geometrie.md` — section « Mise à jour 2026-10-29 — plusieurs toits » (`computeRoofs`, `shed`/`hip`, emprise par pièces et règle du voisin, `eaves` et murs, `roofUnder`, validation, structure, impasse « bâtiments ») ; le paragraphe « Toit (`roof.ts`) » et les bornes marqués dépassés.
+- `2_maison/2_0_format-house-json.md` — section « Mise à jour 2026-10-29 — `roofs[]` » (champs, compatibilité `roof`, refus des deux ensemble, validation, structure, démo Tilleuls) ; ligne Tilleuls du tableau des démos annotée.
+- `1_architecture/1_5_scene-3d.md` — section « Mise à jour 2026-10-29 — plusieurs toits » (un mesh par toit, visibilité par niveau, pick, pignons `roof:gables` en façade, rives sur le contour, piège des observateurs `sameShell*` de `useHouseScene`) ; note « dépassé » sur la section du 2026-09-12 (quinquies).
+
+**Contradictions et trous** : aucune contradiction code/wiki relevée au-delà des passages marqués dépassés.
+
+**Index** : catalogues `1_architecture` (1 date) et `2_maison` (2 dates), index.md régénéré.
+
 ## [2026-10-29] update | Démo web statique sur GitHub Pages, Les Embruns en accueil, Les Tilleuls déplacée, assistant simulé
 
 **Déclencheur** : préparation de la publication Play de l'appli Android ; l'utilisateur veut une démo visible sans rien installer, sur le site Pages, « en faisant attention à la sécurité ».
