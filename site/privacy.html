@@ -12,6 +12,13 @@
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="stylesheet" href="style.css">
+  <script>
+    // A French-speaking browser lands on the French page, unless the EN / FR switch was used once.
+    try { var chosen = localStorage.getItem('kasbah-lang') } catch (e) {}
+    if (!chosen && /^fr\b/i.test((navigator.languages || [navigator.language])[0] || '')) {
+      location.replace('fr/' + location.pathname.split('/').pop() + location.hash)
+    }
+  </script>
 </head>
 <body>
 
@@ -23,7 +30,7 @@
       <a href="./#plugins">Plugins</a>
       <a href="./#start">Get started</a>
     </nav>
-    <a class="lang" href="fr/privacy.html" hreflang="fr" lang="fr" title="Version française">FR</a>
+    <a class="lang" href="fr/privacy.html" onclick="try { localStorage.setItem('kasbah-lang', 'fr') } catch (e) {}" hreflang="fr" lang="fr" title="Version française">FR</a>
   </div>
 </header>
 
@@ -95,12 +102,14 @@
 
   <h2>This website</h2>
   <p>This site sets no cookies and loads nothing from other sites, except the YouTube video on the home page,
-  and only once you click it (through <code>youtube-nocookie.com</code>). It is hosted by GitHub Pages.</p>
+  and only once you click it (through <code>youtube-nocookie.com</code>). It opens in French when your browser
+  asks for French; if you use the EN / FR switch, your browser remembers that choice (and nothing else) in its
+  local storage. It is hosted by GitHub Pages.</p>
 </main>
 
 <footer>
   <div class="wrap">
-    <span>Kasbah · MIT License</span>
+    <span>Kasbah · <a href="https://github.com/stillgbx/kasbah/blob/main/LICENSE">MIT License</a></span>
     <nav aria-label="Links">
       <a href="https://github.com/stillgbx/kasbah">GitHub</a>
       <a href="https://x.com/kasbah_app">X</a>

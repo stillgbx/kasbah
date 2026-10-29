@@ -138,6 +138,9 @@ h1, h2, h3 { line-height: 1.15; letter-spacing: -.02em; margin: 0; }
   text-wrap: balance;
 }
 
+/* The French title is longer: wider, it keeps the two lines of the English one. */
+.hero h1:lang(fr) { max-width: 18ch; }
+
 .hero h1 span { color: var(--sand); white-space: nowrap; }
 
 .hero .lead {

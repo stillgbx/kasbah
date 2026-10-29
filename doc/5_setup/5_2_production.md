@@ -567,6 +567,12 @@ Une page publique qui se partage (X, Discord, README), montre la vidéo, et port
   `KasbahClient`, le géorepérage d'`Approach.kt`, le micro de `Voice.kt`, l'écran Voiture de
   `ProbeScreen.kt`, qui affiche sans rien envoyer). À relire à chaque permission ajoutée au manifeste.
   Contact : les issues GitHub, pour ne pas écrire d'adresse dans le dépôt public.
+- **Langue** : un script en tête des deux pages anglaises renvoie vers `fr/` un navigateur dont la
+  PREMIÈRE langue est le français, sauf si la pastille EN / FR a déjà servi : elle écrit
+  `kasbah-lang` dans le `localStorage`, que la redirection respecte. Les robots d'aperçu de liens
+  n'exécutent pas de script et voient la page demandée. La section « Ce site » des deux politiques le
+  dit. Le titre français, plus long, a droit à `18ch` au lieu de `14ch` (`.hero h1:lang(fr)`) pour
+  rester sur deux lignes comme l'anglais ; sur téléphone il en prend trois.
 - **Vérifier en local** : config `kasbah-site` de `.claude/launch.json`
   (`python -m http.server 8090 --directory site`), puis la page à 375 px et sur bureau.
 

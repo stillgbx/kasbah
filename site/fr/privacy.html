@@ -23,7 +23,7 @@
       <a href="./#plugins">Plugins</a>
       <a href="./#start">Démarrer</a>
     </nav>
-    <a class="lang" href="../privacy.html" hreflang="en" lang="en" title="English version">EN</a>
+    <a class="lang" href="../privacy.html" onclick="try { localStorage.setItem('kasbah-lang', 'en') } catch (e) {}" hreflang="en" lang="en" title="English version">EN</a>
   </div>
 </header>
 
@@ -101,12 +101,14 @@
 
   <h2>Ce site</h2>
   <p>Ce site ne dépose aucun cookie et ne charge rien depuis d'autres sites, sauf la vidéo YouTube de la page
-  d'accueil, et seulement après un clic (par <code>youtube-nocookie.com</code>). Il est hébergé par GitHub Pages.</p>
+  d'accueil, et seulement après un clic (par <code>youtube-nocookie.com</code>). Il s'ouvre en français quand
+  votre navigateur demande le français&nbsp;; si vous utilisez la pastille EN / FR, votre navigateur retient ce
+  choix (et rien d'autre) dans son stockage local. Il est hébergé par GitHub Pages.</p>
 </main>
 
 <footer>
   <div class="wrap">
-    <span>Kasbah · Licence MIT</span>
+    <span>Kasbah · <a href="https://github.com/stillgbx/kasbah/blob/main/LICENSE">Licence MIT</a></span>
     <nav aria-label="Liens">
       <a href="https://github.com/stillgbx/kasbah">GitHub</a>
       <a href="https://x.com/kasbah_app">X</a>
