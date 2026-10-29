@@ -19,6 +19,13 @@
     "version": "0.0.1",
     "configurations": [
         {
+            // The showcase site (site/), served as GitHub Pages will: plain static files.
+            "name": "kasbah-site",
+            "runtimeExecutable": "python",
+            "runtimeArgs": ["-m", "http.server", "8090", "--bind", "127.0.0.1", "--directory", "site"],
+            "port": 8090
+        },
+        {
             "name": "kasbah",
             "runtimeExecutable": "npm",
             "runtimeArgs": ["run", "dev"],

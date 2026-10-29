@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-29] update | Site vitrine sur GitHub Pages (EN + FR) et politique de confidentialité de l'appli Android
+
+**Déclencheur** : chantier 1 du plan site / Android / Nest — une page à partager, et l'URL de politique de confidentialité qu'exige Google Play.
+
+**Pages modifiées** :
+- `5_setup/5_2_production.md` — section « Mise à jour 2026-10-29 » : dossier `site/`, workflow `pages.yml` et réglage Pages = GitHub Actions, police servie par le site et vidéo au clic (aucun tiers avant un clic), images des démos seulement, `og-image` par ffmpeg, qualité YouTube non pilotable, politique écrite d'après le code Android.
+- `5_setup/5_0_installation-et-scripts.md` — section datée : `check:private` ne lit que les fichiers suivis (`--message <fichier>` pour un fichier neuf), config de preview `kasbah-site`.
+
+**Index** : catalogue `5_setup` (2 dates, résumé de 5_2 élargi au site), index.md régénéré.
+
 ## [2026-10-28] update | Logo sans fenêtres, deux coutures d'arêtes corrigées, appli Android 0.6
 
 **Déclencheur** : la tour du logo perd ses fenêtres (idée venue d'une vidéo de démo) ; l'utilisateur a ensuite signalé un défaut sur l'arête de la tour.

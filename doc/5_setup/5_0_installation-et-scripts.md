@@ -1,6 +1,6 @@
 # Installation et scripts
 
-> Dernière mise à jour : 2026-10-26
+> Dernière mise à jour : 2026-10-29
 > Sources : `package.json` (racine et workspaces), `.claude/launch.json`, `apps/web/vite.config.ts`, `apps/server/src/config/env.ts`, `apps/server/src/main.ts`, `README.md`, `scripts/fetch-textures.mjs`, `.claude/launch.json`, `scripts/dev-server.mjs`, `scripts/supervisor.mjs`
 
 ## Prérequis
@@ -434,3 +434,19 @@ copiés de la production (fabricants qui renouvellent le jeton à chaque usage).
 côté production ; `NEST_REDIRECT_URI` reste sur l'adresse déclarée chez Google.
 
 Sources : `apps/web/vite.config.ts`, `apps/server/src/config/env.ts`, `apps/server/.env.example`.
+
+### Mise à jour 2026-10-29 — `check:private` ne lit que les fichiers suivis
+
+`npm run check:private` (sans argument, ou `--all`) parcourt `git ls-files` : un fichier **neuf, pas
+encore indexé**, lui échappe, et le contrôle passe au vert sans l'avoir lu. Le hook `pre-commit` le
+rattrape au commit (il lit les lignes ajoutées de l'index), mais pour vérifier avant d'indexer, passer
+chaque fichier par le mode message, qui lit un fichier quelconque :
+
+```bash
+node scripts/check-private.mjs --message site/index.html
+```
+
+Nouvelle config de preview : `kasbah-site` sert le site vitrine `site/` en fichiers statiques
+(`python -m http.server`, port 8090), voir `5_2_production.md`.
+
+Sources : `scripts/check-private.mjs`, `.claude/launch.json`.

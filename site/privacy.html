@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy policy — Kasbah</title>
+  <meta name="description" content="Privacy policy of the Kasbah Android app: it talks only to your own Kasbah server, and the publisher collects nothing.">
+  <link rel="canonical" href="https://stillgbx.github.io/kasbah/privacy.html">
+  <link rel="alternate" hreflang="en" href="https://stillgbx.github.io/kasbah/privacy.html">
+  <link rel="alternate" hreflang="fr" href="https://stillgbx.github.io/kasbah/fr/privacy.html">
+  <meta name="theme-color" content="#0d1420">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="assets/icon.svg" alt="" width="32" height="32">Kasbah</a>
+    <nav class="nav" aria-label="Sections">
+      <a href="./#features">Features</a>
+      <a href="./#plugins">Plugins</a>
+      <a href="./#start">Get started</a>
+    </nav>
+    <a class="lang" href="fr/privacy.html" hreflang="fr" lang="fr" title="Version française">FR</a>
+  </div>
+</header>
+
+<main class="doc">
+  <p class="label">Android app</p>
+  <h1>Privacy policy</h1>
+  <p class="updated">Last updated: 29 October 2026</p>
+
+  <p>This policy covers <strong>Kasbah</strong>, the Android and Android Auto app published on Google Play
+  (package <code>org.kasbah.auto</code>). Kasbah is open-source software: the app's code is public in the
+  <a href="https://github.com/stillgbx/kasbah">GitHub repository</a>, so everything below can be checked.</p>
+
+  <h2>In short</h2>
+  <ul>
+    <li>The app talks only to <strong>your own Kasbah server</strong>, at the address you type in. The publisher
+    runs no server, and receives nothing from the app.</li>
+    <li>No account with the publisher, no advertising, no analytics, no crash reporting, no tracking.</li>
+    <li>Your position stays on the phone.</li>
+  </ul>
+
+  <h2>What the app keeps on the phone</h2>
+  <ul>
+    <li>Your server's address and your user name on it.</li>
+    <li>The <strong>session cookie</strong> your server gives back when you sign in. Your password is sent once,
+    to your server, to sign in, and is never stored.</li>
+    <li>Your house's position, read from your server, to place the approach alert (see below).</li>
+    <li>Your display choices: the order of the gates and doors, and which ones the approach alert offers.</li>
+  </ul>
+  <p>Signing out closes the session on your server and forgets it on the phone. Uninstalling the app erases all
+  of the above.</p>
+
+  <h2>Location</h2>
+  <p>The app asks for your location, including <strong>in the background</strong>, for a single feature: the
+  alert that offers to open the gate or the garage door as you near home. It places a geofence around your house
+  with Android's location services (Google Play services), which wake the app when you enter or leave that area.
+  The app does not send your position to your server, to the publisher or to anyone else. Without the background
+  location, everything else works; only the alert is missing.</p>
+
+  <h2>Microphone</h2>
+  <p>The microphone is used only when you tap <strong>Talk to Kasbah</strong> in the car. The sentence you say is sent to
+  your Kasbah server, which turns it into text with the transcription service its owner configured (on the server
+  itself, or an online service of their choice), then hands it to the server's assistant. Nothing is recorded
+  outside of that button.</p>
+
+  <h2>Car data</h2>
+  <p>The <strong>Car</strong> screen, on the car's display, shows what the car shares with apps: its model, the
+  battery or fuel level, the speed, the odometer and the position. These values are displayed on that screen only: they are not stored, and not sent
+  anywhere.</p>
+
+  <h2>Notifications</h2>
+  <p>Notifications are created on the phone by the app itself, for the approach alert. They go through no
+  outside service.</p>
+
+  <h2>Your server</h2>
+  <p>Your Kasbah server is run by you (or by whoever invited you to it), not by the publisher. What it does with
+  your requests depends on how its owner set it up — for example, which vendor services it uses for your devices,
+  and which transcription or assistant service it calls. Those services have their own policies.</p>
+
+  <h2>Children</h2>
+  <p>Kasbah is a family app, and children may use it too. It collects no personal information from anyone,
+  children included: everything described above stays on the phone or goes to the family's own Kasbah server.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the new version is published on this page with a new date. Its history is in the
+  <a href="https://github.com/stillgbx/kasbah/commits/main/site/privacy.html">repository</a>.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy: open an issue on <a href="https://github.com/stillgbx/kasbah/issues">GitHub</a>.</p>
+
+  <h2>This website</h2>
+  <p>This site sets no cookies and loads nothing from other sites, except the YouTube video on the home page,
+  and only once you click it (through <code>youtube-nocookie.com</code>). It is hosted by GitHub Pages.</p>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Kasbah · MIT License</span>
+    <nav aria-label="Links">
+      <a href="https://github.com/stillgbx/kasbah">GitHub</a>
+      <a href="https://x.com/kasbah_app">X</a>
+      <a href="https://buymeacoffee.com/stillgbx">Buy me a coffee</a>
+      <a href="./">Home</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -5,7 +5,7 @@
 
 *[English](README.md) · Français*
 
-▶ **[Voir la vidéo](https://youtu.be/eeAIOqT7iPQ)** (YouTube)
+▶ **[Voir la vidéo](https://youtu.be/eeAIOqT7iPQ)** (YouTube) · **[Site web](https://stillgbx.github.io/kasbah/fr/)**
 
 Application web (**tablette, ordinateur, téléphone**) qui montre la maison et le jardin en **3D** (souris et tactile) et permet de **visualiser et piloter les appareils connectés** placés dans les pièces : lumières, ventilateurs, ouvrants, lecteurs, caméras, chauffage, robots, eau, énergie solaire, véhicules et animaux. S'y ajoutent la musique (YouTube Music, Mixcloud, radios), la météo, l'agenda de la famille, le cahier de texte de l'école et des automatisations exécutées par le serveur.
 

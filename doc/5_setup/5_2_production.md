@@ -1,7 +1,7 @@
 # Production
 
-> Dernière mise à jour : 2026-10-28
-> Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts` (2026-10-13)
+> Dernière mise à jour : 2026-10-29
+> Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts`, `site/`, `.github/workflows/pages.yml` (2026-10-29)
 
 ## Build
 
@@ -534,3 +534,40 @@ celle-ci, la couture entre deux faces adjacentes n'étant jamais tout à fait op
   (×16) : un défaut de couture est invisible à 512.
 
 Sources : `apps/web/public/icons/`, `apps/android/app/src/main/res/drawable/{ic_kasbah_logo,ic_launcher_foreground}.xml`.
+
+## Mise à jour 2026-10-29 — le site vitrine sur GitHub Pages (`site/`)
+
+Une page publique qui se partage (X, Discord, README), montre la vidéo, et porte l'URL de la
+**politique de confidentialité** qu'exige la fiche Google Play de l'appli Android :
+`https://stillgbx.github.io/kasbah/` (anglais) et `/fr/` (français), chacune avec son `privacy.html`.
+
+- **Où** : le dossier `site/` à la racine — `index.html`, `privacy.html`, `fr/` (les deux mêmes pages
+  en français), un seul `style.css`, `assets/`. Pas le mode « dossier `/docs` » de Pages : `docs/` porte
+  déjà la documentation des plugins.
+- **Publication** : `.github/workflows/pages.yml`, sur tout push de `site/**` dans `main` (ou à la main,
+  `workflow_dispatch`) : `upload-pages-artifact` (chemin `site`) puis `deploy-pages`. Prérequis réglé
+  une fois dans le dépôt : Settings → Pages → Source = **GitHub Actions**. Ne pas cliquer « Configure »
+  sur cette page : GitHub commiterait un second workflow concurrent. Le jeton par défaut des Actions
+  n'a pas les droits pour activer Pages lui-même.
+- **Technique** : HTML et CSS écrits à la main, aucune dépendance ni étape de build. Couleurs = variante
+  sombre du thème Kasbah (`apps/web/src/themes/kasbah.ts`) plus le sable du logo (`#e0aa70`) ; sombre
+  seulement.
+- **Aucune requête vers un tiers tant qu'on ne clique pas** : la police Plus Jakarta Sans est servie par
+  le site (le `woff2` latin de `@fontsource-variable`, 27 Ko), pas par Google Fonts ; la vidéo est une
+  affiche locale qui ne devient un `iframe` `youtube-nocookie.com` qu'au clic (dix lignes de script ;
+  sans JavaScript, un simple lien). C'est ce qui permet à la politique de confidentialité de dire que le
+  site ne charge rien d'ailleurs.
+- **Images** : uniquement des captures des **démos** (Les Embruns, Les Tilleuls, `docs/screenshots/`),
+  ré-encodées par ffmpeg en WebP (1280 px, ~20 à 60 Ko chacune). `og-image.png` (1200 × 630, aperçu des
+  liens) est un rendu des Embruns recadré sur la 3D, assombri en dégradé, avec le logo et le titre
+  posés par `drawtext` en Segoe UI (ffmpeg ne lit pas le `woff2`). Le site pèse ~440 Ko hors cette image.
+- **YouTube choisit seul la qualité** de la vidéo intégrée, d'après la taille du lecteur et le débit ;
+  `vq=hd1080` dans l'URL est ignoré depuis des années.
+- **Politique de confidentialité** : écrite d'après le code de `apps/android` (ce que garde
+  `KasbahClient`, le géorepérage d'`Approach.kt`, le micro de `Voice.kt`, l'écran Voiture de
+  `ProbeScreen.kt`, qui affiche sans rien envoyer). À relire à chaque permission ajoutée au manifeste.
+  Contact : les issues GitHub, pour ne pas écrire d'adresse dans le dépôt public.
+- **Vérifier en local** : config `kasbah-site` de `.claude/launch.json`
+  (`python -m http.server 8090 --directory site`), puis la page à 375 px et sur bureau.
+
+Sources : `site/`, `.github/workflows/pages.yml`, `.claude/launch.json`, `_generated-ai-doc/plan-site-android-nest.md` §1 (non versionné).
