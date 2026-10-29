@@ -617,6 +617,13 @@ une maquette.
 - **Données privées** : le contenu construit passé contre `.private-denylist` (55 règles, aucune trouvée).
 - **Politique de confidentialité** : la section « This website » / « Ce site » décrit la démo (tout dans
   le navigateur, réglages dans le stockage local, les hôtes des cartes et du radar).
+- **Aperçu des liens** : le même plugin pose dans la page de démo le titre, la description, les balises
+  Open Graph et la carte `summary_large_image` de X. L'image, `site/assets/og-demo.jpg` (1200 × 630,
+  ~100 Ko), est un rendu des Embruns en coupe recadré, avec un bandeau « Kasbah / Live demo – try it in
+  your browser, nothing to install » posé par ffmpeg (`drawbox` + `drawtext` en Segoe UI) ; choisie par
+  l'utilisateur plutôt que la capture seule, pour que l'aperçu dise que c'est une démo à essayer, et
+  distincte de `og-card.png` pour qu'un lien vers la démo ne ressemble pas à un lien vers le site.
+  Adresse absolue (`DEMO_SITE`) : les robots la lisent depuis ailleurs.
 - **Vérifier en local** : `npm run build:demo -w @kasbah/web`, puis la config `kasbah-demo-static` de
   `.claude/launch.json` (`vite preview --mode demo`, port 8091) et `http://localhost:8091/kasbah/demo/`.
 

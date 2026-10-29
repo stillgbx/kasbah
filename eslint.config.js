@@ -8,6 +8,7 @@ export default tseslint.config(
   {
     ignores: [
       '**/dist/**',
+      '**/dist-demo/**',
       '**/node_modules/**',
       '**/coverage/**',
       '_generated-ai-doc/**',

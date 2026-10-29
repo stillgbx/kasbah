@@ -65,6 +65,25 @@ const DEMO_CSP = [
   "base-uri 'self'",
   "form-action 'none'",
 ].join('; ')
+// The card a shared demo link shows (X, Discord…): the image is the site's (site/assets/), addressed
+// absolutely since crawlers read it from elsewhere.
+const DEMO_SITE = 'https://stillgbx.github.io/kasbah'
+const DEMO_TITLE = 'Kasbah — live demo'
+const DEMO_DESCRIPTION = 'Try Kasbah in your browser, nothing to install: three demo homes in 3D, on simulated devices.'
+const DEMO_PREVIEW = [
+  `<meta name="description" content="${DEMO_DESCRIPTION}" />`,
+  '<meta property="og:type" content="website" />',
+  '<meta property="og:site_name" content="Kasbah" />',
+  `<meta property="og:title" content="${DEMO_TITLE}" />`,
+  `<meta property="og:description" content="${DEMO_DESCRIPTION}" />`,
+  `<meta property="og:url" content="${DEMO_SITE}/demo/" />`,
+  `<meta property="og:image" content="${DEMO_SITE}/assets/og-demo.jpg" />`,
+  '<meta property="og:image:width" content="1200" />',
+  '<meta property="og:image:height" content="630" />',
+  '<meta property="og:image:alt" content="The Kasbah app showing a demo house in 3D, cut away at dusk, with the words: Live demo, try it in your browser, nothing to install." />',
+  '<meta name="twitter:card" content="summary_large_image" />',
+  '<meta name="twitter:site" content="@kasbah_app" />',
+].map((tag) => `\n    ${tag}`).join('')
 function demoPage(): Plugin {
   let outDir = ''
   return {
@@ -72,7 +91,7 @@ function demoPage(): Plugin {
     apply: (_, env) => env.command === 'build' && env.mode === 'demo',
     configResolved(config) { outDir = config.build.outDir },
     transformIndexHtml: (html) => html
-      .replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${DEMO_CSP}" />`)
+      .replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${DEMO_CSP}" />${DEMO_PREVIEW}`)
       .replace(/\n\s*<link rel="manifest"[^>]*>/, ''),
     closeBundle() {
       for (const file of ['sw.js', 'diag.html', 'manifest.webmanifest']) rmSync(join(outDir, file), { force: true })
