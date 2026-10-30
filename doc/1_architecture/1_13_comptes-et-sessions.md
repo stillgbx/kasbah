@@ -1,6 +1,6 @@
 # Comptes et sessions
 
-> Dernière mise à jour : 2026-10-25
+> Dernière mise à jour : 2026-10-30
 > Sources : `apps/server/src/http/session.ts`, `apps/server/src/http/static.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/music/sources.ts`, `apps/server/src/plugins/claude/index.ts`, `apps/server/src/assistant/assistant.ts` ; pages citées plus bas
 
 Page de synthèse, écrite au lint du 2026-10-13 : le sujet était dispersé entre le serveur MCP, la
@@ -36,6 +36,8 @@ Access : [1_7 Serveur MCP](1_7_serveur-mcp.md), sections du 2026-10-04 (soir) et
   Depuis le 2026-10-13, même règle pour `/api/system/*` (version du serveur et mise à jour par le
   superviseur, [5_2 Production](../5_setup/5_2_production.md)) : `LAN_ONLY` est une liste de préfixes
   dans `session.ts`, et le message d'erreur ne nomme plus les comptes.
+  Depuis le 2026-10-30, aussi `/api/matter/*` : son code d'appairage donne la main sur ce que le pont
+  publie ([1_17](1_17_pont-matter.md)).
 - **Droits par compte** (un compte en lecture seule, par exemple) : pas encore faits, tout compte connecté
   peut tout. Voir [0_0 Vision et principes](../0_overview/0_0_vision-et-principes.md).
 

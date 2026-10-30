@@ -112,9 +112,54 @@ poussé reviendrait comme une commande.
   dans la console développeur Google Home ; Apple Maison affiche un avertissement ; Alexa n'a pas été
   essayé.
 
+### Mise à jour 2026-10-30 — réseau local seulement, dissociation d'un assistant
+
+Livré dans le même commit que l'entrée de `log.md` du jour. Sources : `apps/server/src/http/session.ts`
+(`LAN_ONLY`) et `session.test.ts`, `apps/server/src/matter/bridge.ts` (`removeFabric`, `status`),
+`packages/shared/src/protocol/http.ts` (`MatterStatus.fabrics`), `apps/server/test/integration.test.ts`.
+
+**Réservé au réseau local.** `/api/matter` rejoint `/api/mcp/users` et `/api/system` dans `LAN_ONLY`
+(`1_13_comptes-et-sessions.md`). Pourquoi : le code d'appairage (QR ou 11 chiffres) donne à **n'importe
+quel assistant** la main sur ce que le pont publie, garage et serrure de voiture compris. Avant, un compte
+connecté par l'adresse publique pouvait allumer le pont, cocher le garage et lire le code. Depuis
+l'adresse publique : 403 `LAN_ONLY`, y compris sous un chemin encodé (`/api/%6Datter`) ; la carte n'affiche
+alors qu'une phrase (`matter.lanOnly`) à la place de ses commandes. Le test de session est la seule
+couverture de la garde : l'adresse publique réelle n'a pas été essayée.
+
+**Assistants appairés.** Un assistant = un fabric Matter. `MatterStatus.fabrics` liste
+`{ index, label, vendorId }` (lu dans `server.state.commissioning.fabrics`, vide pont arrêté).
+`DELETE /api/matter/fabrics/:index` (entier ≥ 1, sinon 400) appelle `MatterBridge.removeFabric` :
+`FabricManager.find(...).leave()` prévient le contrôleur, puis supprime le fabric et ses clés ; passe par
+la file sérielle ; sans effet pont éteint ou index inconnu. Plus besoin d'effacer `apps/server/.state/matter/`
+pour réinitialiser l'appairage.
+
+**Piège : le dernier fabric parti redémarre le nœud.** matter.js le relance pour proposer de nouveau le
+code ; pendant quelques secondes `lifecycle.isOnline` est faux et la carte lisait « Le pont n'a pas
+démarré », puis restait figée (elle ne relisait l'état que pendant l'appairage). Deux correctifs : la route
+attend le retour en ligne avant de répondre (jusqu'à 10 s, pas de 200 ms) ; la carte relit aussi l'état
+toutes les 5 s tant que le pont est allumé sans tourner. Code revenu en moins d'1 s à l'essai.
+
+**Libellé produit** passé de « Kasbah Bridge » à « Matter Bridge » : matter.js avertissait qu'il répétait
+le nom du fabricant (`productName` reste « Kasbah Bridge »).
+
+### Dépublier : quatre niveaux
+
+| Pour retirer… | Geste | Effet chez l'assistant |
+|---|---|---|
+| un appareil | son interrupteur dans la carte | il disparaît |
+| un plugin | « Tout retirer » (par groupe) | tous ses appareils disparaissent |
+| le pont entier | l'interrupteur du pont | appareils injoignables, **appairage conservé** |
+| un assistant | « Dissocier » | il perd tout ; le dernier parti, le code est de nouveau proposé |
+
+**Vérifié** : un contrôleur matter.js réel contre un serveur en simulation : appairage, dissociation depuis
+la carte, code revenu sans que rien ne bouge (mesure géométrique) ; puis le contrôleur dissocié tente de
+déverrouiller la voiture simulée : refusé par le pont (`NoSharedTrustRoots`), aucun appareil visible,
+serrure restée verrouillée. **Non joué** : un vrai Alexa, Google ou Apple (on ne sait pas s'ils retirent
+proprement le pont de leur appli après dissociation).
+
 ## Carte « Assistants vocaux (Matter) » de Réglages
 
-Voir `../4_ui/4_7_reglages.md` (mise à jour du 2026-10-30).
+Voir `../4_ui/4_7_reglages.md` (mises à jour du 2026-10-30).
 
 ## Vérifié, et non joué
 

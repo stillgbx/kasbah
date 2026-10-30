@@ -527,7 +527,8 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async systemUpdate() { throw new ApiRequestError(409, 'NOT_SUPERVISED', 'no supervisor in mock mode') },
     // no server, hence no push service to subscribe to
     // no Matter node in the browser: the card says the bridge is off and has nothing to publish
-    async matterStatus() { return { enabled: false, running: false, commissioned: false, candidates: [], skipped: [] } },
+    async matterStatus() { return { enabled: false, running: false, commissioned: false, fabrics: [], candidates: [], skipped: [] } },
+    async removeMatterFabric() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Matter bridge in mock mode') },
     async setMatter() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Matter bridge in mock mode') },
     async pushKey() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no push notifications in mock mode') },
     async pushSubscribe() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no push notifications in mock mode') },

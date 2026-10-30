@@ -4,6 +4,7 @@ import { matterSettingsPatchSchema, type Command, type DeviceEntry, type DeviceI
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
 import QRCode from 'qrcode'
+import { z } from 'zod'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import type { Bus } from '../core/bus'
 import { stateFile } from '../core/paths'
@@ -61,6 +62,7 @@ async function loadMatter() {
     ...(await import('@matter/main/devices/door-lock')),
     ...(await import('@matter/main/clusters/door-lock')),
     ...(await import('@matter/main/clusters/window-covering')),
+    FabricManager: (await import('@matter/main/protocol')).FabricManager,
   }
 }
 
@@ -124,7 +126,7 @@ export class MatterBridge {
           vendorId: m.VendorId(0xfff1),   // test vendor: an uncertified bridge
           productId: 0x8000,
           productName: 'Kasbah Bridge',
-          productLabel: 'Kasbah Bridge',
+          productLabel: 'Matter Bridge',   // matter.js warns when it repeats the vendor name
           nodeLabel: 'Kasbah',
         },
       })
@@ -158,6 +160,26 @@ export class MatterBridge {
     if (server) await server.close().catch((err: unknown) => this.opts.logger.warn({ err }, 'matter bridge close failed'))
   }
 
+  /**
+   * Unpairs one assistant: the bridge leaves its fabric (the controller is told) and forgets its
+   * keys. Without any fabric left, matter.js offers the pairing code again.
+   */
+  removeFabric(index: number): Promise<void> {
+    return this.serial(async () => {
+      const server = this.server
+      const m = this.matter
+      if (!server || !m) return
+      const fabric = server.env.get(m.FabricManager).find((f) => f.fabricIndex === index)
+      if (!fabric) return
+      await fabric.leave()
+      // the last one gone, matter.js restarts the node to offer the code again: answer once it is
+      // back, or the card would read "did not start" for a few seconds
+      for (let waited = 0; !server.lifecycle.isOnline && waited < 10_000; waited += 200) {
+        await new Promise((resolve) => setTimeout(resolve, 200))
+      }
+    })
+  }
+
   async status(): Promise<MatterStatus> {
     const settings = this.opts.settings()
     const listed = settings?.devices ?? []
@@ -179,6 +201,9 @@ export class MatterBridge {
       enabled: !!settings?.enabled,
       running: online,
       commissioned,
+      fabrics: online && server
+        ? Object.values(server.state.commissioning.fabrics).map((f) => ({ index: f.fabricIndex, label: f.label, vendorId: f.rootVendorId }))
+        : [],
       ...(codes ? { pairing: { manualCode: codes.manualPairingCode, qrSvg: await QRCode.toString(codes.qrPairingCode, { type: 'svg', margin: 1 }) } } : {}),
       candidates,
       skipped: [...this.skipped].map(([id, reason]) => ({ id, reason })),
@@ -337,6 +362,10 @@ export function registerMatterRoutes(app: FastifyInstance, deps: MatterRoutesDep
     })
     deps.hub.broadcast({ type: 'house', house })
     await deps.bridge.apply()
+    return deps.bridge.status()
+  })
+  app.delete<{ Params: { index: string } }>('/api/matter/fabrics/:index', async (req) => {
+    await deps.bridge.removeFabric(z.coerce.number().int().min(1).parse(req.params.index))   // ZodError → 400
     return deps.bridge.status()
   })
 }

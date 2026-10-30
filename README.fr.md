@@ -269,6 +269,8 @@ Le serveur peut servir de **pont Matter** sur le réseau local : les appareils c
 
 - Publiés aujourd'hui : lampes (marche/arrêt, luminosité), ouvrants (volets, portails, portes de garage, vus comme des stores) et serrures des véhicules.
 - Ne publier que ce que les assistants ne connaissent pas déjà : une lampe Hue ou un volet Somfy déjà reliés chez eux apparaîtraient deux fois.
+- Pour retirer : l'interrupteur d'un appareil, **Tout retirer** pour un plugin, l'interrupteur du pont, ou **Dissocier** à côté d'un assistant, qui perd alors tous les appareils (le code d'appairage revient quand il n'en reste plus aucun).
+- Le pont se règle depuis le réseau local seulement : son code d'appairage donne la main sur ce qu'il publie, la carte et son API refusent donc l'adresse publique.
 - Le pont n'est pas certifié : Google Home demande de le déclarer d'abord (gratuitement) dans la Google Home Developer Console, Maison affiche un avertissement. Le serveur doit avoir le port UDP 5540 et le mDNS (5353) ouverts sur le réseau local.
 
 ## Plugins

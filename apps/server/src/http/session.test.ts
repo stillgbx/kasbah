@@ -42,6 +42,9 @@ async function build(maxFailures = 3) {
   app.put('/api/mcp/users/:name', async () => ({ ok: true }))
   app.delete('/api/mcp/users/:name', async () => ({ ok: true }))
   app.post('/api/system/update', async () => ({ ok: true }))
+  app.get('/api/matter', async () => ({ enabled: false }))
+  app.patch('/api/matter', async () => ({ enabled: false }))
+  app.delete('/api/matter/fabrics/:index', async () => ({ enabled: false }))
   app.get('/ws', async () => ({ ws: true }))
   app.get('/api/plugins/nest/cameras/c1/stream', async () => ({ ws: true }))
   app.get('/settings', async () => 'app')
@@ -155,6 +158,15 @@ it('leaves the server update to the local network, even when signed in', async (
   const c = await signIn()
   for (const [method, url] of [['GET', '/api/system/version'], ['POST', '/api/system/update']] as const) {
     const res = await req({ method, url, cookie: c, origin: ORIGIN })
+    expect(res.statusCode, url).toBe(403)
+    expect(res.json().error.code, url).toBe('LAN_ONLY')
+  }
+})
+
+it('leaves the Matter bridge and its pairing code to the local network, even when signed in', async () => {
+  const c = await signIn()
+  for (const [method, url] of [['GET', '/api/matter'], ['PATCH', '/api/matter'], ['DELETE', '/api/matter/fabrics/1'], ['GET', '/api/%6Datter']] as const) {
+    const res = await req({ method, url, cookie: c, origin: ORIGIN, payload: {} })
     expect(res.statusCode, url).toBe(403)
     expect(res.json().error.code, url).toBe('LAN_ONLY')
   }

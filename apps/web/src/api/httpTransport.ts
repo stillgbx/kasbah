@@ -434,6 +434,7 @@ export function createHttpTransport(base = ''): Transport {
     systemUpdate: () => request(`${base}/api/system/update`, { method: 'POST' }, (j) => j as { status: UpdateStatus }),
     matterStatus: () => request(`${base}/api/matter`, undefined, (j) => j as MatterStatus),
     setMatter: (patch: MatterSettingsPatch) => request(`${base}/api/matter`, json('PATCH', patch), (j) => j as MatterStatus),
+    removeMatterFabric: (index) => request(`${base}/api/matter/fabrics/${index}`, { method: 'DELETE' }, (j) => j as MatterStatus),
     pushKey: () => request(`${base}/api/push/key`, undefined, (j) => j as { publicKey: string }),
     pushSubscribe: (body) => request(`${base}/api/push/subscription`, json('PUT', body), () => undefined),
     pushUnsubscribe: (endpoint) => request(`${base}/api/push/subscription`, json('DELETE', { endpoint }), () => undefined),

@@ -1560,6 +1560,18 @@ seulement quand la maison active le pont (`loadMatter`, `apps/server/src/matter/
 [1_17 Pont Matter](../1_architecture/1_17_pont-matter.md), qui porte aussi le piège de l'id d'endpoint
 (le `.` est refusé, l'id doit rester stable).
 
+## 2026-10-30 — pont Matter : « n'a pas démarré » après avoir dissocié le dernier assistant
+
+**Symptôme** : après « Dissocier » du dernier assistant, la carte lit « Le pont n'a pas démarré » et reste
+figée.
+
+**Diagnostic** : matter.js redémarre le nœud pour proposer de nouveau le code ; pendant quelques secondes
+`lifecycle.isOnline` est faux, et la carte ne relisait l'état que pendant l'appairage.
+
+**Solution** : la route `DELETE /api/matter/fabrics/:index` attend le retour en ligne (jusqu'à 10 s) avant
+de répondre ; la carte relit l'état toutes les 5 s tant que le pont est allumé sans tourner. Voir
+[1_17 Pont Matter](../1_architecture/1_17_pont-matter.md).
+
 ## 2026-10-30 — le front de développement ne parle pas au serveur qu'on croit
 
 **Symptôme** : lors de la vérification de la carte Matter, on ne sait pas à quel serveur le front de

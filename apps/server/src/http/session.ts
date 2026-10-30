@@ -40,7 +40,8 @@ type SessionsFile = z.infer<typeof fileSchema>
 // installable app is requested without credentials, its icons along with it).
 const OPEN_PATHS = new Set(['/login', '/logout', '/manifest.webmanifest'])
 const OPEN_PREFIXES = ['/icons/']
-const LAN_ONLY = ['/api/mcp/users', '/api/system']
+// the Matter bridge: its pairing code lets any assistant take over what it publishes (a garage, a lock)
+const LAN_ONLY = ['/api/mcp/users', '/api/system', '/api/matter']
 const lanOnly = (path: string | undefined) => path !== undefined && LAN_ONLY.some((p) => path === p || path.startsWith(`${p}/`))
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 

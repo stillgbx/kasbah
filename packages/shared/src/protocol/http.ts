@@ -410,6 +410,8 @@ export interface MatterStatus {
   enabled: boolean
   running: boolean
   commissioned: boolean
+  /** The assistants that paired the bridge (one Matter fabric each); `vendorId` names the maker. */
+  fabrics: { index: number; label: string; vendorId: number }[]
   /** Only while no controller holds the bridge: the codes stop being useful once it is paired. */
   pairing?: { manualCode: string; qrSvg: string }
   /** Every device the bridge can translate, published or not. */

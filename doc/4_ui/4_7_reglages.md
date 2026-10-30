@@ -422,3 +422,29 @@ fabriqués sur 6 plugins, la carte pliée mesure 557 px. **Non joué** : aucun v
 
 Sources : `apps/web/src/components/settings/{MatterCard.vue,MatterCard.test.ts}`,
 `apps/web/src/views/SettingsView.vue`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`.
+
+### Mise à jour 2026-10-30 — la carte Matter : assistants appairés, adresse publique
+
+Livré dans le même commit que l'entrée de `log.md` du jour (`MatterCard.vue`, `MatterCard.test.ts`).
+
+- **Adresse publique** : la carte n'affiche qu'une phrase (`matter.lanOnly`) à la place de ses commandes,
+  l'API répondant 403 `LAN_ONLY` (`1_17_pont-matter.md`).
+- **État « appairé »** : la boîte de taille fixe (124 px) liste les assistants (« Appairé à : »). Nom =
+  libellé du fabric, sinon le fabricant d'après le vendor id racine (Amazon « Alexa (Amazon) », Google
+  « Google Home », Apple « Maison (Apple) », SmartThings), sinon « Assistant n ». Le nom est un
+  `MarqueeText`. La liste est bornée à 440 px de large et **défile au-delà de 124 px** : trois assistants
+  ne poussent pas la liste des appareils.
+- **« Dissocier » en deux temps**, même geste que la suppression d'une ambiance : « Confirmer » en rouge,
+  désarmé seul après 5 s. Largeur fixe 104 px armé ou non (rien ne bouge). **Sous 520 px** le bouton se
+  réduit à son icône (`linkOff`, puis `check` rouge), 42 px dans les deux états, ce qui laisse environ
+  120 px au nom.
+- **Relecture** : toutes les 5 s aussi tant que le pont est allumé sans tourner (redémarrage après le
+  départ du dernier assistant, voir le piège dans 1_17).
+- **Piège de grille (déjà connu, `../6_faq/6_0_pieges-outillage.md`, entrée du 2026-09-12)** : au
+  téléphone, un nom d'assistant sur une ligne élargissait **toute la carte de 82 px** (`min-width: auto`
+  d'un élément de grille). Corrigé par `grid-template-columns: minmax(0, 1fr)` sur `.mc` **et** sur
+  `.mc__fabrics` : le même piège à deux niveaux, il fallait les deux.
+
+Vérifié : carte appairée avec trois assistants fabriqués, boîte à 124 px, aucun débordement à 1280, 853 et
+375 px, thèmes clair et sombre, fr et en. Tests : noms, deux temps, adresse publique. **Non joué** : un
+vrai assistant.

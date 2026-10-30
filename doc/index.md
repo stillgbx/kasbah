@@ -37,7 +37,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-10-11 |
 | [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-10-26 |
 | [1_12 Scène 3D : objets dessinés](1_architecture/1_12_scene-3d-objets.md) | 2026-10-26 |
-| [1_13 Comptes et sessions](1_architecture/1_13_comptes-et-sessions.md) | 2026-10-25 |
+| [1_13 Comptes et sessions](1_architecture/1_13_comptes-et-sessions.md) | 2026-10-30 |
 | [1_14 Énergie](1_architecture/1_14_energie.md) | 2026-10-26 |
 | [1_15 Appli Android Auto](1_architecture/1_15_appli-android-auto.md) | 2026-10-28 |
 | [1_16 Notifications push](1_architecture/1_16_notifications-push.md) | 2026-10-28 |
@@ -135,6 +135,6 @@ Pièges rencontrés et recettes : une entrée datée par incident (Date / Sympt�
 
 | Pages | Dernière mise à jour |
 |---|---|
-| [6_0 Pièges d'outillage](6_faq/6_0_pieges-outillage.md) | 2026-10-26 |
+| [6_0 Pièges d'outillage](6_faq/6_0_pieges-outillage.md) | 2026-10-30 |
 | [6_1 Pièges à l'exécution](6_faq/6_1_pieges-runtime.md) | 2026-10-30 |
 <!-- section:6_faq:end -->

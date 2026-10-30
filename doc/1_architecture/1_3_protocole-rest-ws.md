@@ -585,7 +585,7 @@ renvoie vers `/`.
 |---|---|---|
 | `AUTH_REQUIRED` | 401 | Pas de session valide sous le nom public, pour tout ce qui n'est pas une navigation (API, WebSocket, scripts, CSS, images). Une navigation (`GET` avec `Accept: text/html`, hors `/api/` et `/ws`) part en 302 vers `/login?next=…`. |
 | `BAD_ORIGIN` | 403 | `Origin` différent de l'origine publique sur une écriture (`/login` et `/logout` compris) ou sur toute demande de WebSocket (en-tête `upgrade` : `/ws` ET les flux des caméras sous `/api/plugins/<id>/cameras/…`). |
-| `LAN_ONLY` | 403 | `/api/mcp/users` sous le nom public, MÊME connecté. |
+| `LAN_ONLY` | 403 | `/api/mcp/users`, `/api/system` et `/api/matter` sous le nom public, MÊME connecté *(liste complétée le 2026-10-30)*. |
 
 Le client web n'agit que sur **`AUTH_REQUIRED`**, pas sur tout 401 : la route du plugin `automower` rend
 déjà 401 sur le réseau local pour le compte Husqvarna (voir `1_4_app-web.md`). Un refus ne se lit pas sur
@@ -856,3 +856,15 @@ mécanisme est dans [1_17 Pont Matter](1_17_pont-matter.md).
 
 Pas de message WebSocket dédié : la carte relit l'état toutes les 5 s tant que le code d'appairage est
 affiché.
+
+#### Suite 2026-10-30 — dissociation, réseau local
+
+- `MatterStatus.fabrics` : `{ index, label, vendorId }[]`, un fabric par assistant appairé.
+- `DELETE /api/matter/fabrics/:index` : retire l'assistant (`MatterBridge.removeFabric`) et rend le nouvel
+  `MatterStatus`. Index entier ≥ 1, sinon 400. Quand le dernier fabric part, la route attend le retour en
+  ligne du nœud (jusqu'à 10 s) avant de répondre. Pont éteint : sans effet.
+- **`/api/matter` entier est `LAN_ONLY`** (GET, PATCH et DELETE) : 403 sous l'adresse publique, même
+  connecté, y compris sous un chemin encodé (`/api/%6Datter`) ; le code d'appairage donnerait la main sur
+  le garage ou la serrure d'une voiture. Voir [1_17](1_17_pont-matter.md) et
+  [1_13](1_13_comptes-et-sessions.md). Le tableau des codes d'erreur ci-dessus (`LAN_ONLY`) est complété en
+  conséquence.

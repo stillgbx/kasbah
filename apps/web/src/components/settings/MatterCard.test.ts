@@ -3,14 +3,14 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import type { MatterStatus } from '@kasbah/shared'
 import { setTransport } from '../../api'
-import type { Transport } from '../../api/transport'
+import { ApiRequestError, type Transport } from '../../api/transport'
 import MatterCard from './MatterCard.vue'
 
 // The Matter card: the pairing code while no assistant holds the bridge, the devices grouped by
 // plugin, and each switch writing the WHOLE list of published devices.
 
 const base: MatterStatus = {
-  enabled: true, running: true, commissioned: false,
+  enabled: true, running: true, commissioned: false, fabrics: [],
   pairing: { manualCode: '06252306146', qrSvg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>' },
   candidates: [
     { id: 'mock:light-living', name: 'Plafonnier salon', pluginId: 'mock', type: 'dimmable_light', listed: true, published: true },
@@ -25,8 +25,14 @@ const shown = (e: Element) => (e as HTMLElement).style.display !== 'none'
 
 function fake(status: MatterStatus) {
   const setMatter = vi.fn(async () => status)
-  setTransport({ matterStatus: async () => status, setMatter } as unknown as Transport)
-  return setMatter
+  const removeMatterFabric = vi.fn(async () => status)
+  setTransport({ matterStatus: async () => status, setMatter, removeMatterFabric } as unknown as Transport)
+  return Object.assign(setMatter, { removeMatterFabric })
+}
+
+const paired: MatterStatus = {
+  ...base, commissioned: true, pairing: undefined,
+  fabrics: [{ index: 1, label: '', vendorId: 0x1217 }, { index: 2, label: 'Salon', vendorId: 0x6006 }, { index: 3, label: '', vendorId: 0xfff1 }],
 }
 
 describe('MatterCard', () => {
@@ -49,6 +55,29 @@ describe('MatterCard', () => {
     expect(w.find('.mc__qr').exists()).toBe(true)
     expect(w.find('.mc__qr img').exists()).toBe(false)
     expect(w.find('.mc__code').exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('names the paired assistants, and unpairs one only on the second press', async () => {
+    const { removeMatterFabric } = fake(paired)
+    const w = mount(MatterCard)
+    await flushPromises()
+    expect(w.findAll('.mc__fabric-name').map((n) => n.text())).toEqual(['Alexa (Amazon)', 'Salon', 'Assistant 3'])
+    const first = () => w.findAll('.mc__fabric')[0]!.find('.mc__unpair')
+    await first().trigger('click')
+    expect(removeMatterFabric).not.toHaveBeenCalled()
+    expect(first().text()).toBe('Confirmer')
+    await first().trigger('click')
+    expect(removeMatterFabric).toHaveBeenCalledWith(1)
+    w.unmount()
+  })
+
+  it('says the bridge is managed from the local network when opened through the public address', async () => {
+    setTransport({ matterStatus: async () => { throw new ApiRequestError(403, 'LAN_ONLY', 'local network only') } } as unknown as Transport)
+    const w = mount(MatterCard)
+    await flushPromises()
+    expect(w.find('.mc').exists()).toBe(false)
+    expect(w.text()).toContain('réseau local seulement')
     w.unmount()
   })
 

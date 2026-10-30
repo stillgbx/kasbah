@@ -364,6 +364,11 @@ describe('Matter bridge setting (GET/PATCH /api/matter)', () => {
       expect(JSON.parse(await readFile(file, 'utf8')).matter).toEqual({ enabled: false, devices: ['mock:cover-gate'] })
 
       expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/matter', payload: { enabled: 'yes' } })).statusCode).toBe(400)
+      // unpairing with the bridge off changes nothing; an index that is not a number is refused
+      const off = await kasbah.app.inject({ method: 'DELETE', url: '/api/matter/fabrics/1' })
+      expect(off.statusCode).toBe(200)
+      expect(off.json().fabrics).toEqual([])
+      expect((await kasbah.app.inject({ method: 'DELETE', url: '/api/matter/fabrics/abc' })).statusCode).toBe(400)
     } finally { await kasbah.close(); await rm(dir, { recursive: true, force: true }) }
   })
 })

@@ -7,6 +7,22 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-30] update | Pont Matter : réseau local seulement, dissociation d'un assistant
+
+**Déclencheur** : suite du pont Matter, livrée dans le même commit que cette entrée (`session.ts`, `bridge.ts`, `MatterCard.vue`, protocole partagé). Question de l'utilisateur : comment dépublier, d'où les quatre niveaux.
+
+**Pages modifiées** :
+- `1_architecture/1_17_pont-matter.md` - section « Mise à jour 2026-10-30 » : `/api/matter` en `LAN_ONLY` et pourquoi, assistants appairés (`fabrics`) et `DELETE`, piège du redémarrage du nœud, libellé produit, tableau des quatre niveaux de dépublication, vérifié / non joué.
+- `1_architecture/1_3_protocole-rest-ws.md` - sous-section : `fabrics`, route `DELETE /api/matter/fabrics/:index`, `LAN_ONLY`.
+- `4_ui/4_7_reglages.md` - section : boîte appairée, noms, « Dissocier » en deux temps, bouton réduit à l'icône sous 520 px, relecture, piège de grille à deux niveaux.
+- `6_faq/6_0_pieges-outillage.md` - entrée « Revu le 2026-10-30 » sur le piège `minmax(0, 1fr)` à deux niveaux.
+- `1_architecture/1_13_comptes-et-sessions.md` - une phrase : `/api/matter/*` rejoint les routes `LAN_ONLY`.
+- `6_faq/6_1_pieges-runtime.md` - entrée : « n'a pas démarré » après le départ du dernier assistant.
+
+**Contradictions et trous** : le tableau des codes d'erreur de `1_3` ne cite que `/api/mcp/users` pour `LAN_ONLY` (antérieur à `/api/system`) : complété par une note, non réécrit. Non joué : vrai Alexa, Google ou Apple ; adresse publique réelle (seul le test de session couvre la garde).
+
+**Index** : catalogues `6_faq` et `1_architecture` (1 date chacun), index.md régénéré ; les autres dates étaient déjà au 2026-10-30.
+
 ## [2026-10-30] update | Pont Matter et carte « Assistants vocaux » de Réglages
 
 **Déclencheur** : rendre des appareils pilotables par Alexa, Google Home ou Apple Maison sans skill ni cloud ; livré dans le même commit que cette entrée : `apps/server/src/matter/`, bloc `matter` de la maison, routes `/api/matter`, carte de Réglages.

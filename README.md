@@ -269,6 +269,8 @@ The server can act as a **Matter bridge** on the local network: the devices you 
 
 - Published today: lights (on/off, brightness), covers (shutters, gates, garage doors, shown as blinds) and vehicle locks.
 - Only publish what the assistants don't already know: a Hue light or a Somfy shutter already linked there would show up twice.
+- To withdraw: a device's switch, **Withdraw all** for a plugin, the bridge's switch, or **Unpair** next to an assistant, which then loses every device (the pairing code comes back once none is left).
+- The bridge is managed from the local network only: its pairing code gives control over what it publishes, so the card and its API refuse the public address.
 - The bridge is not certified: Google Home asks for it to be declared (free) in the Google Home Developer Console first, Apple Home shows a warning. The server needs UDP port 5540 and mDNS (5353) open on the local network.
 
 ## Plugins

@@ -1,6 +1,6 @@
 # FAQ — pièges d'outillage
 
-> Dernière mise à jour : 2026-10-26
+> Dernière mise à jour : 2026-10-30
 > Sources : sessions des 2026-09-04 et 2026-09-08, `apps/web/src/stores/settings.ts`, `apps/web/vite.config.ts`, `apps/web/src/components/home/*.vue`, `apps/web/src/styles/app.css`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/views/EnergyView.vue`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/three/builders/details.ts`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/server/src/app.ts`, `apps/server/src/plugins/mixcloud/resolve.ts`, `apps/server/package.json`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `docs/plugins/claude-assistant.md`, session du 2026-10-08, `scripts/dev-server.mjs`, session du 2026-10-10, `apps/web/src/lib/maplibreWorker.ts`, session du 2026-10-13, `apps/android/dhu.cmd`, session du 2026-10-22, `scripts/supervisor.mjs`, session du 2026-10-26
 
 ## Vuetify 4 : changer de thème
@@ -229,6 +229,10 @@ ailleurs, est d'ajouter les alias manquants dans `icons.ts`.
 - **Leçon** : troisième façon pour une grille de déborder, après le plancher `minmax()` et le
   `min-width` qui remonte la chaîne (entrée précédente). Toutes ont la même parade — donner
   explicitement un plancher de 0 aux colonnes qui doivent pouvoir se serrer.
+- **Revu le 2026-10-30** (carte Matter, `MatterCard.vue`) : le même piège **à deux niveaux**. Un nom
+  d'assistant sur une ligne élargissait la carte de 82 px au téléphone ; `minmax(0, 1fr)` sur la grille
+  de la carte ne suffisait pas, la liste imbriquée (`.mc__fabrics`, aussi une grille) en voulait un
+  aussi. Poser le plancher à chaque niveau de grille entre le texte long et le conteneur.
 
 ## `PCFSoftShadowMap` déprécié depuis three 0.184 : les ombres redeviennent dures en silence
 

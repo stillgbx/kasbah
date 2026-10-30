@@ -798,6 +798,8 @@ export interface Transport {
   matterStatus(): Promise<MatterStatus>
   /** Writes the bridge's setting into the house and applies it live. */
   setMatter(patch: MatterSettingsPatch): Promise<MatterStatus>
+  /** Unpairs one assistant (its fabric index): it loses the bridge, the others keep it. */
+  removeMatterFabric(index: number): Promise<MatterStatus>
   /** The server's VAPID public key, for `pushManager.subscribe`. */
   pushKey(): Promise<{ publicKey: string }>
   /** Subscribes this screen to push notifications, or changes its categories. */
