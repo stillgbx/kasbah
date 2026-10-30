@@ -7,6 +7,13 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-30] update | Pont Matter : Google Home ne gère pas encore les fermetures
+
+**Déclencheur** : essai de l'utilisateur sur la vraie maison ; texte de l'interrupteur et `docs/matter.md` mis à jour dans le même commit.
+
+**Pages modifiées** :
+- `1_architecture/1_17_pont-matter.md` - section « Mise à jour 2026-10-30 (7) » : portes listées mais inertes, lumières Hörmann hors connexion, retour par retrait et republication ; section (5) : le curseur de vitesse du ventilateur vérifié dans Google Home (20 % → vitesse 2).
+
 ## [2026-10-30] update | Pont Matter : portes de garage et portails en fermetures Matter 1.5
 
 **Déclencheur** : question de l'utilisateur sur les portes de garage vues comme des stores ; livré dans le même commit que cette entrée (réglage `matter.closures`, interrupteur de la carte, `bridge.ts`, `mapping.ts`).

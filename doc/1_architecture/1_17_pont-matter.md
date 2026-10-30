@@ -221,8 +221,9 @@ attributs ensemble (`matterStateOf`, contexte `offline`), cohérents entre eux.
 
 Vérifié au contrôleur matter.js sur le ventilateur simulé (`mock:fan-chambre2_fan`, mêmes capacités que
 le Tuya) : mode fort → vitesse 6 et 100 % ; 50 % → vitesse 3, mode moyen ; vitesse 5 → 83 %, mode
-fort ; sens inversé ; arrêt → 0 %. Non joué : ce que Google, Apple ou Alexa affichent des 6 vitesses
-et du sens.
+fort ; sens inversé ; arrêt → 0 %. **Vérifié ensuite dans Google Home** sur la vraie maison : marche,
+arrêt, et un **curseur en %** (Google ne montre pas les 6 crans) qui donne la vitesse attendue (20 % →
+vitesse 2). Non joué : le sens dans Google, Apple et Alexa.
 
 ### Mise à jour 2026-10-30 (6) — portes de garage et portails en fermetures Matter 1.5 (à l'essai)
 
@@ -251,6 +252,16 @@ devient alors une Closure, sinon reste un Window Covering.
 Vérifié au contrôleur matter.js sur le portail simulé (`mock:cover-gate`, classe `gate`) : étiquette Gate
 reçue, ouvrir, arrêter en course (position partielle), fermer, puis bascule du réglage → le portail revient
 en store sans redémarrage. Non joué : Google, Apple, Alexa (aucune prise en charge des fermetures annoncée).
+
+### Mise à jour 2026-10-30 (7) — essai réel des fermetures avec Google Home : non pris en charge
+
+Sur la vraie maison, réglage `closures` allumé, hubs redémarrés : Google Home **liste** les portes de
+garage mais ne peut **pas les piloter**, et les **lumières des moteurs** (autres appareils Hörmann du même
+pont, restés des lampes) passent **hors connexion**, alors que Kasbah les voit toutes disponibles. Réglage
+éteint : les portes redeviennent des stores pilotables. Les lumières ne sont revenues qu'après un
+**retrait puis une republication** (interrupteur de l'appareil éteint puis rallumé dans la carte) : Google
+garde un état périmé tant que l'endpoint n'est pas recréé. Conclusion : à laisser éteint avec Google ;
+le texte de l'interrupteur et `docs/matter.md` le disent. Apple et Alexa non essayés.
 
 ## Restant
 

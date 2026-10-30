@@ -8,8 +8,8 @@ server over the local network.
 The bridge is part of the server, not a plugin: it creates no device of its own, it republishes the
 ones the plugins already provide.
 
-> **Tested with Google Home** on a real house (pairing through the Developer Console declaration, lights
-> and garage doors listed in the phone app), and with a Matter test controller (matter.js) for states and
+> **Tested with Google Home** on a real house (pairing through the Developer Console declaration, lights,
+> garage doors and a ceiling fan with its speed slider, in the phone app), and with a Matter test controller (matter.js) for states and
 > commands both ways and unpairing. Apple Home and Alexa have not been tried yet: their steps follow the
 > vendors' documentation; report what differs.
 
@@ -27,9 +27,12 @@ By default a **garage door or a gate shows up as a blind**, the only form every 
 
 **Garage doors and gates as doors** (switch in the card, off by default) publishes them instead as
 Matter 1.5 **closures**, tagged *garage door* or *gate*: open, close and stop. An assistant that knows
-closures shows a garage door and can ask for a code to open it. Matter 1.5 is recent and no assistant
-has confirmed it supports closures yet: if yours shows them as unsupported, turn the switch off and
-they come back as blinds, with no restart. Tested with a Matter test controller only.
+closures shows a garage door and can ask for a code to open it. Matter 1.5 is recent and **Google Home does not
+support closures yet** (tried on a real house): it lists the doors but cannot control them, and the
+other devices of the same vendor on the bridge (the motor lights) showed up offline too. Leave the
+switch off with Google Home. If you tried it: turn it off (the doors come back as blinds, controllable,
+no restart), and if a device stays offline in Google Home, switch it off and on again in the card to
+publish it anew. Apple Home and Alexa have not been tried.
 
 Publish **device by device**, and only what the assistants do not already know: a Hue light or a Somfy
 shutter already linked to Google Home through the vendor's own integration would show up twice.
@@ -145,4 +148,4 @@ loses it. You should not need to: **Unpair** does the same, one assistant at a t
 | The card only says it is managed from the local network | you opened Kasbah through the public address: open it from the local network |
 | The assistant does not find the bridge | same network, multicast not blocked by the Wi-Fi, IPv6 on the server, the card shows a code (no assistant holds it already) |
 | A device is missing | it is ticked, its plugin is on, and its kind can be published (see the table above); the card lists ticked ids it cannot find |
-| A device stays "unreachable" | the plugin lost the device (check its view in Kasbah) or the bridge is off |
+| A device stays "unreachable" | the plugin lost the device (check its view in Kasbah) or the bridge is off; if Kasbah shows it available, switch it off and on again in the card to publish it anew |
