@@ -1,7 +1,7 @@
 # Plugin YouTube Music (non officiel)
 
-> Dernière mise à jour : 2026-10-24
-> Sources : `apps/server/src/plugins/ytmusic/{index,catalog,cookie,browserCookies,resolve,mapping,types}.ts` (`stream.ts` et `queue.ts` devenus `apps/server/src/music/{proxy,queue}.ts` le 2026-09-23), `apps/server/src/music/{player,sources,ytdlp}.ts`, `apps/server/src/core/playbackBridge.ts` (ex-`ytmusic/bridge.ts`), tests `apps/server/src/plugins/ytmusic/plugin.test.ts` et `apps/server/src/music/{proxy,queue}.test.ts` (ex-`ytmusic/{stream,queue}.test.ts`), `apps/server/src/app.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue` (ex-`YtmusicView.vue`), `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/composables/useMediaPosition.ts`, `apps/web/src/components/ui/{ArtThumb,artThumbLoader}.vue|ts`, `apps/web/src/components/music/ArtPlay.vue` (ex-`ui/PlayButton.vue`), `apps/web/src/components/YtmusicLinkCard.vue`, `apps/server/.env.example`, Music Assistant `providers/ytmusic` (référence)
+> Dernière mise à jour : 2026-10-30
+> Sources : `apps/server/src/plugins/ytmusic/{index,catalog,cookie,browserCookies,resolve,mapping,types}.ts` (`stream.ts` et `queue.ts` devenus `apps/server/src/music/{proxy,queue}.ts` le 2026-09-23), `apps/server/src/music/{player,sources,ytdlp}.ts`, `apps/server/src/core/playbackBridge.ts` (ex-`ytmusic/bridge.ts`), tests `apps/server/src/plugins/ytmusic/{plugin,resolve}.test.ts` et `apps/server/src/music/{proxy,queue}.test.ts` (ex-`ytmusic/{stream,queue}.test.ts`), `apps/server/src/app.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue` (ex-`YtmusicView.vue`), `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/composables/useMediaPosition.ts`, `apps/web/src/components/ui/{ArtThumb,artThumbLoader}.vue|ts`, `apps/web/src/components/music/ArtPlay.vue` (ex-`ui/PlayButton.vue`), `apps/web/src/components/YtmusicLinkCard.vue`, `apps/server/.env.example`, Music Assistant `providers/ytmusic` (référence)
 
 ## Avertissement
 
@@ -1300,3 +1300,45 @@ que la copie brute. Désormais `cookie.ts`, `browserCookies.ts` et la copie temp
 écrivent en 0600 (par `writeFileAtomic`, qui applique le mode à chaque écriture puisqu'il crée un
 nouveau fichier), et `clear()` efface aussi `<fichier>.netscape`. Test : `ytmusic/cookie.test.ts` (le test
 du mode est sauté sous Windows, où il ne veut rien dire).
+
+### Mise à jour 2026-10-30 — un cookie que yt-dlp n'accepte plus : le flux coupé après un Mo
+
+**Symptôme.** Sur le compte relié d'un utilisateur, seul le premier titre d'un album se jouait, puis
+erreur ; impossible de lancer le n-ième titre directement. Le navigateur affichait « Failed to load because
+no supported source was found », un Cast `LOAD_FAILED`. La file d'attente et le préchargement
+n'étaient pas en cause : « Dis-le » lancé seul échouait aussi.
+
+**Cause, mesurée sur la vraie maison.** Avec ce compte, yt-dlp résolvait le **format 140** (AAC 130 kb/s),
+celui d'un invité, au lieu du 141 d'un compte Premium, alors que le compte est Premium. Sur l'URL googlevideo
+obtenue, la plage `0-1048575` répondait 206 et **toute autre plage 403** : googlevideo ne sert que le
+premier Mo d'un flux dont il refuse le jeton PO. Un intro de 786 Ko tenait dedans et se jouait en entier ;
+tous les titres suivants, plus gros, s'arrêtaient sur l'enceinte. Le compte de la maison (cookie Premium,
+format 141) lisait les mêmes titres jusqu'au bout. **Un cookie recollé depuis une fenêtre privée, fermée
+aussitôt, a tout réglé** : Google fait tourner les jetons d'une session restée ouverte dans le navigateur
+où le cookie a été copié, et yt-dlp repasse alors en invité **sans échouer**. Le catalogue (InnerTube)
+acceptait encore ce cookie : la carte disait « Cookie enregistré » et la sonde des likes passait.
+
+**Ce qui le rend visible désormais** (`resolve.ts`) :
+
+- **`--no-warnings` retiré** de l'appel yt-dlp ; les lignes `WARNING:` de sa sortie d'erreur sont passées
+  à `onWarnings` et journalisées par le plugin (`yt-dlp warnings`, avec le compte et le `videoId`).
+  C'est la seule trace d'un cookie qu'il n'accepte plus. Mixcloud et l'import navigateur gardent
+  `--no-warnings`.
+- **Sonde de la fin du fichier** à chaque résolution d'un flux de plus d'un Mo (`FIRST_CHUNK_BYTES`) :
+  une requête du dernier octet. Un **403** fait échouer la résolution avec un message lisible
+  (« YouTube cut the stream after its first megabyte: yt-dlp no longer accepts this account's cookie —
+  paste a fresh one… » ; la variante sans cookie parle du PO Token d'une session anonyme), qui arrive en
+  toast au lieu d'un `LOAD_FAILED` muet. Une erreur réseau ou un autre statut ne bloque rien : seule la
+  réponse 403 de googlevideo tranche. Le message évite exprès les mots qu'`isAuthError` reconnaît : il
+  devient `lastError` sans passer le cookie en « expiré », que la sonde du catalogue rétablirait aussitôt.
+  Coût : une requête HTTP de plus par résolution, préchargements compris.
+
+Le relevé du 2026-10-07 (« anonyme = format 140 ») ne mesurait que la résolution, pas une lecture
+complète : un flux anonyme coupé au premier Mo reste possible ; la sonde le dirait de la même façon.
+
+**Tests** : `apps/server/src/plugins/ytmusic/resolve.test.ts` (4) — avertissements transmis et
+`--no-warnings` absent, 403 sur le dernier octet refusé avec la plage demandée, 206 ou réseau en panne
+acceptés, pas de sonde sous un Mo. Les deux premiers étaient rouges avant le correctif. Dossier ytmusic :
+56 tests verts.
+
+Sources : `apps/server/src/plugins/ytmusic/{resolve,index}.ts`, `resolve.test.ts`.

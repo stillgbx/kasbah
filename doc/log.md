@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-30] update | YouTube Music : flux coupé après un Mo (cookie que yt-dlp n'accepte plus)
+
+**Déclencheur** : bug signalé (seul le 1er titre d'un album se joue, puis erreur, sur enceinte et dans le navigateur), diagnostiqué sur la vraie maison ; code `ytmusic/{resolve,index}.ts` et `resolve.test.ts` non commités à la date d'écrire.
+
+**Pages modifiées** :
+- `3_plugins/3_16_ytmusic.md` - section « Mise à jour 2026-10-30 » : format 140 au lieu du 141 Premium, 403 sur toute plage après le premier Mo, cookie recollé depuis une fenêtre privée qui règle tout ; `--no-warnings` retiré et avertissements journalisés, sonde du dernier octet à la résolution avec message lisible ; tests.
+
+**Index** : catalogue `3_plugins` mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-30] update | Verrouillage des voitures : Tesla oui, R5 non
 
 **Déclencheur** : session lancée depuis celle du pont Matter (publier la serrure des voitures) ; code Tesla (`index.ts`, `mapping.ts`, tests) non commité à la date d'écrire.

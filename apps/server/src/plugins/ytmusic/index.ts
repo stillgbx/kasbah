@@ -226,6 +226,8 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       poTokenUrl: cfg().YTM_PO_TOKEN_URL,
       ...(netscapePath ? { netscapePath } : {}),
       ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}),
+      ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+      onWarnings: (warnings) => log().warn({ user: a.user, videoId, warnings }, 'yt-dlp warnings'),
     })
   }
 

@@ -25,7 +25,20 @@ export interface StreamResolveOpts {
   /** Netscape file already written; otherwise a temporary one is created. */
   netscapePath?: string
   spawnImpl?: SpawnFn
+  fetchImpl?: typeof fetch
+  /**
+   * yt-dlp's `WARNING:` lines. They are the only trace of a cookie it stopped accepting: it then goes
+   * on as a guest, without failing.
+   */
+  onWarnings?: (lines: string[]) => void
 }
+
+/**
+ * What googlevideo serves of a stream whose PO Token it does not accept: the first megabyte, then 403
+ * on any other range (seen on 2026-10-30, cookie no longer accepted by yt-dlp). A shorter track plays
+ * whole, the next ones fail on the speaker.
+ */
+const FIRST_CHUNK_BYTES = 1_048_576
 
 /** Ping of the PO Token generator (Music Assistant: `GET {base}/ping`). */
 export async function pingPoToken(baseUrl: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
@@ -58,7 +71,7 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
   // No `-f`: we dump `-J` then sort in JS. `--ignore-config` avoids a user `-f`.
   const args = [
     '--ignore-config',
-    '-J', '--no-download', '--no-warnings',
+    '-J', '--no-download',
     ...(netscapePath ? ['--cookies', netscapePath] : []),
     '--js-runtimes', 'node',
     '--remote-components', 'ejs:github',
@@ -67,6 +80,8 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
     pageUrl,
   ]
   const { code, stdout, stderr } = await runCapture(opts.ytdlpPath, args, spawnImpl)
+  const warnings = stderr.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.startsWith('WARNING:'))
+  if (warnings.length) opts.onWarnings?.(warnings)
   if (code !== 0) {
     const tail = stderr.trim().split(/\r?\n/).filter(Boolean).slice(-2).join(' ; ')
     throw new Error(`yt-dlp failed (${code})${tail ? `: ${tail}` : ''}`)
@@ -100,12 +115,30 @@ export async function resolveStreamUrl(opts: StreamResolveOpts): Promise<Resolve
   const durationS = !info.is_live && typeof info.duration === 'number' && info.duration > 0 ? info.duration : null
   const rate = (pick as { abr?: number; tbr?: number }).abr ?? (pick as { tbr?: number }).tbr ?? null
   const size = (pick as { filesize?: number }).filesize ?? (pick as { filesize_approx?: number }).filesize_approx ?? null
+  const sizeBytes = typeof size === 'number' && size > 0 ? Math.floor(size) : null
+  if (sizeBytes && sizeBytes > FIRST_CHUNK_BYTES && await cutAfterFirstChunk(pick.url, sizeBytes, opts.fetchImpl ?? fetch)) {
+    throw new Error(opts.cookieRaw
+      ? 'YouTube cut the stream after its first megabyte: yt-dlp no longer accepts this account\'s cookie — paste a fresh one, copied from a private window then closed'
+      : 'YouTube cut the stream after its first megabyte: PO Token not accepted for an anonymous session')
+  }
   return {
     url: pick.url,
     formatId: pick.format_id ?? null,
     ext: pick.ext ?? null,
     abrKbps: rate ? Math.round(rate) : null,
-    sizeBytes: typeof size === 'number' && size > 0 ? Math.floor(size) : null,
+    sizeBytes,
     durationS,
+  }
+}
+
+/** Asks for the stream's last byte: a 403 there is a stream the speaker would lose after a megabyte. */
+async function cutAfterFirstChunk(url: string, sizeBytes: number, fetchImpl: typeof fetch): Promise<boolean> {
+  try {
+    const r = await fetchImpl(url, { headers: { range: `bytes=${sizeBytes - 1}-${sizeBytes - 1}` }, signal: AbortSignal.timeout(5_000) })
+    await r.body?.cancel().catch(() => undefined)
+    return r.status === 403
+  } catch {
+    // the network failing is not YouTube refusing: the speaker will say for itself
+    return false
   }
 }

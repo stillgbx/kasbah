@@ -50,7 +50,7 @@ The cookie is stored in `apps/server/.state/ytmusic-cookie.txt`, **never** in `.
 3. Tick **Ytmusic** in **Settings → Plugins**.
 4. Sign in to **music.youtube.com** in a browser **on the Kasbah machine**, then **do not sign out** (only close the window).
 5. In the YouTube Music section of Settings → Plugins, link the cookie in one of two ways:
-   - **Paste the cookie** (the most reliable, especially on Windows): F12 → Network tab → reload → click a request to `music.youtube.com` → Request Headers → **Cookie** → copy the whole value (it must contain `__Secure-3PAPISID`) → **Save cookie**. A private window will do.
+   - **Paste the cookie** (the most reliable, especially on Windows): F12 → Network tab → reload → click a request to `music.youtube.com` → Request Headers → **Cookie** → copy the whole value (it must contain `__Secure-3PAPISID`) → **Save cookie**. Best copied from a private window, closed right after: Google rotates the cookies of a session left open, and `yt-dlp` then quietly falls back to a guest, whose streams stop after their first megabyte (Kasbah says so: "YouTube cut the stream after its first megabyte").
    - **Import from a browser on the server**: **normal** profile (not private), browser completely closed, then choose the browser and **Import from browser**. On Windows, Chrome and Edge often fail (encryption): prefer Firefox or pasting.
 6. The card shows "Cookie saved" and the state of the PO Token generator. Open the **Music** view, choose a speaker in the "Listening" panel, start a track.
 
