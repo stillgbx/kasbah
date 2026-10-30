@@ -28,6 +28,23 @@ export function matterKindOf(d: DeviceDescriptor, opts: { closures?: boolean } =
   }
 }
 
+/** A car's cabin climate: a second Matter device next to its lock, ticked on its own. */
+export const CLIMATE_FACET = '#climate'
+
+/**
+ * Everything a Kasbah device can be published as, each with its own key in the house's list: the
+ * device itself (its id), plus a car's cabin climate (`<id>#climate`, a thermostat).
+ */
+export function matterFacetsOf(d: DeviceDescriptor, opts: { closures?: boolean } = {}): { key: string; kind: MatterKind }[] {
+  const out: { key: string; kind: MatterKind }[] = []
+  const main = matterKindOf(d, opts)
+  if (main) out.push({ key: d.id, kind: main })
+  if (d.kind === 'vehicle' && (d.capabilities as readonly string[]).includes('climate_precondition')) {
+    out.push({ key: `${d.id}${CLIMATE_FACET}`, kind: 'thermostat' })
+  }
+  return out
+}
+
 // Matter level: 1-254 (0 is reserved for "off" on some controllers). Kasbah brightness: 0-100.
 export const levelFromBrightness = (b: number): number => Math.min(254, Math.max(1, Math.round((b * 254) / 100)))
 export const brightnessFromLevel = (level: number): number => Math.min(100, Math.max(0, Math.round((level * 100) / 254)))
@@ -112,8 +129,33 @@ export function closureCommandOf(position: number | undefined): Command | null {
   return null
 }
 
+// Thermostat values (Matter spec): system modes, and temperatures in hundredths of a degree.
+export const SYSTEM_MODE = { off: 0, auto: 1, cool: 3, heat: 4 } as const
+// the setpoints a Tesla accepts (`vehicle.climate_*`): 15-28 °C
+export const CABIN_MIN_C = 15
+export const CABIN_MAX_C = 28
+const centi = (c: number): number => Math.round(c * 100)
+const clampCabin = (c: number): number => Math.min(CABIN_MAX_C, Math.max(CABIN_MIN_C, Math.round(c * 2) / 2))
+
+/**
+ * The Kasbah command for an attribute a controller wrote on a car's climate thermostat. Turning it
+ * on wakes the car (`climate_start`, the very purpose); moving the setpoint does not (`climate_set`).
+ */
+export function cabinCommandOf(
+  attribute: 'systemMode' | 'occupiedHeatingSetpoint' | 'occupiedCoolingSetpoint',
+  value: number | null,
+  targetC: number | undefined,
+): Command | null {
+  if (value === null) return null
+  if (attribute === 'systemMode') {
+    if (value === SYSTEM_MODE.off) return { type: 'vehicle.climate_stop' }
+    return targetC === undefined ? { type: 'vehicle.climate_start' } : { type: 'vehicle.climate_start', targetTempC: clampCabin(targetC) }
+  }
+  return { type: 'vehicle.climate_set', targetTempC: clampCabin(value / 100) }
+}
+
 /** Attribute values for `endpoint.set()`, by cluster. Absent Kasbah values are not written. */
-export function matterStateOf(kind: MatterKind, state: DeviceState, speedMax = 0): Record<string, Record<string, unknown>> {
+export function matterStateOf(kind: MatterKind, state: DeviceState, speedMax = 0, cabinMode?: number): Record<string, Record<string, unknown>> {
   switch (kind) {
     case 'on_off_light':
     case 'dimmable_light': {
@@ -157,6 +199,23 @@ export function matterStateOf(kind: MatterKind, state: DeviceState, speedMax = 0
       if (speedMax) Object.assign(fanControl, { speedSetting: speed, speedCurrent: speed })
       if (state.direction) fanControl.airflowDirection = state.direction === 'reverse' ? 1 : 0
       return { onOff: { onOff: state.on }, fanControl }
+    }
+    case 'thermostat': {
+      if (state.kind !== 'vehicle') return {}
+      const target = state.climateTargetC
+      const inside = state.insideTempC
+      // a car aims at a setpoint, it neither "heats" nor "cools": the mode the assistant chose stays
+      // shown while the climate runs; turned on elsewhere, the direction the setpoint asks for (heat
+      // when the cabin temperature is unknown)
+      const mode = !state.climateOn ? SYSTEM_MODE.off
+        : cabinMode !== undefined ? cabinMode
+          : target !== undefined && inside !== undefined && target < inside ? SYSTEM_MODE.cool : SYSTEM_MODE.heat
+      const thermostat: Record<string, unknown> = { localTemperature: inside === undefined ? null : centi(inside), systemMode: mode }
+      if (target !== undefined) {
+        thermostat.occupiedHeatingSetpoint = centi(clampCabin(target))
+        thermostat.occupiedCoolingSetpoint = centi(clampCabin(target))
+      }
+      return { thermostat }
     }
     case 'door_lock': {
       if (state.kind !== 'vehicle') return {}

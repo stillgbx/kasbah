@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { defaultState, type DeviceDescriptor, type DeviceState } from '@kasbah/shared'
-import { brightnessFromLevel, closureCommandOf, coverCommandForLift, fanCommandOf, fanSpeedMax, levelFromBrightness, liftFromPosition, matterKindOf, matterStateOf, positionFromLift } from './mapping'
+import { brightnessFromLevel, cabinCommandOf, closureCommandOf, coverCommandForLift, fanCommandOf, fanSpeedMax, levelFromBrightness, liftFromPosition, matterFacetsOf, matterKindOf, matterStateOf, positionFromLift } from './mapping'
 
 const device = (kind: DeviceDescriptor['kind'], capabilities: string[]): DeviceDescriptor =>
   ({ id: `mock:${kind}1`, pluginId: 'mock', externalId: `${kind}1`, kind, name: 'Device', capabilities }) as unknown as DeviceDescriptor
@@ -140,5 +140,37 @@ describe('closure', () => {
     expect(matterStateOf('closure', state('cover', { position: 100, motion: 'stopped' })).closureControl?.overallCurrentState).toEqual({ position: 1, secureState: false })
     expect(matterStateOf('closure', state('cover', { motion: 'closing' })).closureControl)
       .toEqual({ mainState: 1, overallCurrentState: null, overallTargetState: { position: 0 } })
+  })
+})
+
+describe('cabin climate', () => {
+  it('offers the climate of a car as its own thermostat, next to its lock', () => {
+    expect(matterFacetsOf(device('vehicle', ['soc', 'lock', 'climate_precondition']))).toEqual([
+      { key: 'mock:vehicle1', kind: 'door_lock' },
+      { key: 'mock:vehicle1#climate', kind: 'thermostat' },
+    ])
+    expect(matterFacetsOf(device('vehicle', ['soc', 'climate_precondition']))).toEqual([{ key: 'mock:vehicle1#climate', kind: 'thermostat' }])
+    expect(matterFacetsOf(device('vehicle', ['soc']))).toEqual([])
+  })
+
+  it('turns the mode into start or stop, and a setpoint into a setting that does not wake the car', () => {
+    expect(cabinCommandOf('systemMode', 0, 21)).toEqual({ type: 'vehicle.climate_stop' })
+    expect(cabinCommandOf('systemMode', 4, 21)).toEqual({ type: 'vehicle.climate_start', targetTempC: 21 })
+    expect(cabinCommandOf('systemMode', 3, undefined)).toEqual({ type: 'vehicle.climate_start' })
+    expect(cabinCommandOf('occupiedHeatingSetpoint', 2250, 21)).toEqual({ type: 'vehicle.climate_set', targetTempC: 22.5 })
+    expect(cabinCommandOf('occupiedCoolingSetpoint', 3000, 21)).toEqual({ type: 'vehicle.climate_set', targetTempC: 28 })
+    expect(cabinCommandOf('occupiedHeatingSetpoint', 1000, 21)).toEqual({ type: 'vehicle.climate_set', targetTempC: 15 })
+  })
+
+  it('shows heat or cool from the setpoint against the cabin temperature, off when the climate is off', () => {
+    expect(matterStateOf('thermostat', state('vehicle', { climateOn: true, climateTargetC: 21, insideTempC: 8 }))).toEqual({
+      thermostat: { localTemperature: 800, systemMode: 4, occupiedHeatingSetpoint: 2100, occupiedCoolingSetpoint: 2100 },
+    })
+    expect(matterStateOf('thermostat', state('vehicle', { climateOn: true, climateTargetC: 20, insideTempC: 34 })).thermostat?.systemMode).toBe(3)
+    // the mode the assistant chose wins while the climate runs
+    expect(matterStateOf('thermostat', state('vehicle', { climateOn: true, climateTargetC: 20, insideTempC: 34 }), 0, 4).thermostat?.systemMode).toBe(4)
+    expect(matterStateOf('thermostat', state('vehicle', { climateOn: false, climateTargetC: 20 }), 0, 4).thermostat?.systemMode).toBe(0)
+    expect(matterStateOf('thermostat', state('vehicle', { climateOn: false, climateTargetC: 20 })).thermostat)
+      .toEqual({ localTemperature: null, systemMode: 0, occupiedHeatingSetpoint: 2000, occupiedCoolingSetpoint: 2000 })
   })
 })

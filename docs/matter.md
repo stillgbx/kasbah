@@ -19,7 +19,8 @@ ones the plugins already provide.
 |---|---|---|
 | Light with on/off | Light | brightness too when the light has it |
 | Cover (shutter, blind, gate, garage door) | Window covering (blind) | open, close, stop, position; a cover without a known position goes to the nearest end |
-| Vehicle with a lock | Door lock | lock and unlock; assistants ask for a voice PIN to unlock |
+| Vehicle with a lock | Door lock | lock and unlock; assistants ask for a voice PIN to unlock (the Tesla plugin has no lock yet) |
+| Vehicle with cabin climate | Thermostat, named "<car> (clim)" | its own line in the card, next to the lock; off stops the climate, heat or cool starts it (and wakes the car), the setpoint (15-28 °C) adjusts it without waking the car; shows the cabin temperature |
 | Fan with on/off | Fan | its speeds (low, medium, high and a percentage are derived from them) and its direction when it can reverse; timer and beep stay in Kasbah |
 
 By default a **garage door or a gate shows up as a blind**, the only form every assistant knows today:

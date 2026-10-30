@@ -10,7 +10,7 @@ import type { Bus } from '../core/bus'
 import { stateFile } from '../core/paths'
 import type { DeviceRegistry } from '../core/registry'
 import type { WsHub } from '../ws/hub'
-import { closureCommandOf, coverCommandForLift, fanCommandOf, fanSpeedMax, matterKindOf, matterStateOf, brightnessFromLevel, type MatterKind } from './mapping'
+import { cabinCommandOf, closureCommandOf, coverCommandForLift, CLIMATE_FACET, fanCommandOf, fanSpeedMax, matterFacetsOf, matterStateOf, brightnessFromLevel, type MatterKind } from './mapping'
 
 // Matter bridge: the devices the house opts in are published on the LAN as bridged endpoints of
 // one Matter node, for Alexa, Google Home or Apple Home. It creates no device of its own — it reads
@@ -25,7 +25,8 @@ export interface MatterBridgeOptions {
   logger: Logger
 }
 
-interface Published { id: DeviceId; kind: MatterKind; name: string; endpoint?: Endpoint; speedMax: number }
+// `key`: what the house lists (the device id, or `<id>#climate` for a car's climate)
+interface Published { key: string; id: DeviceId; kind: MatterKind; name: string; endpoint?: Endpoint; speedMax: number; cabinMode?: number }
 
 type MatterModules = Awaited<ReturnType<typeof loadMatter>>
 
@@ -67,6 +68,9 @@ async function loadMatter() {
     ...(await import('@matter/main/devices/closure')),
     ...(await import('@matter/main/behaviors/closure-control')),
     ...(await import('@matter/main/behaviors/descriptor')),
+    ...(await import('@matter/main/devices/thermostat')),
+    ...(await import('@matter/main/behaviors/thermostat')),
+    ...(await import('@matter/main/clusters/thermostat')),
     ...(await import('@matter/main/clusters/door-lock')),
     ...(await import('@matter/main/clusters/window-covering')),
     FabricManager: (await import('@matter/main/protocol')).FabricManager,
@@ -78,19 +82,27 @@ const label = (s: string): string => (s.length <= 32 ? s : `${s.slice(0, 31)}…
 // `.` is refused in an endpoint id; the id also keys matter.js storage, so it must stay stable. A
 // closure gets its own id: switching a garage door between blind and closure must not reuse the
 // stored state of the other device type.
-const endpointIdOf = (id: DeviceId, kind: MatterKind): string => id.replaceAll('.', '_') + (kind === 'closure' ? '__closure' : '')
+const endpointIdOf = (id: DeviceId, kind: MatterKind): string =>
+  id.replaceAll('.', '_') + (kind === 'closure' ? '__closure' : kind === 'thermostat' ? '__climate' : '')
+const deviceIdOf = (key: string): DeviceId => (key.endsWith(CLIMATE_FACET) ? key.slice(0, -CLIMATE_FACET.length) : key)
 
 export class MatterBridge {
   private server: ServerNode | undefined
   private aggregator: Endpoint | undefined
   private matter: MatterModules | undefined
   private readonly published = new Map<string, Published>()   // by endpoint id
-  private publishedOf(id: DeviceId): Published | undefined {
-    for (const p of this.published.values()) if (p.id === id) return p
+  private publishedFor(id: DeviceId): Published[] {
+    return [...this.published.values()].filter((p) => p.id === id)
+  }
+  private publishedAs(key: string): Published | undefined {
+    for (const p of this.published.values()) if (p.key === key) return p
     return undefined
   }
-  private kindOf(entry: DeviceEntry): MatterKind | null {
-    return matterKindOf(entry.descriptor, { closures: !!this.opts.settings()?.closures })
+  private facetsOf(entry: DeviceEntry): { key: string; kind: MatterKind }[] {
+    return matterFacetsOf(entry.descriptor, { closures: !!this.opts.settings()?.closures })
+  }
+  private kindOf(key: string, entry: DeviceEntry): MatterKind | null {
+    return this.facetsOf(entry).find((f) => f.key === key)?.kind ?? null
   }
   private readonly skipped = new Map<string, 'unknown' | 'unsupported'>()
   private readonly unsubscribe: (() => void)[] = []
@@ -120,7 +132,7 @@ export class MatterBridge {
       for (const [endpointId, p] of [...this.published]) {
         // still listed and still the same Matter type (the closures setting can change it): kept
         const entry = this.opts.registry.get(p.id)
-        if (this.exposed.includes(p.id) && (!entry || this.kindOf(entry) === p.kind)) continue
+        if (this.exposed.includes(p.key) && (!entry || this.kindOf(p.key, entry) === p.kind)) continue
         this.published.delete(endpointId)
         await p.endpoint?.delete().catch((err: unknown) => this.opts.logger.warn({ err, deviceId: p.id }, 'matter bridge could not withdraw a device'))
       }
@@ -208,13 +220,13 @@ export class MatterBridge {
     const candidates: MatterStatus['candidates'] = []
     for (const entry of this.opts.registry.list()) {
       const { descriptor } = entry
-      const type = this.kindOf(entry)
-      if (!type) continue
-      candidates.push({
-        id: descriptor.id, name: descriptor.name, pluginId: descriptor.pluginId, type,
-        listed: listed.includes(descriptor.id),
-        published: !!this.publishedOf(descriptor.id)?.endpoint,
-      })
+      for (const { key, kind: type } of this.facetsOf(entry)) {
+        candidates.push({
+          id: key, name: descriptor.name, pluginId: descriptor.pluginId, type,
+          listed: listed.includes(key),
+          published: !!this.publishedAs(key)?.endpoint,
+        })
+      }
     }
     return {
       enabled: !!settings?.enabled,
@@ -233,23 +245,23 @@ export class MatterBridge {
   /** Publishes the listed devices the registry knows and the bridge does not publish yet. */
   private async sync(): Promise<void> {
     if (!this.server) return
-    for (const id of this.exposed) {
-      if (this.publishedOf(id)) continue
-      const entry = this.opts.registry.get(id)
-      if (!entry) { this.skipped.set(id, 'unknown'); continue }
-      const kind = this.kindOf(entry)
-      if (!kind) { this.skipped.set(id, 'unsupported'); continue }
-      this.skipped.delete(id)
+    for (const key of this.exposed) {
+      if (this.publishedAs(key)) continue
+      const entry = this.opts.registry.get(deviceIdOf(key))
+      if (!entry) { this.skipped.set(key, 'unknown'); continue }
+      const kind = this.kindOf(key, entry)
+      if (!kind) { this.skipped.set(key, 'unsupported'); continue }
+      this.skipped.delete(key)
       try {
-        await this.publish(entry, kind)
+        await this.publish(entry, kind, key)
       } catch (err) {
-        this.published.delete(endpointIdOf(id, kind))
-        this.opts.logger.warn({ err, deviceId: id }, 'matter bridge could not publish a device')
+        this.published.delete(endpointIdOf(entry.descriptor.id, kind))
+        this.opts.logger.warn({ err, deviceId: entry.descriptor.id, kind }, 'matter bridge could not publish a device')
       }
     }
   }
 
-  private async publish(entry: DeviceEntry, kind: MatterKind): Promise<void> {
+  private async publish(entry: DeviceEntry, kind: MatterKind, key: string): Promise<void> {
     const m = this.matter
     const aggregator = this.aggregator
     if (!m || !aggregator) return
@@ -257,13 +269,14 @@ export class MatterBridge {
     const id = descriptor.id
     const endpointId = endpointIdOf(id, kind)
     const speedMax = kind === 'fan' ? fanSpeedMax(descriptor) : 0
-    const published: Published = { id, kind, name: descriptor.name, speedMax }
+    const published: Published = { key, id, kind, name: descriptor.name, speedMax }
     this.published.set(endpointId, published)
     const bridged = {
-      nodeLabel: label(descriptor.name),
+      // the car's climate is a second device of the same car: its name says which one
+      nodeLabel: label(kind === 'thermostat' ? `${descriptor.name} (clim)` : descriptor.name),
       productName: label(descriptor.meta?.model ?? descriptor.kind),
       vendorName: label(descriptor.meta?.manufacturer ?? descriptor.pluginId),
-      uniqueId: createHash('sha256').update(id).digest('hex').slice(0, 32),
+      uniqueId: createHash('sha256').update(key).digest('hex').slice(0, 32),
       reachable: state.available,
     }
     const initial = matterStateOf(kind, state, speedMax)
@@ -334,6 +347,20 @@ export class MatterBridge {
         } as never)
         break
       }
+      case 'thermostat': {
+        // Heating and Cooling, no Auto: in Auto, assistants show a range of two setpoints, while a
+        // car keeps one. Limits = what a Tesla accepts (15-28 °C).
+        endpoint = new m.Endpoint(m.ThermostatDevice.with(m.BridgedDeviceBasicInformationServer, m.ThermostatServer.with('Heating', 'Cooling')), {
+          id: endpointId, bridgedDeviceBasicInformation: bridged,
+          thermostat: {
+            controlSequenceOfOperation: m.Thermostat.ControlSequenceOfOperation.CoolingAndHeating,
+            absMinHeatSetpointLimit: 1500, absMaxHeatSetpointLimit: 2800, minHeatSetpointLimit: 1500, maxHeatSetpointLimit: 2800,
+            absMinCoolSetpointLimit: 1500, absMaxCoolSetpointLimit: 2800, minCoolSetpointLimit: 1500, maxCoolSetpointLimit: 2800,
+            ...initial.thermostat,
+          },
+        } as never)
+        break
+      }
       case 'fan': {
         // MultiSpeed only with speeds to offer, AirflowDirection only when the fan can reverse:
         // an attribute the device cannot honour would show a control that does nothing.
@@ -362,6 +389,26 @@ export class MatterBridge {
       events.levelControl?.currentLevel$Changed.on((level, _old, context) => {
         if (level !== null && context && !context.offline) send(endpointId, { type: 'light.set', brightness: brightnessFromLevel(level) })
       })
+    }
+    if (kind === 'thermostat') {
+      // Turning the climate on wakes the car (`climate_start`); a setpoint only adjusts it
+      // (`climate_set`), whatever the mode the controller shows.
+      const events = endpoint.events as unknown as ThermostatEvents
+      const target = () => {
+        const s = this.opts.registry.get(id)?.state
+        return s?.kind === 'vehicle' ? s.climateTargetC : undefined
+      }
+      const watch = (attribute: Parameters<typeof cabinCommandOf>[0], changed: Changed<number | null>) =>
+        changed.on((value, _old, context) => {
+          if (!context || context.offline) return
+          // the mode the assistant chose is shown back while the climate runs (see matterStateOf)
+          if (attribute === 'systemMode') published.cabinMode = value === 0 || value === null ? undefined : value
+          const command = cabinCommandOf(attribute, value, target())
+          if (command) send(endpointId, command)
+        })
+      watch('systemMode', events.thermostat.systemMode$Changed)
+      watch('occupiedHeatingSetpoint', events.thermostat.occupiedHeatingSetpoint$Changed)
+      watch('occupiedCoolingSetpoint', events.thermostat.occupiedCoolingSetpoint$Changed)
     }
     if (kind === 'fan') {
       // Matter leaves mode, percent and speed for the device to reconcile: each attribute a
@@ -394,27 +441,37 @@ export class MatterBridge {
   }
 
   private async push(id: DeviceId, state: DeviceState): Promise<void> {
-    const p = this.publishedOf(id)
-    if (!p?.endpoint) return
-    try {
-      await p.endpoint.set(matterStateOf(p.kind, state, p.speedMax) as never)
-    } catch (err) {
-      this.opts.logger.warn({ err, deviceId: id }, 'matter state update failed')
+    for (const p of this.publishedFor(id)) {
+      if (!p.endpoint) continue
+      try {
+        if (p.kind === 'thermostat' && state.kind === 'vehicle' && !state.climateOn) p.cabinMode = undefined
+        await p.endpoint.set(matterStateOf(p.kind, state, p.speedMax, p.cabinMode) as never)
+      } catch (err) {
+        this.opts.logger.warn({ err, deviceId: id, kind: p.kind }, 'matter state update failed')
+      }
     }
   }
 
   private async setReachable(id: DeviceId, reachable: boolean): Promise<void> {
-    const p = this.publishedOf(id)
-    if (!p?.endpoint) return
-    try {
-      await p.endpoint.set({ bridgedDeviceBasicInformation: { reachable } } as never)
-    } catch (err) {
-      this.opts.logger.warn({ err, deviceId: id }, 'matter reachability update failed')
+    for (const p of this.publishedFor(id)) {
+      if (!p.endpoint) continue
+      try {
+        await p.endpoint.set({ bridgedDeviceBasicInformation: { reachable } } as never)
+      } catch (err) {
+        this.opts.logger.warn({ err, deviceId: id, kind: p.kind }, 'matter reachability update failed')
+      }
     }
   }
 }
 
 interface Changed<T> { on(fn: (value: T, old: T, context: { offline?: boolean } | undefined) => void): void }
+interface ThermostatEvents {
+  thermostat: {
+    systemMode$Changed: Changed<number | null>
+    occupiedHeatingSetpoint$Changed: Changed<number | null>
+    occupiedCoolingSetpoint$Changed: Changed<number | null>
+  }
+}
 interface FanEvents {
   onOff: { onOff$Changed: Changed<number | boolean | null> }
   fanControl: {

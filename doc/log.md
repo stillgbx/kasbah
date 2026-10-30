@@ -7,6 +7,13 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-30] update | Pont Matter : la clim des voitures en thermostat
+
+**Déclencheur** : demande de l'utilisateur (exposer la clim des voitures) ; livré dans le même commit que cette entrée (`mapping.ts`, `bridge.ts`, type partagé, libellé de la carte).
+
+**Pages modifiées** :
+- `1_architecture/1_17_pont-matter.md` - ligne du tableau et section « Mise à jour 2026-10-30 (8) » : facette `<id>#climate`, thermostat chauffage + refroidissement sans Auto, traduction, mode retenu, Tesla réelle sans `lock`, vérifié / non joué.
+
 ## [2026-10-30] update | Pont Matter : Google Home ne gère pas encore les fermetures
 
 **Déclencheur** : essai de l'utilisateur sur la vraie maison ; texte de l'interrupteur et `docs/matter.md` mis à jour dans le même commit.

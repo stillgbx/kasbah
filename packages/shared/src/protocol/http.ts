@@ -396,7 +396,7 @@ export function releaseNotesLang(lang: string | undefined): string {
 // --- Matter bridge (`/api/matter`) ---
 
 /** What a Kasbah device becomes for a Matter controller (Alexa, Google Home, Apple Home). */
-export const MATTER_DEVICE_TYPES = ['on_off_light', 'dimmable_light', 'window_covering', 'closure', 'door_lock', 'fan'] as const
+export const MATTER_DEVICE_TYPES = ['on_off_light', 'dimmable_light', 'window_covering', 'closure', 'door_lock', 'fan', 'thermostat'] as const
 export type MatterDeviceType = (typeof MATTER_DEVICE_TYPES)[number]
 
 /** `PATCH /api/matter`: only the present fields are written (same reason as `pluginSettingsPatchSchema`). */
@@ -417,7 +417,10 @@ export interface MatterStatus {
   fabrics: { index: number; label: string; vendorId: number }[]
   /** Only while no controller holds the bridge: the codes stop being useful once it is paired. */
   pairing?: { manualCode: string; qrSvg: string }
-  /** Every device the bridge can translate, published or not. */
+  /**
+   * Everything the bridge can publish, ticked or not. `id` is a device id, or `<deviceId>#climate`
+   * for a car's cabin climate, published apart from its lock.
+   */
   candidates: { id: string; name: string; pluginId: string; type: MatterDeviceType; listed: boolean; published: boolean }[]
   /** Listed ids it does not publish: absent from the registry, or of a kind it cannot translate. */
   skipped: { id: string; reason: 'unknown' | 'unsupported' }[]

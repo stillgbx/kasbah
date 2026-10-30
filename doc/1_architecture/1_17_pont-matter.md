@@ -42,6 +42,7 @@ Module pur, sans import de matter.js (la bibliothèque ne se charge que si le po
 | `vehicle` avec `lock` | Door Lock | `LockState` 1 verrouillé, 2 déverrouillé, `null` si inconnu |
 | `fan` avec `on_off` | Fan (+ OnOff) | ajouté le 2026-10-30, voir la mise à jour (5) |
 | `cover` de classe `garage` / `gate`, réglage `closures` | Closure (Matter 1.5) | à l'essai, voir la mise à jour (6) |
+| `vehicle` avec `climate_precondition`, clé `<id>#climate` | Thermostat | voir la mise à jour (8) |
 
 - **Volets** : Matter compte la position en centièmes de pour cent **fermé** (0 = ouvert) ; Kasbah, 0 =
   fermé, 100 = ouvert. Un volet sans `position` (radio à sens unique) n'a pas de position connue
@@ -262,6 +263,34 @@ pont, restés des lampes) passent **hors connexion**, alors que Kasbah les voit 
 **retrait puis une republication** (interrupteur de l'appareil éteint puis rallumé dans la carte) : Google
 garde un état périmé tant que l'endpoint n'est pas recréé. Conclusion : à laisser éteint avec Google ;
 le texte de l'interrupteur et `docs/matter.md` le disent. Apple et Alexa non essayés.
+
+### Mise à jour 2026-10-30 (8) — la clim des voitures en thermostat
+
+Une voiture avec `climate_precondition` a une **facette** de plus : sa clim, publiée comme un second
+appareil Matter (Thermostat) à côté de sa serrure, et cochée à part. La liste de la maison porte alors
+`<deviceId>#climate` (`CLIMATE_FACET`) ; `matterFacetsOf` donne, pour un appareil, toutes ses
+publications possibles (clé, type), et le pont garde la clé de chacune (`Published.key`), plusieurs
+publications pouvant venir du même appareil (l'état de la voiture alimente les deux). Endpoint distinct
+(`<id>__climate`), `uniqueId` tiré de la clé, nom « <voiture> (clim) ».
+
+- `ThermostatServer.with('Heating', 'Cooling')`, **sans** `AutoMode` : en Auto les assistants montrent une
+  plage de deux consignes, une voiture n'en garde qu'une. Limites 15-28 °C (celles de Tesla).
+  `controlSequenceOfOperation` CoolingAndHeating. Contrairement au ventilateur et aux fermetures, ce
+  serveur-là de matter.js a sa propre logique (validation des consignes).
+- Traduction (`cabinCommandOf`) : `systemMode` Off → `vehicle.climate_stop` ; Heat / Cool →
+  `vehicle.climate_start` avec la consigne connue (réveille la voiture, c'est le but ; `LOW_BATTERY` sous
+  20 % chez Tesla) ; une consigne → `vehicle.climate_set` (ne réveille pas), arrondie au demi-degré.
+- **Le mode affiché** : une voiture vise une consigne, elle ne « chauffe » ni ne « refroidit ». Le mode
+  choisi par l'assistant est **retenu** (`Published.cabinMode`) tant que la clim tourne ; allumée
+  ailleurs, il est déduit (consigne sous la température intérieure → Cool, sinon Heat). Sans cela,
+  l'essai montrait « Froid » juste après avoir choisi « Chaud » (consigne 20 °C, cabine à 21,5 °C).
+- La **Tesla réelle n'a pas la capacité `lock`** (le plugin ne fait pas encore le verrouillage, cf.
+  `../3_plugins/3_8_tesla.md`) : elle n'apparaissait donc pas dans la carte avant cette facette. Avec
+  elle, Tesla et Renault apparaissent par leur clim.
+
+Vérifié au contrôleur matter.js sur la Tesla simulée : Chaud → clim allumée, consigne 23,5 °C →
+`climate_set`, Arrêt → clim coupée, mode Chaud retenu ; la serrure publiée à côté inchangée. Non joué :
+Google Home et la vraie voiture.
 
 ## Restant
 

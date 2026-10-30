@@ -355,7 +355,7 @@ describe('Matter bridge setting (GET/PATCH /api/matter)', () => {
       const before = (await kasbah.app.inject({ method: 'GET', url: '/api/matter' })).json()
       expect(before).toMatchObject({ enabled: false, running: false, commissioned: false, skipped: [] })
       const types = new Set(before.candidates.map((c: { type: string }) => c.type))
-      expect(types).toEqual(new Set(['dimmable_light', 'on_off_light', 'window_covering', 'door_lock', 'fan']))
+      expect(types).toEqual(new Set(['dimmable_light', 'on_off_light', 'window_covering', 'door_lock', 'fan', 'thermostat']))
       expect(before.candidates.some((c: { listed: boolean }) => c.listed)).toBe(false)
 
       const r = await kasbah.app.inject({ method: 'PATCH', url: '/api/matter', payload: { devices: ['mock:cover-gate'] } })

@@ -130,7 +130,8 @@ Optional. The devices published to voice assistants (Alexa, Google Home, Apple H
 - `enabled` (default `false`): the bridge runs on the local network.
 - `closures` (default `false`): garage doors and gates (covers of class `garage` or `gate`) published as
   Matter 1.5 closures rather than blinds.
-- `devices` (default `[]`): device ids, as in `GET /api/devices`. Only lights, covers, fans and vehicles with a lock can be published; any other id is listed as skipped in `GET /api/matter`.
+- `devices` (default `[]`): device ids, as in `GET /api/devices`; a car's cabin climate is listed
+  apart from its lock, as `<device id>#climate`. Only lights, covers, fans and vehicles with a lock can be published; any other id is listed as skipped in `GET /api/matter`.
 
 The pairing keys are not in the house: they stay in the server's state folder (`apps/server/.state/matter/`).
 
