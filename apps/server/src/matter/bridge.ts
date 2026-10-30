@@ -10,7 +10,7 @@ import type { Bus } from '../core/bus'
 import { stateFile } from '../core/paths'
 import type { DeviceRegistry } from '../core/registry'
 import type { WsHub } from '../ws/hub'
-import { coverCommandForLift, fanCommandOf, fanSpeedMax, matterKindOf, matterStateOf, brightnessFromLevel, type MatterKind } from './mapping'
+import { closureCommandOf, coverCommandForLift, fanCommandOf, fanSpeedMax, matterKindOf, matterStateOf, brightnessFromLevel, type MatterKind } from './mapping'
 
 // Matter bridge: the devices the house opts in are published on the LAN as bridged endpoints of
 // one Matter node, for Alexa, Google Home or Apple Home. It creates no device of its own — it reads
@@ -64,6 +64,9 @@ async function loadMatter() {
     ...(await import('@matter/main/behaviors/fan-control')),
     ...(await import('@matter/main/behaviors/on-off')),
     ...(await import('@matter/main/clusters/fan-control')),
+    ...(await import('@matter/main/devices/closure')),
+    ...(await import('@matter/main/behaviors/closure-control')),
+    ...(await import('@matter/main/behaviors/descriptor')),
     ...(await import('@matter/main/clusters/door-lock')),
     ...(await import('@matter/main/clusters/window-covering')),
     FabricManager: (await import('@matter/main/protocol')).FabricManager,
@@ -72,14 +75,23 @@ async function loadMatter() {
 
 // Matter strings: 32 characters at most for labels and unique ids.
 const label = (s: string): string => (s.length <= 32 ? s : `${s.slice(0, 31)}…`)
-// `.` is refused in an endpoint id; the id also keys matter.js storage, so it must stay stable.
-const endpointIdOf = (id: DeviceId): string => id.replaceAll('.', '_')
+// `.` is refused in an endpoint id; the id also keys matter.js storage, so it must stay stable. A
+// closure gets its own id: switching a garage door between blind and closure must not reuse the
+// stored state of the other device type.
+const endpointIdOf = (id: DeviceId, kind: MatterKind): string => id.replaceAll('.', '_') + (kind === 'closure' ? '__closure' : '')
 
 export class MatterBridge {
   private server: ServerNode | undefined
   private aggregator: Endpoint | undefined
   private matter: MatterModules | undefined
   private readonly published = new Map<string, Published>()   // by endpoint id
+  private publishedOf(id: DeviceId): Published | undefined {
+    for (const p of this.published.values()) if (p.id === id) return p
+    return undefined
+  }
+  private kindOf(entry: DeviceEntry): MatterKind | null {
+    return matterKindOf(entry.descriptor, { closures: !!this.opts.settings()?.closures })
+  }
   private readonly skipped = new Map<string, 'unknown' | 'unsupported'>()
   private readonly unsubscribe: (() => void)[] = []
   private exposed: readonly string[] = []
@@ -106,7 +118,9 @@ export class MatterBridge {
       if (!this.server) return this.startNow()
       this.exposed = settings.devices
       for (const [endpointId, p] of [...this.published]) {
-        if (this.exposed.includes(p.id)) continue
+        // still listed and still the same Matter type (the closures setting can change it): kept
+        const entry = this.opts.registry.get(p.id)
+        if (this.exposed.includes(p.id) && (!entry || this.kindOf(entry) === p.kind)) continue
         this.published.delete(endpointId)
         await p.endpoint?.delete().catch((err: unknown) => this.opts.logger.warn({ err, deviceId: p.id }, 'matter bridge could not withdraw a device'))
       }
@@ -192,17 +206,19 @@ export class MatterBridge {
     const commissioned = online && !!server?.state.commissioning.commissioned
     const codes = online && !commissioned ? server?.state.commissioning.pairingCodes : undefined
     const candidates: MatterStatus['candidates'] = []
-    for (const { descriptor } of this.opts.registry.list()) {
-      const type = matterKindOf(descriptor)
+    for (const entry of this.opts.registry.list()) {
+      const { descriptor } = entry
+      const type = this.kindOf(entry)
       if (!type) continue
       candidates.push({
         id: descriptor.id, name: descriptor.name, pluginId: descriptor.pluginId, type,
         listed: listed.includes(descriptor.id),
-        published: !!this.published.get(endpointIdOf(descriptor.id))?.endpoint,
+        published: !!this.publishedOf(descriptor.id)?.endpoint,
       })
     }
     return {
       enabled: !!settings?.enabled,
+      closures: !!settings?.closures,
       running: online,
       commissioned,
       fabrics: online && server
@@ -218,16 +234,16 @@ export class MatterBridge {
   private async sync(): Promise<void> {
     if (!this.server) return
     for (const id of this.exposed) {
-      if (this.published.has(endpointIdOf(id))) continue
+      if (this.publishedOf(id)) continue
       const entry = this.opts.registry.get(id)
       if (!entry) { this.skipped.set(id, 'unknown'); continue }
-      const kind = matterKindOf(entry.descriptor)
+      const kind = this.kindOf(entry)
       if (!kind) { this.skipped.set(id, 'unsupported'); continue }
       this.skipped.delete(id)
       try {
         await this.publish(entry, kind)
       } catch (err) {
-        this.published.delete(endpointIdOf(id))
+        this.published.delete(endpointIdOf(id, kind))
         this.opts.logger.warn({ err, deviceId: id }, 'matter bridge could not publish a device')
       }
     }
@@ -239,7 +255,7 @@ export class MatterBridge {
     if (!m || !aggregator) return
     const { descriptor, state } = entry
     const id = descriptor.id
-    const endpointId = endpointIdOf(id)
+    const endpointId = endpointIdOf(id, kind)
     const speedMax = kind === 'fan' ? fanSpeedMax(descriptor) : 0
     const published: Published = { id, kind, name: descriptor.name, speedMax }
     this.published.set(endpointId, published)
@@ -296,6 +312,26 @@ export class MatterBridge {
             ...({ wrongCodeEntryLimit: 5, userCodeTemporaryDisableTime: 10 } as object),
           },
         })
+        break
+      }
+      case 'closure': {
+        // Matter 1.5: the garage door (or gate) as such. Open, close and stop only: Kasbah's
+        // garage doors have no pedestrian or ventilation position to offer.
+        class KasbahClosure extends m.ClosureControlServer.with('Positioning') {
+          override moveTo({ position }: { position?: number }) {
+            const command = closureCommandOf(position)
+            if (command) send(this.endpoint.id, command)
+          }
+          override stop() { send(this.endpoint.id, { type: 'cover.stop' }) }
+        }
+        const tag = descriptor.meta?.cover?.deviceClass === 'gate' ? m.ClosureTag.Gate : m.ClosureTag.GarageDoor
+        // the tag says which closure it is (garage door or gate): the Descriptor only carries it
+        // with its TagList feature on
+        endpoint = new m.Endpoint(m.ClosureDevice.with(m.BridgedDeviceBasicInformationServer, KasbahClosure, m.DescriptorServer.with('TagList')), {
+          id: endpointId, bridgedDeviceBasicInformation: bridged,
+          descriptor: { tagList: [tag] },
+          closureControl: { currentErrorList: [], ...initial.closureControl },
+        } as never)
         break
       }
       case 'fan': {
@@ -358,7 +394,7 @@ export class MatterBridge {
   }
 
   private async push(id: DeviceId, state: DeviceState): Promise<void> {
-    const p = this.published.get(endpointIdOf(id))
+    const p = this.publishedOf(id)
     if (!p?.endpoint) return
     try {
       await p.endpoint.set(matterStateOf(p.kind, state, p.speedMax) as never)
@@ -368,7 +404,7 @@ export class MatterBridge {
   }
 
   private async setReachable(id: DeviceId, reachable: boolean): Promise<void> {
-    const p = this.published.get(endpointIdOf(id))
+    const p = this.publishedOf(id)
     if (!p?.endpoint) return
     try {
       await p.endpoint.set({ bridgedDeviceBasicInformation: { reachable } } as never)

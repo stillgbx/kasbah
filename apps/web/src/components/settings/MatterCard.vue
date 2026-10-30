@@ -121,6 +121,15 @@ function toggleGroup(pluginId: string) {
       <v-switch :model-value="status?.enabled ?? false" :disabled="!status || busy" hide-details density="compact"
                 @update:model-value="(v: boolean | null) => save({ enabled: v === true })" />
     </div>
+    <div class="mc__row">
+      <div class="min0">
+        <div class="mc__name">{{ $t('matter.closures') }}</div>
+        <div class="muted small">{{ $t('matter.closuresHint') }}</div>
+      </div>
+      <v-switch :model-value="status?.closures ?? false" :disabled="!status || busy" hide-details density="compact"
+                :aria-label="$t('matter.closures')"
+                @update:model-value="(v: boolean | null) => save({ closures: v === true })" />
+    </div>
 
     <div class="mc__pair" :data-state="state">
       <div class="mc__qr">

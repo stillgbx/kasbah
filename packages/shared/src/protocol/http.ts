@@ -396,18 +396,21 @@ export function releaseNotesLang(lang: string | undefined): string {
 // --- Matter bridge (`/api/matter`) ---
 
 /** What a Kasbah device becomes for a Matter controller (Alexa, Google Home, Apple Home). */
-export const MATTER_DEVICE_TYPES = ['on_off_light', 'dimmable_light', 'window_covering', 'door_lock', 'fan'] as const
+export const MATTER_DEVICE_TYPES = ['on_off_light', 'dimmable_light', 'window_covering', 'closure', 'door_lock', 'fan'] as const
 export type MatterDeviceType = (typeof MATTER_DEVICE_TYPES)[number]
 
 /** `PATCH /api/matter`: only the present fields are written (same reason as `pluginSettingsPatchSchema`). */
 export const matterSettingsPatchSchema = z.object({
   enabled: z.boolean().optional(),
   devices: z.array(z.string()).optional(),
+  closures: z.boolean().optional(),
 })
 export type MatterSettingsPatch = z.infer<typeof matterSettingsPatchSchema>
 
 export interface MatterStatus {
   enabled: boolean
+  /** Garage doors and gates published as Matter 1.5 closures rather than blinds. */
+  closures: boolean
   running: boolean
   commissioned: boolean
   /** The assistants that paired the bridge (one Matter fabric each); `vendorId` names the maker. */

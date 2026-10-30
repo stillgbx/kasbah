@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { defaultState, type DeviceDescriptor, type DeviceState } from '@kasbah/shared'
-import { brightnessFromLevel, coverCommandForLift, fanCommandOf, fanSpeedMax, levelFromBrightness, liftFromPosition, matterKindOf, matterStateOf, positionFromLift } from './mapping'
+import { brightnessFromLevel, closureCommandOf, coverCommandForLift, fanCommandOf, fanSpeedMax, levelFromBrightness, liftFromPosition, matterKindOf, matterStateOf, positionFromLift } from './mapping'
 
 const device = (kind: DeviceDescriptor['kind'], capabilities: string[]): DeviceDescriptor =>
   ({ id: `mock:${kind}1`, pluginId: 'mock', externalId: `${kind}1`, kind, name: 'Device', capabilities }) as unknown as DeviceDescriptor
@@ -17,6 +17,16 @@ describe('matterKindOf', () => {
   it('publishes a cover that opens and closes, even without position', () => {
     expect(matterKindOf(device('cover', ['open_close', 'stop', 'position']))).toBe('window_covering')
     expect(matterKindOf(device('cover', ['open_close']))).toBe('window_covering')
+  })
+
+  it('publishes garage doors and gates as closures only when the house asks for it', () => {
+    const garage = { ...device('cover', ['open_close', 'stop', 'position']), meta: { cover: { deviceClass: 'garage' } } } as DeviceDescriptor
+    const gate = { ...device('cover', ['open_close']), meta: { cover: { deviceClass: 'gate' } } } as DeviceDescriptor
+    const shutter = { ...device('cover', ['open_close', 'position']), meta: { cover: { deviceClass: 'shutter' } } } as DeviceDescriptor
+    expect(matterKindOf(garage)).toBe('window_covering')
+    expect(matterKindOf(garage, { closures: true })).toBe('closure')
+    expect(matterKindOf(gate, { closures: true })).toBe('closure')
+    expect(matterKindOf(shutter, { closures: true })).toBe('window_covering')
   })
 
   it('publishes a vehicle as a lock only when it has the lock', () => {
@@ -110,5 +120,25 @@ describe('fan', () => {
     expect(matterStateOf('fan', state('fan', { on: false, speed: 3 }), 6).fanControl)
       .toEqual({ fanMode: 0, percentSetting: 0, percentCurrent: 0, speedSetting: 0, speedCurrent: 0 })
     expect(matterStateOf('fan', state('fan', { on: true }), 0).fanControl).toEqual({ fanMode: 4, percentSetting: 100, percentCurrent: 100 })
+  })
+})
+
+describe('closure', () => {
+  it('opens and closes, and ignores the target positions it does not offer', () => {
+    expect(closureCommandOf(1)).toEqual({ type: 'cover.open' })
+    expect(closureCommandOf(0)).toEqual({ type: 'cover.close' })
+    expect(closureCommandOf(2)).toBeNull()
+    expect(closureCommandOf(undefined)).toBeNull()
+  })
+
+  it('says fully closed, fully open or partly open, moving or not, and null when unknown', () => {
+    expect(matterStateOf('closure', state('cover', { position: 0, motion: 'stopped' }))).toEqual({
+      closureControl: { mainState: 0, overallCurrentState: { position: 0, secureState: true }, overallTargetState: null },
+    })
+    expect(matterStateOf('closure', state('cover', { position: 40, motion: 'opening' })).closureControl)
+      .toEqual({ mainState: 1, overallCurrentState: { position: 2, secureState: false }, overallTargetState: { position: 1 } })
+    expect(matterStateOf('closure', state('cover', { position: 100, motion: 'stopped' })).closureControl?.overallCurrentState).toEqual({ position: 1, secureState: false })
+    expect(matterStateOf('closure', state('cover', { motion: 'closing' })).closureControl)
+      .toEqual({ mainState: 1, overallCurrentState: null, overallTargetState: { position: 0 } })
   })
 })

@@ -22,8 +22,14 @@ ones the plugins already provide.
 | Vehicle with a lock | Door lock | lock and unlock; assistants ask for a voice PIN to unlock |
 | Fan with on/off | Fan | its speeds (low, medium, high and a percentage are derived from them) and its direction when it can reverse; timer and beep stay in Kasbah |
 
-Assistants do not support the Matter garage door type yet, so a **garage door shows up as a blind**:
-"open the garage" works **without a voice PIN**, unlike a lock. Think about it before publishing one.
+By default a **garage door or a gate shows up as a blind**, the only form every assistant knows today:
+"open the garage" then works **without a voice PIN**, unlike a lock. Think about it before publishing one.
+
+**Garage doors and gates as doors** (switch in the card, off by default) publishes them instead as
+Matter 1.5 **closures**, tagged *garage door* or *gate*: open, close and stop. An assistant that knows
+closures shows a garage door and can ask for a code to open it. Matter 1.5 is recent and no assistant
+has confirmed it supports closures yet: if yours shows them as unsupported, turn the switch off and
+they come back as blinds, with no restart. Tested with a Matter test controller only.
 
 Publish **device by device**, and only what the assistants do not already know: a Hue light or a Somfy
 shutter already linked to Google Home through the vendor's own integration would show up twice.

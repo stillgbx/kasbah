@@ -267,7 +267,7 @@ Chaque appareil choisit ses catégories (Véhicules, Robots, Animaux, Météo, P
 
 Le serveur peut servir de **pont Matter** sur le réseau local : les appareils choisis apparaissent dans **Alexa**, **Google Home** ou **Maison** (Apple), sans skill ni cloud entre les deux. On l'allume dans **Réglages → Assistants vocaux (Matter)**, on scanne le QR code (ou on saisit le code) depuis l'application de l'assistant, puis on coche les appareils à publier, plugin par plugin ; les changements s'appliquent tout de suite. La procédure pas à pas pour chaque assistant, déclaration dans la Google Home Developer Console comprise : [docs/matter.md](docs/matter.md) (en anglais).
 
-- Publiés aujourd'hui : lampes (marche/arrêt, luminosité), ouvrants (volets, portails, portes de garage, vus comme des stores), ventilateurs (marche/arrêt, vitesse, sens) et serrures des véhicules.
+- Publiés aujourd'hui : lampes (marche/arrêt, luminosité), ouvrants (volets, portails, portes de garage, vus comme des stores, ou comme des portes en Matter 1.5 à titre d'essai), ventilateurs (marche/arrêt, vitesse, sens) et serrures des véhicules.
 - Ne publier que ce que les assistants ne connaissent pas déjà : une lampe Hue ou un volet Somfy déjà reliés chez eux apparaîtraient deux fois.
 - Pour retirer : l'interrupteur d'un appareil, **Tout retirer** pour un plugin, l'interrupteur du pont, ou **Dissocier** à côté d'un assistant, qui perd alors tous les appareils (le code d'appairage revient quand il n'en reste plus aucun).
 - Le pont se règle depuis le réseau local seulement : son code d'appairage donne la main sur ce qu'il publie, la carte et son API refusent donc l'adresse publique.

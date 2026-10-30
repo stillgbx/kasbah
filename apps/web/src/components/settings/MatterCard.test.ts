@@ -10,7 +10,7 @@ import MatterCard from './MatterCard.vue'
 // plugin, and each switch writing the WHOLE list of published devices.
 
 const base: MatterStatus = {
-  enabled: true, running: true, commissioned: false, fabrics: [],
+  enabled: true, closures: false, running: true, commissioned: false, fabrics: [],
   pairing: { manualCode: '06252306146', qrSvg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>' },
   candidates: [
     { id: 'mock:light-living', name: 'Plafonnier salon', pluginId: 'mock', type: 'dimmable_light', listed: true, published: true },

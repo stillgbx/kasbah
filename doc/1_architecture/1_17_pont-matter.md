@@ -41,6 +41,7 @@ Module pur, sans import de matter.js (la bibliothèque ne se charge que si le po
 | `cover` avec `open_close` ou `position` | Window Covering | échelle **inversée** (voir plus bas) |
 | `vehicle` avec `lock` | Door Lock | `LockState` 1 verrouillé, 2 déverrouillé, `null` si inconnu |
 | `fan` avec `on_off` | Fan (+ OnOff) | ajouté le 2026-10-30, voir la mise à jour (5) |
+| `cover` de classe `garage` / `gate`, réglage `closures` | Closure (Matter 1.5) | à l'essai, voir la mise à jour (6) |
 
 - **Volets** : Matter compte la position en centièmes de pour cent **fermé** (0 = ouvert) ; Kasbah, 0 =
   fermé, 100 = ouvert. Un volet sans `position` (radio à sens unique) n'a pas de position connue
@@ -222,6 +223,34 @@ Vérifié au contrôleur matter.js sur le ventilateur simulé (`mock:fan-chambre
 le Tuya) : mode fort → vitesse 6 et 100 % ; 50 % → vitesse 3, mode moyen ; vitesse 5 → 83 %, mode
 fort ; sens inversé ; arrêt → 0 %. Non joué : ce que Google, Apple ou Alexa affichent des 6 vitesses
 et du sens.
+
+### Mise à jour 2026-10-30 (6) — portes de garage et portails en fermetures Matter 1.5 (à l'essai)
+
+Question de l'utilisateur : la porte publiée comme store, est-ce voulu pour éviter le code vocal ?
+Non : c'était la seule forme connue des assistants. Matter 1.5 (novembre 2025) ajoute les
+**fermetures** (Closure, 0x0230) et matter.js 0.17.9 les porte, mais aucun assistant n'a annoncé les
+prendre en charge. D'où un **réglage d'essai**, `matter.closures` (défaut `false`, interrupteur
+« Portes de garage et portails comme des portes » de la carte) : une `cover` de classe `garage` ou `gate`
+devient alors une Closure, sinon reste un Window Covering.
+
+- `ClosureControlServer.with('Positioning')` surchargé : `moveTo` → `cover.open` / `cover.close`
+  (`closureCommandOf`, les autres positions cibles sont ignorées), `stop` → `cover.stop`. Comme pour le
+  ventilateur, le serveur de matter.js n'a **aucune logique** : l'état vient de Kasbah (`mainState`
+  Moving / Stopped selon `motion`, `overallCurrentState` FullyClosed / FullyOpened / PartiallyOpened,
+  `overallTargetState` selon le sens).
+- **Piège 1** : `secureState` est **obligatoire** dans `overallCurrentState` ; sans lui, la lecture
+  complète d'un contrôleur échoue (`InvalidAction`) et **l'appairage entier** casse. Posé à vrai quand la
+  porte est entièrement fermée.
+- **Piège 2** : l'étiquette qui dit *porte de garage* ou *portail* (`ClosureTag` GarageDoor / Gate,
+  espace de noms 68) ne part que si le Descriptor a sa fonctionnalité `TagList`
+  (`DescriptorServer.with('TagList')`) ; sans elle, `descriptor.tagList` est ignoré en silence.
+- **Bascule à chaud** : une fermeture a son propre id d'endpoint (`<id>__closure`) pour ne pas reprendre
+  l'état stocké d'un autre type ; `apply()` retire et republie un appareil dont le type Matter a changé.
+  Les recherches par appareil passent par `publishedOf(id)`.
+
+Vérifié au contrôleur matter.js sur le portail simulé (`mock:cover-gate`, classe `gate`) : étiquette Gate
+reçue, ouvrir, arrêter en course (position partielle), fermer, puis bascule du réglage → le portail revient
+en store sans redémarrage. Non joué : Google, Apple, Alexa (aucune prise en charge des fermetures annoncée).
 
 ## Restant
 

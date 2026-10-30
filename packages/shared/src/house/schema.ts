@@ -655,6 +655,11 @@ export const matterSettingsSchema = z.object({
   enabled: z.boolean().default(false),
   /** Device ids (`<pluginId>:<externalId>`) to publish. */
   devices: z.array(z.string()).default([]),
+  /**
+   * Garage doors and gates as Matter 1.5 closures (a garage door to the assistant, opened with a
+   * voice PIN) rather than as blinds. Off by default: not every assistant knows closures yet.
+   */
+  closures: z.boolean().default(false),
 })
 export type MatterSettings = z.infer<typeof matterSettingsSchema>
 

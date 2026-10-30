@@ -6,15 +6,19 @@ import type { Command, DeviceDescriptor, DeviceState, MatterDeviceType } from '@
 export type MatterKind = MatterDeviceType
 
 /** What a Kasbah device becomes on the Matter side, or null when the bridge cannot publish it. */
-export function matterKindOf(d: DeviceDescriptor): MatterKind | null {
+export function matterKindOf(d: DeviceDescriptor, opts: { closures?: boolean } = {}): MatterKind | null {
   const caps = d.capabilities as readonly string[]
   switch (d.kind) {
     case 'light':
       if (!caps.includes('on_off')) return null
       return caps.includes('brightness') ? 'dimmable_light' : 'on_off_light'
-    case 'cover':
-      // a garage door is a cover too: no voice assistant knows the Matter garage door yet
-      return caps.includes('position') || caps.includes('open_close') ? 'window_covering' : null
+    case 'cover': {
+      if (!caps.includes('position') && !caps.includes('open_close')) return null
+      // garage doors and gates: a Matter 1.5 closure when the house asks for it, otherwise a blind
+      // (the only form every assistant knows today)
+      const cls = d.meta?.cover?.deviceClass
+      return opts.closures && (cls === 'garage' || cls === 'gate') ? 'closure' : 'window_covering'
+    }
     case 'vehicle':
       return caps.includes('lock') ? 'door_lock' : null
     case 'fan':
@@ -94,6 +98,20 @@ export function fanCommandOf(
   }
 }
 
+// ClosureControl values (Matter 1.5), same reason as LOCK_STATE.
+export const CLOSURE = {
+  main: { stopped: 0, moving: 1 },
+  current: { fullyClosed: 0, fullyOpened: 1, partiallyOpened: 2 },
+  target: { moveToFullyClosed: 0, moveToFullyOpen: 1 },
+} as const
+
+/** The Kasbah command for a closure's `moveTo`: open or close, the other target positions are not offered. */
+export function closureCommandOf(position: number | undefined): Command | null {
+  if (position === CLOSURE.target.moveToFullyOpen) return { type: 'cover.open' }
+  if (position === CLOSURE.target.moveToFullyClosed) return { type: 'cover.close' }
+  return null
+}
+
 /** Attribute values for `endpoint.set()`, by cluster. Absent Kasbah values are not written. */
 export function matterStateOf(kind: MatterKind, state: DeviceState, speedMax = 0): Record<string, Record<string, unknown>> {
   switch (kind) {
@@ -109,6 +127,23 @@ export function matterStateOf(kind: MatterKind, state: DeviceState, speedMax = 0
       // unknown position (one-way radio): null, the Matter way to say it
       const lift = state.position === undefined ? null : liftFromPosition(state.position)
       return { windowCovering: { currentPositionLiftPercent100ths: lift, targetPositionLiftPercent100ths: lift } }
+    }
+    case 'closure': {
+      if (state.kind !== 'cover') return {}
+      const position = state.position === undefined ? null
+        : state.position <= 0 ? CLOSURE.current.fullyClosed
+          : state.position >= 100 ? CLOSURE.current.fullyOpened : CLOSURE.current.partiallyOpened
+      const target = state.motion === 'opening' ? CLOSURE.target.moveToFullyOpen
+        : state.motion === 'closing' ? CLOSURE.target.moveToFullyClosed : null
+      return {
+        closureControl: {
+          mainState: state.motion === 'stopped' ? CLOSURE.main.stopped : CLOSURE.main.moving,
+          // unknown position (one-way radio): null, as for a blind. `secureState` is mandatory in
+          // the struct (matter.js refuses the read without it): secure = fully closed.
+          overallCurrentState: position === null ? null : { position, secureState: position === CLOSURE.current.fullyClosed },
+          overallTargetState: target === null ? null : { position: target },
+        },
+      }
     }
     case 'fan': {
       if (state.kind !== 'fan') return {}
