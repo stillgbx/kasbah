@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useMediaQuery, useWindowSize } from '@vueuse/core'
 import { computed, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput, DeviceEntry, StateFor } from '@kasbah/shared'
@@ -54,8 +55,27 @@ const props = defineProps<{
 const emit = defineEmits<{
   command: [cmd: CommandInput]; seek: [positionS: number]; transfer: []; cancelTransfer: []
   repeat: [mode: MusicRepeat]; toggleQueue: []
+  /** Phone: open the "Listening" sheet (the list of players), which has no room on the page. */
+  sessions: []
 }>()
 const { t } = useI18n()
+
+// ---- phone in portrait ---------------------------------------------------------------------------
+// Compact, the bar keeps the track, ALL the transport buttons and the position; the volume, the
+// player and "Transfer" wait in the expanded player. A tap on the cover art or the title expands
+// it over the whole page (above the bottom bar), a tap on the chevron brings it back.
+const phone = useMediaQuery('(max-width: 599px)')
+const expanded = ref(false)
+watch(phone, (p) => { if (!p) expanded.value = false })
+const full = computed(() => phone.value && expanded.value)
+const { width: winW, height: winH } = useWindowSize()
+/** The expanded player's cover: the width of the page, without eating more than a good third of the height. */
+const coverSize = computed(() => Math.round(Math.max(120, Math.min(winW.value - 32, winH.value * 0.38))))
+/** The queue opens in the central zone, which the expanded player covers: it steps aside. */
+function toggleQueue() {
+  expanded.value = false
+  emit('toggleQueue')
+}
 
 const state = computed<StateFor<'media_player'> | undefined>(() =>
   props.entry?.state.kind === 'media_player' ? props.entry.state : undefined)
@@ -241,21 +261,38 @@ const explicit = computed(() => (props.pending
 </script>
 
 <template>
-  <div class="bar" :data-empty="entry ? '0' : '1'">
+  <div class="bar" :data-empty="entry ? '0' : '1'" :data-full="full ? '1' : '0'">
+    <!-- phone, expanded player: the chevron that brings it back, then the large cover art -->
+    <template v-if="full">
+      <button type="button" class="key key--small bar__collapse" :title="$t('music.playerCollapse')" :aria-label="$t('music.playerCollapse')" @click="expanded = false">
+        <StrokeIcon name="chevronDown" :size="20" />
+      </button>
+      <ArtThumb :key="art ?? 'none'" :src="art" :size="coverSize" icon="music" class="bar__cover" />
+    </template>
     <!-- the track -->
     <div class="bar__track">
-      <ArtThumb :key="art ?? 'none'" :src="art" :size="56" icon="music" class="bar__art" />
-      <div class="bar__titles">
-        <div class="bar__line1">
-          <ExplicitBadge v-if="explicit" />
-          <MarqueeText class="bar__title" :text="title" />
+      <!-- phone, compact: cover art and title expand the player -->
+      <component :is="phone && !full ? 'button' : 'div'" class="bar__open" :type="phone && !full ? 'button' : undefined"
+                 :aria-label="phone && !full ? $t('music.playerExpand') : undefined" @click="phone && !full && (expanded = true)">
+        <ArtThumb v-if="!full" :key="art ?? 'none'" :src="art" :size="phone ? 44 : 56" icon="music" class="bar__art" />
+        <div class="bar__titles">
+          <div class="bar__line1">
+            <ExplicitBadge v-if="explicit" />
+            <MarqueeText class="bar__title" :text="title" />
+          </div>
+          <MarqueeText class="bar__sub muted" :text="subtitle" />
         </div>
-        <MarqueeText class="bar__sub muted" :text="subtitle" />
-      </div>
+      </component>
+      <!-- phone, compact: the player's name, which opens the "Listening" sheet -->
+      <button v-if="phone && !full" type="button" class="bar__chip" :title="$t('music.choosePlayer')" :aria-label="`${$t('music.choosePlayer')} · ${name}`" @click="emit('sessions')">
+        <StrokeIcon :name="!entry ? 'speaker' : isLocalPlayer(entry.descriptor.id) ? 'tablet' : deviceIcon(entry.descriptor, entry.state)" :size="16" />
+        <MarqueeText class="bar__chip-name" :text="name || NBSP" />
+        <StrokeIcon name="chevronDown" :size="14" />
+      </button>
       <!-- at the end of the track, not on the right: volume, player and transfer already fill that column at 1280 px -->
       <button type="button" class="key key--small key--queue" :data-on="queueOpen ? '1' : '0'" :disabled="!entry"
               :title="queueOpen ? $t('music.queueHide') : $t('music.queueShow')" :aria-label="queueOpen ? $t('music.queueHide') : $t('music.queueShow')"
-              :aria-pressed="queueOpen" @click="emit('toggleQueue')">
+              :aria-pressed="queueOpen" @click="toggleQueue">
         <StrokeIcon name="list" :size="16" />
         <!-- set on the corner: it widens nothing when it appears -->
         <span class="key__badge" :class="{ 'bar--hidden': !waiting }" :title="$t('music.queueWaiting', { n: waiting }, waiting)">{{ waiting > 99 ? '99+' : waiting }}</span>
@@ -339,7 +376,9 @@ const explicit = computed(() => (props.pending
         </button>
         <span class="pct muted">{{ has('volume') ? Math.round(volume) : '' }}</span>
       </div>
-      <div class="bar__device">
+      <!-- phone (expanded player): the player opens the "Listening" sheet -->
+      <component :is="phone ? 'button' : 'div'" class="bar__device" :type="phone ? 'button' : undefined"
+                 :title="phone ? $t('music.choosePlayer') : undefined" @click="phone && emit('sessions')">
         <span class="icon-square" :data-on="loaded ? '1' : '0'">
           <!-- this browser: a screen, not a speaker -->
           <StrokeIcon :name="!entry ? 'speaker' : isLocalPlayer(entry.descriptor.id) ? 'tablet' : deviceIcon(entry.descriptor, entry.state)" :size="18" />
@@ -349,7 +388,8 @@ const explicit = computed(() => (props.pending
           <!-- slot kept even without a stream of ours: the column does not move when playback starts -->
           <span class="bar__quality muted" :title="qualityHint">{{ qualityLine }}</span>
         </div>
-      </div>
+        <StrokeIcon v-if="phone" name="chevronDown" :size="14" class="muted" />
+      </component>
       <!-- Transfer becomes Cancel while choosing the target: a single button, a single place -->
       <button v-if="transferMode" type="button" class="pill pill--transfer" data-on="1" :disabled="transferBusy" @click="emit('cancelTransfer')">
         <StrokeIcon name="close" :size="16" />
@@ -387,6 +427,11 @@ const explicit = computed(() => (props.pending
   -webkit-backdrop-filter: blur(14px);
 }
 .bar__track { display: flex; align-items: center; gap: 14px; min-width: 0; }
+/* cover art + titles: a button on a phone (it expands the player), a plain block otherwise */
+.bar__open {
+  display: flex; align-items: center; gap: 14px; flex: 1 1 auto; min-width: 0;
+  padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left;
+}
 .bar__art { border-radius: 8px; overflow: hidden; }
 .bar__titles { min-width: 0; flex: 1 1 auto; display: grid; gap: 2px; }
 .bar__line1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -468,22 +513,49 @@ const explicit = computed(() => (props.pending
 .pill--transfer { height: 36px; width: 124px; padding: 0 12px; font-size: 13px; flex: 0 0 auto; justify-content: center; }
 .pill--transfer span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar[data-empty='1'] .bar__title { color: var(--muted); }
-/* Phone in portrait: the three columns stack — the track, the buttons, the position, then the
-   volume with the player and "Transfer". Fixed heights: nothing moves from one track to the
-   next. */
+/* Phone in portrait, COMPACT: three rows — the track with the player's name and the queue, all
+   the transport buttons, the position. The volume, the player and "Transfer" are in the expanded
+   player. Fixed heights: nothing moves from one track to the next. */
 @media (max-width: 599px) {
   .bar {
     --center-w: 100%; --bar-gap: 6px;
-    height: auto; grid-template-columns: minmax(0, 1fr); padding: 8px var(--page-x) calc(var(--safe-bottom) + 8px);
+    height: auto; grid-template-columns: minmax(0, 1fr); padding: 8px var(--page-x) 8px;
   }
-  .bar__track { gap: 10px; }
+  .bar__track { gap: 8px; }
+  .bar__open { gap: 10px; cursor: pointer; }
+  .bar__title { font-size: 14px; }
   .bar__keys { --key: 40px; --key-w: 40px; gap: 6px; }
-  .bar__right { justify-content: space-between; gap: 8px; }
-  .bar__volume { min-width: 0; max-width: none; }
+  .bar__right { display: none; }
+  /* FIXED width: a long name scrolls, a short one does not shrink the title */
+  .bar__chip {
+    flex: 0 0 auto; width: 108px; height: 36px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 10px;
+    border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--accent); font: inherit;
+  }
+  .bar__chip > svg { flex: 0 0 auto; }
+  .bar__chip-name { flex: 1 1 auto; min-width: 0; font-size: 12.5px; font-weight: 500; }
+
+  /* EXPANDED: the bar covers the page (above the bottom bar) — chevron, large cover art, track,
+     position then buttons, volume, then the player and "Transfer". */
+  .bar[data-full='1'] {
+    position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: stretch; gap: 14px;
+    padding: calc(var(--safe-top) + 8px) var(--page-x) 16px; overflow-y: auto;
+    border-top: 0; background: var(--surface); backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+  .bar__collapse { align-self: flex-start; }
+  .bar__cover { align-self: center; border-radius: 14px; overflow: hidden; flex: 0 0 auto; }
+  .bar[data-full='1'] .bar__title { font-size: 17px; }
+  .bar[data-full='1'] .bar__sub { font-size: 13.5px; }
+  .bar[data-full='1'] .bar__center { gap: 10px; }
+  .bar[data-full='1'] .bar__seek { order: -1; }
+  .bar[data-full='1'] .bar__right { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 8px; }
+  .bar__volume { flex: 1 1 100%; min-width: 0; max-width: none; }
   .bar__volume-slider { min-width: 0; }
-  .bar__device-name, .bar__quality { width: 72px; }
-  /* "Transfer" as an icon only; the label is still read by screen readers */
-  .pill--transfer { width: 44px; padding: 0; }
-  .pill--transfer span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .bar__device {
+    flex: 1 1 auto; min-width: 0; height: 44px; padding: 0 10px 0 4px; border-radius: 12px;
+    border: 1px solid var(--line); background: transparent; color: inherit; font: inherit; text-align: left;
+  }
+  .bar__device-text { flex: 1 1 auto; }
+  .bar__device-name, .bar__quality { width: auto; }
+  .pill--transfer { height: 44px; }
 }
 </style>

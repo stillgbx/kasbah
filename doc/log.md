@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-30] update | Page Musique sur téléphone : barre compacte, lecteur agrandi, feuille Écoute
+
+**Déclencheur** : signalé par l'utilisateur (« la page musique est inutilisable sur mobile »), mise en page choisie sur maquettes ; code `MusicPlayerBar.vue`, `MusicView.vue`, locales.
+
+**Pages modifiées** :
+- `4_ui/4_5_musique-et-medias.md` - « Mise à jour 2026-10-30 — page Musique sur téléphone » : budget de hauteur mesuré, barre compacte à trois rangées, lecteur agrandi en plein écran, Écoute en feuille du bas, options de recherche dans un menu ; deux pièges (feuille fermée qui allonge le défilement, `align-items` de la grille en colonne flex) ; remplace la partie Musique de la mise à jour du 2026-09-29 de `4_1`.
+
+**Index** : catalogue `4_ui/README.md` (1 ligne), index.md régénéré.
+
 ## [2026-10-30] update | Curseur du lecteur figé après un déplacement
 
 **Déclencheur** : signalé par l'utilisateur (« une fois lâché il se fige jusqu'à la resynchro suivante ») ; code `useMediaPosition.ts` (`useSeekHold`), `MusicPlayerBar.vue`, `MediaPlayerControl.vue` non commité à la date d'écrire.

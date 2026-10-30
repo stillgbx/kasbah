@@ -10,7 +10,7 @@ let lastSearch: { query: string; result: YtmusicSearchResult } | null = null
 </script>
 
 <script setup lang="ts">
-import { useLocalStorage, useResizeObserver } from '@vueuse/core'
+import { useLocalStorage, useMediaQuery, useResizeObserver } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -278,6 +278,15 @@ async function resumeLast() {
 }
 const transferMode = ref(false)
 const transferBusyId = ref<string | null>(null)
+// Phone in portrait: no room for the "Listening" panel next to the content — it rises in a sheet,
+// opened from the player's name in the bar (and by "Transfer", which needs the list of targets).
+const phone = useMediaQuery('(max-width: 599px)')
+const sessionsOpen = ref(false)
+watch(phone, (p) => { if (!p) sessionsOpen.value = false })
+function startTransfer() {
+  transferMode.value = true
+  if (phone.value) sessionsOpen.value = true
+}
 const canTransfer = computed(() => {
   const s = selected.value
   if (!s || s.state.kind !== 'media_player') return false
@@ -899,7 +908,7 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
   <div class="page">
     <PageHeader>
       <!-- sources: YouTube Music and each active source plugin; the chosen one occupies the search and the central zone -->
-      <Segmented v-model="sourceChoice" :options="sourceOptions" :label="$t('music.sources')" />
+      <Segmented v-model="sourceChoice" class="sources" :options="sourceOptions" :label="$t('music.sources')" />
     </PageHeader>
 
     <div class="body">
@@ -934,6 +943,25 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
             <button type="button" class="search__clear" :class="{ 'is-hidden': !query }" :aria-label="$t('music.clear')" :tabindex="query ? 0 : -1" @click="clearSearch">
               <StrokeIcon name="close" :size="14" />
             </button>
+            <!-- phone: "Advanced" and the explicit filter wait in a menu at the end of the field -->
+            <v-menu v-if="phone" location="bottom end" :close-on-content-click="false">
+              <template #activator="{ props: menu }">
+                <button v-bind="menu" type="button" class="search__options" :data-on="(advanced && searched) || hideExplicit ? '1' : '0'"
+                        :title="$t('music.searchOptions')" :aria-label="$t('music.searchOptions')">
+                  <StrokeIcon name="gear" :size="16" />
+                </button>
+              </template>
+              <div class="search-menu card">
+                <button type="button" class="pill" :data-on="advanced && searched ? '1' : '0'" :disabled="!searched" @click="advanced = !advanced">
+                  <StrokeIcon name="layers" :size="16" />
+                  <span>{{ $t('music.advanced') }}</span>
+                </button>
+                <label class="hide-explicit">
+                  <v-switch v-model="hideExplicit" density="compact" hide-details color="primary" />
+                  <span class="small">{{ $t('ytmusic.hideExplicit') }}</span>
+                </label>
+              </div>
+            </v-menu>
           </div>
           <!-- the presentation of the RESULTS: with no search displayed, nothing to present — greyed out, the choice stays remembered -->
           <button type="button" class="pill" :data-on="advanced && searched ? '1' : '0'" :disabled="!searched" :title="$t('music.advancedHint')" @click="advanced = !advanced">
@@ -1178,30 +1206,71 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
         </template>
       </section>
 
-      <ListeningSessions :players="players" :selected-id="sessionId || null" :transfer-mode="transferMode" :transfer-busy-id="transferBusyId"
-                         :pending-id="pendingTrack && selected ? selected.descriptor.id : null"
-                         @select="selectSession" @transfer-to="transferTo" @locate="locate"
-                         @command="panelCommand" />
+      <!-- the column on the right; on a phone, a sheet over the page (scrim, handle), closed by default -->
+      <div class="sessions-sheet" :data-open="sessionsOpen ? '1' : '0'">
+        <div class="sessions-sheet__scrim" @click="sessionsOpen = false" />
+        <div class="sessions-sheet__panel">
+          <button type="button" class="sessions-sheet__grip" :aria-label="$t('common.close')" @click="sessionsOpen = false"><span /></button>
+          <ListeningSessions :players="players" :selected-id="sessionId || null" :transfer-mode="transferMode" :transfer-busy-id="transferBusyId"
+                             :pending-id="pendingTrack && selected ? selected.descriptor.id : null"
+                             @select="selectSession" @transfer-to="transferTo" @locate="locate"
+                             @command="panelCommand" />
+        </div>
+      </div>
     </div>
 
     <MusicPlayerBar :entry="selected" :name="selectedName" :session="selectedSession" :station="selectedStation" :pending="pendingTrack" :resume="barResume"
                     :transfer-mode="transferMode" :can-transfer="canTransfer" :transfer-busy="!!transferBusyId" :queue-open="queueOpen"
-                    @command="barCommand" @seek="barSeek" @transfer="transferMode = true" @cancel-transfer="transferMode = false"
-                    @repeat="setRepeat" @toggle-queue="queueOpen = !queueOpen" />
+                    @command="barCommand" @seek="barSeek" @transfer="startTransfer" @cancel-transfer="transferMode = false"
+                    @repeat="setRepeat" @toggle-queue="queueOpen = !queueOpen" @sessions="sessionsOpen = true" />
   </div>
 </template>
 
 <style scoped>
-.page { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+/* relative: the expanded player and the "Listening" sheet of a phone cover the page */
+.page { position: relative; height: 100%; display: flex; flex-direction: column; min-height: 0; }
 
 .body {
   flex: 1 1 auto; min-height: 0;
   display: grid; grid-template-columns: minmax(0, 1fr) var(--aside-w); gap: 16px;
   padding: 0 var(--page-x) 16px;
 }
-/* Phone in portrait: the players go UNDER the central zone, on a good third of the height. */
+/* outside a phone, the sheet does not exist: the panel is the grid's right column */
+.sessions-sheet, .sessions-sheet__panel { display: contents; }
+.sessions-sheet__scrim, .sessions-sheet__grip { display: none; }
+/* Phone in portrait: the central zone takes all the height; "Listening" rises in a sheet from the
+   bottom, above the player (expanded or not), and the scrim closes it. */
 @media (max-width: 599px) {
-  .body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 38%); gap: 10px; padding-bottom: 10px; }
+  .body { grid-template-columns: minmax(0, 1fr); gap: 10px; padding-bottom: 10px; }
+  /* overflow: the closed panel, pushed down out of the frame, would otherwise lengthen the shell's
+     scroll and the whole page could slide up under it */
+  .sessions-sheet { display: block; position: absolute; inset: 0; z-index: 30; pointer-events: none; overflow: hidden; }
+  .sessions-sheet__scrim {
+    display: block; position: absolute; inset: 0; background: rgba(0, 0, 0, .25);
+    opacity: 0; transition: opacity .2s;
+  }
+  .sessions-sheet__panel {
+    display: flex; flex-direction: column; position: absolute; left: 0; right: 0; bottom: 0; height: 64%;
+    border-top: 1px solid var(--line); border-radius: 20px 20px 0 0; overflow: hidden;
+    background: var(--surface); box-shadow: var(--shadow);
+    transform: translateY(100%); visibility: hidden;
+  }
+  .sessions-sheet[data-open='1'] { pointer-events: auto; }
+  .sessions-sheet[data-open='1'] .sessions-sheet__scrim { opacity: 1; }
+  .sessions-sheet[data-open='1'] .sessions-sheet__panel { transform: none; visibility: visible; }
+  /* hidden after its slide, not before: `visibility` waits for the end of the transition */
+  .sessions-sheet__panel { transition: transform .22s ease, visibility 0s linear .22s; }
+  .sessions-sheet[data-open='1'] .sessions-sheet__panel { transition: transform .22s ease, visibility 0s; }
+  .sessions-sheet__grip {
+    display: grid; place-items: center; flex: 0 0 auto; height: 24px; width: 100%;
+    border: 0; background: transparent; padding: 0;
+  }
+  .sessions-sheet__grip > span { width: 40px; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--text) 28%, transparent); }
+  /* the sheet is the card: the panel loses its own */
+  .sessions-sheet__panel > :deep(.sessions) { flex: 1 1 auto; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+}
+@media (max-width: 599px) and (prefers-reduced-motion: reduce) {
+  .sessions-sheet__scrim, .sessions-sheet__panel, .sessions-sheet[data-open='1'] .sessions-sheet__panel { transition: none; }
 }
 .main { display: flex; flex-direction: column; min-height: 0; min-width: 0; gap: 10px; }
 /* under the search: "Back", the scrolling zone, and the veil behind them */
@@ -1233,10 +1302,19 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
 .search__clear:hover { color: var(--text); }
 .is-hidden { visibility: hidden; }
 .hide-explicit { display: flex; align-items: center; gap: 6px; cursor: pointer; flex: 0 0 auto; }
-/* Phone in portrait: the search takes its row, "Advanced" and the explicit filter go underneath. */
+.search__options {
+  display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 999px;
+  background: var(--surface2); color: var(--muted); flex: 0 0 auto;
+}
+.search__options[data-on='1'] { background: var(--accent-soft); color: var(--accent); }
+.search-menu { display: grid; gap: 10px; padding: 12px; justify-items: start; }
+/* Phone in portrait: the field alone on its row, its options in the menu at its end. The source
+   selector stays on the title's line (three icons): one row less above the content. */
 @media (max-width: 599px) {
-  .search { flex-wrap: wrap; row-gap: 8px; }
-  .search__field { flex: 1 1 100%; }
+  .search__field { padding-right: 6px; }
+  .search > .pill, .search > .hide-explicit { display: none; }
+  .page :deep(.page-header__titles) { flex-basis: 0; }
+  .sources { order: -1; }   /* before the assistant's button, which PageHeader also moves to -1 */
 }
 .small { font-size: 12px; }
 

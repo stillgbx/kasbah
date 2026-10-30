@@ -132,6 +132,7 @@
     "favoriteAdd": "Add to favorites", "favoriteRemove": "Remove from favorites",
     "stereo": "stereo", "streamSource": "source {format}", "megabytes": "{size} MB",
     "queue": "Queue", "queueShow": "Show the queue", "queueHide": "Close the queue", "queueClear": "Clear the queue",
+    "playerExpand": "Expand the player", "playerCollapse": "Collapse the player", "choosePlayer": "Choose the player", "searchOptions": "Search options",
     "queueEmpty": "Nothing from Kasbah is playing on this player.", "queueNothingNext": "Nothing after this track.", "queueRemove": "Remove from the queue",
     "queueWaiting": "{n} track waiting | {n} tracks waiting", "playAll": "Play all", "playNext": "Play next", "addToQueue": "Add to the end of the queue",
     "repeatOff": "Repeat the track", "repeatOnce": "Track replays once — tap to loop it", "repeatLoop": "Track loops — tap to stop repeating"

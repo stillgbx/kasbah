@@ -1,6 +1,6 @@
 # Musique et médias
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-30
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Médias, les lignes et le panneau d'un lecteur, la page Musique (sources, recherche, file, genres, détail d'album, lecture dans le navigateur). Elle est née du découpage de
@@ -977,3 +977,53 @@ Les comptes musicaux sont par utilisateur (`../1_architecture/1_6_lecteur-musiqu
   géométrique), aucun débordement à 1 280 et 375 px, fr et en ; cartes de Réglages et étapes du cookie fr/en à
   375 px. Pas de contrôle clair/sombre consigné : aucune couleur n'a été touchée.
 - **Limite** : le badge de santé du plugin, dans Réglages, reste celui de la maison.
+
+### Mise à jour 2026-10-30 — page Musique sur téléphone : barre compacte, lecteur agrandi, feuille Écoute
+
+Retour de l'utilisateur : la page était inutilisable sur téléphone. Mesuré à 360 × 740, la zone de
+contenu n'avait plus que **48 px** (en-tête 126, recherche 96, Écoute 126, lecteur 200, barre du bas 72) :
+les trois zones permanentes du bureau (contenu, Écoute, lecteur) ne tiennent pas. **Remplace** la partie
+« Musique » de la mise à jour du 2026-09-29 de `4_1_navigation-et-panneaux.md` (Écoute sur 38 % de la
+hauteur, barre à quatre rangées). Seulement sous 600 px de large (`useMediaQuery('(max-width: 599px)')`
+et les mêmes media queries) : bureau et tablette inchangés (mesuré à 1 280 × 800 : colonne Écoute à
+droite, barre de 92 px).
+
+Choix de l'utilisateur sur maquettes (deux directions comparées : mini-lecteur + plein écran, ou barre
+compacte fixe + onglet Écoute) : **la barre compacte** — les touches classiques toujours à portée —,
+**agrandissable en plein écran**, et **pas d'onglet Écoute** (écarté).
+
+- **Barre compacte** (`MusicPlayerBar.vue`) : trois rangées, 145 px que quelque chose joue ou non — le
+  morceau (pochette 44 px, titre, une pastille au nom du lecteur qui ouvre Écoute, touche File), les sept
+  touches de transport, la position. Volume, lecteur et « Transférer » attendent dans le lecteur agrandi.
+  La pastille a une largeur fixe (108 px) : un nom long défile, un nom court ne rétrécit pas le titre.
+- **Lecteur agrandi** : un tap sur la pochette ou le titre (`.bar__open`, un bouton seulement sur
+  téléphone) étale la barre sur toute la page, au-dessus de la barre du bas (`.page` en `position:
+  relative`, `.bar[data-full='1']` en `inset: 0`) : chevron pour réduire, grande pochette (largeur de la
+  page, au plus 38 % de la hauteur, `coverSize`), titre et File, position puis touches, volume, lecteur
+  (qui ouvre Écoute) et « Transférer ». Ouvrir la file réduit le lecteur : la file s'affiche dans la zone
+  centrale, qu'il couvre. Le retour au bureau le replie (`watch(phone)`).
+- **Écoute en feuille** (`MusicView.vue`, `.sessions-sheet`) : le même `ListeningSessions`, toujours monté
+  (son filtre et son défilement survivent), dans une feuille du bas de 64 % de la page, au-dessus du
+  lecteur, agrandi ou non ; voile et poignée la ferment. « Transférer » l'ouvre aussi : il faut la liste
+  des cibles. Hors téléphone, le conteneur est en `display: contents` et le panneau reste la colonne de
+  droite de la grille. `SidePanel` n'a pas été repris : il démonte son contenu à la fermeture.
+- **Piège** : la feuille fermée, poussée hors du cadre par `translateY(100%)`, allongeait la zone qui
+  défile de la coquille — toute la page glissait de 327 px vers le haut. `overflow: hidden` sur le
+  conteneur de la feuille.
+- **Piège** : en plein écran, la barre passe en colonne flex, mais l'`align-items: center` de sa grille de
+  bureau s'y applique aussi et réduit la rangée du morceau à son contenu (titre de largeur nulle, à cause
+  du `contain: inline-size` de `MarqueeText`). `align-items: stretch` sur `.bar[data-full='1']`.
+- **Recherche** : « Avancée » et « Masquer explicit » passent dans un menu (`v-menu`) ouvert par une touche
+  réglages au bout du champ, teintée quand une option est active. Le sélecteur de source remonte sur la
+  ligne du titre (`.page :deep(.page-header__titles) { flex-basis: 0 }`, `order: -1` avant la touche de
+  l'assistant). Contenu : 48 → 343 px à 360 × 740.
+- Nouvelles clés `music.playerExpand`, `playerCollapse`, `choosePlayer`, `searchOptions`.
+
+**Vérifié** dans la preview `kasbah-mock` à 360 × 740 (lecture forcée dans le store) : barre de même
+hauteur au repos et en lecture, aucun débordement horizontal, plein écran, feuille et menu ouverts ; clair
+et sombre ; 1 280 × 800 inchangé ; suite complète, typecheck et lint verts. **Non vérifiés** : le vrai
+téléphone, les zooms 1,25 / 1,5, l'anglais, une vraie pochette et plusieurs enceintes (le mock n'en
+liste qu'une). **Non fait** : fermer la feuille ou le lecteur agrandi en les tirant vers le bas.
+
+Sources : `apps/web/src/components/music/MusicPlayerBar.vue`, `apps/web/src/views/MusicView.vue`,
+`apps/web/src/i18n/locales/{fr,en}.json`.
