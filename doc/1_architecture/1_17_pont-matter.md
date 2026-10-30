@@ -192,6 +192,16 @@ La procédure côté utilisateur vit dans [`docs/matter.md`](../../docs/matter.m
   genre (Home Assistant Matter Hub) appairent souvent, mais de façon capricieuse (même réseau, IPv6,
   nouvel essai). C'est le moins sûr des trois.
 
+### Mise à jour 2026-10-30 (4) — premier essai réel : Google Home
+
+Vérifié sur la vraie maison (sans détails) : déclaration VID `0xFFF1` / PID `0x8000` dans la Google Home
+Developer Console sur un **projet neuf** (ne pas importer le projet Google Cloud du plugin Nest),
+appairage depuis l'appli Google Home du téléphone, un fabric Google (`vendorId` `0x6006`), portes de garage
+(en stores) et lumières publiées et visibles **dans l'appli du téléphone** ; la page web home.google.com
+ne les liste pas. Le « hub » est l'enceinte ou l'écran Google de la maison (Nest Hub, Nest Mini) : il
+parle au pont en local. **IPv6 coupé sur le routeur** (cf. `../5_setup/5_0_installation-et-scripts.md`,
+2026-10-05) : sans effet, l'adresse link-local suffit à Matter. Restent : Apple Maison et Alexa.
+
 ## Restant
 
 Essai avec un vrai assistant ; skill personnalisée (questions vers l'assistant de Kasbah) ; piloter un

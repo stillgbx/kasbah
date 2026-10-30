@@ -7,6 +7,13 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-30] update | Pont Matter : premier essai réel avec Google Home
+
+**Déclencheur** : l'utilisateur a appairé le pont à Google Home sur la vraie maison ; `docs/matter.md` mis à jour dans le même commit (Google vérifié, hub, IPv6 link-local, appli du téléphone plutôt que la page web).
+
+**Pages modifiées** :
+- `1_architecture/1_17_pont-matter.md` - section « Mise à jour 2026-10-30 (4) » : ce qui a marché, projet neuf dans la console, hub, IPv6 coupé sur le routeur sans effet, page web qui ne liste pas les appareils.
+
 ## [2026-10-30] update | Pont Matter : guide utilisateur et section « Intégré » du site
 
 **Déclencheur** : demande de l'utilisateur, une procédure pour appairer le pont (Google et sa console développeur en particulier) et une section du site pour ce qui est intégré sans être un plugin. Livré dans le même commit que cette entrée : `docs/matter.md`, liens des README, `site/index.html` et `site/fr/index.html`.

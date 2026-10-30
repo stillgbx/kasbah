@@ -8,9 +8,10 @@ server over the local network.
 The bridge is part of the server, not a plugin: it creates no device of its own, it republishes the
 ones the plugins already provide.
 
-> **Tested so far with a Matter test controller only** (matter.js), against a simulated house: pairing,
-> states both ways, commands both ways, unpairing. Google Home, Apple Home and Alexa themselves have not
-> been tried yet. The steps below follow each vendor's documentation; report what differs.
+> **Tested with Google Home** on a real house (pairing through the Developer Console declaration, lights
+> and garage doors listed in the phone app), and with a Matter test controller (matter.js) for states and
+> commands both ways and unpairing. Apple Home and Alexa have not been tried yet: their steps follow the
+> vendors' documentation; report what differs.
 
 ## What can be published
 
@@ -30,8 +31,9 @@ shutter already linked to Google Home through the vendor's own integration would
 
 - The server and the assistant's hub (or phone) are on the **same local network**.
 - The server accepts **UDP port 5540** (Matter) and **mDNS** (UDP 5353, multicast) from the local
-  network. Matter runs over **IPv6**: leave it enabled on the server's network interface (a link-local
-  address is enough).
+  network. Matter runs over **IPv6**, but a **link-local** address (`fe80::…`) is enough: IPv6 can stay
+  off on the router, as long as it is not disabled in the server's own system (on Linux,
+  `ip -6 addr show scope link` lists an `fe80::` address).
 - Wi-Fi settings that block multicast between clients (client isolation, some "IGMP snooping" setups)
   stop the assistant from finding the bridge.
 - Open Kasbah **from the local network**: the bridge's card and its API refuse the public address,
@@ -64,8 +66,13 @@ needed once.
 4. **Setup**: a **Product name** (for example "Kasbah Bridge") and a device type (the list may not offer a
    bridge; pick **Light**).
 5. **Vendor ID**: the **test** option, then **0xFFF1** in the list. **Product ID**: **0x8000**.
-6. **Save & continue**, then **Save**.
-7. **Restart your Google hub** (unplug it a few seconds) so it reads the new integration.
+6. **Save & continue**. The next page, **Configure setup and branding**, is optional: for the product
+   images, upload [`matter-off-720.png`](../apps/web/public/icons/matter-off-720.png) as **Pre-setup** and
+   [`matter-on-720.png`](../apps/web/public/icons/matter-on-720.png) as **Post-setup** (720 × 720 PNG,
+   transparent). Leave **App info** empty, then **Save**.
+7. **Restart your Google hub** so it reads the new integration: unplug it a few seconds, or Google Home
+   app → the device → settings → **Reboot**. The "hub" is the Google speaker or display that stays on at
+   home (Nest Hub, Nest Mini, Nest Audio…): it is the one that talks to the bridge, not your phone.
 
 **2. Pair** (in the Google Home app)
 
@@ -74,7 +81,8 @@ needed once.
 - In the app: **+** → **Set up device** → **New device** → choose your home → **Matter device**, then
   scan the QR code shown in Kasbah (or enter the 11-digit code when the app offers it).
 - The bridge itself appears as an inert **bridge** device; the published devices appear as ordinary
-  lights, blinds and locks, which you can move to rooms.
+  lights, blinds and locks, which you can move to rooms. Look in the **phone app**: the Google Home web
+  page (home.google.com) may not list them.
 
 If it fails with "could not contact Google" or similar: check that the console integration says
 **0xFFF1 / 0x8000**, that you are signed in with the **same account** as the hub, then restart the hub.
