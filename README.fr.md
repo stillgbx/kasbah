@@ -298,6 +298,7 @@ Chaque plugin a sa **page** : ce qu'il fait, comment il se connecte, sa mise en 
 | `petkit` | PetKit (mangeoires, fontaines) | `pet_feeder`, `pet_fountain` | cloud privé (connexion par code courriel) | [petkit](docs/plugins/petkit.md) |
 | `tuya` | Tuya (ventilateur-lumière) | `fan`, `light` | local (protocole Tuya 3.5) | [tuya](docs/plugins/tuya.md) |
 | `hormann` | Hörmann (portes de garage SupraMatic 4) | `cover`, `light` | local (pont HCPBridgeMqtt sur le bus du moteur, HTTP) | [hormann](docs/plugins/hormann.md) |
+| `home_assistant` | Home Assistant (lampes, volets, chauffages, capteurs, lecteurs) | `light`, `cover`, `climate`, `sensor`, `media_player` | local (API WebSocket, jeton longue durée) | [home_assistant](docs/plugins/home_assistant.md) |
 | `ytmusic` | YouTube Music | — (source musicale) | cloud non officiel (cookie du compte) | [ytmusic](docs/plugins/ytmusic.md) |
 | `mixcloud` | Mixcloud | — (source musicale) | cloud public sans clé | [mixcloud](docs/plugins/mixcloud.md) |
 | `radio` | Radios (radio-browser.info) | — (source musicale) | cloud libre sans clé | [radio](docs/plugins/radio.md) |

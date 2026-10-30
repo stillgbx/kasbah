@@ -1,0 +1,154 @@
+[
+  {
+    "entity_id": "light.lampe_1",
+    "state": "on",
+    "attributes": {
+      "min_color_temp_kelvin": 2000,
+      "max_color_temp_kelvin": 6500,
+      "supported_color_modes": ["color_temp", "hs", "xy"],
+      "color_mode": "color_temp",
+      "brightness": 153,
+      "color_temp_kelvin": 4000,
+      "hs_color": [27, 35],
+      "rgb_color": [255, 206, 166],
+      "xy_color": [0.42, 0.365],
+      "friendly_name": "Lampe 1",
+      "supported_features": 32
+    }
+  },
+  {
+    "entity_id": "light.chevet_chambre_2",
+    "state": "on",
+    "attributes": {
+      "min_color_temp_kelvin": 2000,
+      "max_color_temp_kelvin": 6500,
+      "supported_color_modes": ["color_temp", "hs", "xy"],
+      "color_mode": "color_temp",
+      "brightness": 3,
+      "color_temp_kelvin": 2700,
+      "xy_color": [0.52, 0.39],
+      "friendly_name": "Chevet chambre 2",
+      "supported_features": 32
+    }
+  },
+  {
+    "entity_id": "light.camera_1_led",
+    "state": "off",
+    "attributes": {
+      "supported_color_modes": ["onoff"],
+      "color_mode": null,
+      "friendly_name": "Caméra 1 LED",
+      "supported_features": 0
+    }
+  },
+  {
+    "entity_id": "cover.volet_1",
+    "state": "closed",
+    "attributes": {
+      "is_closed": true,
+      "current_position": 0,
+      "device_class": "shutter",
+      "friendly_name": "Volet 1",
+      "supported_features": 15
+    }
+  },
+  {
+    "entity_id": "cover.volet_1_low_speed",
+    "state": "closed",
+    "attributes": {
+      "is_closed": true,
+      "current_position": 0,
+      "device_class": "shutter",
+      "friendly_name": "Volet 1 Low speed",
+      "supported_features": 15
+    }
+  },
+  {
+    "entity_id": "cover.volets_groupe",
+    "state": "closed",
+    "attributes": {
+      "is_closed": true,
+      "current_position": 0,
+      "entity_id": ["cover.volet_1", "cover.volet_2"],
+      "friendly_name": "Volets groupe",
+      "supported_features": 15
+    }
+  },
+  {
+    "entity_id": "climate.radiateur_1",
+    "state": "off",
+    "attributes": {
+      "hvac_modes": ["heat", "off"],
+      "min_temp": 7,
+      "max_temp": 35,
+      "preset_modes": ["none", "frost_protection", "eco", "comfort", "comfort-1", "comfort-2"],
+      "current_temperature": null,
+      "preset_mode": "none",
+      "friendly_name": "Radiateur 1",
+      "supported_features": 400
+    }
+  },
+  {
+    "entity_id": "climate.poele",
+    "state": "heat",
+    "attributes": {
+      "hvac_modes": ["off", "heat"],
+      "min_temp": 5.0,
+      "max_temp": 40.0,
+      "preset_modes": ["manual", "comfort", "auto"],
+      "current_temperature": 19.5,
+      "temperature": 21,
+      "hvac_action": "heating",
+      "preset_mode": "auto",
+      "friendly_name": "Poêle",
+      "supported_features": 401
+    }
+  },
+  {
+    "entity_id": "sensor.capteur_1_temperature",
+    "state": "21.5",
+    "attributes": {
+      "state_class": "measurement",
+      "unit_of_measurement": "°C",
+      "device_class": "temperature",
+      "friendly_name": "Capteur 1 Température"
+    }
+  },
+  {
+    "entity_id": "sensor.capteur_1_battery",
+    "state": "80",
+    "attributes": {
+      "state_class": "measurement",
+      "unit_of_measurement": "%",
+      "device_class": "battery",
+      "friendly_name": "Capteur 1 Batterie"
+    }
+  },
+  {
+    "entity_id": "media_player.tv_1",
+    "state": "on",
+    "attributes": {
+      "source_list": ["TV", "HDMI 1", "HDMI 2"],
+      "volume_level": 0.2,
+      "is_volume_muted": false,
+      "device_class": "tv",
+      "friendly_name": "TV 1",
+      "supported_features": 24509
+    }
+  },
+  {
+    "entity_id": "media_player.enceinte_1",
+    "state": "playing",
+    "attributes": {
+      "volume_level": 0.35,
+      "is_volume_muted": false,
+      "media_title": "Titre 1",
+      "media_artist": "Artiste 1",
+      "media_duration": 200,
+      "media_position": 42,
+      "entity_picture": "/api/media_player_proxy/media_player.enceinte_1?token=abc123&cache=f00d",
+      "friendly_name": "Enceinte 1",
+      "supported_features": 152463
+    }
+  }
+]

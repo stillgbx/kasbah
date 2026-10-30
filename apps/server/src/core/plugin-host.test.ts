@@ -4,7 +4,7 @@ import pino from 'pino'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { Bus } from './bus'
-import { PluginError, type DevicePlugin } from './plugin'
+import { PluginError, type DevicePlugin, type PluginContext } from './plugin'
 import { PluginHost } from './plugin-host'
 import { DeviceRegistry } from './registry'
 import { SceneRegistry } from './scene-registry'
@@ -108,6 +108,40 @@ describe('plugin host startup', () => {
     release()
     await all
     expect((await h.health()).slow).toMatchObject({ status: 'ok' })
+    await h.stopAll()
+  })
+})
+
+describe('plugin host: other plugins turned on or off', () => {
+  it('tells the running plugins, which read the plugins that are on from their context', async () => {
+    const clock = new ManualClock(0)
+    const enabled: Record<string, boolean> = { bridge: true, native: false }
+    let ctx: PluginContext | null = null
+    let changes = 0
+    const make = (id: string, extra: Partial<DevicePlugin> = {}): DevicePlugin => ({
+      id, configSchema: z.object({}),
+      async init() {}, async discover() { return [] }, async start() {}, async execute() {}, async stop() {}, ...extra,
+    })
+    const h = new PluginHost({
+      site: () => ({ lat: 0, lon: 0, alt: 0 }),
+      settingsOf: (id) => ({ ...DEFAULT_PLUGIN_SETTINGS, enabled: enabled[id] ?? false }),
+      strict: false,
+      factories: {
+        bridge: () => make('bridge', { async init(c) { ctx = c }, onPluginsChanged() { changes++ } }),
+        native: () => make('native'),
+      },
+      registry: new DeviceRegistry(new Bus(), clock), scenes: new SceneRegistry(new Bus(), clock), bus: new Bus(), clock,
+      logger: pino({ level: 'silent' }), envSource: {},
+    })
+    await h.startAll()
+    expect(ctx!.enabledPlugins!()).toEqual(['bridge'])
+    enabled.native = true
+    await h.apply('native')
+    expect(changes).toBe(1)
+    expect(ctx!.enabledPlugins!()).toEqual(['bridge', 'native'])
+    enabled.native = false
+    await h.apply('native')
+    expect(changes).toBe(2)
     await h.stopAll()
   })
 })

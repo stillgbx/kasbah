@@ -1,4 +1,4 @@
-import type { GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEnergyDays, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, MatterSettingsPatch, MatterStatus, PropertiesResponse, PropertyMode, NewPropertyBody, PushSubscribeBody, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor } from '@kasbah/shared'
+import type { GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEnergyDays, DeviceEntry, DeviceKind, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, MatterSettingsPatch, MatterStatus, PropertiesResponse, PropertyMode, NewPropertyBody, PushSubscribeBody, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor } from '@kasbah/shared'
 
 // Abstraction of the server channel. Two implementations: HTTP + WebSocket (real) and in-process
 // simulation (tests, static demo without a server). Commands ALWAYS go through a request
@@ -250,6 +250,22 @@ export interface UpdateStatus {
  * never the token, only whether there is one and whether the house has one as a fallback.
  */
 export interface ClaudeAccount { user: string | null; savedAt: number | null; house: boolean }
+
+/** A Home Assistant entity Kasbah can translate (`home_assistant` plugin), as Settings lists it. */
+export interface HaEntityInfo {
+  entityId: string
+  name: string
+  kind: DeviceKind
+  /** HA integration (`hue`, `overkiz`…), `''` if unknown. */
+  integration: string
+  room?: string
+  shown: boolean
+  /** Shown or hidden by an explicit choice, rather than by the default. */
+  chosen: boolean
+  /** The Kasbah plugin, on, that already provides this entity: hidden by default. */
+  duplicateOf?: string
+}
+export interface HaEntities { connected: boolean; entities: HaEntityInfo[] }
 
 /**
  * The voice of spoken replies (`transcription` plugin) of the current account (`user` `null` = the house,
@@ -764,6 +780,10 @@ export interface Transport {
   /** Stores the `claude setup-token` token for the current account; it never comes back. */
   claudeSetToken(token: string): Promise<ClaudeAccount>
   claudeClearToken(): Promise<ClaudeAccount>
+  /** The Home Assistant entities and which ones show up in Kasbah. */
+  homeAssistantEntities(): Promise<HaEntities>
+  /** Explicit choices by entity_id; `null` gives an entity back to the default. */
+  setHomeAssistantEntities(choices: Record<string, boolean | null>): Promise<HaEntities>
   /** An instruction: events arrive as they go, the promise holds until the end. */
   assistantAsk(text: string, onEvent: (e: AssistantEvent) => void, signal?: AbortSignal): Promise<void>
   /** Is the `transcription` plugin running and does it know where to send the audio? (the microphone only shows then) */

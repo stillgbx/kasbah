@@ -1,6 +1,6 @@
 # Serveur et hôte de plugins
 
-> Dernière mise à jour : 2026-10-25
+> Dernière mise à jour : 2026-10-30
 > Sources : `apps/server/src/{app,main}.ts`, `apps/server/src/core/*.ts`, `apps/server/src/plugins/index.ts`, `apps/server/src/core/scene-registry.ts`, `apps/server/src/core/{plugin,plugin-host,scene-seeder}.ts`, `packages/shared/src/house/schema.ts`, `apps/server/src/plugins/comap/{history,state}.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/core/playbackBridge.ts`, `apps/server/src/music/{player,sources}.ts`, `apps/server/src/core/automations/engine.ts`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/main.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/plugins/shopping/index.ts` (2026-10-11)
 
 ## Assemblage (`app.ts`)
@@ -609,3 +609,20 @@ Le `settingsOf` de `buildApp` passe par lui. Seul membre : `shopping`, interrupt
 courses — un plugin sans appareil ni configuration, qui ne fait rien lui-même ; les routes, le MCP et
 l'écran lisent son réglage. Les fabricants restent éteints par défaut. Détail :
 `1_10_liste-de-courses.md` (mise à jour 2).
+
+### Mise à jour 2026-10-30 — un plugin sait quels autres plugins sont allumés
+
+Deux membres **facultatifs** du contrat (`core/plugin.ts`), pour un pont vers un autre hub qui doit taire
+ce qu'un plugin natif fournit déjà (Home Assistant, `../3_plugins/3_27_home-assistant.md`) :
+
+- `PluginContext.enabledPlugins?()` : les ids allumés dans la maison, relus à chaque appel (`makeContext`
+  filtre `order` par `isEnabled`) ;
+- `DevicePlugin.onPluginsChanged?()` : `PluginHost.apply` l'appelle, après avoir allumé ou éteint un
+  plugin, sur chacun des **autres** plugins en marche ; une exception y est journalisée, sans plus. Un
+  changement de sous-items (redémarrage) ne le déclenche pas.
+
+Facultatifs : les contextes de test écrits à la main n'ont pas à changer. Test :
+`core/plugin-host.test.ts`.
+
+Dans le même temps, `session.routes(app)` remonte en tête de `buildApp` : voir
+`1_13_comptes-et-sessions.md` (mise à jour du 2026-10-30).

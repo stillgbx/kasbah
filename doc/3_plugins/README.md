@@ -1,6 +1,6 @@
 # 3 — Plugins
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-10-30
 > Catalogue de la section : source unique de sa liste de pages, d'où `scripts/wiki-index.mjs` génère le bloc `3_plugins` de [`index.md`](../index.md). Historique de la section : `Grep 3_plugins/` dans [`log/`](../log/README.md).
 
 Un résumé dit **ce que couvre** la page, en 350 caractères au plus, jamais ce qui a changé : l'historique
@@ -45,4 +45,5 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_24 Claude (moteur de l'assistant)](3_24_claude.md) | Moteur de l'assistant par `claude -p` : forfait de chaque compte (`claude setup-token`), lancement verrouillé (outils, MCP, réglages, environnement), traduction de `stream-json`, santé, coût par instruction, pièges. | 2026-10-11 |
 | [3_25 Transcription (la voix de l'assistant)](3_25_transcription.md) | Voix de l'assistant : micro et WAV 16 kHz faits par le navigateur, trois fournisseurs par la route OpenAI de transcription, vocabulaire de la maison, réponses parlées et choix des voix, texte réécrit pour la voix, drapeau Chrome du micro sur le LAN. | 2026-10-12 |
 | [3_26 Hörmann (portes de garage)](3_26_hormann.md) | Portes SupraMatic série 4 par un pont HCPBridgeMqtt (ESP32 + RS485) sur le bus HCP2 : câblage RJ12, bus coupé hors scan, broches série inversées sur l'Atom Lite, API HTTP lue dans le firmware, sondage plutôt que SSE, disponibilité par la fraîcheur du bus, accusé qui ne prouve rien, lumière en bascule. | 2026-10-21 |
+| [3_27 Home Assistant](3_27_home-assistant.md) | Appareils d'une installation Home Assistant par son API WebSocket, HA seul à commander : correspondances (jumeau lent Somfy, groupes, radiateurs à préréglages), sélection par intégration avec doublons des plugins natifs, contrat `enabledPlugins`, pochettes relayées, données du contributeur. | 2026-10-30 |
 <!-- catalogue:end -->

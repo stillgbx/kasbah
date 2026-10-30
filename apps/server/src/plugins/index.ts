@@ -5,6 +5,7 @@ import { createClaudePlugin } from './claude'
 import { createComapPlugin } from './comap'
 import { createEnphasePlugin } from './enphase'
 import { createGoogleCastPlugin } from './google_cast'
+import { createHomeAssistantPlugin } from './home_assistant'
 import { createHormannPlugin } from './hormann'
 import { createHuePlugin } from './hue'
 import { createIrobotPlugin } from './irobot'
@@ -54,4 +55,5 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   claude: () => createClaudePlugin(),
   transcription: () => createTranscriptionPlugin(),
   shopping: createShoppingPlugin,
+  home_assistant: () => createHomeAssistantPlugin(),
 }

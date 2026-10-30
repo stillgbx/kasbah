@@ -4,6 +4,7 @@ import type { PluginHealth, PluginInfo } from '@kasbah/shared'
 import AgendaLinkCard from '../AgendaLinkCard.vue'
 import ClaudeLinkCard from '../ClaudeLinkCard.vue'
 import EnphasePairingCard from '../EnphasePairingCard.vue'
+import HomeAssistantCard from '../HomeAssistantCard.vue'
 import HuePairingCard from '../HuePairingCard.vue'
 import IrobotLinkCard from '../IrobotLinkCard.vue'
 import MelcloudLinkCard from '../MelcloudLinkCard.vue'
@@ -69,6 +70,7 @@ const SETUP_CARDS = {
   toutemonannee: SchoolLinkCard,
   claude: ClaudeLinkCard,
   transcription: TranscriptionLinkCard,
+  home_assistant: HomeAssistantCard,
 } as const
 const setupCard = computed(() => SETUP_CARDS[props.plugin.id as keyof typeof SETUP_CARDS] ?? null)
 

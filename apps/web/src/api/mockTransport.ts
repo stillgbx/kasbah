@@ -461,6 +461,8 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async claudeAccount() { return { user: null, savedAt: null, house: false } },
     async claudeSetToken() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Claude in mock mode') },
     async claudeClearToken() { return { user: null, savedAt: null, house: false } },
+    async homeAssistantEntities() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Home Assistant in mock mode') },
+    async setHomeAssistantEntities() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Home Assistant in mock mode') },
     async assistantAsk(text, onEvent) {
       const t0 = Date.now()
       await wait(400)

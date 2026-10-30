@@ -47,6 +47,11 @@ export interface PluginContext {
    * truth, the one the 3D scene already takes its sun from.
    */
   site: PluginSite
+  /**
+   * Ids of the plugins turned on in the house, re-read at each call: a bridge to another hub (Home
+   * Assistant) leaves out what a native plugin already provides. Optional: test contexts omit it.
+   */
+  enabledPlugins?: () => readonly string[]
 }
 
 export interface PluginSite {
@@ -143,6 +148,8 @@ export interface DevicePlugin {
    */
   releaseNotes?(externalId: string, lang: string): Promise<PluginReleaseNotes>
   stop(): Promise<void>
+  /** Another plugin was turned on or off (see `PluginContext.enabledPlugins`); called on running plugins only. */
+  onPluginsChanged?(): void
   /** The plugin's own routes, mounted under /api/plugins/<id>/. */
   registerRoutes?(app: FastifyInstance): void
   health?(): PluginHealth

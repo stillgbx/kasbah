@@ -26,7 +26,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 |---|---|
 | [1_0 Monorepo et flux de données](1_architecture/1_0_monorepo-et-flux.md) | 2026-10-20 |
 | [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-10-26 |
-| [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-10-25 |
+| [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-10-30 |
 | [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-10-30 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-10-06 |
 | [1_5 Scène 3D (Three.js)](1_architecture/1_5_scene-3d.md) | 2026-10-29 |
@@ -59,7 +59,7 @@ La maison décrite en JSON : format et validation, géométrie dérivée (murs, 
 ## 3 — Plugins
 
 <!-- section:3_plugins:begin (généré par scripts/wiki-index.mjs depuis 3_plugins/README.md - ne pas éditer ici) -->
-Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (27 pages, dernière mise à jour 2026-10-30).
+Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (28 pages, dernière mise à jour 2026-10-30).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -93,6 +93,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_24 Claude (moteur de l'assistant)](3_plugins/3_24_claude.md) | 2026-10-11 |
 | [3_25 Transcription (la voix de l'assistant)](3_plugins/3_25_transcription.md) | 2026-10-12 |
 | [3_26 Hörmann (portes de garage)](3_plugins/3_26_hormann.md) | 2026-10-21 |
+| [3_27 Home Assistant](3_plugins/3_27_home-assistant.md) | 2026-10-30 |
 <!-- section:3_plugins:end -->
 
 ## 4 — UI

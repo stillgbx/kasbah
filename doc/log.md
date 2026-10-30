@@ -7,6 +7,19 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-30] update | Plugin Home Assistant (contribution de qgiu) et `sessionUser` des routes de plugins
+
+**Déclencheur** : plugin `home_assistant` et correctif reçus d'un utilisateur (écrits sur la version du 2026-10-12), intégrés et adaptés ; sélection des entités demandée « comme le pont Matter » ; code non commité à la date d'écrire.
+
+**Pages modifiées** :
+- `1_architecture/1_2_serveur-et-plugins.md` - mise à jour : `ctx.enabledPlugins` et `onPluginsChanged` facultatifs.
+- `1_architecture/1_13_comptes-et-sessions.md` - mise à jour : `req.sessionUser` `undefined` dans les routes de plugins, cause (ordre `decorateRequest` / `await registerMcp`) et correctif à la source.
+
+**Pages créées** :
+- `3_plugins/3_27_home-assistant.md` - le plugin : principe, correspondances, sélection par intégration et doublons, pochettes relayées, défauts corrigés, données du contributeur réécrites.
+
+**Index** : catalogues `1_architecture` (2 dates) et `3_plugins` (1 ligne) mis à jour, index.md régénéré.
+
 ## [2026-10-30] update | YouTube Music : flux coupé après un Mo (cookie que yt-dlp n'accepte plus)
 
 **Déclencheur** : bug signalé (seul le 1er titre d'un album se joue, puis erreur, sur enceinte et dans le navigateur), diagnostiqué sur la vraie maison ; code `ytmusic/{resolve,index}.ts` et `resolve.test.ts` non commités à la date d'écrire.

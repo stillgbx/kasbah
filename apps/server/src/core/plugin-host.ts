@@ -121,6 +121,7 @@ export class PluginHost {
       emitEvent: (externalId, event) => { this.opts.bus.emit('deviceEvent', `${id}:${externalId}`, event, this.opts.clock.now()) },
       parts: this.resolveParts(id, slot),
       site: this.opts.site(),
+      enabledPlugins: () => this.order.filter((other) => this.isEnabled(other)),
     }
   }
 
@@ -168,6 +169,10 @@ export class PluginHost {
       this.opts.scenes.register(id, [])
       slot.status = { status: 'disabled' }
       this.logger.info({ plugin: id }, 'plugin stopped')
+    }
+    for (const [other, s] of this.slots) {
+      if (other === id || !s.ctx || !s.plugin.onPluginsChanged) continue
+      try { s.plugin.onPluginsChanged() } catch (err) { this.logger.warn({ plugin: other, err }, 'onPluginsChanged failed') }
     }
   }
 
