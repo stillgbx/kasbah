@@ -20,6 +20,8 @@ const { t, d, n } = useI18n()
 /** `null`: not (yet) read, or public address. */
 const log = ref<AssistantLogEntry[] | null>(null)
 const loading = ref(false)
+/** Closed by default: two hundred entries would lengthen the page. */
+const open = ref(false)
 
 const fail = (err: unknown) => notifications.error(t('errors.UNKNOWN', { name: 'Assistant', message: (err as Error).message }))
 
@@ -51,7 +53,10 @@ onMounted(async () => {
   <div v-if="log" class="ac">
     <div class="ac__head">
       <div class="min0">
-        <div class="ac__title">{{ $t('assistant.logTitle') }}</div>
+        <button type="button" class="ac__toggle" :aria-expanded="open" @click="open = !open">
+          <StrokeIcon :name="open ? 'chevronUp' : 'chevronDown'" :size="16" class="ac__chev" />
+          <span class="ac__title">{{ $t('assistant.logTitle') }}</span>
+        </button>
         <div class="muted small">{{ $t('assistant.logHint') }}</div>
         <div v-if="total" class="ac__total muted small">{{ $t('assistant.logTotal', { cost: usd(total.cost), k: n(total.count) }, total.count) }}</div>
       </div>
@@ -59,8 +64,8 @@ onMounted(async () => {
         <StrokeIcon name="rotateRight" :size="16" />{{ $t('assistant.refresh') }}
       </button>
     </div>
-    <div v-if="!log.length" class="muted small">{{ $t('assistant.logEmpty') }}</div>
-    <div v-else class="ac__entries">
+    <div v-if="open && !log.length" class="muted small">{{ $t('assistant.logEmpty') }}</div>
+    <div v-else-if="open" class="ac__entries">
       <div v-for="e in log" :key="e.at + (e.user ?? '')" class="ac__entry">
         <div class="ac__meta muted small">
           {{ $t('assistant.logMeta', { when: when(e.at), who: e.user ?? $t('claude.house'), s: seconds(e.ms) }) }}<span v-if="e.usage" class="ac__cost" :title="tokens(e.usage)"> · {{ $t('assistant.logCost', { cost: usd(e.usage.costUsd) }) }}</span>
@@ -74,12 +79,14 @@ onMounted(async () => {
 <style scoped>
 .ac { display: grid; gap: 8px; }
 .ac__head { display: flex; align-items: flex-start; gap: 10px; }
+.ac__toggle { display: flex; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.ac__chev { flex: 0 0 auto; color: var(--muted); }
 .ac__title { font-size: 14px; font-weight: 600; }
 .ac__total { margin-top: 2px; }
 .ac__cost { cursor: help; }
 .ac__refresh { flex: none; height: 34px; font-size: 13px; }
-/* at most two hundred entries: the list scrolls inside the card instead of lengthening the page */
-.ac__entries { max-height: 480px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: var(--radius); }
+/* no scroll of its own: an inner scroller caught the page's wheel when it passed under the pointer */
+.ac__entries { border: 1px solid var(--line); border-radius: var(--radius); }
 .ac__entry + .ac__entry { border-top: 1px solid var(--line); }
 .ac__meta { padding: 10px 16px 0; }
 .ac__entry :deep(.reply) { padding-top: 4px; }

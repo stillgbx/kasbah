@@ -25,10 +25,12 @@ describe('AssistantCard — journal', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
   afterEach(() => { setTransport(null) })
 
-  it('shows the instructions of all accounts on the local network', async () => {
+  it('shows the instructions of all accounts on the local network, once the log is unfolded', async () => {
     fake(null)
     const w = mount(AssistantCard)
     await flushPromises()
+    expect(w.find('.ac__entries').exists()).toBe(false)
+    await w.find('.ac__toggle').trigger('click')
     const entries = w.findAll('.ac__entry')
     expect(entries).toHaveLength(3)
     expect(entries[0]!.find('.ac__meta').text()).toContain('lou')
@@ -41,6 +43,9 @@ describe('AssistantCard — journal', () => {
     fake(null)
     const w = mount(AssistantCard)
     await flushPromises()
+    // the total is read with the log folded
+    expect(w.find('.ac__total').text()).toBe('Total ≈ 0,016 $ pour 2 instructions, au prix de l’API : le forfait ne facture rien à l’instruction.')
+    await w.find('.ac__toggle').trigger('click')
     const entries = w.findAll('.ac__entry')
     const cost = entries[0]!.find('.ac__cost')
     expect(cost.text()).toBe('· ≈ 0,0031 $')
@@ -48,7 +53,6 @@ describe('AssistantCard — journal', () => {
     expect(cost.attributes('title')).toContain('écrits en cache')
     // an entry without a cost (silent engine, earlier log) shows none and does not count
     expect(entries[2]!.find('.ac__cost').exists()).toBe(false)
-    expect(w.find('.ac__total').text()).toBe('Total ≈ 0,016 $ pour 2 instructions, au prix de l’API : le forfait ne facture rien à l’instruction.')
   })
 
   it('with no priced instruction, no total', async () => {
