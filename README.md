@@ -265,7 +265,7 @@ Each device picks its categories (Vehicles, Robots, Pets, Weather, Plugins, Auto
 
 ### Voice assistants (Matter)
 
-The server can act as a **Matter bridge** on the local network: the devices you pick show up in **Alexa**, **Google Home** or **Apple Home**, with no skill and no cloud in between. Turn it on in **Settings → Voice assistants (Matter)**, scan the QR code (or type the code) from the assistant's app, then tick the devices to publish, plugin by plugin; changes apply at once.
+The server can act as a **Matter bridge** on the local network: the devices you pick show up in **Alexa**, **Google Home** or **Apple Home**, with no skill and no cloud in between. Turn it on in **Settings → Voice assistants (Matter)**, scan the QR code (or type the code) from the assistant's app, then tick the devices to publish, plugin by plugin; changes apply at once. Step by step for each assistant, including the Google Home Developer Console declaration: [docs/matter.md](docs/matter.md).
 
 - Published today: lights (on/off, brightness), covers (shutters, gates, garage doors, shown as blinds) and vehicle locks.
 - Only publish what the assistants don't already know: a Hue light or a Somfy shutter already linked there would show up twice.
@@ -437,6 +437,7 @@ Each plugin validates its own variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST_*`
 - [doc/index.md](doc/index.md) — wiki, in French (architecture, contract, each plugin, UI, setup, pitfalls).
 - [docs/house-json.md](docs/house-json.md) — house file format (reference frame, rooms, survey).
 - [docs/android-auto.md](docs/android-auto.md) — the Android Auto app: gates and garage doors on the car's screen, an alert to open them when nearing home, voice, building and trying it.
+- [docs/matter.md](docs/matter.md) — voice assistants through the Matter bridge: what can be published, pairing with Google Home (Developer Console), Apple Home and Alexa, withdrawing, troubleshooting.
 - [doc/5_setup/5_1_configuration-env.md](doc/5_setup/5_1_configuration-env.md) — environment variables (in French).
 
 ## License

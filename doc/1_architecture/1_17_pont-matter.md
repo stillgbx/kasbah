@@ -173,6 +173,25 @@ d'intégration `GET/PATCH /api/matter`, `MatterCard.test.ts` ; suite complète v
 **Non joué** : la disponibilité (`reachable`) transmise ; aucun vrai Alexa, Google ou Apple ; pas
 d'essai sur la vraie maison.
 
+### Mise à jour 2026-10-30 (3) — le guide utilisateur `docs/matter.md`
+
+La procédure côté utilisateur vit dans [`docs/matter.md`](../../docs/matter.md) (en anglais, comme
+`docs/`), liée depuis les deux README et depuis la section « Built in / Intégré » du site vitrine
+(`site/index.html`, `site/fr/index.html`, avant les plugins). Ce que les sources des trois éditeurs
+établissent, et qui n'est **pas** vérifié chez nous :
+
+- **Google Home** refuse un appareil non certifié tant que son couple VID/PID de test n'est pas déclaré
+  dans la Google Home Developer Console (projet → *Add Matter integration* → VID de test `0xFFF1`, PID
+  `0x8000`), avec le **même compte** que le hub ; redémarrer le hub ensuite. Un hub Google est
+  obligatoire ; le pont lui-même apparaît comme un appareil « pont » inerte, les appareils publiés comme
+  des appareils ordinaires. Les pages Google consultées datent en partie de 2022-2023 : libellés à
+  revérifier au premier essai.
+- **Apple Maison** accepte après l'avertissement « accessoire non certifié » (*Add Anyway*) ; un
+  concentrateur est conseillé, pas obligatoire.
+- **Alexa** : la documentation d'Amazon demande des ponts **certifiés** ; des ponts non certifiés du même
+  genre (Home Assistant Matter Hub) appairent souvent, mais de façon capricieuse (même réseau, IPv6,
+  nouvel essai). C'est le moins sûr des trois.
+
 ## Restant
 
 Essai avec un vrai assistant ; skill personnalisée (questions vers l'assistant de Kasbah) ; piloter un

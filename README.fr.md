@@ -265,7 +265,7 @@ Chaque appareil choisit ses catégories (Véhicules, Robots, Animaux, Météo, P
 
 ### Assistants vocaux (Matter)
 
-Le serveur peut servir de **pont Matter** sur le réseau local : les appareils choisis apparaissent dans **Alexa**, **Google Home** ou **Maison** (Apple), sans skill ni cloud entre les deux. On l'allume dans **Réglages → Assistants vocaux (Matter)**, on scanne le QR code (ou on saisit le code) depuis l'application de l'assistant, puis on coche les appareils à publier, plugin par plugin ; les changements s'appliquent tout de suite.
+Le serveur peut servir de **pont Matter** sur le réseau local : les appareils choisis apparaissent dans **Alexa**, **Google Home** ou **Maison** (Apple), sans skill ni cloud entre les deux. On l'allume dans **Réglages → Assistants vocaux (Matter)**, on scanne le QR code (ou on saisit le code) depuis l'application de l'assistant, puis on coche les appareils à publier, plugin par plugin ; les changements s'appliquent tout de suite. La procédure pas à pas pour chaque assistant, déclaration dans la Google Home Developer Console comprise : [docs/matter.md](docs/matter.md) (en anglais).
 
 - Publiés aujourd'hui : lampes (marche/arrêt, luminosité), ouvrants (volets, portails, portes de garage, vus comme des stores) et serrures des véhicules.
 - Ne publier que ce que les assistants ne connaissent pas déjà : une lampe Hue ou un volet Somfy déjà reliés chez eux apparaîtraient deux fois.
@@ -437,6 +437,7 @@ Chaque plugin valide ses propres variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST
 - [doc/index.md](doc/index.md) — wiki (architecture, contrat, chaque plugin, UI, setup, pièges).
 - [docs/house-json.md](docs/house-json.md) — format du fichier maison (repère, pièces, relevé métré).
 - [docs/android-auto.md](docs/android-auto.md) — l'appli Android Auto : portail et portes de garage sur l'écran de la voiture, une alerte pour les ouvrir en arrivant, voix, construire et essayer (en anglais).
+- [docs/matter.md](docs/matter.md) — les assistants vocaux par le pont Matter : ce qui peut être publié, appairage avec Google Home (Developer Console), Maison (Apple) et Alexa, retrait, dépannage (en anglais).
 - [doc/5_setup/5_1_configuration-env.md](doc/5_setup/5_1_configuration-env.md) — variables d'environnement.
 
 ## Licence

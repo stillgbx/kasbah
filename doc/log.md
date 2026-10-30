@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-30] update | Pont Matter : guide utilisateur et section « Intégré » du site
+
+**Déclencheur** : demande de l'utilisateur, une procédure pour appairer le pont (Google et sa console développeur en particulier) et une section du site pour ce qui est intégré sans être un plugin. Livré dans le même commit que cette entrée : `docs/matter.md`, liens des README, `site/index.html` et `site/fr/index.html`.
+
+**Pages modifiées** :
+- `1_architecture/1_17_pont-matter.md` - section « Mise à jour 2026-10-30 (3) » : renvoi vers `docs/matter.md`, ce que les sources de Google, Apple et Amazon établissent pour un pont non certifié, non vérifié chez nous.
+
+**Trous** : aucun vrai assistant essayé ; libellés de la Google Home Developer Console à revérifier (pages de 2022-2023).
+
 ## [2026-10-30] update | Pont Matter : réseau local seulement, dissociation d'un assistant
 
 **Déclencheur** : suite du pont Matter, livrée dans le même commit que cette entrée (`session.ts`, `bridge.ts`, `MatterCard.vue`, protocole partagé). Question de l'utilisateur : comment dépublier, d'où les quatre niveaux.
@@ -19,7 +28,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 - `1_architecture/1_13_comptes-et-sessions.md` - une phrase : `/api/matter/*` rejoint les routes `LAN_ONLY`.
 - `6_faq/6_1_pieges-runtime.md` - entrée : « n'a pas démarré » après le départ du dernier assistant.
 
-**Contradictions et trous** : le tableau des codes d'erreur de `1_3` ne cite que `/api/mcp/users` pour `LAN_ONLY` (antérieur à `/api/system`) : complété par une note, non réécrit. Non joué : vrai Alexa, Google ou Apple ; adresse publique réelle (seul le test de session couvre la garde).
+**Contradictions et trous** : le tableau des codes d'erreur de `1_3` ne cite que `/api/mcp/users` pour `LAN_ONLY` (antérieur à `/api/system`) : complété dans la foulée. Non joué : vrai Alexa, Google ou Apple ; adresse publique réelle (seul le test de session couvre la garde).
 
 **Index** : catalogues `6_faq` et `1_architecture` (1 date chacun), index.md régénéré ; les autres dates étaient déjà au 2026-10-30.
 
