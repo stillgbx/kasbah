@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
+import { computed, getCurrentScope, onBeforeUnmount, onMounted, onScopeDispose, ref, watch, type Ref } from 'vue'
 import type { StateFor } from '@kasbah/shared'
 
 // Position read from a player, advanced locally between two readings. The device does not push its
@@ -71,35 +71,55 @@ export const SEEK_HOLD_MAX_MS = 8_000
  * player publishes a position CLOSER to the target than to the starting point (compare to the
  * start rather than to a fixed distance: a one-second move must also hold against a
  * stagnant reading), at most `SEEK_HOLD_MAX_MS`. `deviceId`: changing player releases everything.
+ *
+ * The hold is judged on TIME too, not only when a reading changes: the echo arrives before the minimum
+ * hold and a Cast is only read every 10 s — judged on readings alone, the thumb stayed frozen on the
+ * target until the next one. And while held, it moves on with the music (`playing`).
  */
-export function useSeekHold(published: Ref<number | undefined>, deviceId?: Ref<string | undefined>) {
+export function useSeekHold(published: Ref<number | undefined>, deviceId?: Ref<string | undefined>, playing?: () => boolean) {
   const seekDraft = ref<number | null>(null)
   const holding = ref(false)
   let target = 0
   let origin = 0
   let beganAt = 0
+  /** Last value the hold wrote: another one in `seekDraft` is the user dragging again. */
+  let written: number | null = null
+  let ticker: ReturnType<typeof setInterval> | undefined
 
   /** Sets the target (rounded to the second) and returns the value to send to the player. */
   function beginSeek(v: number): number {
     target = Math.round(v)
     origin = published.value ?? target
     beganAt = Date.now()
-    seekDraft.value = target
+    seekDraft.value = written = target
     holding.value = true
+    clearInterval(ticker)
+    ticker = setInterval(tick, 500)
     return target
   }
   function release() {
+    clearInterval(ticker)
+    ticker = undefined
     holding.value = false
-    seekDraft.value = null
+    seekDraft.value = written = null
+  }
+  function judge(pos: number | undefined) {
+    const heldMs = Date.now() - beganAt
+    if (heldMs >= SEEK_HOLD_MAX_MS) return release()
+    if (pos !== undefined && heldMs >= SEEK_HOLD_MIN_MS && Math.abs(pos - target) < Math.abs(pos - origin)) release()
+  }
+  function tick() {
+    // the thumb is being dragged again: leave it to the hand
+    if (!holding.value || seekDraft.value !== written) return
+    judge(published.value)
+    if (holding.value && playing?.()) seekDraft.value = written = target + (Date.now() - beganAt) / 1000
   }
 
   watch(published, (pos) => {
-    if (!holding.value || pos === undefined) return
-    const heldMs = Date.now() - beganAt
-    if (heldMs >= SEEK_HOLD_MAX_MS) return release()
-    if (heldMs >= SEEK_HOLD_MIN_MS && Math.abs(pos - target) < Math.abs(pos - origin)) release()
+    if (holding.value && pos !== undefined) judge(pos)
   })
   if (deviceId) watch(deviceId, release)
+  if (getCurrentScope()) onScopeDispose(() => clearInterval(ticker))
 
   return { seekDraft, beginSeek, holding }
 }

@@ -150,6 +150,42 @@ describe('useSeekHold', () => {
     expect(seekDraft.value).toBeNull()
   })
 
+  // seen on 2026-10-30 on a Cast, read every 10 s: once released, the thumb stayed frozen on the target
+  // until the next reading
+  it('releases on the optimistic echo once the minimum hold is over, without waiting for another reading', async () => {
+    const published = ref<number | undefined>(40)
+    const { seekDraft, beginSeek, holding } = useSeekHold(published)
+    beginSeek(120)
+    published.value = 120
+    await nextTick()
+    vi.advanceTimersByTime(SEEK_HOLD_MIN_MS + 600)
+    expect(holding.value).toBe(false)
+    expect(seekDraft.value).toBeNull()
+  })
+
+  it('gives up after the maximum hold even when no reading comes at all', () => {
+    const published = ref<number | undefined>(40)
+    const { beginSeek, holding } = useSeekHold(published)
+    beginSeek(120)
+    vi.advanceTimersByTime(SEEK_HOLD_MAX_MS + 600)
+    expect(holding.value).toBe(false)
+  })
+
+  it('moves the held position on with the music while it plays, not while paused', async () => {
+    const published = ref<number | undefined>(40)
+    const playing = ref(true)
+    const { seekDraft, beginSeek } = useSeekHold(published, undefined, () => playing.value)
+    beginSeek(120)
+    // a reading from before the gesture keeps the hold
+    published.value = 41
+    await nextTick()
+    vi.advanceTimersByTime(1500)
+    expect(seekDraft.value).toBe(121.5)
+    playing.value = false
+    vi.advanceTimersByTime(1000)
+    expect(seekDraft.value).toBe(121.5)
+  })
+
   it('clears when the device id changes', async () => {
     const published = ref<number | undefined>(40)
     const deviceId = ref('a')

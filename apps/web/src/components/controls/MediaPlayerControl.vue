@@ -90,7 +90,11 @@ function skip(kind: 'next' | 'previous') {
 
 // Position slider: local value during the drag, then `media_player.seek` on release.
 // The slider only acts on a track with a duration (a live stream has none) and if the device can seek.
-const { seekDraft, beginSeek } = useSeekHold(toRef(() => props.state.nowPlaying?.positionS), toRef(() => props.descriptor.id))
+const { seekDraft, beginSeek } = useSeekHold(
+  toRef(() => props.state.nowPlaying?.positionS),
+  toRef(() => props.descriptor.id),
+  () => props.state.playback === 'playing',
+)
 const canSeek = computed(() => hasDuration.value && has('seek') && !live.value)
 const shownPosition = computed(() => seekDraft.value ?? position.value ?? 0)
 /** The slider ROUNDS to its step, the clock truncates: given the whole second, both move together. */

@@ -143,6 +143,7 @@ const position = computed<number | undefined>(() => {
 const { seekDraft, beginSeek } = useSeekHold(
   toRef(() => state.value?.nowPlaying?.positionS),
   toRef(() => props.entry?.descriptor.id),
+  () => !resume.value && state.value?.playback === 'playing',
 )
 // the last listen: the slider only chooses where it will resume
 const canSeek = computed(() => hasDuration.value && (resume.value ? true : !live.value && loaded.value && has('seek')))

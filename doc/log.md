@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-30] update | Curseur du lecteur figé après un déplacement
+
+**Déclencheur** : signalé par l'utilisateur (« une fois lâché il se fige jusqu'à la resynchro suivante ») ; code `useMediaPosition.ts` (`useSeekHold`), `MusicPlayerBar.vue`, `MediaPlayerControl.vue` non commité à la date d'écrire.
+
+**Pages modifiées** :
+- `6_faq/6_1_pieges-runtime.md` - « Complément 2026-10-30 — le curseur figé après un déplacement » sous l'entrée du 2026-09-22 : tenue jugée au seul relevé, limite de 8 s non tenue sans relevé ; réjugée toutes les 500 ms et avancée avec la musique.
+
+**Index** : inchangé (page déjà datée du 2026-10-30).
+
 ## [2026-10-30] update | Barre du lecteur : seconde d'avance et position négative
 
 **Déclencheur** : signalé par l'utilisateur (« la barre de progression délire un peu », « elle n'avance pas en même temps que le timecode »), relevé sur la vraie page Musique ; code `useMediaPosition.ts`, `MusicPlayerBar.vue`, `MediaPlayerControl.vue` non commité à la date d'écrire.

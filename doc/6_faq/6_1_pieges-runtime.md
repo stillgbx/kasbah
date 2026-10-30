@@ -1090,6 +1090,26 @@ Sources : `apps/web/src/composables/useMediaPosition.ts` + `useMediaPosition.tes
 `apps/web/src/components/{music/MusicPlayerBar,controls/MediaPlayerControl}.vue`,
 `apps/web/src/lib/optimistic.ts`, `../1_architecture/1_4_app-web.md`.
 
+### Complément 2026-10-30 — le curseur figé après un déplacement, jusqu'au relevé suivant
+
+- **Symptôme** : sur un Cast, une fois le curseur lâché, il reste **figé** sur la cible jusqu'au relevé
+  suivant (jusqu'à 10 s), puis saute à la bonne position.
+- **Diagnostic** : la tenue de `useSeekHold` n'était jugée qu'**à l'arrivée d'un relevé** (`watch` sur la
+  position publiée). L'écho optimiste arrive avant la tenue minimale et ne compte pas ; ensuite plus rien ne
+  change jusqu'au relevé suivant, toutes les 10 s pour un Cast. La tenue maximale (`SEEK_HOLD_MAX_MS`) n'était
+  elle aussi vérifiée qu'à ce moment-là : « un lecteur qui ne confirme jamais ne fige pas le curseur » n'était
+  vrai que s'il publiait encore quelque chose. Et la valeur tenue ne bougeait pas.
+- **Solution** : la tenue est **réjugée toutes les 500 ms** (`setInterval`, arrêté au relâchement et à la
+  fin de la portée) : l'écho la relâche dès `SEEK_HOLD_MIN_MS`, et `SEEK_HOLD_MAX_MS` s'applique sans aucun
+  relevé. Pendant la tenue, la valeur **avance avec la musique** quand le lecteur joue (troisième argument
+  `playing`, passé par `MusicPlayerBar` et `MediaPlayerControl`) ; un curseur repris à la main pendant la
+  tenue est laissé à la main. Trois tests, rouges avant le correctif.
+- **Règle** : une attente de confirmation dont la sortie n'est jugée que sur des événements ne sort pas
+  quand les événements cessent ; une limite de temps doit être tenue par le temps.
+
+Sources : `apps/web/src/composables/useMediaPosition.ts` + `useMediaPosition.test.ts`,
+`apps/web/src/components/{music/MusicPlayerBar,controls/MediaPlayerControl}.vue`.
+
 ## 2026-09-23 — un `v-select` s'étire sur toute la hauteur d'une colonne
 
 - **Date** : 2026-09-23
