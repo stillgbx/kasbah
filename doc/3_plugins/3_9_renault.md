@@ -779,6 +779,35 @@ n'y est confirmé, la R5 n'y est pas citée, et sur une Mégane protégée par S
 répondent `CONTACT_SRC`. L'essayer voudrait dire envoyer une commande inconnue à la vraie voiture, sur le
 quota du compte (bloqué 1 h le 2026-09-19) : **non tenté**, à décider avec l'utilisateur.
 
+**Essayée le même jour, à la demande de l'utilisateur, la voiture garée à côté de lui** : un seul
+`POST .../kamereon/kca/car-adapter/v1/cars/{vin}/actions/lock-unlock`, corps
+`{ data: { type: "LockUnlock", attributes: { action: "unlock", target: "doors_hatch" } } }` (l'enveloppe
+de `hvac-start`, qui, elle, passe sur la R5), envoyé par une sonde hors dépôt qui réutilise
+`RenaultClient`. Réponse : **HTTP 403 `err.func.wired.forbidden`**, le code que la R5 rend pour
+`pressure`, `charge-mode` ou `charge/pause-resume`, et que `isEndpointUnavailable` (`client.ts`) lit
+comme « absent pour ce véhicule ». La voiture n'a pas bougé ; le verrouillage n'a pas été envoyé.
+Pas d'autre préfixe essayé (`kcm` deviné), ni la voie SRP (`srp-initiates` / `srp-sets`, à code PIN)
+citée dans le ticket : ce serait inventer un protocole. La R5 reste sans `lock`.
+
+**Pourquoi, lu le même soir** : la passerelle `myr` de l'appli (hôte `https://apis.renault.com`, mêmes
+en-têtes `apikey` + `x-gigya-id_token` que Kamereon, documentée par `renault-api` dans
+`docs/myr-gateway.rst`, PR n°2258) dit, véhicule par véhicule, quelles fonctions à distance sont
+actives et sous quel protocole. Deux lectures, aucune action :
+
+- `GET /myr/api/v1/accounts/{accountId}/connected-vehicles?vin={vin}&country=FR` : pour la R5
+  (`R5E1VE`, passerelle `CVC`, architecture `CCS2`, appairage `ONBOARD`),
+  `connectedStatus.remoteSecurityProtocol` = **`JWT`**, et dans `applicableFeatures` la fonction
+  **2021** (verrouillage par le cloud, ordres `/RLU/Lock` et `/RLU/Unlock`) est **`DEACTIVATED`**, comme
+  la 973 (état du verrou) ; la 27 (`hasLockUnlock`) n'y figure pas ;
+- `GET /myr/api/v1/accounts/{accountId}/vehicles/{vin}/remotes?country=FR` : 36 fonctions, toutes en
+  `["JWT"]`, aucune 2021 ni 27.
+
+Donc la voie SRP (code PIN, `srp-initiates` / `srp-sets`, reconstituée en octobre 2026 pour la Nissan
+Ariya dans le ticket n°96 de `dan-r/HomeAssistant-NissanConnect`) **ne concerne pas la R5** : son
+protocole est le JWT que Kasbah envoie déjà, et le 403 vient de la fonction elle-même, désactivée par
+Renault pour ce véhicule. Rien à débloquer côté Kasbah ; si Renault l'active un jour, la 2021 passera
+à `ACTIVATED` dans cette même lecture, et c'est elle qu'il faudrait relire avant de réessayer.
+
 Le klaxon et les feux (`actions/horn-lights`, listés pour la R5 par `renault-api`) restent une
 possibilité distincte, non demandée.
 

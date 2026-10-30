@@ -13,7 +13,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 
 **Pages modifiées** :
 - `3_plugins/3_8_tesla.md` - section « Mise à jour 2026-10-30 » : `door_lock` / `door_unlock`, capacité `lock`, réveil comme la clim, `locked` gardé dans le fichier d'état, pistes écartées, pas essayé sur la vraie voiture ; note « Dépassé » en tête.
-- `3_plugins/3_9_renault.md` - section « Mise à jour 2026-10-30 » : aucune commande de verrouillage dans `renault-api` ni Home Assistant, `lock-status` à `None` pour la R5, piste non vérifiée `actions/lock-unlock` (ticket n°2253), non tentée.
+- `3_plugins/3_9_renault.md` - section « Mise à jour 2026-10-30 » : aucune commande de verrouillage dans `renault-api` ni Home Assistant, `lock-status` à `None` pour la R5, piste `actions/lock-unlock` (ticket n°2253) essayée ensuite à la demande de l'utilisateur : un déverrouillage, 403 `err.func.wired.forbidden` ; la passerelle `myr` (`connected-vehicles`, `remotes`) dit pourquoi : protocole JWT (pas SRP), fonction 2021 désactivée pour la R5.
 - `1_architecture/1_17_pont-matter.md` - note « Dépassé » sur « la Tesla réelle n'a pas la capacité `lock` ».
 
 **Index** : catalogue `3_plugins` mis à jour (2 lignes), index.md régénéré.
