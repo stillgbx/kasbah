@@ -147,6 +147,8 @@ const { seekDraft, beginSeek } = useSeekHold(
 // the last listen: the slider only chooses where it will resume
 const canSeek = computed(() => hasDuration.value && (resume.value ? true : !live.value && loaded.value && has('seek')))
 const shownPosition = computed(() => seekDraft.value ?? position.value ?? 0)
+/** The slider ROUNDS to its step, the clock truncates: given the whole second, both move together. */
+const sliderPosition = computed(() => Math.floor(shownPosition.value))
 function seekEnd(v: number) {
   emit('seek', beginSeek(v))
 }
@@ -308,7 +310,7 @@ const explicit = computed(() => (props.pending
       <!-- invisible without duration or position (nothing playing), but the space stays -->
       <div class="bar__seek" :class="{ 'bar--hidden': !hasDuration && !hasPosition && !resume }">
         <span class="time">{{ formatClock(shownPosition) || '0:00' }}</span>
-        <v-slider :class="{ 'bar--hidden': !hasDuration }" :model-value="shownPosition" :min="0" :max="duration ?? 1" :step="1"
+        <v-slider :class="{ 'bar--hidden': !hasDuration }" :model-value="sliderPosition" :min="0" :max="duration ?? 1" :step="1"
                   :disabled="!available || !canSeek" density="compact" hide-details color="primary" track-size="4" thumb-size="16"
                   :aria-label="$t('media.seek')"
                   @update:model-value="(v: number) => { seekDraft = v }" @end="seekEnd" />

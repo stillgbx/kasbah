@@ -93,6 +93,8 @@ function skip(kind: 'next' | 'previous') {
 const { seekDraft, beginSeek } = useSeekHold(toRef(() => props.state.nowPlaying?.positionS), toRef(() => props.descriptor.id))
 const canSeek = computed(() => hasDuration.value && has('seek') && !live.value)
 const shownPosition = computed(() => seekDraft.value ?? position.value ?? 0)
+/** The slider ROUNDS to its step, the clock truncates: given the whole second, both move together. */
+const sliderPosition = computed(() => Math.floor(shownPosition.value))
 function seekEnd(v: number) {
   emit('command', { type: 'media_player.seek', positionS: beginSeek(v) })
 }
@@ -131,7 +133,7 @@ function nudgeVolume(delta: number) {
       <MarqueeText class="text-body-2 text-medium-emphasis" :text="line2" />
       <!-- position slider and times: invisible without a duration (live stream), but the space stays reserved -->
       <v-slider class="now__seek" :class="{ 'now--hidden': !hasDuration }"
-                :model-value="shownPosition" :min="0" :max="duration ?? 1" :step="1"
+                :model-value="sliderPosition" :min="0" :max="duration ?? 1" :step="1"
                 :disabled="disabled || !canSeek" density="compact" hide-details color="primary" track-size="3" thumb-size="12"
                 :aria-label="$t('media.seek')"
                 @update:model-value="(v: number) => { seekDraft = v }" @end="seekEnd" />

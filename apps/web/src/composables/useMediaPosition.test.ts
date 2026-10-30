@@ -49,6 +49,20 @@ describe('useMediaPosition', () => {
     await nextTick()
     expect(position.value).toBe(100 + MEDIA_POSITION_SLACK_S + 1)
   })
+
+  it('never goes below the reading just received, between two ticks of its clock', async () => {
+    // seen on 2026-10-30 at a track change: the clock showed "-1:-1:-1"
+    const state = ref(media({
+      playback: 'playing',
+      nowPlaying: { title: 'Break On Through', positionS: 236, durationS: 283 },
+    }))
+    const { position } = useMediaPosition(state)
+    // the local clock only ticks every 500 ms: a reading lands in between
+    vi.advanceTimersByTime(300)
+    state.value = media({ playback: 'playing', nowPlaying: { title: 'Introduction', positionS: 0, durationS: 28 } })
+    await nextTick()
+    expect(position.value).toBe(0)
+  })
 })
 
 describe('useSeekHold', () => {

@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-30] update | Barre du lecteur : seconde d'avance et position négative
+
+**Déclencheur** : signalé par l'utilisateur (« la barre de progression délire un peu », « elle n'avance pas en même temps que le timecode »), relevé sur la vraie page Musique ; code `useMediaPosition.ts`, `MusicPlayerBar.vue`, `MediaPlayerControl.vue` non commité à la date d'écrire.
+
+**Pages modifiées** :
+- `6_faq/6_1_pieges-runtime.md` - entrée « 2026-10-30 — la barre du lecteur a une seconde d'avance… » : `v-slider` arrondit, `formatClock` tronque ; horloge locale à 500 ms qui fait compter un temps négatif après un relevé ; corrections et sondes.
+
+**Index** : inchangé (page déjà datée du 2026-10-30).
+
 ## [2026-10-30] update | Plugin Home Assistant (contribution de qgiu) et `sessionUser` des routes de plugins
 
 **Déclencheur** : plugin `home_assistant` et correctif reçus d'un utilisateur (écrits sur la version du 2026-10-12), intégrés et adaptés ; sélection des entités demandée « comme le pont Matter » ; code non commité à la date d'écrire.

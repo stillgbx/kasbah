@@ -50,7 +50,9 @@ export function useMediaPosition(state: Ref<StateFor<'media_player'> | undefined
   const position = computed<number | undefined>(() => {
     const s = state.value
     if (!s?.nowPlaying) return undefined
-    const p = s.playback === 'playing' ? anchor.value.pos + (now.value - anchor.value.at) / 1000 : anchor.value.pos
+    // `now` only ticks every 500 ms: a reading received in between dates its reference AFTER it —
+    // without the floor, the position went below the reading ("-1:-1:-1" at a track change)
+    const p = s.playback === 'playing' ? anchor.value.pos + Math.max(0, now.value - anchor.value.at) / 1000 : anchor.value.pos
     return duration.value ? Math.min(p, duration.value) : p
   })
   return { position, duration, hasPosition }

@@ -1580,3 +1580,31 @@ développement parle : ce n'est pas forcément celui qu'on vient de lancer sur 8
 **Diagnostic** : `kasbah-web` proxifie vers le `KASBAH_PORT` de `apps/server/.env`, pas forcément 8787.
 
 **Solution** : lire ce port avant de lancer un serveur d'essai, et lancer ce dernier sur le même.
+
+## 2026-10-30 — la barre du lecteur a une seconde d'avance, et affiche « -1:-1:-1 » au changement de titre
+
+Deux défauts relevés sur la vraie page Musique (un Cast, un titre de 28 s), le Cast lui-même étant hors de
+cause : chaque position qu'il publiait tombait à moins de 0,3 s de ce que la barre extrapolait.
+
+- **Symptôme 1** : la barre n'avance pas en même temps que le compteur ; le curseur passe à la seconde
+  suivante avant lui (« 3:32 » affiché, curseur à 213).
+- **Diagnostic 1** : `v-slider` **arrondit** sa valeur à son pas (`roundValue`, `Math.round`, `:step="1"`)
+  et anime le déplacement en 0,3 s ; `formatClock` **tronque**. À 23,7 s, le compteur dit 0:23 et le curseur
+  est à 24 : une demi-seconde d'avance en moyenne. Sonde : 24 écarts sur 50 relevés sans correctif, 0 avec.
+- **Solution 1** : le curseur reçoit la seconde tronquée (`sliderPosition` = `Math.floor(shownPosition)`)
+  dans `MusicPlayerBar` et `MediaPlayerControl`. Le saut de ±10 s part toujours de la position exacte.
+- **Symptôme 2** : au changement de titre, le compteur affiche **« -1:-1:-1 »** un instant ; en cours de
+  titre, la barre recule d'une fraction de seconde à l'arrivée d'un relevé.
+- **Diagnostic 2** : `useMediaPosition` avance la position avec une horloge locale `now` qui ne bat que
+  toutes les 500 ms, alors qu'un relevé reçu pose son repère à `Date.now()`. Entre deux battements, le repère
+  est **plus récent** que l'horloge : `now - anchor.at` est négatif, la position tombe sous le relevé
+  (-0,3 s au début d'un titre, d'où `formatClock` → « -1:-1:-1 »).
+- **Solution 2** : le temps écoulé depuis le repère est borné à zéro (`Math.max(0, …)`). Test « never goes
+  below the reading just received », rouge avant (-0,3), vert après.
+- **Règle** : une valeur avancée par une horloge qui bat moins vite que les événements qui la recalent ne
+  doit jamais compter un temps négatif ; et deux affichages d'une même valeur doivent passer par la même
+  conversion (arrondi ou troncature), sinon ils se décalent.
+
+Sources : `apps/web/src/composables/useMediaPosition.ts` + `useMediaPosition.test.ts`,
+`apps/web/src/components/{music/MusicPlayerBar,controls/MediaPlayerControl}.vue`, Vuetify
+`components/VSlider/slider.js` (`roundValue`).
