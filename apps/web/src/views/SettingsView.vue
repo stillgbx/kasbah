@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import AssistantCard from '../components/settings/AssistantCard.vue'
+import MatterCard from '../components/settings/MatterCard.vue'
 import McpUsersCard from '../components/settings/McpUsersCard.vue'
 import NavOrderCard from '../components/settings/NavOrderCard.vue'
 import PushCard from '../components/settings/PushCard.vue'
@@ -352,6 +353,12 @@ const houseStats = computed(() => {
         <div class="block__title">{{ $t('assistant.title') }}</div>
         <p class="muted small plugins__hint">{{ $t('assistant.hint') }}</p>
         <AssistantCard />
+      </section>
+      <!-- the house's devices published on the local network for Alexa, Google Home or Apple Home -->
+      <section class="card block settings__plugins">
+        <div class="block__title">{{ $t('matter.title') }}</div>
+        <p class="muted small plugins__hint">{{ $t('matter.hint') }}</p>
+        <MatterCard />
       </section>
       <!-- the server version, and its update by the supervisor (local network only) -->
       <section class="card block settings__plugins">

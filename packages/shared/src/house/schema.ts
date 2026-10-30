@@ -647,6 +647,18 @@ export function pluginSettingsOf(plugins: Readonly<Record<string, PluginSettings
 }
 
 /**
+ * Matter bridge of this house: Kasbah devices published on the local network for Alexa, Google
+ * Home or Apple Home. Opt-in device by device: what a voice assistant already reaches through the
+ * vendor's own integration would appear twice.
+ */
+export const matterSettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Device ids (`<pluginId>:<externalId>`) to publish. */
+  devices: z.array(z.string()).default([]),
+})
+export type MatterSettings = z.infer<typeof matterSettingsSchema>
+
+/**
  * LIGHT SETTING of the 3D scene, saved in the house (`render.tuning`). These are
  * MULTIPLIERS applied on what the render style computes for the current hour: × 1 everywhere
  * gives the style as is, and the style's day/night curve survives the setting. The last five,
@@ -736,6 +748,8 @@ export const houseSchema = z.object({
   arrays: z.array(panelArraySchema).default([]),
   /** Plugins of this house: which are active, and their sub-items. */
   plugins: z.record(z.string(), pluginSettingsSchema).default(defaultPlugins),
+  /** Matter bridge: which devices are published to the voice assistants. */
+  matter: matterSettingsSchema.optional(),
   /** Light setting of the 3D scene, set from the Home view. */
   render: renderSettingsSchema.optional(),
   /** Appearance of the envelope: the finish of the facade (exterior faces of the exterior walls). */

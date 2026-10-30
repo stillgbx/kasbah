@@ -1,4 +1,4 @@
-import type { GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEnergyDays, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, PropertiesResponse, PropertyMode, NewPropertyBody, PushSubscribeBody, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor } from '@kasbah/shared'
+import type { GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEnergyDays, DeviceEntry, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, MatterSettingsPatch, MatterStatus, PropertiesResponse, PropertyMode, NewPropertyBody, PushSubscribeBody, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor } from '@kasbah/shared'
 
 // Abstraction of the server channel. Two implementations: HTTP + WebSocket (real) and in-process
 // simulation (tests, static demo without a server). Commands ALWAYS go through a request
@@ -794,6 +794,10 @@ export interface Transport {
   systemUpdateStatus(): Promise<{ status: UpdateStatus | null }>
   /** Asks the supervisor for the update; `NOT_SUPERVISED` without it, `UPDATE_RUNNING` if it is running. */
   systemUpdate(): Promise<{ status: UpdateStatus }>
+  /** The Matter bridge: its state, its pairing codes while unpaired, and what it can publish. */
+  matterStatus(): Promise<MatterStatus>
+  /** Writes the bridge's setting into the house and applies it live. */
+  setMatter(patch: MatterSettingsPatch): Promise<MatterStatus>
   /** The server's VAPID public key, for `pushManager.subscribe`. */
   pushKey(): Promise<{ publicKey: string }>
   /** Subscribes this screen to push notifications, or changes its categories. */

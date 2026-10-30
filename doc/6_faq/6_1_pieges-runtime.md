@@ -1,6 +1,6 @@
 # FAQ — pièges à l'exécution
 
-> Dernière mise à jour : 2026-10-25
+> Dernière mise à jour : 2026-10-30
 > Sources : `apps/web/src/components/home/SceneLoader.vue`, `apps/web/src/three/HouseScene.ts` (`padLamps`), `apps/web/src/three/core/post.ts`, session du 2026-09-19 (`_generated-ai-doc/sessions/2026-09-19-irobot/journal.md`), sessions du 2026-09-04, du 2026-09-07, du 2026-09-08 et du 2026-09-09, `apps/server/src/plugins/tahoma/{client,index,mapping}.ts`, `apps/web/src/stores/devices.ts`, `apps/web/src/stores/scenes.ts`, `apps/server/src/plugins/hue/index.ts`, `apps/server/test/integration.test.ts`, `apps/web/src/styles/app.css`, `apps/server/src/core/registry.ts`, `packages/shared/src/devices/{state,rules}.ts`, `apps/web/src/lib/deviceState.ts`, `packages/mock-sim/src/simulation.ts`, `packages/shared/src/house/geometry/walls.ts`, `house/fit-survey.mjs`, `apps/web/src/composables/useHouseScene.ts`, `apps/server/src/plugins/google_cast/{index,known,discovery,channel,mapping}.ts`, session du 2026-09-17 (`_generated-ai-doc/sessions/2026-09-16-comap-proteo-2/journal.md`), `apps/web/src/components/automations/AutomationEditor.vue`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/plugins/tesla/{state,index}.ts`, `apps/web/src/views/AutomationEditView.vue`, `apps/server/src/plugins/claude/run.ts`, `house/demos/tilleuls.json`
 
 ## ytmusic : « Best of » reste en Album alors que « Best Of » est en Compil
@@ -1540,3 +1540,31 @@ par `assistant.ts`) puis lit le journal une seule fois (commit `fceb698`). `writ
 descripteur ouvert sur le fichier pendant l'écriture (`core/atomic-file.test.ts`). **Leçon** : sous
 Windows, « atomique » ne veut pas dire « toujours possible » ; une sonde qui interroge un fichier peut
 empêcher l'écriture qu'elle attend.
+
+## 2026-10-30 — matter.js : deux pièges au démarrage du pont
+
+**Symptôme** : (1) importer `@matter/main` change le comportement de tout le processus (stockage dans
+le dossier personnel, signaux interceptés, code de sortie modifié), relevé dans le code de matter.js avant
+de l'intégrer ; (2) un pont avec une
+serrure refusait de démarrer sur une valeur hors bornes.
+
+**Diagnostic** : (1) matter.js installe son environnement Node **à l'import** de `@matter/main` : les
+réglages de `@matter/nodejs/config` doivent être posés avant. (2) Sans la fonctionnalité PIN, matter.js
+0.17.9 exige quand même `operatingMode` et **valide** `wrongCodeEntryLimit` et
+`userCodeTemporaryDisableTime` contre 1 à 255, alors qu'ils sont absents du type : leur défaut 0 est
+refusé.
+
+**Solution** : (1) régler `@matter/nodejs/config` puis importer `@matter/main` **dynamiquement**, donc
+seulement quand la maison active le pont (`loadMatter`, `apps/server/src/matter/bridge.ts`). (2) Poser
+`operatingMode` et ces deux valeurs par un cast ; jamais utilisées. Voir
+[1_17 Pont Matter](../1_architecture/1_17_pont-matter.md), qui porte aussi le piège de l'id d'endpoint
+(le `.` est refusé, l'id doit rester stable).
+
+## 2026-10-30 — le front de développement ne parle pas au serveur qu'on croit
+
+**Symptôme** : lors de la vérification de la carte Matter, on ne sait pas à quel serveur le front de
+développement parle : ce n'est pas forcément celui qu'on vient de lancer sur 8787.
+
+**Diagnostic** : `kasbah-web` proxifie vers le `KASBAH_PORT` de `apps/server/.env`, pas forcément 8787.
+
+**Solution** : lire ce port avant de lancer un serveur d'essai, et lancer ce dernier sur le même.

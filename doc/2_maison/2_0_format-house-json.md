@@ -1,6 +1,6 @@
 # Format house.json : décisions et validation
 
-> Dernière mise à jour : 2026-10-29
+> Dernière mise à jour : 2026-10-30
 > Sources : `packages/shared/src/house/{schema,validate,lookup,geo}.ts`, `docs/house-json.md`, `house/demo-house.json`, `packages/shared/src/house/autoplace.ts`, `house/fit-survey.mjs`, `house/maison.json`, `packages/shared/src/house/place.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/panels.ts`, `packages/shared/src/house/openings.ts`, `packages/shared/src/house/parking.ts`, `packages/shared/src/house/geometry/relief.ts` (`site.relief`), `house/demos/*.json`, `apps/server/src/config/properties.ts`, `packages/shared/src/house/structure.ts`, `packages/shared/src/house/newHouse.ts`, `packages/shared/src/house/geometry/roof.ts` (`roofs`)
 
 La **référence complète du format** (champs, exemples) est `docs/house-json.md`. Cette page
@@ -1455,3 +1455,15 @@ a ses propres étages ou un sol à une autre cote. Il s'ajouterait sans revenir 
 
 Référence publique : section « Roofs » de `docs/house-json.md`. Sources : `packages/shared/src/house/{schema,validate,structure,newHouse}.ts`,
 `packages/shared/src/house/geometry/roof.ts`.
+
+### Mise à jour 2026-10-30 — `matter` : les appareils publiés aux assistants vocaux
+
+Bloc **facultatif** de la maison : `matter: { enabled, devices }` (`matterSettingsSchema`,
+`packages/shared/src/house/schema.ts`). `enabled` vaut `false` par défaut ; `devices` est la liste des
+ids (`<pluginId>:<idExterne>`) à publier. Absent, le pont est éteint.
+
+Le choix se fait **appareil par appareil**, pas par type ni par plugin : ce qui produirait des doublons
+dans Alexa ou Google Home, c'est la marque (Hue, Somfy y sont déjà), pas le type. Un id listé que le
+registre ne connaît plus, ou d'un genre non traduisible, reste dans le fichier et est signalé par
+`skipped` côté API. Le bloc s'écrit depuis Réglages (`PATCH /api/matter`, `../1_architecture/1_3_protocole-rest-ws.md`) ;
+fond : [1_17 Pont Matter](../1_architecture/1_17_pont-matter.md).

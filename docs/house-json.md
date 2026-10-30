@@ -119,6 +119,19 @@ One roof per **volume** of the building: the main house, an attached garage, a d
 
 The former single `"roof": { … }` is still read as a one-roof list; a file carries `roof` or `roofs`, not both. A roof is hidden as soon as a level below it is focused.
 
+### Matter bridge (`matter`)
+
+Optional. The devices published to voice assistants (Alexa, Google Home, Apple Home) by the server's Matter bridge, written by **Settings → Voice assistants (Matter)**:
+
+```jsonc
+"matter": { "enabled": true, "devices": ["mock:light-living", "mock:cover-gate", "mock:vehicle-tesla"] }
+```
+
+- `enabled` (default `false`): the bridge runs on the local network.
+- `devices` (default `[]`): device ids, as in `GET /api/devices`. Only lights, covers and vehicles with a lock can be published; any other id is listed as skipped in `GET /api/matter`.
+
+The pairing keys are not in the house: they stay in the server's state folder (`apps/server/.state/matter/`).
+
 ## Measured survey (`meta.survey`)
 
 A real house is measured **inside the rooms**: each shared partition is reduced to a single shared line there, whereas the polygons must be spaced apart by the sum of the half-partitions (see **Walls** above). Rather than correcting the measurements by hand, the raw measurements are kept in `meta` — which the schema leaves free — and the `polygon`s are **derived** from them by a script.

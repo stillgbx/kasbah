@@ -392,3 +392,28 @@ export function releaseNotesLang(lang: string | undefined): string {
   const l = lang?.trim().slice(0, 2).toLowerCase()
   return l && /^[a-z]{2}$/.test(l) ? l : RELEASE_NOTES_FALLBACK_LANG
 }
+
+// --- Matter bridge (`/api/matter`) ---
+
+/** What a Kasbah device becomes for a Matter controller (Alexa, Google Home, Apple Home). */
+export const MATTER_DEVICE_TYPES = ['on_off_light', 'dimmable_light', 'window_covering', 'door_lock'] as const
+export type MatterDeviceType = (typeof MATTER_DEVICE_TYPES)[number]
+
+/** `PATCH /api/matter`: only the present fields are written (same reason as `pluginSettingsPatchSchema`). */
+export const matterSettingsPatchSchema = z.object({
+  enabled: z.boolean().optional(),
+  devices: z.array(z.string()).optional(),
+})
+export type MatterSettingsPatch = z.infer<typeof matterSettingsPatchSchema>
+
+export interface MatterStatus {
+  enabled: boolean
+  running: boolean
+  commissioned: boolean
+  /** Only while no controller holds the bridge: the codes stop being useful once it is paired. */
+  pairing?: { manualCode: string; qrSvg: string }
+  /** Every device the bridge can translate, published or not. */
+  candidates: { id: string; name: string; pluginId: string; type: MatterDeviceType; listed: boolean; published: boolean }[]
+  /** Listed ids it does not publish: absent from the registry, or of a kind it cannot translate. */
+  skipped: { id: string; reason: 'unknown' | 'unsupported' }[]
+}

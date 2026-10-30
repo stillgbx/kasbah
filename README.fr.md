@@ -230,7 +230,7 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 | **Animaux** | Mangeoires et fontaines PetKit : repas, distribution, eau, consommables. |
 | **TENS** | Électrostimulateur actiTENS en Bluetooth, depuis le navigateur ; n'apparaît que sur les postes où il est activé. |
 | **Automatisations** | Règles « Quand / Sauf si / Alors » (voir plus bas). |
-| **Réglages** | Thème, ordre de la barre de navigation sur cet appareil, notifications, rendu 3D, plugins, cartes de mise en route, comptes des assistants IA (MCP), mode édition, calage de la maison sur la photo aérienne. |
+| **Réglages** | Thème, ordre de la barre de navigation sur cet appareil, notifications, rendu 3D, plugins, cartes de mise en route, comptes des assistants IA (MCP), pont Matter des assistants vocaux, mode édition, calage de la maison sur la photo aérienne. |
 
 ### Scène 3D
 
@@ -262,6 +262,14 @@ Le serveur envoie des **notifications push** (Web Push) aux téléphones et ordi
 - les messages de l'action **Envoyer une notification** des automatisations, titrés du nom de la règle.
 
 Chaque appareil choisit ses catégories (Véhicules, Robots, Animaux, Météo, Plugins, Automatisations), et un appui ouvre la vue concernée. Les navigateurs ne le permettent qu'en **HTTPS** : par l'adresse publique (voir [Accès depuis l'extérieur](#accès-depuis-lextérieur)), pas par `http://<ip>:8787`. Sur iPhone, ajoutez d'abord l'app à l'écran d'accueil.
+
+### Assistants vocaux (Matter)
+
+Le serveur peut servir de **pont Matter** sur le réseau local : les appareils choisis apparaissent dans **Alexa**, **Google Home** ou **Maison** (Apple), sans skill ni cloud entre les deux. On l'allume dans **Réglages → Assistants vocaux (Matter)**, on scanne le QR code (ou on saisit le code) depuis l'application de l'assistant, puis on coche les appareils à publier, plugin par plugin ; les changements s'appliquent tout de suite.
+
+- Publiés aujourd'hui : lampes (marche/arrêt, luminosité), ouvrants (volets, portails, portes de garage, vus comme des stores) et serrures des véhicules.
+- Ne publier que ce que les assistants ne connaissent pas déjà : une lampe Hue ou un volet Somfy déjà reliés chez eux apparaîtraient deux fois.
+- Le pont n'est pas certifié : Google Home demande de le déclarer d'abord (gratuitement) dans la Google Home Developer Console, Maison affiche un avertissement. Le serveur doit avoir le port UDP 5540 et le mDNS (5353) ouverts sur le réseau local.
 
 ## Plugins
 

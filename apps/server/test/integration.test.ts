@@ -342,3 +342,28 @@ describe('GET /api/devices/:id/forecast', () => {
     } finally { await kasbah.close() }
   })
 })
+
+// The Matter card writes the house; the bridge itself is not started here (a real Matter node opens
+// UDP ports and mDNS): only the setting, the list of what can be published, and the refusals.
+describe('Matter bridge setting (GET/PATCH /api/matter)', () => {
+  it('lists what the bridge can translate, writes the chosen devices into the house, refuses a bad body', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kasbah-matter-'))
+    const file = join(dir, 'house.json')
+    await copyFile(HOUSE, file)
+    const { kasbah } = await makeApp('default', {}, file)
+    try {
+      const before = (await kasbah.app.inject({ method: 'GET', url: '/api/matter' })).json()
+      expect(before).toMatchObject({ enabled: false, running: false, commissioned: false, skipped: [] })
+      const types = new Set(before.candidates.map((c: { type: string }) => c.type))
+      expect(types).toEqual(new Set(['dimmable_light', 'on_off_light', 'window_covering', 'door_lock']))
+      expect(before.candidates.some((c: { listed: boolean }) => c.listed)).toBe(false)
+
+      const r = await kasbah.app.inject({ method: 'PATCH', url: '/api/matter', payload: { devices: ['mock:cover-gate'] } })
+      expect(r.statusCode).toBe(200)
+      expect(r.json().candidates.filter((c: { listed: boolean }) => c.listed).map((c: { id: string }) => c.id)).toEqual(['mock:cover-gate'])
+      expect(JSON.parse(await readFile(file, 'utf8')).matter).toEqual({ enabled: false, devices: ['mock:cover-gate'] })
+
+      expect((await kasbah.app.inject({ method: 'PATCH', url: '/api/matter', payload: { enabled: 'yes' } })).statusCode).toBe(400)
+    } finally { await kasbah.close(); await rm(dir, { recursive: true, force: true }) }
+  })
+})

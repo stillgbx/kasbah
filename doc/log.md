@@ -7,6 +7,23 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-30] update | Pont Matter et carte « Assistants vocaux » de Réglages
+
+**Déclencheur** : rendre des appareils pilotables par Alexa, Google Home ou Apple Maison sans skill ni cloud ; livré dans le même commit que cette entrée : `apps/server/src/matter/`, bloc `matter` de la maison, routes `/api/matter`, carte de Réglages.
+
+**Pages modifiées** :
+- `1_architecture/1_3_protocole-rest-ws.md` - section « Mise à jour 2026-10-30 » : `GET` et `PATCH /api/matter`.
+- `2_maison/2_0_format-house-json.md` - section « Mise à jour 2026-10-30 » : bloc `matter`, exposition appareil par appareil.
+- `4_ui/4_7_reglages.md` - section « Mise à jour 2026-10-30 » : la carte (boîte d'appairage fixe, groupes pliables, mesures).
+- `6_faq/6_1_pieges-runtime.md` - deux entrées : matter.js installe son environnement à l'import, Door Lock et ses bornes ; le front proxifie vers `KASBAH_PORT`.
+
+**Pages créées** :
+- `1_architecture/1_17_pont-matter.md` - le pont : décisions, pistes écartées (skill Alexa officielle, piloter un Echo, exposition par type ou par plugin, carte Plugins), traductions, cycle de vie, commande contrôleur ou écriture Kasbah, pièges, vérifié / non joué, restant.
+
+**Contradictions et trous** : aucune contradiction code/wiki. Non sourcé, donc non écrit : aucune session de journal (`journal.md`) n'existait, le récit vient du fil principal et du code ; la disponibilité (`reachable`) et tout vrai assistant restent non joués ; les mesures de la carte (94 appareils, 557 px) sont reprises du témoignage.
+
+**Index** : catalogues `1_architecture` (1 ligne ajoutée, intro), `2_maison`, `4_ui` et `6_faq` (1 date chacun), index.md régénéré.
+
 ## [2026-10-29] update | Plusieurs toits par maison (`roofs[]`), toits à 1 et 4 pans
 
 **Déclencheur** : changement de code livré dans le même commit (format, géométrie, scène 3D) : une maison peut porter un toit par volume (maison, garage accolé plus bas, abri détaché). Demande liée de l'utilisateur : que les pignons s'affichent comme des murs de façade.

@@ -27,6 +27,7 @@ import { registerRoutes } from './http/routes'
 import { registerSystemRoutes, type SystemRoutesDeps } from './http/system'
 import { actAsHook, createAppSession, sessionConfigSchema } from './http/session'
 import { readAppBuild, registerStatic } from './http/static'
+import { MatterBridge, registerMatterRoutes } from './matter/bridge'
 import { createMcpAuth, mcpAuthConfigSchema, publicHostFilter } from './mcp/auth'
 import { registerMcp } from './mcp/server'
 import { registerMcpUserRoutes } from './mcp/users-routes'
@@ -121,6 +122,13 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     commandTimeoutMs: opts.env.KASBAH_COMMAND_TIMEOUT_MS,
   })
 
+  // Matter bridge: the devices the house opts in, published for Alexa, Google Home or Apple Home.
+  const matter = new MatterBridge({
+    settings: () => house.house.matter,
+    registry, bus, logger: opts.logger.child({ component: 'matter' }),
+    execute: (id, command) => host.execute(id, command),
+  })
+
   // Automations: a file next to the house, run here (the screen sleeps, the server doesn't). After
   // `host`, through which commands go; before the hub, whose snapshot carries them.
   const automations = new AutomationEngine({
@@ -166,6 +174,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   registerSystemRoutes(app, { supervisor: opts.supervisor, statusFile: stateFile('update-status.json') })
   registerDiagRoutes(app, opts.logger.child({ component: 'diag' }))
   await registerMcp(app, { registry, scenes, host, house, auth: mcpAuth })
+  registerMatterRoutes(app, { bridge: matter, house, hub })
   registerMcpUserRoutes(app, { usersFile: mcpConfig.MCP_USERS_FILE })
   registerAssistantRoutes(app, {
     auth: mcpAuth,
@@ -195,12 +204,14 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
 
   return {
     app, registry, scenes, bus, hub, host, house, automations,
-    startPlugins: () => host.startAll(),
+    // the bridge does not wait for the plugins: it publishes their devices as they appear
+    startPlugins: async () => { await Promise.all([host.startAll(), matter.start()]) },
     async close() {
       automations.close()                 // nothing fires anymore during shutdown
       await alerts.close()
       setPlaybackBridge(null)
       music.stop()
+      await matter.close()
       await host.stopAll()
       seeder.close()
       hub.close()

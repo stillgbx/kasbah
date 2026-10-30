@@ -1,6 +1,6 @@
 # Protocole REST et WebSocket
 
-> Dernière mise à jour : 2026-10-28
+> Dernière mise à jour : 2026-10-30
 > Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11), `apps/server/src/http/static.ts` (`appBuild`, 2026-10-13), `apps/server/src/http/system.ts` (2026-10-13), `apps/server/src/http/diag.ts` et `apps/web/public/diag.html`, `apps/web/src/lib/sceneProbe.ts` (2026-10-22)
 
 ## REST
@@ -839,3 +839,20 @@ la session comme le reste (le compte de l'abonnement est `req.sessionUser`, `nul
 
 Pas de message WebSocket : un abonnement est propre à un écran, rien à diffuser aux autres. Page de
 fond : [1_16 Notifications push](1_16_notifications-push.md).
+
+### Mise à jour 2026-10-30 — `GET` et `PATCH /api/matter`
+
+Deux routes pour le pont Matter (`apps/server/src/matter/bridge.ts`, `registerMatterRoutes`) ; le
+mécanisme est dans [1_17 Pont Matter](1_17_pont-matter.md).
+
+- `GET /api/matter` rend un `MatterStatus` : `enabled`, `running`, `commissioned`, `pairing`
+  (`manualCode` et `qrSvg`) **seulement tant qu'aucun contrôleur ne tient le pont**, `candidates` (tous
+  les appareils traduisibles, avec `listed` et `published`) et `skipped` (ids listés absents du registre
+  ou non traduisibles).
+- `PATCH /api/matter` `{ enabled?, devices? }` : seuls les champs présents sont écrits dans le bloc
+  `matter` de la maison (`updateHouseFile`), le message `house` est diffusé, le pont s'applique à
+  chaud, et la réponse est le nouvel état. Une maison de démo en lecture seule refuse comme pour les
+  autres écritures ; le transport en mémoire répond 501 (`NOT_IMPLEMENTED`).
+
+Pas de message WebSocket dédié : la carte relit l'état toutes les 5 s tant que le code d'appairage est
+affiché.

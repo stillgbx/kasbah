@@ -230,7 +230,7 @@ On a large (landscape) screen, a three-column layout: the **rail** on the left, 
 | **Pets** | PetKit feeders and fountains: meals, dispensing, water, consumables. |
 | **TENS** | actiTENS electrostimulator over Bluetooth, from the browser; only appears on the computers where it is enabled. |
 | **Automations** | “When / Unless / Then” rules (see below). |
-| **Settings** | Theme, order of the navigation bar on this device, notifications, 3D rendering, plugins, setup cards, AI assistant accounts (MCP), edit mode, aligning the house on the aerial photo. |
+| **Settings** | Theme, order of the navigation bar on this device, notifications, 3D rendering, plugins, setup cards, AI assistant accounts (MCP), Matter bridge for voice assistants, edit mode, aligning the house on the aerial photo. |
 
 ### 3D scene
 
@@ -262,6 +262,14 @@ The server sends **push notifications** (Web Push) to the phones and computers t
 - the messages of the automations' **Send a notification** action, titled with the rule's name.
 
 Each device picks its categories (Vehicles, Robots, Pets, Weather, Plugins, Automations), and a tap opens the matching view. Browsers only allow it over **HTTPS**: through the public address (see [Remote access](#remote-access)), not `http://<ip>:8787`. On iPhone, add the app to the home screen first.
+
+### Voice assistants (Matter)
+
+The server can act as a **Matter bridge** on the local network: the devices you pick show up in **Alexa**, **Google Home** or **Apple Home**, with no skill and no cloud in between. Turn it on in **Settings → Voice assistants (Matter)**, scan the QR code (or type the code) from the assistant's app, then tick the devices to publish, plugin by plugin; changes apply at once.
+
+- Published today: lights (on/off, brightness), covers (shutters, gates, garage doors, shown as blinds) and vehicle locks.
+- Only publish what the assistants don't already know: a Hue light or a Somfy shutter already linked there would show up twice.
+- The bridge is not certified: Google Home asks for it to be declared (free) in the Google Home Developer Console first, Apple Home shows a warning. The server needs UDP port 5540 and mDNS (5353) open on the local network.
 
 ## Plugins
 

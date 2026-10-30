@@ -1,6 +1,6 @@
 # Vue Réglages
 
-> Dernière mise à jour : 2026-10-28
+> Dernière mise à jour : 2026-10-30
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Réglages : ses zones, la carte Plugins, les thèmes, le rendu 3D, les entrées locales au poste, les comptes, le calage sur la photo. Elle est née du découpage de
@@ -394,3 +394,31 @@ i18n : clés `push.*` et `automations.editor.{message,messagePlaceholder,notifyH
 
 Sources : `apps/web/src/components/settings/PushCard.vue`, `apps/web/src/stores/push.ts`,
 `apps/web/src/views/SettingsView.vue`, `apps/web/src/i18n/locales/{fr,en}.json`.
+
+### Mise à jour 2026-10-30 — la carte « Assistants vocaux (Matter) »
+
+Nouvelle section pleine largeur **après la carte Assistant** (`SettingsView.vue`, composant
+`components/settings/MatterCard.vue`, clés i18n `matter.*` en fr et en). Elle règle le pont Matter
+([1_17 Pont Matter](../1_architecture/1_17_pont-matter.md)). **Carte à part, pas dans Plugins** : le pont
+ne fournit aucun appareil, l'en-tête « actifs / dispo · appareils » y serait faux.
+
+- Un interrupteur du pont et une ligne d'état : éteint, n'a pas démarré, en attente d'appairage, appairé.
+- **Boîte d'appairage de taille fixe** (tuile de 124 px toujours présente) : le QR sur fond blanc quel que
+  soit le thème (un lecteur ne lit pas un QR sombre) et le code manuel en groupes 4-3-4 ; ou une coche
+  « appairé » ; ou l'invitation à allumer le pont. Règle « rien ne bouge » : allumer le pont ne pousse pas
+  la liste vers le bas. Tant que le code est affiché, l'état est relu toutes les 5 s, ce qui fait passer la
+  carte à « Appairé » dès qu'un contrôleur a pris le pont.
+- Les appareils sont **groupés par plugin et pliables** : plié par défaut, sauf quand il n'y a qu'un
+  seul plugin (rien à trier) ; ce que l'utilisateur ouvre ou ferme l'emporte. Le compteur « Publiés : n /
+  total » est dans l'en-tête, avec « Tout publier » et « Tout retirer », un interrupteur par appareil,
+  une grille `auto-fill minmax(260px)` et un tri naturel des noms (`localeCompare` numérique, « Volet 2 »
+  avant « Volet 10 »).
+- **Démo statique** (transport en mémoire) : pont éteint, rien à publier, écriture refusée (501).
+
+Vérifié : mesure géométrique (`getBoundingClientRect`), rien ne bouge entre éteint, en attente et
+appairé ni en dépliant un plugin (son en-tête reste en place) ; aucun débordement à 1280, 1024, 853 et
+375 px (zooms 1,25 et 1,5 simulés par la largeur), thèmes clair et sombre, fr et en. Avec 94 appareils
+fabriqués sur 6 plugins, la carte pliée mesure 557 px. **Non joué** : aucun vrai assistant.
+
+Sources : `apps/web/src/components/settings/{MatterCard.vue,MatterCard.test.ts}`,
+`apps/web/src/views/SettingsView.vue`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`.
