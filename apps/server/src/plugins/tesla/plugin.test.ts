@@ -613,11 +613,10 @@ describe('commands', () => {
     expect(t.calls.some((c) => c.path.endsWith('/wake_up'))).toBe(false)
   })
 
-  it('the wake-up is the only action: POST wake_up, then a delayed re-read; the rest is refused', async () => {
+  it('the wake-up: POST wake_up, then a delayed re-read; an unknown vehicle is refused', async () => {
     const tesla = fakeTesla()
     const { plugin, clock, tesla: t } = await started({ tesla, tokens: linkedTokens() })
     await plugin.discover()
-    await expect(plugin.execute(VIN, { type: 'vehicle.lock' })).rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
     await expect(plugin.execute('unknown', { type: 'vehicle.wake' })).rejects.toMatchObject({ code: 'DEVICE_UNAVAILABLE' })
     await plugin.execute(VIN, { type: 'vehicle.wake' })
     expect(t.calls.at(-1)).toMatchObject({ method: 'POST', path: `/api/1/vehicles/${VIN}/wake_up` })
@@ -744,6 +743,64 @@ describe('climate', () => {
     await plugin.execute(VIN, { type: 'vehicle.climate_stop' })
     expect(commandPaths(t)).toEqual(['auto_conditioning_stop'])
     expect(patches(ctx).at(-1)).toMatchObject({ climateOn: false })
+  })
+})
+
+describe('locks', () => {
+  const commandPaths = (t: ReturnType<typeof fakeTesla>) => t.calls.filter((c) => c.path.includes('/command/')).map((c) => c.path.split('/command/')[1])
+  const flush = async () => { for (let i = 0; i < 10; i++) await settle() }
+
+  it('awake: door_lock / door_unlock, `locked` published on the acknowledgment and kept for the next startup', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    const state = memoryState()
+    const { plugin, ctx, tesla: t } = await started({ tesla, tokens: linkedTokens(), state })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.unlock' })
+    expect(patches(ctx).at(-1)).toMatchObject({ locked: false })
+    await plugin.execute(VIN, { type: 'vehicle.lock' })
+    expect(commandPaths(t)).toEqual(['door_unlock', 'door_lock'])
+    expect(patches(ctx).at(-1)).toMatchObject({ locked: true })
+    expect(t.calls.some((c) => c.path.endsWith('/wake_up'))).toBe(false)
+    expect(dataCalls(t)).toBe(0)
+    await settle()
+    expect(state.value!.vehicles[VIN]).toMatchObject({ locked: true })
+  })
+
+  it('a Tesla refusal surfaces, and `locked` does not move', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.commandResult = { result: false, reason: 'vehicle_in_motion' }
+    const { plugin, ctx } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await expect(plugin.execute(VIN, { type: 'vehicle.unlock' })).rejects.toMatchObject({ code: 'UPSTREAM_ERROR' })
+    expect(patches(ctx).some((p) => 'locked' in p)).toBe(false)
+  })
+
+  it('asleep: woken, the command goes out once online, then a read confirms the lock', async () => {
+    const tesla = fakeTesla()
+    const { plugin, ctx, clock, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.lock' })
+    expect(t.calls.at(-1)).toMatchObject({ method: 'POST', path: `/api/1/vehicles/${VIN}/wake_up` })
+    expect(commandPaths(t)).toEqual([])
+    expect(patches(ctx).some((p) => 'locked' in p)).toBe(false)   // nothing announced before the command
+    tesla.world.list = VEHICLES_ONLINE
+    clock.advance(5_000); await flush()
+    expect(commandPaths(t)).toEqual(['door_lock'])
+    expect(patches(ctx).at(-1)).toMatchObject({ locked: true })
+    clock.advance(15_000); await flush()
+    expect(dataCalls(t)).toBe(1)
+  })
+
+  it('asleep since the last list (408): the wake-up path takes over', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    tesla.world.asleep = true
+    const { plugin, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.unlock' })
+    expect(t.calls.at(-1)).toMatchObject({ method: 'POST', path: `/api/1/vehicles/${VIN}/wake_up` })
   })
 })
 

@@ -1,6 +1,6 @@
 # Plugin Renault (véhicules, Gigya + Kamereon)
 
-> Dernière mise à jour : 2026-10-24
+> Dernière mise à jour : 2026-10-30
 > Sources : `apps/server/src/plugins/renault/{index,auth,client,mapping,types}.ts`, `apps/server/src/plugins/renault/__fixtures__/kamereon.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/components/RenaultLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/server/.env.example`, capture du vrai compte le 2026-09-14 (Renault 5 E-Tech `R5E1VE`), documentation `renault-api` (hacf-fr), portail `developer.ampere.cars`, dépôt `evcc-io/evcc` (modes de réveil), forum communautaire Renault, écriture de la cible de charge essayée sur le vrai véhicule le 2026-09-14, diagnostic du 2026-09-19 sur le vrai véhicule et le vrai serveur (réveil de charge qui ne partait pas), portail `developer.renaultgroup.com` (propriétés véhicule partenaires), session du 2026-10-22
 
 ## Il n'existe aucune voie officielle
@@ -754,3 +754,33 @@ compteur) — pas de pression des pneus non plus.
 Constat F35 : le mot de passe MY Renault traverse le réseau local en HTTP au moment de la liaison. Pas de
 changement de code ; conseil de relier le compte depuis l'adresse publique (HTTPS). Détail et choix :
 `../1_architecture/1_13_comptes-et-sessions.md`, section du 2026-10-24 (3).
+
+### Mise à jour 2026-10-30 — pas de verrouillage à distance pour la R5
+
+**Question** : la Tesla verrouille désormais par Kasbah (`3_8_tesla.md`, même date), ce qui la publie en
+serrure dans le pont Matter. La R5 le peut-elle ? **Non, pas par une voie connue** : rien n'est codé, la
+capacité `lock` reste absente, `vehicle.lock` répond `UNSUPPORTED_COMMAND` (test `plugin.test.ts`).
+
+Ce qui a été vérifié (source de `renault-api`, branche principale, lue le 2026-10-30) :
+
+- la bibliothèque ne connaît **aucune commande** de verrouillage, pour aucun modèle : ses actions sont
+  `charge-start/stop`, `charge-set-mode/schedule`, `hvac-start/stop`, `hvac-set-schedule`,
+  `horn-start` et `lights-start` (toutes deux `kca .../actions/horn-lights`) et `refresh-location`. Le seul
+  appel lié au verrou est la LECTURE `lock-status` ;
+- sa table `_VEHICLE_ENDPOINTS["R5E1VE"]` met `lock-status` à `None` (« err.func.wired.notFound »),
+  ce que la capture du 2026-09-14 avait vu (404, tableau plus haut) ;
+- l'intégration Renault de Home Assistant n'a pas de serrure non plus : un capteur binaire en lecture,
+  et des boutons klaxon, feux, clim et charge.
+
+**Seule piste, non vérifiée** : le ticket n°2253 de `renault-api` (analyse STATIQUE de l'appli Android MY
+Renault 6.13.4, pas du trafic observé) décrit une fonction « verrouillage » avec `POST actions/lock-unlock`,
+corps `{ action: "lock" | "unlock", target: "doors_hatch" }`, sans préfixe d'URL établi. Aucun véhicule
+n'y est confirmé, la R5 n'y est pas citée, et sur une Mégane protégée par SRP toutes les commandes
+répondent `CONTACT_SRC`. L'essayer voudrait dire envoyer une commande inconnue à la vraie voiture, sur le
+quota du compte (bloqué 1 h le 2026-09-19) : **non tenté**, à décider avec l'utilisateur.
+
+Le klaxon et les feux (`actions/horn-lights`, listés pour la R5 par `renault-api`) restent une
+possibilité distincte, non demandée.
+
+Sources : `renault-api` (hacf-fr) `kamereon/__init__.py`, `kamereon/models.py`, `renault_vehicle.py`,
+ticket n°2253 ; documentation de l'intégration Renault de Home Assistant.

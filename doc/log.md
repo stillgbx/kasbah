@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-30] update | Verrouillage des voitures : Tesla oui, R5 non
+
+**Déclencheur** : session lancée depuis celle du pont Matter (publier la serrure des voitures) ; code Tesla (`index.ts`, `mapping.ts`, tests) non commité à la date d'écrire.
+
+**Pages modifiées** :
+- `3_plugins/3_8_tesla.md` - section « Mise à jour 2026-10-30 » : `door_lock` / `door_unlock`, capacité `lock`, réveil comme la clim, `locked` gardé dans le fichier d'état, pistes écartées, pas essayé sur la vraie voiture ; note « Dépassé » en tête.
+- `3_plugins/3_9_renault.md` - section « Mise à jour 2026-10-30 » : aucune commande de verrouillage dans `renault-api` ni Home Assistant, `lock-status` à `None` pour la R5, piste non vérifiée `actions/lock-unlock` (ticket n°2253), non tentée.
+- `1_architecture/1_17_pont-matter.md` - note « Dépassé » sur « la Tesla réelle n'a pas la capacité `lock` ».
+
+**Index** : catalogue `3_plugins` mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-10-30] update | Pont Matter : la clim des voitures en thermostat
 
 **Déclencheur** : demande de l'utilisateur (exposer la clim des voitures) ; livré dans le même commit que cette entrée (`mapping.ts`, `bridge.ts`, type partagé, libellé de la carte).

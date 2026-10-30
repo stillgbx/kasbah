@@ -35,7 +35,7 @@ describe('descriptor', () => {
     // `charge_power` is not a command: it says the car GIVES its charging power, and spares the UI
     // from estimating it (hence from asking for the battery capacity).
     // `release_notes` is read, `software_update` is written (scheduling an update's installation)
-    expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_power', 'release_notes', 'charge_limit', 'charging', 'climate_precondition', 'software_update'])
+    expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_power', 'release_notes', 'charge_limit', 'charging', 'climate_precondition', 'software_update', 'lock'])
   })
 
   it('the model line is read from the 4th VIN character, and serves as the fallback name', () => {

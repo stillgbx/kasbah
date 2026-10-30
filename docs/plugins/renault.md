@@ -56,7 +56,7 @@ Nothing is required: everything is set in Settings. Optional variables:
 - **A sleeping R5 cannot be woken through the API**: once its unit is offline, no command brings it back, not even from the official app. The charge wake-up therefore does not cover every situation.
 - A command is **queued** at Renault and only takes effect when the car reconnects; Kasbah reads again after a delay to confirm it. A "command already pending" refusal is a deferral, not a failure: try again in a few minutes.
 - **Start charging** disables the car's charging schedules (they are what make it wait) and does not restore them: turn them back on in the MY Renault app.
-- Not available for the R5: locking, tyre pressure, speed, outside temperature, instantaneous charging power (estimated at display time from the battery capacity entered in the house).
+- Not available for the R5: locking (neither its state nor a remote lock command: no known way through the API), tyre pressure, speed, outside temperature, instantaneous charging power (estimated at display time from the battery capacity entered in the house).
 - The color is only known for shades already checked on a real car; otherwise the scene keeps its theme color.
 - Climate and starting a charge have not yet been tried on the real car.
 

@@ -22,10 +22,9 @@ export const READ_CAPABILITIES = ['soc', 'range', 'location', 'charge_power', 'r
 
 /**
  * What the vehicle ACCEPTS being changed: the charge limit (a setting bounded by the contract), the
- * charge itself and cabin preconditioning — nothing makes the car move or open. Locking is still to
- * be done.
+ * charge itself, cabin preconditioning and the door locks — nothing makes the car move.
  */
-export const WRITE_CAPABILITIES = ['charge_limit', 'charging', 'climate_precondition', 'software_update'] as const
+export const WRITE_CAPABILITIES = ['charge_limit', 'charging', 'climate_precondition', 'software_update', 'lock'] as const
 
 /**
  * What the climate control can do, for the vehicles' shared UI. The bounds are those the car

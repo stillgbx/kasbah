@@ -288,6 +288,10 @@ publications pouvant venir du même appareil (l'état de la voiture alimente les
   `../3_plugins/3_8_tesla.md`) : elle n'apparaissait donc pas dans la carte avant cette facette. Avec
   elle, Tesla et Renault apparaissent par leur clim.
 
+  *(Dépassé le 2026-10-30 : le plugin Tesla verrouille et déclare `lock`, sa serrure est donc publiable ;
+  la R5 n'a toujours pas de verrouillage à distance — cf. `../3_plugins/3_8_tesla.md` et
+  `../3_plugins/3_9_renault.md`, même date.)*
+
 Vérifié au contrôleur matter.js sur la Tesla simulée : Chaud → clim allumée, consigne 23,5 °C →
 `climate_set`, Arrêt → clim coupée, mode Chaud retenu ; la serrure publiée à côté inchangée. Non joué :
 Google Home et la vraie voiture.

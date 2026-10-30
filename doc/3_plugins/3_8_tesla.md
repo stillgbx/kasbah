@@ -1,6 +1,6 @@
 # Plugin Tesla (véhicules, Fleet API)
 
-> Dernière mise à jour : 2026-10-20
+> Dernière mise à jour : 2026-10-30
 > Sources : `apps/server/src/plugins/tesla/{index,auth,client,mapping,types}.ts`, `apps/server/src/plugins/tesla/__fixtures__/fleet.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/components/TeslaLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/server/.env.example`, documentation developer.tesla.com (Fleet API : billing-and-limits, vehicle-endpoints, third-party-tokens, virtual-keys), relevé de l'utilisateur (Model S, MCU2), mise en route sur le vrai compte le 2026-09-13 (soir), première écriture essayée sur la vraie voiture le 2026-09-14, console de facturation du fabricant (relevé du 2026-09-14), `apps/server/src/plugins/tesla/state.ts`, essais sur la vraie voiture du 2026-10-02 (notes de version, langue, facturation)
 
 ## Ce que le plugin fait, et ce qu'il ne fait pas encore
@@ -18,6 +18,8 @@ limite viendront en phase 2 : sur le véhicule de référence (Model S pré-2021
 pour ces modèles. Voir la piste d'origine dans `3_3_fabricants-a-venir.md`.
 
 *(Dépassé du 2026-09-14 au 2026-10-02 : les commandes de charge (limite, démarrer/arrêter), la climatisation, les sièges et le volant chauffants et la mise à jour logicielle (OTA) ont été ajoutées — capacités `charge_limit`, `charging`, `climate_precondition`, `software_update`, `WRITE_CAPABILITIES` dans `apps/server/src/plugins/tesla/mapping.ts`. Seul le verrouillage reste à faire : `vehicle.lock` est refusé (`UNSUPPORTED_COMMAND`). Voir les sections « Mise à jour » datées de 2026-09-14 à 2026-10-02 plus bas.)*
+
+*(Dépassé le 2026-10-30 : le verrouillage est fait, capacité `lock` — voir « Mise à jour 2026-10-30 — verrouiller et déverrouiller ».)*
 
 Il n'existe **rien en local** : tout passe par le cloud du fabricant, comme pour Nest.
 
@@ -724,3 +726,33 @@ pressions) montrent les mêmes cases. Une roue en alerte met une icône à côt�
 Sources : `apps/server/src/plugins/tesla/{mapping,types}.ts` (+ `mapping.test.ts`),
 `apps/web/src/views/VehiclesView.vue`, `apps/web/src/components/vehicles/VehicleTires.vue`,
 `apps/web/src/components/controls/VehicleCard.vue`, relevé `GET /api/plugins/tesla/raw` du 2026-10-20.
+
+### Mise à jour 2026-10-30 — verrouiller et déverrouiller
+
+**Pourquoi.** Le pont Matter publie une serrure (Door Lock) pour tout véhicule qui déclare `lock`
+(`../1_architecture/1_17_pont-matter.md`) ; la Tesla n'y apparaissait pas faute de cette capacité. L'UI
+(bouton « Verrouiller » de la vue Véhicules et du panneau 3D), les automatisations et l'assistant
+(`vehicle.unlock` dans `VEHICLE_SENSITIVE`, `apps/server/src/mcp/server.ts`) savaient déjà l'envoyer.
+
+**Ce qui est fait.** `vehicle.lock` / `vehicle.unlock` → `command/door_lock` / `command/door_unlock`,
+**non signés** comme la limite de charge, et la capacité `lock` rejoint `WRITE_CAPABILITIES`
+(`mapping.ts`). L'état `locked` était déjà lu (`vehicle_state.locked`, `toDataPatch`) : aucune lecture
+de plus. Facturé comme une commande (0,1 ¢).
+
+- **Éveillée** : la commande part, `locked` est publié à l'accusé, sans relecture, et **gardé dans
+  `TESLA_STATE_FILE`** (un redémarrage ne remontre pas le verrou de la dernière lecture). Un refus en
+  HTTP 200 (`result: false`) remonte en `UPSTREAM_ERROR` et `locked` ne bouge pas.
+- **Endormie** (ou 408 malgré une liste « en ligne ») : la voiture est **réveillée**, comme pour la
+  climatisation et le lancement de la charge — c'est un geste de l'utilisateur (l'app, une règle qu'il a
+  écrite, ou l'assistant vocal, où Google demande un code pour déverrouiller). Même chemin `wakeThen` :
+  `execute` rend la main à l'accusé du réveil, la commande part quand la liste dit « en ligne »,
+  `locked` n'est publié qu'après son accusé, puis une lecture `WAKE_FOLLOW_UP_MS` (15 s) plus tard le
+  confirme. Un échec derrière le réveil ne se lit que dans le journal du serveur. Coût : un réveil (2 ¢).
+- **Écartés** : ne pas réveiller pour verrouiller une voiture dont le dernier état dit « verrouillée »
+  (elle a pu être ouverte puis se rendormir entre deux lectures, pendant le repos) ; retenter
+  `could_not_wake_buses` (pas plus que la clim réveillée : la relecture dit l'état réel).
+
+**Pas essayé sur la vraie voiture** à la date d'écrire : une commande réelle réveille et déverrouille
+une vraie voiture, à faire avec l'utilisateur. Tests : `plugin.test.ts` (« locks »), `mapping.test.ts`.
+
+Sources : `apps/server/src/plugins/tesla/{index,mapping}.ts`, tests `plugin.test.ts` et `mapping.test.ts`.

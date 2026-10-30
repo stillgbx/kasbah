@@ -557,6 +557,34 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     catch (err) { log().debug({ err, vin }, 'Tesla charge follow-up read failed') }
   }
 
+  // ---- locks --------------------------------------------------------------------------------
+
+  /**
+   * `door_lock` / `door_unlock`, unsigned like the charge limit. `locked` is published on the
+   * acknowledgment and kept for the next startup: a restart must not show the last read's lock.
+   */
+  async function lockCommand(vin: string, locked: boolean): Promise<void> {
+    await vehicleCommand(vin, locked ? 'door_lock' : 'door_unlock')
+    ctx!.emitState(vin, { locked })
+    saved.vehicles[vin] = { ...saved.vehicles[vin], locked }
+    persist()
+    log().info({ vin }, locked ? 'Tesla vehicle locked' : 'Tesla vehicle unlocked')
+  }
+
+  /**
+   * Lock or unlock. Asleep — a parked car, the usual case when a voice assistant is asked to lock
+   * it —, we WAKE it, like the climate: it's a gesture of the user (the app, a rule they wrote, the
+   * Matter bridge, where Google asks for a PIN to unlock). `execute` then returns at the wake-up's
+   * acknowledgment; `locked` only moves once the command went through, and a read confirms it.
+   */
+  async function setLocked(vin: string, locked: boolean): Promise<void> {
+    if (vehicles.get(vin)!.sleepState === 'online') {
+      try { await lockCommand(vin, locked); return }
+      catch (err) { if (!(err instanceof PluginError && err.code === 'DEVICE_UNAVAILABLE')) throw err }
+    }
+    await wakeThen(vin, locked ? 'lock it' : 'unlock it', () => lockCommand(vin, locked), WAKE_FOLLOW_UP_MS)
+  }
+
   // ---- software: release notes and update -----------------------------------------------------
 
   type SoftwareUpdate = NonNullable<StateFor<'vehicle'>['softwareUpdate']>
@@ -873,6 +901,10 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
       }
       if (command.type === 'vehicle.schedule_update' || command.type === 'vehicle.cancel_update') {
         await softwareCommand(externalId, command)
+        return
+      }
+      if (command.type === 'vehicle.lock' || command.type === 'vehicle.unlock') {
+        await setLocked(externalId, command.type === 'vehicle.lock')
         return
       }
       if (command.type !== 'vehicle.wake') {

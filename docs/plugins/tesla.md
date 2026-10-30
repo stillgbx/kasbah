@@ -16,8 +16,8 @@
 
 - **Reading**: charge level, range, cable plugged in and charging in progress, charge limit, estimated end of charge, lock state, position (on the map, with the heading), mileage, speed and gear, pressure of the four tyres (a tyre the car flags as under-inflated raises an alert, critical if much lower), temperatures, software version and pending update, paint color.
 - **Sleep**: the "asleep" state is a normal state, shown as such. The last known values stay visible, dated ("Read 12 min ago").
-- **Commands**: **Wake up**, **Refresh** (read now, without waking), set the charge limit, **Start charging** / **Stop charging**, **Climate** (target temperature, heated seats and steering wheel), schedule or cancel the installation of a software update (**Install now**) with its release notes in the app's language.
-- **Waking**: never an automatic wake-up, except for the actions you ask for (button, automation): starting a charge and climate wake the car if it is asleep. Other settings are refused while it sleeps.
+- **Commands**: **Wake up**, **Refresh** (read now, without waking), set the charge limit, **Lock** / **Unlock**, **Start charging** / **Stop charging**, **Climate** (target temperature, heated seats and steering wheel), schedule or cancel the installation of a software update (**Install now**) with its release notes in the app's language.
+- **Waking**: never an automatic wake-up, except for the actions you ask for (button, automation): starting a charge, climate and locking or unlocking wake the car if it is asleep. Other settings are refused while it sleeps.
 - Climate is refused when the battery is below 20% (refusal by the vendor).
 
 ## Connection
@@ -66,7 +66,7 @@ Tesla has billed for the API since 2025: a credit of **$10 per month and per acc
 ## Limitations
 
 - Commands tried without a signature (charge limit, charging, climate) go through on a 2017 Model S; more recent models may require a virtual key installed in the car, which Kasbah does not handle.
-- Locking / unlocking is not yet available.
+- Locking / unlocking has not yet been tried on a real car.
 - The car takes 20 seconds to a minute to react to a charge command: the state updates at the next read.
 - A Model S or X from before 2021 may stay awake because of the reads (battery); reduce the budget or lengthen `TESLA_POLL_MS` if needed.
 - Failures of a preconditioning started from an automation only show up in the server log.
