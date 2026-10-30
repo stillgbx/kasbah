@@ -10,7 +10,7 @@ import type { Bus } from '../core/bus'
 import { stateFile } from '../core/paths'
 import type { DeviceRegistry } from '../core/registry'
 import type { WsHub } from '../ws/hub'
-import { coverCommandForLift, matterKindOf, matterStateOf, brightnessFromLevel, type MatterKind } from './mapping'
+import { coverCommandForLift, fanCommandOf, fanSpeedMax, matterKindOf, matterStateOf, brightnessFromLevel, type MatterKind } from './mapping'
 
 // Matter bridge: the devices the house opts in are published on the LAN as bridged endpoints of
 // one Matter node, for Alexa, Google Home or Apple Home. It creates no device of its own — it reads
@@ -25,7 +25,7 @@ export interface MatterBridgeOptions {
   logger: Logger
 }
 
-interface Published { id: DeviceId; kind: MatterKind; name: string; endpoint?: Endpoint }
+interface Published { id: DeviceId; kind: MatterKind; name: string; endpoint?: Endpoint; speedMax: number }
 
 type MatterModules = Awaited<ReturnType<typeof loadMatter>>
 
@@ -60,6 +60,10 @@ async function loadMatter() {
     ...(await import('@matter/main/devices/dimmable-light')),
     ...(await import('@matter/main/devices/window-covering')),
     ...(await import('@matter/main/devices/door-lock')),
+    ...(await import('@matter/main/devices/fan')),
+    ...(await import('@matter/main/behaviors/fan-control')),
+    ...(await import('@matter/main/behaviors/on-off')),
+    ...(await import('@matter/main/clusters/fan-control')),
     ...(await import('@matter/main/clusters/door-lock')),
     ...(await import('@matter/main/clusters/window-covering')),
     FabricManager: (await import('@matter/main/protocol')).FabricManager,
@@ -236,7 +240,8 @@ export class MatterBridge {
     const { descriptor, state } = entry
     const id = descriptor.id
     const endpointId = endpointIdOf(id)
-    const published: Published = { id, kind, name: descriptor.name }
+    const speedMax = kind === 'fan' ? fanSpeedMax(descriptor) : 0
+    const published: Published = { id, kind, name: descriptor.name, speedMax }
     this.published.set(endpointId, published)
     const bridged = {
       nodeLabel: label(descriptor.name),
@@ -245,7 +250,7 @@ export class MatterBridge {
       uniqueId: createHash('sha256').update(id).digest('hex').slice(0, 32),
       reachable: state.available,
     }
-    const initial = matterStateOf(kind, state)
+    const initial = matterStateOf(kind, state, speedMax)
     const send = (endpointId: string, command: Command): void => this.send(endpointId, command)
 
     let endpoint: Endpoint
@@ -293,6 +298,20 @@ export class MatterBridge {
         })
         break
       }
+      case 'fan': {
+        // MultiSpeed only with speeds to offer, AirflowDirection only when the fan can reverse:
+        // an attribute the device cannot honour would show a control that does nothing.
+        const reverses = (descriptor.capabilities as readonly string[]).includes('fan_direction')
+        const FanServer = speedMax
+          ? (reverses ? m.FanControlServer.with('MultiSpeed', 'AirflowDirection') : m.FanControlServer.with('MultiSpeed'))
+          : (reverses ? m.FanControlServer.with('AirflowDirection') : m.FanControlServer)
+        endpoint = new m.Endpoint(m.FanDevice.with(m.BridgedDeviceBasicInformationServer, FanServer, m.OnOffServer), {
+          id: endpointId, bridgedDeviceBasicInformation: bridged,
+          onOff: initial.onOff,
+          fanControl: { fanModeSequence: m.FanControl.FanModeSequence.OffLowMedHigh, ...(speedMax ? { speedMax } : {}), ...initial.fanControl },
+        } as never)
+        break
+      }
     }
     published.endpoint = endpoint
     await aggregator.add(endpoint)
@@ -307,6 +326,22 @@ export class MatterBridge {
       events.levelControl?.currentLevel$Changed.on((level, _old, context) => {
         if (level !== null && context && !context.offline) send(endpointId, { type: 'light.set', brightness: brightnessFromLevel(level) })
       })
+    }
+    if (kind === 'fan') {
+      // Matter leaves mode, percent and speed for the device to reconcile: each attribute a
+      // controller writes becomes one command, and the state Kasbah reports back sets them all.
+      const events = endpoint.events as unknown as FanEvents
+      const watch = (attribute: Parameters<typeof fanCommandOf>[0], changed: Changed<number | boolean | null> | undefined) =>
+        changed?.on((value, _old, context) => {
+          if (!context || context.offline) return
+          const command = fanCommandOf(attribute, value, speedMax)
+          if (command) send(endpointId, command)
+        })
+      watch('onOff', events.onOff.onOff$Changed)
+      watch('fanMode', events.fanControl.fanMode$Changed)
+      watch('percentSetting', events.fanControl.percentSetting$Changed)
+      watch('speedSetting', events.fanControl.speedSetting$Changed)
+      watch('airflowDirection', events.fanControl.airflowDirection$Changed)
     }
   }
 
@@ -326,7 +361,7 @@ export class MatterBridge {
     const p = this.published.get(endpointIdOf(id))
     if (!p?.endpoint) return
     try {
-      await p.endpoint.set(matterStateOf(p.kind, state) as never)
+      await p.endpoint.set(matterStateOf(p.kind, state, p.speedMax) as never)
     } catch (err) {
       this.opts.logger.warn({ err, deviceId: id }, 'matter state update failed')
     }
@@ -344,6 +379,15 @@ export class MatterBridge {
 }
 
 interface Changed<T> { on(fn: (value: T, old: T, context: { offline?: boolean } | undefined) => void): void }
+interface FanEvents {
+  onOff: { onOff$Changed: Changed<number | boolean | null> }
+  fanControl: {
+    fanMode$Changed: Changed<number | boolean | null>
+    percentSetting$Changed: Changed<number | boolean | null>
+    speedSetting$Changed?: Changed<number | boolean | null>
+    airflowDirection$Changed?: Changed<number | boolean | null>
+  }
+}
 interface LightEvents {
   onOff: { onOff$Changed: Changed<boolean> }
   levelControl?: { currentLevel$Changed: Changed<number | null> }

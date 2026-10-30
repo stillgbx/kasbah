@@ -267,7 +267,7 @@ Each device picks its categories (Vehicles, Robots, Pets, Weather, Plugins, Auto
 
 The server can act as a **Matter bridge** on the local network: the devices you pick show up in **Alexa**, **Google Home** or **Apple Home**, with no skill and no cloud in between. Turn it on in **Settings → Voice assistants (Matter)**, scan the QR code (or type the code) from the assistant's app, then tick the devices to publish, plugin by plugin; changes apply at once. Step by step for each assistant, including the Google Home Developer Console declaration: [docs/matter.md](docs/matter.md).
 
-- Published today: lights (on/off, brightness), covers (shutters, gates, garage doors, shown as blinds) and vehicle locks.
+- Published today: lights (on/off, brightness), covers (shutters, gates, garage doors, shown as blinds), fans (on/off, speed, direction) and vehicle locks.
 - Only publish what the assistants don't already know: a Hue light or a Somfy shutter already linked there would show up twice.
 - To withdraw: a device's switch, **Withdraw all** for a plugin, the bridge's switch, or **Unpair** next to an assistant, which then loses every device (the pairing code comes back once none is left).
 - The bridge is managed from the local network only: its pairing code gives control over what it publishes, so the card and its API refuse the public address.

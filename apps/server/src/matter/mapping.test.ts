@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { defaultState, type DeviceDescriptor, type DeviceState } from '@kasbah/shared'
-import { brightnessFromLevel, coverCommandForLift, levelFromBrightness, liftFromPosition, matterKindOf, matterStateOf, positionFromLift } from './mapping'
+import { brightnessFromLevel, coverCommandForLift, fanCommandOf, fanSpeedMax, levelFromBrightness, liftFromPosition, matterKindOf, matterStateOf, positionFromLift } from './mapping'
 
 const device = (kind: DeviceDescriptor['kind'], capabilities: string[]): DeviceDescriptor =>
   ({ id: `mock:${kind}1`, pluginId: 'mock', externalId: `${kind}1`, kind, name: 'Device', capabilities }) as unknown as DeviceDescriptor
@@ -22,6 +22,13 @@ describe('matterKindOf', () => {
   it('publishes a vehicle as a lock only when it has the lock', () => {
     expect(matterKindOf(device('vehicle', ['soc', 'lock']))).toBe('door_lock')
     expect(matterKindOf(device('vehicle', ['soc']))).toBeNull()
+  })
+
+  it('publishes a fan that turns on and off, with its number of speeds', () => {
+    const fan = { ...device('fan', ['on_off', 'fan_speed', 'fan_direction']), meta: { fan: { speeds: [1, 2, 3, 4, 5, 6] } } } as DeviceDescriptor
+    expect(matterKindOf(fan)).toBe('fan')
+    expect(fanSpeedMax(fan)).toBe(6)
+    expect(fanSpeedMax(device('fan', ['on_off']))).toBe(0)
   })
 
   it('does not publish the kinds it cannot translate', () => {
@@ -71,5 +78,37 @@ describe('matterStateOf', () => {
     expect(matterStateOf('door_lock', state('vehicle', { locked: true }))).toEqual({ doorLock: { lockState: 1 } })
     expect(matterStateOf('door_lock', state('vehicle', { locked: false }))).toEqual({ doorLock: { lockState: 2 } })
     expect(matterStateOf('door_lock', state('vehicle', {}))).toEqual({ doorLock: { lockState: null } })
+  })
+})
+
+describe('fan', () => {
+  it('turns each written attribute into one Kasbah command', () => {
+    expect(fanCommandOf('fanMode', 0, 6)).toEqual({ type: 'fan.set', on: false })
+    expect(fanCommandOf('fanMode', 1, 6)).toEqual({ type: 'fan.set', on: true, speed: 2 })
+    expect(fanCommandOf('fanMode', 2, 6)).toEqual({ type: 'fan.set', on: true, speed: 4 })
+    expect(fanCommandOf('fanMode', 3, 6)).toEqual({ type: 'fan.set', on: true, speed: 6 })
+    expect(fanCommandOf('fanMode', 4, 6)).toEqual({ type: 'fan.set', on: true })
+    expect(fanCommandOf('percentSetting', 50, 6)).toEqual({ type: 'fan.set', on: true, speed: 3 })
+    expect(fanCommandOf('percentSetting', 1, 6)).toEqual({ type: 'fan.set', on: true, speed: 1 })
+    expect(fanCommandOf('percentSetting', 0, 6)).toEqual({ type: 'fan.set', on: false })
+    expect(fanCommandOf('speedSetting', 5, 6)).toEqual({ type: 'fan.set', on: true, speed: 5 })
+    expect(fanCommandOf('airflowDirection', 1, 6)).toEqual({ type: 'fan.set', direction: 'reverse' })
+    expect(fanCommandOf('onOff', true, 6)).toEqual({ type: 'fan.set', on: true })
+    expect(fanCommandOf('percentSetting', null, 6)).toBeNull()
+  })
+
+  it('a fan without speeds only turns on and off', () => {
+    expect(fanCommandOf('percentSetting', 30, 0)).toEqual({ type: 'fan.set', on: true })
+    expect(fanCommandOf('fanMode', 1, 0)).toEqual({ type: 'fan.set', on: true })
+  })
+
+  it('writes mode, percent and speed together from the Kasbah state', () => {
+    expect(matterStateOf('fan', state('fan', { on: true, speed: 3, direction: 'forward' }), 6)).toEqual({
+      onOff: { onOff: true },
+      fanControl: { fanMode: 2, percentSetting: 50, percentCurrent: 50, speedSetting: 3, speedCurrent: 3, airflowDirection: 0 },
+    })
+    expect(matterStateOf('fan', state('fan', { on: false, speed: 3 }), 6).fanControl)
+      .toEqual({ fanMode: 0, percentSetting: 0, percentCurrent: 0, speedSetting: 0, speedCurrent: 0 })
+    expect(matterStateOf('fan', state('fan', { on: true }), 0).fanControl).toEqual({ fanMode: 4, percentSetting: 100, percentCurrent: 100 })
   })
 })

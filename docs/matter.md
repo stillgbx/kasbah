@@ -20,6 +20,7 @@ ones the plugins already provide.
 | Light with on/off | Light | brightness too when the light has it |
 | Cover (shutter, blind, gate, garage door) | Window covering (blind) | open, close, stop, position; a cover without a known position goes to the nearest end |
 | Vehicle with a lock | Door lock | lock and unlock; assistants ask for a voice PIN to unlock |
+| Fan with on/off | Fan | its speeds (low, medium, high and a percentage are derived from them) and its direction when it can reverse; timer and beep stay in Kasbah |
 
 Assistants do not support the Matter garage door type yet, so a **garage door shows up as a blind**:
 "open the garage" works **without a voice PIN**, unlike a lock. Think about it before publishing one.

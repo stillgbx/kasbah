@@ -128,7 +128,7 @@ Optional. The devices published to voice assistants (Alexa, Google Home, Apple H
 ```
 
 - `enabled` (default `false`): the bridge runs on the local network.
-- `devices` (default `[]`): device ids, as in `GET /api/devices`. Only lights, covers and vehicles with a lock can be published; any other id is listed as skipped in `GET /api/matter`.
+- `devices` (default `[]`): device ids, as in `GET /api/devices`. Only lights, covers, fans and vehicles with a lock can be published; any other id is listed as skipped in `GET /api/matter`.
 
 The pairing keys are not in the house: they stay in the server's state folder (`apps/server/.state/matter/`).
 

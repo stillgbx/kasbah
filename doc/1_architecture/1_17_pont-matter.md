@@ -40,6 +40,7 @@ Module pur, sans import de matter.js (la bibliothèque ne se charge que si le po
 | `light` avec `on_off` | lampe | avec `brightness` : lampe à variateur, niveau Matter 1 à 254 |
 | `cover` avec `open_close` ou `position` | Window Covering | échelle **inversée** (voir plus bas) |
 | `vehicle` avec `lock` | Door Lock | `LockState` 1 verrouillé, 2 déverrouillé, `null` si inconnu |
+| `fan` avec `on_off` | Fan (+ OnOff) | ajouté le 2026-10-30, voir la mise à jour (5) |
 
 - **Volets** : Matter compte la position en centièmes de pour cent **fermé** (0 = ouvert) ; Kasbah, 0 =
   fermé, 100 = ouvert. Un volet sans `position` (radio à sens unique) n'a pas de position connue
@@ -201,6 +202,26 @@ appairage depuis l'appli Google Home du téléphone, un fabric Google (`vendorId
 ne les liste pas. Le « hub » est l'enceinte ou l'écran Google de la maison (Nest Hub, Nest Mini) : il
 parle au pont en local. **IPv6 coupé sur le routeur** (cf. `../5_setup/5_0_installation-et-scripts.md`,
 2026-10-05) : sans effet, l'adresse link-local suffit à Matter. Restent : Apple Maison et Alexa.
+
+### Mise à jour 2026-10-30 (5) — le ventilateur
+
+Un `fan` avec `on_off` devient un appareil Matter **Fan**, avec le cluster OnOff en plus (certains
+assistants commandent la marche par lui). Fonctionnalités de FanControl **selon l'appareil** :
+`MultiSpeed` seulement s'il a `fan_speed` (`speedMax` = la plus grande valeur de `meta.fan.speeds`),
+`AirflowDirection` seulement s'il a `fan_direction` ; séquence de modes `OffLowMedHigh`. La minuterie
+et le bip muet n'ont pas d'équivalent Matter et restent dans Kasbah.
+
+**Piège : le `FanControlServer` de matter.js 0.17.9 n'a aucune logique.** Il ne réconcilie pas mode,
+pourcentage et vitesse : c'est au pont de le faire. Chaque attribut écrit par un contrôleur devient
+UNE commande `fan.set` (`fanCommandOf`, pur) : mode Off → arrêt ; Low / Medium / High → le tiers des
+vitesses (6 vitesses : 2, 4, 6) ; un pourcentage → la vitesse au-dessus (`ceil`) ; une vitesse →
+elle-même ; le sens → `forward` / `reverse`. L'état que Kasbah renvoie réécrit ensuite tous les
+attributs ensemble (`matterStateOf`, contexte `offline`), cohérents entre eux.
+
+Vérifié au contrôleur matter.js sur le ventilateur simulé (`mock:fan-chambre2_fan`, mêmes capacités que
+le Tuya) : mode fort → vitesse 6 et 100 % ; 50 % → vitesse 3, mode moyen ; vitesse 5 → 83 %, mode
+fort ; sens inversé ; arrêt → 0 %. Non joué : ce que Google, Apple ou Alexa affichent des 6 vitesses
+et du sens.
 
 ## Restant
 

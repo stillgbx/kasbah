@@ -17,6 +17,8 @@ export function matterKindOf(d: DeviceDescriptor): MatterKind | null {
       return caps.includes('position') || caps.includes('open_close') ? 'window_covering' : null
     case 'vehicle':
       return caps.includes('lock') ? 'door_lock' : null
+    case 'fan':
+      return caps.includes('on_off') ? 'fan' : null
     default:
       return null
   }
@@ -43,8 +45,57 @@ export function coverCommandForLift(d: DeviceDescriptor, lift100ths: number): Co
 // DoorLock.LockState values (Matter spec): kept as numbers so that this module stays matter.js-free.
 export const LOCK_STATE = { locked: 1, unlocked: 2 } as const
 
+// FanControl.FanMode values (Matter spec), same reason as LOCK_STATE.
+export const FAN_MODE = { off: 0, low: 1, medium: 2, high: 3, on: 4, auto: 5, smart: 6 } as const
+
+/** Number of speeds a fan offers (`meta.fan.speeds`), 0 when it only turns on and off. */
+export function fanSpeedMax(d: DeviceDescriptor): number {
+  if (!(d.capabilities as readonly string[]).includes('fan_speed')) return 0
+  return Math.max(0, ...(d.meta?.fan?.speeds ?? []))
+}
+
+// The three Matter modes split the speeds in thirds: 6 speeds → low 1-2, medium 3-4, high 5-6.
+const modeOfSpeed = (speed: number, max: number): number =>
+  speed * 3 <= max ? FAN_MODE.low : speed * 3 <= max * 2 ? FAN_MODE.medium : FAN_MODE.high
+const speedOfMode = (mode: number, max: number): number =>
+  Math.max(1, Math.round((max * (mode === FAN_MODE.low ? 1 : mode === FAN_MODE.medium ? 2 : 3)) / 3))
+
+/**
+ * The Kasbah command for ONE attribute a controller wrote on a fan. Matter leaves it to the device
+ * to keep mode, percent and speed consistent: the bridge sends the command, and the state Kasbah
+ * reports back writes all of them at once.
+ */
+export function fanCommandOf(
+  attribute: 'fanMode' | 'percentSetting' | 'speedSetting' | 'airflowDirection' | 'onOff',
+  value: number | boolean | null,
+  speedMax: number,
+): Command | null {
+  if (value === null) return null
+  switch (attribute) {
+    case 'onOff':
+      return { type: 'fan.set', on: value === true }
+    case 'airflowDirection':
+      return { type: 'fan.set', direction: value === 1 ? 'reverse' : 'forward' }
+    case 'fanMode': {
+      if (value === FAN_MODE.off) return { type: 'fan.set', on: false }
+      const banded = value === FAN_MODE.low || value === FAN_MODE.medium || value === FAN_MODE.high
+      return banded && speedMax ? { type: 'fan.set', on: true, speed: speedOfMode(Number(value), speedMax) } : { type: 'fan.set', on: true }
+    }
+    case 'percentSetting': {
+      const pct = Number(value)
+      if (pct <= 0) return { type: 'fan.set', on: false }
+      return speedMax ? { type: 'fan.set', on: true, speed: Math.min(speedMax, Math.ceil((pct * speedMax) / 100)) } : { type: 'fan.set', on: true }
+    }
+    case 'speedSetting': {
+      const speed = Number(value)
+      if (speed <= 0) return { type: 'fan.set', on: false }
+      return { type: 'fan.set', on: true, speed: Math.min(speedMax || speed, speed) }
+    }
+  }
+}
+
 /** Attribute values for `endpoint.set()`, by cluster. Absent Kasbah values are not written. */
-export function matterStateOf(kind: MatterKind, state: DeviceState): Record<string, Record<string, unknown>> {
+export function matterStateOf(kind: MatterKind, state: DeviceState, speedMax = 0): Record<string, Record<string, unknown>> {
   switch (kind) {
     case 'on_off_light':
     case 'dimmable_light': {
@@ -58,6 +109,19 @@ export function matterStateOf(kind: MatterKind, state: DeviceState): Record<stri
       // unknown position (one-way radio): null, the Matter way to say it
       const lift = state.position === undefined ? null : liftFromPosition(state.position)
       return { windowCovering: { currentPositionLiftPercent100ths: lift, targetPositionLiftPercent100ths: lift } }
+    }
+    case 'fan': {
+      if (state.kind !== 'fan') return {}
+      // a fan whose speed is unknown runs at its top speed, the Matter "on" with no detail
+      const speed = state.on ? Math.min(speedMax, state.speed ?? speedMax) : 0
+      const percent = state.on ? (speedMax ? Math.round((speed * 100) / speedMax) : 100) : 0
+      const fanControl: Record<string, unknown> = {
+        fanMode: !state.on ? FAN_MODE.off : speedMax ? modeOfSpeed(speed, speedMax) : FAN_MODE.on,
+        percentSetting: percent, percentCurrent: percent,
+      }
+      if (speedMax) Object.assign(fanControl, { speedSetting: speed, speedCurrent: speed })
+      if (state.direction) fanControl.airflowDirection = state.direction === 'reverse' ? 1 : 0
+      return { onOff: { onOff: state.on }, fanControl }
     }
     case 'door_lock': {
       if (state.kind !== 'vehicle') return {}

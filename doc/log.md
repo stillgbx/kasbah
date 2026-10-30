@@ -7,6 +7,13 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-30] update | Pont Matter : le ventilateur
+
+**Déclencheur** : demande de l'utilisateur, publier le ventilateur de plafond Tuya et pas seulement sa lumière. Livré dans le même commit que cette entrée (`mapping.ts`, `bridge.ts`, type partagé, libellé de la carte).
+
+**Pages modifiées** :
+- `1_architecture/1_17_pont-matter.md` - ligne `fan` du tableau et section « Mise à jour 2026-10-30 (5) » : fonctionnalités selon l'appareil, piège du `FanControlServer` sans logique, règles de traduction, vérifié / non joué.
+
 ## [2026-10-30] update | Pont Matter : premier essai réel avec Google Home
 
 **Déclencheur** : l'utilisateur a appairé le pont à Google Home sur la vraie maison ; `docs/matter.md` mis à jour dans le même commit (Google vérifié, hub, IPv6 link-local, appli du téléphone plutôt que la page web).
