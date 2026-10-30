@@ -92,6 +92,9 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   })
   app.addHook('onRequest', publicHostFilter(mcpAuth.publicHosts, session.gate, mcpConfig.KASBAH_LAN_HOSTS))
   app.addHook('onRequest', actAsHook)
+  // BEFORE any route: `decorateRequest` only reaches the contexts loaded after it, and the `await`s
+  // below load the plugins' routes (`req.sessionUser` was `undefined` there on the local network).
+  session.routes(app)
   const house = opts.house ?? (await loadHouse(opts.env.KASBAH_HOUSE_FILE))
   if (opts.readOnly) house.readOnly = true
   for (const w of house.warnings) opts.logger.warn({ path: w.path, code: w.code }, w.message)
@@ -181,7 +184,6 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     mcpUrl: `http://127.0.0.1:${opts.env.KASBAH_PORT}/mcp`,
     logger: opts.logger.child({ component: 'assistant' }),
   })
-  session.routes(app)
   // Music sources have no devices: for `play_url` they go through Cast/Sonos via the host.
   setPlaybackBridge({
     getDevice: (id) => registry.get(id),

@@ -233,3 +233,24 @@ sessions :
 
 Non audités en entier par ce passage : `components/settings` (dont `McpUsersCard.vue`),
 `components/heating`, `components/weather`, le routeur, `main.ts` et `three/HouseScene.ts`.
+
+### Mise à jour 2026-10-30 - `req.sessionUser` valait `undefined` dans les routes des plugins
+
+Signalé par un utilisateur (qgiu) : sur le réseau local, le jeton `claude setup-token` collé dans Réglages
+→ Plugins → Claude partait dans `.state/users/undefined/claude.json` au lieu de `.state/claude.json`, et la
+carte comme la santé disaient toujours « no house token ». Le jeton servait quand même, par hasard
+(`run.user` valait aussi `undefined`), mais la maison était vue sans jeton et le serveur se rabattait sur la
+connexion `claude` de la machine.
+
+**Cause** : l'ordre d'enregistrement dans `buildApp` (`apps/server/src/app.ts`). `decorateRequest('sessionUser',
+null)` (dans `session.routes`) n'atteint que les contextes Fastify chargés **après** lui ; or
+`await registerMcp(...)` chargeait déjà les routes des plugins (`host.registerRoutes`, enregistrées par
+`app.register`). Reproduit avec Fastify seul : `undefined` dans une route enregistrée avant un `await
+app.register`, `null` à la racine.
+
+**Correctif à la source** plutôt que `?? null` route par route (ce que proposait le correctif reçu, et ce que
+`transcription` faisait déjà sans savoir pourquoi) : `session.routes(app)` est appelé juste après les hooks
+`onRequest`, avant toute route. Toutes les routes de plugins étaient touchées ; le raté penchait du côté sûr
+(un test « réseau local ? » répondait non), aucune faille. Test : `test/integration.test.ts`, « a plugin's own
+route sees no account on the local network » (rouge sans le correctif). Un ancien fichier
+`.state/users/undefined/claude.json` éventuel est à recoller depuis la carte.

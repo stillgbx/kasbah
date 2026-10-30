@@ -126,6 +126,11 @@ describe('REST API', () => {
     expect(body.plugins.mock.deviceCount).toBeGreaterThan(15)
     expect(body.plugins.sonos.status).toBe('disabled')
   })
+  it("a plugin's own route sees no account on the local network (null, not undefined)", async () => {
+    const r = await kasbah.app.inject({ method: 'GET', url: '/api/plugins/claude/account' })
+    expect(r.statusCode).toBe(200)
+    expect(r.json()).toHaveProperty('user', null)
+  })
   it('serves the validated house', async () => {
     const r = await kasbah.app.inject({ method: 'GET', url: '/api/house' })
     expect(r.statusCode).toBe(200)
