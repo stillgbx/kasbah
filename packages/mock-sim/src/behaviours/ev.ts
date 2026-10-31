@@ -23,6 +23,8 @@ export interface VehicleOptions {
   socMin?: number
   /** Power of the charger that charges it when plugged in (W); 0 = never charged by this sim. */
   chargerPowerW?: number
+  /** Ceiling of the current it draws (A), like a Tesla: declares `charge_current`; without it, not (the R5). */
+  chargeCurrentMaxA?: number
   /** What its climate control can do (`meta.vehicle.climate`); default: that of a Tesla. */
   climate?: ClimateFeatures
   /**
@@ -103,6 +105,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
   const dev: SimDevice<'vehicle'> = {
     descriptor: descriptor(externalId, 'vehicle', o.name, [
       'soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'climate_precondition',
+      ...(o.chargeCurrentMaxA ? ['charge_current' as const] : []),
       // no charger, no power to report: this vehicle gets estimated like a real R5
       ...((o.chargerPowerW ?? 7400) > 0 ? ['charge_power' as const] : []),
       ...(o.software ? ['release_notes' as const, 'software_update' as const] : []),
@@ -113,6 +116,7 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       kind: 'vehicle', updatedAt: 0, available: true,
       soc: o.soc ?? 72, rangeKm: Math.round(((o.soc ?? 72) / 100) * rangeFull), pluggedIn: true, charging: false,
       locked: true, chargeLimit: o.chargeLimit ?? 80, ...(o.socMin === undefined ? {} : { socMin: o.socMin }),
+      ...(o.chargeCurrentMaxA ? { chargeCurrentA: o.chargeCurrentMaxA, chargeCurrentMaxA: o.chargeCurrentMaxA } : {}),
       location: { lat: o.home.lat, lon: o.home.lon, at: 0 }, odometerKm: 24_310,
       // what a real connected vehicle also reports: the simulation provides it so the UI can try itself on it
       sleepState: 'asleep', gear: 'P', speedKmh: 0, headingDeg: bearing(o.home, o.work),
@@ -141,7 +145,8 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
       }
       if (phase === 'home') setLocation(0, ctx.simTime, s)
       if (phase === 'work') setLocation(1, ctx.simTime, s)
-      const power = o.chargerPowerW ?? 7400
+      // the current the car draws caps the charger's power (single phase, 230 V)
+      const power = Math.min(o.chargerPowerW ?? 7400, s.chargeCurrentA === undefined ? Infinity : s.chargeCurrentA * 230)
       s.charging = phase === 'home' && s.pluggedIn && power > 0 && s.soc < (s.chargeLimit ?? 80) - 0.01
       if (s.charging) {
         s.soc = clamp(s.soc + ((power * ctx.dtS) / 3600 / (batteryKwh * 1000)) * 100, 0, s.chargeLimit ?? 80)
@@ -179,6 +184,9 @@ export function vehicle(externalId: string, o: VehicleOptions): SimDevice<'vehic
         case 'vehicle.start_charge': if (!s.pluggedIn) throw new SimError('DEVICE_UNAVAILABLE', 'vehicle not plugged in'); s.chargeLimit = Math.max(s.chargeLimit ?? 80, Math.min(100, s.soc + 10)); break
         case 'vehicle.stop_charge': s.chargeLimit = Math.floor(s.soc); break
         case 'vehicle.set_charge_limit': s.chargeLimit = clamp(Math.round(cmd.percent), 50, 100); break
+        case 'vehicle.set_charge_current':
+          if (s.chargeCurrentMaxA === undefined) throw new SimError('UNSUPPORTED_COMMAND', 'no charging current setting')
+          s.chargeCurrentA = clamp(Math.round(cmd.amps), 1, s.chargeCurrentMaxA); break
         case 'vehicle.wake': s.sleepState = 'online'; awakeUntil = ctx.simTime + AWAKE_AFTER_WAKE_MS; break
         // like the real one: preconditioning wakes the car up, and keeps it awake
         // like Tesla (`low_soc`): no climate control below 20 %

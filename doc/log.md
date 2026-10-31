@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-31] update | Intensité de charge de la Tesla (et pourquoi pas pour la R5)
+
+**Déclencheur** : demande de l'utilisateur (« dans l'app mobile de la tesla et dans la voiture on peut choisir l'ampérage max de la charge. possible d'ajouter la fonctionnalité à kasbah ? et pour la r5 ? »).
+
+**Pages modifiées** :
+- `3_plugins/3_8_tesla.md` - « Mise à jour 2026-10-31 » : lecture de `charge_current_request(_max)`, commande non signée `set_charging_amps`, plafond qui suit la borne et le câble, pas de minimum publié, pas encore essayée sur la vraie voiture.
+- `3_plugins/3_9_renault.md` - « Mise à jour 2026-10-31 » : aucun réglage d'intensité côté R5 (ni appli, ni voiture, ni Kamereon) ; le levier restant est la borne.
+- `4_ui/4_4_vues-energie-vehicules.md` - « Mise à jour 2026-10-31 » : `ChargeCurrentCard` dans la vue Véhicules et le panneau 3D, bornes du curseur, mesures dans la simulation.
+
+**Index** : catalogues `3_plugins/README.md` (2 lignes) et `4_ui/README.md` (1 ligne), index.md régénéré.
+
 ## [2026-10-31] update | Nom local introuvable sur le téléphone : renvoi conditionnel du Pi-hole désactivé
 
 **Déclencheur** : signalé par l'utilisateur (« `kasbah:8787` fonctionne depuis le PC, par contre depuis un tél non ») ; diagnostic DNS depuis le poste, correction dans les réglages du Pi-hole, aucun code touché.

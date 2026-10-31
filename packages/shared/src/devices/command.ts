@@ -103,6 +103,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('vehicle.start_charge') }),
   z.object({ type: z.literal('vehicle.stop_charge') }),
   z.object({ type: z.literal('vehicle.set_charge_limit'), percent: pct }),
+  /** Maximum current the vehicle draws (A), bounded by `chargeCurrentMaxA`. Requires the car awake, like the limit. */
+  z.object({ type: z.literal('vehicle.set_charge_current'), amps: z.number().int().min(1).max(80) }),
   z.object({ type: z.literal('vehicle.wake') }),
   /**
    * Precondition the cabin (heat or cool before leaving). `targetTempC` absent = the
@@ -182,7 +184,8 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'ev_charger.resume_mode': 'charge_control', 'ev_charger.set_mode': 'charge_mode',
   'vehicle.lock': 'lock', 'vehicle.unlock': 'lock',
   'vehicle.start_charge': 'charging', 'vehicle.stop_charge': 'charging',
-  'vehicle.set_charge_limit': 'charge_limit', 'vehicle.wake': 'soc', 'vehicle.refresh': 'soc',
+  'vehicle.set_charge_limit': 'charge_limit', 'vehicle.set_charge_current': 'charge_current',
+  'vehicle.wake': 'soc', 'vehicle.refresh': 'soc',
   'vehicle.climate_start': 'climate_precondition', 'vehicle.climate_stop': 'climate_precondition', 'vehicle.climate_set': 'climate_precondition',
   'vehicle.schedule_update': 'software_update', 'vehicle.cancel_update': 'software_update',
   'pet_feeder.feed': 'feed', 'pet_feeder.call_pet': 'call_pet',

@@ -5,6 +5,7 @@ import { formatDistance, formatKm, formatPower } from '../../lib/format'
 import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
 import StrokeIcon from '../ui/StrokeIcon.vue'
+import ChargeCurrentCard from '../vehicles/ChargeCurrentCard.vue'
 import ChargeLimitCard from '../vehicles/ChargeLimitCard.vue'
 import VehicleBattery from '../vehicles/VehicleBattery.vue'
 import VehicleClimate from '../vehicles/VehicleClimate.vue'
@@ -35,6 +36,15 @@ function setLimit(percent: number): void {
 // control handed back to the state as soon as the command has finished: accepted it carries the target, refused it has
 // gone back to the old one
 watch(() => [props.state.chargeLimit, props.pending], () => { dragged.value = null })
+
+/** The charging current: same back-and-forth as the limit. */
+const draggedAmps = ref<number | null>(null)
+const amps = computed(() => draggedAmps.value ?? props.state.chargeCurrentA)
+function setAmps(value: number): void {
+  draggedAmps.value = value
+  emit('command', { type: 'vehicle.set_charge_current', amps: value })
+}
+watch(() => [props.state.chargeCurrentA, props.pending], () => { draggedAmps.value = null })
 </script>
 
 <template>
@@ -69,6 +79,8 @@ watch(() => [props.state.chargeLimit, props.pending], () => { dragged.value = nu
     <!-- the charge target: the Vehicles view's block, taken as is -->
     <ChargeLimitCard v-if="has('charge_limit')" class="mb-3" :value="limit" :disabled="disabled"
                      @preview="dragged = $event" @change="setLimit" />
+    <ChargeCurrentCard v-if="has('charge_current')" class="mb-3" :value="amps" :max="state.chargeCurrentMaxA" :disabled="disabled"
+                       @preview="draggedAmps = $event" @change="setAmps" />
     <!-- the climate control: the common panel of the Vehicles view, which sends its own commands -->
     <VehicleClimate v-if="has('climate_precondition')" class="card card--soft mb-3" :descriptor="descriptor" :state="state" />
     <!-- the software: the Vehicles view's line and its dialog (notes, installation). Always there, greyed out

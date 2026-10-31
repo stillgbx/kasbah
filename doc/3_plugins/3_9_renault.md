@@ -1,6 +1,6 @@
 # Plugin Renault (véhicules, Gigya + Kamereon)
 
-> Dernière mise à jour : 2026-10-30
+> Dernière mise à jour : 2026-10-31
 > Sources : `apps/server/src/plugins/renault/{index,auth,client,mapping,types}.ts`, `apps/server/src/plugins/renault/__fixtures__/kamereon.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/components/RenaultLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/server/.env.example`, capture du vrai compte le 2026-09-14 (Renault 5 E-Tech `R5E1VE`), documentation `renault-api` (hacf-fr), portail `developer.ampere.cars`, dépôt `evcc-io/evcc` (modes de réveil), forum communautaire Renault, écriture de la cible de charge essayée sur le vrai véhicule le 2026-09-14, diagnostic du 2026-09-19 sur le vrai véhicule et le vrai serveur (réveil de charge qui ne partait pas), portail `developer.renaultgroup.com` (propriétés véhicule partenaires), session du 2026-10-22
 
 ## Il n'existe aucune voie officielle
@@ -813,3 +813,15 @@ possibilité distincte, non demandée.
 
 Sources : `renault-api` (hacf-fr) `kamereon/__init__.py`, `kamereon/models.py`, `renault_vehicle.py`,
 ticket n°2253 ; documentation de l'intégration Renault de Home Assistant.
+
+### Mise à jour 2026-10-31 — pas de réglage d'intensité de charge
+
+Demandé avec celui de la Tesla (`3_8_tesla.md`, même date) : la R5 n'en offre aucun, ni dans l'appli
+MY Renault ni dans la voiture, et Kamereon non plus. `ev/settings` ne porte que le mode, l'heure de
+début, la durée, la température et les programmes (`EV_SETTINGS`, `__fixtures__/kamereon.ts`) ;
+`ev/soc-levels` règle la cible ; `charging-settings` répond 403 `err.func.wired.forbidden`. Le plugin
+ne déclare donc pas `charge_current`, et l'UI ne montre pas le curseur.
+
+Le seul levier pour la R5 est la **borne** : le contrat prévoit `ev_charger.set_current` (capacité
+`charge_current` du `ev_charger`), le plugin Enphase lit l'intensité (`maxCurrentA`) mais ne l'écrit
+pas encore — à éprouver une fois la borne installée (`3_7_enphase.md`).

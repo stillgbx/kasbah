@@ -59,7 +59,8 @@ export const CAPABILITIES = [
   // with the car charging) and the UI estimates it, which requires a battery capacity entered by hand.
   // `release_notes`: the vehicle publishes the notes of its software versions, served on demand
   // (`GET /api/devices/:id/release-notes`); `software_update`: it accepts that the installation of an
-  // already downloaded update be scheduled or canceled (Tesla), two distinct things
+  // already downloaded update be scheduled or canceled (Tesla), two distinct things.
+  // A vehicle may also declare `charge_current` (above): the current IT draws, set in its own app (Tesla)
   'soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'charge_power', 'climate_precondition',
   'release_notes', 'software_update',
   // camera — `live_stream`: an on-demand video stream (protocols in `meta.camera.protocols`),
@@ -100,7 +101,7 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   sensor: ['measure'],
   energy: ['production', 'consumption', 'grid', 'storage', 'energy_history'],
   ev_charger: ['charge_control', 'charge_current', 'charge_mode'],
-  vehicle: ['soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'charge_power', 'climate_precondition', 'release_notes', 'software_update'],
+  vehicle: ['soc', 'range', 'location', 'lock', 'charging', 'charge_limit', 'charge_current', 'charge_power', 'climate_precondition', 'release_notes', 'software_update'],
   camera: ['live_stream', 'chime'],
   weather: ['forecast', 'air_quality', 'pollen'],
   water: ['consumables', 'water_flow', 'water_usage', 'uv_lamp'],

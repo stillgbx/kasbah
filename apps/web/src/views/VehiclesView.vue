@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { HOME_RADIUS_M, estimateChargePowerW, geoDistance, sitePosition, type Capability, type CommandInput, type DeviceEntry, type StateFor } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
+import ChargeCurrentCard from '../components/vehicles/ChargeCurrentCard.vue'
 import ChargeLimitCard from '../components/vehicles/ChargeLimitCard.vue'
 import VehicleBattery from '../components/vehicles/VehicleBattery.vue'
 import VehicleMap from '../components/vehicles/VehicleMap.vue'
@@ -159,6 +160,21 @@ async function setLimit(v: VehicleEntry, percent: number): Promise<void> {
   const next = { ...dragged.value }
   delete next[id]
   dragged.value = next
+}
+
+/** The charging CURRENT (`ChargeCurrentCard`): same back-and-forth, same lock as the limit. */
+const draggedAmps = ref<Record<string, number>>({})
+const ampsOf = (v: VehicleEntry) => draggedAmps.value[v.descriptor.id] ?? v.state.chargeCurrentA
+const previewAmps = (v: VehicleEntry, amps: number) => {
+  draggedAmps.value = { ...draggedAmps.value, [v.descriptor.id]: amps }
+}
+async function setAmps(v: VehicleEntry, amps: number): Promise<void> {
+  const id = v.descriptor.id
+  previewAmps(v, amps)
+  await send(id, { type: 'vehicle.set_charge_current', amps })
+  const next = { ...draggedAmps.value }
+  delete next[id]
+  draggedAmps.value = next
 }
 
 async function send(id: string, cmd: CommandInput): Promise<boolean> {
@@ -352,6 +368,10 @@ const readAgo = (s: StateFor<'vehicle'>) => (s.readAt ? t('vehicle.readAt', { ag
             <ChargeLimitCard v-if="has(v, 'charge_limit')" watermark :value="limitOf(v)" :disabled="limitLocked(v)"
                              :hint="asleep(v.state) ? $t('vehicle.wakeHint') : undefined"
                              @preview="preview(v, $event)" @change="setLimit(v, $event)" />
+            <!-- the current the car draws, when it lets it be written (Tesla) -->
+            <ChargeCurrentCard v-if="has(v, 'charge_current')" watermark :value="ampsOf(v)" :max="v.state.chargeCurrentMaxA"
+                               :disabled="limitLocked(v)" :hint="asleep(v.state) ? $t('vehicle.wakeHint') : undefined"
+                               @preview="previewAmps(v, $event)" @change="setAmps(v, $event)" />
           </div>
           <div class="vcard__state">
             <!-- each section carries as a watermark, at the bottom right, the icon of what it says (trial 2026-10-01) -->

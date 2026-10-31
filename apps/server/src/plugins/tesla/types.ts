@@ -41,6 +41,9 @@ export const chargeStateSchema = z.looseObject({
   charging_state: str,
   charger_power: num,
   charge_limit_soc: num,
+  /** The current the car is set to draw (A), and its ceiling with the cable plugged in. */
+  charge_current_request: num,
+  charge_current_request_max: num,
   charge_port_latch: str,
   charge_port_door_open: bool,
   time_to_full_charge: num,

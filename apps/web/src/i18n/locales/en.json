@@ -318,7 +318,7 @@
     }
   },
   "vehicle": {
-    "soc": "Charge", "range": "Range", "chargeLimit": "Charge limit", "pluggedIn": "Plugged in", "unplugged": "Unplugged",
+    "soc": "Charge", "range": "Range", "chargeLimit": "Charge limit", "chargeCurrent": "Max current", "pluggedIn": "Plugged in", "unplugged": "Unplugged",
     "rename": "Rename", "chargeWake": "Charge wake-up", "charging": "Charging", "locked": "Locked", "unlocked": "Unlocked", "atHome": "At home", "away": "{distance} away",
     "startCharge": "Start charging", "stopCharge": "Stop charging", "odometer": "Odometer", "location": "Location",
     "mapPlaceholder": "Map — vehicle location", "none": "No known vehicle",

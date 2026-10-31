@@ -294,6 +294,13 @@ export const vehicleStateSchema = z.object({
   chargeMinutesRemaining: z.number().min(0).optional(),
   chargeLimit: pct.optional(),
   /**
+   * Maximum charging current the VEHICLE draws (A), as set in its app or on its screen (Tesla
+   * `charge_current_request`) — not the charger's. Absent = the vehicle does not say it (the R5).
+   */
+  chargeCurrentA: z.number().min(0).optional(),
+  /** Ceiling of that setting, imposed by the cable and the charger plugged in (Tesla `charge_current_request_max`). */
+  chargeCurrentMaxA: z.number().min(0).optional(),
+  /**
    * Lock. **Optional = unknown**: not all makers report it (the R5 E-Tech
    * answers 403 on its `lock-status` endpoint). Same trade-off as the `position` of a cover:
    * display "—" rather than a padlock that would lie.

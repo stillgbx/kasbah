@@ -104,7 +104,7 @@ export function tilleulsDevices(opts: { winter?: boolean } = {}): AnySimDevice[]
     petFeeder('tl-pet-feeder', { name: 'Distributeur de croquettes' }),
     petFountain('tl-pet-fountain', { name: 'Fontaine à eau' }),
 
-    vehicle('tl-vehicle-tesla', { name: 'Model S', manufacturer: 'Tesla', model: 'Model S', batteryKwh: 75, rangeKmFull: 480, home: parked(TILLEULS, 15.9, 3.4), work: TILLEULS_WORK, soc: 68, chargeLimit: 80,
+    vehicle('tl-vehicle-tesla', { name: 'Model S', manufacturer: 'Tesla', model: 'Model S', batteryKwh: 75, rangeKmFull: 480, home: parked(TILLEULS, 15.9, 3.4), work: TILLEULS_WORK, soc: 68, chargeLimit: 80, chargeCurrentMaxA: 32,
       software: { version: '2026.32.7', pending: '2026.38' } }),
     vehicle('tl-vehicle-r5', { name: 'Renault 5', manufacturer: 'Renault', model: 'Renault 5 E-Tech', batteryKwh: 52, rangeKmFull: 410, home: parked(TILLEULS, 18.9, 3.4), work: TILLEULS_WORK, workDays: [], soc: 55, chargeLimit: 80, socMin: 20, chargerPowerW: 0,
       climate: { minC: 16, maxC: 26, stepC: 1, seats: ['fl', 'fr'], seatLevels: 1, steeringWheelHeat: true, heatWhileOff: true } }),

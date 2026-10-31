@@ -1,7 +1,7 @@
 # Plugin Tesla (véhicules, Fleet API)
 
-> Dernière mise à jour : 2026-10-30
-> Sources : `apps/server/src/plugins/tesla/{index,auth,client,mapping,types}.ts`, `apps/server/src/plugins/tesla/__fixtures__/fleet.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/components/TeslaLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/server/.env.example`, documentation developer.tesla.com (Fleet API : billing-and-limits, vehicle-endpoints, third-party-tokens, virtual-keys), relevé de l'utilisateur (Model S, MCU2), mise en route sur le vrai compte le 2026-09-13 (soir), première écriture essayée sur la vraie voiture le 2026-09-14, console de facturation du fabricant (relevé du 2026-09-14), `apps/server/src/plugins/tesla/state.ts`, essais sur la vraie voiture du 2026-10-02 (notes de version, langue, facturation)
+> Dernière mise à jour : 2026-10-31
+> Sources : `apps/server/src/plugins/tesla/{index,auth,client,mapping,types}.ts`, `apps/server/src/plugins/tesla/__fixtures__/fleet.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/components/TeslaLinkCard.vue`, `apps/web/src/views/VehiclesView.vue`, `apps/server/.env.example`, documentation developer.tesla.com (Fleet API : billing-and-limits, vehicle-endpoints, third-party-tokens, virtual-keys), relevé de l'utilisateur (Model S, MCU2), mise en route sur le vrai compte le 2026-09-13 (soir), première écriture essayée sur la vraie voiture le 2026-09-14, console de facturation du fabricant (relevé du 2026-09-14), `apps/server/src/plugins/tesla/state.ts`, essais sur la vraie voiture du 2026-10-02 (notes de version, langue, facturation), `vehicle.set_charge_current` (2026-10-31)
 
 ## Ce que le plugin fait, et ce qu'il ne fait pas encore
 
@@ -756,3 +756,32 @@ de plus. Facturé comme une commande (0,1 ¢).
 une vraie voiture, à faire avec l'utilisateur. Tests : `plugin.test.ts` (« locks »), `mapping.test.ts`.
 
 Sources : `apps/server/src/plugins/tesla/{index,mapping}.ts`, tests `plugin.test.ts` et `mapping.test.ts`.
+
+### Mise à jour 2026-10-31 — l'intensité de charge
+
+**Pourquoi.** L'appli Tesla et l'écran de bord règlent l'intensité que la voiture tire en charge ;
+Kasbah ne le permettait pas.
+
+**Lecture, sans appel de plus.** `charge_state` porte déjà `charge_current_request` (l'intensité
+réglée) et `charge_current_request_max` (son plafond) : `toDataPatch` les publie en `chargeCurrentA`
+et `chargeCurrentMaxA` (`mapping.ts`). Le plafond n'est pas une constante de la voiture : il suit
+la borne et le câble branchés (`charger_pilot_current`, ce que la borne annonce, vaut la même chose
+dans la capture branchée sur la borne de la maison), plafonnés aussi par le chargeur embarqué.
+Demander plus n'aurait pas d'effet : la voiture ne tire jamais au-delà de ce que la borne annonce.
+Aucun **minimum** n'est publié par l'API.
+
+**Écriture.** `vehicle.set_charge_current` `{ amps }` → `command/set_charging_amps`
+`{ charging_amps }`, **non signée**, capacité `charge_current` ajoutée à `WRITE_CAPABILITIES`. Mêmes
+règles que la limite de charge : voiture éveillée (408 sinon, aucun réveil implicite pour un
+réglage), refus en HTTP 200 par `result: false`, `could_not_wake_buses` retenté dans la commande,
+intensité publiée à l'accusé sans relecture. La boucle de nouvel essai est sortie de la limite dans
+`chargeSetting` (`index.ts`), que les deux réglages partagent. Facturée comme une commande (0,1 ¢).
+
+**Pas essayée sur la vraie voiture** à la date d'écrire. Restent à observer : le plancher accepté
+(l'UI part de 5 A, plancher de l'appli Tesla, non vérifié) et ce que vaut le plafond câble
+débranché. Tests : `plugin.test.ts` (« setting the charging current »), `mapping.test.ts`.
+
+**La R5, elle, n'a pas de levier** : voir `3_9_renault.md`, même date.
+
+Sources : `apps/server/src/plugins/tesla/{index,mapping,types}.ts`, `__fixtures__/fleet.ts` (capture
+du 2026-09-13), `packages/shared/src/devices/{kinds,state,command}.ts`.

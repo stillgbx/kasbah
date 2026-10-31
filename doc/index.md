@@ -59,7 +59,7 @@ La maison décrite en JSON : format et validation, géométrie dérivée (murs, 
 ## 3 — Plugins
 
 <!-- section:3_plugins:begin (généré par scripts/wiki-index.mjs depuis 3_plugins/README.md - ne pas éditer ici) -->
-Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (28 pages, dernière mise à jour 2026-10-30).
+Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (28 pages, dernière mise à jour 2026-10-31).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -74,8 +74,8 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_5 Google Nest (caméras, sonnettes)](3_plugins/3_5_google-nest.md) | 2026-10-29 |
 | [3_6 Google Cast](3_plugins/3_6_google-cast.md) | 2026-10-24 |
 | [3_7 Enphase](3_plugins/3_7_enphase.md) | 2026-10-26 |
-| [3_8 Tesla (Fleet API)](3_plugins/3_8_tesla.md) | 2026-10-30 |
-| [3_9 Renault (Gigya + Kamereon)](3_plugins/3_9_renault.md) | 2026-10-30 |
+| [3_8 Tesla (Fleet API)](3_plugins/3_8_tesla.md) | 2026-10-31 |
+| [3_9 Renault (Gigya + Kamereon)](3_plugins/3_9_renault.md) | 2026-10-31 |
 | [3_10 Open-Meteo](3_plugins/3_10_open-meteo.md) | 2026-10-09 |
 | [3_11 Husqvarna Automower](3_plugins/3_11_husqvarna-automower.md) | 2026-10-14 |
 | [3_12 COMAP Proteo 2](3_plugins/3_12_comap-proteo.md) | 2026-10-06 |
@@ -99,7 +99,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 ## 4 — UI
 
 <!-- section:4_ui:begin (généré par scripts/wiki-index.mjs depuis 4_ui/README.md - ne pas éditer ici) -->
-Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-10-30).
+Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-10-31).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -110,7 +110,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | Vues | Dernière mise à jour |
 |---|---|
 | [4_3 Vues Lumières, Ouvrants et Caméras](4_ui/4_3_vues-lumieres-ouvrants-cameras.md) | 2026-10-26 |
-| [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-26 |
+| [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-31 |
 | [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-10-30 |
 | [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-10-25 |
 | [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-10-30 |

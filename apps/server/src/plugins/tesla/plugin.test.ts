@@ -559,6 +559,17 @@ describe('commands', () => {
     expect(plugin.health!().quota!.used).toBeCloseTo(1 / 1000, 5)
   })
 
+  it('setting the charging current: `set_charging_amps`, the current published without a re-read', async () => {
+    const tesla = fakeTesla()
+    tesla.world.list = VEHICLES_ONLINE
+    const { plugin, ctx, tesla: t } = await started({ tesla, tokens: linkedTokens() })
+    await plugin.discover()
+    await plugin.execute(VIN, { type: 'vehicle.set_charge_current', amps: 13 })
+    expect(t.calls.at(-1)).toMatchObject({ method: 'POST', path: `/api/1/vehicles/${VIN}/command/set_charging_amps`, body: '{"charging_amps":13}' })
+    expect(dataCalls(t)).toBe(0)
+    expect(patches(ctx).at(-1)).toMatchObject({ chargeCurrentA: 13 })
+  })
+
   it('a Tesla REFUSAL arrives as HTTP 200: the target is then not published', async () => {
     const tesla = fakeTesla()
     tesla.world.list = VEHICLES_ONLINE

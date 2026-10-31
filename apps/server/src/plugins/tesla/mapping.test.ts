@@ -35,7 +35,7 @@ describe('descriptor', () => {
     // `charge_power` is not a command: it says the car GIVES its charging power, and spares the UI
     // from estimating it (hence from asking for the battery capacity).
     // `release_notes` is read, `software_update` is written (scheduling an update's installation)
-    expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_power', 'release_notes', 'charge_limit', 'charging', 'climate_precondition', 'software_update', 'lock'])
+    expect(d.capabilities).toEqual(['soc', 'range', 'location', 'charge_power', 'release_notes', 'charge_limit', 'charge_current', 'charging', 'climate_precondition', 'software_update', 'lock'])
   })
 
   it('the model line is read from the 4th VIN character, and serves as the fallback name', () => {
@@ -104,6 +104,8 @@ describe('full reading (`vehicle_data`)', () => {
     expect(p.charging).toBe(false)
     expect(p.chargePowerW).toBe(0)
     expect(p.chargeLimit).toBe(80)
+    expect(p.chargeCurrentA).toBe(24)            // `charge_current_request`, and its ceiling with this cable
+    expect(p.chargeCurrentMaxA).toBe(24)
     expect(p.locked).toBe(true)
     expect(p.odometerKm).toBeCloseTo(61234.01676 * MILE, 0)
     expect(p.insideTempC).toBe(25.8)

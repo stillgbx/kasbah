@@ -22,9 +22,9 @@ export const READ_CAPABILITIES = ['soc', 'range', 'location', 'charge_power', 'r
 
 /**
  * What the vehicle ACCEPTS being changed: the charge limit (a setting bounded by the contract), the
- * charge itself, cabin preconditioning and the door locks — nothing makes the car move.
+ * current it draws, the charge itself, cabin preconditioning and the door locks — nothing makes the car move.
  */
-export const WRITE_CAPABILITIES = ['charge_limit', 'charging', 'climate_precondition', 'software_update', 'lock'] as const
+export const WRITE_CAPABILITIES = ['charge_limit', 'charge_current', 'charging', 'climate_precondition', 'software_update', 'lock'] as const
 
 /**
  * What the climate control can do, for the vehicles' shared UI. The bounds are those the car
@@ -176,6 +176,8 @@ export function toDataPatch(d: VehicleData): StatePatch<'vehicle'> {
       : null
   }
   if (defined(c?.charge_limit_soc)) patch.chargeLimit = Math.max(0, Math.min(100, c.charge_limit_soc))
+  if (defined(c?.charge_current_request)) patch.chargeCurrentA = Math.max(0, c.charge_current_request)
+  if (defined(c?.charge_current_request_max)) patch.chargeCurrentMaxA = Math.max(0, c.charge_current_request_max)
 
   if (defined(vs?.locked)) patch.locked = vs.locked
   if (defined(vs?.odometer)) patch.odometerKm = milesToKm(vs.odometer)

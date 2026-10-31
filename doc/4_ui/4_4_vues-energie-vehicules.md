@@ -1,6 +1,6 @@
 # Vues Énergie et Véhicules
 
-> Dernière mise à jour : 2026-10-26
+> Dernière mise à jour : 2026-10-31
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Énergie (schéma de flux, onduleurs, champs de panneaux, tuiles), la vue Véhicules et la carte d'un véhicule (charge, limite, carte, réveil, climatisation, logiciel). Elle est née du découpage de
@@ -1105,3 +1105,24 @@ Vérifié dans la preview `kasbah-mock` : records présents à l'ouverture, iden
 d'une minute (le mock rend tout, la fusion l'accepte), périodes intactes, console propre. Non joué : la
 requête `?days=2` en HTTP réel dans le navigateur (le serveur de démo n'avait pas de site solaire).
 Tests : `energyPeriods.test.ts` (`mergeRecentDays`).
+
+### Mise à jour 2026-10-31 — l'intensité de charge d'un véhicule
+
+`components/vehicles/ChargeCurrentCard.vue`, partagé comme `ChargeLimitCard` : sous la limite de
+charge dans la carte de la vue Véhicules (`views/VehiclesView.vue`, avec le filigrane `bolt`) et
+dans le panneau de la vue 3D (`components/controls/VehicleCard.vue`). Affiché pour un véhicule qui
+déclare `charge_current` (Tesla) ; la R5 ne l'a pas, sa carte n'en change pas.
+
+- **Bornes du curseur** : de 5 A (plancher de l'appli Tesla) au plafond que la voiture publie
+  (`chargeCurrentMaxA`, celui du câble et de la borne branchés), les deux rappelés sous la piste.
+  Plafond inconnu (avant la première lecture) : 32 A par défaut, valeur affichée « — » et curseur
+  grisé.
+- **Même contrat que la limite** : le parent tient la valeur pendant le glissé (`preview`), la
+  commande part au relâché (`change`), le contrôle revient à l'état à l'accusé ; grisé quand la
+  voiture dort (`limitLocked`), avec l'aide « réveiller » au survol. Écho optimiste dans
+  `lib/optimistic.ts`. Libellé `vehicle.chargeCurrent` (« Intensité max » / « Max current »).
+
+Mesuré sur la démo « Les Tilleuls » (simulation, 1280 px) : la carte de la Model S garde sa hauteur
+(la colonne de gauche avait la place), aucun débordement aux zooms 1, 1,25 et 1,5, aucune erreur
+console ; 32 → 16 A publie 16 A et la puissance simulée tombe à 3,7 kW (la simulation plafonne la
+puissance à l'intensité × 230 V, option `chargeCurrentMaxA` de `packages/mock-sim/src/behaviours/ev.ts`).

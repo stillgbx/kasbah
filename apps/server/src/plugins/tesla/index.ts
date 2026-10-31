@@ -377,6 +377,27 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
     }
   }
 
+  /**
+   * A charge setting (limit, current). "Online" according to the list, the car may still have its
+   * internal buses asleep: TRANSIENT refusal, seen on the real car on 2026-10-01 (the first limit set
+   * failed, the next one went through), so retried a couple of times within the command.
+   */
+  async function chargeSetting(vin: string, name: string, body: unknown, what: string): Promise<void> {
+    for (let attempt = 0; ; attempt++) {
+      const res = commandResultSchema.parse(await client!.request(
+        'POST', `/api/1/vehicles/${encodeURIComponent(vin)}/command/${name}`, { body, signal: ctx!.signal },
+      ))
+      if (res.response?.result === true) return
+      const reason = res.response?.reason
+      if (reason === 'could_not_wake_buses' && attempt < LIMIT_BUSES_RETRIES) {
+        log().info({ vin }, `Tesla buses still asleep: retrying the ${what}`)
+        await sleep(ctx!.clock, LIMIT_BUSES_PAUSE_MS, ctx!.signal)
+        continue
+      }
+      throw new PluginError('UPSTREAM_ERROR', `Tesla refused the ${what}${reason ? `: ${reason}` : ''}`)
+    }
+  }
+
   /** The setpoint first (same value on both sides), then on or off; the state follows without a re-read. */
   async function climateCommand(vin: string, command: CommandOf<'vehicle.climate_start'> | CommandOf<'vehicle.climate_stop'>): Promise<void> {
     if (command.type === 'vehicle.climate_stop') {
@@ -861,24 +882,16 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
        * again within the minute), it's our echo that keeps the card up to date until the next round.
        */
       if (command.type === 'vehicle.set_charge_limit') {
-        // "online" according to the list, but its internal buses are still asleep: TRANSIENT refusal,
-        // seen on the real car on 2026-10-01 (the first limit set failed, the next one went through)
-        for (let attempt = 0; ; attempt++) {
-          const body = commandResultSchema.parse(await client.request(
-            'POST', `/api/1/vehicles/${encodeURIComponent(externalId)}/command/set_charge_limit`,
-            { body: { percent: command.percent }, signal: ctx!.signal },
-          ))
-          if (body.response?.result === true) break
-          const reason = body.response?.reason
-          if (reason === 'could_not_wake_buses' && attempt < LIMIT_BUSES_RETRIES) {
-            log().info({ vin: externalId }, 'Tesla buses still asleep: retrying the charge limit')
-            await sleep(ctx!.clock, LIMIT_BUSES_PAUSE_MS, ctx!.signal)
-            continue
-          }
-          throw new PluginError('UPSTREAM_ERROR', `Tesla refused the charge limit${reason ? `: ${reason}` : ''}`)
-        }
+        await chargeSetting(externalId, 'set_charge_limit', { percent: command.percent }, 'charge limit')
         ctx!.emitState(externalId, { chargeLimit: command.percent })
         log().info({ vin: externalId, percent: command.percent }, 'Tesla charge limit set')
+        return
+      }
+      /** The current the car draws: same rules as the limit (awake car, echo without a re-read). */
+      if (command.type === 'vehicle.set_charge_current') {
+        await chargeSetting(externalId, 'set_charging_amps', { charging_amps: command.amps }, 'charging current')
+        ctx!.emitState(externalId, { chargeCurrentA: command.amps })
+        log().info({ vin: externalId, amps: command.amps }, 'Tesla charging current set')
         return
       }
       if (command.type === 'vehicle.climate_stop') {
