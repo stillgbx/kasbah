@@ -41,7 +41,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_14 Énergie](1_architecture/1_14_energie.md) | 2026-10-31 |
 | [1_15 Appli Android Auto](1_architecture/1_15_appli-android-auto.md) | 2026-10-28 |
 | [1_16 Notifications push](1_architecture/1_16_notifications-push.md) | 2026-10-28 |
-| [1_17 Pont Matter](1_architecture/1_17_pont-matter.md) | 2026-10-30 |
+| [1_17 Pont Matter](1_architecture/1_17_pont-matter.md) | 2026-10-31 |
 <!-- section:1_architecture:end -->
 
 ## 2 — Maison

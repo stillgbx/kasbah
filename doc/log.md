@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-31] update | Le pont Matter passe en ligne avec ses appareils
+
+**Déclencheur** : à chaque mise à jour du serveur, Google Home annonce les appareils du pont comme nouveaux et il faut les remettre dans leurs pièces.
+
+**Pages modifiées** :
+- `1_architecture/1_17_pont-matter.md` - « Mise à jour 2026-10-31 » : cause (pont en ligne avant que les plugins aient déclaré leurs appareils), attente des appareils cochés plafonnée à 60 s (`waitForDevices`), arrêt pendant l'attente, vérifié et non joué.
+
+**Index** : catalogue `1_architecture` mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-31] update | Raccourci « Demander à Kasbah » de l'app installée, qui écoute directement
 
 **Déclencheur** : demande de l'utilisateur d'un raccourci de PWA « Demander à Kasbah » (appui long sur l'icône Android, glissable sur l'écran d'accueil) qui ouvre directement la question ; pas de widget natif ni de TWA.

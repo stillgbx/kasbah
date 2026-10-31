@@ -86,6 +86,20 @@ const endpointIdOf = (id: DeviceId, kind: MatterKind): string =>
   id.replaceAll('.', '_') + (kind === 'closure' ? '__closure' : kind === 'thermostat' ? '__climate' : '')
 const deviceIdOf = (key: string): DeviceId => (key.endsWith(CLIMATE_FACET) ? key.slice(0, -CLIMATE_FACET.length) : key)
 
+/** Resolves once the registry knows every given device, after `timeoutMs`, or on `cancel()`. */
+export function waitForDevices(ids: readonly DeviceId[], registry: Pick<DeviceRegistry, 'get'>, bus: Pick<Bus, 'on'>, timeoutMs: number): { done: Promise<void>; cancel: () => void } {
+  let cancel = (): void => {}
+  const done = new Promise<void>((resolve) => {
+    const missing = (): boolean => ids.some((id) => !registry.get(id))
+    if (!missing()) return resolve()
+    const finish = (): void => { clearTimeout(timer); off(); resolve() }
+    const timer = setTimeout(finish, timeoutMs)
+    const off = bus.on('devices', () => { if (!missing()) finish() })
+    cancel = finish
+  })
+  return { done, cancel }
+}
+
 export class MatterBridge {
   private server: ServerNode | undefined
   private aggregator: Endpoint | undefined
@@ -107,6 +121,7 @@ export class MatterBridge {
   private readonly skipped = new Map<string, 'unknown' | 'unsupported'>()
   private readonly unsubscribe: (() => void)[] = []
   private exposed: readonly string[] = []
+  private stopWaiting: (() => void) | undefined
   // start, stop, apply and sync run one at a time: a box ticked during the start must not
   // publish a device twice, nor a stop race a publish
   private queue: Promise<void> = Promise.resolve()
@@ -120,7 +135,10 @@ export class MatterBridge {
 
   /** Never throws: a bridge that cannot start must not take the house down. */
   start(): Promise<void> { return this.serial(() => this.startNow()) }
-  close(): Promise<void> { return this.serial(() => this.closeNow()) }
+  close(): Promise<void> {
+    this.stopWaiting?.()   // a stop during the start must not wait for the devices
+    return this.serial(() => this.closeNow())
+  }
 
   /** Follows the house's setting without a restart: starts, stops, publishes, withdraws. */
   apply(): Promise<void> {
@@ -162,6 +180,13 @@ export class MatterBridge {
       })
       this.aggregator = new m.Endpoint(m.AggregatorEndpoint, { id: 'aggregator' })
       await this.server.add(this.aggregator)
+      // A controller that finds the bridge without its devices drops them, then adds them back as new
+      // ones (Google Home: a notification, rooms lost). Plugins start in parallel with the bridge: it
+      // goes online once the listed devices are known, or after a minute.
+      const wait = waitForDevices(settings.devices.map(deviceIdOf), this.opts.registry, this.opts.bus, 60_000)
+      this.stopWaiting = wait.cancel
+      await wait.done
+      this.stopWaiting = undefined
       await this.sync()
       this.unsubscribe.push(
         // plugins start in parallel with the bridge: a listed device can appear later

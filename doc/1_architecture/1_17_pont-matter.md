@@ -1,7 +1,7 @@
 # Pont Matter (Alexa, Google Home, Apple Maison)
 
-> Dernière mise à jour : 2026-10-30
-> Sources : `apps/server/src/matter/{bridge,mapping,mapping.test}.ts`, `apps/server/src/app.ts` (`MatterBridge`, `registerMatterRoutes`), `packages/shared/src/house/schema.ts` (`matterSettingsSchema`), `packages/shared/src/protocol/http.ts` (`MATTER_DEVICE_TYPES`, `matterSettingsPatchSchema`, `MatterStatus`), `apps/server/test/integration.test.ts`, `apps/web/src/components/settings/{MatterCard.vue,MatterCard.test.ts}`, `apps/server/package.json`
+> Dernière mise à jour : 2026-10-31
+> Sources : `apps/server/src/matter/{bridge,bridge.test,mapping,mapping.test}.ts`, `apps/server/src/app.ts` (`MatterBridge`, `registerMatterRoutes`), `packages/shared/src/house/schema.ts` (`matterSettingsSchema`), `packages/shared/src/protocol/http.ts` (`MATTER_DEVICE_TYPES`, `matterSettingsPatchSchema`, `MatterStatus`), `apps/server/test/integration.test.ts`, `apps/web/src/components/settings/{MatterCard.vue,MatterCard.test.ts}`, `apps/server/package.json`
 
 ## Ce que c'est
 
@@ -295,6 +295,33 @@ publications pouvant venir du même appareil (l'état de la voiture alimente les
 Vérifié au contrôleur matter.js sur la Tesla simulée : Chaud → clim allumée, consigne 23,5 °C →
 `climate_set`, Arrêt → clim coupée, mode Chaud retenu ; la serrure publiée à côté inchangée. Non joué :
 Google Home et la vraie voiture.
+
+### Mise à jour 2026-10-31 — en ligne seulement avec ses appareils
+
+Constat de l'utilisateur sur la vraie maison : à chaque mise à jour du serveur, l'appli Google Home
+annonce que les appareils du pont « viennent d'être ajoutés », et il faut les remettre dans leurs pièces.
+L'appairage, lui, tient (fabric dans `apps/server/.state/matter/`), et les numéros d'endpoint aussi
+(indexés par l'id de l'endpoint).
+
+**Cause** : le pont démarre **en parallèle** des plugins (`startPlugins`). Il passait en ligne juste
+après une première publication, avant que les plugins aient déclaré leurs appareils, puis les ajoutait
+au fil de l'eau. Le hub, en se reconnectant, trouvait un pont **sans ses appareils**, les oubliait, puis
+les voyait arriver comme nouveaux.
+
+**Correctif** : `startNow` attend, entre l'ajout de l'agrégateur et `server.start()`, que le registre
+connaisse **tous les appareils cochés** (`waitForDevices`, sur l'événement `devices` du bus), puis
+publie et passe en ligne. **Plafond de 60 s** : un appareil coché dont le plugin est éteint ou en panne
+retarde le pont d'une minute sans le bloquer ; il reste noté `unknown` dans `skipped`, et arrivera en
+retard (donc encore « nouveau » pour Google). Un arrêt du serveur pendant l'attente l'interrompt
+(`close()` appelle `stopWaiting` avant d'entrer dans la file sérielle). Tant que le pont attend, la
+carte affiche « pas démarré » (elle relit l'état toutes les 5 s).
+
+Vérifié au contrôleur matter.js en simulation : démarrage normal, pont en ligne avec ses 2 appareils
+(mêmes numéros d'endpoint qu'avant) ; un appareil coché inexistant, pont en ligne au bout d'environ
+60 s, les 2 autres publiés, l'absent dans `skipped`. Tests : `bridge.test.ts`. **Non joué** : la
+course elle-même ne se reproduit pas en simulation (le plugin mock répond avant que matter.js soit
+chargé), et l'absence de notification Google reste à constater à la prochaine mise à jour ; l'arrêt
+pendant l'attente n'est couvert que par le test unitaire.
 
 ## Restant
 
