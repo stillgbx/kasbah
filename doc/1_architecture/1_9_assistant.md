@@ -241,3 +241,29 @@ Tests : `SearchPalette.shortcut.test.ts` (2 : permission accordée → écoute, 
 faux silence) ; contrôles négatifs faits pour les deux. Preview : le panneau refuse le micro
 (`denied`), la palette s'y ouvre focalisée, sans erreur. L'écoute elle-même n'est vérifiable que sur
 le téléphone.
+
+### Mise à jour 2026-10-31 (ter) — vérifié sur le téléphone, et la mise en route
+
+Essayé par l'utilisateur sur son téléphone Android, app installée depuis l'adresse publique : le
+raccourci apparaît à l'appui long, se glisse sur l'écran d'accueil, ouvre la palette **déjà à
+l'écoute**, et l'écoute **s'arrête seule à la fin de la phrase**. Chrome laisse donc tourner
+l'`AudioContext` d'une app ajoutée à l'écran d'accueil sans geste : le garde-fou de l'audio suspendu
+(mise à jour « bis ») ne sert pas dans ce cas. Les mentions « Pas encore essayé sur un téléphone
+Android » et « à confirmer sur le téléphone » des deux mises à jour précédentes sont réglées ; elles
+disaient vrai à l'écriture.
+
+**Mise en route sur Android** :
+
+1. Le serveur sert un build qui contient le raccourci (`npm run build -w @kasbah/web`, puis
+   redémarrage : le serveur ne tourne pas en mode watch).
+2. Sur le téléphone, l'app est installée depuis l'**adresse publique en HTTPS** (en `http://` sur le
+   réseau local, pas de micro sans drapeau Chrome, donc pas d'écoute directe).
+3. Faire relire le manifest : `chrome://webapks` → *Request update* pour Kasbah, ou désinstaller puis
+   réinstaller ; sinon Chrome le relit seul au lancement, environ une fois par jour
+   (`../5_setup/5_2_production.md`, recette du plein écran et mise à jour du 2026-10-31).
+4. **Autoriser le micro une fois** : ouvrir la palette dans l'app et toucher son micro, accepter la
+   demande. Sans cette autorisation, le raccourci ouvre la palette champ focalisé, sans écouter.
+5. Appui long sur l'icône Kasbah : « Demander » apparaît ; le glisser sur l'écran d'accueil pour en
+   faire une icône à part.
+6. Toucher « Demander » : palette ouverte à l'écoute, clavier baissé ; parler, l'instruction part à la
+   fin de la phrase.

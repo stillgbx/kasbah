@@ -15,6 +15,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 - `1_architecture/1_9_assistant.md` - « Mise à jour 2026-10-31 » : `?ask&source=shortcut`, palette ouverte focalisée même au doigt, micro jamais démarré seul, paramètres retirés de l'URL, hors ligne.
 - `5_setup/5_2_production.md` - « Mise à jour 2026-10-31 » : membre `shortcuts` du manifest, icônes `any` et `maskable` de 192 px et leur rasterisation, mise à jour sur le téléphone, absent de la démo.
 - `1_architecture/1_9_assistant.md` - « Mise à jour 2026-10-31 (bis) » : après essai, le raccourci écoute directement si la permission du micro est déjà accordée ; repli sur le champ focalisé ; garde-fou de l'audio suspendu.
+- `1_architecture/1_9_assistant.md` - « Mise à jour 2026-10-31 (ter) » : vérifié sur le téléphone (écoute directe, arrêt seul en fin de phrase), procédure de mise en route sur Android en six étapes.
 
 **Index** : catalogues `1_architecture` et `5_setup` mis à jour (1 ligne chacun), index.md régénéré.
 
