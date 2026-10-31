@@ -64,14 +64,30 @@ function show(focusField = true) {
 
 watch(paletteRequest, () => { if (!open.value) show(!matchMedia('(pointer: coarse)').matches) })
 // The installed app's "Ask Kasbah" shortcut (`manifest.webmanifest`) opens `/?ask&source=shortcut`: the
-// palette opens with the field focused, even by finger. The microphone is never started for it — the
-// browser wants a touch for that — its button sits in the field. The parameters go, so a reload does not reopen it.
+// palette opens listening when the microphone can start without a touch, otherwise with the field
+// focused, even by finger. The parameters go, so a reload does not reopen it.
 watch(() => route.query.ask, (ask) => {
   if (ask === undefined) return
-  if (!open.value) show()
   const { ask: _ask, source: _source, ...rest } = route.query
   void router.replace({ query: rest })
+  if (open.value) return
+  show(false)
+  void canListenAlone().then((listen) => {
+    if (!open.value || voicePhase.value !== 'idle') return
+    if (listen) talk()
+    else input.value?.focus()
+  })
 }, { immediate: true })
+
+/** Without a touch, the microphone opens only on a secure page, transcription on, and its permission already given (no prompt). */
+async function canListenAlone(): Promise<boolean> {
+  if (!window.isSecureContext) return false
+  if (voiceReady.value === null) await new Promise<void>((resolve) => { const unwatch = watch(voiceReady, () => { unwatch(); resolve() }) })
+  if (!voiceReady.value) return false
+  try {
+    return (await navigator.permissions.query({ name: 'microphone' })).state === 'granted'
+  } catch { return false } // a browser that does not know this permission
+}
 
 function close() {
   open.value = false

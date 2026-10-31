@@ -7,13 +7,14 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
-## [2026-10-31] update | Raccourci « Demander à Kasbah » de l'app installée
+## [2026-10-31] update | Raccourci « Demander à Kasbah » de l'app installée, qui écoute directement
 
 **Déclencheur** : demande de l'utilisateur d'un raccourci de PWA « Demander à Kasbah » (appui long sur l'icône Android, glissable sur l'écran d'accueil) qui ouvre directement la question ; pas de widget natif ni de TWA.
 
 **Pages modifiées** :
 - `1_architecture/1_9_assistant.md` - « Mise à jour 2026-10-31 » : `?ask&source=shortcut`, palette ouverte focalisée même au doigt, micro jamais démarré seul, paramètres retirés de l'URL, hors ligne.
 - `5_setup/5_2_production.md` - « Mise à jour 2026-10-31 » : membre `shortcuts` du manifest, icônes `any` et `maskable` de 192 px et leur rasterisation, mise à jour sur le téléphone, absent de la démo.
+- `1_architecture/1_9_assistant.md` - « Mise à jour 2026-10-31 (bis) » : après essai, le raccourci écoute directement si la permission du micro est déjà accordée ; repli sur le champ focalisé ; garde-fou de l'audio suspendu.
 
 **Index** : catalogues `1_architecture` et `5_setup` mis à jour (1 ligne chacun), index.md régénéré.
 

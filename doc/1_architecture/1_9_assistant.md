@@ -214,3 +214,30 @@ Tests : `SearchPalette.test.ts` (+2 : ouverture focalisée au doigt et paramètr
 `?ask`), contrôle négatif fait. Vérifié dans la preview sur le mock à 375 px avec pointeur tactile :
 `/?ask&source=shortcut` ouvre la palette focalisée, micro affiché, URL revenue à `/`, console vide.
 Pas encore essayé sur un téléphone Android.
+
+### Mise à jour 2026-10-31 (bis) — « Demander » écoute directement
+
+Après essai sur le téléphone, l'utilisateur veut que le raccourci écoute tout de suite. La mise à jour
+précédente (« le micro ne démarre jamais seul ») est dépassée ; elle disait vrai pour le premier
+commit (`05584dc`).
+
+- **Quand il écoute** (`canListenAlone()` dans `SearchPalette.vue`) : page sécurisée, plugin
+  `transcription` prêt (on attend la réponse de `transcriptionStatus`, qui arrive après l'ouverture), et
+  permission du micro **déjà accordée** (`navigator.permissions.query({ name: 'microphone' })` rend
+  `granted`). Chrome n'exige pas de geste pour `getUserMedia`, seulement la permission, gardée pour une
+  origine HTTPS. La palette s'ouvre aussitôt, puis lance le micro comme un toucher (`talk()`) : au
+  doigt, le champ perd le focus et le clavier reste baissé.
+- **Sinon, comme avant** : champ focalisé, micro à toucher. C'est le cas en `http://` sur le réseau
+  local, à la première fois (permission `prompt` : on ne fait pas surgir la demande sans geste), après
+  un refus, ou dans un navigateur qui ne connaît pas cette permission.
+- **Garde-fou** (`watchSilence`, `useVoiceInput.ts`) : un `AudioContext` créé sans geste peut rester
+  `suspended` ; ses images muettes passeraient pour « personne ne parle » et couperaient l'écoute
+  aussitôt. Tant qu'il est suspendu, la détection de fin de phrase ne lit rien : l'écoute s'arrête au
+  bouton ou à la durée maximale. Chrome sur Android laisse en principe jouer le son d'une app ajoutée
+  à l'écran d'accueil, auquel cas la fin de phrase marche comme d'habitude — à confirmer sur le téléphone.
+
+Tests : `SearchPalette.shortcut.test.ts` (2 : permission accordée → écoute, clavier baissé ; `prompt`
+→ pas de `getUserMedia`, champ focalisé), `useVoiceInput.autosend.test.ts` (+1 : audio suspendu, pas de
+faux silence) ; contrôles négatifs faits pour les deux. Preview : le panneau refuse le micro
+(`denied`), la palette s'y ouvre focalisée, sans erreur. L'écoute elle-même n'est vérifiable que sur
+le téléphone.

@@ -141,6 +141,9 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
     const vad = createEndpointer()
     const t0 = performance.now()
     const poll = setInterval(() => {
+      // started without a touch (the app's shortcut), the browser may keep the audio suspended: its
+      // silent frames would read as "nobody speaks" and cut at once, so the button stops it instead
+      if (audio.state === 'suspended') return
       analyser.getFloatTimeDomainData(frame)
       const event = vad.push(rms(frame), performance.now() - t0)
       if (event === 'nothing') silent = true

@@ -26,6 +26,8 @@ class FakeRecorder {
 /** The level the microphone is hearing right now (amplitude of a square signal). */
 let level = 0
 const closed = vi.fn()
+/** What the browser lets the audio do: suspended until a touch, when started without one. */
+let audioState: AudioContextState = 'running'
 class FakeAudioContext {
   resume = async () => {}
   close = async () => { closed() }
@@ -33,6 +35,7 @@ class FakeAudioContext {
   createAnalyser() {
     return { fftSize: 0, getFloatTimeDomainData: (frame: Float32Array) => { for (let i = 0; i < frame.length; i++) frame[i] = i % 2 ? level : -level } }
   }
+  get state() { return audioState }
 }
 
 const transcribe = vi.fn(async () => ({ text: 'Allume la cuisine', ms: 300 }))
@@ -42,6 +45,7 @@ beforeEach(() => {
   vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
   setActivePinia(createPinia())
   level = 0.002
+  audioState = 'running'
   transcribe.mockClear(); closed.mockClear()
   setTransport({ transcriptionStatus: async () => ({ ready: true, provider: 'voicestudio', speech: false, autoSend: true }), transcribe } as unknown as Transport)
   vi.stubGlobal('MediaRecorder', FakeRecorder)
@@ -87,6 +91,17 @@ it('the button stays: a touch during speech sends right away', async () => {
   await vi.advanceTimersByTimeAsync(0)
   api().toggle(); await vi.advanceTimersByTimeAsync(300)
   level = 0.1; await vi.advanceTimersByTimeAsync(800)
+  api().toggle(); await vi.advanceTimersByTimeAsync(0)
+  expect(heard).toEqual(['Allume la cuisine'])
+})
+
+it('audio kept suspended (started without a touch): no false "nobody speaks", the button stops it', async () => {
+  audioState = 'suspended'
+  const { heard, api } = harness()
+  await vi.advanceTimersByTimeAsync(0)
+  api().toggle(); await vi.advanceTimersByTimeAsync(NO_SPEECH_MS + 1000)
+  expect(api().phase.value).toBe('recording')
+  expect(api().heardNothing.value).toBe(false)
   api().toggle(); await vi.advanceTimersByTimeAsync(0)
   expect(heard).toEqual(['Allume la cuisine'])
 })
