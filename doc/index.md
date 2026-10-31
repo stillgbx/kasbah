@@ -33,7 +33,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-10-09 |
 | [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-10-24 |
 | [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-28 |
-| [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-10-29 |
+| [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-10-31 |
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-10-11 |
 | [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-10-26 |
 | [1_12 Scène 3D : objets dessinés](1_architecture/1_12_scene-3d-objets.md) | 2026-10-26 |
@@ -126,7 +126,7 @@ Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5
 |---|---|
 | [5_0 Installation et scripts](5_setup/5_0_installation-et-scripts.md) | 2026-10-31 |
 | [5_1 Configuration (.env)](5_setup/5_1_configuration-env.md) | 2026-10-27 |
-| [5_2 Production](5_setup/5_2_production.md) | 2026-10-29 |
+| [5_2 Production](5_setup/5_2_production.md) | 2026-10-31 |
 <!-- section:5_setup:end -->
 
 ## 6 — FAQ

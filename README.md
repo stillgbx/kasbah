@@ -165,7 +165,7 @@ From a phone away from home, without a VPN: an **HTTPS reverse proxy** (the Syno
 - **Accounts**: the same as the AI assistants' accounts, in **Settings → Accounts**, managed from the local network only (even when signed in, the public address doesn't show them).
 - **Session**: a 90-day cookie, extended on every use; you sign in once per device. Changing an account's password closes all its sessions (lost phone); so does removing it. “Sign out” is in Settings → Accounts.
 - **Lockout**: after 5 failed sign-ins in a row, the account is locked for 15 minutes, even with the right password (app and AI assistants; `KASBAH_LOGIN_MAX_FAILURES`, `KASBAH_LOGIN_LOCK_MINUTES`). Open sessions are not affected.
-- **Installable app**: over HTTPS, the browser offers to install Kasbah, starting from the sign-in page. On iPhone, the app added to the home screen has its own cookies: sign in to it once.
+- **Installable app**: over HTTPS, the browser offers to install Kasbah, starting from the sign-in page. On iPhone, the app added to the home screen has its own cookies: sign in to it once. On Android, a long press on the installed app's icon offers an “Ask Kasbah” shortcut (labelled “Demander”, in French), which opens the assistant ready to type or dictate; it can be dragged to the home screen as an icon of its own.
 
 **Setting it up on a Synology NAS** (DSM 6: Control Panel → Application Portal → Reverse Proxy; DSM 7: Login Portal → Advanced → Reverse Proxy):
 

@@ -165,7 +165,7 @@ Depuis un téléphone hors de la maison, sans VPN : un **proxy inverse HTTPS** (
 - **Comptes** : les mêmes que ceux des assistants IA, dans **Réglages → Comptes**, gérés depuis le réseau local seulement (même connecté, l'adresse publique ne les montre pas).
 - **Session** : un cookie de 90 jours, prolongé à chaque usage ; on se connecte une fois par appareil. Changer le mot de passe d'un compte ferme toutes ses sessions (téléphone perdu) ; le retirer aussi. « Se déconnecter » est dans Réglages → Comptes.
 - **Blocage** : après 5 échecs de connexion d'affilée, le compte est bloqué 15 minutes, même avec le bon mot de passe (application et assistants IA ; `KASBAH_LOGIN_MAX_FAILURES`, `KASBAH_LOGIN_LOCK_MINUTES`). Les sessions ouvertes ne sont pas touchées.
-- **App installable** : en HTTPS, le navigateur propose d'installer Kasbah, dès la page de connexion. Sur iPhone, l'app ajoutée à l'écran d'accueil a ses propres cookies : s'y connecter une fois.
+- **App installable** : en HTTPS, le navigateur propose d'installer Kasbah, dès la page de connexion. Sur iPhone, l'app ajoutée à l'écran d'accueil a ses propres cookies : s'y connecter une fois. Sur Android, un appui long sur l'icône de l'app installée propose le raccourci « Demander », qui ouvre l'assistant prêt pour la saisie ou la dictée ; on peut le glisser sur l'écran d'accueil comme une icône à part.
 
 **Mise en service sur un NAS Synology** (DSM 6 : Panneau de configuration → Portail des applications → Proxy inversé ; DSM 7 : Portail de connexion → Avancé → Proxy inversé) :
 

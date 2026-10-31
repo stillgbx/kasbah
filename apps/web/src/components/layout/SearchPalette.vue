@@ -63,6 +63,15 @@ function show(focusField = true) {
 }
 
 watch(paletteRequest, () => { if (!open.value) show(!matchMedia('(pointer: coarse)').matches) })
+// The installed app's "Ask Kasbah" shortcut (`manifest.webmanifest`) opens `/?ask&source=shortcut`: the
+// palette opens with the field focused, even by finger. The microphone is never started for it — the
+// browser wants a touch for that — its button sits in the field. The parameters go, so a reload does not reopen it.
+watch(() => route.query.ask, (ask) => {
+  if (ask === undefined) return
+  if (!open.value) show()
+  const { ask: _ask, source: _source, ...rest } = route.query
+  void router.replace({ query: rest })
+}, { immediate: true })
 
 function close() {
   open.value = false

@@ -1,6 +1,6 @@
 # Assistant (« Demander à Kasbah »)
 
-> Dernière mise à jour : 2026-10-29
+> Dernière mise à jour : 2026-10-31
 > Sources : `apps/web/src/api/demoAssistant.ts`, `apps/server/src/assistant/{assistant,engines}.ts`, tests `apps/server/src/assistant/assistant.test.ts`, `apps/server/src/mcp/auth.ts` (`runToken`), `apps/server/src/app.ts`, `apps/web/src/composables/useAssistant.ts`, `apps/web/src/components/layout/{AssistantReply,SearchPalette,PageHeader}.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.ts`, `apps/android/app/src/main/kotlin/org/kasbah/auto/VoiceScreen.kt`, session du 2026-10-22
 
 ## Ce que c'est
@@ -187,3 +187,30 @@ conditions** plutôt que des ordres simples (`apps/web/src/api/demoAssistant.ts`
   de haut, même largeur qu'avant, à 1280, 1024 et 853 px de large (zooms 1, 1,25, 1,5). Et les lignes
   défilaient trop vite pour être lues : chaque commande s'affiche, puis se coche 0,45 s plus tard,
   une toutes les 0,7 s environ ; réponse au bout de ~6 s pour six commandes, l'ordre d'une vraie course.
+
+### Mise à jour 2026-10-31 — un raccourci de l'app installée
+
+Quatrième point d'entrée, hors de l'app : un **raccourci** de la PWA installée. Sur Android, un appui
+long sur l'icône Kasbah montre « Demander », qu'on peut glisser sur l'écran d'accueil comme une icône
+à part. Le cœur, les moteurs et `useAssistant` ne changent pas.
+
+- **Manifest** (`apps/web/public/manifest.webmanifest`) : membre `shortcuts`, une entrée (nom
+  « Demander à Kasbah », nom court « Demander »), adresse `./?ask&source=shortcut`, dans le `scope`
+  `./`. Icônes : `../5_setup/5_2_production.md`, mise à jour du 2026-10-31.
+- **Ouverture** (`components/layout/SearchPalette.vue`) : la palette, montée par `App.vue` sur toutes
+  les vues, regarde `route.query.ask`. Présent, elle s'ouvre **avec le focus dans le champ, même au
+  doigt** — à l'inverse du bouton de l'en-tête (mise à jour du 2026-10-25), qui garde le clavier
+  baissé : par le raccourci, on vient pour taper ou dicter. Puis `ask` et `source` sont retirés de
+  l'URL par `router.replace`, les autres paramètres gardés : un rechargement ne la rouvre pas.
+  `source` ne pilote rien aujourd'hui ; il dit d'où vient l'ouverture.
+- **Le micro ne démarre jamais seul** : un navigateur exige un geste pour l'ouvrir, un démarrage au
+  chargement échouerait. Son bouton est dans le champ, comme d'habitude.
+- **Clavier** : sans geste de l'utilisateur, Chrome sur Android pose le focus mais peut ne pas faire
+  monter le clavier ; un toucher sur le champ ou le micro suffit.
+- **Hors ligne** : le service worker ne met rien en cache (notifications seules) : le raccourci se
+  comporte comme l'ouverture de l'app. La démo de Pages n'a pas de manifest, donc pas de raccourci.
+
+Tests : `SearchPalette.test.ts` (+2 : ouverture focalisée au doigt et paramètres retirés ; rien sans
+`?ask`), contrôle négatif fait. Vérifié dans la preview sur le mock à 375 px avec pointeur tactile :
+`/?ask&source=shortcut` ouvre la palette focalisée, micro affiché, URL revenue à `/`, console vide.
+Pas encore essayé sur un téléphone Android.

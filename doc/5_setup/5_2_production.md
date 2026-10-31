@@ -1,6 +1,6 @@
 # Production
 
-> Dernière mise à jour : 2026-10-29
+> Dernière mise à jour : 2026-10-31
 > Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts`, `site/`, `.github/workflows/pages.yml`, `apps/web/src/stores/push.ts` (2026-10-29)
 
 ## Build
@@ -630,3 +630,25 @@ une maquette.
   `.claude/launch.json` (`vite preview --mode demo`, port 8091) et `http://localhost:8091/kasbah/demo/`.
 
 Sources : `apps/web/vite.config.ts`, `apps/web/package.json`, `apps/web/src/stores/push.ts`, `.github/workflows/pages.yml`, `site/404.html`, `site/privacy.html`, `site/fr/privacy.html`, `.claude/launch.json`.
+
+## Mise à jour 2026-10-31 — un raccourci « Demander à Kasbah » dans le manifest
+
+Le manifest gagne un membre `shortcuts` (une entrée, adresse `./?ask&source=shortcut`) : appui long sur
+l'icône de l'app installée, raccourci à glisser sur l'écran d'accueil. Ce qu'il ouvre :
+`../1_architecture/1_9_assistant.md`, mise à jour du 2026-10-31.
+
+- **Icônes** (`apps/web/public/icons/`) : le micro de l'app (`mic` de `src/lib/strokeIcons.ts`) en
+  sombre dans une bulle sable `#e0aa70`, sur le fond `#0d1420` du logo. Deux PNG de 192 px :
+  `shortcut-ask-192.png` (`purpose: any`, coins arrondis comme `icon.svg`) et
+  `shortcut-ask-maskable-192.png` (`maskable`, fond plein, dessin dans le cercle de sécurité de 40 %),
+  la seconde pour le recadrage rond d'Android si Chrome la prend, la première sinon. Sources SVG à
+  côté (`shortcut-ask.svg`, `shortcut-ask-maskable.svg`), rasterisées comme le logo (mise à jour du
+  2026-10-28 (bis) : fenêtre 512, `--force-device-scale-factor=0.375`, chemins à barres obliques).
+- **Mise à jour sur le téléphone** : Chrome relit le manifest d'une app installée à son lancement et la
+  met à jour, avec un délai qui peut aller jusqu'à un jour ; désinstaller puis réinstaller la prend
+  tout de suite.
+- **Build** : `public/` est copié tel quel, le manifest construit porte `shortcuts` (vérifié sur un build
+  dans un dossier jetable, `vite build --outDir`, pour ne pas remplacer le `dist/` servi). Le build de
+  démo retire le manifest (`demoPage()` de `vite.config.ts`) : pas de raccourci sur Pages.
+
+Sources : `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/shortcut-ask*.{svg,png}`.
