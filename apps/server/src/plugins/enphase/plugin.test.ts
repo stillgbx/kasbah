@@ -220,7 +220,7 @@ describe('unpaired gateway', () => {
 
   it('the keys listed in Settings contain no account credential', async () => {
     const { plugin } = await started()
-    expect(plugin.health!().keys).toEqual(['ENPHASE_HOST', 'ENPHASE_TOKEN', 'ENPHASE_TOKEN_FILE', 'ENPHASE_CLOUD_FILE', 'ENPHASE_DAYS_FILE', 'ENPHASE_INVERTER_DAYS_FILE'])
+    expect(plugin.health!().keys).toEqual(['ENPHASE_HOST', 'ENPHASE_TOKEN', 'ENPHASE_TOKEN_FILE', 'ENPHASE_CLOUD_FILE', 'ENPHASE_DAYS_FILE', 'ENPHASE_INVERTER_DAYS_FILE', 'ENPHASE_SETTINGS_FILE'])
     expect(Object.keys(enphaseConfigSchema.shape)).not.toContain('ENPHASE_PASSWORD')
     expect(plugin.parts).toEqual([{ id: 'ev_charger', labelKey: 'kinds.ev_charger', enabledByDefault: true }])
   })
@@ -559,6 +559,20 @@ describe('devices', () => {
     await settle()
     const site = (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.find(([id]) => id === 'site')
     expect(site?.[1]).toMatchObject({ kind: 'energy', productionW: 6472, consumptionW: 725, gridW: -5763, batteryW: -16 })
+    await plugin.stop()
+  })
+
+  it('the subscription entered on the card gives each phase its limit, published with the site', async () => {
+    const { plugin, ctx, app } = await paired()
+    await plugin.discover()
+    const res = await app.inject({ method: 'POST', url: '/api/plugins/enphase/subscription', payload: { kva: 36 } })
+    expect(res.json()).toMatchObject({ subscriptionKva: 36 })
+    await plugin.start()
+    await settle()
+    const site = (ctx.emitState as ReturnType<typeof vi.fn>).mock.calls.filter(([id, p]) => id === 'site' && 'gridPhases' in (p as object)).at(-1)
+    // three-phase gateway: 36 kVA split evenly, 12 kVA a phase
+    expect(site?.[1]).toMatchObject({ phaseLimitVa: 12_000, gridPhases: [{ w: -2017 }, { w: -1661 }, { w: -2084 }] })
+    expect((await app.inject({ method: 'POST', url: '/api/plugins/enphase/subscription', payload: { kva: -1 } })).statusCode).toBe(400)
     await plugin.stop()
   })
 

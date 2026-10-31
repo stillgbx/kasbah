@@ -268,6 +268,11 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ force }) },
       (j) => j as EnphaseTokenStatus,
     ),
+    setEnphaseSubscription: (kva) => request(
+      `${base}/api/plugins/enphase/subscription`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kva }) },
+      (j) => j as EnphaseTokenStatus,
+    ),
     teslaStatus: () => request(`${base}/api/plugins/tesla/status`, undefined, (j) => j as TeslaStatus),
     teslaRegister: () => request(`${base}/api/plugins/tesla/register`, { method: 'POST' }, (j) => j as TeslaStatus),
     teslaAuthUrl: () => request(`${base}/api/plugins/tesla/auth/url`, undefined, (j) => j as { url: string; redirectUri: string }),

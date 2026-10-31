@@ -84,6 +84,21 @@ describe('site state', () => {
     expect(patch.gridW).toBe(-5763)                      // negative = export, already the contract's sign
   })
 
+  it('reads the grid phase by phase, active and apparent power, the three adding up to the total', () => {
+    const phases = (toSitePatch(live) as { gridPhases: { w: number; va: number }[] }).gridPhases
+    expect(phases).toEqual([{ w: -2017, va: -2028 }, { w: -1661, va: -1760 }, { w: -2084, va: -2090 }])
+    expect(phases.reduce((t, p) => t + p.w, 0)).toBeCloseTo(-5763, -1)
+  })
+
+  it('single phase without per-phase fields: the aggregate is the phase; three phases without them: nothing', () => {
+    const bare = { agg_p_mw: 2_400_000, agg_s_mva: 2_500_000 }
+    const phasesOf = (phase_count?: number) =>
+      (toSitePatch({ meters: { grid: bare, ...(phase_count ? { phase_count } : {}) } }) as { gridPhases?: unknown }).gridPhases
+    expect(phasesOf(1)).toEqual([{ w: 2400, va: 2500 }])
+    expect(phasesOf(3)).toBeUndefined()
+    expect(phasesOf()).toBeUndefined()                  // silent gateway: taken as three phases, no guess
+  })
+
   it('when falling back on `production.json`, takes the METER and not the inverters\' sum', () => {
     const p = toSitePatch(undefined, report) as Record<string, number>
     expect(productionW(report)).toBe(6456)

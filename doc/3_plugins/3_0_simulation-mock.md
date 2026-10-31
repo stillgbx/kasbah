@@ -1,6 +1,6 @@
 # Simulation (`@kasbah/mock-sim` et plugin `mock`)
 
-> Dernière mise à jour : 2026-10-29
+> Dernière mise à jour : 2026-10-31
 > Sources : `apps/web/src/api/demoProperties.ts`, `packages/mock-sim/src/{simulation,scenarios,world,clock,rng,types}.ts`, `packages/mock-sim/src/behaviours/*.ts`, `apps/server/src/plugins/mock/index.ts`, `apps/web/src/api/mockTransport.ts`, `packages/mock-sim/src/behaviours/energy.ts`, `packages/mock-sim/src/demos.ts`, `packages/mock-sim/src/behaviours/camera.ts`
 
 ## Pourquoi un paquet séparé
@@ -520,3 +520,14 @@ section du 2026-09-13) est inchangé : il ne suit donc pas ce `peakW`.
   L'ancienne `HOME` (47.309343, 5.045591) reste celle de la maison démo historique
   (`demo-house.json`, ses deux exemplaires, `scenarios.ts`, l'exemple de `docs/house-json.md`) et
   des tests qui l'emploient comme valeur quelconque : rien à changer de ce côté.
+
+### Mise à jour 2026-10-31 — des phases pour le site simulé
+
+`energySite` (`packages/mock-sim/src/behaviours/energy.ts`) accepte `phaseLimitVa` (publie
+`gridPhases` et la limite) et `phases: 1 | 3`. En triphasé, la borne et les autres charges se
+répartissent également, la base penche sur L1 et l'appareil aléatoire (un four) est tout sur L1 ; la
+somme des phases vaut toujours `gridW`. Facteur de puissance 0,95 pour passer des W aux VA.
+« Les Tilleuls » est en triphasé (12 kVA par phase), « Les Embruns », la maison ouverte par défaut,
+en monophasé (9 kVA) : la démo montre les deux cas. Valeurs inventées. Les pics horaires de la
+maquette dans le navigateur (`getHistory` de `mockTransport.ts`) sont fabriqués, autant que de
+phases, plus forts le soir.

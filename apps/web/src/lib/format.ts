@@ -8,6 +8,10 @@ const nf = (locale: string, digits: number) => new Intl.NumberFormat(locale, { m
 export function formatPower(w: number, locale = 'fr'): string {
   return Math.abs(w) >= 1000 ? `${nf(locale, 1).format(w / 1000)} kW` : `${nf(locale, 0).format(w)} W`
 }
+/** Apparent power, always in kVA: the unit a subscription and the meter's limit are given in. */
+export function formatApparent(va: number, locale = 'fr'): string {
+  return `${nf(locale, 1).format(va / 1000)} kVA`
+}
 /**
  * A portion, IN THE DEVICE'S UNIT (`meta.petFeeder.unit`). It is not always a mass:
  * a Fresh Element Solo counts in CUPS by tenths, an Infinity in grams. Writing "g"

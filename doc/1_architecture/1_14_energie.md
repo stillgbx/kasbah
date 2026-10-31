@@ -1,7 +1,7 @@
 # Énergie : mesures, historique et charge des véhicules
 
-> Dernière mise à jour : 2026-10-26
-> Sources : `packages/shared/src/devices/state.ts` (`energyStateSchema`, `evChargerStateSchema`), `packages/shared/src/devices/rules.ts` (`estimateChargePowerW`), `apps/server/src/core/history.ts`, `apps/server/src/core/chargeCoordination.ts`, `apps/server/src/core/plugin-host.ts` (`execute`, `onVehicleState`, `checkChargingClaim`), `apps/server/src/http/routes.ts` (`/api/devices/:id/history`, `/api/devices/:id/energy-days`), `apps/server/src/http/recentDays.ts`, `apps/server/src/plugins/enphase/days.ts` ; pages citées plus bas
+> Dernière mise à jour : 2026-10-31
+> Sources : `packages/shared/src/devices/state.ts` (`energyStateSchema`, `evChargerStateSchema`), `packages/shared/src/devices/rules.ts` (`estimateChargePowerW`), `apps/server/src/core/history.ts`, `apps/server/src/core/chargeCoordination.ts`, `apps/server/src/core/plugin-host.ts` (`execute`, `onVehicleState`, `checkChargingClaim`), `apps/server/src/http/routes.ts` (`/api/devices/:id/history`, `/api/devices/:id/energy-days`), `apps/server/src/http/recentDays.ts`, `apps/server/src/plugins/enphase/days.ts` ; pages citées plus bas, `apps/server/src/app.ts` (historique écrit sur disque, 2026-10-31)
 
 Page de synthèse, écrite au lint du 2026-10-13 : l'énergie était décrite par morceaux dans le contrat,
 le serveur, les plugins Enphase, Tesla et Renault et la vue Énergie. Elle décrit l'état du code à cette
@@ -138,3 +138,40 @@ production + import − export + décharge − charge, réseau et batterie resta
 L'état `energy` du site porte les mêmes valeurs (`todayProductionWh`, `todayConsumptionWh`), calculées
 par `EnergyDays.today`. « Aujourd'hui reste toujours local » tient toujours. Sources :
 `apps/server/src/plugins/enphase/days.ts`, `index.ts`.
+
+### Mise à jour 2026-10-31 — les phases, et l'historique qui survit à une coupure
+
+**Pourquoi.** L'utilisateur fait sauter son abonnement triphasé quand la voiture charge pendant que
+le four et le chauffage tournent. Un compteur triphasé coupe dès qu'**une** phase dépasse sa part de
+l'abonnement (en principe le tiers), quel que soit le total : le `gridW` du site ne pouvait pas le
+montrer.
+
+**Contrat.** L'état `energy` gagne deux champs optionnels (`packages/shared/src/devices/state.ts`) :
+`gridPhases` (L1, L2, L3 : puissance active `w` et apparente `va`, même signe que `gridW`) et
+`phaseLimitVa` (la part de l'abonnement de chaque phase, réglée par l'utilisateur). La puissance
+**apparente** est celle que le compteur limite : avec une pompe à chaleur ou un compresseur, elle
+dépasse l'active. Le point d'historique horaire gagne `phasePeakVa` (`protocol/http.ts`) : le plus
+fort soutirage de chaque phase dans l'heure, 0 si elle n'a fait qu'injecter. Une moyenne horaire
+cacherait la minute qui fait couper.
+
+**`EnergyHistory` n'est plus seulement en mémoire.** *(Dépasse le « sans base de données : un
+redémarrage efface l'historique » plus haut, pour la partie effacement.)* Une coupure du compteur
+éteint aussi le serveur, et effaçait justement l'heure qui l'explique. L'historique est donc écrit
+dans `.state/energy-history.json` (`app.ts`, option `file`), relu au démarrage, toujours 48 h :
+- toutes les **5 minutes** ;
+- **aussitôt** quand le pic d'une phase monte au-delà de **80 %** de sa limite (`URGENT_SHARE`) :
+  les secondes d'avant une coupure sont celles qui comptent. Sans limite saisie, seul le rythme de
+  5 minutes joue.
+
+Usure du disque, choix de l'utilisateur : environ 300 écritures par jour d'un fichier d'une
+quinzaine de Ko (le site et chaque batterie, 48 seaux chacun), au lieu de milliers avec une écriture
+à chaque hausse de pic. Le prix : un arrêt brutal sans dépassement perd au plus 5 minutes de
+moyennes, celles du graphique de production.
+
+**Rien à rattraper chez Enphase.** La resynchronisation ne ramène que des totaux journaliers, et la
+série au quart d'heure du cloud est une moyenne sur 15 min : aucune des deux ne dit le pic d'une
+phase. L'historique des phases commence au premier démarrage du serveur avec ce code.
+
+Sources : `apps/server/src/core/history.ts` (+ `history.test.ts`), `apps/server/src/app.ts`,
+`packages/shared/src/devices/state.ts`, `packages/shared/src/protocol/http.ts`. Plugin :
+[3_7 Enphase](../3_plugins/3_7_enphase.md) ; vue : [4_4](../4_ui/4_4_vues-energie-vehicules.md).

@@ -113,7 +113,7 @@ export function tilleulsDevices(opts: { winter?: boolean } = {}): AnySimDevice[]
     ...Array.from({ length: 12 }, (_, i) => solarPanel(`tl-panel-${String(i + 1).padStart(2, '0')}`, {
       name: `Panneau ${i + 1}`, factor: 0.95 + ((i * 3) % 5) * 0.01, ...(i === 11 ? { shadeFrom: 16 } : {}),
     })),
-    energySite('tl-energy', { name: 'Énergie', peakW: 5400, batteryWh: 10_000 }),
+    energySite('tl-energy', { name: 'Énergie', peakW: 5400, batteryWh: 10_000, phaseLimitVa: 12_000 }),
   ]
 }
 
@@ -185,7 +185,7 @@ export function embrunsDevices(opts: { winter?: boolean } = {}): AnySimDevice[] 
     ...Array.from({ length: 10 }, (_, i) => solarPanel(`em-panel-${String(i + 1).padStart(2, '0')}`, {
       name: `Panneau ${i + 1}`, factor: 0.97 + ((i * 3) % 5) * 0.01,
     })),
-    energySite('em-energy', { name: 'Énergie', peakW: 4500 }),
+    energySite('em-energy', { name: 'Énergie', peakW: 4500, phaseLimitVa: 9000, phases: 1 }),
   ]
 }
 

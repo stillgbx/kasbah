@@ -105,7 +105,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   // Per-plugin settings: they live IN the house (`house.plugins`), written by the UI. `house` is
   // mutated in place by `updateHouseFile`, so this read always sees the current value.
   const settingsOf = (pluginId: string) => pluginSettingsOf(house.house.plugins, pluginId)
-  const history = new EnergyHistory(bus, clock)
+  const history = new EnergyHistory(bus, clock, { file: stateFile('energy-history.json'), logger: opts.logger.child({ component: 'history' }) })
   // Push notifications: the subscribed screens, the alerts of the house, the "Notify" action.
   const push = new PushService({
     path: stateFile('push.json'),

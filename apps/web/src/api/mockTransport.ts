@@ -236,12 +236,20 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       // plausible curve of the hours elapsed in the day (no real memory on the in-process mock side)
       const now = Date.now()
       const hourStart = Math.floor(now / 3_600_000) * 3_600_000
+      const site = entries().find((e) => e.descriptor.id === deviceId)?.state
+      const limit = site?.kind === 'energy' ? site.phaseLimitVa : undefined
+      const phaseCount = site?.kind === 'energy' ? site.gridPhases?.length ?? 3 : 3
       const points = []
       for (let i = hours - 1; i >= 0; i--) {
         const t = hourStart - i * 3_600_000
         const h = new Date(t).getHours() + 0.5
         const productionW = Math.round(6000 * solarGeometry(h) * 0.85)
-        points.push({ t, productionW, consumptionW: 350 + Math.round(600 * Math.abs(Math.sin(h / 3))), gridW: 0, samples: 1 })
+        // plausible hourly peaks, as many as the site has phases: the evening (oven, charger) the highest, L1 the most loaded
+        const evening = Math.max(0, 1 - Math.abs(h - 19.5) / 4)
+        const phasePeakVa = limit
+          ? [0.3 + 0.55 * evening, 0.2 + 0.35 * evening, 0.15 + 0.4 * evening].slice(0, phaseCount).map((f) => Math.round(limit * f))
+          : undefined
+        points.push({ t, productionW, consumptionW: 350 + Math.round(600 * Math.abs(Math.sin(h / 3))), gridW: 0, samples: 1, ...(phasePeakVa ? { phasePeakVa } : {}) })
       }
       return { deviceId, points }
     },
@@ -401,6 +409,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async enphaseTokenStatus() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no IQ Gateway in mock mode') },
     async pairEnphase() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no IQ Gateway in mock mode') },
     async syncEnphaseHistory() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no IQ Gateway in mock mode') },
+    async setEnphaseSubscription() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no IQ Gateway in mock mode') },
     async teslaStatus() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Tesla account in mock mode') },
     async teslaRegister() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Tesla account in mock mode') },
     async teslaAuthUrl() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Tesla account in mock mode') },

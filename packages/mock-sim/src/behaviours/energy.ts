@@ -46,7 +46,19 @@ export interface EnergyOptions {
   batteryMaxW?: number
   /** Baseline consumption of the house (standby, fridge…) in W. */
   baseLoadW?: number
+  /**
+   * Publishes the grid phase by phase (`gridPhases`) with this share of the subscription per phase
+   * (VA). Three phases: the charger and the other loads spread evenly, the baseline leans on L1, the
+   * random appliance (an oven) sits on L1 alone. Absent = no phase data.
+   */
+  phaseLimitVa?: number
+  /** How many phases the meter has: 1 = single phase, the whole grid on L1. Default 3. */
+  phases?: 1 | 3
 }
+
+/** Baseline share of each phase, and the power factor that turns watts into the meter's volt-amperes. */
+const BASE_SPLIT = [0.45, 0.3, 0.25] as const
+const POWER_FACTOR = 0.95
 
 /**
  * Energy site (Enphase type): production = sunshine × peak; consumption = baseline + loads
@@ -66,6 +78,7 @@ export function energySite(externalId: string, o: EnergyOptions): SimDevice<'ene
       productionW: 0, consumptionW: baseLoadW, gridW: baseLoadW,
       ...(batteryWh > 0 ? { batteryW: 0, batterySoc: 60 } : {}),
       todayProductionWh: 0, todayConsumptionWh: 0,
+      ...(o.phaseLimitVa ? { phaseLimitVa: o.phaseLimitVa } : {}),
     },
     tick(ctx) {
       const s = dev.state
@@ -92,6 +105,14 @@ export function energySite(externalId: string, o: EnergyOptions): SimDevice<'ene
       s.productionW = production
       s.consumptionW = consumption
       s.gridW = consumption - production + batteryW
+      if (o.phaseLimitVa) {
+        const appliance = applianceLeftS > 0 ? applianceW : 0
+        const split = o.phases === 1 ? [1] : BASE_SPLIT
+        s.gridPhases = split.map((share, i) => {
+          const w = Math.round(baseLoadW * share + ctx.world.loadsW / 3 + (i === 0 ? appliance : 0) + (batteryW - production) / 3)
+          return { w, va: Math.round(w / POWER_FACTOR) }
+        })
+      }
       s.todayProductionWh = Math.round((s.todayProductionWh ?? 0) + (production * ctx.dtS) / 3600)
       s.todayConsumptionWh = Math.round((s.todayConsumptionWh ?? 0) + (consumption * ctx.dtS) / 3600)
     },

@@ -8,6 +8,7 @@ import RoomBands from '../components/devices/RoomBands.vue'
 import EvChargerCommands from '../components/controls/EvChargerCommands.vue'
 import EnergyFlow from '../components/energy/EnergyFlow.vue'
 import InverterFields from '../components/energy/InverterFields.vue'
+import PhaseLoad from '../components/energy/PhaseLoad.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import { useHomeSummary } from '../composables/useHomeSummary'
 import { calendarTitle, type PeriodMode } from '../lib/consumption'
@@ -210,6 +211,8 @@ const chartTotal = computed(() => (periodic.value && period.value !== 'day'
           <div v-if="emptyChart" class="muted chart__hint">{{ hourly ? $t('energy.noHistory') : $t('energy.noPeriodHistory') }}</div>
         </section>
         </div>
+        <!-- the grid phase by phase, now and over the last day: what trips a three-phase meter -->
+        <PhaseLoad v-if="e.gridPhases?.length" :energy="e" :points="points" />
       </template>
 
       <!-- What each inverter produces, array by array: the view told the house's production, not

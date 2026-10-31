@@ -7,6 +7,18 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-31] update | Le réseau phase par phase, l'abonnement, et l'historique qui survit à une coupure
+
+**Déclencheur** : l'utilisateur fait sauter son abonnement triphasé (voiture en charge, four et chauffage) ; demande de gérer les trois phases et de les afficher dans la vue Énergie, puis le monophasé et la démo.
+
+**Pages modifiées** :
+- `1_architecture/1_14_energie.md` - « Mise à jour 2026-10-31 » : `gridPhases`, `phaseLimitVa`, `phasePeakVa` ; historique écrit sur disque (5 min, aussitôt au-delà de 80 % de la limite), rien à rattraper chez Enphase.
+- `3_plugins/3_7_enphase.md` - « Mise à jour 2026-10-31 » : phases lues dans `livedata`, repli monophasé, abonnement saisi sur la carte, équilibrage de la borne (`dlbEnabled`) à ne pas confondre.
+- `4_ui/4_4_vues-energie-vehicules.md` - « Mise à jour 2026-10-31 » : bloc « Phases » (direct, pics sur 24 h, singulier en monophasé) et mesures.
+- `3_plugins/3_0_simulation-mock.md` - « Mise à jour 2026-10-31 » : option `phases`, Tilleuls triphasé, Embruns monophasé.
+
+**Index** : catalogues `1_architecture`, `3_plugins` (2 lignes) et `4_ui` mis à jour, index.md régénéré.
+
 ## [2026-10-31] update | Intensité de charge de la Tesla (et pourquoi pas pour la R5)
 
 **Déclencheur** : demande de l'utilisateur (« dans l'app mobile de la tesla et dans la voiture on peut choisir l'ampérage max de la charge. possible d'ajouter la fonctionnalité à kasbah ? et pour la r5 ? »).

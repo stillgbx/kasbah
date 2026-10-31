@@ -148,6 +148,11 @@ export const energyHistoryPointSchema = z.object({
   consumptionW: z.number(),
   gridW: z.number(),
   samples: z.number().int(),
+  /**
+   * Per phase, the HIGHEST apparent power drawn from the grid within the hour (VA, 0 when it only
+   * exported): an hourly average would hide the minute that trips the meter. Absent = no phase data.
+   */
+  phasePeakVa: z.array(z.number()).optional(),
 })
 export const energyHistorySchema = z.object({ deviceId: z.string(), points: z.array(energyHistoryPointSchema) })
 export type EnergyHistoryPoint = z.infer<typeof energyHistoryPointSchema>

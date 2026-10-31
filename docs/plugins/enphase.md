@@ -15,6 +15,7 @@
 ## What the plugin does
 
 - **Site**: solar production, consumption, exchange with the grid and storage, in real time (read every 10 s).
+- **Phases**: the exchange with the grid phase by phase (active and apparent power), shown in the Energy view against each phase's share of the subscription, with the peak of each hour over the last day. A three-phase meter cuts as soon as one phase goes over its share, whatever the total. A single-phase gateway shows one phase.
 - **Microinverters**: one power sensor per inverter, with its record: its best quarter hour over the whole history, which needs the Enphase account (without it, no record is shown). An inverter silent for more than half an hour (at night, a failure) becomes unavailable and keeps its last value, grayed out.
 - **IQ batteries**: one per battery, with its charge level; storage is positive when charging, negative when discharging.
 - **IQ EV Charger 2**: state (plugged in, charging), session energy, **Start charging** / **Stop charging**. The current cannot be set: starting resumes the one from the Enphase app.
@@ -43,6 +44,8 @@
 5. For the charger: choose **Enphase account** and **Validate**. The button links the cloud session without creating a new token if the local token is still valid.
 6. The same card has a **Production history** section: a strip with one cell per day since commissioning (complete, nothing at Enphase, incomplete, missing) and **Resync**, which takes again from Enphase only the days that are not complete — after a fresh install or a server outage. **Take everything again** redoes every day. Today is always counted by Kasbah.
 
+7. Optional: in **Electricity subscription**, enter the **Subscribed power (kVA)** and **Save**. Each phase's limit derives from it (a third on three phases), drawn in the Energy view.
+
 ## Configuration (`apps/server/.env`)
 
 Nothing is required in the normal case.
@@ -55,6 +58,7 @@ Nothing is required in the normal case.
 | `ENPHASE_CLOUD_FILE` | `apps/server/.state/enphase-cloud.json` | Where the server keeps the charger's session. Empty: to be linked at every start |
 | `ENPHASE_DAYS_FILE` | `apps/server/.state/enphase-days.json` | The site's daily history. Empty: kept in memory only, lost at restart |
 | `ENPHASE_INVERTER_DAYS_FILE` | `apps/server/.state/enphase-inverter-days.json` | Each microinverter's daily history. Empty: in memory only |
+| `ENPHASE_SETTINGS_FILE` | `apps/server/.state/enphase-settings.json` | The subscribed power entered on the card. Empty: in memory only |
 | `ENPHASE_POLL_MS` | `10000` | Meter polling interval (2,000 to 300,000 ms) |
 | `ENPHASE_SLOW_POLL_MS` | `60000` | Polling interval for inverters, batteries and charger (30,000 to 900,000 ms) |
 
@@ -67,6 +71,8 @@ Nothing is required in the normal case.
 - The charger does not say which car is plugged in.
 - Only one Enlighten site is read: the one chosen at pairing.
 - **History**: fetching Enphase's past needs the Enphase account; a pasted token only gives what Kasbah measures from then on. The grid and battery figures Kasbah measures itself are integrated from the power readings, so they differ by a few percent from Enphase's. A day when the server was stopped is marked incomplete until a resync.
+- **Phase peaks** are measured by Kasbah from the gateway every 10 s and kept for 48 h, from the moment the server runs this version: Enphase keeps no per-phase peaks to fetch. Ten seconds can miss a spike of a second or two.
+- Single phase: tried only on a three-phase gateway; a single-phase one that does not detail its phase shows its total instead.
 - Safe mode: if the charger is not connected to the gateway, it falls back to a reduced current. This is set in the Enphase app (Charger Connectivity), not in Kasbah.
 
 ## Further reading

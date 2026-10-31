@@ -186,6 +186,22 @@ const invertersText = computed(() => {
 })
 const invertersError = computed(() => status.value?.history?.inverters?.error ?? null)
 
+/** The subscription field: empty = forgotten. The button only wakes up when the value changed. */
+const kva = ref<number | ''>('')
+watch(() => status.value?.subscriptionKva, (v) => { kva.value = v ?? '' }, { immediate: true })
+const kvaChanged = computed(() => (kva.value === '' ? null : kva.value) !== (status.value?.subscriptionKva ?? null))
+const savingKva = ref(false)
+async function saveSubscription() {
+  if (!kvaChanged.value) return
+  savingKva.value = true
+  try {
+    status.value = await getTransport().setEnphaseSubscription(kva.value === '' || kva.value <= 0 ? null : kva.value)
+    notifications.success(t('settings.enphase.subscription.saved'))
+  } catch (err) {
+    notifications.error(t('errors.UNKNOWN', { name: 'Enphase', message: (err as Error).message }))
+  } finally { savingKva.value = false }
+}
+
 async function resync() {
   syncing.value = true
   try {
@@ -279,6 +295,21 @@ async function submit() {
         : $t('settings.enphase.cloudNeeded') }}
     </p>
 
+    <!-- The grid subscription: each phase's limit in the Energy view derives from it. -->
+    <div class="enp__subscription">
+      <div class="enp__historyTitle">{{ $t('settings.enphase.subscription.title') }}</div>
+      <div class="enp__sub">
+        <label class="enp__field enp__field--kva">
+          <span class="muted small">{{ $t('settings.enphase.subscription.label') }}</span>
+          <input v-model.number="kva" type="number" min="1" max="250" step="1" inputmode="numeric" class="enp__input" @keydown.enter="saveSubscription">
+        </label>
+        <button type="button" class="pill" data-on="0" :disabled="savingKva || !kvaChanged" @click="saveSubscription">
+          {{ $t('settings.enphase.subscription.save') }}
+        </button>
+      </div>
+      <p class="muted small enp__hint">{{ $t('settings.enphase.subscription.hint') }}</p>
+    </div>
+
     <!-- The production history. The failure line is always there, hidden when nothing failed:
          a refusal does not push the button down. -->
     <div v-if="status.history" class="enp__history">
@@ -338,8 +369,10 @@ async function submit() {
 /* space held even when invisible: the warning does not push the button when it appears */
 .enp__warn { margin: 0; color: #d38b22; }
 .enp__warn[data-on='0'] { visibility: hidden; }
-.enp__history { display: grid; gap: 8px; justify-items: start; width: 100%; padding-top: 10px; border-top: 1px solid var(--line); }
+.enp__history, .enp__subscription { display: grid; gap: 8px; justify-items: start; width: 100%; padding-top: 10px; border-top: 1px solid var(--line); }
 .enp__historyTitle { font-weight: 600; font-size: 13px; }
+.enp__sub { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 8px 12px; }
+.enp__field--kva { width: 160px; }
 .enp__resync { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
 .enp__force { flex: 0 0 auto; }
 /* the switch's label at the card's text size: Vuetify's 16 px stood out among the 13 px lines */

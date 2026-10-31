@@ -246,6 +246,7 @@
     "today": "Today", "selfConsumption": "self-consumption", "mix": "Where consumption comes from", "flowTitle": "Energy flows", "productionToday": "Production today", "kWhToday": "kWh produced",
     "charger": "Charger", "noData": "No energy device", "noHistory": "History fills up as the day goes on.",
     "instant": "Live", "localHistory": "Local history",
+    "phases": {"title": "Phase | Phases", "limit": "limit {value} | limit {value} per phase", "noLimit": "no limit set: subscribed power on the Enphase card (Settings → Plugins)", "exporting": "exports {value}", "peak": "peak {value}", "hourlyPeaks": "Peak of each hour, over 24 h"},
     "maxReported": "Record", "invertersLoose": "Unassigned", "noSlot": "No slot",
     "periods": {"instant": "Live", "day": "Day", "week": "Week", "month": "Month", "year": "Year", "lifetime": "Lifetime"},
     "modes": {"rolling": "Rolling", "calendar": "Calendar"},
@@ -590,6 +591,13 @@
       "cloudLinked": "Enlighten account linked: the charger can be read. Session kept in {file}.",
       "cloudLinkedNoFile": "Enlighten account linked for this session only (ENPHASE_CLOUD_FILE is empty).",
       "cloudNeeded": "To reach the charger, pair with the Enphase account: a pasted token does not open the cloud.",
+      "subscription": {
+        "title": "Electricity subscription",
+        "label": "Subscribed power (kVA)",
+        "save": "Save",
+        "hint": "Kasbah derives each phase's limit from it, drawn in the Energy view: a three-phase meter cuts as soon as one phase goes over its share, whatever the total.",
+        "saved": "Subscribed power saved."
+      },
       "history": {
         "title": "Production history",
         "never": "Enphase's history has not been fetched yet. Kasbah counts the days itself since it started.",

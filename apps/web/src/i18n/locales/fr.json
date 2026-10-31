@@ -246,6 +246,7 @@
     "today": "Aujourd'hui", "selfConsumption": "autoconsommation", "mix": "Origine de la consommation", "flowTitle": "Flux d'énergie", "productionToday": "Production du jour", "kWhToday": "kWh produits",
     "charger": "Borne", "noData": "Aucun appareil énergie", "noHistory": "L'historique se remplit au fil de la journée.",
     "instant": "Instantané", "localHistory": "Historique local",
+    "phases": {"title": "Phase | Phases", "limit": "limite {value} | limite {value} par phase", "noLimit": "limite non réglée : puissance souscrite sur la carte Enphase (Réglages → Plugins)", "exporting": "injecte {value}", "peak": "pic {value}", "hourlyPeaks": "Pic de chaque heure, sur 24 h"},
     "maxReported": "Record", "invertersLoose": "Hors champ", "noSlot": "Aucun emplacement",
     "periods": {"instant": "Instantané", "day": "Jour", "week": "Semaine", "month": "Mois", "year": "Année", "lifetime": "Total"},
     "modes": {"rolling": "Glissant", "calendar": "Calendaire"},
@@ -590,6 +591,13 @@
       "cloudLinked": "Compte Enlighten lié : la borne pourra être lue. Session gardée dans {file}.",
       "cloudLinkedNoFile": "Compte Enlighten lié pour cette session seulement (ENPHASE_CLOUD_FILE est vide).",
       "cloudNeeded": "Pour la borne, appairer avec le compte Enphase : un jeton collé n'ouvre pas le cloud.",
+      "subscription": {
+        "title": "Abonnement électrique",
+        "label": "Puissance souscrite (kVA)",
+        "save": "Enregistrer",
+        "hint": "Kasbah en déduit la limite de chaque phase, tracée dans la vue Énergie : un compteur triphasé coupe dès qu'une phase dépasse sa part, quel que soit le total.",
+        "saved": "Puissance souscrite enregistrée."
+      },
       "history": {
         "title": "Historique de production",
         "never": "L'historique d'Enphase n'a pas encore été récupéré. Kasbah compte les jours lui-même depuis sa mise en route.",

@@ -81,7 +81,7 @@ function defaultDevices(opts: { winter?: boolean } = {}) {
     ...Array.from({ length: 10 }, (_, i) => solarPanel(`panel-n${String(i + 1).padStart(2, '0')}`, {
       name: `Panneau nord ${i + 1}`, factor: 0.6 + ((i * 3) % 5) * 0.01,
     })),
-    energySite('energy-site', { name: 'Énergie Enphase', peakW: opts.winter ? 6000 : 6000, batteryWh: 5000 }),
+    energySite('energy-site', { name: 'Énergie Enphase', peakW: opts.winter ? 6000 : 6000, batteryWh: 5000, phaseLimitVa: 12_000 }),
   ]
 }
 

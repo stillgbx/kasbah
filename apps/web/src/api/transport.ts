@@ -71,6 +71,8 @@ export interface EnphaseTokenStatus {
   username?: string
   source?: 'config' | 'cache' | 'minted'
   renewUnderDays: number
+  /** The grid subscription entered on the card (kVA): each phase's limit derives from it. `null` = not entered. */
+  subscriptionKva?: number | null
   tokenFile: string | null
   /** Enlighten session: essential for the charger, distinct from the gateway's local token. */
   cloudLinked: boolean
@@ -646,6 +648,8 @@ export interface Transport {
   pairEnphase(body: EnphasePairing): Promise<EnphaseTokenStatus>
   /** Fetches Enphase's daily history again (the "Resync" button): the incomplete days, or every day with `force`. */
   syncEnphaseHistory(force?: boolean): Promise<EnphaseTokenStatus>
+  /** The grid subscription (kVA), or `null` to forget it. */
+  setEnphaseSubscription(kva: number | null): Promise<EnphaseTokenStatus>
   /** Where the Tesla setup stands (public key to place, domain registered, account linked). */
   teslaStatus(): Promise<TeslaStatus>
   /** Registers the domain with Tesla, once the public key is placed on it. */

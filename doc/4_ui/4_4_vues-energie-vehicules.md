@@ -1126,3 +1126,26 @@ Mesuré sur la démo « Les Tilleuls » (simulation, 1280 px) : la carte de la M
 (la colonne de gauche avait la place), aucun débordement aux zooms 1, 1,25 et 1,5, aucune erreur
 console ; 32 → 16 A publie 16 A et la puissance simulée tombe à 3,7 kW (la simulation plafonne la
 puissance à l'intensité × 230 V, option `chargeCurrentMaxA` de `packages/mock-sim/src/behaviours/ev.ts`).
+
+### Mise à jour 2026-10-31 — vue Énergie : le bloc « Phases »
+
+`components/energy/PhaseLoad.vue`, sous le schéma et le graphique, affiché quand le site publie
+`gridPhases` (voir `../1_architecture/1_14_energie.md`, même date).
+
+- **En direct** : une ligne par phase, la piste finit à la limite de la phase (`phaseLimitVa`), un
+  trait marque le pic de l'heure en cours, à droite la valeur en kVA et « pic x kVA ». Orange au-delà
+  de 80 % de la limite, rouge au-delà de 95 %. Une phase qui injecte garde une barre vide et dit
+  « injecte x kW ». Le pic affiché vaut au moins la valeur du moment : l'historique n'est relu que
+  chaque minute, les phases toutes les 10 s.
+- **Sur 24 h** : le pic de chaque heure, une rangée de 24 barres par phase (`phasePeakVa` de
+  `GET /api/devices/:id/history`), heures en abscisse au début, au milieu et à la fin.
+- **Sans limite saisie** : barres à l'échelle de la plus forte valeur montrée, et l'en-tête dit où
+  la régler (carte Enphase).
+- **Une seule phase** : « Phase » et « limite x kVA », au singulier (pluriel de vue-i18n sur le nombre
+  de phases, aucun champ `count` interpolé).
+- Lignes de hauteur fixe ; sur téléphone, le pic passe sous la valeur.
+
+Mesuré en simulation (démo « Les Tilleuls » triphasée et « Les Embruns » monophasée) : aucun
+débordement à 1280 px aux zooms 1, 1,25 et 1,5, ni à 375 px ; fr et en ; thème clair contrôlé par
+les couleurs calculées (la capture restait figée sur le sombre) ; aucune erreur console. La section
+de la carte Enphase n'existe pas en simulation : couverte par `EnphasePairingCard.test.ts` seulement.

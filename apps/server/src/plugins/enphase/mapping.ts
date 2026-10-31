@@ -117,14 +117,36 @@ export function toSitePatch(live: Livedata | undefined, report?: ProductionRepor
   const production = m?.pv ? Math.max(0, mw(m.pv.agg_p_mw)) : report ? productionW(report) : undefined
   const consumption = m?.load ? mw(m.load.agg_p_mw) : total ? Math.round(total.wNow) : undefined
   const grid = m?.grid ? mw(m.grid.agg_p_mw) : net ? Math.round(net.wNow) : undefined
+  const phases = m?.grid ? gridPhases(m.grid, m.phase_count) : undefined
   return {
     kind: 'energy',
+    ...(phases ? { gridPhases: phases } : {}),
     ...(production !== undefined ? { productionW: production } : {}),
     ...(consumption !== undefined ? { consumptionW: consumption } : {}),
     ...(grid !== undefined ? { gridW: grid } : {}),
     ...(m?.storage ? { batteryW: batteryW(m.storage.agg_p_mw) } : {}),
     ...(m?.enc_agg_soc !== undefined ? { batterySoc: Math.round(m.enc_agg_soc) } : {}),
   } as StatePatch
+}
+
+/**
+ * The grid meter phase by phase, from `livedata` (verified on a real three-phase gateway: the three
+ * phases add up to the aggregate). Only as many phases as `phase_count` says (three when it is
+ * silent); nothing when a phase lacks its apparent power, the one the utility meter limits.
+ *
+ * FALLBACK, single phase only: a gateway that says `phase_count: 1` but leaves the per-phase fields
+ * empty (not seen, no single-phase capture) gives its aggregate, which IS its only phase. Never on
+ * three phases: the total does not say how the load is spread, and one bar against a third of the
+ * subscription would be wrong.
+ */
+function gridPhases(grid: NonNullable<NonNullable<Livedata['meters']>['grid']>, count = 3): { w: number; va: number }[] | undefined {
+  const all = [
+    [grid.agg_p_ph_a_mw, grid.agg_s_ph_a_mva], [grid.agg_p_ph_b_mw, grid.agg_s_ph_b_mva], [grid.agg_p_ph_c_mw, grid.agg_s_ph_c_mva],
+  ].slice(0, Math.max(1, Math.min(3, count)))
+  if (all.some(([w, va]) => w === undefined || va === undefined)) {
+    return count === 1 && grid.agg_s_mva !== undefined ? [{ w: mw(grid.agg_p_mw), va: mw(grid.agg_s_mva) }] : undefined
+  }
+  return all.map(([w, va]) => ({ w: mw(w!), va: mw(va!) }))
 }
 
 /**

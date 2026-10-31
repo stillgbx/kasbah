@@ -215,6 +215,14 @@ export const energyStateSchema = z.object({
   batterySoc: pct.optional(),
   todayProductionWh: z.number().optional(),
   todayConsumptionWh: z.number().optional(),
+  /**
+   * The grid exchange PHASE BY PHASE (L1, L2, L3), same sign as `gridW`: active power (W) and
+   * apparent power (VA), the one the meter limits. A three-phase meter cuts as soon as ONE phase
+   * goes over its share of the subscription, whatever the total. Absent = single meter or unknown.
+   */
+  gridPhases: z.array(z.object({ w: z.number(), va: z.number() })).optional(),
+  /** The share of the subscription each phase may draw (VA), set by the user. Absent = not set. */
+  phaseLimitVa: z.number().positive().optional(),
 })
 
 export const CHARGER_STATUSES = ['disconnected', 'connected', 'charging', 'finished', 'error'] as const

@@ -1,6 +1,8 @@
+import { readFile } from 'node:fs/promises'
 import type { Command, DeviceDescriptor, PluginHealth, SettableChargeMode, StatePatch } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { writeFileAtomic } from '../../core/atomic-file'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { stateFile } from '../../core/paths'
 import type { FetchLike } from '../../core/sse'
@@ -71,6 +73,8 @@ export const enphaseConfigSchema = z.object({
   ENPHASE_DAYS_FILE: z.string().trim().default(stateFile('enphase-days.json')),
   /** Each micro-inverter's daily production (`inverterDays.ts`). Empty string = in memory only. */
   ENPHASE_INVERTER_DAYS_FILE: z.string().trim().default(stateFile('enphase-inverter-days.json')),
+  /** The user's settings of the site (the subscription, `POST /subscription`). Empty string = in memory only. */
+  ENPHASE_SETTINGS_FILE: z.string().trim().default(stateFile('enphase-settings.json')),
   /** Meter rate: they measure in real time, it is what the Energy view shows. */
   ENPHASE_POLL_MS: z.coerce.number().int().min(2000).max(300_000).default(10_000),
   /**
@@ -157,6 +161,8 @@ export interface TokenStatus {
   source: 'config' | 'cache' | 'minted' | undefined
   /** Threshold (days) below which the UI asks for a renewal. */
   renewUnderDays: number
+  /** The grid subscription (kVA), entered on the card; `null` = not entered. */
+  subscriptionKva: number | null
   /**
    * Where the server keeps the token, or `null` if `ENPHASE_TOKEN_FILE` is empty. It is what tells
    * the UI whether there is something to copy by hand: with a cache, no, pairing from the UI is
@@ -242,6 +248,9 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   /** The inverter resync in progress: days done and to do. */
   let invProgress: { done: number; total: number } | null = null
   let invError: string | null = null
+  /** The grid subscription entered on the card (kVA), and how many phases the gateway measures. */
+  let subscriptionKva: number | null = null
+  let phaseCount = 0
 
   const log = () => ctx!.logger
 
@@ -254,6 +263,23 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       lastError = (err as Error).message
       log().warn({ err, host: config!.ENPHASE_HOST }, 'IQ Gateway did not answer /info')
     }
+  }
+
+  /**
+   * The share of the subscription each phase may draw: a three-phase meter splits it evenly and cuts
+   * as soon as ONE phase goes over its third (36 kVA → 12 kVA a phase). Known only once the gateway
+   * has said how many phases it measures.
+   */
+  function phaseLimitVa(): number | undefined {
+    return subscriptionKva && phaseCount ? Math.round((subscriptionKva * 1000) / phaseCount) : undefined
+  }
+
+  async function loadSettings(file: string): Promise<void> {
+    let text: string
+    try { text = await readFile(file, 'utf8') } catch { return }   // never entered: nothing to read
+    const parsed = z.object({ subscriptionKva: z.number().positive().nullable().default(null) }).safeParse(JSON.parse(text))
+    if (parsed.success) subscriptionKva = parsed.data.subscriptionKva
+    else log().warn({ file }, 'Enphase settings unreadable: subscription forgotten')
   }
 
   function status(): TokenStatus {
@@ -269,6 +295,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       username: token?.claims.username,
       source: token?.source,
       renewUnderDays: RENEW_WARNING_DAYS,
+      subscriptionKva,
       tokenFile: config?.ENPHASE_TOKEN_FILE || null,
       cloudLinked: !!enlighten?.hasSession,
       cloudFile: config?.ENPHASE_CLOUD_FILE || null,
@@ -490,7 +517,10 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
   async function pollMeters(): Promise<void> {
     const live = await get('/ivp/livedata/status', (j) => livedataSchema.parse(j))
     const patch = toSitePatch(live)
-    ctx!.emitState(SITE_ID, patch)
+    const phases = (patch as { gridPhases?: unknown[] }).gridPhases?.length
+    if (phases) phaseCount = phases
+    const limit = phaseLimitVa()
+    ctx!.emitState(SITE_ID, limit ? { ...patch, phaseLimitVa: limit } as StatePatch : patch)
     days?.recordSite(patch as SitePower, ctx!.clock.now())
     await saveDays()
     lastError = null
@@ -803,6 +833,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
       invStore = deps.inverterDaysStore ?? (config.ENPHASE_INVERTER_DAYS_FILE ? createInverterDaysFile(config.ENPHASE_INVERTER_DAYS_FILE, context.logger) : null)
       await invStore?.load(invDays)
       daysSavedAt = context.clock.now()
+      if (config.ENPHASE_SETTINGS_FILE) await loadSettings(config.ENPHASE_SETTINGS_FILE)
       const pinFile = deps.pinFile ?? createPinFile(stateFile('enphase-tls-pin.json'), context.logger)
       pin = new TlsPin(await pinFile.load(), (fp) => { void pinFile.save(fp) }, { device: 'IQ Gateway', logger: context.logger })
       client = new EnphaseClient({
@@ -1005,6 +1036,23 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
         return status()
       })
 
+      /**
+       * The grid subscription (kVA), from the plugin's card: Kasbah derives each phase's limit from
+       * it (`phaseLimitVa` of the site), drawn in the Energy view. `null` forgets it.
+       */
+      app.post('/subscription', async (req, reply) => {
+        const body = z.object({ kva: z.number().positive().max(250).nullable() }).safeParse(req.body ?? {})
+        if (!body.success) return sendError(reply, 400, 'VALIDATION_ERROR', 'kva: a positive number of kVA, or null')
+        subscriptionKva = body.data.kva
+        if (config?.ENPHASE_SETTINGS_FILE) {
+          try { await writeFileAtomic(config.ENPHASE_SETTINGS_FILE, `${JSON.stringify({ subscriptionKva }, null, 2)}
+`) }
+          catch (err) { log().warn({ err }, 'Enphase settings not saved: the subscription will be forgotten at restart') }
+        }
+        if (ctx && inventory) ctx.emitState(SITE_ID, { kind: 'energy', phaseLimitVa: phaseLimitVa() ?? null } as StatePatch)
+        return status()
+      })
+
       app.get('/ev/raw', async (_req, reply) => {
         if (!enlighten?.hasSession) return sendError(reply, 409, 'NEEDS_PAIRING', 'pair with the Enphase account first (a pasted gateway token is not enough)')
         return probeEvRaw(enlighten, enlighten.current?.siteId, ctx?.signal)
@@ -1020,7 +1068,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
     },
 
     health(): PluginHealth {
-      const keys = ['ENPHASE_HOST', 'ENPHASE_TOKEN', 'ENPHASE_TOKEN_FILE', 'ENPHASE_CLOUD_FILE', 'ENPHASE_DAYS_FILE', 'ENPHASE_INVERTER_DAYS_FILE']
+      const keys = ['ENPHASE_HOST', 'ENPHASE_TOKEN', 'ENPHASE_TOKEN_FILE', 'ENPHASE_CLOUD_FILE', 'ENPHASE_DAYS_FILE', 'ENPHASE_INVERTER_DAYS_FILE', 'ENPHASE_SETTINGS_FILE']
       if (pin?.changed) {
         return { status: 'error', detail: 'Le certificat de la passerelle IQ Gateway a changé : connexion refusée. Appairer de nouveau accepte le nouveau certificat.', keys }
       }

@@ -42,7 +42,14 @@ export type Inverter = z.infer<typeof inverterSchema>
  * their overall charge. Answers with fresh values even when `connection.sc_stream` is `disabled`
  * (verified on the real gateway).
  */
-const aggregateSchema = z.object({ agg_p_mw: z.number() })
+const aggregateSchema = z.object({
+  agg_p_mw: z.number(),
+  /** Apparent power of the whole meter (mVA). */
+  agg_s_mva: z.number().optional(),
+  /** Per phase (a, b, c = L1, L2, L3): active power in mW, apparent power in mVA, same sign as the aggregate. */
+  agg_p_ph_a_mw: z.number().optional(), agg_p_ph_b_mw: z.number().optional(), agg_p_ph_c_mw: z.number().optional(),
+  agg_s_ph_a_mva: z.number().optional(), agg_s_ph_b_mva: z.number().optional(), agg_s_ph_c_mva: z.number().optional(),
+})
 export const livedataSchema = z.object({
   connection: z.object({ sc_stream: z.string().optional() }).optional(),
   meters: z.object({
@@ -52,6 +59,8 @@ export const livedataSchema = z.object({
     /** NEGATIVE = grid export, like `net-consumption`. */
     grid: aggregateSchema.optional(),
     load: aggregateSchema.optional(),
+    /** 1 or 3: how many of the per-phase fields carry a phase. */
+    phase_count: z.number().optional(),
     /** Overall charge of the IQ batteries (%). `acb_agg_soc` is the AC Battery's. */
     enc_agg_soc: z.number().optional(),
     enc_agg_energy: z.number().optional(),

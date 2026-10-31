@@ -1,6 +1,6 @@
 # Plugin Enphase (production solaire, micro-onduleurs, batteries)
 
-> Dernière mise à jour : 2026-10-26
+> Dernière mise à jour : 2026-10-31
 > Sources : `apps/server/src/plugins/enphase/{index,client,token,cloud,mapping,types,days,inverterDays}.ts`, `apps/server/src/plugins/enphase/__fixtures__/gateway.ts`, tests `token.test.ts`, `mapping.test.ts`, `plugin.test.ts` et `cloud.test.ts`, `apps/web/src/components/EnphasePairingCard.vue`, `apps/server/.env.example`, note technique du fabricant « Accessing IQ Gateway local APIs or local UI with token-based authentication » (2022-12-14), commits 3b4767a et a89ae3b
 
 ## Ce que le plugin lit, et ce qu'il ne peut pas lire
@@ -599,3 +599,33 @@ Cause côté passerelle inconnue (signalée au support Enphase).
 **À connaître** : après un redémarrage en cours de journée, la production reste juste (compteurs des
 onduleurs), la consommation ne compte que depuis le redémarrage ; le jour est alors incomplet, comme
 avant. Tests : `days.test.ts`, `plugin.test.ts` (« the polls feed today's day »).
+
+### Mise à jour 2026-10-31 — le réseau phase par phase, et l'abonnement
+
+**Lecture.** `/ivp/livedata/status` porte déjà, pour chaque compteur, les champs par phase
+`agg_p_ph_{a,b,c}_mw` (actif) et `agg_s_ph_{a,b,c}_mva` (apparent), et `meters.phase_count`. Dans la
+capture de la vraie passerelle (triphasée), les trois phases du compteur `grid` s'additionnent au
+total au milliwatt près. `toSitePatch` en tire `gridPhases` (`gridPhases()`, `mapping.ts`), autant de
+phases que `phase_count` en annonce, **trois quand il se tait**. Aucune requête de plus : c'est la
+lecture toutes les 10 s qui existait.
+
+**Repli monophasé, jamais vu sur une vraie passerelle** (pas de capture) : `phase_count: 1` sans
+champs par phase donne le total du compteur (`agg_p_mw`, `agg_s_mva`), qui EST la phase. Jamais en
+triphasé : le total ne dit pas la répartition, et une barre unique face au tiers de l'abonnement
+serait fausse. `phase_count` absent = triphasé, pas de devinette. Test : `mapping.test.ts`.
+
+**L'abonnement.** Saisi sur la carte du plugin (section « Abonnement électrique » de
+`EnphasePairingCard.vue`), là où l'utilisateur l'a voulu plutôt que dans la vue Énergie. Route
+`POST /api/plugins/enphase/subscription { kva }` (`null` l'oublie), gardé dans
+`ENPHASE_SETTINGS_FILE` (`.state/enphase-settings.json`), rendu dans `GET /token`
+(`subscriptionKva`). Le plugin publie `phaseLimitVa` = kVA ÷ nombre de phases avec chaque relevé du
+site.
+
+**L'équilibrage de la borne, à ne pas confondre.** La capture cloud dit `dlbEnabled: 1` : l'IQ EV
+Charger 2 équilibre déjà sa charge avec les mesures de la passerelle. L'appli propriétaire ne montre
+que « Changement de phase automatique » (« dans les limites fixées ») et le niveau de charge par
+défaut ; la limite du site se règle côté installateur. Les phases de Kasbah servent à voir si et où
+ça dépasse, pas à piloter la borne.
+
+Sources : `apps/server/src/plugins/enphase/{index,mapping,types}.ts`, tests `mapping.test.ts`
+(phases, repli) et `plugin.test.ts` (abonnement), `__fixtures__/gateway.ts`, `__fixtures__/evse.ts`.
