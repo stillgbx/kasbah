@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-31] update | three r185 → r187, mesuré
+
+**Déclencheur** : question de l'utilisateur, « est-ce que three r187 peut nous apporter de meilleures perfs ? », puis mise à jour mesurée en A/B/A/B avant livraison.
+
+**Pages modifiées** :
+- `1_architecture/1_11_scene-3d-rendu.md` - « Mise à jour 2026-10-31 » : ce que r187 change côté WebGL, tableau des temps GPU (gain net en medium vue étage seulement), image identique, pièges du banc (cache Vite, première capture à froid).
+- `5_setup/5_0_installation-et-scripts.md` - version de three passée à `^0.187` dans le tableau des versions épinglées.
+
+**Index** : catalogue `1_architecture` mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-10-31] update | Le pont Matter passe en ligne avec ses appareils
 
 **Déclencheur** : à chaque mise à jour du serveur, Google Home annonce les appareils du pont comme nouveaux et il faut les remettre dans leurs pièces.

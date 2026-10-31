@@ -19,7 +19,7 @@
     "@vueuse/core": "^14.0.0",
     "maplibre-gl": "^6.9.0",
     "pinia": "^4.0.0",
-    "three": "^0.185.0",
+    "three": "^0.187.0",
     "vue": "^3.5.0",
     "vue-i18n": "^11.0.0",
     "vue-router": "^5.0.0",
@@ -27,7 +27,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@types/three": "^0.185.0",
+    "@types/three": "^0.187.0",
     "@vitejs/plugin-vue": "^6.0.0",
     "@vue/test-utils": "^2.4.0",
     "happy-dom": "^20.0.0",

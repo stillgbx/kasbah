@@ -43,7 +43,7 @@ Vitest 5 : un seul `vitest.config.ts` racine avec `test.projects` ; chaque works
 | vuetify | `^4` | thème `system` natif ; voir pièges dans `6_faq/6_0_pieges-outillage.md` |
 | vite | `^8` (Rolldown) | découpage en chunks via `output.codeSplitting` |
 | zod | `^4` | `z.iso.datetime()`, `z.looseObject()`, `z.record(k, v)` à deux arguments |
-| three | `^0.185` | imports `three/addons/*` (OrbitControls, CSS2DRenderer, BufferGeometryUtils) |
+| three | `^0.187` | imports `three/addons/*` (OrbitControls, CSS2DRenderer, BufferGeometryUtils) |
 
 ## Aperçu dans Claude Code
 

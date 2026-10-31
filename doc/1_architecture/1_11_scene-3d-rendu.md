@@ -1,6 +1,6 @@
 # Scène 3D : rendu
 
-> Dernière mise à jour : 2026-10-26
+> Dernière mise à jour : 2026-10-31
 > Sources : sections reprises telles quelles de `1_5_scene-3d.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre le rendu de la scène : styles et thèmes, lumière du jour et de la nuit, ombres, météo (nuages, pluie, neige, brume), eau de la piscine, matières photo, chaîne d'image et étalonnage, tilt-shift, banc de réglage, performance GPU (passes, MSAA, shaders précompilés, voile de mesure). Elle est née du découpage de
@@ -2154,3 +2154,42 @@ ordinateur, bornes 94-268 m, jardin lisible. Test « stretches the fog with the 
 Sources : `apps/web/src/three/core/ambience.ts` (`fogRange`, `FOG_CAMERA_REF_M`),
 `apps/web/src/three/HouseScene.ts` (`updateFogRange`, `applySky`, `render`),
 `apps/web/src/three/three.test.ts`.
+
+### Mise à jour 2026-10-31 — three r185 → r187 : la passe de scène s'allège, l'image ne change pas
+
+**Pourquoi la question** : les notes de r187 annoncent surtout du travail sur `WebGPURenderer` et TSL
+(caches de construction, ombres rendues à la demande, `compileAsync` en parallèle), que la scène
+n'emploie pas : elle tourne sur `WebGLRenderer` + `EffectComposer` (`core/post.ts`). Côté WebGL, les
+notes ne listent que des fuites de mémoire corrigées (géométries, textures, ombres de lampes) et une
+clé de cache de programme nettoyée ; rien sur le MSAA ni les passes d'effets. Seule une mesure pouvait
+trancher.
+
+**Mesure** : banc par passe (`kasbah-passes.mjs`, Chrome à part, GPU intégré, secteur), maison de
+démonstration (`kasbah-mock`), en alternance r185 / r187 / r185 / r187. Le premier passage, cache de
+shaders de Chrome vide, sortait ~3 ms trop haut : écarté, comme le veut la règle « jamais conclure
+sur une paire ».
+
+| Vue (ms GPU / image) | r185 | r187 (2 passages) |
+|---|---|---|
+| ensemble, high | 30,2 | 28,8 / 26,8 |
+| rdc, high | 25,0 | 23,6 / 23,0 |
+| toutes lampes, high | 23,8 | 23,4 / 22,8 |
+| **étage, medium** | **14,0** (13,6 au 1er passage) | **9,1 / 9,1** |
+
+Les passes d'effets ne bougent pas (GTAO ~13,6 ms, bloom ~1,5, sortie ~0,65) ; le gain net est dans
+le rendu de la scène lui-même, 11 → 6,5 ms en medium vue étage, à appels de dessin et triangles
+identiques. Ailleurs, −1 à −2 ms, dans le bruit (±1,5 ms). Le CPU par image ne montre aucune tendance.
+L'origine précise du gain n'est pas identifiée (r186 a été franchie en même temps, ses notes non lues).
+
+**Image** : six paires de captures (jour et nuit × ensemble, rdc, étage) comparées pixel à pixel,
+écart moyen inférieur à 1 niveau de luminance sur 255. Le PMREM réécrit (#34585) et les correctifs
+de matrices de couleur (#34952) ne se voient donc pas ici ; les rares pixels qui diffèrent sont la
+houle de la piscine et les pilules des marqueurs. Typecheck sur les types r187 et suite de tests verts,
+aucun code touché.
+
+**Pièges du banc** : après un changement de version de three, vider `apps/web/node_modules/.vite/deps`
+et lire `REVISION` dans la page avant de mesurer, sinon Vite sert l'ancien paquet pré-optimisé ; et la
+première capture d'un Chrome froid montre le voile « Préparation de la maison » au lieu de la scène.
+Non mesuré : les tablettes, où le gain en medium devrait compter le plus.
+Sources : `apps/web/package.json`, `apps/web/src/three/core/post.ts`,
+`apps/web/src/three/HouseScene.ts`, notes de version three.js r187 et guide de migration 186 → 187.
