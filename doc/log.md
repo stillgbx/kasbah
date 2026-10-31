@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-09.md](log/2026-09.md).
 <!-- log-nav:end -->
 
+## [2026-10-31] update | Nom local introuvable sur le téléphone : renvoi conditionnel du Pi-hole désactivé
+
+**Déclencheur** : signalé par l'utilisateur (« `kasbah:8787` fonctionne depuis le PC, par contre depuis un tél non ») ; diagnostic DNS depuis le poste, correction dans les réglages du Pi-hole, aucun code touché.
+
+**Pages modifiées** :
+- `5_setup/5_0_installation-et-scripts.md` - « Mise à jour 2026-10-31 » : Pi-hole premier DNS sans la zone `home.internal`, ligne de renvoi conditionnel présente mais décochée ; le routeur annonce un DNS IPv6 (ULA) malgré l'IPv6 décoché, d'où un PC qui marche et contourne le Pi-hole ; contradiction relevée avec le 2026-10-05 sur le nom court sous Android.
+
+**Index** : catalogue `5_setup/README.md` (1 ligne), index.md régénéré.
+
 ## [2026-10-30] update | Page Musique sur téléphone : barre compacte, lecteur agrandi, feuille Écoute
 
 **Déclencheur** : signalé par l'utilisateur (« la page musique est inutilisable sur mobile »), mise en page choisie sur maquettes ; code `MusicPlayerBar.vue`, `MusicView.vue`, locales.

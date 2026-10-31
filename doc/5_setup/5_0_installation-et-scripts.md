@@ -1,6 +1,6 @@
 # Installation et scripts
 
-> Dernière mise à jour : 2026-10-29
+> Dernière mise à jour : 2026-10-31
 > Sources : `package.json` (racine et workspaces), `.claude/launch.json`, `apps/web/vite.config.ts`, `apps/server/src/config/env.ts`, `apps/server/src/main.ts`, `README.md`, `scripts/fetch-textures.mjs`, `.claude/launch.json`, `scripts/dev-server.mjs`, `scripts/supervisor.mjs`
 
 ## Prérequis
@@ -450,3 +450,38 @@ Nouvelle config de preview : `kasbah-site` sert le site vitrine `site/` en fichi
 (`python -m http.server`, port 8090), voir `5_2_production.md`.
 
 Sources : `scripts/check-private.mjs`, `.claude/launch.json`.
+
+### Mise à jour 2026-10-31 — `kasbah.home.internal` introuvable sur le téléphone : renvoi conditionnel du Pi-hole désactivé
+
+**Symptôme.** `http://kasbah:8787` et `http://kasbah.home.internal:8787` marchaient depuis le PC, pas
+depuis un téléphone du LAN. Même famille de panne que le 2026-10-05 (voir plus haut) : l'échec est
+DNS, pas Kasbah.
+
+**Cause.** Le réseau a désormais deux DNS. Le **premier** annoncé par le DHCP du routeur est un
+**Pi-hole** (conteneur Docker sur le NAS) ; le second est le paquet DNS Server du routeur, qui héberge
+la zone `home.internal`. Le Pi-hole ne connaissait pas cette zone et répondait NXDOMAIN, réponse
+valide que le téléphone ne retente pas auprès du second. Sa ligne de *Conditional forwarding*
+(réseau local en CIDR, IP du routeur, domaine `home.internal`) existait, mais sa case **Enabled**
+était décochée.
+
+**Correction.** Cocher *Enabled* sur cette ligne (Pi-hole → Settings → DNS) et enregistrer. Le nom
+s'est résolu sur le téléphone tout de suite, sans vider le cache du Pi-hole ni redémarrer quoi que
+ce soit. Diagnostic : interroger chaque DNS séparément depuis le poste, par exemple
+`Resolve-DnsName kasbah.home.internal -Server <ip> -DnsOnly` ; le Pi-hole doit rendre l'IP du poste
+Kasbah, comme le DNS du routeur.
+
+**Pourquoi le PC marchait.** Le routeur annonce lui-même un préfixe IPv6 local (ULA, `fd…::/64`) et
+se donne comme DNS IPv6 dans ses annonces de routeur, **alors que l'IPv6 du réseau local est décoché**
+dans ses réglages DHCP IPv6. Windows interroge ce DNS IPv6 en premier : le PC passe par le DNS du
+routeur, qui connaît la zone, et **contourne le Pi-hole** (pas de filtrage sur ce poste). Le réglage
+du routeur à l'origine de ces annonces n'est pas identifié. La correction du 2026-10-05 (« désactiver
+l'IPv6 sur le routeur ») ne suffit donc pas à garantir un seul DNS par appareil ; le renvoi
+conditionnel rend la réponse identique quel que soit le DNS choisi.
+
+**Contradiction relevée.** La mise à jour du 2026-10-05 dit qu'Android n'applique pas le suffixe
+DHCP et que le nom court `kasbah` n'y est pas fiable. Ici, `kasbah` seul marche sur le téléphone,
+alors que le Pi-hole interrogé depuis le PC rend NXDOMAIN pour le nom court : le téléphone ajoute
+probablement `home.internal` lui-même, ou passe par le DNS IPv6 du routeur. Mécanisme non établi ;
+`kasbah.home.internal` reste le nom sûr.
+
+Sources : réglages du Pi-hole et du routeur, `Resolve-DnsName` et `Get-NetNeighbor` sur le poste.
