@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { NOTIFY_CATEGORIES, PUSH_LANGS, pushSubscriptionSchema, type NotifyCategory, type PushLang, type PushMessage, type PushSubscribeBody } from '@kasbah/shared'
+import { grants, NOTIFY_CATEGORIES, PUSH_LANGS, pushSubscriptionSchema, RIGHT_OF_NOTIFY_CATEGORY, type NotifyCategory, type PushLang, type PushMessage, type PushSubscribeBody, type Right } from '@kasbah/shared'
 import type { Logger } from 'pino'
 import { z } from 'zod'
 import { writeFileAtomic } from '../atomic-file'
@@ -12,7 +12,8 @@ import { encryptPayload, generateVapidKeys, vapidAuthorization, type VapidKeys }
 //
 // A subscription remembers the account that made it (`null` = the local network): an account
 // removed from `mcp-users.json` stops receiving the house's alerts, its subscriptions are dropped at
-// the next sending. A push service answering 404 or 410 says the subscription no longer exists.
+// the next sending. A push service answering 404 or 410 says the subscription no longer exists. An
+// account without the right of a category (`RIGHT_OF_NOTIFY_CATEGORY`) is not sent that category.
 
 const storedSchema = pushSubscriptionSchema.extend({
   categories: z.array(z.enum(NOTIFY_CATEGORIES)),
@@ -41,6 +42,8 @@ export interface PushServiceDeps {
   subject: string
   /** The accounts that exist now; a subscription of another account is dropped. */
   accounts: () => Promise<string[]>
+  /** The rights of each account (`undefined` = every right); absent = no filtering. */
+  rights?: () => Promise<ReadonlyMap<string, readonly Right[] | undefined>>
   logger: Logger
   now?: () => number
   fetch?: PushFetch
@@ -93,8 +96,10 @@ export class PushService {
   has(endpoint: string): boolean { return this.subs.some((s) => s.endpoint === endpoint) }
 
   /** To every screen subscribed to `category`, each in its language. */
-  send(category: NotifyCategory, render: (lang: PushLang) => PushMessage): Promise<SendResult> {
-    return this.deliver((s) => s.categories.includes(category), render)
+  async send(category: NotifyCategory, render: (lang: PushLang) => PushMessage): Promise<SendResult> {
+    const rights = await this.deps.rights?.()
+    const allowed = (s: StoredSubscription) => s.user === null || !rights || grants(rights.get(s.user), RIGHT_OF_NOTIFY_CATEGORY[category])
+    return this.deliver((s) => s.categories.includes(category) && allowed(s), render)
   }
 
   /** To one screen, whatever its categories (the "Send a test" button). */

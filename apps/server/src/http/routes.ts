@@ -1,4 +1,4 @@
-import { pluginSettingsOf, geoOriginSchema, setOriginInJson, addShoppingItems, clearCheckedShoppingItems, removeShoppingItem, setShoppingFavorite, shoppingAddBodySchema, shoppingFavoriteBodySchema, shoppingItemPatchSchema, updateShoppingItem, propertyModeBodySchema, newPropertyBodySchema, duplicatePropertyBodySchema, applyHouseEditToJson, houseEditPatchSchema, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationOrderSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type HealthResponse } from '@kasbah/shared'
+import { pluginSettingsOf, geoOriginSchema, setOriginInJson, addShoppingItems, clearCheckedShoppingItems, removeShoppingItem, setShoppingFavorite, shoppingAddBodySchema, shoppingFavoriteBodySchema, shoppingItemPatchSchema, updateShoppingItem, propertyModeBodySchema, newPropertyBodySchema, duplicatePropertyBodySchema, applyHouseEditToJson, houseEditPatchSchema, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationOrderSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type DeviceDescriptor, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import { singleProperty, type PropertyHost } from '../config/properties'
@@ -25,6 +25,8 @@ export interface RoutesDeps {
   startedAt: number
   /** Demo properties to switch between; absent = the file's single house. */
   properties?: PropertyHost
+  /** What an account may see of the devices (`http/rights.ts`); absent = everything. */
+  deviceFilter?: (user: string | null) => Promise<(d: DeviceDescriptor) => boolean>
 }
 
 // REST: reading (house, devices, health) + commands. The state resulting from a command is NOT
@@ -218,7 +220,10 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     return { house }
   })
 
-  app.get('/api/devices', async () => ({ devices: deps.registry.list() }))
+  app.get('/api/devices', async (req) => {
+    const visible = deps.deviceFilter ? await deps.deviceFilter(req.sessionUser) : () => true
+    return { devices: deps.registry.list().filter((e) => visible(e.descriptor)) }
+  })
 
   app.get<{ Params: { id: string } }>('/api/devices/:id', async (req, reply) => {
     const entry = deps.registry.get(req.params.id)

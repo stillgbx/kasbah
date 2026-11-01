@@ -1,4 +1,4 @@
-import { copyFileSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { AddressInfo } from 'node:net'
@@ -29,9 +29,10 @@ const resolvedFor: (string | null)[] = []
 // An account in a throwaway file; each client goes through the real OAuth sign-in.
 const LOGIN = { username: 'lou', password: 'correct horse battery' }
 let provider: TestOAuthProvider
+let usersFile: string
 beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'kasbah-mcp-'))
-  const usersFile = join(dir, 'mcp-users.json')
+  usersFile = join(dir, 'mcp-users.json')
   // a copy of the house: its automations are written next to it, not in the repo
   const housePath = join(dir, 'demo-house.json')
   copyFileSync(DEMO_HOUSE, housePath)
@@ -497,5 +498,43 @@ describe("acting in the name of an account", () => {
     })
     expect(res.status).toBe(200)
     expect(resolvedFor.at(-1)).toBeNull()
+  })
+})
+
+describe('rights of the account', () => {
+  let client: Client
+  let original: string
+  beforeAll(async () => {
+    client = new Client({ name: 'test', version: '0' }, { versionNegotiation: { mode: 'legacy' } })
+    await client.connect(new StreamableHTTPClientTransport(url, { authProvider: provider }))
+    // lights only, with the same password hash (the token holds its fingerprint)
+    original = readFileSync(usersFile, 'utf8')
+    const file = JSON.parse(original) as { users: { name: string; rights?: string[] }[] }
+    file.users[0]!.rights = ['lights']
+    writeFileSync(usersFile, JSON.stringify(file))
+  })
+  afterAll(async () => { writeFileSync(usersFile, original); await client.close() })
+
+  it('drives only the domains granted, directly and through the replayed routes', async () => {
+    const light = kasbah.registry.list().find((e) => e.descriptor.kind === 'light')!
+    const cover = kasbah.registry.list().find((e) => e.descriptor.kind === 'cover' && e.descriptor.capabilities.includes('open_close'))!
+    const ok = await client.callTool({ name: 'send_command', arguments: { deviceId: light.descriptor.id, command: { type: 'light.set', on: true } } })
+    expect(ok.isError).toBeFalsy()
+    const refused = await client.callTool({ name: 'send_command', arguments: { deviceId: cover.descriptor.id, command: { type: 'cover.close' } } })
+    expect(refused.isError).toBe(true)
+    expect(text(refused)).toContain("n'a pas le droit")
+    const shopping = await client.callTool({ name: 'add_shopping_items', arguments: { items: [{ name: 'lait' }] } })
+    expect(shopping.isError).toBe(true)
+    expect(text(shopping)).toContain('may not use "shopping"')
+  })
+
+  it('reads only the domains granted', async () => {
+    const kinds = new Set((JSON.parse(text(await client.callTool({ name: 'list_devices', arguments: {} }))) as { kind: string }[]).map((d) => d.kind))
+    expect(kinds.has('light')).toBe(true)
+    expect(kinds.has('cover') || kinds.has('vehicle')).toBe(false)
+    const cover = kasbah.registry.list().find((e) => e.descriptor.kind === 'cover')!
+    expect((await client.callTool({ name: 'get_device', arguments: { id: cover.descriptor.id } })).isError).toBe(true)
+    expect((await client.callTool({ name: 'get_weather', arguments: {} })).isError).toBe(true)
+    expect((await client.callTool({ name: 'list_scenes', arguments: {} })).isError).toBeFalsy()
   })
 })

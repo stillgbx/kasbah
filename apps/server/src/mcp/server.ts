@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { assertCommandAllowed, automationBodySchema, commandSchema, DEVICE_KINDS, deviceClassOf, findShoppingItem, pluginSettingsOf, indexHouse, sceneRecallSchema, SHOPPING_ADD_MAX, shoppingNameSchema, shoppingQuantitySchema, type ShoppingList, type AutomationAction, type AutomationEntry, type AutomationRun, type DeviceConsumption, type DeviceEntry, type DeviceJournal, type EnergyHistory, type StateFor, type WeatherForecast } from '@kasbah/shared'
+import { assertCommandAllowed, automationBodySchema, commandSchema, DEVICE_KINDS, deviceClassOf, deviceRight, findShoppingItem, pluginSettingsOf, indexHouse, sceneRecallSchema, SHOPPING_ADD_MAX, shoppingNameSchema, shoppingQuantitySchema, type ShoppingList, type AutomationAction, type AutomationEntry, type AutomationRun, type DeviceConsumption, type DeviceEntry, type DeviceJournal, type EnergyHistory, type StateFor, type WeatherForecast } from '@kasbah/shared'
 import { hostHeaderValidation, originValidation } from '@modelcontextprotocol/fastify'
 import { createMcpHandler, McpServer, type McpRequestContext } from '@modelcontextprotocol/server'
 import type { FastifyInstance } from 'fastify'
@@ -12,6 +12,7 @@ import type { SceneRegistry } from '../core/scene-registry'
 import type { AgendaEvent } from '../plugins/agenda/ics'
 import { REPEAT_MODES, type RepeatMode } from '../music/queue'
 import { sha256, type McpAuth } from './auth'
+import { deviceFilter, mayUse } from '../http/rights'
 import { actAsHeaders } from '../http/session'
 
 export interface McpDeps {
@@ -190,6 +191,9 @@ export function sensitiveActions(actions: AutomationAction[], classOf: (id: stri
 // in-app assistant draws a token per request, so a fresh « ouvre le portail » is not affected.
 const EXTERNAL_WINDOW_MS = 30 * 60_000
 const EXTERNAL_REFUSAL = "refusé : un contenu extérieur (agenda, école ou recherche musicale) a été lu dans cette demande ; ouvrir un accès à la maison ou déverrouiller une voiture se fait alors depuis l'app de Kasbah, ou dans une nouvelle demande"
+// The routes replayed through `call` are checked by the rights hook (`http/rights.ts`); the tools that
+// read or drive the house directly check here.
+const NO_RIGHT = "refusé : ce compte n'a pas le droit d'utiliser ce type d'appareil (Réglages → Comptes)"
 const APP_ONLY = "cette automatisation ouvre un accès à la maison ou déverrouille une voiture : elle s'active et se lance depuis l'app de Kasbah seulement"
 
 /** Has this token read third-party content lately (`mark` when it does)? */
@@ -229,7 +233,8 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     annotations: { readOnlyHint: true },
   }, async ({ kind, room, query }) => {
     const has = (s: string | undefined, part: string) => (s ?? '').toLowerCase().includes(part.toLowerCase())
-    const devices = deps.registry.list().map(describe).filter((d) =>
+    const visible = await deviceFilter(deps.auth.users, user)
+    const devices = deps.registry.list().filter((e) => visible(e.descriptor)).map(describe).filter((d) =>
       (!kind || d.kind === kind) && (!room || has(d.room, room)) && (!query || has(d.name, query) || has(d.id, query)))
     return json(devices)
   })
@@ -241,7 +246,8 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     annotations: { readOnlyHint: true },
   }, async ({ id }) => {
     const entry = deps.registry.get(id)
-    return entry ? json(entry) : fail(`appareil inconnu "${id}"`)
+    if (!entry) return fail(`appareil inconnu "${id}"`)
+    return await mayUse(deps.auth.users, user, deviceRight(entry.descriptor)) ? json(entry) : fail(NO_RIGHT)
   })
 
   server.registerTool('send_command', {
@@ -253,6 +259,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     const entry = deps.registry.get(deviceId)
     if (!entry) return fail(`appareil inconnu "${deviceId}"`)
     assertCommandAllowed(entry.descriptor, command)
+    if (!await mayUse(deps.auth.users, user, deviceRight(entry.descriptor))) return fail(NO_RIGHT)
     const opens = sensitiveActions([{ type: 'command', target: { type: 'devices', deviceIds: [entry.descriptor.id] }, command }], classOf)
     if (opens.length && external.recent()) return fail(EXTERNAL_REFUSAL)
     await deps.host.execute(entry.descriptor.id, command)
@@ -263,7 +270,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     title: 'Lister les scènes',
     description: "Scènes enregistrées chez les fabricants (scènes Hue d'une pièce ou d'une zone) et leur état : active vaut inactive, static ou dynamic. dynamic: true signale une palette animée. Les scènes maison de house.json n'y figurent pas.",
     annotations: { readOnlyHint: true },
-  }, async () => json(deps.scenes.list()))
+  }, async () => await mayUse(deps.auth.users, user, 'lights') ? json(deps.scenes.list()) : fail(NO_RIGHT))
 
   server.registerTool('recall_scene', {
     title: 'Rappeler une scène',
@@ -273,6 +280,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
   }, async ({ sceneId, recall }) => {
     const entry = deps.scenes.get(sceneId)
     if (!entry) return fail(`scène inconnue "${sceneId}"`)
+    if (!await mayUse(deps.auth.users, user, 'lights')) return fail(NO_RIGHT)
     const r = recall ?? sceneRecallSchema.parse({})
     if (r.mode === 'dynamic' && !entry.scene.dynamic) return fail(`la scène "${entry.scene.name}" n'a pas de palette animée`)
     await deps.host.recallScene(entry.scene.id, r)
@@ -360,6 +368,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     }),
     annotations: { readOnlyHint: true, openWorldHint: true },
   }, async ({ place }) => {
+    if (!await mayUse(deps.auth.users, user, 'weather')) return fail(NO_RIGHT)
     const alerts = (lat: number, lon: number) => call<Vigilance>('GET', `/api/plugins/open_meteo/alerts?lat=${lat}&lon=${lon}`)
       .then((r) => (r.area ? r : null))
     if (place) {
@@ -689,6 +698,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
   }, async ({ id, hours }) => {
     const entry = deps.registry.get(id)
     if (!entry) return fail(`appareil inconnu "${id}"`)
+    if (!await mayUse(deps.auth.users, user, deviceRight(entry.descriptor))) return fail(NO_RIGHT)
     const { day, at } = clockOf()
     const caps = entry.descriptor.capabilities as readonly string[]
     const path = `/api/devices/${encodeURIComponent(entry.descriptor.id)}`

@@ -837,7 +837,17 @@
     "mismatch": "Les deux saisies diffèrent.",
     "added": "Compte {name} ajouté.",
     "changed": "Mot de passe de {name} changé.",
-    "removed": "Compte {name} retiré."
+    "removed": "Compte {name} retiré.",
+    "rights": "Droits du compte",
+    "rightsAll": "Tous les droits",
+    "rightsSome": "{n} droits sur {total}",
+    "rightsHint": "Ce que ce compte peut piloter, depuis l'adresse publique ou par un assistant. Le réseau local garde tous les droits. Un droit retiré cache ses appareils et refuse leurs commandes ; son entrée de menu reste affichée pour l'instant."
+  },
+  "rights": {
+    "lights": "Lumières", "covers": "Volets et stores", "access": "Portail, garage, fenêtres", "heating": "Chauffage et ventilateurs",
+    "vehicles": "Véhicules et borne", "media": "Musique et médias", "cameras": "Caméras", "robots": "Robots", "pets": "Animaux",
+    "energy": "Énergie", "water": "Eau", "weather": "Météo", "agenda": "Agenda", "school": "École", "shopping": "Courses",
+    "automations": "Automatisations", "settings": "Réglages (plugins, maison)"
   },
   "agenda": {
     "modes": { "month": "Mois", "week": "Semaine", "day": "Jour" },

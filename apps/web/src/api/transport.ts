@@ -1,4 +1,4 @@
-import type { GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEnergyDays, DeviceEntry, DeviceKind, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, MatterSettingsPatch, MatterStatus, PropertiesResponse, PropertyMode, NewPropertyBody, PushSubscribeBody, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor } from '@kasbah/shared'
+import type { GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEnergyDays, DeviceEntry, DeviceKind, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, MatterSettingsPatch, MatterStatus, PropertiesResponse, PropertyMode, NewPropertyBody, PushSubscribeBody, Right, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor } from '@kasbah/shared'
 
 // Abstraction of the server channel. Two implementations: HTTP + WebSocket (real) and in-process
 // simulation (tests, static demo without a server). Commands ALWAYS go through a request
@@ -218,7 +218,8 @@ export interface YtmusicStatus {
 }
 
 /** An account of the MCP server (`mcp-users.json`): the name only, the hashed password stays on the server. */
-export interface McpUser { name: string }
+/** `rights` absent = every right. */
+export interface McpUser { name: string; rights?: Right[] }
 
 /** A commit of the server's repository; `date` ISO 8601. */
 export interface SystemCommit { sha: string; subject: string; date: string }
@@ -812,6 +813,8 @@ export interface Transport {
   mcpSetUser(name: string, password: string): Promise<{ users: McpUser[] }>
   /** Removes the account: its tokens no longer get through. */
   mcpRemoveUser(name: string): Promise<{ users: McpUser[] }>
+  /** What the account may use; `null` = every right. */
+  mcpSetRights(name: string, rights: Right[] | null): Promise<{ users: McpUser[] }>
   /** Version in service and available commits; `refresh` forces a `git fetch`. Local network only. */
   systemVersion(refresh?: boolean): Promise<SystemVersion>
   /** Last update (`null`: never). */

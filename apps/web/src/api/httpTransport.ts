@@ -436,6 +436,7 @@ export function createHttpTransport(base = ''): Transport {
     mcpUsers: () => request(`${base}/api/mcp/users`, undefined, (j) => j as { users: McpUser[] }),
     mcpSetUser: (name, password) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}`, json('PUT', { password }), (j) => j as { users: McpUser[] }),
     mcpRemoveUser: (name) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}`, { method: 'DELETE' }, (j) => j as { users: McpUser[] }),
+    mcpSetRights: (name, rights) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}/rights`, json('PUT', { rights }), (j) => j as { users: McpUser[] }),
     systemVersion: (refresh) => request(`${base}/api/system/version${refresh ? '?refresh=1' : ''}`, undefined, (j) => j as SystemVersion),
     systemUpdateStatus: () => request(`${base}/api/system/update`, undefined, (j) => j as { status: UpdateStatus | null }),
     systemUpdate: () => request(`${base}/api/system/update`, { method: 'POST' }, (j) => j as { status: UpdateStatus }),

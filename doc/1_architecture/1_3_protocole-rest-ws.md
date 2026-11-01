@@ -1,6 +1,6 @@
 # Protocole REST et WebSocket
 
-> Dernière mise à jour : 2026-10-30
+> Dernière mise à jour : 2026-11-01
 > Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11), `apps/server/src/http/static.ts` (`appBuild`, 2026-10-13), `apps/server/src/http/system.ts` (2026-10-13), `apps/server/src/http/diag.ts` et `apps/web/public/diag.html`, `apps/web/src/lib/sceneProbe.ts` (2026-10-22)
 
 ## REST
@@ -868,3 +868,19 @@ affiché.
   le garage ou la serrure d'une voiture. Voir [1_17](1_17_pont-matter.md) et
   [1_13](1_13_comptes-et-sessions.md). Le tableau des codes d'erreur ci-dessus (`LAN_ONLY`) est complété en
   conséquence.
+
+### Mise à jour 2026-11-01 - droits par compte : route, code `NO_RIGHT`, WebSocket filtré
+
+- **`PUT /api/mcp/users/:name/rights`** `{ rights: Right[] | null }` : règle les droits d'un compte (`null` =
+  tous). 404 `NOT_FOUND` si le compte n'existe pas ; réseau local seulement (`LAN_ONLY`), comme le reste
+  de `/api/mcp/users`. `GET /api/mcp/users` rend `rights` seulement quand le compte a une liste.
+- **Nouveau code d'erreur `NO_RIGHT`** (403, `this account may not use "<right>"`) : un compte identifié
+  qui écrit sur un domaine qu'on lui a retiré. Le hook décide sur le motif de route ; une route inconnue
+  demande `settings`. Les lectures ne répondent pas 403 : elles sont **filtrées** (`GET /api/devices`,
+  scenes, automations, shopping) ou rendent le même 403 pour la fiche d'un appareil interdit. Le tableau
+  des codes d'erreur ci-dessus est complété en conséquence.
+- **Le WebSocket est filtré par compte** : snapshot, `devices`, `state`, `deviceEvent`, `availability`,
+  `scenes` / `scene`, `automations`, `shopping` ne portent que ce que le compte peut voir. Droits relus à
+  la connexion et à chaque ping de 15 s ; droits changés → nouveau snapshot, compte retiré → fermeture
+  1008. Réseau local et compte sans liste : inchangé. Détail et limites (`/api/house` reste lisible) :
+  [1_13](1_13_comptes-et-sessions.md), section du 2026-11-01.

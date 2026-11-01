@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { isIP } from 'node:net'
 import { readFile, rm, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { rightsSchema, type Right } from '@kasbah/shared'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { Logger } from 'pino'
 import { z } from 'zod'
@@ -136,7 +137,8 @@ export async function verifyPassword(password: string, stored: string): Promise<
 // --- files ------------------------------------------------------------------------------------
 
 export const usersFileSchema = z.object({
-  users: z.array(z.object({ name: z.string().min(1), password: z.string().min(1) })).default([]),
+  // `rights` absent = every right (accounts written before rights existed)
+  users: z.array(z.object({ name: z.string().min(1), password: z.string().min(1), rights: rightsSchema.optional() })).default([]),
 })
 export type UsersFile = z.infer<typeof usersFileSchema>
 
@@ -161,12 +163,24 @@ async function readUsersForEdit(path: string): Promise<UsersFile> {
 }
 const writeUsers = (path: string, file: UsersFile) => writeFileAtomic(path, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
 
-/** Creates the account, or changes its password. Returns the names. */
+/** Creates the account, or changes its password (its rights stay). Returns the names. */
 export async function saveUser(path: string, name: string, password: string): Promise<string[]> {
   const file = await readUsersForEdit(path)
-  const users = [...file.users.filter((u) => u.name !== name), { name, password: await hashPassword(password) }]
+  const rights = file.users.find((u) => u.name === name)?.rights
+  const users = [...file.users.filter((u) => u.name !== name), { name, password: await hashPassword(password), ...(rights ? { rights } : {}) }]
   await writeUsers(path, { users })
   return users.map((u) => u.name)
+}
+
+/** Sets the account's rights (`null` = all of them again); `false` if it does not exist. */
+export async function setUserRights(path: string, name: string, rights: Right[] | null): Promise<boolean> {
+  const file = await readUsersForEdit(path)
+  const account = file.users.find((u) => u.name === name)
+  if (!account) return false
+  if (rights) account.rights = [...new Set(rights)]
+  else delete account.rights
+  await writeUsers(path, file)
+  return true
 }
 
 /** Removes the account (its tokens no longer pass) and its music accounts; `null` if it did not exist. */

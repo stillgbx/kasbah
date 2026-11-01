@@ -8,6 +8,7 @@ import pino from 'pino'
 import WebSocket from 'ws'
 import { buildApp, type KasbahApp } from '../src/app'
 import { loadEnv } from '../src/config/env'
+import { actAsHeaders } from '../src/http/session'
 
 const HOUSE = resolve(import.meta.dirname, '../../../house/demo-house.json')
 const MONDAY = Date.UTC(2026, 8, 7, 12)
@@ -375,5 +376,87 @@ describe('Matter bridge setting (GET/PATCH /api/matter)', () => {
       expect(off.json().fabrics).toEqual([])
       expect((await kasbah.app.inject({ method: 'DELETE', url: '/api/matter/fabrics/abc' })).statusCode).toBe(400)
     } finally { await kasbah.close(); await rm(dir, { recursive: true, force: true }) }
+  })
+})
+
+describe('rights of an account (http/rights.ts)', () => {
+  let kasbah: KasbahApp
+  let dir: string
+  let usersFile: string
+  beforeAll(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'kasbah-rights-'))
+    usersFile = join(dir, 'mcp-users.json')
+    await writeFile(usersFile, JSON.stringify({ users: [
+      { name: 'kid', password: 'x', rights: ['lights'] },
+      { name: 'adult', password: 'x' },
+    ] }))
+    ;({ kasbah } = await makeApp('default', { MCP_USERS_FILE: usersFile }))
+  })
+  afterAll(async () => { await kasbah.close(); await rm(dir, { recursive: true, force: true }) })
+
+  const as = (user: string | null, method: 'GET' | 'POST' | 'PATCH', url: string, payload?: object) =>
+    kasbah.app.inject({ method, url, headers: actAsHeaders(user), ...(payload ? { payload } : {}) })
+
+  it('knows every route the server serves', () => {
+    expect(kasbah.unmappedRoutes).toEqual([])
+  })
+
+  it('lets an account drive only the domains it was granted', async () => {
+    expect((await as('kid', 'POST', '/api/devices/mock:light-living/command', { type: 'light.set', on: true })).statusCode).toBe(200)
+    const cover = await as('kid', 'POST', '/api/devices/mock:cover-living/command', { type: 'cover.close' })
+    expect(cover.statusCode).toBe(403)
+    expect(cover.json().error.code).toBe('NO_RIGHT')
+    expect((await as('kid', 'PATCH', '/api/plugins/mock', { enabled: true })).statusCode).toBe(403)
+    // the reads stay open in phase 1, and an unknown device is still a 404
+    expect((await as('kid', 'GET', '/api/devices')).statusCode).toBe(200)
+    expect((await as('kid', 'POST', '/api/devices/mock:nope/command', { type: 'cover.close' })).statusCode).toBe(404)
+  })
+
+  it('shows an account only the devices it may see', async () => {
+    const kinds = new Set<string>((await as('kid', 'GET', '/api/devices')).json().devices.map((e: { descriptor: { kind: string } }) => e.descriptor.kind))
+    expect(kinds.has('light')).toBe(true)
+    expect(kinds.has('sensor')).toBe(true)          // a sensor needs no right
+    expect(kinds.has('cover') || kinds.has('vehicle')).toBe(false)
+    expect((await as('kid', 'GET', '/api/devices/mock:cover-living')).statusCode).toBe(403)
+    expect((await as('kid', 'GET', '/api/automations')).statusCode).toBe(403)
+    expect((await as('adult', 'GET', '/api/devices')).json().devices.length).toBeGreaterThan(15)
+  })
+
+  it('filters the WebSocket of an account, and follows a change of its rights', async () => {
+    const address = await kasbah.app.listen({ port: 0, host: '127.0.0.1' })
+    const ws = new WebSocket(`${address.replace('http', 'ws')}/ws`, { headers: actAsHeaders('kid') })
+    const received: ServerMessage[] = []
+    ws.on('message', (d) => received.push(serverMessageSchema.parse(JSON.parse(d.toString()))))
+    const until = async (ok: () => boolean) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise((r) => setTimeout(r, 20)) }
+    await new Promise((r) => ws.once('open', r))
+    await until(() => received.length > 0)
+    const first = received[0]!
+    expect(first.type).toBe('snapshot')
+    if (first.type === 'snapshot') {
+      expect(first.devices.some((e) => e.descriptor.kind === 'cover')).toBe(false)
+      expect(first.devices.some((e) => e.descriptor.kind === 'light')).toBe(true)
+      expect(first.automations).toEqual([])
+    }
+    // a state of a cover never reaches it
+    kasbah.hub.broadcast({ type: 'state', deviceId: 'mock:cover-living', state: kasbah.registry.get('mock:cover-living')!.state })
+    kasbah.hub.broadcast({ type: 'state', deviceId: 'mock:light-living', state: kasbah.registry.get('mock:light-living')!.state })
+    await until(() => received.length > 1)
+    expect(received.slice(1).map((m) => m.type === 'state' && m.deviceId)).toEqual(['mock:light-living'])
+
+    // covers granted: a new snapshot with them; the account removed: the screen is closed
+    await writeFile(usersFile, JSON.stringify({ users: [{ name: 'kid', password: 'x', rights: ['lights', 'covers'] }, { name: 'adult', password: 'x' }] }))
+    await kasbah.hub.refreshRights()
+    await until(() => received.length > 2)
+    const again = received[2]!
+    expect(again.type === 'snapshot' && again.devices.some((e) => e.descriptor.kind === 'cover')).toBe(true)
+    const closed = new Promise<number>((r) => ws.once('close', r))
+    await writeFile(usersFile, JSON.stringify({ users: [{ name: 'adult', password: 'x' }] }))
+    await kasbah.hub.refreshRights()
+    expect(await closed).toBe(1008)
+  })
+
+  it('leaves every right to an account without a list, and to the house', async () => {
+    expect((await as('adult', 'POST', '/api/devices/mock:cover-living/command', { type: 'cover.close' })).statusCode).toBe(200)
+    expect((await as(null, 'POST', '/api/devices/mock:cover-living/command', { type: 'cover.close' })).statusCode).toBe(200)
   })
 })

@@ -22,8 +22,9 @@
 
 ## Catalogue
 
-217 entrées archivées. Sections : dossiers les plus cités dans les entrées du mois (nombre de mentions).
+401 entrées archivées. Sections : dossiers les plus cités dans les entrées du mois (nombre de mentions).
 
 | Mois | Entrées | Types | Sections les plus touchées |
 |---|---|---|---|
+| [2026-10](2026-10.md) | 184 | update 180, ingest 2, lint 2 | 1_architecture (160), 3_plugins (122), 4_ui (80), 5_setup (53), 6_faq (28) |
 | [2026-09](2026-09.md) | 217 | update 215, fix 1, ingest 1 | 4_ui (222), 1_architecture (205), 3_plugins (171), 6_faq (87), 2_maison (67) |

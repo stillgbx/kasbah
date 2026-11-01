@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ManualClock } from '@kasbah/mock-sim'
-import type { DeviceDescriptor, PluginHealth, PushMessage, PushSubscriptionJson } from '@kasbah/shared'
+import type { DeviceDescriptor, PluginHealth, PushMessage, PushSubscriptionJson, Right } from '@kasbah/shared'
 import pino from 'pino'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Bus } from '../bus'
@@ -68,7 +68,7 @@ beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'kasbah-push-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 /** A push service that records what it receives, and answers `status` per endpoint. */
-function pushHarness(opts: { accounts?: string[]; status?: Record<string, number> } = {}) {
+function pushHarness(opts: { accounts?: string[]; status?: Record<string, number>; rights?: Record<string, Right[]> } = {}) {
   const received: { endpoint: string; headers: Record<string, string>; body: Uint8Array }[] = []
   const fetch: PushFetch = async (url, init) => {
     received.push({ endpoint: url, headers: init.headers, body: init.body })
@@ -77,6 +77,7 @@ function pushHarness(opts: { accounts?: string[]; status?: Record<string, number
   const service = new PushService({
     path: join(dir, 'push.json'), subject: 'mailto:kasbah@example.org', logger, fetch,
     accounts: async () => opts.accounts ?? [],
+    ...(opts.rights ? { rights: async () => new Map(Object.entries(opts.rights!)) } : {}),
   })
   return { service, received }
 }
@@ -214,5 +215,20 @@ describe('AlertNotifier', () => {
     await n.tick()
     expect(h.sent).toHaveLength(2)
     await n.close()
+  })
+
+  it("leaves out an account without the category's right, never the local network's screens", async () => {
+    const kid = browser(); const adult = browser(); const house = browser()
+    const { service, received } = pushHarness({ accounts: ['kid', 'adult'], rights: { kid: ['robots'] } })
+    await service.load()
+    await service.subscribe({ subscription: kid.sub, categories: ['vehicles', 'robots'], lang: 'fr' }, 'kid')
+    await service.subscribe({ subscription: adult.sub, categories: ['vehicles'], lang: 'fr' }, 'adult')
+    await service.subscribe({ subscription: house.sub, categories: ['vehicles'], lang: 'fr' }, null)
+
+    expect((await service.send('vehicles', () => message('x'))).sent).toBe(2)
+    expect(received.map((r) => r.endpoint)).not.toContain(kid.sub.endpoint)
+    expect((await service.send('robots', () => message('x'))).sent).toBe(1)
+    // the subscription stays: given the right back, the account is notified again
+    expect(service.has(kid.sub.endpoint)).toBe(true)
   })
 })

@@ -1,6 +1,6 @@
 # Vision et principes
 
-> Dernière mise à jour : 2026-10-07
+> Dernière mise à jour : 2026-11-01
 > Sources : `README.md`, `CLAUDE.md`, commit 0615484
 
 ## Objectif
@@ -49,3 +49,5 @@ l'origine GPS, carte des véhicules, mode éclaté des niveaux, éditeur de mais
 *(Mise à jour du 2026-10-06 (soir) : l'authentification de l'UI et de l'API est faite pour l'accès depuis l'extérieur — sous l'adresse publique du proxy inverse, tout passe par une connexion (mêmes comptes que le MCP, session par cookie). Le réseau local reste sans compte, par choix : écrans fixes de confiance. Les droits par compte (enfant en lecture seule…) restent à faire. Voir `../1_architecture/1_7_serveur-mcp.md`.)*
 
 *(Mise à jour du 2026-10-07 : première chose que ces comptes servent — les **comptes musicaux par utilisateur** (YouTube Music, Mixcloud) : chacun retrouve ses playlists et recommandations sans abîmer l'historique d'un autre ni celui de la maison ; connecté sans réglage = accès anonyme ; sur le réseau local, toujours « la maison ». Les **droits** par compte restent à faire. Voir `../1_architecture/1_6_lecteur-musique.md`.)*
+
+*(Mise à jour du 2026-11-01 : les **droits par compte** sont faits pour les écritures et les lectures (un interrupteur par domaine : lumières, volets, chauffage, voitures, réglages…), tenus côté serveur ; ils ne concernent qu'un compte identifié, jamais le réseau local. Le masquage dans l'app reste à faire. Voir `../1_architecture/1_13_comptes-et-sessions.md`.)*

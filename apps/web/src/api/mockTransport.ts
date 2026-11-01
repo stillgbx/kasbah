@@ -1,4 +1,4 @@
-import { addShoppingItems, clearCheckedShoppingItems, EMPTY_SHOPPING_LIST, removeShoppingItem, setShoppingFavorite, shoppingAddBodySchema, shoppingItemPatchSchema, updateShoppingItem, type ShoppingList, applyHouseEditToJson, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, patchGardenItemInJson, removeGardenItemFromJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setReliefInJson, setRenderTuningInJson, setOriginInJson, setTerrainInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type PluginSceneEntry, type PropertiesResponse, type SceneActivation, type StateFor, type StatePatch } from '@kasbah/shared'
+import { addShoppingItems, clearCheckedShoppingItems, EMPTY_SHOPPING_LIST, removeShoppingItem, setShoppingFavorite, shoppingAddBodySchema, shoppingItemPatchSchema, updateShoppingItem, type ShoppingList, applyHouseEditToJson, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, patchGardenItemInJson, removeGardenItemFromJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setReliefInJson, setRenderTuningInJson, setOriginInJson, setTerrainInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type PluginSceneEntry, type PropertiesResponse, type Right, type SceneActivation, type StateFor, type StatePatch } from '@kasbah/shared'
 import { SimError, Simulation, solarGeometry, type ScenarioName } from '@kasbah/mock-sim'
 import demoHouse from '@kasbah/shared/demo-house.json'
 import { createMockSchool } from './mockSchool'
@@ -158,6 +158,8 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
   const sim = new Simulation({ scenario: opts.scenario ?? 'default', seed: opts.seed ?? 42, timeScale: opts.timeScale ?? 1 })
   let house = opts.house ?? parseHouse(demoHouse)
   let mcpUsers = ['parent']
+  const mcpRights = new Map<string, Right[]>()
+  const mcpUserList = () => mcpUsers.map((name) => ({ name, ...(mcpRights.has(name) ? { rights: mcpRights.get(name)! } : {}) }))
   const states = new Map<string, DeviceState>()
   const descriptors = sim.devices()
   for (const d of descriptors) states.set(d.id, { ...sim.getState(d.externalId)!, updatedAt: Date.now() })
@@ -522,15 +524,22 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       return { text: demoTranscript(demoLang()), ms: 0 }
     },
     // MCP accounts: in memory, a demonstration account
-    async mcpUsers() { return { users: mcpUsers.map((name) => ({ name })) } },
+    async mcpUsers() { return { users: mcpUserList() } },
     async mcpSetUser(name) {
       if (!mcpUsers.includes(name)) mcpUsers.push(name)
-      return { users: mcpUsers.map((n) => ({ name: n })) }
+      return { users: mcpUserList() }
     },
     async mcpRemoveUser(name) {
       if (!mcpUsers.includes(name)) throw new ApiRequestError(404, 'NOT_FOUND', `no MCP user "${name}"`)
       mcpUsers = mcpUsers.filter((n) => n !== name)
-      return { users: mcpUsers.map((n) => ({ name: n })) }
+      mcpRights.delete(name)
+      return { users: mcpUserList() }
+    },
+    async mcpSetRights(name, rights) {
+      if (!mcpUsers.includes(name)) throw new ApiRequestError(404, 'NOT_FOUND', `no MCP user "${name}"`)
+      if (rights) mcpRights.set(name, rights)
+      else mcpRights.delete(name)
+      return { users: mcpUserList() }
     },
     // demonstration: no repository behind it, hence no supervisor
     async systemVersion() { return { supervised: false, running: { sha: '0000000000000000000000000000000000000000', subject: 'Démonstration', date: new Date(0).toISOString() }, available: [], error: null } },

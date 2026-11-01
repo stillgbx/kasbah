@@ -163,6 +163,7 @@ From a phone away from home, without a VPN: an **HTTPS reverse proxy** (the Syno
 - **On the local network** (`http://<ip>:8787`, `kasbah.home.internal`): nothing changes, no account required. The **name** decides, not the place: the public address requires signing in even from home (through the proxy, every request comes from the NAS).
 - **Local names**: an IP address, `localhost`, a short name (`kasbah`) or a name ending in `.internal`, `.local`, `.lan` or `.home.arpa`; add any other in `KASBAH_LAN_HOSTS`. Any other name is refused (protection against DNS rebinding), and so is a write or a WebSocket that a page from another site sends from a browser at home.
 - **Accounts**: the same as the AI assistants' accounts, in **Settings → Accounts**, managed from the local network only (even when signed in, the public address doesn't show them).
+- **Rights**: under each account, a folded list of domains (lights, shutters, gate and garage, heating, vehicles, music, cameras, settings…) to grant or take away. A signed-in account, and the AI assistants acting for it, can neither see nor drive the devices of a domain it lacks, nor get its notifications. Every domain is granted by default; the local network keeps them all. Views not granted still show in the menu, empty, for now.
 - **Session**: a 90-day cookie, extended on every use; you sign in once per device. Changing an account's password closes all its sessions (lost phone); so does removing it. “Sign out” is in Settings → Accounts.
 - **Lockout**: after 5 failed sign-ins in a row, the account is locked for 15 minutes, even with the right password (app and AI assistants; `KASBAH_LOGIN_MAX_FAILURES`, `KASBAH_LOGIN_LOCK_MINUTES`). Open sessions are not affected.
 - **Installable app**: over HTTPS, the browser offers to install Kasbah, starting from the sign-in page. On iPhone, the app added to the home screen has its own cookies: sign in to it once. On Android, a long press on the installed app's icon offers an “Ask Kasbah” shortcut (labelled “Demander”, in French), which opens the assistant already listening (ready to type when the microphone cannot start on its own); it can be dragged to the home screen as an icon of its own.
@@ -353,7 +354,7 @@ Resource: `kasbah://house` (the validated `house.json`).
 
 **OAuth authentication, everywhere** (local network included): Kasbah is its own authorization server. On first connection, the client opens a Kasbah page (user + password), then keeps a token (1 h access, 90-day sliding refresh). Clients register themselves (dynamic registration, or a metadata document for claude.ai).
 
-- **Accounts**: `apps/server/mcp-users.json`, next to `.env`, outside the repo, hashed passwords (scrypt); the same accounts open the app through the public address. Manage them in **Settings → Accounts** (add, change password, remove; from the local network only), or as a fallback:
+- **Accounts**: `apps/server/mcp-users.json`, next to `.env`, outside the repo, hashed passwords (scrypt); the same accounts open the app through the public address. Manage them in **Settings → Accounts** (add, change password, rights, remove; from the local network only), or as a fallback:
   ```bash
   npm run mcp-user -w @kasbah/server -- add <name>
   ```

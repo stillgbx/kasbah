@@ -71,3 +71,13 @@ it('does not overwrite an unreadable file', async () => {
   expect(res.statusCode).toBe(500)
   expect(readFileSync(usersFile, 'utf8')).toBe('{ pas du json')
 })
+
+it('sets the rights of an account, keeps them across a password change, and gives them all back', async () => {
+  await put('lou', 'premier-mdp')
+  const rights = (list: string[] | null) => app.inject({ method: 'PUT', url: '/api/mcp/users/lou/rights', payload: { rights: list } })
+  expect((await rights(['lights', 'covers'])).json()).toEqual({ users: [{ name: 'lou', rights: ['lights', 'covers'] }] })
+  expect((await put('lou', 'second-mdp')).json()).toEqual({ users: [{ name: 'lou', rights: ['lights', 'covers'] }] })
+  expect((await rights(null)).json()).toEqual({ users: [{ name: 'lou' }] })
+  expect((await rights(['nope'] as string[])).statusCode).toBe(400)
+  expect((await app.inject({ method: 'PUT', url: '/api/mcp/users/zoe/rights', payload: { rights: [] } })).statusCode).toBe(404)
+})

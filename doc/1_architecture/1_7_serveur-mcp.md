@@ -1,6 +1,6 @@
 # Serveur MCP (`/mcp`)
 
-> Dernière mise à jour : 2026-10-24
+> Dernière mise à jour : 2026-11-01
 > Sources : `apps/server/src/mcp/server.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/http/session.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/web/src/components/settings/McpUsersCard.vue`, `apps/server/src/mcp/auth.test.ts`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{ytmusic,mixcloud,radio}/index.ts`, `apps/server/src/mcp/server.test.ts`, `apps/server/src/app.ts` (`registerMcp`), `apps/server/package.json`, `README.md` (section « Serveur MCP »), arbre de travail du 2026-09-23 (après c9abf58), `apps/server/src/assistant/assistant.ts` ; arbre de travail NON COMMITÉ du 2026-10-09 (après 00397bc) : `apps/server/src/mcp/{server,server.test}.ts`, `README.md`, `packages/shared/src/shopping/shopping.ts` (2026-10-11)
 
 ## Ce que c'est
@@ -772,3 +772,15 @@ Constat F27 : `client_id` vient de n'importe qui, sans compte (`/oauth/authorize
 chercher son document à cette adresse, réseau local compris : de quoi sonder le réseau de la maison au
 temps de réponse. Le document passe désormais par `publicFetch` (`core/outbound.ts`) : adresse publique
 seule, redirection toujours refusée. Les clients réels (claude.ai) ne sont pas touchés.
+
+### Mise à jour 2026-11-01 - les droits par compte, et les outils qui ne passent par aucune route
+
+Les droits par compte ([1_13](1_13_comptes-et-sessions.md), section du 2026-11-01) sont tenus par un
+`preHandler` Fastify sur les routes. Or tous les outils MCP ne passent pas par une route : `call` rejoue
+une route (`app.inject` + `actAsHeaders`) et est donc couvert, mais **`send_command` et `recall_scene`**
+agissent directement sur le registre ou l'hôte, comme les lectures `list_devices`, `get_device`,
+`get_device_history`, `list_scenes` et `get_weather`. Le hook ne les verrait jamais : ils vérifient eux-mêmes
+(`mayUse` / `deviceFilter`, `http/rights.ts`) et répondent par un message `NO_RIGHT` en français qui renvoie à
+Réglages → Comptes. Ceci contredit la phrase de la section du 2026-10-04 (« les outils rejouent les routes ») :
+vraie pour la plupart seulement. Piège pour un futur outil : s'il touche le registre sans passer par
+`call`, il doit appeler `mayUse` lui-même. Tests : `mcp/server.test.ts` (« rights of the account »).

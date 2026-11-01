@@ -1,6 +1,6 @@
 # Vue Réglages
 
-> Dernière mise à jour : 2026-10-30
+> Dernière mise à jour : 2026-11-01
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Réglages : ses zones, la carte Plugins, les thèmes, le rendu 3D, les entrées locales au poste, les comptes, le calage sur la photo. Elle est née du découpage de
@@ -448,3 +448,18 @@ Livré dans le même commit que l'entrée de `log.md` du jour (`MatterCard.vue`,
 Vérifié : carte appairée avec trois assistants fabriqués, boîte à 124 px, aucun débordement à 1280, 853 et
 375 px, thèmes clair et sombre, fr et en. Tests : noms, deux temps, adresse publique. **Non joué** : un
 vrai assistant.
+
+### Mise à jour 2026-11-01 — Comptes : les droits sous chaque compte
+
+Dans la carte « Comptes » (`McpUsersCard.vue`), chaque compte devient une **ligne pliable** (chevron, comme
+les plugins) avec un résumé : « Tous les droits » ou « n droits sur 17 ». Dépliée : une phrase d'aide, une
+**pastille par domaine** (même motif que les sous-éléments des plugins, même emprise allumée ou éteinte pour
+que rien ne bouge), et les boutons « Tout » / « Aucun ». **Chaque pression enregistre**
+(`PUT /api/mcp/users/:name/rights`) ; les 17 allumées reviennent à « aucune liste », ce qui couvre aussi
+les futurs domaines. Libellés i18n `rights.*` et `mcpUsers.rights*` (fr et en). Ce que chaque domaine
+garde et ce qu'il ne garde pas (réseau local non concerné, `/api/house` lisible) :
+[1_13](../1_architecture/1_13_comptes-et-sessions.md), section du 2026-11-01.
+
+**Limite visible** : l'écran ne masque pas encore les vues interdites (phase 3) : une vue refusée reste dans
+le menu, vide. Vérifié en preview mock : rien ne bouge (`getBoundingClientRect` avant / après), pas de
+débordement à 1 / 1,25 / 1,5, en fr et en, à 375 px, thème sombre.

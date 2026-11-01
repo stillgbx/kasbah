@@ -23,6 +23,7 @@ import { ShoppingService, shoppingPathFor } from './core/shopping'
 import { EnergyHistory } from './core/history'
 import { registerDiagRoutes } from './http/diag'
 import { registerPushRoutes } from './http/push'
+import { accountRights, deviceFilter, registerRights } from './http/rights'
 import { registerRoutes } from './http/routes'
 import { registerSystemRoutes, type SystemRoutesDeps } from './http/system'
 import { actAsHook, createAppSession, sessionConfigSchema } from './http/session'
@@ -62,6 +63,8 @@ export interface KasbahApp {
   host: PluginHost
   house: LoadedHouse
   automations: AutomationEngine
+  /** Routes the rights tables do not know: they need `settings` (`http/rights.ts`). */
+  unmappedRoutes: string[]
   /** Starts the plugins (after app.ready()/listen so that the routes are ready). */
   startPlugins(): Promise<void>
   close(): Promise<void>
@@ -101,6 +104,11 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
 
   const bus = new Bus()
   const registry = new DeviceRegistry(bus, clock, opts.logger.child({ component: 'registry' }))
+  // the rights of a signed-in account, on every route registered below (`http/rights.ts`)
+  const rights = registerRights(app, { users: mcpAuth.users, registry })
+  app.addHook('onReady', async () => {
+    if (rights.unmapped.length) opts.logger.warn({ routes: rights.unmapped }, 'routes missing from the rights tables: they need "settings"')
+  })
   const scenes = new SceneRegistry(bus, clock, opts.logger.child({ component: 'scenes' }))
   // Per-plugin settings: they live IN the house (`house.plugins`), written by the UI. `house` is
   // mutated in place by `updateHouseFile`, so this read always sees the current value.
@@ -111,6 +119,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     path: stateFile('push.json'),
     subject: mcpConfig.MCP_PUBLIC_URL ?? 'mailto:kasbah@localhost',
     accounts: async () => (await mcpAuth.users()).users.map((u) => u.name),
+    rights: () => accountRights(mcpAuth.users),
     logger: opts.logger.child({ component: 'push' }),
     now: () => clock.now(),
   })
@@ -148,7 +157,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   const shopping = new ShoppingService(shoppingPathFor(house.path), { readOnly: !!opts.readOnly })
   await shopping.load()
   const hub = new WsHub(registry, bus, clock, opts.logger.child({ component: 'ws' }), {
-    scenes, automations, shopping, propertyId: () => house.house.id,
+    scenes, automations, shopping, propertyId: () => house.house.id, rights: () => accountRights(mcpAuth.users),
     // web build served, re-read on each connection; without static serving, no build to compare
     ...((opts.serveStatic ?? true) ? { appBuild: () => readAppBuild(opts.env.KASBAH_STATIC_DIR) } : {}),
   })
@@ -171,7 +180,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   // the WebSocket does not go through this hook.
   await app.register(fastifyCompress, { global: true })
 
-  registerRoutes(app, { registry, scenes, host, house, hub, history, automations, shopping, startedAt: clock.now(), ...(opts.properties ? { properties: opts.properties } : {}) })
+  registerRoutes(app, { registry, scenes, host, house, hub, history, automations, shopping, startedAt: clock.now(), deviceFilter: (user) => deviceFilter(mcpAuth.users, user), ...(opts.properties ? { properties: opts.properties } : {}) })
   host.registerRoutes(app)
   registerPushRoutes(app, push)
   registerSystemRoutes(app, { supervisor: opts.supervisor, statusFile: stateFile('update-status.json') })
@@ -205,7 +214,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   }
 
   return {
-    app, registry, scenes, bus, hub, host, house, automations,
+    app, registry, scenes, bus, hub, host, house, automations, unmappedRoutes: rights.unmapped,
     // the bridge does not wait for the plugins: it publishes their devices as they appear
     startPlugins: async () => { await Promise.all([host.startAll(), matter.start()]) },
     async close() {

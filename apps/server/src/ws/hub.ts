@@ -1,4 +1,4 @@
-import { EMPTY_SHOPPING_LIST, type AutomationEntry, type DeviceId, type DeviceState, type ServerMessage, type ShoppingList } from '@kasbah/shared'
+import { deviceRight, EMPTY_SHOPPING_LIST, type AutomationEntry, type DeviceId, type DeviceState, type Right, type ServerMessage, type ShoppingList } from '@kasbah/shared'
 import websocket from '@fastify/websocket'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
@@ -7,9 +7,15 @@ import type { Bus } from '../core/bus'
 import type { Clock } from '../core/clock'
 import type { DeviceRegistry } from '../core/registry'
 import type { SceneRegistry } from '../core/scene-registry'
+import { filterMessage } from '../http/rights'
 
 // WebSocket hub: snapshot on connection, then push of FULL states coalesced per device (a burst of
 // Hue SSE events becomes one frame). Protocol ping to purge dead clients.
+//
+// Each connection keeps its account (`req.sessionUser`, `null` = the local network): an account with
+// a list of rights only receives what they let it see. The rights are re-read at each connection and
+// at each ping; when an account's change, its screens get a new snapshot, and a removed account's
+// screens are closed.
 
 export interface WsHubOptions {
   coalesceMs?: number
@@ -24,10 +30,15 @@ export interface WsHubOptions {
   propertyId?: () => string
   /** Web build being served: a screen carrying another build offers to reload. */
   appBuild?: () => string | undefined
+  /** Rights of each account (`http/rights.ts`, `accountRights`); absent = no filtering. */
+  rights?: () => Promise<ReadonlyMap<string, readonly Right[] | undefined>>
 }
 
+interface Client { alive: boolean; user: string | null; key: string }
+
 export class WsHub {
-  private readonly clients = new Map<WebSocket, { alive: boolean }>()
+  private readonly clients = new Map<WebSocket, Client>()
+  private accounts: ReadonlyMap<string, readonly Right[] | undefined> = new Map()
   private readonly pending = new Map<DeviceId, DeviceState>()
   private flushTimer: unknown = null
   private heartbeat: unknown = null
@@ -39,6 +50,7 @@ export class WsHub {
   private readonly shopping: WsHubOptions['shopping']
   private readonly propertyId: WsHubOptions['propertyId']
   private readonly appBuild: WsHubOptions['appBuild']
+  private readonly rights: WsHubOptions['rights']
 
   constructor(
     private readonly registry: DeviceRegistry,
@@ -54,6 +66,7 @@ export class WsHub {
     this.shopping = opts.shopping
     this.propertyId = opts.propertyId
     this.appBuild = opts.appBuild
+    this.rights = opts.rights
     this.unsubscribe.push(
       bus.on('state', (id, state) => { this.pending.set(id, state); this.scheduleFlush() }),
       bus.on('availability', (deviceIds, available) => {
@@ -75,18 +88,60 @@ export class WsHub {
 
   async attach(app: FastifyInstance): Promise<void> {
     await app.register(websocket, { options: { maxPayload: 1 << 20 } })
-    app.get('/ws', { websocket: true }, (socket) => this.onConnection(socket))
-    this.heartbeat = this.clock.setInterval(() => this.pingAll(), this.heartbeatMs)
+    // the rights as they are now, before the snapshot
+    app.get('/ws', { websocket: true, preHandler: async () => { await this.refreshRights() } },
+      (socket, req) => this.onConnection(socket, req.sessionUser ?? null))
+    this.heartbeat = this.clock.setInterval(() => {
+      this.pingAll()
+      this.refreshRights().catch((err: unknown) => this.logger.warn({ err }, 'ws rights not re-read'))
+    }, this.heartbeatMs)
   }
 
-  private onConnection(socket: WebSocket): void {
-    this.clients.set(socket, { alive: true })
+  /** What `user` may see: `*` everything, `-` nothing (no such account), otherwise its rights. */
+  private keyOf(user: string | null): string {
+    if (user === null || !this.rights) return '*'
+    if (!this.accounts.has(user)) return '-'
+    return this.accounts.get(user)?.join(',') ?? '*'
+  }
+
+  /** The message as an account with this key receives it; `null` = nothing. */
+  private view(key: string, msg: ServerMessage): ServerMessage | null {
+    if (key === '*') return msg
+    if (key === '-') return null
+    const rights = key ? key.split(',') as Right[] : []
+    return filterMessage(msg, rights, (id) => { const e = this.registry.get(id); return e ? deviceRight(e.descriptor) : undefined })
+  }
+
+  private snapshot(): ServerMessage {
+    const appBuild = this.appBuild?.()
+    return { type: 'snapshot', serverTime: this.clock.now(), devices: this.registry.list(), scenes: this.scenes?.list() ?? [], automations: this.automations?.list() ?? [], shopping: this.shopping?.get() ?? EMPTY_SHOPPING_LIST, ...(this.propertyId ? { propertyId: this.propertyId() } : {}), ...(appBuild ? { appBuild } : {}) }
+  }
+
+  /** Re-reads the rights: a screen whose account changed gets a new snapshot, a removed account's closes. */
+  async refreshRights(): Promise<void> {
+    if (!this.rights) return
+    this.accounts = await this.rights()
+    for (const [socket, c] of this.clients) {
+      if (c.user === null) continue
+      const key = this.keyOf(c.user)
+      if (key === c.key) continue
+      if (key === '-') { socket.close(1008, 'account removed'); this.clients.delete(socket); continue }
+      c.key = key
+      const snapshot = this.view(key, this.snapshot())
+      if (snapshot) this.send(socket, snapshot)
+    }
+  }
+
+  private onConnection(socket: WebSocket, user: string | null): void {
+    const key = this.keyOf(user)
+    if (key === '-') { socket.close(1008, 'no such account'); return }
+    this.clients.set(socket, { alive: true, user, key })
     socket.on('pong', () => { const c = this.clients.get(socket); if (c) c.alive = true })
     socket.on('close', () => this.clients.delete(socket))
     socket.on('error', (err) => { this.logger.debug({ err }, 'ws client error'); this.clients.delete(socket) })
     socket.on('message', () => { /* v1: the client sends nothing useful */ })
-    const appBuild = this.appBuild?.()
-    this.send(socket, { type: 'snapshot', serverTime: this.clock.now(), devices: this.registry.list(), scenes: this.scenes?.list() ?? [], automations: this.automations?.list() ?? [], shopping: this.shopping?.get() ?? EMPTY_SHOPPING_LIST, ...(this.propertyId ? { propertyId: this.propertyId() } : {}), ...(appBuild ? { appBuild } : {}) })
+    const snapshot = this.view(key, this.snapshot())
+    if (snapshot) this.send(socket, snapshot)
     this.logger.debug({ clients: this.clients.size }, 'ws client connected')
   }
 
@@ -111,9 +166,13 @@ export class WsHub {
 
   broadcast(msg: ServerMessage): void {
     if (this.clients.size === 0) return
-    const data = JSON.stringify(msg)
-    for (const socket of this.clients.keys()) {
-      if (socket.readyState === socket.OPEN) socket.send(data)
+    // one serialisation per set of rights, not per screen
+    const frames = new Map<string, string | null>()
+    for (const [socket, c] of this.clients) {
+      if (socket.readyState !== socket.OPEN) continue
+      if (!frames.has(c.key)) { const v = this.view(c.key, msg); frames.set(c.key, v && JSON.stringify(v)) }
+      const data = frames.get(c.key)
+      if (data) socket.send(data)
     }
   }
 

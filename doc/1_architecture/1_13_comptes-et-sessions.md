@@ -1,7 +1,7 @@
 # Comptes et sessions
 
-> Dernière mise à jour : 2026-10-30
-> Sources : `apps/server/src/http/session.ts`, `apps/server/src/http/static.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/music/sources.ts`, `apps/server/src/plugins/claude/index.ts`, `apps/server/src/assistant/assistant.ts` ; pages citées plus bas
+> Dernière mise à jour : 2026-11-01
+> Sources : `apps/server/src/http/rights.ts`, `packages/shared/src/rights/rights.ts`, `apps/server/src/http/session.ts`, `apps/server/src/http/static.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/music/sources.ts`, `apps/server/src/plugins/claude/index.ts`, `apps/server/src/assistant/assistant.ts` ; pages citées plus bas
 
 Page de synthèse, écrite au lint du 2026-10-13 : le sujet était dispersé entre le serveur MCP, la
 configuration, les Réglages et le lecteur musique. Elle décrit l'état du code à cette date et renvoie aux
@@ -38,8 +38,8 @@ Access : [1_7 Serveur MCP](1_7_serveur-mcp.md), sections du 2026-10-04 (soir) et
   dans `session.ts`, et le message d'erreur ne nomme plus les comptes.
   Depuis le 2026-10-30, aussi `/api/matter/*` : son code d'appairage donne la main sur ce que le pont
   publie ([1_17](1_17_pont-matter.md)).
-- **Droits par compte** (un compte en lecture seule, par exemple) : pas encore faits, tout compte connecté
-  peut tout. Voir [0_0 Vision et principes](../0_overview/0_0_vision-et-principes.md).
+- **Droits par compte** (un compte en lecture seule, par exemple) : *(faits le 2026-11-01, voir la section
+  datée en bas de page ; avant, tout compte connecté pouvait tout)*. Voir [0_0 Vision et principes](../0_overview/0_0_vision-et-principes.md).
 
 ### Mise à jour 2026-10-23 - le nom public sous toutes ses graphies, les routes locales sous toutes leurs écritures
 
@@ -144,7 +144,8 @@ trahit pas quels comptes existent), et il vit en mémoire : un redémarrage le l
 - **Assistant** : le jeton Claude de chaque compte (repli sur celui de la maison), une instruction à la
   fois par compte, journal des instructions lu depuis le réseau local seulement. Voir
   [1_9 Assistant](1_9_assistant.md) et [3_24 Claude](../3_plugins/3_24_claude.md).
-- **Outils MCP** : ils rejouent les routes de l'app au nom du compte de leur jeton. Le secret interne de
+- **Outils MCP** : ils rejouent les routes de l'app au nom du compte de leur jeton *(sauf `send_command`, `recall_scene` et quelques lectures,
+  qui vérifient eux-mêmes les droits : section du 2026-11-01)*. Le secret interne de
   `actAsHeaders` est tiré au démarrage et ne quitte jamais le processus : une requête venue du réseau ne
   peut pas s'en réclamer.
 
@@ -152,7 +153,7 @@ trahit pas quels comptes existent), et il vit en mémoire : un redémarrage le l
 
 | Fichier | Contenu | Hors dépôt |
 |---|---|---|
-| `apps/server/mcp-users.json` | comptes (nom, haché scrypt) | oui, ignoré par git |
+| `apps/server/mcp-users.json` | comptes (nom, haché scrypt, `rights` facultatif) | oui, ignoré par git |
 | `.state/sessions.json` | sessions de l'app, hachées | oui (`.state/`) |
 | `.state/mcp-auth.json` | clients et jetons MCP, hachés | oui (`.state/`) |
 | `.state/users/<nom>/` | comptes musicaux et jeton Claude d'un utilisateur | oui (`.state/`) |
@@ -254,3 +255,88 @@ app.register`, `null` à la racine.
 (un test « réseau local ? » répondait non), aucune faille. Test : `test/integration.test.ts`, « a plugin's own
 route sees no account on the local network » (rouge sans le correctif). Un ancien fichier
 `.state/users/undefined/claude.json` éventuel est à recoller depuis la carte.
+
+### Mise à jour 2026-11-01 - les droits par compte (phases 1 et 2 : écritures et lectures)
+
+Demande : choisir à quoi chaque compte a droit (pas les réglages des plugins, pas les voitures, pas le
+chauffage ; lumières et volets oui), avec des blocages **dans le code**, pas seulement dans l'écran. Cette
+section remplace la puce « Droits par compte : pas encore faits » plus haut (laissée en place, renvoyée
+ici) ; le masquage dans l'app (phase 3) reste à faire, voir en fin de section.
+
+**Le principe : un interrupteur par domaine, pas par appareil.** 17 domaines (`RIGHTS`,
+`packages/shared/src/rights/rights.ts`) : lights, covers, access, heating, vehicles, media, cameras, robots,
+pets, energy, water, weather, agenda, school, shopping, automations, settings. Un interrupteur par appareil
+aurait été ingérable à tenir (les appareils changent, les usages de la maison non) et aurait laissé les
+futurs appareils ouverts par défaut.
+- `deviceRight(descriptor)` : le `kind` donne le domaine (`RIGHT_OF_KIND`). Exceptions : un `cover` de
+  classe gate / garage / window demande `access` et non `covers` (`ACCESS_COVER_CLASSES`, les mêmes classes
+  que le garde-fou `sensitiveActions` du MCP, qui garde sa propre copie) ; `fan` → heating ;
+  `ev_charger` → vehicles ; `sensor` → aucun droit (rien à garder).
+- `RIGHT_OF_NOTIFY_CATEGORY` : catégorie de push → droit (les alertes de plugins → settings).
+- `grants(rights, right)` : **liste absente = tous les droits**.
+
+**Qui est concerné.** Seulement un compte **identifié** : adresse publique, jeton MCP, assistant de l'app
+(qui agit au nom du compte). Le réseau local (`req.sessionUser === null`) est la maison et garde tous les
+droits, comme un compte sans liste `rights` (rétrocompatible : rien ne change tant qu'on n'a pas touché la
+carte). **Limite à dire clairement : un enfant qui ouvre l'adresse locale n'a aucun blocage** ; les droits
+protègent l'accès par compte, pas la maison.
+
+**Stockage.** Champ facultatif `rights` (tableau) de chaque compte de `apps/server/mcp-users.json`
+(`usersFileSchema`, `mcp/auth.ts`). Changer un mot de passe (`saveUser`) garde les droits. `setUserRights(path,
+name, rights | null)`. Route `PUT /api/mcp/users/:name/rights` `{ rights: Right[] | null }` (`null` = tous),
+404 si le compte n'existe pas, réseau local seulement comme le reste de `/api/mcp/users` ; `GET` ne rend
+`rights` que si la liste existe. Les 17 allumées s'enregistrent en `null` (pas de liste), ce qui couvre aussi
+les domaines ajoutés plus tard.
+
+**Phase 1 : écritures** (`apps/server/src/http/rights.ts`). Un seul `preHandler` global (`registerRights`,
+branché dans `buildApp` juste après la création du registre, **avant** toute route), décidé sur le **motif de
+route** (`req.routeOptions.url`), jamais sur l'URL brute : même piège que `LAN_ONLY` (section du 2026-10-23).
+Refus : 403 `NO_RIGHT`, message `this account may not use "<right>"`.
+- `classifyRoute(method, url)` : `/api/devices/:id/*` → droit de l'appareil (résolu par le registre ; un
+  appareil inconnu laisse la route répondre 404) ; `PATCH /api/plugins/:id` → settings ; `/api/music/*` →
+  media ; écritures du cœur par préfixe (`CORE_WRITES`) : house et properties → settings, scenes → lights
+  (les scènes fabricant sont des scènes Hue), automations et automation-order → automations, shopping →
+  shopping. Push, diag, assistant, mcp/users, system, matter, login/logout/oauth/mcp : aucun droit.
+- Routes propres aux plugins (`/api/plugins/<id>/…`) : table `PLUGIN_RIGHTS` (domaine du plugin + premiers
+  segments d'**écriture** qui relèvent des réglages : login, logout, pair, token, calendars, devices…).
+  `raw` (dumps fabricant) et `auth` (OAuth : le callback est un GET qui enregistre le jeton) → settings
+  pour toute méthode. **Choix** : le cookie YouTube Music, le compte Mixcloud et le jeton Claude sont
+  **personnels**, donc pas « settings » (ytmusic et mixcloud = media, claude = aucun droit) ; transcription =
+  aucun droit sauf ses réglages.
+- **Garde-fou : le doute refuse.** Une route qu'aucune table ne connaît demande `settings` (trop refuser
+  plutôt que pas assez). Un hook `onRoute` les collecte, `buildApp` les journalise en `warn` au démarrage
+  (`unmappedRoutes`, exposé sur `KasbahApp`) et un test d'intégration exige une liste vide : une nouvelle
+  route oubliée fait rougir la suite. `rights.test.ts` vérifie aussi que chaque dossier de plugin qui a
+  `registerRoutes` figure dans `PLUGIN_RIGHTS`.
+
+**Phase 2 : lectures.**
+- `GET /api/devices` est filtré (`deviceFilter`, passé à `registerRoutes`) ; les lectures d'un appareil
+  (`/api/devices/:id`, history, forecast, journal, map, release-notes, consumption, energy-days) suivent le
+  droit de l'appareil ; `GET /api/scenes` → lights, `/api/automations` → automations, `/api/shopping` →
+  shopping (`CORE_READS`).
+- **Restent lisibles** : `/api/house` (elle dessine la vue : un compte limité y voit encore le **nom et
+  l'emplacement** des appareils cachés, pas leur état), `/api/plugins`, `/api/health`. Limite assumée.
+- **WebSocket** (`ws/hub.ts`) : chaque connexion retient son compte ; `filterMessage` (`http/rights.ts`)
+  filtre le snapshot (devices, scenes, automations, shopping) et les messages devices, state, deviceEvent,
+  availability, scenes / scene, automations, shopping ; le reste passe. Une sérialisation par jeu de droits,
+  pas par client. Les droits sont relus à chaque connexion (`preHandler` de `/ws`) et à chaque ping (15 s,
+  `refreshRights()`) : droits changés → nouveau snapshot à ses écrans ; compte retiré → écran fermé, code
+  1008. Réseau local et comptes sans liste : comportement inchangé (GitNexus classait `WsHub` CRITICAL, d'où
+  ce soin). L'app web ne lit scenes / automations / shopping que par le WebSocket : un compte limité n'a donc
+  aucune erreur au démarrage.
+- **Push** : voir [1_16](1_16_notifications-push.md).
+
+**Constat qui corrige la puce « Outils MCP » de « Ce qui dépend du compte ».** Elle dit que les outils rejouent
+les routes de l'app au nom du compte. C'est vrai de la plupart (`call` passe par `app.inject` +
+`actAsHeaders`, donc par le hook), mais `send_command` et `recall_scene`, et des lectures (`list_devices`,
+`get_device`, `get_device_history`, `list_scenes`, `get_weather`), agissent **directement** sur le registre
+ou l'hôte, sans route : le hook ne les voit pas. Ils vérifient donc eux-mêmes (`mayUse`, message `NO_RIGHT`
+en français, `mcp/server.ts`). Voir [1_7](1_7_serveur-mcp.md).
+
+**Reste à faire (phase 3).** Masquer dans l'app les entrées de menu, vues et marqueurs 3D interdits
+(exposer les droits dans `GET /api/session`). Aujourd'hui une vue interdite reste dans le menu, **vide**.
+
+Vérifié : suite complète verte (2 610 tests), typecheck et lint globaux. Tests : `http/rights.test.ts`,
+`mcp/users-routes.test.ts`, `mcp/server.test.ts` (« rights of the account »), `core/push/push.test.ts`,
+`test/integration.test.ts` (« rights of an account » : commande refusée, liste filtrée, vrai WebSocket
+filtré, nouveau snapshot après changement, fermeture 1008). L'interface : [4_7](../4_ui/4_7_reglages.md).

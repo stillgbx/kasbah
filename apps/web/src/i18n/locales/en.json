@@ -837,7 +837,17 @@
     "mismatch": "The two entries differ.",
     "added": "Account {name} added.",
     "changed": "{name}'s password changed.",
-    "removed": "Account {name} removed."
+    "removed": "Account {name} removed.",
+    "rights": "Account rights",
+    "rightsAll": "Every right",
+    "rightsSome": "{n} rights out of {total}",
+    "rightsHint": "What this account may drive, through the public address or an assistant. The local network keeps every right. A right taken away hides its devices and refuses their commands; its menu entry still shows for now."
+  },
+  "rights": {
+    "lights": "Lights", "covers": "Shutters and awnings", "access": "Gate, garage, windows", "heating": "Heating and fans",
+    "vehicles": "Vehicles and charger", "media": "Music and media", "cameras": "Cameras", "robots": "Robots", "pets": "Pets",
+    "energy": "Energy", "water": "Water", "weather": "Weather", "agenda": "Calendar", "school": "School", "shopping": "Shopping",
+    "automations": "Automations", "settings": "Settings (plugins, house)"
   },
   "agenda": {
     "modes": { "month": "Month", "week": "Week", "day": "Day" },

@@ -1,6 +1,6 @@
 # Notifications push (Web Push)
 
-> Dernière mise à jour : 2026-10-28
+> Dernière mise à jour : 2026-11-01
 > Sources : `packages/shared/src/push/push.ts`, `apps/server/src/core/push/{webpush,service,alerts,texts}.ts`, `apps/server/src/http/push.ts`, `apps/server/src/core/outbound.ts`, `apps/server/src/core/automations/runner.ts`, `apps/server/src/app.ts`, `apps/web/public/sw.js`, `apps/web/src/stores/push.ts`, `apps/web/src/components/settings/PushCard.vue`, tests `apps/server/src/core/push/push.test.ts` et `core/automations/runner.test.ts`, arbre de travail NON COMMITÉ du 2026-10-28 (après 610eff3)
 
 ## Ce que c'est, et pourquoi ce choix
@@ -122,3 +122,12 @@ et en, 1440 et 375 px sans débordement, rien ne bouge entre activé / désactiv
 les notifications), thème sombre, zooms 1,25 et 1,5. Tant que cela n'a pas été fait, le chemin
 complet jusqu'au service de push d'un navigateur réel n'est pas éprouvé : seul le chiffrement l'est,
 par le test de déchiffrement.
+
+### Mise à jour 2026-11-01 - une notification n'est envoyée qu'à qui y a droit
+
+`PushService` reçoit une dépendance facultative `rights` ([1_13](1_13_comptes-et-sessions.md), section du
+2026-11-01). `send(category)` saute l'abonnement d'un compte qui n'a pas le droit de la catégorie
+(`RIGHT_OF_NOTIFY_CATEGORY`, `packages/shared/src/rights/rights.ts` ; les alertes de plugins demandent
+`settings`). **L'abonnement est gardé**, pas supprimé : un droit rendu reprend les notifications sans
+se réabonner. `sendTo` (le bouton d'essai) n'est pas filtré : il écrit à l'appareil qui le demande. Sans
+liste de droits (réseau local, compte non limité), rien ne change. Test : `core/push/push.test.ts`.
