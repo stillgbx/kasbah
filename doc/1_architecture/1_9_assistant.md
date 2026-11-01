@@ -1,7 +1,7 @@
 # Assistant (« Demander à Kasbah »)
 
-> Dernière mise à jour : 2026-10-31
-> Sources : `apps/web/src/api/demoAssistant.ts`, `apps/server/src/assistant/{assistant,engines}.ts`, tests `apps/server/src/assistant/assistant.test.ts`, `apps/server/src/mcp/auth.ts` (`runToken`), `apps/server/src/app.ts`, `apps/web/src/composables/useAssistant.ts`, `apps/web/src/components/layout/{AssistantReply,SearchPalette,PageHeader}.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.ts`, `apps/android/app/src/main/kotlin/org/kasbah/auto/VoiceScreen.kt`, session du 2026-10-22
+> Dernière mise à jour : 2026-11-01
+> Sources : `apps/web/src/api/demoAssistant.ts`, `apps/server/src/assistant/{assistant,engines}.ts`, tests `apps/server/src/assistant/assistant.test.ts`, `apps/server/src/mcp/auth.ts` (`runToken`), `apps/server/src/app.ts`, `apps/web/src/composables/useAssistant.ts`, `apps/web/src/components/layout/{AssistantReply,SearchPalette,PageHeader}.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/views/AskView.vue`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.ts`, `apps/android/app/src/main/kotlin/org/kasbah/auto/VoiceScreen.kt`, session du 2026-10-22
 
 ## Ce que c'est
 
@@ -267,3 +267,45 @@ disaient vrai à l'écriture.
    faire une icône à part.
 6. Toucher « Demander » : palette ouverte à l'écoute, clavier baissé ; parler, l'instruction part à la
    fin de la phrase.
+
+### Mise à jour 2026-11-01 — une page à part, `/ask`
+
+Le raccourci arrivait sur la vue Maison, avec la palette par-dessus : la scène 3D se construisait
+avant tout, d'où un petit délai à l'affichage. À la demande de l'utilisateur, il ouvre maintenant une
+**page à lui**, qui ne charge pas la scène. Les mises à jour du 2026-10-31 (palette ouverte par
+`?ask`, champ focalisé même au doigt) disaient vrai pour le commit de ce jour-là ; la règle d'écoute
+directe (« bis ») et la mise en route (« ter ») restent valables.
+
+- **Adresse** : le manifest pointe sur `./ask` (`apps/web/public/manifest.webmanifest`). Route `ask`
+  (`apps/web/src/router/index.ts`), vue `views/AskView.vue`, **sans entrée dans le rail** mais
+  accessible par son adresse. Le **rail reste** (la barre du bas sur un téléphone en portrait) : depuis
+  cette page, on va aux autres vues d'un toucher. Une première version sans rail a été écartée par
+  l'utilisateur pour cette raison.
+- **L'ancienne adresse** `/?ask&source=shortcut` (manifest pas encore relu par Chrome) est renvoyée
+  vers `/ask` par le `beforeEnter` de la route `home`, avant tout chargement de la vue Maison. La
+  palette ne regarde plus `?ask` ; `canListenAlone()` passe de `SearchPalette.vue` à
+  `composables/useVoiceInput.ts`, exportée.
+- **Mise en page** (de haut en bas, quatre rangées dont trois fixes) : le titre « Demander à Kasbah »
+  en petit ; un grand micro rond (120 px) et une ligne d'état sous lui, toujours présente (« Appuyez
+  pour parler », « J'écoute… », « Transcription… », « Appuyez pour arrêter la lecture », « Je n'ai rien
+  entendu », ou « Micro indisponible : tapez votre demande. » sans plugin `transcription`) ; un champ
+  fin « Ou tapez votre demande » (Entrée ou la touche d'envoi du clavier, `enterkeyhint="send"`, le
+  champ se vide : l'instruction s'affiche en tête de la réponse) ; puis `AssistantReply.vue` dans le
+  reste de la hauteur, qui défile à l'intérieur (actions, réponse, « Réécouter »). Écoute = anneau
+  rouge en `box-shadow` animé : rien ne bouge. Écran bas (≤ 560 px de haut : téléphone en paysage,
+  ordinateur zoomé) : micro de 80 px et rangée d'écoute resserrée, sinon il restait 19 px à la réponse.
+- **À l'arrivée** : écoute tout de suite si `canListenAlone()` (même règle que la mise à jour « bis ») ;
+  sinon, **au doigt, le champ n'est plus focalisé** : le clavier cacherait le micro, devenu le geste
+  principal ; au pointeur fin, le champ prend le focus.
+- **Ce qui se charge encore** : `stores/settings.ts` et `stores/house.ts` importent des constantes de
+  `three/` (styles, ambiances, qualité, espèces du jardin) ; du code three.js est donc téléchargé sur
+  toutes les pages, `/ask` comprise. La scène, elle, n'est pas construite (aucun `canvas`).
+
+Tests : `views/AskView.test.ts` (3 : permission accordée → écoute ; `prompt` → pas de `getUserMedia`,
+micro en attente ; instruction tapée → assistant appelé, champ vidé, réponse affichée), contrôle
+négatif fait ; `SearchPalette.shortcut.test.ts` et les deux tests `?ask` de `SearchPalette.test.ts`
+retirés avec le code qu'ils couvraient. Preview sur le mock : `/?ask&source=shortcut` arrive sur
+`/ask` sans `canvas` ; positions mesurées avant et après une réponse de sept actions, identiques, à
+375 × 812 (barre du bas), 812 × 375 (rail de 60 px, 139 px pour la réponse), 1 280 × 800 et
+853 × 533 (zoom 1,5) ; clair et sombre, fr et en ; ni débordement ni erreur console. Non joués : la
+dictée (le panneau navigateur refuse le micro) et « Réécouter » (le mock n'a pas de réponse parlée).

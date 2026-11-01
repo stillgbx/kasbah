@@ -1,6 +1,6 @@
 # Production
 
-> Dernière mise à jour : 2026-10-31
+> Dernière mise à jour : 2026-11-01
 > Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts`, `site/`, `.github/workflows/pages.yml`, `apps/web/src/stores/push.ts` (2026-10-29)
 
 ## Build
@@ -652,3 +652,12 @@ l'icône de l'app installée, raccourci à glisser sur l'écran d'accueil. Ce qu
   démo retire le manifest (`demoPage()` de `vite.config.ts`) : pas de raccourci sur Pages.
 
 Sources : `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/shortcut-ask*.{svg,png}`.
+
+## Mise à jour 2026-11-01 — le raccourci pointe sur `./ask`
+
+L'adresse du raccourci passe de `./?ask&source=shortcut` à `./ask`, une page à part sans scène 3D
+(`../1_architecture/1_9_assistant.md`, mise à jour du 2026-11-01). Rien à faire côté serveur : `/ask`
+est servie par le repli SPA comme toute route de l'app. Un téléphone dont Chrome n'a pas encore relu
+le manifest ouvre l'ancienne adresse, que le routeur renvoie vers `/ask`.
+
+Sources : `apps/web/public/manifest.webmanifest`, `apps/web/src/router/index.ts`.

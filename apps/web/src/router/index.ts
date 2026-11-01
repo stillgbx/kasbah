@@ -8,7 +8,11 @@ if (location.hash.startsWith('#/')) history.replaceState(history.state, '', loca
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    { path: '/', name: 'home', component: () => import('../views/HomeView.vue') },
+    // `/?ask`: the app shortcut's former address, kept by a manifest Chrome has not read again yet
+    { path: '/', name: 'home', component: () => import('../views/HomeView.vue'), beforeEnter: (to) => ('ask' in to.query ? { name: 'ask' } : true) },
+    // "Ask Kasbah", the installed app's shortcut: a page of its own, without the 3D scene, so it opens
+    // at once. The rail stays (the other views are a touch away); no rail entry leads to it.
+    { path: '/ask', name: 'ask', component: () => import('../views/AskView.vue') },
     { path: '/lights', name: 'lights', component: () => import('../views/LightsView.vue') },
     { path: '/covers', name: 'covers', component: () => import('../views/CoversView.vue') },
     { path: '/cameras', name: 'cameras', component: () => import('../views/CamerasView.vue') },

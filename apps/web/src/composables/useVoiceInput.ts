@@ -1,4 +1,4 @@
-import { onBeforeUnmount, ref } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getTransport } from '../api'
 import { ApiRequestError } from '../api/transport'
@@ -46,6 +46,19 @@ const speech = ref(false)
 /** `autoSend` sub-item on: listening stops by itself at the end of the sentence. */
 const autoSend = ref(false)
 let asked = false
+
+/**
+ * Without a touch (the app's shortcut), the microphone opens only on a secure page, transcription on,
+ * and its permission already given (no prompt). Waits for the plugin's status, which `useVoiceInput` requests.
+ */
+export async function canListenAlone(): Promise<boolean> {
+  if (!window.isSecureContext) return false
+  if (ready.value === null) await new Promise<void>((resolve) => { const unwatch = watch(ready, () => { unwatch(); resolve() }) })
+  if (!ready.value) return false
+  try {
+    return (await navigator.permissions.query({ name: 'microphone' })).state === 'granted'
+  } catch { return false } // a browser that does not know this permission
+}
 
 /**
  * `onText` receives the heard text; if it returns (or promises) the assistant's reply, it is said

@@ -13,11 +13,10 @@ import SearchPalette from './SearchPalette.vue'
 // to the House view then selects (in that order, otherwise the URL cancels the navigation),
 // and requests the panel to open; a page, for its part, only navigates.
 
-const route = { name: 'music' as string, query: {} as Record<string, string | null> }
+const route = { name: 'music' as string }
 const calls: string[] = []
 const push = vi.fn(async (to: { name: string }) => { calls.push(`push:${to.name}`); route.name = to.name })
-const replace = vi.fn(async (to: { query: Record<string, string | null> }) => { route.query = to.query })
-vi.mock('vue-router', () => ({ useRouter: () => ({ push, replace }), useRoute: () => route }))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push }), useRoute: () => route }))
 
 const ctrlK = () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
 
@@ -32,10 +31,8 @@ describe('SearchPalette', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     route.name = 'music'
-    route.query = {}
     calls.length = 0
     push.mockClear()
-    replace.mockClear()
   })
 
   it('ignores a keydown without a key (Chrome autofill)', async () => {
@@ -78,30 +75,6 @@ describe('SearchPalette', () => {
       expect(focus).not.toHaveBeenCalled()
       w.unmount()
     })
-  })
-
-  it('the app shortcut (?ask&source=shortcut) opens it focused, even by finger, and clears its parameters', async () => {
-    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('coarse') }))
-    const focus = vi.spyOn(HTMLInputElement.prototype, 'focus')
-    route.name = 'home'
-    route.query = { ask: null, source: 'shortcut', room: 'r1' }
-    const { w } = await setup()
-    await flushPromises()
-    expect(w.find('.palette input').exists()).toBe(true)
-    expect(focus).toHaveBeenCalled()
-    expect(replace).toHaveBeenCalledWith({ query: { room: 'r1' } })
-    w.unmount()
-    focus.mockRestore()
-    vi.unstubAllGlobals()
-  })
-
-  it('without ?ask, stays closed and leaves the URL alone', async () => {
-    route.query = { room: 'r1' }
-    const { w } = await setup()
-    await flushPromises()
-    expect(w.find('.palette').exists()).toBe(false)
-    expect(replace).not.toHaveBeenCalled()
-    w.unmount()
   })
 
   it('from another page, goes back to the house BEFORE selecting, then opens the panel', async () => {

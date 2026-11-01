@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-01] update | Raccourci « Demander à Kasbah » : une page à part, `/ask`
+
+**Trigger** : demande de l'utilisateur : le raccourci de la PWA arrivait sur la vue Maison (délai de la scène 3D) ; il veut une page dédiée, écoute en grand, saisie discrète dessous, place pour les actions et la réponse, rail gardé.
+
+**Pages modified** :
+- 1_architecture/1_9_assistant.md - section datée 2026-11-01 : route `/ask` sans scène ni entrée de rail, ancienne adresse renvoyée par `beforeEnter`, `canListenAlone()` déplacée, mise en page à quatre rangées et version écran bas, focus au doigt abandonné, three.js encore téléchargé par les stores, tests et mesures ; sources.
+- 5_setup/5_2_production.md - section datée : adresse du raccourci `./ask`, repli SPA, ancienne adresse redirigée.
+
+**Index** : catalogues 1_architecture et 5_setup (dates), index.md régénéré.
+
 ## [2026-11-01] update | Droits par compte, phases 1 et 2 (écritures, lectures, WebSocket, push)
 
 **Trigger** : fonctionnalité livrée, code non encore commité : choisir à quoi chaque compte a droit (un interrupteur par domaine), blocages côté serveur, liste pliable sous chaque compte dans la carte Comptes.
