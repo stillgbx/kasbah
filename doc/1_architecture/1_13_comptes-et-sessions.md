@@ -1,7 +1,7 @@
 # Comptes et sessions
 
 > Dernière mise à jour : 2026-11-01
-> Sources : `apps/server/src/http/rights.ts`, `packages/shared/src/rights/rights.ts`, `apps/server/src/http/session.ts`, `apps/server/src/http/static.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/music/sources.ts`, `apps/server/src/plugins/claude/index.ts`, `apps/server/src/assistant/assistant.ts` ; pages citées plus bas
+> Sources : `apps/server/src/http/rights.ts`, `packages/shared/src/rights/rights.ts`, `apps/server/src/http/session.ts`, `apps/web/src/stores/session.ts`, `apps/web/src/lib/navItems.ts`, `apps/web/src/views/NoRightView.vue`, `apps/server/src/http/static.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/music/sources.ts`, `apps/server/src/plugins/claude/index.ts`, `apps/server/src/assistant/assistant.ts` ; pages citées plus bas
 
 Page de synthèse, écrite au lint du 2026-10-13 : le sujet était dispersé entre le serveur MCP, la
 configuration, les Réglages et le lecteur musique. Elle décrit l'état du code à cette date et renvoie aux
@@ -107,7 +107,8 @@ reste plus stricte (pas d'IP). Tests : `mcp/public-host.test.ts`.
 - **Origine exigée** (celle de `MCP_PUBLIC_URL`) sur toute écriture et toute demande de WebSocket, `/ws`
   comme les flux des caméras : les autres services publiés sous le même domaine sont du même *site*,
   SameSite ne les sépare pas. Sinon 403 `BAD_ORIGIN`.
-- `GET /api/session` rend `{ user }` (`null` sur le réseau local).
+- `GET /api/session` rend `{ user }` (`null` sur le réseau local). *(Complété le 2026-11-01 : plus `rights`
+  quand le compte a une liste, voir la dernière section de la page.)*
 - La page de connexion est rendue par le serveur, en français seulement, comme celle du MCP.
 
 ## Les échecs de connexion (`LoginGuard`, `mcp/auth.ts`)
@@ -333,10 +334,52 @@ les routes de l'app au nom du compte. C'est vrai de la plupart (`call` passe par
 ou l'hôte, sans route : le hook ne les voit pas. Ils vérifient donc eux-mêmes (`mayUse`, message `NO_RIGHT`
 en français, `mcp/server.ts`). Voir [1_7](1_7_serveur-mcp.md).
 
-**Reste à faire (phase 3).** Masquer dans l'app les entrées de menu, vues et marqueurs 3D interdits
+**Reste à faire (phase 3).** *(Faite le soir même : section suivante.)* Masquer dans l'app les entrées de menu, vues et marqueurs 3D interdits
 (exposer les droits dans `GET /api/session`). Aujourd'hui une vue interdite reste dans le menu, **vide**.
 
 Vérifié : suite complète verte (2 610 tests), typecheck et lint globaux. Tests : `http/rights.test.ts`,
 `mcp/users-routes.test.ts`, `mcp/server.test.ts` (« rights of the account »), `core/push/push.test.ts`,
 `test/integration.test.ts` (« rights of an account » : commande refusée, liste filtrée, vrai WebSocket
 filtré, nouveau snapshot après changement, fermeture 1008). L'interface : [4_7](../4_ui/4_7_reglages.md).
+
+### Mise à jour 2026-11-01 (soir) - phase 3 : l'app cache ce que le compte ne peut pas utiliser
+
+Constat sur un compte limité, sous l'adresse publique : toutes les icônes restaient dans le rail, une vue
+interdite s'ouvrait **vide** avec un toast brut `errors.NO_RIGHT` (clé non traduite), et Réglages montrait
+tous les plugins. Le serveur refusait déjà tout (phases 1 et 2) : il ne manquait que l'écran.
+
+- **Le serveur dit les droits** : `GET /api/session` rend `{ user, rights? }` (`http/session.ts`).
+  `rights` n'est là que si le compte a une liste ; absent = tous les droits, comme sur le réseau local
+  (`user: null`, jamais de `rights`). Test : `http/session.test.ts`.
+- **Un store** `stores/session.ts` : `user`, `rights` (`undefined` = tous), `ready()` (lu une seule fois),
+  `may(right)`. Il est relu à chaque snapshot WebSocket **sauf le premier** : le hub renvoie un snapshot
+  quand les droits d'un compte changent (phase 2), donc l'écran ouvert suit sans rechargement. Branché dans
+  `devices.start()` (`onMessage`).
+- **Le routeur attend** (`router/index.ts`, `beforeEach` → `session.ready()`) avant la première vue : sans
+  cela, une vue interdite serait montée un instant, ses requêtes partiraient et le serveur répondrait
+  `NO_RIGHT`.
+- **`lib/navItems.ts`** : chaque entrée porte `rights?: Right[]` (**un seul** droit suffit). **Ouvrants =
+  covers OU access**, parce que le portail et le garage y vivent : un compte qui n'a que `access` doit les
+  voir. Maison, Réglages, TENS (personnel, local au poste) et Demander n'exigent aucun droit. Helpers
+  `navAllowed(item, rights)`, `navItemOf(route)` (lit `meta.nav`, pour les sous-pages comme l'édition d'une
+  automatisation) et `visibleNavItems(..., rights)`. Le rail (`NavRail`), la recherche (`useSearch`) et la
+  carte « Barre de navigation » de Réglages (`NavOrderCard`) filtrent avec.
+- **Une vue interdite ouverte par son adresse** (favori, lien) est remplacée par `NoRightView` dans
+  `App.vue`, **dans le même `keep-alive`** pour ne pas perdre le cache de la vue Maison : « Le compte X
+  n'a pas accès à « Vue » », l'aide « Les droits d'un compte se règlent depuis le réseau local, dans
+  Réglages → Comptes », et un bouton « Retour à la maison ». La vue n'est jamais montée.
+- **Réglages** sans le droit `settings` : voir [4_7](../4_ui/4_7_reglages.md).
+- **i18n** : `errors.NO_RIGHT` (fr, en) pour les refus qui passent quand même, objet `noRight.*`, aide
+  `mcpUsers.rightsHint` réécrite (elle disait que l'entrée de menu restait affichée).
+
+**Écarté** : griser l'entrée plutôt que la masquer. L'utilisateur voulait que les icônes disparaissent.
+**Limite qui reste** : les marqueurs 3D de la vue Maison montrent encore l'emplacement des appareils cachés,
+parce que `/api/house` les décrit (limite déjà notée en phase 2) ; seuls leur état et leurs commandes sont
+refusés.
+
+Vérifié : tests des dossiers touchés et suite complète, typecheck, lint ; preview mock en forçant les droits
+dans le store pinia (rail réduit à 8 entrées, page de refus centrée en fr et en, 375 px sans débordement,
+Réglages réduits, console sans erreur). **Non joué** : un vrai compte limité sous l'adresse publique (le mock
+n'a pas de session, les droits y ont été posés à la main). Piège d'outillage : GitNexus `impact` a rendu des
+résultats incohérents pour `createAppSession` et `visibleNavItems` (même CRITICAL, mêmes 661 appelants
+directs) ; les appelants ont été vérifiés par recherche texte.

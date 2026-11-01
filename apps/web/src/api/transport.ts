@@ -778,8 +778,11 @@ export interface Transport {
   musicProgress(body: { source: string; id: string; positionS: number; durationS?: number; ended?: boolean }): Promise<void>
   /** Clear the queue: the current track continues, alone. */
   musicQueueClear(deviceId: string): Promise<MusicQueue>
-  /** The session's account, under the public address; `null` on the local network (no session). */
-  session(): Promise<{ user: string | null }>
+  /**
+   * The session's account, under the public address; `null` on the local network (no session).
+   * `rights` only when the account has a list (absent = every right).
+   */
+  session(): Promise<{ user: string | null; rights?: Right[] }>
   /** The Claude plan (`claude` plugin) of the current account. */
   claudeAccount(): Promise<ClaudeAccount>
   /** Stores the `claude setup-token` token for the current account; it never comes back. */

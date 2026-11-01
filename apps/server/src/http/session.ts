@@ -195,7 +195,12 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
 
     routes(app) {
       app.decorateRequest('sessionUser', null)
-      app.get('/api/session', async (req) => ({ user: req.sessionUser }))
+      // `rights` only when the account has a list: the app hides what it may not use (the server
+      // refuses it anyway, `http/rights.ts`)
+      app.get('/api/session', async (req) => {
+        const rights = req.sessionUser ? (await users()).users.find((u) => u.name === req.sessionUser)?.rights : undefined
+        return { user: req.sessionUser, ...(rights ? { rights } : {}) }
+      })
 
       void app.register(async (sub) => {
         sub.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_req, body, done) => {

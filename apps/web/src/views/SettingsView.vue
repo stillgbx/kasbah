@@ -22,6 +22,7 @@ import { useHouseStore } from '../stores/house'
 import { usePluginsStore } from '../stores/plugins'
 import { usePropertiesStore } from '../stores/properties'
 import { useLocalPluginsStore } from '../stores/localPlugins'
+import { useSessionStore } from '../stores/session'
 import { browserBluetooth } from '../lib/tens/link'
 import { WEATHER_CONDITIONS } from '@kasbah/shared'
 import { conditionIcon } from '../lib/weather'
@@ -56,6 +57,10 @@ const house = useHouseStore()
 const { t } = useI18n()
 onMounted(() => { void devices.refreshHealth(); void plugins.load() })
 const router = useRouter()
+// An account without the "settings" right (Settings → Accounts) keeps only this screen's choices and
+// its own (push, assistant, sign-out): what writes the house or its plugins would be refused.
+const session = useSessionStore()
+const houseSettings = computed(() => session.may('settings'))
 
 /** Active / implemented in the inventory, plus the device set seen at time T. */
 const pluginsStats = computed(() => {
@@ -220,7 +225,7 @@ const houseStats = computed(() => {
                 <v-switch :model-value="settings.sceneDebug" hide-details density="compact"
                           @update:model-value="(v: boolean | null) => settings.setSceneDebug(v === true)" />
               </div>
-              <div class="auto-row auto-row--default">
+              <div v-if="houseSettings" class="auto-row auto-row--default">
                 <div class="min0">
                   <div class="auto-row__name">{{ $t('render.tuning.title') }}</div>
                   <div class="muted small">{{ $t('render.tuning.hint') }}</div>
@@ -278,7 +283,7 @@ const houseStats = computed(() => {
           <!-- approximate survey: openings are adjusted from the House view once armed here,
                never through a floating button on a wall-mounted tablet where a sliding finger must
                not move anything by accident -->
-          <section class="card block">
+          <section v-if="houseSettings" class="card block">
             <div class="block__title">{{ $t('settings.editMode') }}</div>
             <!-- a demo is for looking at: we duplicate it to modify it (the server refuses any write) -->
             <div v-if="properties.isDemo" class="auto-row">
@@ -305,13 +310,13 @@ const houseStats = computed(() => {
               <button type="button" class="pill pill--sm" @click="openRelief()">{{ $t('relief.open') }}</button>
             </div>
           </section>
-          <section v-if="properties.hasMenu" class="card block">
+          <section v-if="properties.hasMenu && houseSettings" class="card block">
             <div class="block__title">{{ $t('properties.title') }}</div>
             <ModeSwitch v-if="properties.mode" />
             <PropertyList />
             <div class="muted small">{{ $t(properties.canCreate ? 'properties.hintCreate' : 'properties.hint') }}</div>
           </section>
-          <section class="card block">
+          <section v-if="houseSettings" class="card block">
             <div class="block__title">{{ $t('settings.gps') }}</div>
             <div class="mono">{{ gps }}</div>
             <div class="muted small">{{ houseStats }}</div>
@@ -355,20 +360,20 @@ const houseStats = computed(() => {
         <AssistantCard />
       </section>
       <!-- the house's devices published on the local network for Alexa, Google Home or Apple Home -->
-      <section class="card block settings__plugins">
+      <section v-if="houseSettings" class="card block settings__plugins">
         <div class="block__title">{{ $t('matter.title') }}</div>
         <p class="muted small plugins__hint">{{ $t('matter.hint') }}</p>
         <MatterCard />
       </section>
       <!-- the server version, and its update by the supervisor (local network only) -->
-      <section class="card block settings__plugins">
+      <section v-if="houseSettings" class="card block settings__plugins">
         <div class="block__title">{{ $t('serverUpdate.title') }}</div>
         <p class="muted small plugins__hint">{{ $t('serverUpdate.hint') }}</p>
         <ServerUpdateCard />
       </section>
       <!-- the vendors close the page: a full-width list, where each row has room to
            say name, status and switch without squeezing -->
-      <section class="card block settings__plugins">
+      <section v-if="houseSettings" class="card block settings__plugins">
         <div class="plugins__head">
           <div class="block__title">{{ $t('settings.plugins') }}</div>
           <div v-if="pluginsStats" class="muted small">{{ pluginsStats }}</div>

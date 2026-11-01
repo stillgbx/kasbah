@@ -884,3 +884,7 @@ affiché.
   la connexion et à chaque ping de 15 s ; droits changés → nouveau snapshot, compte retiré → fermeture
   1008. Réseau local et compte sans liste : inchangé. Détail et limites (`/api/house` reste lisible) :
   [1_13](1_13_comptes-et-sessions.md), section du 2026-11-01.
+- **`GET /api/session` rend aussi `rights`** (phase 3) : `{ user, rights? }`, `rights` seulement si le compte
+  a une liste (absent = tous les droits ; réseau local : `user: null`, pas de `rights`). Le web s'en sert
+  pour cacher rail, vues et blocs de Réglages interdits (`apps/server/src/http/session.ts`,
+  `Transport.session()`). Voir [1_13](1_13_comptes-et-sessions.md), section « phase 3 ».

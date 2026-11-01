@@ -738,7 +738,7 @@
     "UNSUPPORTED_COMMAND": "{name} : commande non supportée.", "DEVICE_UNAVAILABLE": "{name} est indisponible.",
     "UPSTREAM_ERROR": "{name} : le service du fabricant a échoué.", "LOW_BATTERY": "{name} : batterie trop faible, le constructeur refuse de climatiser.", "RATE_LIMITED": "{name} : trop de commandes, patientez.",
     "NEEDS_PAIRING": "{name} : appairage requis.", "TIMEOUT": "{name} : pas de réponse.", "NOT_IMPLEMENTED": "{name} : plugin non implémenté.",
-    "INTERNAL": "{name} : erreur serveur.", "UNKNOWN": "{name} : {message}", "houseLoad": "Impossible de charger la maison : {message}"
+    "INTERNAL": "{name} : erreur serveur.", "NO_RIGHT": "{name} : ce compte n’a pas ce droit.", "UNKNOWN": "{name} : {message}", "houseLoad": "Impossible de charger la maison : {message}"
   },
   "scene": {
     "webglUnavailable": "La 3D n'est pas disponible sur cet appareil.",
@@ -842,8 +842,9 @@
     "rights": "Droits du compte",
     "rightsAll": "Tous les droits",
     "rightsSome": "{n} droits sur {total}",
-    "rightsHint": "Ce que ce compte peut piloter, depuis l'adresse publique ou par un assistant. Le réseau local garde tous les droits. Un droit retiré cache ses appareils et refuse leurs commandes ; son entrée de menu reste affichée pour l'instant."
+    "rightsHint": "Ce que ce compte peut piloter, depuis l'adresse publique ou par un assistant. Le réseau local garde tous les droits. Un droit retiré cache ses appareils et sa vue, et refuse leurs commandes. Sans « Réglages », la page Réglages ne garde que les choix de l'écran."
   },
+  "noRight": { "title": "Le compte {user} n’a pas accès à « {view} ».", "hint": "Les droits d’un compte se règlent depuis le réseau local, dans Réglages → Comptes.", "home": "Retour à la maison" },
   "rights": {
     "lights": "Lumières", "covers": "Volets et stores", "access": "Portail, garage, fenêtres", "heating": "Chauffage et ventilateurs",
     "vehicles": "Véhicules et borne", "media": "Musique et médias", "cameras": "Caméras", "robots": "Robots", "pets": "Animaux",

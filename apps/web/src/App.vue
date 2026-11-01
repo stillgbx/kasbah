@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
+import type { RouteLocationNormalizedLoaded } from 'vue-router'
+import { navAllowed, navItemOf } from './lib/navItems'
 import { useDevicesStore } from './stores/devices'
 import { useHouseStore } from './stores/house'
 import { useNotificationsStore } from './stores/notifications'
 import { usePropertiesStore } from './stores/properties'
+import { useSessionStore } from './stores/session'
 import AppUpdateBanner from './components/AppUpdateBanner.vue'
 import ConnectionBanner from './components/ConnectionBanner.vue'
 import NavRail from './components/layout/NavRail.vue'
 import SearchPalette from './components/layout/SearchPalette.vue'
 import NewPropertyDialog from './components/property/NewPropertyDialog.vue'
+import NoRightView from './views/NoRightView.vue'
 
 // Shell: navigation rail on the left (bar at the bottom on a portrait phone), LAID OVER the current view (it has no background or border: the
 // House view extends its 3D scene underneath, the other views shift by its width). Loads the house and
@@ -17,6 +21,12 @@ const house = useHouseStore()
 const devices = useDevicesStore()
 const notifications = useNotificationsStore()
 const properties = usePropertiesStore()
+const session = useSessionStore()
+/** A view the account may not use, opened by its address: a page that says so takes its place. */
+function forbidden(r: RouteLocationNormalizedLoaded) {
+  const item = navItemOf(r)
+  return !!item && !navAllowed(item, session.rights)
+}
 
 // the plugins' health is not pushed: read every minute, for the alerts of the rail (`stores/alerts`)
 let healthTimer: ReturnType<typeof setInterval> | undefined
@@ -32,9 +42,9 @@ onBeforeUnmount(() => { devices.stop(); clearInterval(healthTimer) })
   <v-app class="app-shell">
     <NavRail />
     <main class="app-main">
-      <router-view v-slot="{ Component }">
+      <router-view v-slot="{ Component, route: r }">
         <keep-alive include="HomeView">
-          <component :is="Component" />
+          <component :is="forbidden(r) ? NoRightView : Component" />
         </keep-alive>
       </router-view>
     </main>

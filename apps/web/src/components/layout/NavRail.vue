@@ -10,6 +10,7 @@ import { useLocalPluginsStore } from '../../stores/localPlugins'
 import { useSettingsStore } from '../../stores/settings'
 import { useAlertsStore } from '../../stores/alerts'
 import { usePropertiesStore } from '../../stores/properties'
+import { useSessionStore } from '../../stores/session'
 import PropertyList from './PropertyList.vue'
 
 // Navigation rail (72 px): the house's initials, views, then the settings at the very bottom. On a
@@ -31,9 +32,11 @@ const localPlugins = useLocalPluginsStore()
 // a feature turned off in Settings (the shopping list) leaves the rail; before the house
 // arrives, its default applies (on): no entry popping up at load
 const pluginOn = (id: string) => pluginSettingsOf(house.house?.plugins ?? {}, id).enabled
-// in the order chosen on this device (Settings → Navigation bar)
+// in the order chosen on this device (Settings → Navigation bar); a view the account may not use
+// leaves the rail too
 const settings = useSettingsStore()
-const items = computed(() => orderNavItems(visibleNavItems(localPlugins.isEnabled, pluginOn), settings.navOrder).filter((it) => it.name !== 'settings'))
+const session = useSessionStore()
+const items = computed(() => orderNavItems(visibleNavItems(localPlugins.isEnabled, pluginOn, session.rights), settings.navOrder).filter((it) => it.name !== 'settings'))
 const settingsItem = NAV_ITEMS.find((it) => it.name === 'settings')!
 
 // A pill on the icon of a view that has a pending alert. Being on the view is enough to see its

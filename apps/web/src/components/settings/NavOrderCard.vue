@@ -5,17 +5,19 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 import { FIXED_NAV, NAV_ITEMS, orderNavItems, visibleNavItems, type NavItem } from '../../lib/navItems'
 import { useHouseStore } from '../../stores/house'
 import { useLocalPluginsStore } from '../../stores/localPlugins'
+import { useSessionStore } from '../../stores/session'
 import { useSettingsStore } from '../../stores/settings'
 
 // The rail's order on THIS device (localStorage): the views are dragged by their handle, House and
 // Settings keep their place. Only the views the rail shows are listed; a hidden one (a local plugin
-// turned off, a feature turned off in the house) keeps its place in the saved order, ready for its return.
+// turned off, a feature turned off in the house, a view the account may not use) keeps its place in the saved order, ready for its return.
 const settings = useSettingsStore()
 const house = useHouseStore()
 const localPlugins = useLocalPluginsStore()
+const session = useSessionStore()
 const pluginOn = (id: string) => pluginSettingsOf(house.house?.plugins ?? {}, id).enabled
 const movable = (items: NavItem[]) => orderNavItems(items, settings.navOrder).filter((it) => !FIXED_NAV.includes(it.name))
-const shown = computed(() => movable(visibleNavItems(localPlugins.isEnabled, pluginOn)))
+const shown = computed(() => movable(visibleNavItems(localPlugins.isEnabled, pluginOn, session.rights)))
 const isDefault = computed(() => movable(NAV_ITEMS).map((it) => it.name).join() === NAV_ITEMS.map((it) => it.name).filter((n) => !FIXED_NAV.includes(n)).join())
 
 // Same gesture as the automations list: the list reorders under the finger, the order is saved

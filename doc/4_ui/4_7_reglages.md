@@ -463,3 +463,20 @@ garde et ce qu'il ne garde pas (réseau local non concerné, `/api/house` lisibl
 **Limite visible** : l'écran ne masque pas encore les vues interdites (phase 3) : une vue refusée reste dans
 le menu, vide. Vérifié en preview mock : rien ne bouge (`getBoundingClientRect` avant / après), pas de
 débordement à 1 / 1,25 / 1,5, en fr et en, à 375 px, thème sombre.
+
+### Mise à jour 2026-11-01 (soir) — Réglages sans le droit `settings`
+
+*(Remplace la « limite visible » de la section précédente : l'écran masque désormais les vues interdites, rail,
+recherche et carte « Barre de navigation » compris, voir [1_13](../1_architecture/1_13_comptes-et-sessions.md),
+section « phase 3 ».)*
+
+Un compte sans le droit `settings` ne voit plus ce que le serveur lui refuserait d'écrire (`SettingsView.vue`,
+`session.may('settings')`) : le banc de réglage de la lumière (`saveRenderTuning` écrit la maison), le Mode
+édition (et le relief), Propriété, l'Origine GPS, Matter, la Mise à jour du serveur et la liste des Plugins.
+**Restent** les choix de l'écran (apparence, langue, thème, barre de navigation, rendu 3D, plein écran, plugins
+locaux) et le personnel (notifications, Comptes = session et déconnexion, Assistant). Ces blocs sont retirés
+(`v-if`), pas grisés : même choix que pour le rail. Le texte d'aide des droits (`mcpUsers.rightsHint`) ne dit
+plus que l'entrée de menu reste affichée, et précise que sans « Réglages » la page ne garde que les choix de
+l'écran. Une vue interdite ouverte par son adresse affiche `NoRightView` (page centrée, bouton « Retour à la
+maison »). Vérifié en preview mock, droits forcés dans le store : Réglages réduits, fr et en, 375 px sans
+débordement. **Non joué** : un vrai compte limité.

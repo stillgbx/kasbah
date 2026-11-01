@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { NAV_ITEMS, orderNavItems, visibleNavItems } from './navItems'
+import { RIGHTS, type Right } from '@kasbah/shared'
+import { NAV_ITEMS, navItemOf, orderNavItems, visibleNavItems } from './navItems'
 
 describe('visibleNavItems', () => {
   it('hides a local plugin page until it is enabled on this device', () => {
@@ -15,6 +16,22 @@ describe('visibleNavItems', () => {
   it('hides a feature turned off in the house settings', () => {
     expect(visibleNavItems(() => false, (id) => id !== 'shopping').map((i) => i.name)).not.toContain('shopping')
     expect(visibleNavItems(() => false).map((i) => i.name)).toContain('shopping')
+  })
+
+  it("keeps only the views the account's rights open, House and Settings always", () => {
+    const names = (rights?: Right[]) => visibleNavItems(() => false, () => true, rights).map((i) => i.name)
+    expect(names(['lights', 'weather'])).toEqual(['home', 'lights', 'weather', 'settings'])
+    // the gate and the garage door live in the covers view
+    expect(names(['access'])).toEqual(['home', 'covers', 'settings'])
+    expect(names([])).toEqual(['home', 'settings'])
+    expect(names()).toEqual(names([...RIGHTS]))
+  })
+})
+
+describe('navItemOf', () => {
+  it('finds the view of a sub-page through meta.nav', () => {
+    expect(navItemOf({ name: 'automation-edit', meta: { nav: 'automations' } })?.rights).toEqual(['automations'])
+    expect(navItemOf({ name: 'ask', meta: {} })).toBeUndefined()
   })
 })
 

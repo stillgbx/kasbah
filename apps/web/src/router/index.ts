@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getTransport } from '../api'
+import { useSessionStore } from '../stores/session'
 
 // HTML5 history (no `#`): the Fastify server returns index.html for any GET outside /api and
 // /ws (SPA fallback), Vite does the same in dev. An old `/#/music` link is rewritten to `/music`.
@@ -39,6 +40,10 @@ export const router = createRouter({
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
+
+// The account's rights before the first view: one it may not use is not mounted, even for a moment
+// (`App.vue` shows `NoRightView` in its place).
+router.beforeEach(async () => { await useSessionStore().ready() })
 
 // A view that fails to load, under the public address, is often an ended session (the server
 // then refuses its files): we ask the API, which redirects to login if needed.

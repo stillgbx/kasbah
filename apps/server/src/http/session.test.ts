@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Fastify, { type FastifyInstance, type InjectOptions } from 'fastify'
@@ -110,6 +110,14 @@ it('opens a session through a protected __Host- cookie, and returns to where you
   expect((await req({ method: 'GET', url: '/api/devices', cookie: c })).statusCode).toBe(200)
   expect((await req({ method: 'GET', url: '/settings', cookie: c })).body).toBe('app')
   expect((await req({ method: 'GET', url: '/api/session', cookie: c })).json()).toEqual({ user: 'lou' })
+})
+
+it("gives the app the session account's rights, when it has a list", async () => {
+  const c = String((await login('lou', 'bon-mot-de-passe')).headers['set-cookie']).split(';')[0]!
+  const file = JSON.parse(readFileSync(usersFile, 'utf8')) as { users: { rights?: string[] }[] }
+  file.users[0]!.rights = ['lights', 'covers']
+  writeFileSync(usersFile, JSON.stringify(file))
+  expect((await req({ method: 'GET', url: '/api/session', cookie: c })).json()).toEqual({ user: 'lou', rights: ['lights', 'covers'] })
 })
 
 it('never redirects anywhere but the site after sign-in', async () => {

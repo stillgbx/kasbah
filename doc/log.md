@@ -7,6 +7,22 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-01] update | Droits par compte, phase 3 : l'app cache rail, vues et réglages interdits
+
+**Trigger** : code non commité. Constat sur un compte limité (adresse publique) : toutes les icônes dans le rail, vue interdite vide avec un toast `errors.NO_RIGHT` non traduit, Réglages montrant tous les plugins.
+
+**Pages modified** :
+- 1_architecture/1_13_comptes-et-sessions.md - section datée « phase 3 » (`rights` dans `/api/session`, store, attente du routeur, `navItems`, `NoRightView`, i18n, écarté : griser, limite : marqueurs 3D, vérifications, piège GitNexus) ; « Reste à faire (phase 3) » annoté comme fait ; puce `/api/session` complétée ; sources.
+- 1_architecture/1_3_protocole-rest-ws.md - `GET /api/session` rend `rights`.
+- 1_architecture/1_4_app-web.md - store `session`, `beforeEach`, `navItems`, `NoRightView` dans le `keep-alive`.
+- 4_ui/4_7_reglages.md - blocs masqués sans le droit `settings`, ce qui reste ; la « limite visible » du matin annotée comme levée.
+
+**Contradiction relevée** : 1_7 (« `GET /api/session` → `{ user }` ») et la section 2026-10-06 de 1_4 (`session(): Promise<{ user }>`) sont dépassées sur la forme de la réponse ; laissées telles quelles (historique daté), complétées par renvoi dans 1_3, 1_4 et 1_13.
+
+**Trou** : jamais essayé avec un vrai compte limité sous l'adresse publique (le mock n'a pas de session).
+
+**Index** : catalogues 1_architecture (1_4 : date) ; 1_3, 1_13 et 4_7 déjà datés du 2026-11-01 ; index.md régénéré.
+
 ## [2026-11-01] update | Raccourci « Demander à Kasbah » : une page à part, `/ask`
 
 **Trigger** : demande de l'utilisateur : le raccourci de la PWA arrivait sur la vue Maison (délai de la scène 3D) ; il veut une page dédiée, écoute en grand, saisie discrète dessous, place pour les actions et la réponse, rail gardé.

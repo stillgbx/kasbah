@@ -738,7 +738,7 @@
     "UNSUPPORTED_COMMAND": "{name}: unsupported command.", "DEVICE_UNAVAILABLE": "{name} is unavailable.",
     "UPSTREAM_ERROR": "{name}: the vendor service failed.", "LOW_BATTERY": "{name}: battery too low, the manufacturer refuses to run the climate.", "RATE_LIMITED": "{name}: too many commands, please wait.",
     "NEEDS_PAIRING": "{name}: pairing required.", "TIMEOUT": "{name}: no response.", "NOT_IMPLEMENTED": "{name}: plugin not implemented.",
-    "INTERNAL": "{name}: server error.", "UNKNOWN": "{name}: {message}", "houseLoad": "Could not load the house: {message}"
+    "INTERNAL": "{name}: server error.", "NO_RIGHT": "{name}: this account does not have that right.", "UNKNOWN": "{name}: {message}", "houseLoad": "Could not load the house: {message}"
   },
   "scene": {
     "webglUnavailable": "3D is not available on this device.",
@@ -842,8 +842,9 @@
     "rights": "Account rights",
     "rightsAll": "Every right",
     "rightsSome": "{n} rights out of {total}",
-    "rightsHint": "What this account may drive, through the public address or an assistant. The local network keeps every right. A right taken away hides its devices and refuses their commands; its menu entry still shows for now."
+    "rightsHint": "What this account may drive, through the public address or an assistant. The local network keeps every right. A right taken away hides its devices and its view, and refuses their commands. Without “Settings”, the Settings page keeps only this screen’s choices."
   },
+  "noRight": { "title": "The {user} account has no access to “{view}”.", "hint": "An account’s rights are set from the local network, in Settings → Accounts.", "home": "Back to the house" },
   "rights": {
     "lights": "Lights", "covers": "Shutters and awnings", "access": "Gate, garage, windows", "heating": "Heating and fans",
     "vehicles": "Vehicles and charger", "media": "Music and media", "cameras": "Cameras", "robots": "Robots", "pets": "Pets",

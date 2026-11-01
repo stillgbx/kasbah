@@ -1,5 +1,5 @@
 import { shoppingResponseSchema, type ShoppingList, apiErrorSchema, automationResponseSchema, automationRunResponseSchema, automationsResponseSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, propertiesResponseSchema, propertyCreatedSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, deviceEnergyDaysSchema, deviceReleaseNotesSchema, siteMapSchema, type SiteMap, type AutomationBody, type AutomationEntry, type AutomationRun, type CommandInput, type DeviceConsumption, type DeviceEnergyDays, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type MatterSettingsPatch, type MatterStatus, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
-import { parseDeviceId } from '@kasbah/shared'
+import { parseDeviceId, type Right } from '@kasbah/shared'
 import { t } from '../i18n'
 import { ApiRequestError, type AgendaCalendar, type AssistantEvent, type ClaudeAccount, type HaEntities,type TranscriptionSettings, type AssistantLogEntry, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type McpUser, type SystemVersion, type UpdateStatus, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultContract, type RenaultStatus, type SchoolData, type TeslaStatus, type Transport, type TransportHandlers, type WeatherAlerts, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicLastPlayed, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
 
@@ -417,7 +417,7 @@ export function createHttpTransport(base = ''): Transport {
     musicQueueClear: (deviceId) => request(
       `${base}/api/music/queue?deviceId=${encodeURIComponent(deviceId)}`, { method: 'DELETE' }, (j) => j as MusicQueue,
     ),
-    session: () => request(`${base}/api/session`, undefined, (j) => j as { user: string | null }),
+    session: () => request(`${base}/api/session`, undefined, (j) => j as { user: string | null; rights?: Right[] }),
     claudeAccount: () => request(`${base}/api/plugins/claude/account`, undefined, (j) => j as ClaudeAccount),
     claudeSetToken: (token) => request(`${base}/api/plugins/claude/account`, json('PUT', { token }), (j) => j as ClaudeAccount),
     claudeClearToken: () => request(`${base}/api/plugins/claude/account`, { method: 'DELETE' }, (j) => j as ClaudeAccount),

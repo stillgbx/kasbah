@@ -1,6 +1,6 @@
 # Application web : stores, transport, routage
 
-> Dernière mise à jour : 2026-10-06
+> Dernière mise à jour : 2026-11-01
 > Sources : `apps/web/src/main.ts`, `apps/web/src/stores/*.ts`, `apps/web/src/api/*.ts`, `apps/web/src/router/index.ts`, `apps/web/src/lib/optimistic.ts`, `apps/web/src/views/LightsView.vue`, `apps/web/src/components/home/PlacementControl.vue`, `apps/web/src/stores/scenes.ts`, `apps/web/src/lib/deviceState.ts`, `apps/web/src/lib/cover.ts`, `apps/web/src/components/devices/ForgetDeviceButton.vue`, `apps/web/src/lib/audioRouting.ts`, `apps/web/src/stores/house.ts`, `apps/web/src/composables/useRoomLights.ts`, `apps/web/src/views/VehiclesView.vue`, `apps/web/src/components/vehicles/VehicleMap.vue`, `apps/web/src/lib/map.ts`, `apps/web/src/composables/useConsumption.ts`, `apps/web/src/lib/consumption.ts`, `apps/web/src/stores/settings.ts`, `packages/shared/src/house/openings.ts`, `apps/web/src/composables/useMediaPosition.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/stores/automations.ts`, `apps/web/src/lib/automations.ts`, `apps/web/src/composables/useAutomationNames.ts`
 
 ## Démarrage (`main.ts`)
@@ -928,3 +928,22 @@ Sous l'adresse publique (voir `1_7_serveur-mcp.md`), une session peut finir sous
 d'origine (morceaux JS recevant la page de connexion) : `../6_faq/6_1_pieges-runtime.md`, 2026-10-06.
 
 Sources : `apps/web/src/api/{httpTransport,transport,mockTransport}.ts`, `apps/web/src/router/index.ts`.
+
+### Mise à jour 2026-11-01 — le store `session`, la garde du routeur, `NoRightView`
+
+Les droits du compte (`GET /api/session`, `{ user, rights? }`) pilotent ce que l'app montre. Raisons et
+choix écartés : [1_13](1_13_comptes-et-sessions.md), section « phase 3 ».
+
+- **`stores/session.ts`** : `user`, `rights` (`undefined` = tous), `ready()` (lecture unique, partagée), `may(right)`.
+  `apply(msg)` relit la session à chaque snapshot WebSocket **sauf le premier** (le hub en renvoie un quand
+  les droits changent) ; il est appelé par `devices.start()` avec les autres stores. En cas d'erreur de
+  lecture, les valeurs restent comme elles étaient : le serveur refuse de toute façon.
+- **`router/index.ts`** : `beforeEach` attend `session.ready()`, pour qu'une vue interdite ne soit **jamais
+  montée** (ses requêtes partiraient et recevraient `NO_RIGHT`).
+- **`lib/navItems.ts`** : `rights?: Right[]` par entrée (un droit suffit ; Ouvrants = covers OU access),
+  `navAllowed`, `navItemOf(route)` (via `meta.nav` pour les sous-pages), `visibleNavItems(..., rights)`.
+  Filtrent le rail, la recherche et la carte « Barre de navigation ».
+- **`App.vue`** : si la route est interdite, `NoRightView` prend la place de la vue **dans le même `keep-alive`**
+  (le cache de `HomeView` survit). `Transport.session()` rend `{ user, rights? }`.
+
+Sources : `apps/web/src/{stores/session,lib/navItems,router/index,App,api/transport}.ts`, `views/NoRightView.vue`.

@@ -10,6 +10,7 @@ import type { IconName } from '../lib/strokeIcons'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 import { useScenesStore } from '../stores/scenes'
+import { useSessionStore } from '../stores/session'
 
 // What the House view's search can reach, and what validating a result does. Nothing
 // is indexed: the entities already live in the stores, we flatten them into `SearchEntry` (the
@@ -75,6 +76,7 @@ export function useSearch(query: Ref<string>, { withHome = false } = {}) {
   const scenes = useScenesStore()
   const router = useRouter()
   const localPlugins = useLocalPluginsStore()
+  const session = useSessionStore()
   const { t } = useI18n()
 
   const entries = computed<SearchEntry[]>(() => {
@@ -142,7 +144,7 @@ export function useSearch(query: Ref<string>, { withHome = false } = {}) {
       })
     }
 
-    for (const item of visibleNavItems(localPlugins.isEnabled, (id) => pluginSettingsOf(house.house?.plugins ?? {}, id).enabled)) {
+    for (const item of visibleNavItems(localPlugins.isEnabled, (id) => pluginSettingsOf(house.house?.plugins ?? {}, id).enabled, session.rights)) {
       if (item.name === 'home' && !withHome) continue    // we are already there: the search lives on it
       out.push({ key: `page:${item.name}`, label: t(item.label), sub: t('search.page'), icon: item.icon, family: 'page', go: () => { void router.push({ name: item.name }) } })
     }

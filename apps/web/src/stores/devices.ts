@@ -10,6 +10,7 @@ import { useAutomationsStore } from './automations'
 import { useShoppingStore } from './shopping'
 import { usePropertiesStore } from './properties'
 import { useAppUpdateStore } from './appUpdate'
+import { useSessionStore } from './session'
 
 // Plugin devices: descriptors + states, push connection, commands with optimistic update
 // and rollback. INVARIANT: a device's state object is REPLACED (never mutated)
@@ -157,10 +158,11 @@ export const useDevicesStore = defineStore('devices', () => {
     const properties = usePropertiesStore()
     const appUpdate = useAppUpdateStore()
     const shopping = useShoppingStore()
+    const session = useSessionStore()
     disconnect = getTransport().connect({
       // the same stream feeds the devices, the vendors' scenes, the automations and the shopping list, each its own
       // store; the snapshot's property says whether another screen switched away from the demo house
-      onMessage: (msg) => { properties.apply(msg); appUpdate.apply(msg); applyMessage(msg); scenes.apply(msg); automations.apply(msg); shopping.apply(msg) },
+      onMessage: (msg) => { properties.apply(msg); appUpdate.apply(msg); session.apply(msg); applyMessage(msg); scenes.apply(msg); automations.apply(msg); shopping.apply(msg) },
       onStatus: (s) => { connection.value = s },
     })
   }
