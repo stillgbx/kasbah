@@ -8,7 +8,7 @@
 | Route | Réponse |
 |---|---|
 | `GET /api/health` | `{ ok, uptimeS, clients, plugins: { [id]: { status, detail?, deviceCount?, keys? } } }` |
-| `GET /api/house` | maison validée (défauts zod appliqués) |
+| `GET /api/house` | maison validée (défauts zod appliqués) ; filtrée par compte *(2026-11-01)* |
 | `GET /api/house/warnings` | avertissements du lint de la maison |
 | `GET /api/devices` | `{ devices: [{ descriptor, state }] }` |
 | `GET /api/devices/:id` | une entrée, 404 sinon |
@@ -882,9 +882,18 @@ affiché.
 - **Le WebSocket est filtré par compte** : snapshot, `devices`, `state`, `deviceEvent`, `availability`,
   `scenes` / `scene`, `automations`, `shopping` ne portent que ce que le compte peut voir. Droits relus à
   la connexion et à chaque ping de 15 s ; droits changés → nouveau snapshot, compte retiré → fermeture
-  1008. Réseau local et compte sans liste : inchangé. Détail et limites (`/api/house` reste lisible) :
+  1008. Réseau local et compte sans liste : inchangé. Détail et limites (`/api/house` y restait lisible, filtrée depuis : section suivante) :
   [1_13](1_13_comptes-et-sessions.md), section du 2026-11-01.
 - **`GET /api/session` rend aussi `rights`** (phase 3) : `{ user, rights? }`, `rights` seulement si le compte
   a une liste (absent = tous les droits ; réseau local : `user: null`, pas de `rights`). Le web s'en sert
   pour cacher rail, vues et blocs de Réglages interdits (`apps/server/src/http/session.ts`,
   `Transport.session()`). Voir [1_13](1_13_comptes-et-sessions.md), section « phase 3 ».
+
+### Mise à jour 2026-11-01 (nuit) - `GET /api/house` et le message `house` filtrés par compte
+
+Le plan de la maison n'est plus servi entier à un compte limité : `GET /api/house` (dépendance `houseView`
+de `registerRoutes`) et le message WebSocket `house` (`filterMessage`, nouveau `case 'house'`) en retirent
+les appareils que le compte ne peut pas voir. Ce qui contredit la mention « `/api/house` reste lisible » de
+la section précédente (levée). Le droit `settings`, le réseau local et les comptes sans liste voient le plan
+entier. Règles, raisons et tests : [1_13](1_13_comptes-et-sessions.md), section « le plan de la maison est
+filtré par compte ».

@@ -1,4 +1,4 @@
-import { deviceRight, EMPTY_SHOPPING_LIST, type AutomationEntry, type DeviceId, type DeviceState, type Right, type ServerMessage, type ShoppingList } from '@kasbah/shared'
+import { EMPTY_SHOPPING_LIST, type AutomationEntry, type DeviceId, type DeviceState, type Right, type ServerMessage, type ShoppingList } from '@kasbah/shared'
 import websocket from '@fastify/websocket'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
@@ -7,7 +7,7 @@ import type { Bus } from '../core/bus'
 import type { Clock } from '../core/clock'
 import type { DeviceRegistry } from '../core/registry'
 import type { SceneRegistry } from '../core/scene-registry'
-import { filterMessage } from '../http/rights'
+import { filterMessage, registryRight } from '../http/rights'
 
 // WebSocket hub: snapshot on connection, then push of FULL states coalesced per device (a burst of
 // Hue SSE events becomes one frame). Protocol ping to purge dead clients.
@@ -109,7 +109,7 @@ export class WsHub {
     if (key === '*') return msg
     if (key === '-') return null
     const rights = key ? key.split(',') as Right[] : []
-    return filterMessage(msg, rights, (id) => { const e = this.registry.get(id); return e ? deviceRight(e.descriptor) : undefined })
+    return filterMessage(msg, rights, registryRight(this.registry))
   }
 
   private snapshot(): ServerMessage {

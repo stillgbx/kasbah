@@ -12,7 +12,7 @@ import type { SceneRegistry } from '../core/scene-registry'
 import type { AgendaEvent } from '../plugins/agenda/ics'
 import { REPEAT_MODES, type RepeatMode } from '../music/queue'
 import { sha256, type McpAuth } from './auth'
-import { deviceFilter, mayUse } from '../http/rights'
+import { deviceFilter, houseView, mayUse } from '../http/rights'
 import { actAsHeaders } from '../http/session'
 
 export interface McpDeps {
@@ -727,7 +727,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     title: 'Maison',
     description: 'house.json validé : niveaux, pièces, ouvertures, placement des appareils.',
     mimeType: 'application/json',
-  }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(deps.house.house) }] }))
+  }, async (uri) => ({ contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify((await houseView(deps.auth.users, deps.registry, user))(deps.house.house)) }] }))
 
   return server
 }

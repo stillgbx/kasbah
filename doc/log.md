@@ -7,6 +7,21 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-01] update | Droits par compte, fin de la phase 3 : le plan de la maison filtré par compte
+
+**Trigger** : code non commité. Le plan (`house.json`) restait lisible par tous les comptes : un compte limité voyait nom et emplacement des appareils cachés, d'où leurs marqueurs dans la 3D de la vue Maison.
+
+**Pages modified** :
+- 1_architecture/1_13_comptes-et-sessions.md - section datée « le plan de la maison est filtré par compte » (trois sorties, règles `filterHouse` / `kindRight` / `settings` voit tout, effet côté app, tests, non joué) ; la puce « Restent lisibles » de la phase 2 et la « limite qui reste » de la phase 3 annotées comme levées.
+- 1_architecture/1_7_serveur-mcp.md - `kasbah://house` filtrée par compte ; mention de `GET /api/session` corrigée (`rights` en plus de `user`).
+- 1_architecture/1_3_protocole-rest-ws.md - `GET /api/house` et message `house` filtrés par compte (tableau des routes, section datée, renvoi « reste lisible » annoté).
+
+**Contradiction relevée** : la mention « `/api/house` reste lisible » (1_3, 1_13 phase 2) est dépassée ; laissée en place, annotée avec renvoi. Aucune contradiction code / wiki trouvée.
+
+**Trou** : jamais essayé avec un vrai compte limité sous l'adresse publique ; preview non jouée (le mode simulé n'a ni serveur ni comptes).
+
+**Index** : catalogues inchangés (1_3, 1_7 et 1_13 déjà datés du 2026-11-01, portée des résumés inchangée), index.md régénéré (à jour).
+
 ## [2026-11-01] update | Droits par compte, phase 3 : l'app cache rail, vues et réglages interdits
 
 **Trigger** : code non commité. Constat sur un compte limité (adresse publique) : toutes les icônes dans le rail, vue interdite vide avec un toast `errors.NO_RIGHT` non traduit, Réglages montrant tous les plugins.

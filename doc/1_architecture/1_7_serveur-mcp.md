@@ -55,7 +55,7 @@ le README est en anglais : la section s'appelle « MCP server » (« Serveur MCP
 
 > Mis à jour le 2026-10-09 : le tableau passe de 10 à **19** outils (9 ajouts, voir la section du 2026-10-09 en bas de page).
 
-Ressource `kasbah://house` : le `house.json` validé.
+Ressource `kasbah://house` : le `house.json` validé *(filtré par compte depuis le 2026-11-01, voir la dernière section)*.
 
 Comme en REST, une commande réussit **à l'accusé du fabricant** et ne rend pas l'état : l'agent le
 relit par `get_device`. Un appareil inconnu est rendu en `isError: true` ; une exception
@@ -424,7 +424,7 @@ blocage d'un compte après trop d'échecs, paramétrable.
 
 **Porte à session (`apps/server/src/http/session.ts`, nouveau).** `createAppSession` rend `gate`, que
 `publicHostFilter(publicHosts, gate)` appelle pour tout chemin non-MCP sous le nom public, et `routes` :
-`GET`/`POST /login`, `POST /logout`, `GET /api/session` (→ `{ user }`, `null` sur le réseau local ;
+`GET`/`POST /login`, `POST /logout`, `GET /api/session` (→ `{ user }`, `null` sur le réseau local, plus `rights` si le compte a une liste depuis le 2026-11-01 ;
 `/login` y renvoie vers `/`). Décoration `req.sessionUser`.
 - **Cookie** `__Host-kasbah_session` : Secure, Path=/, HttpOnly, SameSite=Lax. **90 jours glissants**,
   prolongés au plus une fois par jour (le cookie est alors réécrit).
@@ -784,3 +784,12 @@ agissent directement sur le registre ou l'hôte, comme les lectures `list_device
 Réglages → Comptes. Ceci contredit la phrase de la section du 2026-10-04 (« les outils rejouent les routes ») :
 vraie pour la plupart seulement. Piège pour un futur outil : s'il touche le registre sans passer par
 `call`, il doit appeler `mayUse` lui-même. Tests : `mcp/server.test.ts` (« rights of the account »).
+
+### Mise à jour 2026-11-01 (nuit) - `kasbah://house` filtrée par compte
+
+La ressource `kasbah://house` ne rend plus le plan entier : elle passe par `houseView(deps.auth.users,
+deps.registry, user)` (`mcp/server.ts`), donc un compte limité n'y voit pas les appareils dont il n'a pas le
+droit (le droit `settings` voit tout, le réseau local aussi). Règles et raisons :
+[1_13](1_13_comptes-et-sessions.md), section « le plan de la maison est filtré par compte ».
+Au passage, correction : `GET /api/session` (section 2026-10-04, plus haut) ne rend pas seulement `{ user }`
+mais aussi `rights` quand le compte a une liste.

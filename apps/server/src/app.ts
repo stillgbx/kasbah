@@ -23,7 +23,7 @@ import { ShoppingService, shoppingPathFor } from './core/shopping'
 import { EnergyHistory } from './core/history'
 import { registerDiagRoutes } from './http/diag'
 import { registerPushRoutes } from './http/push'
-import { accountRights, deviceFilter, registerRights } from './http/rights'
+import { accountRights, deviceFilter, houseView, registerRights } from './http/rights'
 import { registerRoutes } from './http/routes'
 import { registerSystemRoutes, type SystemRoutesDeps } from './http/system'
 import { actAsHook, createAppSession, sessionConfigSchema } from './http/session'
@@ -180,7 +180,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   // the WebSocket does not go through this hook.
   await app.register(fastifyCompress, { global: true })
 
-  registerRoutes(app, { registry, scenes, host, house, hub, history, automations, shopping, startedAt: clock.now(), deviceFilter: (user) => deviceFilter(mcpAuth.users, user), ...(opts.properties ? { properties: opts.properties } : {}) })
+  registerRoutes(app, { registry, scenes, host, house, hub, history, automations, shopping, startedAt: clock.now(), deviceFilter: (user) => deviceFilter(mcpAuth.users, user), houseView: (user) => houseView(mcpAuth.users, registry, user), ...(opts.properties ? { properties: opts.properties } : {}) })
   host.registerRoutes(app)
   registerPushRoutes(app, push)
   registerSystemRoutes(app, { supervisor: opts.supervisor, statusFile: stateFile('update-status.json') })

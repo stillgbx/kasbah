@@ -536,5 +536,9 @@ describe('rights of the account', () => {
     expect((await client.callTool({ name: 'get_device', arguments: { id: cover.descriptor.id } })).isError).toBe(true)
     expect((await client.callTool({ name: 'get_weather', arguments: {} })).isError).toBe(true)
     expect((await client.callTool({ name: 'list_scenes', arguments: {} })).isError).toBeFalsy()
+    // the house resource leaves out the devices it may not see
+    const plan = JSON.parse(((await client.readResource({ uri: 'kasbah://house' })).contents[0] as { text: string }).text) as { devices: { deviceId?: string }[] }
+    expect(plan.devices.some((d) => d.deviceId === cover.descriptor.id)).toBe(false)
+    expect(kasbah.house.house.devices.some((d) => d.deviceId === cover.descriptor.id)).toBe(true)
   })
 })

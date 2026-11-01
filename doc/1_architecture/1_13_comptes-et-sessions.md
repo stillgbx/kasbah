@@ -317,6 +317,7 @@ Refus : 403 `NO_RIGHT`, message `this account may not use "<right>"`.
   shopping (`CORE_READS`).
 - **Restent lisibles** : `/api/house` (elle dessine la vue : un compte limité y voit encore le **nom et
   l'emplacement** des appareils cachés, pas leur état), `/api/plugins`, `/api/health`. Limite assumée.
+  *(Levée pour `/api/house` le 2026-11-01 (nuit) : le plan est filtré par compte, voir la dernière section.)*
 - **WebSocket** (`ws/hub.ts`) : chaque connexion retient son compte ; `filterMessage` (`http/rights.ts`)
   filtre le snapshot (devices, scenes, automations, shopping) et les messages devices, state, deviceEvent,
   availability, scenes / scene, automations, shopping ; le reste passe. Une sérialisation par jeu de droits,
@@ -373,9 +374,9 @@ tous les plugins. Le serveur refusait déjà tout (phases 1 et 2) : il ne manqua
   `mcpUsers.rightsHint` réécrite (elle disait que l'entrée de menu restait affichée).
 
 **Écarté** : griser l'entrée plutôt que la masquer. L'utilisateur voulait que les icônes disparaissent.
-**Limite qui reste** : les marqueurs 3D de la vue Maison montrent encore l'emplacement des appareils cachés,
-parce que `/api/house` les décrit (limite déjà notée en phase 2) ; seuls leur état et leurs commandes sont
-refusés.
+**Limite qui restait** : les marqueurs 3D de la vue Maison montraient encore l'emplacement des appareils
+cachés, parce que `/api/house` les décrit (limite déjà notée en phase 2) ; seuls leur état et leurs commandes
+étaient refusés. *(Levée le soir même : section suivante.)*
 
 Vérifié : tests des dossiers touchés et suite complète, typecheck, lint ; preview mock en forçant les droits
 dans le store pinia (rail réduit à 8 entrées, page de refus centrée en fr et en, 375 px sans débordement,
@@ -383,3 +384,38 @@ Réglages réduits, console sans erreur). **Non joué** : un vrai compte limité
 n'a pas de session, les droits y ont été posés à la main). Piège d'outillage : GitNexus `impact` a rendu des
 résultats incohérents pour `createAppSession` et `visibleNavItems` (même CRITICAL, mêmes 661 appelants
 directs) ; les appelants ont été vérifiés par recherche texte.
+
+### Mise à jour 2026-11-01 (nuit) - le plan de la maison est filtré par compte
+
+Jusqu'ici `house.json` restait lisible par tous les comptes : un compte limité voyait le **nom et
+l'emplacement** des appareils cachés, d'où leurs marqueurs dans la 3D de la vue Maison (limite notée en
+phase 2 et en phase 3). Le serveur filtre maintenant le plan à ses trois sorties :
+
+- `GET /api/house` (`http/routes.ts`, dépendance `houseView` passée par `app.ts`, absente = plan entier) ;
+- le message WebSocket `house` (`filterMessage` gagne un `case 'house'` ; `ws/hub.ts` utilise le nouveau
+  `registryRight(registry)`, qui remplace la fermeture écrite en dur) ;
+- la ressource MCP `kasbah://house` (`mcp/server.ts`, `houseView(deps.auth.users, deps.registry, user)`).
+
+**Règles** (`filterHouse(house, rights, rightOf)`, `http/rights.ts`) :
+- un appareil du plan, relié et connu du registre, prend le droit de son descripteur (`deviceRight` : portail,
+  garage et fenêtre demandent donc `access`) ;
+- un appareil inconnu du registre (plugin absent) ou non relié est jugé sur son indice `kind`
+  (`kindRight`, `packages/shared/src/rights/rights.ts`) ; sans `kind`, il reste ;
+- un capteur ne demande aucun droit : il reste ;
+- **le droit `settings` voit tout le plan**, puisqu'il l'édite. Sans risque : les écritures du plan se font
+  appareil par appareil (`PUT /api/house/devices/:id`…), jamais en renvoyant le plan entier ; un plan
+  filtré n'efface donc rien ;
+- réseau local (`user === null`) et comptes sans liste : plan entier, inchangé.
+
+`kindRight` est ajoutée **à côté** de `deviceRight` plutôt que d'en changer la signature : GitNexus classe
+`deviceRight` CRITICAL (beaucoup d'appelants).
+
+**Effet côté app, sans code web** : la vue Maison reçoit moins d'appareils, donc leurs marqueurs, panneaux et
+entrées de recherche disparaissent. Un volet caché laisse sa fenêtre **sans tablier** (`dressedOpenings` de
+`HouseScene` ne la voit plus habillée).
+
+Tests : `http/rights.test.ts` (filtre, `kind` de repli, `settings` et liste absente = plan entier, message
+`house`), `test/integration.test.ts` (compte limité aux lumières : ni volets, ni portail, ni véhicule,
+capteurs gardés ; compte sans liste : plan entier), `mcp/server.test.ts` (ressource filtrée). Suite complète
+(2 614 tests), typecheck et lint globaux verts. **Non joué** : la preview (le mode simulé n'a ni serveur ni
+comptes) et un vrai compte limité sous l'adresse publique.

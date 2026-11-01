@@ -2,8 +2,8 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import Fastify from 'fastify'
 import { describe, expect, it } from 'vitest'
-import { EMPTY_SHOPPING_LIST, type DeviceEntry, type Right, type ServerMessage } from '@kasbah/shared'
-import { filterMessage, PLUGIN_RIGHTS, registerRights, routeRight } from './rights'
+import { EMPTY_SHOPPING_LIST, type DeviceEntry, type House, type Right, type ServerMessage } from '@kasbah/shared'
+import { filterHouse, filterMessage, PLUGIN_RIGHTS, registerRights, routeRight } from './rights'
 
 describe('routeRight', () => {
   it('drives a device with the right of that device', () => {
@@ -90,5 +90,21 @@ describe('filterMessage', () => {
     expect(only({ type: 'availability', deviceIds: ['p:car'], available: false })).toBeNull()
     expect(only({ type: 'automations', automations: [] })).toBeNull()
     expect(only({ type: 'error', code: 'X', message: 'y' })).toEqual({ type: 'error', code: 'X', message: 'y' })
+  })
+
+  it('keeps out of the house plan the devices the rights do not grant', () => {
+    const house = { devices: [
+      { id: 'l', deviceId: 'p:l' }, { id: 'car', deviceId: 'p:car' }, { id: 'gate', deviceId: 'p:gate' },
+      // not known to the registry: judged on its kind hint, or kept without one
+      { id: 'tv', deviceId: 'gone:tv', kind: 'media_player' }, { id: 'lamp', kind: 'light' }, { id: 'x' },
+    ] } as unknown as House
+    const ids = (h: House) => h.devices.map((d) => d.id)
+    expect(ids(filterHouse(house, ['lights'], rightOf))).toEqual(['l', 'lamp', 'x'])
+    expect(ids(filterHouse(house, ['access', 'media'], rightOf))).toEqual(['gate', 'tv', 'x'])
+    // "settings" edits the plan: it sees it whole, as an account without a list
+    expect(filterHouse(house, ['settings'], rightOf)).toBe(house)
+    expect(filterHouse(house, undefined, rightOf)).toBe(house)
+    const msg = only({ type: 'house', house })
+    expect(msg?.type === 'house' && ids(msg.house)).toEqual(['l', 'lamp', 'x'])
   })
 })

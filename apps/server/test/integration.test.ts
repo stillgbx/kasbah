@@ -422,6 +422,19 @@ describe('rights of an account (http/rights.ts)', () => {
     expect((await as('adult', 'GET', '/api/devices')).json().devices.length).toBeGreaterThan(15)
   })
 
+  it('leaves out of the house plan the devices an account may not see', async () => {
+    const ids = async (user: string | null) => ((await as(user, 'GET', '/api/house')).json().devices as { deviceId?: string }[]).map((d) => d.deviceId)
+    const all = await ids(null)
+    expect(all).toContain('mock:cover-gate')
+    const kid = await ids('kid')
+    expect(kid).toContain('mock:light-living')
+    expect(kid).toContain('mock:sensor-outdoor-temp')   // a sensor needs no right
+    expect(kid).not.toContain('mock:cover-living')
+    expect(kid).not.toContain('mock:cover-gate')
+    expect(kid).not.toContain('mock:vehicle-tesla')
+    expect(await ids('adult')).toEqual(all)
+  })
+
   it('filters the WebSocket of an account, and follows a change of its rights', async () => {
     const address = await kasbah.app.listen({ port: 0, host: '127.0.0.1' })
     const ws = new WebSocket(`${address.replace('http', 'ws')}/ws`, { headers: actAsHeaders('kid') })

@@ -34,6 +34,9 @@ export function deviceRight(descriptor: DeviceDescriptor): Right | null {
   return RIGHT_OF_KIND[descriptor.kind]
 }
 
+/** The right of a kind alone, for a house device not linked to a plugin (no descriptor, no class). */
+export const kindRight = (kind: DeviceKind): Right | null => RIGHT_OF_KIND[kind]
+
 /** The right a push notification category needs: an account without it is not notified. */
 export const RIGHT_OF_NOTIFY_CATEGORY: Record<NotifyCategory, Right> = {
   vehicles: 'vehicles', robots: 'robots', pets: 'pets', weather: 'weather', plugins: 'settings', automations: 'automations',

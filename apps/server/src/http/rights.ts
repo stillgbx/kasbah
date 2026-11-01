@@ -1,4 +1,4 @@
-import { deviceRight, EMPTY_SHOPPING_LIST, grants, type DeviceDescriptor, type DeviceId, type Right, type ServerMessage } from '@kasbah/shared'
+import { deviceRight, EMPTY_SHOPPING_LIST, grants, kindRight, type DeviceDescriptor, type DeviceId, type House, type Right, type ServerMessage } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { DeviceRegistry } from '../core/registry'
 import type { UsersFile } from '../mcp/auth'
@@ -10,7 +10,8 @@ import { sendError } from './errors'
 // house and is never checked; an account without a list keeps every right.
 //
 // Reads too: a device's own routes need its right, the device list and the WebSocket leave out what
-// the account may not see (`filterMessage`). The house plan itself stays readable (it draws the view).
+// the account may not see (`filterMessage`), and so does the house plan (`filterHouse`): a hidden
+// device leaves no name and no place in the 3D view.
 
 /** `device`: the right of the device the route drives (`:id`). */
 export type RouteRight = Right | null | 'device'
@@ -126,6 +127,33 @@ export async function deviceFilter(users: () => Promise<UsersFile>, user: string
 }
 
 /**
+ * The house plan as an account with these rights (absent = all) sees it: without the devices it may not
+ * see. `rightOf` as in `filterMessage`; a device the registry does not know is judged on its kind hint.
+ * "settings" sees the whole plan: it edits it (the writes go device by device, never the whole plan).
+ */
+export function filterHouse(house: House, rights: readonly Right[] | undefined, rightOf: (id: DeviceId) => Right | null | undefined): House {
+  if (grants(rights, 'settings')) return house
+  const rightOfDevice = (d: House['devices'][number]) => {
+    const r = d.deviceId ? rightOf(d.deviceId) : undefined
+    return r !== undefined ? r : d.kind ? kindRight(d.kind) : null
+  }
+  return { ...house, devices: house.devices.filter((d) => grants(rights, rightOfDevice(d))) }
+}
+
+/** The right of a device by its id, from the registry (`undefined` = unknown). */
+export const registryRight = (registry: Pick<DeviceRegistry, 'get'>) => (id: DeviceId): Right | null | undefined => {
+  const e = registry.get(id)
+  return e ? deviceRight(e.descriptor) : undefined
+}
+
+/** The house plan this account may see; the house (`null`) sees it whole. */
+export async function houseView(users: () => Promise<UsersFile>, registry: Pick<DeviceRegistry, 'get'>, user: string | null): Promise<(h: House) => House> {
+  if (user === null) return (h) => h
+  const rights = (await users()).users.find((u) => u.name === user)?.rights
+  return (h) => filterHouse(h, rights, registryRight(registry))
+}
+
+/**
  * The WebSocket message an account with these rights receives, `null` = nothing. `rightOf`: the right
  * of a device by its id (`undefined` = an unknown device, never shown).
  */
@@ -149,6 +177,7 @@ export function filterMessage(msg: ServerMessage, rights: readonly Right[], righ
     case 'scenes': case 'scene': return may('lights') ? msg : null
     case 'automations': return may('automations') ? msg : null
     case 'shopping': return may('shopping') ? msg : null
+    case 'house': return { ...msg, house: filterHouse(msg.house, rights, rightOf) }
     default: return msg
   }
 }
