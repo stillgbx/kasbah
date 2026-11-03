@@ -1,6 +1,6 @@
 # Production
 
-> Dernière mise à jour : 2026-11-01
+> Dernière mise à jour : 2026-11-03
 > Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts`, `site/`, `.github/workflows/pages.yml`, `apps/web/src/stores/push.ts` (2026-10-29)
 
 ## Build
@@ -644,6 +644,7 @@ l'icône de l'app installée, raccourci à glisser sur l'écran d'accueil. Ce qu
   la seconde pour le recadrage rond d'Android si Chrome la prend, la première sinon. Sources SVG à
   côté (`shortcut-ask.svg`, `shortcut-ask-maskable.svg`), rasterisées comme le logo (mise à jour du
   2026-10-28 (bis) : fenêtre 512, `--force-device-scale-factor=0.375`, chemins à barres obliques).
+  *(Mise à jour 2026-11-03 : Chrome prend l'icône `any`, désormais un disque plein, avec un dessin d'onde et d'étincelle qui laisse le coin bas-droit à la pastille de l'app — voir la section « Mise à jour 2026-11-03 » en fin de page.)*
 - **Mise à jour sur le téléphone** : Chrome relit le manifest d'une app installée à son lancement et la
   met à jour, avec un délai qui peut aller jusqu'à un jour ; désinstaller puis réinstaller la prend
   tout de suite.
@@ -661,3 +662,33 @@ est servie par le repli SPA comme toute route de l'app. Un téléphone dont Chro
 le manifest ouvre l'ancienne adresse, que le routeur renvoie vers `/ask`.
 
 Sources : `apps/web/public/manifest.webmanifest`, `apps/web/src/router/index.ts`.
+
+## Mise à jour 2026-11-03 — l'icône du raccourci « Demander » redessinée pour le lanceur Android
+
+Constaté sur un téléphone Android (raccourci épinglé sur l'écran d'accueil) : l'icône apparaissait
+réduite au centre d'un disque blanc.
+
+- **Chrome prend l'icône `any` des raccourcis, pas la `maskable`.** Les deux sont déclarées dans le
+  manifest, mais l'écran montrait le carré à coins arrondis de `shortcut-ask-192.png`. Le lanceur
+  (Launcher3) traite une icône non adaptative ainsi : si sa silhouette opaque n'a pas la forme du
+  masque, il la réduit et la pose sur un fond blanc.
+- **Correctif : l'icône `any` est un disque plein** de 512 (`<circle r="256">`) au lieu d'un carré
+  arrondi. Sa silhouette correspond au masque rond, et le lanceur l'affiche telle quelle. La version
+  `maskable` reste déclarée, pour le cas où Chrome la prendrait un jour.
+- **La pastille de l'app.** Sur un raccourci épinglé, Android ajoute l'icône de l'app dans le coin
+  bas-droit, sur environ 44 % du diamètre (`ICON_BADGE_SCALE` de Launcher3). Le dessin est donc
+  décalé vers le haut à gauche, et le quart bas-droit ne contient que le fond `#0d1420`. Comme le
+  logo est lui aussi sur fond nuit, la pastille se fond dans le disque.
+- **Nouveau dessin** : la bulle sable et son micro sont remplacés par cinq barres d'onde arrondies,
+  en dégradé du turquoise `#7fd0d7` vers le sable `#e0aa70`, avec une étincelle à quatre branches
+  `#f3d4a4` en haut à droite. Dans `shortcut-ask-maskable.svg`, l'étincelle est un peu rentrée
+  (centre 360,132 au lieu de 378,124) pour rester dans le cercle de sécurité de 40 %.
+- PNG refaits comme d'habitude (fenêtre 512, `--force-device-scale-factor=0.375`). Avant de choisir,
+  le rendu a été jugé sur une page jetable qui pose `icon-maskable.svg` en pastille à 44 % dans le
+  coin bas-droit, à deux tailles.
+
+Le téléphone ne voit le changement qu'à la prochaine mise à jour de la WebAPK par Chrome (jusqu'à un
+jour), ou tout de suite en désinstallant puis réinstallant l'app. Le raccourci épinglé est ensuite à
+reposer.
+
+Sources : `apps/web/public/icons/shortcut-ask{,-maskable}.svg`, `apps/web/public/icons/shortcut-ask{,-maskable}-192.png`.

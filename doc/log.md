@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-03] update | Icône du raccourci « Demander » : disque plein, onde et étincelle, place de la pastille Android
+
+**Trigger** : constat sur un téléphone Android, l'icône du raccourci épinglé réduite dans un disque blanc ; demande d'un visuel plus moderne (IA, voix, flux audio) qui tient compte de la pastille de l'app.
+
+**Pages modified** :
+- 5_setup/5_2_production.md - section datée « l'icône du raccourci Demander redessinée pour le lanceur Android » (Chrome prend l'icône any, disque plein contre le fond blanc, pastille à 44 % en bas à droite, nouveau dessin, aperçu jetable) ; puce Icônes de la section du 2026-10-31 annotée.
+
+**Index** : catalogue 5_setup mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-11-01] update | Droits par compte, fin de la phase 3 : le plan de la maison filtré par compte
 
 **Trigger** : code non commité. Le plan (`house.json`) restait lisible par tous les comptes : un compte limité voyait nom et emplacement des appareils cachés, d'où leurs marqueurs dans la 3D de la vue Maison.
