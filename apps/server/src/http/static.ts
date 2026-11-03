@@ -13,6 +13,20 @@ const BUILD_ID_FILE = 'build-id.txt'
 const FRAME_HEADERS = { 'x-frame-options': 'SAMEORIGIN', 'content-security-policy': "frame-ancestors 'self'" }
 
 /**
+ * Install manifest in the browser's language, the app's own rule without a saved choice
+ * (`detectLocale`, apps/web/src/i18n): the first of fr / en in `Accept-Language`, otherwise English.
+ * The browser fetches it without a cookie, so a language chosen in the settings cannot be known here.
+ */
+export function manifestFile(acceptLanguage: string | undefined): string {
+  for (const part of (acceptLanguage ?? '').split(',')) {
+    const base = part.trim().toLowerCase().split(/[-;]/)[0]
+    if (base === 'fr') return 'manifest.webmanifest'
+    if (base === 'en') break
+  }
+  return 'manifest.en.webmanifest'
+}
+
+/**
  * Serves the web app build (prod) with SPA fallback: any GET request outside /api, /ws and /assets
  * returns index.html. Silent if the folder does not exist (dev mode, Vite serves the app).
  * A file missing from /assets (view of a replaced build, requested by a screen left open) is a
@@ -25,6 +39,8 @@ export async function registerStatic(app: FastifyInstance, dir: string): Promise
     // also for the SPA fallback below: `sendFile` goes through it
     setHeaders: (reply, path) => { if (path.endsWith('.html')) reply.headers(FRAME_HEADERS) },
   })
+  app.get('/manifest.webmanifest', (req, reply) =>
+    reply.header('vary', 'Accept-Language').sendFile(manifestFile(req.headers['accept-language'])))
   app.setNotFoundHandler((req, reply) => {
     if (req.method === 'GET' && !req.url.startsWith('/api') && !req.url.startsWith('/ws') && !req.url.startsWith('/assets/')) {
       return reply.type('text/html').sendFile('index.html')

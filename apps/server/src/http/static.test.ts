@@ -50,6 +50,22 @@ describe('registerStatic', () => {
       expect(page.headers['content-security-policy'], url).toBe("frame-ancestors 'self'")
     }
   })
+
+  it('serves the install manifest in the browser language, English when neither fr nor en', async () => {
+    await webBuild({ 'index.html': '', 'manifest.webmanifest': '{"lang":"fr"}', 'manifest.en.webmanifest': '{"lang":"en"}' })
+    app = Fastify()
+    await registerStatic(app, dir)
+    const cases: [string | undefined, string][] = [
+      ['fr-FR,fr;q=0.9,en;q=0.8', 'fr'], ['en-GB,fr;q=0.5', 'en'], ['de-DE,fr;q=0.7', 'fr'], ['de-DE', 'en'], [undefined, 'en'],
+    ]
+    for (const [accept, lang] of cases) {
+      const res = await app.inject({ method: 'GET', url: '/manifest.webmanifest', headers: accept ? { 'accept-language': accept } : {} })
+      expect(res.statusCode, accept).toBe(200)
+      expect(res.json().lang, accept).toBe(lang)
+      expect(res.headers['content-type'], accept).toMatch(/manifest\+json/)
+      expect(res.headers.vary, accept).toMatch(/Accept-Language/)
+    }
+  })
 })
 
 describe('readAppBuild', () => {

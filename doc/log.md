@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-03] update | Manifest d'installation en français ou en anglais
+
+**Trigger** : demande de localiser le manifest, en particulier le raccourci « Demander » → « Ask », en fr et en seulement.
+
+**Pages modified** :
+- 5_setup/5_2_production.md - section datée « 2026-11-03 (ter) » (deux manifests, choix par `Accept-Language` à l'adresse unique, `Vary`, limite du réglage de langue non suivi faute de cookie, dev et démo).
+
+**Index** : catalogue 5_setup déjà daté du 2026-11-03, index.md régénéré (inchangé).
+
 ## [2026-11-03] update | Icône du raccourci « Demander » : dessinée pour le disque blanc du lanceur
 
 **Trigger** : capture du téléphone après mise à jour de la WebAPK, le disque plein reste réduit dans un disque blanc.

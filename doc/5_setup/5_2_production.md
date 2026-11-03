@@ -732,3 +732,29 @@ son contenu), la pastille environ 46 %, et elle déborde un peu du disque en bas
   décalage de 20 vers le haut à gauche reste.
 
 Sources : `apps/web/public/icons/shortcut-ask.svg`, `apps/web/public/icons/shortcut-ask-192.png`.
+
+## Mise à jour 2026-11-03 (ter) — le manifest en français ou en anglais
+
+Le manifest existe en deux langues : `apps/web/public/manifest.webmanifest` (français, inchangé) et
+`apps/web/public/manifest.en.webmanifest` (anglais : description, `lang: "en"`, raccourci « Ask
+Kasbah » / « Ask »). Le reste (icônes, adresses, couleurs) est identique dans les deux.
+
+- **Le serveur choisit à l'adresse unique `/manifest.webmanifest`** (route de `registerStatic`,
+  `apps/server/src/http/static.ts`) : `manifestFile()` lit `Accept-Language`, le premier de `fr` ou
+  `en` dans l'ordre de l'en-tête gagne, l'anglais sinon. C'est la règle de l'app sans choix enregistré
+  (`detectLocale`, `apps/web/src/i18n/index.ts`). Réponse avec `Vary: Accept-Language`.
+- **L'adresse ne change pas** : une app installée n'est pas perturbée, et la page de connexion
+  (`INSTALL_HEAD` de `session.ts`) en profite sans rien toucher.
+- **Limite** : une langue choisie dans les Réglages, différente de celle du navigateur, n'est pas
+  suivie. Le navigateur demande le manifest sans cookie, le serveur ne connaît donc ni le compte ni
+  le réglage. Écarté : un cookie de langue envoyé par `crossorigin="use-credentials"`, plus de
+  pièces pour un cas rare.
+- **Dev** : Vite sert `public/manifest.webmanifest` tel quel, donc en français ; seul le serveur de
+  production choisit. **Démo** : `demoPage()` retire les deux fichiers.
+- Même délai qu'ailleurs sur le téléphone : la WebAPK prend le nouveau libellé à sa prochaine
+  relecture du manifest.
+
+Vérifié par `apps/server/src/http/static.test.ts` (cinq en-têtes, dont un navigateur allemand qui
+accepte le français et une requête sans en-tête).
+
+Sources : `apps/server/src/http/static.ts`, `apps/web/public/manifest{,.en}.webmanifest`, `apps/web/vite.config.ts`.
