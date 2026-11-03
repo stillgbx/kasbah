@@ -675,6 +675,8 @@ réduite au centre d'un disque blanc.
 - **Correctif : l'icône `any` est un disque plein** de 512 (`<circle r="256">`) au lieu d'un carré
   arrondi. Sa silhouette correspond au masque rond, et le lanceur l'affiche telle quelle. La version
   `maskable` reste déclarée, pour le cas où Chrome la prendrait un jour.
+  *(Démenti le même jour sur le téléphone : le disque plein reste réduit dans un disque blanc — voir
+  « Mise à jour 2026-11-03 (bis) » ci-dessous.)*
 - **La pastille de l'app.** Sur un raccourci épinglé, Android ajoute l'icône de l'app dans le coin
   bas-droit, sur environ 44 % du diamètre (`ICON_BADGE_SCALE` de Launcher3). Le dessin est donc
   décalé vers le haut à gauche, et le quart bas-droit ne contient que le fond `#0d1420`. Comme le
@@ -692,3 +694,29 @@ jour), ou tout de suite en désinstallant puis réinstallant l'app. Le raccourci
 reposer.
 
 Sources : `apps/web/public/icons/shortcut-ask{,-maskable}.svg`, `apps/web/public/icons/shortcut-ask{,-maskable}-192.png`.
+
+## Mise à jour 2026-11-03 (bis) — le disque blanc ne s'évite pas : l'icône est dessinée pour lui
+
+Vu sur le téléphone après la mise à jour de la WebAPK : le nouveau dessin est arrivé, mais le disque
+sombre apparaît toujours réduit (environ 68 % du diamètre) au centre d'un disque blanc. Ce lanceur
+enveloppe **toute** icône non adaptative, quelle que soit sa silhouette, et Chrome ne fournit aux
+raccourcis que l'icône `any` (le code de Chromium renvoie au ticket crbug 1152661 pour les icônes
+maskable des raccourcis, état non vérifié). Le blanc ne se supprime donc pas côté manifest.
+
+- **`shortcut-ask.svg` a un fond transparent** : l'onde est posée directement sur le disque blanc du
+  lanceur. Couleurs reprises pour le blanc : dégradé de turquoises foncés `#1b4f58` → `#2c8791`,
+  étincelle sable `#e0aa70`. Les turquoises clairs et le sable pâle du dessin sur fond nuit
+  manquaient de contraste.
+- **Dessin centré et agrandi** : les cinq barres (56 de large, pas de 86) occupent presque toute la
+  largeur du carré de 512. Le profil en losange de l'onde laisse vide le coin bas-droit, où tombe la
+  pastille de l'app. L'onde est remontée de 20 et les barres de droite raccourcies pour que la
+  pastille ne les touche pas à l'échelle observée.
+- **`shortcut-ask-maskable.svg` ne change pas** (dessin sur fond nuit, décalé en haut à gauche) :
+  Chrome ne l'utilise pas pour les raccourcis.
+- Choix fait sur une page jetable qui simule le lanceur : disque blanc, icône à 68 / 60 / 52 % du
+  diamètre, `icon-maskable.svg` en pastille à 44 % dans le coin bas-droit. L'icône précédente y
+  ressemblait à la capture du téléphone, ce qui valide la simulation.
+
+Non vérifié sur le téléphone au moment de l'écrire (même délai de mise à jour de la WebAPK).
+
+Sources : `apps/web/public/icons/shortcut-ask.svg`, `apps/web/public/icons/shortcut-ask-192.png`.

@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-03] update | Icône du raccourci « Demander » : dessinée pour le disque blanc du lanceur
+
+**Trigger** : capture du téléphone après mise à jour de la WebAPK, le disque plein reste réduit dans un disque blanc.
+
+**Pages modified** :
+- 5_setup/5_2_production.md - section datée « 2026-11-03 (bis) » (le lanceur enveloppe toute icône non adaptative, fond transparent, couleurs pour le blanc, dessin centré et agrandi, maskable inchangée, simulation) ; puce « disque plein » de la section précédente annotée comme démentie.
+
+**Contradiction relevée** : la section du matin affirmait que le disque plein évitait le fond blanc ; laissée en place, annotée avec renvoi.
+
+**Index** : catalogue 5_setup déjà daté du 2026-11-03, index.md régénéré.
+
 ## [2026-11-03] update | Icône du raccourci « Demander » : disque plein, onde et étincelle, place de la pastille Android
 
 **Trigger** : constat sur un téléphone Android, l'icône du raccourci épinglé réduite dans un disque blanc ; demande d'un visuel plus moderne (IA, voix, flux audio) qui tient compte de la pastille de l'app.
