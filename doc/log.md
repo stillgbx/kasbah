@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-03] update | Site vitrine : la page française montre la vidéo française
+
+**Trigger** : une vidéo de promotion en français est publiée, la page `/fr/` montrait la version anglaise.
+
+**Pages modified** :
+- 5_setup/5_2_production.md - puce « Une vidéo par langue » dans la section du site vitrine (où revient l'identifiant, README encore sur la vidéo anglaise).
+
+**Index** : catalogue 5_setup déjà daté du 2026-11-03, index.md inchangé.
+
 ## [2026-11-03] update | Manifest d'installation en français ou en anglais
 
 **Trigger** : demande de localiser le manifest, en particulier le raccourci « Demander » → « Ask », en fr et en seulement.
