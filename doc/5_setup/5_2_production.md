@@ -719,4 +719,16 @@ maskable des raccourcis, état non vérifié). Le blanc ne se supprime donc pas 
 
 Non vérifié sur le téléphone au moment de l'écrire (même délai de mise à jour de la WebAPK).
 
+*(Complément 2026-11-03, après la capture du téléphone :)* le rendu est bon, l'onde remplit le
+disque blanc et la pastille ne touche aucune barre. Mesuré sur la capture : l'image de l'icône
+occupe environ **76 %** du disque blanc (le lanceur agrandit un dessin à fond transparent d'après
+son contenu), la pastille environ 46 %, et elle déborde un peu du disque en bas à droite. Ensuite :
+
+- **Étincelle agrandie** (demi-branche 86 au lieu de 72, centre 416,88) et un peu plus pleine
+  (points de contrôle décalés de 6 du centre), en dégradé `#f3d4a4` → `#b77a45` : la version sable
+  uni paraissait petite et pâle sur le blanc.
+- **Onde centrée : écartée.** Sur la simulation recalée à 76 %, la pastille couvre le bas des deux
+  barres de droite ; réduite à 88 %, elle les mord encore, et l'onde perd la place gagnée. Le
+  décalage de 20 vers le haut à gauche reste.
+
 Sources : `apps/web/public/icons/shortcut-ask.svg`, `apps/web/public/icons/shortcut-ask-192.png`.

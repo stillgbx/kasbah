@@ -12,7 +12,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 **Trigger** : capture du téléphone après mise à jour de la WebAPK, le disque plein reste réduit dans un disque blanc.
 
 **Pages modified** :
-- 5_setup/5_2_production.md - section datée « 2026-11-03 (bis) » (le lanceur enveloppe toute icône non adaptative, fond transparent, couleurs pour le blanc, dessin centré et agrandi, maskable inchangée, simulation) ; puce « disque plein » de la section précédente annotée comme démentie.
+- 5_setup/5_2_production.md - section datée « 2026-11-03 (bis) » (le lanceur enveloppe toute icône non adaptative, fond transparent, couleurs pour le blanc, dessin centré et agrandi, maskable inchangée, simulation) ; puce « disque plein » de la section précédente annotée comme démentie ; complément après la capture du téléphone (rendu bon, échelle mesurée à 76 %, étincelle agrandie en dégradé, onde centrée écartée).
 
 **Contradiction relevée** : la section du matin affirmait que le disque plein évitait le fond blanc ; laissée en place, annotée avec renvoi.
 
