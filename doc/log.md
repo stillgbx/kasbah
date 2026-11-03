@@ -12,7 +12,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 **Trigger** : une vidéo de promotion en français est publiée, la page `/fr/` montrait la version anglaise.
 
 **Pages modified** :
-- 5_setup/5_2_production.md - puce « Une vidéo par langue » dans la section du site vitrine (où revient l'identifiant, README encore sur la vidéo anglaise).
+- 5_setup/5_2_production.md - puce « Une vidéo par langue » dans la section du site vitrine (où revient l'identifiant) ; complétée quand `README.fr.md` passe à la vidéo française.
 
 **Index** : catalogue 5_setup déjà daté du 2026-11-03, index.md inchangé.
 

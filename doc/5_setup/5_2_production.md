@@ -569,8 +569,9 @@ Une page publique qui se partage (X, Discord, README), montre la vidéo, et port
   `vq=hd1080` dans l'URL est ignoré depuis des années.
 - **Une vidéo par langue** (2026-11-03) : `fr/index.html` intègre la version française de la vidéo,
   `index.html` l'anglaise. L'identifiant YouTube revient trois fois par page (`og:video`, `href` et
-  `data-id` de l'affiche, lien du pied de page) ; l'affiche locale est commune. Le README anglais et
-  `README.fr.md` pointent encore sur la vidéo anglaise.
+  `data-id` de l'affiche, lien du pied de page) ; l'affiche locale est commune. Même partage pour les
+  README : `README.fr.md` pointe sur la vidéo française (bannière et « Voir la vidéo »), `README.md`
+  sur l'anglaise.
 - **Politique de confidentialité** : écrite d'après le code de `apps/android` (ce que garde
   `KasbahClient`, le géorepérage d'`Approach.kt`, le micro de `Voice.kt`, l'écran Voiture de
   `ProbeScreen.kt`, qui affiche sans rien envoyer). À relire à chaque permission ajoutée au manifeste.
