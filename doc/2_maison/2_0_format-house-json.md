@@ -1,6 +1,6 @@
 # Format house.json : décisions et validation
 
-> Dernière mise à jour : 2026-10-30
+> Dernière mise à jour : 2026-11-03
 > Sources : `packages/shared/src/house/{schema,validate,lookup,geo}.ts`, `docs/house-json.md`, `house/demo-house.json`, `packages/shared/src/house/autoplace.ts`, `house/fit-survey.mjs`, `house/maison.json`, `packages/shared/src/house/place.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/panels.ts`, `packages/shared/src/house/openings.ts`, `packages/shared/src/house/parking.ts`, `packages/shared/src/house/geometry/relief.ts` (`site.relief`), `house/demos/*.json`, `apps/server/src/config/properties.ts`, `packages/shared/src/house/structure.ts`, `packages/shared/src/house/newHouse.ts`, `packages/shared/src/house/geometry/roof.ts` (`roofs`)
 
 La **référence complète du format** (champs, exemples) est `docs/house-json.md`. Cette page
@@ -1467,3 +1467,16 @@ dans Alexa ou Google Home, c'est la marque (Hue, Somfy y sont déjà), pas le ty
 registre ne connaît plus, ou d'un genre non traduisible, reste dans le fichier et est signalé par
 `skipped` côté API. Le bloc s'écrit depuis Réglages (`PATCH /api/matter`, `../1_architecture/1_3_protocole-rest-ws.md`) ;
 fond : [1_17 Pont Matter](../1_architecture/1_17_pont-matter.md).
+
+### Mise à jour 2026-11-03 — `climateLinks` : des thermostats qui se suivent
+
+Section facultative de la racine : `climateLinks`, un tableau de **groupes** d'ids d'appareils (au
+moins 2 par groupe, un appareil dans un groupe au plus : `climateLinksSchema`,
+`packages/shared/src/house/schema.ts`, validé au chargement). Elle dit « ces thermostats ont la même
+consigne » ; ce que le serveur en fait (qui copie quoi, arrondi, garde-fous) est dans
+`../1_architecture/1_2_serveur-et-plugins.md` (même date).
+
+Elle s'écrit depuis l'UI : `PUT /api/house/climate-link`, corps `{ deviceId, linkedTo | null }`
+(`setClimateLinkInJson`, `packages/shared/src/house/place.ts`). L'appareil quitte son ancien groupe,
+rejoint celui de `linkedTo` ou en fonde un ; un groupe resté seul est supprimé ; une liste vide retire
+la section. Tests : `place.test.ts`.

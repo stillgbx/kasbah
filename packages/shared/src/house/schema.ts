@@ -664,6 +664,22 @@ export const matterSettingsSchema = z.object({
 export type MatterSettings = z.infer<typeof matterSettingsSchema>
 
 /**
+ * LINKED thermostats: groups of `climate` devices (`<pluginId>:<externalId>`) whose setpoints the
+ * server keeps equal. Two thermostats in series on the same heating — a Nest asking for heat in
+ * front of a heat pump regulating on its own room sensor — fight when their setpoints differ: one
+ * asks while the other has cut, or the other way round. Brand-blind: any device that declares
+ * `target_temp` can be linked. A device belongs to one group at most.
+ */
+export const climateLinksSchema = z.array(z.array(deviceIdSchema).min(2)).superRefine((groups, ctx) => {
+  const seen = new Set<string>()
+  for (const id of groups.flat()) {
+    if (seen.has(id)) ctx.addIssue({ code: 'custom', message: `device "${id}" is in more than one climate link` })
+    seen.add(id)
+  }
+})
+export type ClimateLinks = z.infer<typeof climateLinksSchema>
+
+/**
  * LIGHT SETTING of the 3D scene, saved in the house (`render.tuning`). These are
  * MULTIPLIERS applied on what the render style computes for the current hour: × 1 everywhere
  * gives the style as is, and the style's day/night curve survives the setting. The last five,
@@ -755,6 +771,8 @@ export const houseSchema = z.object({
   plugins: z.record(z.string(), pluginSettingsSchema).default(defaultPlugins),
   /** Matter bridge: which devices are published to the voice assistants. */
   matter: matterSettingsSchema.optional(),
+  /** Thermostats whose setpoints are kept equal, whatever their brand (`climateLinksSchema`). */
+  climateLinks: climateLinksSchema.optional(),
   /** Light setting of the 3D scene, set from the Home view. */
   render: renderSettingsSchema.optional(),
   /** Appearance of the envelope: the finish of the facade (exterior faces of the exterior walls). */

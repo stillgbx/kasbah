@@ -1,4 +1,4 @@
-import { pluginSettingsOf, geoOriginSchema, setOriginInJson, addShoppingItems, clearCheckedShoppingItems, removeShoppingItem, setShoppingFavorite, shoppingAddBodySchema, shoppingFavoriteBodySchema, shoppingItemPatchSchema, updateShoppingItem, propertyModeBodySchema, newPropertyBodySchema, duplicatePropertyBodySchema, applyHouseEditToJson, houseEditPatchSchema, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationOrderSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type DeviceDescriptor, type House, type HealthResponse } from '@kasbah/shared'
+import { pluginSettingsOf, geoOriginSchema, setOriginInJson, addShoppingItems, clearCheckedShoppingItems, removeShoppingItem, setShoppingFavorite, shoppingAddBodySchema, shoppingFavoriteBodySchema, shoppingItemPatchSchema, updateShoppingItem, propertyModeBodySchema, newPropertyBodySchema, duplicatePropertyBodySchema, applyHouseEditToJson, houseEditPatchSchema, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationOrderSchema, automationPatchSchema, commandSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, climateLinkBodySchema, setClimateLinkInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type DeviceDescriptor, type House, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import { singleProperty, type PropertyHost } from '../config/properties'
@@ -171,6 +171,15 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   app.put('/api/house/render', async (req) => {
     const tuning = sceneTuningSchema.parse(req.body)   // ZodError → 400
     const house = await updateHouseFile(deps.house, (doc) => setRenderTuningInJson(doc, tuning))
+    deps.hub.broadcast({ type: 'house', house })
+    return { house }
+  })
+
+  // Linked thermostats (`climateLinks`), set from a thermostat's settings: `linkedTo: null` unlinks
+  // it. The server then keeps the group's setpoints equal (`core/climateLinks.ts`).
+  app.put('/api/house/climate-link', async (req) => {
+    const body = climateLinkBodySchema.parse(req.body)   // ZodError → 400
+    const house = await updateHouseFile(deps.house, (doc) => setClimateLinkInJson(doc, body))
     deps.hub.broadcast({ type: 'house', house })
     return { house }
   })

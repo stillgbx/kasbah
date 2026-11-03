@@ -135,6 +135,18 @@ Optional. The devices published to voice assistants (Alexa, Google Home, Apple H
 
 The pairing keys are not in the house: they stay in the server's state folder (`apps/server/.state/matter/`).
 
+### Linked thermostats (`climateLinks`)
+
+Optional. Groups of thermostats whose setpoints the server keeps equal, whatever their brand — two thermostats in series on the same heating (a Nest asking for heat in front of a heat pump regulating on its own room sensor) fight when their setpoints differ. Written from a thermostat's panel, **Settings → Linked thermostat**:
+
+```jsonc
+"climateLinks": [["nest:thermostat-hall", "melcloud:unit-z1"]]
+```
+
+- Each group lists at least two device ids, as in `GET /api/devices`, of devices that take a setpoint; a device belongs to one group at most.
+- A setpoint that changes on one of them — from Kasbah, an automation, the thermostat itself or the vendor's app — is copied to the others, rounded **up** to the step each one keeps (a heat pump that only holds half-degrees gets 20.0 °C for a Nest at 19.8 °C).
+- Nothing is copied from or to a thermostat that is off or in eco mode. Linking does not align the setpoints by itself: the next change does.
+
 ## Measured survey (`meta.survey`)
 
 A real house is measured **inside the rooms**: each shared partition is reduced to a single shared line there, whereas the polygons must be spaced apart by the sum of the half-partitions (see **Walls** above). Rather than correcting the measurements by hand, the raw measurements are kept in `meta` — which the schema leaves free — and the `polygon`s are **derived** from them by a script.

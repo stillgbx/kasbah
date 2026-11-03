@@ -10,6 +10,7 @@ import { AutomationEngine } from './core/automations/engine'
 import { createRevertsFile } from './core/automations/reverts'
 import { automationsPathFor, createAutomationsFile } from './core/automations/store'
 import { Bus } from './core/bus'
+import { ClimateLinks } from './core/climateLinks'
 import { systemClock, type Clock } from './core/clock'
 import type { PluginFactory } from './core/plugin'
 import { PluginHost } from './core/plugin-host'
@@ -138,6 +139,13 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   const matter = new MatterBridge({
     settings: () => house.house.matter,
     registry, bus, logger: opts.logger.child({ component: 'matter' }),
+    execute: (id, command) => host.execute(id, command),
+  })
+
+  // Linked thermostats: the setpoints of a group kept equal, whatever their brand.
+  new ClimateLinks({
+    links: () => house.house.climateLinks ?? [],
+    registry, bus, clock, logger: opts.logger.child({ component: 'climate-links' }),
     execute: (id, command) => host.execute(id, command),
   })
 

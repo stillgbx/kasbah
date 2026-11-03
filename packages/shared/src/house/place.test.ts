@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import demo from './__fixtures__/demo-house.json'
 import { parseHouse } from './validate'
 import { NEUTRAL_TUNING } from './schema'
-import { addGardenItemToJson, devicePlacementSchema, addOpeningToJson, gardenItemPatchSchema, patchGardenItemInJson, removeGardenItemFromJson, patchOpeningInJson, PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, setPluginInJson, setRenderTuningInJson, setRoomOrderInJson } from './place'
+import { addGardenItemToJson, devicePlacementSchema, addOpeningToJson, gardenItemPatchSchema, patchGardenItemInJson, removeGardenItemFromJson, patchOpeningInJson, PlacementError, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, setPluginInJson, setRenderTuningInJson, setClimateLinkInJson, setRoomOrderInJson } from './place'
 
 const devices = (doc: Record<string, unknown>) => doc.devices as Record<string, unknown>[]
 
@@ -426,6 +426,34 @@ describe('setRenderTuningInJson', () => {
     const before = JSON.stringify(demo)
     setRenderTuningInJson(demo, { ...NEUTRAL_TUNING, vignette: 1.5 })
     expect(JSON.stringify(demo)).toBe(before)
+  })
+})
+
+describe('setClimateLinkInJson', () => {
+  const NEST = 'nest:thermostat-1', PAC = 'melcloud:unit-z1', OTHER = 'mock:salon'
+
+  it('links two thermostats, then a third joins their group', () => {
+    const two = setClimateLinkInJson(demo, { deviceId: PAC, linkedTo: NEST })
+    expect(two.climateLinks).toEqual([[NEST, PAC]])
+    const three = setClimateLinkInJson(two, { deviceId: OTHER, linkedTo: PAC })
+    expect(parseHouse(three).climateLinks).toEqual([[NEST, PAC, OTHER]])
+  })
+
+  it('moves a thermostat to another group, and drops a group left alone', () => {
+    const doc = { ...demo, climateLinks: [[NEST, PAC]] }
+    expect(setClimateLinkInJson(doc, { deviceId: PAC, linkedTo: OTHER }).climateLinks).toEqual([[OTHER, PAC]])
+  })
+
+  it('unlinks with null, and the section leaves the file with its last group', () => {
+    const doc = { ...demo, climateLinks: [[NEST, PAC]] }
+    const out = setClimateLinkInJson(doc, { deviceId: NEST, linkedTo: null })
+    expect(out.climateLinks).toBeUndefined()
+    expect(parseHouse(out).climateLinks).toBeUndefined()
+  })
+
+  it('refuses a thermostat linked to itself, and a file that puts one in two groups', () => {
+    expect(() => setClimateLinkInJson(demo, { deviceId: NEST, linkedTo: NEST })).toThrow(PlacementError)
+    expect(() => parseHouse({ ...demo, climateLinks: [[NEST, PAC], [NEST, OTHER]] })).toThrow(/more than one climate link/)
   })
 })
 

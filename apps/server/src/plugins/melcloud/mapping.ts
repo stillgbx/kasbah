@@ -206,10 +206,10 @@ export const zoneExternalId = (deviceId: string, zone: 1 | 2): string => `${devi
 /**
  * The devices published to the house: ONE `climate` per heating zone.
  *
- * Read-only, the only declared capability is `current_temp`. `target_temp` and `hvac_mode` would
- * announce commands that `execute` refuses, and offering a button that fails would be lying — the
- * reasoning that deprived the `camera` kind of `on_off`. The SETPOINT stays readable, it is part of
- * the state: it is the button that is missing, not the value.
+ * A zone controlled on the ROOM declares `target_temp`: its setpoint is the room thermostat's, set
+ * through `Device/SetAtw` (`toSetpointWrite`). A zone on the weather curve stays read-only, like
+ * `hvac_mode` everywhere: declaring them would announce commands that `execute` refuses — the
+ * reasoning that deprived the `camera` kind of `on_off`. Its setpoint stays readable.
  */
 export function toDescriptors(link: DeviceLink): DeviceDescriptor[] {
   const f = link.fields
@@ -217,6 +217,8 @@ export function toDescriptors(link: DeviceLink): DeviceDescriptor[] {
     ? (['off', 'heat', 'cool', 'eco'] as const)
     : (['off', 'heat', 'eco'] as const)
   const model = str(f, 'ModelCode')
+  // the controller only holds this step: sent 19.8, it reported 20.0 at its next report (2026-11-03)
+  const stepC = num(f, 'TemperatureIncrement')
   return toZones(f).map((z) => {
     const externalId = zoneExternalId(link.deviceId, z.zone)
     return {
@@ -225,17 +227,38 @@ export function toDescriptors(link: DeviceLink): DeviceDescriptor[] {
       externalId,
       kind: 'climate' as const,
       name: z.name ?? (z.zone === 1 ? link.name : `${link.name} zone 2`),
-      capabilities: ['current_temp' as const],
+      capabilities: z.control === 'room' ? ['current_temp' as const, 'target_temp' as const] : ['current_temp' as const],
       meta: {
         manufacturer: 'Mitsubishi Electric',
         ...(model ? { model: `Ecodan ${model}` } : {}),
         ...(z.bounds ? { targetTempC: z.bounds } : {}),
         // a heat pump zone is not a thermostat: it is a machine on the ground, and the 3D house
         // must draw it as such
-        climate: { modes: [...modes], control: z.control, deviceClass: 'heat_pump' as const },
+        climate: { modes: [...modes], control: z.control, deviceClass: 'heat_pump' as const, ...(stepC && stepC > 0 ? { stepC } : {}) },
       },
     }
   })
+}
+
+/**
+ * `EffectiveFlags` masks of a zone's room setpoint, from pymelcloud (`atw_device.py`). MELCloud
+ * only applies the fields whose bit is set.
+ */
+const ROOM_SETPOINT_FLAGS: Record<1 | 2, number> = { 1: 0x200000080, 2: 0x800000200 }
+
+/**
+ * The `Device/SetAtw` body that sets a zone's room setpoint: the whole state read by `Device/Get`,
+ * the setpoint changed, rounded to the controller's step (`TemperatureIncrement`). Not rounded,
+ * the cloud keeps 19.8 and shows it, then the controller puts back 20.0 at its next report
+ * (2026-11-03): the screens would show for minutes a setpoint the machine never had.
+ */
+export function toSetpointWrite(state: Record<string, unknown>, zone: 1 | 2, targetTempC: number, stepC = 0.5): Record<string, unknown> {
+  return {
+    ...state,
+    [`SetTemperatureZone${zone}`]: Math.round(Math.round(targetTempC / stepC) * stepC * 10) / 10,
+    EffectiveFlags: ROOM_SETPOINT_FLAGS[zone],
+    HasPendingCommand: true,
+  }
 }
 
 /**

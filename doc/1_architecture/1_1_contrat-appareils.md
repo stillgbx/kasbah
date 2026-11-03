@@ -1,6 +1,6 @@
 # Contrat des appareils (packages/shared)
 
-> Dernière mise à jour : 2026-10-26
+> Dernière mise à jour : 2026-11-03
 > Sources : `packages/shared/src/devices/{kinds,descriptor,state,command,rules,color}.ts`, `packages/shared/src/scenes/scene.ts`, `packages/shared/src/devices/activity.ts`, `packages/shared/src/house/geo.ts`
 
 ## Principe
@@ -1138,3 +1138,14 @@ demande, hors de l'état (qui ne porte que l'instant et les cumuls du jour). Ell
 diffusé : c'est `GET /api/devices/:id/energy-days` qui la porte, voir
 [1_3 Protocole REST/WS](1_3_protocole-rest-ws.md) et [1_14 Énergie](1_14_energie.md). Un plugin qui la
 déclare implémente le hook `energyDays?(externalId)`.
+
+### Mise à jour 2026-11-03 — `meta.climate.stepC`
+
+Champ facultatif de `meta.climate` (`packages/shared/src/devices/descriptor.ts`) : le **plus petit pas
+de consigne que l'appareil GARDE**, en °C. Absent = le dixième (Nest, simulation). MELCloud le met à
+0,5 (`TemperatureIncrement`) : son régulateur remet 20,0 si on lui envoie 19,8.
+
+Il sert à deux endroits : l'interface arrondit une valeur **tapée** à ce pas, et les touches avancent de
+`max(0,5, stepC)` (`apps/web/src/lib/setpoint.ts`) ; le serveur arrondit **vers le haut** à ce pas la
+consigne qu'il recopie sur un thermostat lié (`core/climateLinks.ts`, `1_2`). Voir
+`../3_plugins/3_13_mitsubishi-melcloud.md` (2026-11-03).

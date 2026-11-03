@@ -9,7 +9,7 @@ import type { FetchLike } from '../../core/sse'
 import { DEFAULT_APP_VERSION, DEFAULT_BASE_URL, MelcloudAuth, createSessionFile, type SessionStore } from './auth'
 import { MelcloudClient } from './client'
 import { HeatingHistory, createHistoryFile, type HistoryStore } from './history'
-import { toDescriptors, toDeviceLinks, toStatePatch, toSystem, toZones, zoneExternalId } from './mapping'
+import { toDescriptors, toDeviceLinks, toSetpointWrite, toStatePatch, toSystem, toZones, zoneExternalId } from './mapping'
 import type { DeviceLink, SystemReading } from './types'
 
 // MELCloud plugin (Mitsubishi Electric heat pumps) — the vendor's cloud API.
@@ -24,7 +24,8 @@ import type { DeviceLink, SystemReading } from './types'
 //  3. A pace bounded by PHYSICS: the captured machine announces `NextCommunication` one minute
 //     after `LastCommunication`. Polling faster than that re-reads the same thing.
 //
-// WHAT THE PLUGIN PUBLISHES: one `climate` device per heating ZONE, read-only. Not one device per
+// WHAT THE PLUGIN PUBLISHES: one `climate` device per heating ZONE, with the room setpoint as the only
+// command (`execute`). Not one device per
 // machine — the reference installation has three Zubadan in cascade behind a single controller,
 // and MELCloud only shows one. No tank either: `HasHotWaterTank` is false, this house's tank is
 // not driven by the heat pump.
@@ -230,11 +231,29 @@ export function createMelcloudPlugin(deps: MelcloudPluginDeps = {}): DevicePlugi
     },
 
     /**
-     * Deliberately read-only. The opposite of an oversight: the zones declare neither `target_temp`
-     * nor `hvac_mode`, so the UI offers no button that would end up here.
+     * The room setpoint of a zone controlled on the room — the only command, the only thing its
+     * descriptor declares. A zone on the weather curve and the modes stay read-only.
+     *
+     * `Device/SetAtw` wants the WHOLE state, hence a fresh `Device/Get` first. What MELCloud kept is
+     * published at once: the next poll would only come within the minute.
      */
-    async execute(_externalId: string, command: Command): Promise<void> {
-      throw new PluginError('UNSUPPORTED_COMMAND', `MELCloud plugin is read-only for now (${command.type})`)
+    async execute(externalId: string, command: Command): Promise<void> {
+      const link = links.find((l) => externalId.startsWith(`${l.deviceId}-z`))
+      const z = link && toZones(link.fields).find((zone) => zoneExternalId(link.deviceId, zone.zone) === externalId)
+      if (!link || !z) throw new PluginError('DEVICE_UNAVAILABLE', `unknown MELCloud zone ${externalId}`)
+      if (command.type !== 'climate.set_target_temp' || z.control !== 'room') {
+        throw new PluginError('UNSUPPORTED_COMMAND', `MELCloud zone ${externalId} only takes a room setpoint (${command.type})`)
+      }
+      const [lo, hi] = z.bounds ?? [10, 30]
+      const target = Math.min(hi, Math.max(lo, command.targetTempC))
+      const state = await client!.device({ deviceId: link.deviceId, buildingId: link.buildingId, signal: ctx?.signal })
+      if (typeof state !== 'object' || state === null) throw new PluginError('UPSTREAM_ERROR', 'MELCloud returned no device state')
+      const step = link.fields.TemperatureIncrement
+      const kept = await client!.setAtw(toSetpointWrite(state as Record<string, unknown>, z.zone, target, typeof step === 'number' && step > 0 ? step : undefined), ctx?.signal)
+      // HTTP 200 even on failure (`3_13`): what counts is the setpoint read back in the body
+      const value = (kept as Record<string, unknown> | null)?.[`SetTemperatureZone${z.zone}`]
+      if (typeof value !== 'number') throw new PluginError('UPSTREAM_ERROR', `MELCloud did not take the setpoint of ${externalId}`)
+      ctx!.emitState(externalId, { targetTempC: value })
     },
 
     async stop(): Promise<void> {
@@ -337,7 +356,7 @@ export function createMelcloudPlugin(deps: MelcloudPluginDeps = {}): DevicePlugi
       // say what we publish AND what we do not: "2 zones" on "1 unit" is exactly what surprises
       // someone who believes they have three heat pumps
       const faulty = systems.filter((s) => s.error.hasError).length
-      const detail = `${zones} zone(s) on ${links.length} unit(s) · read-only${faulty ? ` · ${faulty} in error` : ''}`
+      const detail = `${zones} zone(s) on ${links.length} unit(s)${faulty ? ` · ${faulty} in error` : ''}`
       return { status: faulty ? 'degraded' : 'ok', detail, keys, deviceCount: zones }
     },
   }

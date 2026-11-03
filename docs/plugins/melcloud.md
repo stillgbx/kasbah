@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Id** | `melcloud` |
-| **Devices** | one heating zone (`climate`) per heat pump zone, read-only |
+| **Devices** | one heating zone (`climate`) per heat pump zone; the room setpoint can be set |
 | **Connection** | **cloud, unofficial**: the MELCloud mobile app API (an Ecodan's Wi-Fi module only talks to this cloud) |
 | **Account** | MELCloud account e-mail and password, entered once in Settings; only a session key is kept |
 | **Views** | Heating, Home (room panel), Settings → Plugins |
@@ -14,7 +14,8 @@
 
 ## What the plugin does
 
-- **One heating zone = one device**: measured temperature, and displayed setpoint. The unit is "on" almost all year round; the interface tells apart what is switched on from what is actually heating.
+- **One heating zone = one device**: measured temperature and setpoint. The unit is "on" almost all year round; the interface tells apart what is switched on from what is actually heating.
+- **Room setpoint**: a zone regulated on the room temperature takes its setpoint from Kasbah, by half-degrees — the controller keeps no finer value (sent 19.8 °C, it goes back to 20.0 °C at its next report), so Kasbah rounds before sending. It can be linked to another thermostat (a Nest in front of the heat pump, for instance) so that both keep the same setpoint: see **Linked thermostats** in the [house format](../house-json.md#linked-thermostats-climatelinks).
 - **Heating view**: the unit's state (heating, running, standby, unreachable), defrost, electric backup heater, circulation pumps, 3-way valve, flow, return and outdoor temperatures, demand, any error, and the time of the last report.
 - **Operating history** (when the unit heated, defrosted, called on the backup heater, and at what outdoor temperature), over 48 hours, a week, a month or a year. It is built up from the readings Kasbah takes — hour by hour for a week, day by day for thirteen months: it starts out empty.
 - **Placement**: each zone is placed in the house like the other devices, through the house file.
@@ -50,7 +51,7 @@ Everything is optional, no secret goes in there.
 
 ## Limitations
 
-- **Read-only**: setpoints are displayed, they cannot be changed from Kasbah yet.
+- **Only the room setpoint can be set**: the setpoint of a zone on weather compensation (flow temperature) and the modes are displayed, not changed. A new setpoint reaches the unit at its next report to the cloud, which can take a few minutes.
 - **A MELCloud unit is not a heat pump**: several heat pumps cascaded behind a single controller show up only as one unit with two zones. On such a cascade, MELCloud keeps the zones "idle" and the circulation pumps off even while a unit runs: Kasbah reads heating from the unit's operating mode instead, and cannot tell which of the two zones is being served: the zones then show no activity rather than a guess, and the circulation pumps read "Not reported".
 - **No hot water tank, no energy meter**: MELCloud does not expose them for every installation, nothing is shown in kWh.
 - Depending on the zone, the displayed temperature is the room temperature or the water flow temperature (weather compensation): the interface says which.

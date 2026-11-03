@@ -7,6 +7,22 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-03] update | Consigne plus fine, zone MELCloud pilotable, thermostats liés
+
+**Trigger** : demande de régler la consigne de chauffage plus finement que par demi-degré ; en chemin, la zone MELCloud sur l'ambiante devient pilotable et un lien entre thermostats voisins est ajouté (non commité à la rédaction).
+
+**Pages modified** :
+- `3_plugins/3_13_mitsubishi-melcloud.md` - mise à jour 2026-11-03 : écriture de la consigne (SetAtw, état complet, drapeaux, piège du HTTP 200), arrondi avant envoi mesuré sur la vraie maison, remontées irrégulières ; dépasse la lecture seule et « Écriture » de « Ce qui reste ouvert ».
+- `1_architecture/1_1_contrat-appareils.md` - `meta.climate.stepC`.
+- `1_architecture/1_2_serveur-et-plugins.md` - `core/climateLinks.ts` : liaison aveugle aux marques, arrondi vers le haut, garde anti-écho (cas du sondage tardif), premières lectures non copiées.
+- `2_maison/2_0_format-house-json.md` - section `climateLinks` et route `PUT /api/house/climate-link`.
+- `4_ui/4_6_autres-vues.md` - touches calées sur la grille, saisie au dixième, piège de l'input qui pousse la touche, sélecteur « Thermostat lié » ; dépasse « pas de commandes pour MELCloud ».
+- `3_plugins/3_5_google-nest.md` - renvoi court (le Nest garde les dixièmes, partenaire du lien).
+
+**Contradictions** : les passages « lecture seule » de 3_13 et 4_6 (et de `6_faq/6_1_pieges-runtime.md` pour la zone 2 de l'Ecodan, qui reste en lecture seule et donc exact) sont marqués dépassés par les sections datées, non effacés. Rien d'éprouvé sur le serveur réel pour le lien de thermostats.
+
+**Index** : catalogues mis à jour (5 lignes), index.md régénéré.
+
 ## [2026-11-03] update | Site vitrine : la page française montre la vidéo française
 
 **Trigger** : une vidéo de promotion en français est publiée, la page `/fr/` montrait la version anglaise.

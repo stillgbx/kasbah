@@ -1,6 +1,6 @@
 # Plugin Google Nest (caméras, sonnettes)
 
-> Dernière mise à jour : 2026-10-29
+> Dernière mise à jour : 2026-11-03
 > Sources : `apps/server/src/plugins/nest/{index,client,mapping,types}.ts`, `apps/server/src/core/video/{rtsp-relay,jpeg}.ts`, `apps/server/src/plugins/nest/__fixtures__/sdm.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/server/.env.example`, `apps/web/src/components/NestLinkCard.vue`, `docs/plugins/nest.md`, demande de l'utilisateur du 2026-09-09
 
 ## Ce que l'utilisateur veut, et par étapes
@@ -945,3 +945,9 @@ avec son (1152 × 864, vidéo et audio), lecture fluide, aucune erreur au journa
 0,5 s, la marge de 0,5 s du lecteur et le trajet caméra → Google → serveur. Des fragments de 0,25 s et
 une marge plus courte gagneraient 0,3 à 0,5 s au prix d'arrêts plus fréquents sur un réseau
 irrégulier : non fait, à décider si la seconde gêne.
+
+### Mise à jour 2026-11-03 — le Nest peut suivre un autre thermostat
+
+Le Nest garde les **dixièmes** (pas de `meta.climate.stepC`) ; il refuse les consignes en éco. C'est le
+partenaire typique d'un lien de thermostats (`../1_architecture/1_2_serveur-et-plugins.md`, 2026-11-03) :
+devant une pompe à chaleur qui ne garde que les demi-degrés, 19,8 côté Nest donne 20,0 côté pompe.

@@ -49,6 +49,12 @@ export const deviceMetaSchema = z.object({
      * Decides the 3D marker and nothing else. Absent = `thermostat`.
      */
     deviceClass: z.enum(CLIMATE_CLASSES).optional(),
+    /**
+     * Smallest setpoint step the device KEEPS, in °C. A MELCloud controller takes 19.8 from the
+     * cloud then puts back 20.0 at its next report: it only holds half-degrees. Absent = the tenth
+     * (Nest, simulation).
+     */
+    stepC: z.number().positive().optional(),
   }).optional(),
   sensor: z.object({
     unit: z.string(),

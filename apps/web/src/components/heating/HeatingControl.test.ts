@@ -12,8 +12,9 @@ import { SETPOINT_SEND_AFTER_MS } from '../../composables/useSetpointDraft'
 //  - speak the house's vocabulary: square 36 px `.key` keys, those of the Covers
 //    and Media views, and not round buttons invented for the occasion;
 //  - keep the setpoint BETWEEN the two keys that set it, and no longer show it when off;
-//  - offer no gesture that the plugin would refuse (the MELCloud zones declare neither
-//    `target_temp` nor `hvac_mode`) and respect the device's bounds.
+//  - offer no gesture that the plugin would refuse (a MELCloud zone on the weather curve declares
+//    neither `target_temp` nor `hvac_mode`) and respect the device's bounds;
+//  - move by half-degrees on the keys, and take a tenth typed on the figure.
 
 const entry = (over: Partial<DeviceEntry['descriptor']>, state: Record<string, unknown> = {}): DeviceEntry => ({
   descriptor: {
@@ -65,6 +66,37 @@ describe('HeatingControl', () => {
     await plus!.trigger('click')
     vi.advanceTimersByTime(SETPOINT_SEND_AFTER_MS)
     expect(w.emitted('command')).toEqual([['x:1', { type: 'climate.set_target_temp', targetTempC: 20 }]])
+  })
+
+  /** The keys stay on half-degrees; the tenth the user wants (19.8) is TYPED on the figure. */
+  it('types a tenth on the figure, then the keys go back to the half-degree grid', async () => {
+    const w = mount(HeatingControl, { props: { entry: thermostat }, attachTo: document.body })
+    await w.find('.target button').trigger('click')
+    const field = w.find('.target input')
+    expect((field.element as HTMLInputElement).value).toBe('19,5')
+    await field.setValue('19,8')
+    await field.trigger('keydown', { key: 'Enter' })
+    expect(w.find('.target').text()).toBe('19,8 °C')
+    await w.find('.keys--target').findAll('.key')[1]!.trigger('click')
+    expect(w.find('.target').text()).toBe('20,0 °C')
+    vi.advanceTimersByTime(SETPOINT_SEND_AFTER_MS)
+    expect(w.emitted('command')).toEqual([['x:1', { type: 'climate.set_target_temp', targetTempC: 20 }]])
+    w.unmount()
+  })
+
+  it('rounds a typed value to the step the device holds, and drops a text that is not a number', async () => {
+    const pac = entry({ ...thermostat.descriptor, meta: { targetTempC: [10, 30], climate: { modes: ['heat'], stepC: 0.5 } } })
+    const w = mount(HeatingControl, { props: { entry: pac }, attachTo: document.body })
+    await w.find('.target button').trigger('click')
+    await w.find('.target input').setValue('abc')
+    await w.find('.target input').trigger('keydown', { key: 'Enter' })
+    expect(w.find('.target').text()).toBe('19,5 °C')
+    await w.find('.target button').trigger('click')
+    await w.find('.target input').setValue('19,8')
+    await w.find('.target input').trigger('keydown', { key: 'Enter' })
+    vi.advanceTimersByTime(SETPOINT_SEND_AFTER_MS)
+    expect(w.emitted('command')).toEqual([['x:1', { type: 'climate.set_target_temp', targetTempC: 20 }]])
+    w.unmount()
   })
 
   /**

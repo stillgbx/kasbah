@@ -3,6 +3,8 @@ import { computed } from 'vue'
 import { CLIMATE_MODES, type CommandInput, type DeviceDescriptor, type StateFor } from '@kasbah/shared'
 import { formatPercent, formatTemp } from '../../lib/format'
 import { useSetpointDraft } from '../../composables/useSetpointDraft'
+import { stepSetpoint } from '../../lib/setpoint'
+import SetpointValue from './SetpointValue.vue'
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'climate'>; pending?: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
@@ -15,7 +17,7 @@ const range = computed<[number, number]>(() => props.descriptor.meta.targetTempC
 const modes = computed(() => props.descriptor.meta.climate?.modes ?? CLIMATE_MODES)
 const has = (c: string) => props.descriptor.capabilities.includes(c as never)
 // This control was the only one not to consult the capabilities: the simulation declared them all,
-// and no real `climate` device existed. A heat pump read in READ-ONLY mode (MELCloud)
+// and no real `climate` device existed. A heat pump zone on the weather curve (MELCloud)
 // publishes its state without accepting commands — showing the buttons would make the UI promise what
 // the plugin would refuse. The VALUE is shown in every case: it is the gesture that is missing.
 // In eco the device follows its own eco setpoint, set on the device: a Nest refuses any other.
@@ -33,7 +35,9 @@ const flow = computed(() => props.descriptor.meta.climate?.control === 'flow')
 // The parent routes the command to the device on screen: a draft left when switching devices is dropped.
 const setpoint = useSetpointDraft(() => props.descriptor.id, () => props.state.targetTempC,
   (_id, targetTempC) => emit('command', { type: 'climate.set_target_temp', targetTempC }), { onSwitch: 'drop' })
-const step = (d: number) => setpoint.set(Math.min(range.value[1], Math.max(range.value[0], Math.round((setpoint.value.value + d) * 2) / 2)))
+const stepC = computed(() => props.descriptor.meta.climate?.stepC)
+// half-degrees on the buttons; a tenth is typed on the figure (`SetpointValue`)
+const step = (dir: 1 | -1) => setpoint.set(stepSetpoint(setpoint.value.value, dir, range.value, stepC.value))
 </script>
 
 <template>
@@ -66,9 +70,10 @@ const step = (d: number) => setpoint.set(Math.min(range.value[1], Math.max(range
       <!-- centered between its two buttons when there are some; otherwise aligned on its label, to the left,
            rather than floating alone in the middle of the card -->
       <div class="d-flex align-center ga-4 my-2" :class="canSetTemp ? 'justify-center' : 'justify-start'">
-        <v-btn v-if="canSetTemp" icon="minus" variant="tonal" size="large" :class="{ 'btn-hidden': eco }" :aria-hidden="eco" :disabled="disabled || eco" @click="step(-0.5)" />
-        <span class="text-h3 font-weight-medium target">{{ formatTemp(setpoint.value.value, $i18n.locale) }}</span>
-        <v-btn v-if="canSetTemp" icon="plus" variant="tonal" size="large" :class="{ 'btn-hidden': eco }" :aria-hidden="eco" :disabled="disabled || eco" @click="step(0.5)" />
+        <v-btn v-if="canSetTemp" icon="minus" variant="tonal" size="large" :class="{ 'btn-hidden': eco }" :aria-hidden="eco" :disabled="disabled || eco" @click="step(-1)" />
+        <SetpointValue class="text-h3 font-weight-medium target" :value="setpoint.value.value" :text="formatTemp(setpoint.value.value, $i18n.locale)"
+                       :editable="canSetTemp && !disabled && !eco" :bounds="range" :step-c="stepC" @set="setpoint.set" />
+        <v-btn v-if="canSetTemp" icon="plus" variant="tonal" size="large" :class="{ 'btn-hidden': eco }" :aria-hidden="eco" :disabled="disabled || eco" @click="step(1)" />
       </div>
     </template>
   </div>

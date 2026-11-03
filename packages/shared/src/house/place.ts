@@ -346,6 +346,32 @@ export function setRenderTuningInJson(doc: unknown, tuning: SceneTuning): JsonOb
   return Object.keys(render).length ? { ...rest, render } : rest
 }
 
+export const climateLinkBodySchema = z.object({ deviceId: deviceIdSchema, linkedTo: deviceIdSchema.nullable() })
+export type ClimateLinkBody = z.infer<typeof climateLinkBodySchema>
+
+/**
+ * Returns a copy of the JSON document with `deviceId` linked to `linkedTo` (`climateLinks`), or
+ * unlinked with `null`. The device leaves its former group first; it joins the group of `linkedTo`
+ * when there is one, otherwise the two make a new group. A group left alone is dropped, and an empty
+ * list removes the section.
+ */
+export function setClimateLinkInJson(doc: unknown, body: ClimateLinkBody): JsonObject {
+  if (!isObject(doc)) throw new PlacementError('house document is not an object')
+  const { deviceId, linkedTo } = body
+  if (linkedTo === deviceId) throw new PlacementError('a thermostat cannot be linked to itself')
+  const groups = (Array.isArray(doc.climateLinks) ? doc.climateLinks : [])
+    .filter((g): g is string[] => Array.isArray(g))
+    .map((g) => g.filter((id) => id !== deviceId))
+  if (linkedTo !== null) {
+    const target = groups.find((g) => g.includes(linkedTo))
+    if (target) target.push(deviceId)
+    else groups.push([linkedTo, deviceId])
+  }
+  const kept = groups.filter((g) => g.length >= 2)
+  const { climateLinks: _dropped, ...rest } = doc
+  return kept.length ? { ...rest, climateLinks: kept } : rest
+}
+
 /**
  * Returns a copy of the JSON document with the GPS origin (`origin`) replaced, as it comes out of the
  * alignment on the photo in Settings. Nothing else changes: rooms, terrain, relief, spots and

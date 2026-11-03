@@ -1,6 +1,6 @@
 # Plugin Mitsubishi MELCloud (pompes à chaleur Ecodan Zubadan)
 
-> Dernière mise à jour : 2026-10-21
+> Dernière mise à jour : 2026-11-03
 > Sources : `apps/server/src/plugins/melcloud/{index,auth,client,mapping,history,types}.ts`, tests `mapping.test.ts`, `plugin.test.ts`, `history.test.ts`, capture anonymisée `apps/server/src/plugins/melcloud/__fixtures__/melcloud.ts`, `apps/server/src/plugins/index.ts`, `apps/server/.env.example`, `apps/web/src/components/MelcloudLinkCard.vue`, `apps/web/src/api/transport.ts`, journal de session `_generated-ai-doc/sessions/2026-09-17-melcloud-chauffage/journal.md`
 
 ## Ce que la maison chauffe, et ce que MELCloud en montre
@@ -314,3 +314,41 @@ omettant le champ — un patch qui omet garde la valeur du sondage précédent d
   Les points relus du disque sont **pondérés par leur nombre d'échantillons** (`fromPoint` : moyenne × n) :
   sans cela, le sondage suivant réécrivait la moyenne d'un jour restauré avec un seul échantillon.
   Tests : `history.test.ts`, `mapping.test.ts`.
+
+### Mise à jour 2026-11-03 — la consigne de la zone sur l'ambiante s'écrit
+
+**Dépasse** « Un `climate` par zone, en lecture seule » et l'item « Écriture » de « Ce qui reste
+ouvert » ci-dessus : la lecture seule était une décision de phase, elle est levée pour **une** zone.
+
+- **Ce qui devient pilotable.** Une zone réglée sur la **pièce** (`control: 'room'`) déclare
+  `target_temp`. La zone sur la **loi d'eau** (`flow`) et les modes (`hvac_mode`) restent en lecture
+  seule : une consigne de départ à 45 °C n'a pas le sens qu'un utilisateur lui prête, et rien n'a été
+  éprouvé de ce côté. `health().detail` ne dit plus « read-only ».
+- **L'écriture** (`execute('climate.set_target_temp')`, `index.ts` / `client.ts`) : un `Device/Get`
+  **frais**, puis `POST Device/SetAtw` avec **tout l'état** (MELCloud remplace, il ne fusionne pas), le
+  seul `SetTemperatureZoneN` changé, `EffectiveFlags` = masques de pymelcloud (zone 1
+  `0x200000080`, zone 2 `0x800000200`) et `HasPendingCommand: true`. La valeur est **bornée** aux
+  limites de la zone puis **arrondie** à `TemperatureIncrement` (`toSetpointWrite`, `mapping.ts`).
+- **Piège du HTTP 200, encore.** Comme à la connexion, MELCloud accuse réception en 200 quoi qu'il
+  arrive : le succès, c'est la **consigne relue dans le corps de la réponse**, sinon `UPSTREAM_ERROR`.
+  La valeur gardée est publiée tout de suite (`emitState`), sans attendre le sondage suivant.
+- **Contrat** : `meta.climate.stepC` = `TemperatureIncrement` (0,5), voir
+  [1_1](../1_architecture/1_1_contrat-appareils.md).
+
+**Pourquoi arrondir AVANT d'envoyer.** Éprouvé sur la vraie installation le 2026-11-03 par une sonde
+jetable : 19,8 envoyé, le cloud affiche 19,8, puis le **régulateur remet 20,0** à sa remontée suivante
+(il ne retient que les demi-degrés) ; 19,5 envoyé, conservé après la remontée (l'écriture marche) ;
+puis remis à 20,0. Sans l'arrondi, les écrans auraient montré pendant des minutes une consigne que la
+machine n'a jamais eue.
+
+**Observé ce soir-là** : le régulateur remonte irrégulièrement (4 à 15 min entre deux
+`LastCommunication`) ; `ListDevices` reflète une écriture **tout de suite** alors que `LastTimeStamp`
+traîne. Ne pas conclure « la consigne a été défaite » avant d'avoir attendu une remontée.
+
+**Thermostat lié.** Cette zone se règle sur sa propre sonde de pièce, comme un Nest posé devant : les
+deux se disputent quand leurs consignes diffèrent. Le serveur sait les aligner, sans rien de
+spécifique à MELCloud : `../1_architecture/1_2_serveur-et-plugins.md`, « Mise à jour 2026-11-03 ». Le
+lien se pose dans le panneau de l'appareil (« Thermostat lié »). **Pas encore éprouvé** sur le serveur
+de l'utilisateur (non redémarré à la rédaction).
+
+Tests : `plugin.test.ts`, `mapping.test.ts`. Interface : `../4_ui/4_6_autres-vues.md` (2026-11-03).

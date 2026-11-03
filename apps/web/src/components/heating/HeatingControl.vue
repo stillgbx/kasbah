@@ -4,6 +4,8 @@ import type { CommandInput, DeviceEntry, StateFor } from '@kasbah/shared'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import { formatPercent } from '../../lib/format'
 import { useSetpointDraft } from '../../composables/useSetpointDraft'
+import { stepSetpoint } from '../../lib/setpoint'
+import SetpointValue from '../controls/SetpointValue.vue'
 
 // The commands of a heating device, on its room's line (`control` slot of `RoomBands`).
 //
@@ -43,10 +45,9 @@ const eco = computed(() => state.value.mode === 'eco')
 // clicks in a row: the figure follows at once, ONE command leaves once they are over (Google quota)
 const setpoint = useSetpointDraft(() => props.entry.descriptor.id, () => state.value.targetTempC,
   (id, targetTempC) => emit('command', id, { type: 'climate.set_target_temp', targetTempC }))
-function step(d: number) {
-  const [lo, hi] = bounds.value
-  setpoint.set(Math.min(hi, Math.max(lo, Math.round((setpoint.value.value + d) * 2) / 2)))
-}
+const stepC = computed(() => props.entry.descriptor.meta.climate?.stepC)
+// half-degrees on the keys; a tenth is typed on the figure (`SetpointValue`)
+const step = (dir: 1 | -1) => setpoint.set(stepSetpoint(setpoint.value.value, dir, bounds.value, stepC.value))
 const setMode = (mode: string) => emit('command', props.entry.descriptor.id, { type: 'climate.set_mode', mode: mode as StateFor<'climate'>['mode'] })
 
 const target = computed(() => `${setpoint.value.value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} °C`)
@@ -69,12 +70,13 @@ const showTarget = computed(() => canSetTemp.value && !off.value)
     <!-- unreachable: greyed out, the gesture would be refused further down -->
     <div v-if="showTarget" class="keys keys--target">
       <!-- in eco the keys keep their place, invisible: the setpoint does not slide when switching -->
-      <button type="button" class="key" :class="{ 'key--hidden': eco }" :aria-hidden="eco" :disabled="!entry.state.available || eco" :title="$t('heating.lower')" :aria-label="$t('heating.lower')" @click="step(-0.5)">
+      <button type="button" class="key" :class="{ 'key--hidden': eco }" :aria-hidden="eco" :disabled="!entry.state.available || eco" :title="$t('heating.lower')" :aria-label="$t('heating.lower')" @click="step(-1)">
         <StrokeIcon name="minus" :size="18" />
       </button>
-      <!-- the setpoint between its two keys: you set a number by looking at it -->
-      <span class="target" :title="eco ? $t('climate.ecoTarget') : undefined">{{ target }}</span>
-      <button type="button" class="key" :class="{ 'key--hidden': eco }" :aria-hidden="eco" :disabled="!entry.state.available || eco" :title="$t('heating.raise')" :aria-label="$t('heating.raise')" @click="step(0.5)">
+      <!-- the setpoint between its two keys: you set a number by looking at it, and a tap types it -->
+      <SetpointValue class="target" :title="eco ? $t('climate.ecoTarget') : undefined" :value="setpoint.value.value" :text="target"
+                     :editable="entry.state.available && !eco" :bounds="bounds" :step-c="stepC" @set="setpoint.set" />
+      <button type="button" class="key" :class="{ 'key--hidden': eco }" :aria-hidden="eco" :disabled="!entry.state.available || eco" :title="$t('heating.raise')" :aria-label="$t('heating.raise')" @click="step(1)">
         <StrokeIcon name="plus" :size="18" />
       </button>
     </div>

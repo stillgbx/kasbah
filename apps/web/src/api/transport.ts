@@ -1,4 +1,4 @@
-import type { GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEnergyDays, DeviceEntry, DeviceKind, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, MatterSettingsPatch, MatterStatus, PropertiesResponse, PropertyMode, NewPropertyBody, PushSubscribeBody, Right, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor } from '@kasbah/shared'
+import type { ClimateLinkBody, GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEnergyDays, DeviceEntry, DeviceKind, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, MatterSettingsPatch, MatterStatus, PropertiesResponse, PropertyMode, NewPropertyBody, PushSubscribeBody, Right, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor } from '@kasbah/shared'
 
 // Abstraction of the server channel. Two implementations: HTTP + WebSocket (real) and in-process
 // simulation (tests, static demo without a server). Commands ALWAYS go through a request
@@ -936,6 +936,8 @@ export interface Transport {
   setRoomOrder(levelId: string, roomIds: string[]): Promise<House>
   /** Saves the 3D scene's light setting in the house; returns the rewritten house. */
   saveRenderTuning(tuning: SceneTuning): Promise<House>
+  /** Links a thermostat to another (`null` unlinks it); returns the rewritten house. */
+  saveClimateLink(body: ClimateLinkBody): Promise<House>
   /** Saves the terrain relief in the house (`null` = flat); returns the rewritten house. */
   saveRelief(relief: Relief | null): Promise<House>
   /** Saves the terrain outline; returns the rewritten house (relief enlarged if needed). */

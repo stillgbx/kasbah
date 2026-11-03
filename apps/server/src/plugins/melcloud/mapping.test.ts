@@ -119,9 +119,13 @@ describe('MELCloud — the two zones, read on the capture', () => {
     expect(toZones(broken)[0]).toMatchObject({ control: 'flow', currentTempC: 20.5, targetTempC: 60 })
   })
 
-  it('publishes one climate per zone, read-only and without offering cooling', () => {
+  it('publishes one climate per zone, the room one settable, without offering cooling', () => {
     const [d1, d2] = toDescriptors(link)
-    expect(d1).toMatchObject({ id: 'melcloud:111111-z1', kind: 'climate', name: 'Chauffage', capabilities: ['current_temp'] })
+    expect(d1).toMatchObject({ id: 'melcloud:111111-z1', kind: 'climate', name: 'Chauffage', capabilities: ['current_temp', 'target_temp'] })
+    // the zone on the weather curve stays read
+    expect(d2!.capabilities).toEqual(['current_temp'])
+    // the controller only holds half-degrees (`TemperatureIncrement`)
+    expect(d1!.meta.climate?.stepC).toBe(0.5)
     expect(d2!.id).toBe('melcloud:111111-z2')
     // `CanCool: false`: "Cool" must not appear among the announced modes
     expect(d1!.meta.climate?.modes).not.toContain('cool')

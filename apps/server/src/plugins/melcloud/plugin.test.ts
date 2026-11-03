@@ -44,8 +44,9 @@ const response = (body: unknown, status = 200) => ({
 const flush = async () => { for (let i = 0; i < 12; i++) await new Promise((r) => setTimeout(r, 0)) }
 
 /** Fake MELCloud, driven by a mutable state. Everything comes out as 200, refusals included. */
-function fakeMelcloud(over: { loginError?: number; rejectKey?: boolean; deviceFails?: string; listFails?: boolean } = {}) {
+function fakeMelcloud(over: { loginError?: number; rejectKey?: boolean; deviceFails?: string; listFails?: boolean; setRefused?: boolean } = {}) {
   const calls: { method: string; path: string }[] = []
+  const writes: Record<string, unknown>[] = []
   const world = { list: LIST_DEVICES as unknown }
   const fetchImpl = vi.fn<FetchLike>(async (url, init) => {
     const method = init?.method ?? 'GET'
@@ -73,9 +74,15 @@ function fakeMelcloud(over: { loginError?: number; rejectKey?: boolean; deviceFa
       return response(DEVICE_GET)
     }
     if (path === '/EnergyCost/Report') return response(ENERGY_REPORT_SEPTEMBER)
+    if (path === '/Device/SetAtw') {
+      const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
+      writes.push(body)
+      // the cloud answers with the state it kept — or, refusing, a 200 without it
+      return response(over.setRefused ? { ErrorId: 5 } : body)
+    }
     return response({ ErrorId: 404 }, 404)
   })
-  return { calls, fetchImpl, world }
+  return { calls, fetchImpl, world, writes }
 }
 
 function memoryStore(initial: StoredSession | null = null): SessionStore & { value: StoredSession | null } {
@@ -88,8 +95,9 @@ function memoryStore(initial: StoredSession | null = null): SessionStore & { val
   return store
 }
 
-async function setup(over: { session?: StoredSession | null; loginError?: number; rejectKey?: boolean; deviceFails?: string; listFails?: boolean } = {}) {
+async function setup(over: { session?: StoredSession | null; loginError?: number; rejectKey?: boolean; deviceFails?: string; listFails?: boolean; setRefused?: boolean } = {}) {
   const melcloud = fakeMelcloud({
+    ...(over.setRefused !== undefined ? { setRefused: over.setRefused } : {}),
     ...(over.loginError !== undefined ? { loginError: over.loginError } : {}),
     ...(over.rejectKey !== undefined ? { rejectKey: over.rejectKey } : {}),
     ...(over.deviceFails !== undefined ? { deviceFails: over.deviceFails } : {}),
@@ -216,9 +224,34 @@ describe('MELCloud — what the plugin publishes', () => {
     expect(plugin.health!().detail).toContain('0 zone(s)')
   })
 
-  it('refuses every command: the plugin is read-only', async () => {
-    const { plugin } = await setup({ session: linked })
-    await expect(plugin.execute(Z1, { type: 'climate.set_mode', mode: 'heat' })).rejects.toThrow(/read-only/i)
+  it('sets a room zone’s setpoint with the whole state, its flag, and the controller’s step', async () => {
+    const { plugin, ctx, melcloud } = await setup({ session: linked })
+    await plugin.start()
+    await flush()
+    await plugin.execute(Z1, { type: 'climate.set_target_temp', targetTempC: 19.8 })
+    const body = melcloud.writes[0]!
+    // 19.8 is not kept by the controller (half-degrees): it is sent rounded, not shown then lost
+    expect(body).toMatchObject({ DeviceID: 111111, SetTemperatureZone1: 20, EffectiveFlags: 0x200000080, HasPendingCommand: true })
+    expect(body.SetHeatFlowTemperatureZone2).toBe(45)   // the rest of the state goes back as read
+    expect(ctx.emitState).toHaveBeenLastCalledWith(Z1, { targetTempC: 20 })
+  })
+
+  it('keeps the modes and the zone on the weather curve read-only', async () => {
+    const { plugin, melcloud } = await setup({ session: linked })
+    await plugin.start()
+    await flush()
+    await expect(plugin.execute(Z1, { type: 'climate.set_mode', mode: 'heat' })).rejects.toThrow(/only takes a room setpoint/)
+    await expect(plugin.execute(Z2, { type: 'climate.set_target_temp', targetTempC: 40 })).rejects.toThrow(/only takes a room setpoint/)
+    expect(melcloud.writes).toEqual([])
+  })
+
+  it('fails when MELCloud answers 200 without the setpoint', async () => {
+    const { plugin, ctx } = await setup({ session: linked, setRefused: true })
+    await plugin.start()
+    await flush()
+    vi.mocked(ctx.emitState).mockClear()
+    await expect(plugin.execute(Z1, { type: 'climate.set_target_temp', targetTempC: 21 })).rejects.toThrow(/did not take the setpoint/)
+    expect(ctx.emitState).not.toHaveBeenCalled()
   })
 
   it('can still start when MELCloud does not answer', async () => {

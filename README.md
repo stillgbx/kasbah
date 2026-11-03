@@ -225,7 +225,7 @@ On a large (landscape) screen, a three-column layout: the **rail** on the left, 
 | **Cameras** | Thumbnails and live view (MSE / ffmpeg). |
 | **Energy** | Flow diagram (solar, house, grid, battery), panel arrays, history by period (live, day, week, month, year, lifetime; rolling or calendar), grid phase by phase against the subscription. |
 | **Water** | Filtration station, flow rate, consumables, history. |
-| **Heating** | Zones and machine (heat pump), operating history. |
+| **Heating** | Zones and machine (heat pump), operating history; setpoint typed to the tenth, linked thermostats kept on the same setpoint. |
 | **Vehicles** | Charging, map (street / satellite), wake-up, charge limit, 3D body, mileage tracking for a lease. |
 | **Robots** | Mower (GPS, current task, zones to mow or exclude, map of the plot on the aerial photo and in 3D, log, quota) and vacuum (mopping depending on capabilities). |
 | **Pets** | PetKit feeders and fountains: meals, dispensing, water, consumables. |

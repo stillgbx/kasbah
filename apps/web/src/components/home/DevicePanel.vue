@@ -21,6 +21,7 @@ import ForgetDeviceButton from '../devices/ForgetDeviceButton.vue'
 import DeviceControl from '../controls/DeviceControl.vue'
 import VehicleTuning from '../vehicles/VehicleTuning.vue'
 import CoverTuning from '../covers/CoverTuning.vue'
+import ClimateLinkTuning from '../heating/ClimateLinkTuning.vue'
 import JournalList from '../robots/JournalList.vue'
 import MowerTuning from '../robots/MowerTuning.vue'
 import MowerZones from '../robots/MowerZones.vue'
@@ -68,6 +69,14 @@ const tunableMower = computed(() => {
 const tunableCover = computed(() => {
   const d = resolved.value?.descriptor
   return d?.kind === 'cover' && resolved.value?.houseDevice ? d : null
+})
+/**
+ * A thermostat that takes a setpoint can be LINKED to another (`ClimateLinkTuning`): the server
+ * then keeps their setpoints equal, whatever the brands.
+ */
+const linkableClimate = computed(() => {
+  const d = resolved.value?.descriptor
+  return d?.kind === 'climate' && d.capabilities.includes('target_temp') ? d : null
 })
 /**
  * The mower's ZONES: mow one of them, open or close an exclusion zone — the same panel as on the
@@ -320,6 +329,17 @@ function send(cmd: CommandInput) {
          comes to do here is operate the shutter, not describe it. -->
     <div v-if="tunableCover" class="card card--soft tuning">
       <div v-if="tuningOpen" class="tuning__body"><CoverTuning :descriptor="tunableCover" /></div>
+      <div class="tuning__foot">
+        <span class="muted">{{ $t('vehicle.tuneTitle') }}</span>
+        <button type="button" class="pill tuning__cta" :data-on="tuningOpen ? '1' : '0'"
+                :aria-expanded="tuningOpen" @click="tuningOpen = !tuningOpen">
+          <StrokeIcon name="gear" :size="16" /> {{ tuningOpen ? $t('place.done') : $t('vehicle.tune') }}
+        </button>
+      </div>
+    </div>
+    <!-- the thermostat: the one it is linked to, whose setpoint it shares. Folded behind "Adjust" -->
+    <div v-if="linkableClimate" class="card card--soft tuning">
+      <div v-if="tuningOpen" class="tuning__body"><ClimateLinkTuning :descriptor="linkableClimate" /></div>
       <div class="tuning__foot">
         <span class="muted">{{ $t('vehicle.tuneTitle') }}</span>
         <button type="button" class="pill tuning__cta" :data-on="tuningOpen ? '1' : '0'"

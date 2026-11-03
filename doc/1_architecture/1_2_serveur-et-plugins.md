@@ -1,6 +1,6 @@
 # Serveur et hôte de plugins
 
-> Dernière mise à jour : 2026-10-30
+> Dernière mise à jour : 2026-11-03
 > Sources : `apps/server/src/{app,main}.ts`, `apps/server/src/core/*.ts`, `apps/server/src/plugins/index.ts`, `apps/server/src/core/scene-registry.ts`, `apps/server/src/core/{plugin,plugin-host,scene-seeder}.ts`, `packages/shared/src/house/schema.ts`, `apps/server/src/plugins/comap/{history,state}.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/core/playbackBridge.ts`, `apps/server/src/music/{player,sources}.ts`, `apps/server/src/core/automations/engine.ts`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/main.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/plugins/shopping/index.ts` (2026-10-11)
 
 ## Assemblage (`app.ts`)
@@ -626,3 +626,37 @@ Facultatifs : les contextes de test écrits à la main n'ont pas à changer. Tes
 
 Dans le même temps, `session.routes(app)` remonte en tête de `buildApp` : voir
 `1_13_comptes-et-sessions.md` (mise à jour du 2026-10-30).
+
+### Mise à jour 2026-11-03 — `core/climateLinks.ts` : des thermostats liés, sans connaître les marques
+
+**Pourquoi.** Cas réel : un Nest devant la pompe à chaleur, tous deux réglés sur leur propre sonde de
+pièce. Avec deux consignes différentes, ils se disputent (l'un demande de la chaleur pendant que
+l'autre a coupé ou limite). Plutôt qu'une règle Nest ↔ MELCloud, un module **aveugle aux marques**,
+câblé dans `app.ts`, comme `chargeCoordination` mais avec un état.
+
+**Donnée.** Section `climateLinks` de la maison : groupes d'ids d'appareils, au moins 2 chacun, un
+appareil dans un groupe au plus (`climateLinksSchema`, `packages/shared/src/house/schema.ts` ; voir
+`../2_maison/2_0_format-house-json.md`). Écrite par `PUT /api/house/climate-link`
+`{ deviceId, linkedTo | null }` (`setClimateLinkInJson`, `place.ts`).
+
+**Comportement.** Le module écoute le bus `state`. Un **changement** de `targetTempC` sur un membre,
+quelle qu'en soit l'origine (Kasbah, automatisation, molette du Nest, appli du fabricant vue au
+sondage), est poussé aux autres en `climate.set_target_temp` via `host.execute`, **arrondi vers le
+haut** au `stepC` de chacun et borné à sa plage (`linkedSetpoint`) : Nest 19,8, pompe 20,0, ainsi la
+pompe ne coupe jamais avant que le Nest soit satisfait (choix de l'utilisateur). Les groupes de 3 et
+plus marchent.
+
+Garde-fous :
+- rien n'est copié depuis ou vers un membre **éteint, en éco ou indisponible** (la consigne éco est
+  celle du Nest, et un Nest en éco refuse les consignes) ;
+- la **première lecture** après le démarrage n'est pas un changement : on n'aligne jamais le groupe dans
+  le dos de l'utilisateur, seul le prochain changement est recopié ;
+- **anti-écho** : pendant `CONFIRM_WITHIN_MS` (10 min) après une poussée, un rapport égal à la valeur
+  poussée **ou** à celle d'avant est ignoré, dans n'importe quel ordre. Le test a attrapé un cas
+  réel : un sondage parti avant que la commande n'atterrisse revient **après** la confirmation avec
+  l'ancienne valeur et aurait remis le Nest à l'ancienne consigne. Prix accepté : remettre un membre
+  à son ancienne consigne depuis l'appli du fabricant dans ces minutes n'est pas recopié ;
+- une commande refusée efface la garde.
+
+**Pas encore éprouvé sur le serveur réel** (non redémarré ; le lien Nest ↔ zone 1 reste à poser dans le
+panneau). Tests : `core/climateLinks.test.ts`, `place.test.ts`. Interface : `../4_ui/4_6_autres-vues.md`.

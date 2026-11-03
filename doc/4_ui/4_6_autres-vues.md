@@ -1,6 +1,6 @@
 # Autres vues : Météo, Robots, Eau, Chauffage, Animaux, Agenda, École, Courses, Automatisations
 
-> Dernière mise à jour : 2026-10-25
+> Dernière mise à jour : 2026-11-03
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre les vues propres à un domaine : Météo et radar, Robots (tondeuse, aspirateur), Eau, Chauffage, Animaux, Agenda, École, Courses, Automatisations. Elle est née du découpage de
@@ -1241,3 +1241,25 @@ c'était déjà le cas avant.
 Sources : `apps/web/src/components/water/WaterConsumptionChart.vue`,
 `apps/web/src/components/heating/HeatingHistoryChart.vue` (+ `HeatingHistoryChart.test.ts`),
 `apps/web/src/lib/consumption.ts` (+ `consumption.test.ts`), `apps/web/src/i18n/locales/{fr,en}.json`.
+
+### Mise à jour 2026-11-03 — consigne plus fine, et thermostat lié
+
+**Dépasse** « les commandes n'apparaissent pas pour les zones MELCloud » (plus haut) : la zone sur
+l'ambiante déclare désormais `target_temp` (`../3_plugins/3_13_mitsubishi-melcloud.md`), donc
+`HeatingControl` lui rend ses touches.
+
+- **Touches par demi-degré, calées sur la grille** (`stepSetpoint`, `apps/web/src/lib/setpoint.ts`) :
+  19,8 puis « + » donne 20,0, puis « − » donne 19,5. Le pas est `max(0,5, meta.climate.stepC)`.
+- **Taper une valeur** : un appui sur le chiffre le change en champ de saisie, au dixième, virgule ou
+  point (`SetpointValue.vue`, `typedSetpoint`), arrondi au `stepC` de l'appareil. Utilisé par
+  `HeatingControl.vue` (vue Chauffage) et `ClimateControl.vue` (panneau 3D). Choix de l'utilisateur :
+  demi-degrés + saisie, plutôt que des clics de 0,1 (20 pour 2 °C) ou un curseur.
+- **Piège trouvé en vérifiant** : un `<input>` se dimensionne tout seul et a poussé la touche « + » à
+  99 px. Le chiffre reste donc **invisible** (`setpoint__sizer`) pour donner sa taille à la boîte, et le
+  champ est posé dessus (`position: absolute; inset: 0`). Mesuré : rien ne bouge, thèmes clair et
+  sombre, zoom 1 / 1,25 / 1,5.
+- **« Thermostat lié »** : carte « Réglages » du panneau appareil (`ClimateLinkTuning.vue`, montée par
+  `components/home/DevicePanel.vue`), un sélecteur ; « Aucun » délie. Store `saveClimateLink`, transports
+  http et mock. Ce que le lien fait : `../1_architecture/1_2_serveur-et-plugins.md` (même date).
+
+Tests : `setpoint.test.ts`, `HeatingControl.test.ts`.

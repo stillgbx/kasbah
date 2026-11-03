@@ -46,6 +46,15 @@ export class MelcloudClient {
   }
 
   /**
+   * Writes an air-to-water machine's state. The body is the WHOLE state read by `device`, the
+   * changed fields set, and `EffectiveFlags` saying which ones count (pymelcloud's masks). Returns
+   * the state MELCloud kept.
+   */
+  setAtw(state: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+    return this.request('POST', '/Device/SetAtw', { body: state, signal })
+  }
+
+  /**
    * A machine's energy report over a period (kWh consumed and produced, per day and per use:
    * heating, hot water, cooling). Many installations WITHOUT an energy meter answer zeros — that
    * is an answer, not a failure, and only the capture will tell what your machines really return.

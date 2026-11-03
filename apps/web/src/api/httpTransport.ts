@@ -239,6 +239,11 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(tuning) },
       (j) => houseSchema.parse((j as { house: unknown }).house) as House,
     ),
+    saveClimateLink: (body) => request(
+      `${base}/api/house/climate-link`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+      (j) => houseSchema.parse((j as { house: unknown }).house) as House,
+    ),
     saveRelief: (relief) => request(
       `${base}/api/house/relief`,
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(relief) },
