@@ -42,6 +42,11 @@ NodeMaterial.prototype.setupDiffuseColor = function (this: NodeMaterial, builder
   if (!this.fog) return
   const a = ownOpacity.mul(select(fadeVisibility.lessThan(1).and(positionWorld.y.greaterThan(fadeY)), fadeVisibility, float(1)))
   if (this.transparent) { diffuseColor.a.mulAssign(a); return }
+  // The ground (`noFade`, `builders/materials.ts`) never fades: no `Discard` in its shader. One that is
+  // never taken still cost 3-6 ms of GPU per frame on these large surfaces (Radeon iGPU, 2026-11-04),
+  // wherever it sits in the shader; an alpha-to-coverage version cost the same. Probably the depth
+  // test, which a shader that can drop its pixel pushes after shading. The GLSL keeps it: no cost there.
+  if ((builder.material.userData as { noFade?: boolean }).noFade) return
   // interleaved gradient noise (Jimenez 2014), as in the GLSL: an opaque material loses a share of its
   // pixels. Counted from the BOTTOM like `gl_FragCoord`, so both renderers drop the same pixels.
   const pixel = vec2(screenCoordinate.x, screenSize.y.sub(screenCoordinate.y))
@@ -118,14 +123,15 @@ NodeMaterial.prototype.setupOutput = function (this: NodeMaterial, builder: Node
   return (builder.material.userData as { noLamps?: boolean }).noLamps ? heightMist(out) : out
 }
 
-// `noLamps` changes the generated code (the mist here, the indoor lamps in `levelLight.ts`): it must
+// `noLamps` changes the generated code (the mist here, the indoor lamps in `levelLight.ts`), `noFade`
+// too (the fade's discard): they must
 // enter the shader cache key, or an outdoor material reuses the shader of an identical indoor one
 // (seen on 2026-11-04: the mist on the roof but not on the lawn). WebGPU reads the key on the ORIGINAL
 // material (`RenderObject.getMaterialCacheKey`), not on its node copy — hence `Material.prototype`,
 // patched only when this module loads, that is in WebGPU.
 const customProgramCacheKey = Material.prototype.customProgramCacheKey
 Material.prototype.customProgramCacheKey = function (this: Material) {
-  const u = this.userData as { noLamps?: boolean; kasbahGpu?: string }
+  const u = this.userData as { noLamps?: boolean; noFade?: boolean; kasbahGpu?: string }
   // a tagged material (`shaderMaterials.ts`, the points of `points.ts`) reads its own uniform objects: one shader each
-  return customProgramCacheKey.call(this) + (u.noLamps ? '|kasbah-outdoor' : '') + (u.kasbahGpu ? `|${u.kasbahGpu}|${this.uuid}` : '')
+  return customProgramCacheKey.call(this) + (u.noLamps ? '|kasbah-outdoor' : '') + (u.noFade ? '|kasbah-nofade' : '') + (u.kasbahGpu ? `|${u.kasbahGpu}|${this.uuid}` : '')
 }

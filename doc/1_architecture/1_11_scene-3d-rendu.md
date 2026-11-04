@@ -2332,3 +2332,56 @@ WebGL, une ambiance nouvelle compile ses shaders en gardant l'image précédente
 pièce suit une animation qui n'avance que si la boucle tourne — attendre sa fin, pas une durée.
 Sources : `scripts/bench-3d/*.mjs`, `apps/web/src/three/gpu/{shared,points,materialHooks}.ts`,
 `apps/web/src/three/HouseScene.ts`.
+
+### Mise à jour 2026-11-04 (soir) — l'écart décomposé, le `Discard` retiré du sol
+
+**L'écart décomposé.** Qualité moyenne, mode éco, Radeon intégrée, maison de démonstration (10 lampes,
+remplaçantes comprises), 1904×905, chaque cas en A/B/A/B. Des interrupteurs temporaires (lus dans
+l'URL, retirés après la mesure) coupaient un poste à la fois, dans les deux moteurs. Base : WebGL 13-14 ms de
+GPU par image, WebGPU 22-24, soit un écart de 9-10 ms :
+
+| Poste coupé | WebGL | WebGPU | Part de l'écart |
+|---|---|---|---|
+| les lampes | −1,7 à −2,6 | −5 à −7,8, même de jour, lampes éteintes | ~4-5 ms |
+| le `Discard` du fondu des niveaux | (tous les crochets : −1,3 à −1,8) | −4 à −6, sans fondu en cours | ~3-4 ms |
+| les ombres | −3,5 à −4 (bruité) | −1,8 à −5,5 | ~1,5 ms |
+| la carte d'environnement | 0 à −1 | −0,3 à −2,4 | ≤ 1-2 ms, incertain |
+
+Hors de cause : l'anticrénelage (passer WebGL en 4× ne coûte que 0,3 ms ; sans anticrénelage des
+deux côtés, l'écart reste), la mise en avant d'une pièce, la brume, le fond de la piscine, l'opacité
+propre relue par objet, et Dawn (`--enable-dawn-features=disable_robustness`, `use_dxc` activé ou
+non : aucun effet ; leur application n'a pas été vérifiée). Les lampes s'expliquent par la façon dont
+three compose l'éclairage en nœuds : chaque `PointLight` est dépliée dans le shader de chaque matière, et le
+masque par niveau multiplie la lumière par 0 au lieu de sauter la lampe (`gpu/levelLight.ts`).
+Piste non tentée : `DynamicLighting` (`three/addons/lighting/DynamicLighting.js`, r187), qui passe
+les lampes dans une boucle à nombre lu à l'exécution, au prix d'un masque réécrit dans cette boucle.
+
+**Piège : un `Discard` jamais pris coûte en WebGPU.** Le tramage du fondu (`gpu/materialHooks.ts`)
+place un `Discard` dans toutes les matières opaques. Sans aucun fondu en cours, il coûtait 3 à 6 ms.
+Quatre variantes ont coûté autant : le `Discard` enveloppé d'un test sur les seuls uniforms, déplacé en
+fin de shader, l'opacité propre ou la position retirées du calcul, et l'**alpha-to-coverage** sans
+aucun `Discard`. Seule l'absence de toute modification de couverture gagne. L'explication probable
+(non vérifiée) : un shader qui peut retirer son pixel repousse le test de profondeur après l'ombrage.
+Le GLSL porte le même `discard` sans coût mesurable (mesure du 2026-09-25).
+
+**Correctif** : le coût venait des grandes surfaces au sol (le `Discard` limité aux matières
+intérieures gagnait autant que sa suppression). Ces surfaces ne s'effacent jamais : elles sont dans
+le site, sous la coupe de tout niveau, et l'éditeur de relief n'estompe que les niveaux et les toits.
+`builders/materials.ts` les marque `userData.noFade` (sol infini, terrain, bassin de piscine, toutes
+les zones, eau comprise). Le crochet WebGPU saute alors le `Discard`, et `noFade` entre dans la clé de
+cache des shaders (`|kasbah-nofade`), sinon une matière du sol partagerait le shader d'une matière de la
+maison aux mêmes réglages. WebGL ne change pas. La maison, le toit et le jardin gardent leur fondu.
+Gain, trois séries A/B : de jour 22,3-25,1 → 21,2-21,8 ms, de nuit 24,6-28 → 21,9-23 ms. Parité
+inchangée (fondu : 2,72 sans, 2,79 avec ; taille de l'effet en WebGPU 5,42 / 5,51).
+
+**Pièges du banc** :
+- la **première vue** de `parity.mjs` (« day ») échoue souvent, même sans aucun changement : la
+  capture WebGL est encore sous le voile « Préparation de la maison » (écarts de 9 à 87) ; la même vue
+  reprise plus loin (« day-again ») fait foi ;
+- le nombre de triangles bascule entre ~140 k et ~274 k au hasard, dans les deux moteurs : les ombres
+  sont parfois recapturées pendant la mesure ;
+- un passage peut partir d'une base plus haute (26-30 ms au lieu de 22-24) : ne comparer qu'à
+  l'intérieur d'un même passage.
+
+Sources : `apps/web/src/three/gpu/materialHooks.ts`, `apps/web/src/three/builders/materials.ts`,
+`apps/web/src/three/gpu/levelLight.ts`, `scripts/bench-3d/parity.mjs`.

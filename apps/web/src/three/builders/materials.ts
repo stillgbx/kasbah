@@ -167,6 +167,10 @@ export function createMaterials(theme: SceneTheme, look: StyleLook, textures: Su
   }
   // outdoors, at the height of a level: an indoor lamp would stain them through the facade
   for (const m of [set.terrain, set.roof, set.roofFlat, ...Object.values(set.zones)]) m.userData.noLamps = true
+  // on the ground, in the site: never above a level's cut, never faded by the relief editor. WebGPU leaves
+  // the fade's dithered discard out of them (`gpu/materialHooks.ts`): on these large surfaces it cost
+  // 3-6 ms of GPU per frame, fade or no fade (Radeon iGPU, 2026-11-04)
+  for (const m of [set.ground, set.terrain, set.poolBasin, ...Object.values(set.zones)]) m.userData.noFade = true
   const mats = { ...set, all }
   applyLook(mats, theme, look)
   return mats
