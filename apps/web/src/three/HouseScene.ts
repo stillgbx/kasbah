@@ -1976,6 +1976,7 @@ export class HouseScene {
    * pills disappear. Everything comes back on leaving the mode.
    */
   private syncReliefFocus(): void {
+    const restored = [...this.reliefFaded]
     for (const m of this.reliefFaded) materialOpacity(m).value = 1
     this.reliefFaded.clear()
     const on = this.reliefGrid !== null
@@ -1987,6 +1988,8 @@ export class HouseScene {
       for (const level of this.nodes.levels.values()) fade(level.group)
       for (const roof of this.nodes.roofs) fade(roof)
     }
+    // WebGPU only re-sends a material's own uniforms when the material changes (`gpu/shared.ts`)
+    if (this.gpu) for (const m of [...restored, ...this.reliefFaded]) m.needsUpdate = true
     if (this.labelRenderer) this.labelRenderer.domElement.style.visibility = on ? 'hidden' : ''
     this.invalidateShadows()
     this.loop.invalidate()

@@ -45,6 +45,7 @@ Rien à livrer : on le dit et on s'arrête.
 | uniquement `doc/`, `docs/`, `README.md`, `*.md` | rien |
 | du code (`apps/`, `packages/`, `scripts/`, configs) | `npm test`, `npm run typecheck`, `npm run lint` |
 | `apps/android/` (l'appli Android Auto, hors de npm) | en plus, dans `apps/android` : `./gradlew testDebugUnitTest :app:lintDebug assembleDebug` avec `JAVA_HOME` = le `jbr` d'Android Studio et `ANDROID_HOME` = le SDK (environ 1 min) ; un fichier de résultat par classe sous `app/build/test-results/testDebugUnitTest/`. Sans JDK ni SDK sur la machine : « non joué », jamais vert |
+| un shader de la scène 3D, dans l'un des deux moteurs : `apps/web/src/three/gpu/`, `three/core/{levelLight,levelFade,heightMist,roomFocus,post,sky}.ts`, `three/effects/water.ts`, un `ShaderMaterial` ou un `onBeforeCompile` ailleurs sous `three/` | en plus, la comparaison des deux moteurs : `node scripts/bench-3d/parity.mjs <url>` contre une preview `kasbah-mock` **démarrée après la dernière modification** (environ 8 min, deux Chrome à part ; un fichier modifié pendant que Vite tourne fausse la vue du fondu). Code de sortie 1 : on regarde les cartes de chaleur dans `_generated-ai-doc/bench-3d/` avant de livrer. Sans Chrome ni GPU : « non joué », jamais vert |
 
 Avant un commit, la suite est complète (environ 2 min pour les trois). Les trois commandes se
 lancent dans le même message, en parallèle.

@@ -12,7 +12,7 @@ import type { EffectiveQuality, PostPipeline } from './post'
 //
 // EVERY shader effect therefore exists twice: GLSL patches (`onBeforeCompile`, `ShaderMaterial`) for
 // WebGL, TSL nodes in `three/gpu/` for WebGPU, reading the SAME uniform objects. A change to one is
-// a change to the other.
+// a change to the other, and `scripts/bench-3d/parity.mjs` checks that both still draw the same house.
 
 export type RendererChoice = 'webgl' | 'webgpu'
 export const RENDERER_CHOICES: readonly RendererChoice[] = ['webgl', 'webgpu']

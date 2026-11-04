@@ -1,6 +1,7 @@
 import { PointLight } from 'three'
 import { PointLightNode, type Node, type NodeBuilder } from 'three/webgpu'
-import { float, mix, positionWorld, select, step, uniform } from 'three/tsl'
+import { float, mix, positionWorld, select, step } from 'three/tsl'
+import { sharedUniform as uniform } from './shared'
 import { levelLightUniforms } from '../core/levelLight'
 
 // `core/levelLight.ts` in TSL: an indoor lamp only lights the slice of its level. Same rule as the

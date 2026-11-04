@@ -2,8 +2,9 @@ import { Material } from 'three'
 import { NodeMaterial, type Node, type NodeBuilder } from 'three/webgpu'
 import {
   Break, Discard, Fn, If, Loop, abs, cameraPosition, clamp, diffuseColor, dot, exp, float, fract, int, length, max, min, mix,
-  positionView, positionWorld, screenCoordinate, select, smoothstep, uniform, uniformArray, vec2, vec3, vec4,
+  positionView, positionWorld, renderGroup, screenCoordinate, screenSize, select, smoothstep, uniform, uniformArray, vec2, vec3, vec4,
 } from 'three/tsl'
+import { sharedUniform } from './shared'
 import { levelFadeUniforms } from '../core/levelFade'
 import { heightMistUniforms } from '../core/heightMist'
 import { DIM, FEATHER_M, ROOM_FOCUS_MAX, roomFocusUniforms } from '../core/roomFocus'
@@ -21,8 +22,8 @@ import { basinThroughWater } from './water'
 
 type Vec4 = Node<'vec4'>
 
-/** A TSL uniform that follows a GLSL uniform object `{ value }`. */
-const follow = (u: { value: number }) => uniform(u.value).onRenderUpdate(() => u.value)
+/** A TSL uniform that follows a GLSL uniform object `{ value }` (shared: see `shared.ts`). */
+const follow = (u: { value: number }) => sharedUniform(u.value).onRenderUpdate(() => u.value)
 
 // —— level fade and own opacity ——————————————————————————————————————————————
 
@@ -41,17 +42,19 @@ NodeMaterial.prototype.setupDiffuseColor = function (this: NodeMaterial, builder
   if (!this.fog) return
   const a = ownOpacity.mul(select(fadeVisibility.lessThan(1).and(positionWorld.y.greaterThan(fadeY)), fadeVisibility, float(1)))
   if (this.transparent) { diffuseColor.a.mulAssign(a); return }
-  // interleaved gradient noise (Jimenez 2014), as in the GLSL: an opaque material loses a share of its pixels
-  const noise = fract(fract(dot(screenCoordinate.xy, vec2(0.06711056, 0.00583715))).mul(52.9829189))
+  // interleaved gradient noise (Jimenez 2014), as in the GLSL: an opaque material loses a share of its
+  // pixels. Counted from the BOTTOM like `gl_FragCoord`, so both renderers drop the same pixels.
+  const pixel = vec2(screenCoordinate.x, screenSize.y.sub(screenCoordinate.y))
+  const noise = fract(fract(dot(pixel, vec2(0.06711056, 0.00583715))).mul(52.9829189))
   If(a.lessThan(1).and(noise.greaterThanEqual(a)), () => { Discard() })
 }
 
 // —— room highlight ———————————————————————————————————————————————————————
 
 const focus = follow(roomFocusUniforms.kasbahFocus)
-const focusCount = uniform(0, 'int').onRenderUpdate(() => roomFocusUniforms.kasbahFocusCount.value)
-const focusPoly = uniformArray(roomFocusUniforms.kasbahFocusPoly.value, 'vec2')
-const focusY = uniform(roomFocusUniforms.kasbahFocusY.value)
+const focusCount = sharedUniform(0, 'int').onRenderUpdate(() => roomFocusUniforms.kasbahFocusCount.value)
+const focusPoly = uniformArray(roomFocusUniforms.kasbahFocusPoly.value, 'vec2').setGroup(renderGroup)
+const focusY = sharedUniform(roomFocusUniforms.kasbahFocusY.value)
 
 /** Distance to the room volume: 0 inside, otherwise the gap to the outline (plan) and to its slice (height). */
 const roomDistance = Fn(([w]: [Node<'vec3'>]) => {
@@ -86,7 +89,7 @@ function roomFocus(out: Vec4): Vec4 {
 // —— low mist (outdoor materials) ———————————————————————————————————————————
 
 const mistDensity = follow(heightMistUniforms.kasbahMistDensity)
-const mistColor = uniform(heightMistUniforms.kasbahMistColor.value)
+const mistColor = sharedUniform(heightMistUniforms.kasbahMistColor.value)
 const mistBase = follow(heightMistUniforms.kasbahMistBase)
 const mistFalloff = follow(heightMistUniforms.kasbahMistFalloff)
 

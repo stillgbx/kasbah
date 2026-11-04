@@ -1,6 +1,7 @@
 import { Texture, type Color, type Vector2 } from 'three'
 import { NodeMaterial, type NodeBuilder } from 'three/webgpu'
-import { atan, cos, float, mix, positionLocal, texture, uniform, uv, vec4 } from 'three/tsl'
+import { atan, cos, float, mix, positionLocal, uv, vec4 } from 'three/tsl'
+import { sharedTexture, sharedUniform } from './shared'
 import { causticPass } from './water'
 
 // Our `ShaderMaterial`s in TSL. `WebGPURenderer` cannot draw GLSL: it converts a material through
@@ -15,7 +16,7 @@ import { causticPass } from './water'
 export type GpuShaderTag = 'marker-wave' | 'screen-art' | 'water-caustics'
 
 type Uniforms = Record<string, { value: unknown }>
-const follow = (u: { value: unknown }) => uniform(u.value as number).onRenderUpdate(() => u.value as number)
+const follow = (u: { value: unknown }) => sharedUniform(u.value as number).onRenderUpdate(() => u.value as number)
 const BLANK = new Texture()
 
 export class KasbahShaderNodeMaterial extends NodeMaterial {
@@ -29,14 +30,14 @@ export class KasbahShaderNodeMaterial extends NodeMaterial {
       case 'marker-wave': {
         const front = cos(atan(positionLocal.x, positionLocal.y)).mul(0.5).add(0.5)
         const fade = mix(float(1), front.mul(front).mul(0.9).add(0.1), follow(u.uDirectional!))
-        this.colorNode = vec4(uniform(u.uColor!.value as Color), follow(u.uOpacity!).mul(fade))
+        this.colorNode = vec4(sharedUniform(u.uColor!.value as Color), follow(u.uOpacity!).mul(fade))
         break
       }
       // `screenArt.ts`, `artMaterial`: the framed image, under a black veil that darkens toward the bottom
       case 'screen-art': {
-        const map = texture((u.uMap!.value as Texture | null) ?? BLANK).onRenderUpdate(() => (u.uMap!.value as Texture | null) ?? BLANK)
-        const c = map.sample(uv().mul(uniform(u.uCrop!.value as Vector2)).add(uniform(u.uCropOffset!.value as Vector2)))
-        const shade = uniform(u.uShade!.value as Vector2)
+        const map = sharedTexture((u.uMap!.value as Texture | null) ?? BLANK).onRenderUpdate(() => (u.uMap!.value as Texture | null) ?? BLANK)
+        const c = map.sample(uv().mul(sharedUniform(u.uCrop!.value as Vector2)).add(sharedUniform(u.uCropOffset!.value as Vector2)))
+        const shade = sharedUniform(u.uShade!.value as Vector2)
         this.colorNode = vec4(c.rgb.mul(mix(shade.y, shade.x, uv().y).oneMinus()), c.a)
         break
       }

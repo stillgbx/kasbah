@@ -1,4 +1,4 @@
-import { Sprite, type BufferAttribute, type Camera, type InterleavedBufferAttribute, type Object3D, type OrthographicCamera, type PerspectiveCamera, type Points, type PointsMaterial } from 'three'
+import { InstancedBufferAttribute, Sprite, type BufferAttribute, type Camera, type Object3D, type PerspectiveCamera, type Points, type PointsMaterial } from 'three'
 import { SpriteNodeMaterial, type Node } from 'three/webgpu'
 import { float, instancedBufferAttribute, materialColor, min, mix, modelViewMatrix, select, smoothstep, uniform, vec4 } from 'three/tsl'
 import { FAR_ALPHA, FAR_SHADE, FAR_SIZE } from '../relief/reliefEditor'
@@ -6,9 +6,12 @@ import { FAR_ALPHA, FAR_SHADE, FAR_SIZE } from '../relief/reliefEditor'
 // WebGPU draws a `Points` one pixel wide, whatever its `size` (a WebGPU point has no size). Three's
 // way to draw sized points is a `Sprite` instanced `count` times, positioned by a buffer attribute.
 // Rather than giving every effect a second construction, each `Points` of the scene gets here a TWIN:
-// a sprite, child of the `Points` (same transform, same visibility), reading the same attributes —
-// positions moved every frame (rain, sparkles) included. The `Points` stays where it is, for picking
-// (the relief handles), but is no longer drawn.
+// a sprite, child of the `Points` (same transform, same visibility), whose instance attributes share
+// the `Points`' ARRAYS — positions moved every frame (rain, sparkles) included — and are sent to the
+// GPU again when the originals change. Its own attributes, not the originals read twice: the same
+// buffer used per vertex by the `Points` and per instance by the sprite drew, now and then, one
+// distorted flake over half the image. The `Points` stays for picking (the relief handles), its
+// material made invisible.
 //
 // A plain `SpriteNodeMaterial` sized in metres, not `PointsNodeMaterial` in sprite mode: its pixel
 // sizing reads `viewportSize`, wrong inside the effect chain's passes — one point covered half the image.
@@ -20,8 +23,10 @@ interface Twin {
   sprite: Sprite
   material: PointsMaterial
   version: number
-  position: BufferAttribute | InterleavedBufferAttribute
-  color: BufferAttribute | InterleavedBufferAttribute | undefined
+  source: { position: BufferAttribute; color: BufferAttribute | undefined }
+  copy: { position: InstancedBufferAttribute; color: InstancedBufferAttribute | undefined }
+  /** The originals' versions last sent. */
+  sent: { position: number; color: number }
 }
 
 const twins = new WeakMap<Points, Twin>()
@@ -32,8 +37,9 @@ type ReliefDepth = { near: { value: number }; far: { value: number } }
 const MAX_POINT_PX = 64
 
 /**
- * What the sizes depend on, re-read at each render: the camera (perspective or orthographic, its
- * field or its zoom) and the canvas height in CSS pixels.
+ * What the sizes depend on, re-read at each render: the camera's vertical scale and the canvas height
+ * in CSS pixels. Read in the projection matrix (`1 / tan(fov/2)` in perspective, `2 / height` in
+ * orthographic), which also carries the zoom.
  */
 const view = { tanHalf: 0.36, perspective: 1, orthoPerPx: 0.01, heightPx: 1000 }
 const tanHalf = uniform(0.36).onRenderUpdate(() => view.tanHalf)
@@ -44,13 +50,16 @@ const heightPx = uniform(1000).onRenderUpdate(() => view.heightPx)
 /** Called before each frame: the camera and the canvas the twins are sized for. */
 export function setPointView(camera: Camera, heightCssPx: number): void {
   view.heightPx = Math.max(1, heightCssPx)
-  const p = camera as PerspectiveCamera & OrthographicCamera
-  view.perspective = p.isPerspectiveCamera ? 1 : 0
-  if (p.isPerspectiveCamera) view.tanHalf = Math.tan((p.fov * Math.PI) / 360) / p.zoom
-  else view.orthoPerPx = (p.top - p.bottom) / p.zoom / view.heightPx
+  const scaleY = camera.projectionMatrix.elements[5]!
+  view.perspective = (camera as PerspectiveCamera).isPerspectiveCamera ? 1 : 0
+  if (view.perspective) view.tanHalf = 1 / scaleY
+  else view.orthoPerPx = 2 / scaleY / view.heightPx
 }
 
-function buildMaterial(source: PointsMaterial, position: Twin['position'], color: Twin['color']): SpriteNodeMaterial {
+/** An instance attribute over the same numbers as `a`. */
+const instanced = (a: BufferAttribute) => new InstancedBufferAttribute(a.array, a.itemSize, a.normalized)
+
+function buildMaterial(source: PointsMaterial, position: InstancedBufferAttribute, color: InstancedBufferAttribute | undefined): SpriteNodeMaterial {
   const m = new SpriteNodeMaterial()
   m.color.copy(source.color)
   m.opacity = source.opacity
@@ -62,23 +71,24 @@ function buildMaterial(source: PointsMaterial, position: Twin['position'], color
   m.depthWrite = source.depthWrite
   m.toneMapped = source.toneMapped
   m.fog = source.fog
-  const center = instancedBufferAttribute(position as BufferAttribute) as unknown as Node<'vec3'>
+  const center = instancedBufferAttribute(position) as unknown as Node<'vec3'>
   m.positionNode = center
   const viewZ = modelViewMatrix.mul(vec4(center, 1)).z.negate()
   // The sprite is sized in METRES; WebGL's rule (`points.glsl`) is in pixels: on screen, an attenuated
   // point is `size × half the height ÷ distance` px, a sprite `metres × half the height ÷ (distance ×
   // tan(fov/2))` px — so `size × tan(fov/2)` metres, whatever the distance. A point in pixels (not
-  // attenuated, or any point in orthographic) is `px × metres per pixel at its distance`.
-  const size = uniform(source.size).onObjectUpdate(({ object }) => ((object?.parent as Points | null)?.material as PointsMaterial | undefined)?.size ?? source.size)
+  // attenuated, or any point in orthographic) is `px × metres per pixel at its distance`. The size is the
+  // twin's own: a material that changes it is rebuilt (`version`).
+  const size = float(source.size)
   const pxToMetres = (px: Node<'float'>) => select(isPerspective.greaterThan(0.5), px.mul(viewZ).mul(tanHalf).mul(2).div(heightPx), px.mul(orthoPerPx))
   // like WebGL, a point whose centre is behind the camera is not drawn, and none grows beyond a cap
-  // (WebGL clamps `gl_PointSize`): a flake brushing the lens otherwise covered half the image
+  // (WebGL clamps `gl_PointSize`)
   const attenuated = min(size.mul(tanHalf), pxToMetres(float(MAX_POINT_PX)))
   let metres: Node<'float'> = source.sizeAttenuation ? select(isPerspective.greaterThan(0.5), attenuated, pxToMetres(size)) : pxToMetres(size)
   metres = select(isPerspective.greaterThan(0.5).and(viewZ.lessThan(0.05)), float(0), metres)
   // `vec4( materialColor )` keeps the alpha of the map (the snowflakes are cut out of theirs)
   const base = vec4(materialColor as unknown as Node<'vec4'>)
-  let colour: Node<'vec4'> | null = color && source.vertexColors ? base.mul(vec4((instancedBufferAttribute(color as BufferAttribute) as unknown as Node<'vec3'>).xyz, 1)) : null
+  let colour: Node<'vec4'> | null = color && source.vertexColors ? base.mul(vec4((instancedBufferAttribute(color) as unknown as Node<'vec3'>).xyz, 1)) : null
   const depth = (source.userData as { reliefDepth?: ReliefDepth }).reliefDepth
   if (depth) {
     const near = uniform(depth.near.value).onRenderUpdate(() => depth.near.value)
@@ -99,28 +109,32 @@ export function syncPointTwins(root: Object3D): void {
     const points = o as Points
     if (!points.isPoints || o.userData.kasbahTwin) return
     const material = points.material as PointsMaterial
-    const position = points.geometry.getAttribute('position')
-    const color = points.geometry.getAttribute('color')
+    const position = points.geometry.getAttribute('position') as BufferAttribute | undefined
+    const color = points.geometry.getAttribute('color') as BufferAttribute | undefined
     let twin = twins.get(points)
-    if (twin && (twin.material !== material || twin.version !== material.version || twin.position !== position || twin.color !== color)) {
+    if (twin && (twin.material !== material || twin.version !== material.version || twin.source.position !== position || twin.source.color !== color
+      || twin.copy.position.array !== position?.array || twin.copy.color?.array !== color?.array)) {
       twin.sprite.removeFromParent()
       ;(twin.sprite.material as SpriteNodeMaterial).dispose()
       twin = undefined
     }
     if (!position) return
     if (!twin) {
-      const sprite = new Sprite(buildMaterial(material, position, color))
+      const copy = { position: instanced(position), color: color ? instanced(color) : undefined }
+      const sprite = new Sprite(buildMaterial(material, copy.position, copy.color))
       sprite.userData.kasbahTwin = true
       sprite.frustumCulled = false
       sprite.raycast = () => {}   // picking stays on the `Points`
       sprite.renderOrder = points.renderOrder
       points.add(sprite)
-      // the `Points` itself is no longer drawn (one pixel per point, and a map without UVs): an
-      // invisible MATERIAL leaves the object, its picking and its child the twin in place
+      // an invisible MATERIAL: the `Points` is no longer drawn, its picking and its child the twin stay
       material.visible = false
-      twin = { sprite, material, version: material.version, position, color }
+      twin = { sprite, material, version: material.version, source: { position, color }, copy, sent: { position: position.version, color: color?.version ?? 0 } }
       twins.set(points, twin)
     }
+    // the effect moved its points: send the shared numbers again
+    if (position.version !== twin.sent.position) { twin.copy.position.needsUpdate = true; twin.sent.position = position.version }
+    if (color && twin.copy.color && color.version !== twin.sent.color) { twin.copy.color.needsUpdate = true; twin.sent.color = color.version }
     // what an effect animates without touching `version`
     const m = twin.sprite.material as SpriteNodeMaterial
     m.color.copy(material.color)

@@ -2284,3 +2284,51 @@ les tablettes.
 Sources : `apps/web/src/three/core/renderBackend.ts`, `apps/web/src/three/gpu/*.ts`,
 `apps/web/src/three/HouseScene.ts`, `apps/web/src/composables/useHouseScene.ts`,
 `apps/web/src/three/effects/water.ts`, `apps/web/src/views/SettingsView.vue`.
+
+### Mise à jour 2026-11-04 — banc versionné, quatre défauts du mode WebGPU corrigés
+
+**Le banc est dans le dépôt**, `scripts/bench-3d/` (le paragraphe « Banc » ci-dessus décrit sa première
+version, restée hors dépôt) :
+- `parity.mjs` : ouvre la vue Maison dans les deux moteurs (Chrome à part, protocole DevTools), capture
+  les mêmes vues — jour, pièce mise en avant puis relâchée, fondu d'un étage, aube avec et sans brume,
+  nuit lampes allumées, gris avec et sans neige — et mesure pour chacune l'**écart** entre les deux
+  moteurs (au plus 3/255) et, pour un effet, sa **taille** dans chaque moteur (écart à la même vue
+  sans lui ; un effet absent d'un côté ou deux fois plus fort échoue, un effet inerte des deux côtés
+  est signalé comme un test cassé, jamais comme une réussite). Code de sortie 1 en cas d'échec ;
+  captures et cartes de chaleur dans `_generated-ai-doc/bench-3d/` (ignoré). Chaque effet passe par
+  l'API de la scène, sauf le fondu (import du module : lancer le banc sur un serveur de développement
+  démarré **après** la dernière modification, voir [6_0](../6_faq/6_0_pieges-outillage.md)).
+  Le skill de livraison (`publish`) la lance dès que le diff touche un shader de la scène, dans l'un
+  ou l'autre moteur.
+- `perf.mjs` : temps GPU et CPU par image dans un moteur, caméra en rotation.
+- `chrome.mjs`, `png.mjs` : lancement de Chrome, verrou de l'ambiance (la simulation impose sinon sa
+  météo pendant la mesure), captures, comparaison d'images.
+
+**Ce que la première version ne voyait pas**, et que `parity.mjs` a trouvé dès son premier passage :
+- **Les uniforms de nos crochets ne repartaient pas vers le GPU.** Sur une matière ordinaire convertie
+  en nœuds, `WebGPURenderer` ne renvoie à chaque image que les uniforms du groupe partagé
+  (`renderGroup`) ; ceux du groupe objet, le groupe par défaut, ne repartent que si l'objet ou sa
+  matière change (`NodeMaterialObserver.needsRefresh`). Effets : une pièce relâchée restait mise en
+  avant jusqu'au geste suivant, le fondu des niveaux n'agissait pas, une ambiance nouvelle mettait
+  quelques secondes à s'afficher (le temps qu'une matière soit reconstruite). Corrigé par
+  `gpu/shared.ts` (`sharedUniform`, `sharedTexture`), comme le fait three pour ses lumières ; l'opacité
+  propre à une matière, qui reste par objet, force une mise à jour de la matière quand l'éditeur de
+  relief la change (`HouseScene.syncReliefFocus`). Les passes plein écran et les jumeaux de points ne
+  sont pas concernés : leur matière contient des nœuds, three la rafraîchit entièrement.
+- **Un flocon géant, par intermittence.** Le jumeau lisait l'attribut de positions du `Points` comme
+  attribut d'instance pendant que le `Points` le lisait par sommet ; masquer le `Points` lui retirait
+  même ses positions (three n'envoie au GPU que les attributs d'une géométrie qu'il dessine). Le jumeau
+  a ses propres attributs d'instance, sur les mêmes tableaux de nombres, renvoyés quand l'original
+  change ; le `Points` est masqué par sa matière.
+- **Le tramage du fondu** comptait les pixels depuis le haut en WebGPU, depuis le bas en WebGL : retourné
+  (`gl_FragCoord`). Il reste l'ombre de l'étage qui s'efface, entière en WebGPU (écart 2,8/255).
+
+**Ce que coûte un mode WebGPU juste** : qualité moyenne, scène complète, mode éco, Radeon intégrée,
+WebGL / WebGPU / WebGL / WebGPU : 14,6-15,1 ms de GPU par image en WebGL, 30-33 en WebGPU — contre 20-29
+avant ces correctifs, quand une partie des effets restait figée. L'écart n'est pas décomposé.
+
+**Pièges du banc** : une capture attend que la scène montre de nouveau des images (`compiling` : en
+WebGL, une ambiance nouvelle compile ses shaders en gardant l'image précédente) ; la mise en avant d'une
+pièce suit une animation qui n'avance que si la boucle tourne — attendre sa fin, pas une durée.
+Sources : `scripts/bench-3d/*.mjs`, `apps/web/src/three/gpu/{shared,points,materialHooks}.ts`,
+`apps/web/src/three/HouseScene.ts`.

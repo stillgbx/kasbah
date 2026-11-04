@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-04] update | Banc de comparaison WebGL / WebGPU versionné, défauts du mode WebGPU corrigés
+
+**Trigger** : remarque d'un agent annexe (le banc des deux moteurs n'était pas versionné) ; demande de le versionner dans un sous-dossier.
+
+**Pages modified** :
+- `1_architecture/1_11_scene-3d-rendu.md` - sous-section « banc versionné » : `scripts/bench-3d/` (`parity.mjs`, `perf.mjs`), ce que la comparaison vérifie, les défauts WebGPU qu'elle a trouvés (uniforms du groupe objet jamais renvoyés, flocon géant, tramage inversé) et leurs correctifs, pièges du banc.
+
+**Index** : catalogue inchangé (même date), index.md régénéré.
+
 ## [2026-11-04] update | Deux moteurs de rendu : WebGL par défaut, WebGPU (TSL) en option
 
 **Trigger** : question « migrer sur WebGPU / TSL, plus moderne ? » ; prototype mesuré (scène, puis chaîne d'effets), deux comparatifs publiés relus, mesure refaite hors mode éco ; choix de l'utilisateur : « les deux modes », WebGL par défaut.

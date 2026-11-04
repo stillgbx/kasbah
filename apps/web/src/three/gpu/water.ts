@@ -2,8 +2,9 @@ import { Texture, type Material, type Vector3 } from 'three'
 import { MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, NodeMaterial, type Node, type NodeBuilder } from 'three/webgpu'
 import {
   abs, attribute, cameraPosition, cameraViewMatrix, clamp, cos, dFdx, dFdy, dot, exp, float, fwidth, instanceIndex, length, materialOpacity,
-  max, min, mix, normalView, normalize, positionGeometry, positionView, positionWorld, refract, smoothstep, sqrt, texture, uniform, varying, vec2, vec3, vec4,
+  max, min, mix, normalView, normalize, positionGeometry, positionView, positionWorld, refract, smoothstep, sqrt, varying, vec2, vec3, vec4,
 } from 'three/tsl'
+import { sharedTexture, sharedUniform } from './shared'
 import { CAUSTIC_RANGE, ETA, FLOOR_DEPTH_M, TILE_M, WATER_DEPTH_ATTRIBUTE, WAVES, waterOf } from '../effects/water'
 
 // `effects/water.ts` in TSL: the swell of the surface, the caustics on the bottom, the water seen
@@ -14,7 +15,7 @@ import { CAUSTIC_RANGE, ETA, FLOOR_DEPTH_M, TILE_M, WATER_DEPTH_ATTRIBUTE, WAVES
 type V2 = Node<'vec2'>
 type F = Node<'float'>
 
-const follow = (u: { value: number }) => uniform(u.value).onRenderUpdate(() => u.value)
+const follow = (u: { value: number }) => sharedUniform(u.value).onRenderUpdate(() => u.value)
 const BLANK = new Texture()
 
 /** The wind frame (`WIND_FRAME` in the GLSL): the waves are drawn in it. */
@@ -39,7 +40,7 @@ const setup = NodeMaterial.prototype.setup
 NodeMaterial.prototype.setup = function (this: NodeMaterial, builder: NodeBuilder) {
   const w = waterOf(builder.material)
   if (w?.role === 'surface') {
-    const wind = uniform(w.water.wind.value)
+    const wind = sharedUniform(w.water.wind.value)
     const at = positionWorld.xz
     const g = fromWind(waveGrad(toWind(at, wind), follow(w.water.time), length(fwidth(at)), wind), wind).mul(follow(w.strength))
     const n = normalize(normalView.add(cameraViewMatrix.mul(vec4(g.x.negate(), 0, g.y.negate(), 0)).xyz))
@@ -60,9 +61,9 @@ function causticFactor(material: Material): F | null {
   const w = waterOf(material)
   if (w?.role !== 'basin') return null
   const { water } = w
-  const wind = uniform(water.wind.value)
-  const refracted = uniform(water.refracted.value as Vector3)
-  const map = texture(water.caustics.value ?? BLANK).onRenderUpdate(() => water.caustics.value ?? BLANK)
+  const wind = sharedUniform(water.wind.value)
+  const refracted = sharedUniform(water.refracted.value as Vector3)
+  const map = sharedTexture(water.caustics.value ?? BLANK).onRenderUpdate(() => water.caustics.value ?? BLANK)
   const d = clamp(depthUnderWater, 0, FLOOR_DEPTH_M)
   const at = positionWorld.xz.add(refracted.xz.mul(float(FLOOR_DEPTH_M).sub(d).div(refracted.y.negate())))
   const caustic = map.sample(toWind(at, wind).mul(1 / TILE_M)).r.mul(CAUSTIC_RANGE)
@@ -95,8 +96,8 @@ for (const MaterialClass of [MeshStandardNodeMaterial, MeshPhysicalNodeMaterial]
 export function basinThroughWater(material: Material, out: Node<'vec4'>): Node<'vec4'> {
   const w = waterOf(material)
   if (w?.role !== 'basin') return out
-  const sigma = uniform(w.water.sigma.value)
-  const tint = uniform(w.water.tint.value)
+  const sigma = sharedUniform(w.water.sigma.value)
+  const tint = sharedUniform(w.water.tint.value)
   const up = max(normalize(cameraPosition.sub(positionWorld)).y, 0.1)
   const path = min(max(depthUnderWater, 0).mul(float(1).add(float(1).div(up))), 12)
   const through = exp(sigma.negate().mul(path))
@@ -109,8 +110,8 @@ export function basinThroughWater(material: Material, out: Node<'vec4'>): Node<'
 /** The refracted grid: nine copies of the tile, each point moved to where its ray meets the bottom. */
 export function causticPass(uniforms: Record<string, { value: unknown }>): { vertex: Node<'vec4'>; colour: Node<'vec4'> } {
   const time = follow(uniforms.uTime as { value: number })
-  const light = uniform(uniforms.uLight!.value as Vector3)
-  const wind = uniform(uniforms.uWaterWind!.value as Vector3)
+  const light = sharedUniform(uniforms.uLight!.value as Vector3)
+  const wind = sharedUniform(uniforms.uWaterWind!.value as Vector3)
   const offset = vec2(float(instanceIndex.mod(3)).sub(1), float(instanceIndex.div(3)).sub(1))
   const p = positionGeometry.xy.mul(TILE_M)
   const g = waveGrad(p, time, null, wind)
