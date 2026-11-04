@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-04] update | Lampes WebGPU : lampes masquées ou éteintes sautées
+
+**Trigger** : suite de la décomposition de l'écart WebGL / WebGPU, demande « les lampes maintenant ? ».
+
+**Pages modified** :
+- `1_architecture/1_11_scene-3d-rendu.md` - sous-section « les lampes masquées ou éteintes sautées » : `If` dans `LevelPointLightNode.setup`, pourquoi c'est sûr (`castShadow` dans la clé de cache), gains, et deux trous du banc (`ALL_LAMPS` inerte, vue `night-lamps` toit posé).
+
+**Index** : catalogue inchangé (même date), index.md régénéré.
+
 ## [2026-11-04] update | Écart WebGL / WebGPU décomposé, `Discard` du fondu retiré du sol en WebGPU
 
 **Trigger** : question « des optimisations ou corrections à faire côté three ? » sur la lenteur de WebGPU ; décomposition mesurée, puis correctif du poste « Discard du fondu » choisi par l'utilisateur.

@@ -2385,3 +2385,28 @@ inchangée (fondu : 2,72 sans, 2,79 avec ; taille de l'effet en WebGPU 5,42 / 5,
 
 Sources : `apps/web/src/three/gpu/materialHooks.ts`, `apps/web/src/three/builders/materials.ts`,
 `apps/web/src/three/gpu/levelLight.ts`, `scripts/bench-3d/parity.mjs`.
+
+### Mise à jour 2026-11-04 (nuit) — les lampes masquées ou éteintes sautées
+
+**Correctif du poste « lampes »**, sans `DynamicLighting`. Dans `gpu/levelLight.ts`,
+`LevelPointLightNode.setup` construit le calcul d'une lampe intérieure dans un `If` : la lampe doit
+être allumée (couleur × intensité non nulle) et le pixel dans la tranche de son niveau. Une matière
+`noLamps` ne reçoit plus de lampe intérieure, et une lampe à ombre (jardin) est calculée comme avant,
+sans test. Ce choix au moment de construire le shader est sûr : `castShadow` entre dans la clé de
+cache des lumières (`LightsNode.customCacheKey`), donc une lampe qui se met à projeter une ombre
+reconstruit le shader. La multiplication par le masque (`setupDirect`, uniform `testedNode`) a
+disparu. C'est désormais la même règle qu'en GLSL, où la boucle saute une lampe masquée
+(`if ( directLight.visible )`).
+Mesure (deux séries A/B, mêmes conditions que plus haut) : de jour 22,9-24 → 17,2-19,1 ms, de nuit
+21,2-23,5 → 16,5-16,9, soit le niveau « sans aucune lampe » (16-17). WebGL : 13-14. L'écart restant
+est de 3 à 5 ms.
+
+**Ce que le banc ne couvre pas** :
+- `ALL_LAMPS` (`scripts/bench-3d/chrome.mjs`) n'allume rien de plus que l'état de la simulation (une
+  lampe) : le cas « toutes les lampes allumées » n'a jamais été mesuré ;
+- la vue `night-lamps` de `parity.mjs` garde le toit : dans la maison de démonstration, le toit plat
+  appartient au rez-de-chaussée, et se placer sur ce niveau ne l'enlève pas. Elle ne voit donc pas
+  l'intérieur. Contrôle fait à part (toits masqués, rez-de-chaussée, nuit) : pièce éclairée
+  identique dans les deux moteurs, écart 0,32/255.
+
+Sources : `apps/web/src/three/gpu/levelLight.ts`, `node_modules/three/src/nodes/lighting/{AnalyticLightNode,LightsNode}.js`.

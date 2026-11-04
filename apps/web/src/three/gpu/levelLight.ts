@@ -1,6 +1,6 @@
 import { PointLight } from 'three'
 import { PointLightNode, type Node, type NodeBuilder } from 'three/webgpu'
-import { float, mix, positionWorld, select, step } from 'three/tsl'
+import { If, float, positionWorld, step, vec3 } from 'three/tsl'
 import { sharedUniform as uniform } from './shared'
 import { levelLightUniforms } from '../core/levelLight'
 
@@ -9,8 +9,10 @@ import { levelLightUniforms } from '../core/levelLight'
 // lamp, the pixel is raised by 5 mm so a slab top belongs to the level it carries. There is no
 // shader text to patch here: three's point light node is replaced, once, for every material.
 //
-// One difference: the GLSL loop SKIPS a masked lamp (`if ( directLight.visible )`), the node
-// multiplies its light by 0. Not measurable on the demo house (2026-11-04).
+// A masked lamp is SKIPPED, as in the GLSL loop (`if ( directLight.visible )`), and so is a lamp
+// that is off. three writes every point light out in full in every shader: multiplying a masked
+// lamp's light by 0 still paid for it, 4-7 ms of GPU per frame on the demo house, lamps off
+// included (integrated Radeon, 2026-11-04). The `If` brings it back to the cost of no lamps at all.
 
 const MAX_BOUNDS = levelLightUniforms.kasbahLevelY.value.length
 const levelY = Array.from({ length: MAX_BOUNDS }, (_, i) => uniform(0).onRenderUpdate(() => levelLightUniforms.kasbahLevelY.value[i]!))
@@ -33,21 +35,20 @@ const fragBand = (() => {
 
 class LevelPointLightNode extends PointLightNode {
   private readonly bandNode = uniform(0)
-  private readonly testedNode = uniform(1)
 
   override update(frame: Parameters<PointLightNode['update']>[0]) {
     const result = super.update(frame)
-    const light = this.light as PointLight
-    this.bandNode.value = bandOf(light.matrixWorld.elements[13]!)
-    this.testedNode.value = light.castShadow ? 0 : 1
+    this.bandNode.value = bandOf((this.light as PointLight).matrixWorld.elements[13]!)
     return result
   }
 
-  override setupDirect(builder: NodeBuilder) {
-    const direct = super.setupDirect(builder)!
-    const noLamps = !!(builder.material as { userData?: { noLamps?: boolean } } | null)?.userData?.noLamps
-    const reaches = noLamps ? float(0) : select(fragBand.equal(this.bandNode), float(1), float(0))
-    return { ...direct, lightColor: (direct.lightColor as ReturnType<typeof float>).mul(mix(float(1), reaches, this.testedNode)) }
+  // `castShadow` is in the lights' cache key: a lamp that starts casting a shadow rebuilds the shader
+  override setup(builder: NodeBuilder) {
+    if ((this.light as PointLight).castShadow) return super.setup(builder)
+    if ((builder.material as { userData?: { noLamps?: boolean } } | null)?.userData?.noLamps) return
+    // the light's colour × intensity (`AnalyticLightNode.colorNode`, untyped): 0 when the lamp is off
+    const on = (this as unknown as { colorNode: Node<'vec3'> }).colorNode.dot(vec3(1)).greaterThan(0)
+    If(on.and(fragBand.equal(this.bandNode)), () => { super.setup(builder) })
   }
 }
 
