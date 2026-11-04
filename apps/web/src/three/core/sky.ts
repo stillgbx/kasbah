@@ -1,5 +1,6 @@
 import { DataTexture, EquirectangularReflectionMapping, FloatType, LinearFilter, PMREMGenerator, RGBAFormat, type Texture, type Vector3, type WebGLRenderer } from 'three'
 import type { SkyLook } from '../styles/types'
+import { isWebGPU } from './renderBackend'
 
 // What the house REFLECTS. A PBR material only renders its reflections — and the whole of its metallic
 // part — from an environment map; without it, walls, glass, water and car bodies
@@ -68,6 +69,7 @@ function skyTexture(look: SkyLook, sun: Vector3): DataTexture {
 export function createSkyEnvironment(renderer: WebGLRenderer | null, look: SkyLook, sun: Vector3): Texture | null {
   if (!renderer) return null
   const source = skyTexture(look, sun)
+  if (isWebGPU(renderer)) return source   // WebGPURenderer prefilters an equirectangular environment itself (PMREMNode)
   const pmrem = new PMREMGenerator(renderer)
   const target = pmrem.fromEquirectangular(source)
   pmrem.dispose()

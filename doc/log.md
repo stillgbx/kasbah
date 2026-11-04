@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-04] update | Deux moteurs de rendu : WebGL par défaut, WebGPU (TSL) en option
+
+**Trigger** : question « migrer sur WebGPU / TSL, plus moderne ? » ; prototype mesuré (scène, puis chaîne d'effets), deux comparatifs publiés relus, mesure refaite hors mode éco ; choix de l'utilisateur : « les deux modes », WebGL par défaut.
+
+**Pages modified** :
+- `1_architecture/1_11_scene-3d-rendu.md` - nouvelle section « Deux moteurs de rendu » : mesures (WebGPU 1,3 à 1,9 fois le temps GPU, moitié du CPU), à-coup au premier usage, organisation (`three/gpu/` à la demande, contrat `renderBackend.ts`), correspondance GLSL ↔ TSL, pièges (cache de shaders et `userData`, points d'un pixel, `viewportSize`, `fragmentNode` et MRT), écarts connus, banc.
+- `4_ui/4_2_theme-et-langues.md` - préférence `kasbah.sceneRenderer`.
+- `6_faq/6_0_pieges-outillage.md` - Vite refuse les `node_modules` du dépôt principal dans un worktree ; une sonde `import('/src/…')` obtient une autre instance d'un module modifié.
+
+**Index** : catalogues mis à jour (3 lignes), index.md régénéré.
+
 ## [2026-11-04] update | Site vitrine : playlists par langue et cartes de tutos
 
 **Trigger** : deux playlists YouTube (EN, FR) avec la vidéo de promo et un premier tuto (installer l'app sur Android avec le raccourci « Demander ») ; demande de faire pointer le lien du pied de page sur la playlist et d'ajouter les cartes des tutos.

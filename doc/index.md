@@ -35,7 +35,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-28 |
 | [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-11-01 |
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-10-11 |
-| [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-10-31 |
+| [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-11-04 |
 | [1_12 Scène 3D : objets dessinés](1_architecture/1_12_scene-3d-objets.md) | 2026-10-26 |
 | [1_13 Comptes et sessions](1_architecture/1_13_comptes-et-sessions.md) | 2026-11-01 |
 | [1_14 Énergie](1_architecture/1_14_energie.md) | 2026-10-31 |
@@ -105,7 +105,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 |---|---|
 | [4_0 Langage visuel](4_ui/4_0_langage-visuel.md) | 2026-10-06 |
 | [4_1 Navigation et panneaux](4_ui/4_1_navigation-et-panneaux.md) | 2026-10-25 |
-| [4_2 Thème et langues](4_ui/4_2_theme-et-langues.md) | 2026-10-06 |
+| [4_2 Thème et langues](4_ui/4_2_theme-et-langues.md) | 2026-11-04 |
 
 | Vues | Dernière mise à jour |
 |---|---|
@@ -132,10 +132,10 @@ Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5
 ## 6 — FAQ
 
 <!-- section:6_faq:begin (généré par scripts/wiki-index.mjs depuis 6_faq/README.md - ne pas éditer ici) -->
-Pièges rencontrés et recettes : une entrée datée par incident (Date / Symptôme / Diagnostic / Solution). Résumés : [6_faq/README.md](6_faq/README.md) (2 pages, dernière mise à jour 2026-10-30).
+Pièges rencontrés et recettes : une entrée datée par incident (Date / Symptôme / Diagnostic / Solution). Résumés : [6_faq/README.md](6_faq/README.md) (2 pages, dernière mise à jour 2026-11-04).
 
 | Pages | Dernière mise à jour |
 |---|---|
-| [6_0 Pièges d'outillage](6_faq/6_0_pieges-outillage.md) | 2026-10-30 |
+| [6_0 Pièges d'outillage](6_faq/6_0_pieges-outillage.md) | 2026-11-04 |
 | [6_1 Pièges à l'exécution](6_faq/6_1_pieges-runtime.md) | 2026-10-30 |
 <!-- section:6_faq:end -->

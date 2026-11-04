@@ -64,7 +64,7 @@ const ART_INSET = 1
  * almost nothing behind. Always full circles, only the intensity varies around the ring.
  */
 function waveMaterial(color: Color, directional: boolean): ShaderMaterial {
-  return new ShaderMaterial({
+  const material = new ShaderMaterial({
     transparent: true, depthWrite: false, side: DoubleSide,
     uniforms: { uColor: { value: color.clone() }, uOpacity: { value: 0 }, uDirectional: { value: directional ? 1 : 0 } },
     vertexShader: `
@@ -79,6 +79,8 @@ function waveMaterial(color: Color, directional: boolean): ShaderMaterial {
         gl_FragColor = vec4(uColor, uOpacity * fade);
       }`,
   })
+  material.userData.kasbahGpu = 'marker-wave'   // its TSL twin: `gpu/shaderMaterials.ts`
+  return material
 }
 
 /** Small neutral object (sensor, heat pump, charger, energy…). */

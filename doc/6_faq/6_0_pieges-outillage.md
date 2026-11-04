@@ -1,7 +1,7 @@
 # FAQ — pièges d'outillage
 
-> Dernière mise à jour : 2026-10-30
-> Sources : sessions des 2026-09-04 et 2026-09-08, `apps/web/src/stores/settings.ts`, `apps/web/vite.config.ts`, `apps/web/src/components/home/*.vue`, `apps/web/src/styles/app.css`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/views/EnergyView.vue`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/three/builders/details.ts`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/server/src/app.ts`, `apps/server/src/plugins/mixcloud/resolve.ts`, `apps/server/package.json`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `docs/plugins/claude-assistant.md`, session du 2026-10-08, `scripts/dev-server.mjs`, session du 2026-10-10, `apps/web/src/lib/maplibreWorker.ts`, session du 2026-10-13, `apps/android/dhu.cmd`, session du 2026-10-22, `scripts/supervisor.mjs`, session du 2026-10-26
+> Dernière mise à jour : 2026-11-04
+> Sources : sessions des 2026-09-04 et 2026-09-08, `apps/web/src/stores/settings.ts`, `apps/web/vite.config.ts`, `apps/web/src/components/home/*.vue`, `apps/web/src/styles/app.css`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/three/markers/screenArt.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/components/energy/EnergyFlow.vue`, `apps/web/src/components/devices/RoomBands.vue`, `apps/web/src/views/EnergyView.vue`, `apps/web/src/components/home/PanelArraysCard.vue`, `apps/web/src/three/builders/details.ts`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/ui/Segmented.vue`, `apps/server/src/app.ts`, `apps/server/src/plugins/mixcloud/resolve.ts`, `apps/server/package.json`, `apps/web/src/components/controls/MediaPlayerControl.vue`, `docs/plugins/claude-assistant.md`, session du 2026-10-08, `scripts/dev-server.mjs`, session du 2026-10-10, `apps/web/src/lib/maplibreWorker.ts`, session du 2026-10-13, `apps/android/dhu.cmd`, session du 2026-10-22, `scripts/supervisor.mjs`, session du 2026-10-26, session du 2026-11-04
 
 ## Vuetify 4 : changer de thème
 
@@ -965,3 +965,28 @@ et sa variante `-dev`) : Vite ne la voit pas, le build ne contient pas le worker
   `apps/web/vite.config.ts` (greffon `kasbah-fail-unresolved`) : un import que rien ne résout arrête le
   build au moment de la résolution, avant toute écriture. Vérifié en remplaçant la jonction par un dossier
   vide : code 1, `dist/` précédent intact ; build normal inchangé.
+
+## Worktree : Vite refuse les `node_modules` du dépôt principal (polices, worker MapLibre)
+
+- **Date** : 2026-11-04
+- **Symptôme** : dans un arbre de travail `.claude/worktrees/<nom>/`, la preview affiche une police de
+  repli et la console aligne des `403 (Forbidden)` sur `/@fs/…/kasbah/node_modules/@fontsource-variable/…` ;
+  `vitest run` échoue sur `RobotsView.test.ts` et `VehiclesView.test.ts` avec
+  `Denied ID …/maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url`.
+- **Diagnostic** : le worktree n'a pas de `node_modules` : la résolution remonte au dépôt principal, hors
+  de la racine que Vite autorise à servir (`server.fs.allow`). Une jonction `node_modules` dans le worktree
+  n'y change rien : Vite résout les liens vers leur chemin réel.
+- **Solution** : rien à corriger dans le code. Mesurer la longueur des libellés dans le dépôt principal (la
+  police de repli fausse les largeurs), et jouer ces deux fichiers de test hors du worktree. Les autres
+  tests ne sont pas touchés.
+
+## Sonde navigateur : `import('/src/…')` rend une AUTRE instance du module après une modification
+
+- **Date** : 2026-11-04
+- **Symptôme** : une sonde qui pose un uniform par `import('/src/three/core/roomFocus.ts')` ne change rien
+  à l'image ; les valeurs relues dans la sonde sont celles d'un module jamais utilisé (compteur à 0).
+- **Diagnostic** : un fichier modifié pendant que Vite tourne est importé par l'application avec un
+  suffixe `?t=…` ; l'URL nue charge une seconde instance, avec ses propres objets d'uniforms. Les URL
+  relevées par `performance.getEntriesByType('resource')` ne montrent pas ce suffixe.
+- **Solution** : redémarrer le serveur de preview avant une sonde qui importe un module de l'application
+  (plus aucun suffixe), ou passer par un objet que l'application expose (`window.kasbahScene`).

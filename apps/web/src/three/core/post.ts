@@ -158,9 +158,9 @@ class VignetteOutputPass extends OutputPass {
 }
 
 /** Width of the sharp → blurred transition, as a fraction of the image. */
-const TILT_FALLOFF = 0.35
+export const TILT_FALLOFF = 0.35
 /** Radius (px) of the blur at full strength. */
-const TILT_MAX_PX = 14
+export const TILT_MAX_PX = 14
 
 /**
  * TILT-SHIFT: a sharp band in the middle of the image, the blur rising toward the top and the bottom.

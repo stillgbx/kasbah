@@ -80,7 +80,7 @@ function aspectOf(texture: Texture): number {
  * for images that carry alpha (app logos are cut-out PNGs).
  */
 function artMaterial(): ShaderMaterial {
-  return new ShaderMaterial({
+  const material = new ShaderMaterial({
     transparent: true, depthWrite: false,
     uniforms: {
       uMap: { value: null },
@@ -102,6 +102,8 @@ function artMaterial(): ShaderMaterial {
         gl_FragColor = vec4(c.rgb * (1.0 - shade), c.a);
       }`,
   })
+  material.userData.kasbahGpu = 'screen-art'   // its TSL twin: `gpu/shaderMaterials.ts`
+  return material
 }
 
 export interface ScreenArtOptions {

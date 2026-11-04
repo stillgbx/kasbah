@@ -15,6 +15,7 @@ import { useSettingsStore } from '../stores/settings'
 import { useWeather } from './useWeather'
 import { sceneProbe, startSceneProbe } from '../lib/sceneProbe'
 import { lacksResources } from '../three/core/post'
+import { loadGpuBackend, RENDERER_CHOICES, webgpuAvailable, type GpuBackend, type RendererChoice } from '../three/core/renderBackend'
 
 // Vue adapter of the scene controller: lifecycle, size, appearance (rendering style, time,
 // Vuetify theme) → scene, house/states → scene (diff by reference), tap events → callbacks.
@@ -104,6 +105,8 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   const shapeCorner = new Set<Handler<[number, [number, number], boolean]>>()
   const shapeSelect = new Set<Handler<[ShapeSelection]>>()
 
+  let unmounted = false
+
   onMounted(() => {
     const canvas = args.canvas.value
     if (!canvas) return
@@ -112,7 +115,18 @@ export function useHouseScene(args: UseHouseSceneArgs) {
       lowResources.value = true; supported.value = false; shown.value = true
       return
     }
-    scene = new HouseScene(canvas,{ labelLayer: args.labelLayer.value, style: style.value, ambience: ambience.value })
+    // set now, while the component is current: after the `await` of the WebGPU side, Vue no longer knows whose it is
+    const parent = canvas.parentElement ?? canvas
+    const fit = () => { const r = parent.getBoundingClientRect(); scene?.resize(r.width, r.height) }
+    useResizeObserver(parent, fit)
+    // WebGPU is only downloaded when chosen; a browser without it gets the WebGL renderer
+    if (rendererChoice(settings.sceneRenderer) === 'webgpu' && webgpuAvailable()) {
+      loadGpuBackend().then((gpu) => { if (!unmounted) mount(canvas, gpu, fit) }, () => { if (!unmounted) mount(canvas, null, fit) })
+    } else mount(canvas, null, fit)
+  })
+
+  function mount(canvas: HTMLCanvasElement, gpu: GpuBackend | null, fit: () => void): void {
+    scene = new HouseScene(canvas, { labelLayer: args.labelLayer.value, style: style.value, ambience: ambience.value, ...(gpu ? { gpu } : {}) })
     // a 3D test of the diagnostic page (`?probe=`) imposes its switches, without saving them
     if (sceneProbe) stopProbe = startSceneProbe(scene, canvas, sceneProbe)
     scene.setAppearance({ ui: readUiTheme(), style: style.value, ambience: ambience.value, assets: sceneProbe?.assets ?? settings.sceneAssets, tuning: settings.sceneTuning })
@@ -153,10 +167,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
       if (!stage) shown.value = true
     })
 
-    const parent = canvas.parentElement ?? canvas
-    const fit = () => { const r = parent.getBoundingClientRect(); scene?.resize(r.width, r.height) }
     fit()
-    useResizeObserver(parent, fit)
 
     scene.setDescriptors(devices.descriptors)
     // The two scene settings that Settings holds (render budget, projection) go
@@ -169,7 +180,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     scene.updateStates(args.states.value)
     scene.setSeason(season.value)
     ready.value = true
-  })
+  }
 
   // only the devices changed (placement, auto-placement) → markers only, the camera does not move
   watch(args.house, (h, prev) => {
@@ -216,7 +227,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   useIntervalFn(() => { clock.value = new Date() }, 15 * 60 * 1000)
   watch(visibility, (v) => scene?.setPaused(v === 'hidden'))
 
-  onBeforeUnmount(() => { stopProbe?.(); scene?.dispose(); scene = null })
+  onBeforeUnmount(() => { unmounted = true; stopProbe?.(); scene?.dispose(); scene = null })
 
   return {
     supported, ready, preparing, shown, lowResources,
@@ -341,4 +352,10 @@ function sameShellButParkings(a: House, b: House): boolean {
 function sameShellButGarden(a: House, b: House): boolean {
   const shell = (h: House) => JSON.stringify([h.levels, h.rooms, { ...h.site, garden: [] }, h.roofs, h.roof, h.defaults])
   return shell(a) === shell(b)
+}
+
+/** `?renderer=webgl|webgpu` imposes the renderer for this load, without saving it (benches, a tablet to test). */
+function rendererChoice(saved: RendererChoice): RendererChoice {
+  const forced = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('renderer') : null
+  return RENDERER_CHOICES.find((c) => c === forced) ?? saved
 }

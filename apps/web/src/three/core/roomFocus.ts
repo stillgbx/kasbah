@@ -12,14 +12,14 @@ import type { Vec2 } from '@kasbah/shared'
 /** Maximum vertices of a room outline; beyond that, no highlight (rare: an L-shaped room has 6). */
 export const ROOM_FOCUS_MAX = 24
 /** What stays of its light, and of its color, for what is outside the room, at full strength. */
-const DIM = { light: 0.45, saturation: 0.35 }
+export const DIM = { light: 0.45, saturation: 0.35 }
 /**
  * Distance (m) from the room outline over which the fade rises from 0 to full strength. Until
  * 2026-09-26 the switch was sharp at the outline ("a bit abrupt"): it is now a gradient that
  * radiates around the room — the neighboring rooms fade little by little, the far end of the house
  * entirely. The outline no longer falls ON any sharp boundary: the grain that flickered there cannot come back.
  */
-const FEATHER_M = 2
+export const FEATHER_M = 2
 
 export const roomFocusUniforms = {
   /** 0 = no room highlighted, 1 = full strength (animated between the two). */

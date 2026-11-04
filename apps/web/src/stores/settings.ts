@@ -10,6 +10,7 @@ import { useWeather } from '../composables/useWeather'
 import { useHouseStore } from './house'
 import { AMBIENCE_MODES, type AmbienceMode } from '../three/core/ambience'
 import { RENDER_QUALITIES, type RenderQuality } from '../three/core/post'
+import { RENDERER_CHOICES, type RendererChoice } from '../three/core/renderBackend'
 import { SCENE_PROJECTIONS, type SceneProjection } from '../three/core/cameraFit'
 import { DEFAULT_STYLE_ID, RENDER_STYLES } from '../three/styles'
 import { NEUTRAL_TUNING, resolveTuning, sameTuning, TUNING_PRESETS, type SceneTuning } from '../three/styles/tuning'
@@ -61,6 +62,8 @@ export const useSettingsStore = defineStore('settings', () => {
   /** Season of the House view garden; `auto` follows the date. */
   const sceneSeason = useLocalStorage<SeasonMode>('kasbah.sceneSeason', 'auto')
   const sceneQuality = useLocalStorage<RenderQuality>('kasbah.sceneQuality', 'auto')
+  /** Which renderer draws the House view (`three/core/renderBackend.ts`); read when the scene is created. */
+  const sceneRenderer = useLocalStorage<RendererChoice>('kasbah.sceneRenderer', 'webgl')
   /**
    * How the house is PROJECTED: in perspective, flat (orthographic, one can still rotate), or
    * in isometry (flat, locked angles, quarter turns). A matter of taste like the style,
@@ -153,6 +156,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function setSceneAmbience(v: AmbienceMode) { if (AMBIENCE_MODES.includes(v)) sceneAmbience.value = v }
   function setSceneSeason(v: SeasonMode) { if (SEASON_MODES.includes(v)) sceneSeason.value = v }
   function setSceneQuality(v: RenderQuality) { if (RENDER_QUALITIES.includes(v)) sceneQuality.value = v }
+  function setSceneRenderer(v: RendererChoice) { if (RENDERER_CHOICES.includes(v)) sceneRenderer.value = v }
   function setSceneProjection(v: SceneProjection) { if (SCENE_PROJECTIONS.includes(v)) sceneProjection.value = v }
   function setSceneAssets(v: boolean) { sceneAssets.value = v }
   function setSceneDebug(v: boolean) { sceneDebug.value = v }
@@ -208,10 +212,10 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     appearance, theme, locale, isDark, wantDark, themeId, currentTheme, resolvedLocale, fullscreen,
-    sceneStyle, sceneAmbience, sceneQuality, sceneProjection, sceneAssets, sceneDebug, sceneTuning, savedSceneTuning, sceneTuningDirty, sceneTuningPreset, sceneTuningOpen, reliefEditing, terrainTab, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize, cupGrams, navOrder,
+    sceneStyle, sceneAmbience, sceneQuality, sceneRenderer, sceneProjection, sceneAssets, sceneDebug, sceneTuning, savedSceneTuning, sceneTuningDirty, sceneTuningPreset, sceneTuningOpen, reliefEditing, terrainTab, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize, cupGrams, navOrder,
     setAppearance, cycleAppearance, setTheme, setLocale, toggleLocale, applyToVuetify, applyLocale,
-    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneProjection, setSceneAssets, setSceneDebug, setSceneTuning, resetSceneTuning, applySceneTuningPreset, saveSceneTuning, setSceneTuningOpen, setReliefEditing, setTerrainTab, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize, setCupGrams, setNavOrder,
+    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneRenderer, setSceneProjection, setSceneAssets, setSceneDebug, setSceneTuning, resetSceneTuning, applySceneTuningPreset, saveSceneTuning, setSceneTuningOpen, setReliefEditing, setTerrainTab, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize, setCupGrams, setNavOrder,
     appearances: APPEARANCES, themes: THEME_LIST, locales: LOCALES,
-    styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, seasons: SEASON_MODES, sceneSeason, setSceneSeason, qualities: RENDER_QUALITIES, projections: SCENE_PROJECTIONS,
+    styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, seasons: SEASON_MODES, sceneSeason, setSceneSeason, qualities: RENDER_QUALITIES, renderers: RENDERER_CHOICES, projections: SCENE_PROJECTIONS,
   }
 })

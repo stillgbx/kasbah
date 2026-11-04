@@ -84,10 +84,12 @@ export function ringTexture(accent: Color): CanvasTexture | null {
  * in the shader, over a [near, far] range readjusted every frame to the plot as seen from the
  * camera (`onBeforeRender`): no per-dot computation, and the range follows the zoom as well as the orbit.
  */
-const FAR_ALPHA = 0.08, FAR_SIZE = 0.45, FAR_SHADE = 0.45
+export const FAR_ALPHA = 0.08, FAR_SIZE = 0.45, FAR_SHADE = 0.45
 
 function fadeWithDepth(points: Points, material: PointsMaterial): void {
   const near = { value: 0 }, far = { value: 1 }
+  // the same range for the TSL twin of these points (`gpu/points.ts`)
+  material.userData.reliefDepth = { near, far }
   material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms, renderer: WebGLRenderer) => {
     Material.prototype.onBeforeCompile.call(material, shader, renderer)   // the shared hooks (level fade…)
     shader.uniforms.reliefNear = near

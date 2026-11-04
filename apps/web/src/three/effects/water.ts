@@ -1,4 +1,4 @@
-import type { Color, MeshStandardMaterial, Texture, WebGLRenderer } from 'three'
+import type { Color, Material, MeshStandardMaterial, Texture, WebGLRenderer } from 'three'
 import {
   AdditiveBlending, InstancedBufferGeometry, LinearFilter, LinearMipmapLinearFilter, Mesh, OrthographicCamera,
   PlaneGeometry, RepeatWrapping, Scene, ShaderMaterial, Color as ThreeColor, Vector3, WebGLRenderTarget,
@@ -56,13 +56,13 @@ export const WATER_DEPTH_ATTRIBUTE = 'waterDepth'
  * periods in it, so the caustics map repeats seamlessly over the bottom — and at 5 m, more than the
  * length of half a basin, the repetition no longer reads.
  */
-const TILE_M = 5
+export const TILE_M = 5
 /** Distance from the water sheet to the bottom (`POOL_DEPTH − POOL_WATER_DROP` of `buildHouse`): where the light concentrates. */
-const FLOOR_DEPTH_M = 1.38
+export const FLOOR_DEPTH_M = 1.38
 const CAUSTIC_PX = 512
 const CAUSTIC_GRID = 256
 /** The caustics average 1 and climb to ~4 on the lines: stored at a quarter in 8 bits. */
-const CAUSTIC_RANGE = 4
+export const CAUSTIC_RANGE = 4
 /** What the water absorbs, per meter, of what is NOT its tint (-ln of the tint × this factor). */
 const ABSORPTION_PER_M = 0.3
 
@@ -224,7 +224,7 @@ export function createWaterUniforms(): WaterUniforms {
 }
 
 /** Index of water: air over water, for `refract`. */
-const ETA = 1 / 1.333
+export const ETA = 1 / 1.333
 /** A sun lower than this (or set: the moon follows the same path) is held at this elevation. */
 const MIN_SUN_ELEVATION = Math.sin((5 * Math.PI) / 180)
 
@@ -269,6 +269,10 @@ export function setWaterTint(u: WaterUniforms, tint: Color): void {
   u.sigma.value.set(s(tint.r), s(tint.g), s(tint.b))
 }
 
+/** What makes each water material alive, for its TSL twin (`gpu/water.ts`): its role, the shared uniforms, its strength. */
+const waterMaterials = new WeakMap<Material, { role: WaterRole; water: WaterUniforms; strength: WaterStrength }>()
+export const waterOf = (material: Material) => waterMaterials.get(material)
+
 /**
  * Makes a water material ALIVE. The patch survives style changes: `applyLook` mutates the
  * same materials (it does not recreate them), and a recompilation goes through `onBeforeCompile` again.
@@ -277,6 +281,7 @@ export function setWaterTint(u: WaterUniforms, tint: Color): void {
 export function makeWaterAlive(mat: MeshStandardMaterial, role: WaterRole, water: WaterUniforms): WaterStrength {
   const strength: WaterStrength = { value: 0 }
   const basin = role === 'basin'
+  waterMaterials.set(mat, { role, water, strength })
   // the water is in the garden: no indoor lamp reaches it (`core/levelLight.ts`)
   mat.userData.noLamps = true
   mat.onBeforeCompile = (shader) => {
@@ -378,6 +383,7 @@ export class WaterCaustics {
       fragmentShader: CAUSTIC_FRAGMENT,
       blending: AdditiveBlending, transparent: true, depthTest: false, depthWrite: false,
     })
+    this.material.userData.kasbahGpu = 'water-caustics'   // its TSL twin: `gpu/shaderMaterials.ts`
     const mesh = new Mesh(this.geometry, this.material)
     mesh.frustumCulled = false
     this.scene.add(mesh)

@@ -33,6 +33,7 @@ import { resolveAmbience, type AmbienceMode } from '../three/core/ambience'
 import type { SeasonMode } from '../three/garden/season'
 import { backdropColor, groundColor } from '../three/builders/materials'
 import type { RenderQuality } from '../three/core/post'
+import { webgpuAvailable, type RendererChoice } from '../three/core/renderBackend'
 import type { SceneProjection } from '../three/core/cameraFit'
 import { styleById, type GradeLook, type RenderStyle } from '../three/styles'
 
@@ -117,6 +118,13 @@ const styleHasAssets = computed(() => !!styleById(settings.sceneStyle).assets)
 const seasonOptions = computed(() => settings.seasons.map((s) => ({ value: s, label: t(`render.seasons.${s}`) })))
 const ambienceOptions = computed(() => settings.ambiences.map((a) => ({ value: a, label: t(`render.ambiences.${a}`) })))
 const qualityOptions = computed(() => settings.qualities.map((q) => ({ value: q, label: t(`render.qualities.${q}`) })))
+const rendererOptions = computed(() => settings.renderers.map((r) => ({ value: r, label: t(`render.renderers.${r}`) })))
+/** A canvas that opened a WebGL context cannot open a WebGPU one: the kept-alive House view only changes with a reload. */
+function chooseRenderer(v: RendererChoice) {
+  if (v === settings.sceneRenderer) return
+  settings.setSceneRenderer(v)
+  location.reload()
+}
 const projectionOptions = computed(() => settings.projections.map((p) => ({ value: p, label: t(`render.projections.${p}`) })))
 // Forced weather (debugging): "Real" then the nine conditions of the contract, with the widget's icon.
 const weatherChoices = computed<{ value: SceneWeatherChoice; label: string; icon: IconName | null }[]>(() => [
@@ -248,6 +256,9 @@ const houseStats = computed(() => {
               <div class="block__sub">{{ $t('render.quality') }}</div>
               <Segmented dense :model-value="settings.sceneQuality" :options="qualityOptions" class="w-100" @update:model-value="(v: RenderQuality) => settings.setSceneQuality(v)" />
               <div class="muted small">{{ $t('render.qualityHint') }}</div>
+              <div class="block__sub">{{ $t('render.renderer') }}</div>
+              <Segmented dense :model-value="settings.sceneRenderer" :options="rendererOptions" class="w-100" @update:model-value="(v: RendererChoice) => chooseRenderer(v)" />
+              <div class="muted small">{{ $t(settings.sceneRenderer === 'webgpu' && !webgpuAvailable() ? 'render.rendererMissing' : 'render.rendererHint') }}</div>
               <!-- forced weather: debugging only, and scene only (the widget always says the real weather) -->
               <template v-if="settings.sceneDebug">
                 <div class="block__sub">{{ $t('render.weather') }}</div>

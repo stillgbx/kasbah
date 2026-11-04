@@ -1,6 +1,6 @@
 # Scène 3D : rendu
 
-> Dernière mise à jour : 2026-10-31
+> Dernière mise à jour : 2026-11-04
 > Sources : sections reprises telles quelles de `1_5_scene-3d.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre le rendu de la scène : styles et thèmes, lumière du jour et de la nuit, ombres, météo (nuages, pluie, neige, brume), eau de la piscine, matières photo, chaîne d'image et étalonnage, tilt-shift, banc de réglage, performance GPU (passes, MSAA, shaders précompilés, voile de mesure). Elle est née du découpage de
@@ -2193,3 +2193,94 @@ première capture d'un Chrome froid montre le voile « Préparation de la maison
 Non mesuré : les tablettes, où le gain en medium devrait compter le plus.
 Sources : `apps/web/package.json`, `apps/web/src/three/core/post.ts`,
 `apps/web/src/three/HouseScene.ts`, notes de version three.js r187 et guide de migration 186 → 187.
+
+## Deux moteurs de rendu : WebGL par défaut, WebGPU en option (2026-11-04)
+
+**Pourquoi** : WebGPU et TSL (le langage de nœuds de three) sont présentés comme l'avenir de three, et
+les nouveautés y arrivent d'abord (notes de r187). La question était de migrer. Mesurée sur la maison de
+démonstration (`kasbah-mock`, Radeon intégrée, secteur), la réponse a été non : WebGPU coûte **1,3 à
+1,9 fois le temps GPU** de WebGL dans les trois qualités, pour environ **la moitié de son temps CPU**.
+La scène étant limitée par le GPU sur les machines visées, WebGL reste le défaut ; WebGPU est un
+choix de Réglages → Rendu 3D (`kasbah.sceneRenderer`, voir
+[4_2 Thème et langues](../4_ui/4_2_theme-et-langues.md)), libellé « expérimental ».
+
+| GPU par image (ms) | WebGL | WebGPU |
+|---|---|---|
+| basse, scène seule, mode éco | 5,7-9,5 | 13,4-19 |
+| basse, mode normal | 8 | 12,7-14 |
+| moyenne, mode normal | 9,7-12,7 | 14,7-21 |
+| haute, mode normal | 23,6-28 | 31,5-42 |
+| haute, scène complète (eau, caustiques, reflet, marqueurs) | 31-33 | 47-58 |
+| moyenne, scène complète | 14-15 | 20-29 |
+
+Ce que les mesures ont écarté, une à une : le masque de lampes en TSL (même coût sans lui), le tampon
+intermédiaire en demi-flottant (`outputBufferType` 8 bits : rien), un redessin des ombres (un seul rendu
+par image, vérifié). Le repli WebGL 2 de `WebGPURenderer` coûte autant que WebGPU, voire plus en haute
+(45-55 ms) : le coût est dans les shaders que three génère pour ses matières en nœuds, pas dans l'API.
+L'occlusion en TSL lit les normales dans la passe de scène (MRT) au lieu de la redessiner (253 k
+triangles contre 382 k en WebGL) : c'est le gain que décrivent les comparatifs publiés, il ne rattrape
+pas le reste. Leur gain en images par seconde vient de scènes limitées par le CPU.
+
+**À-coup au premier usage** : en WebGPU, les premières secondes d'une vue coûtent jusqu'à 600 ms de GPU
+et 700-900 ms de CPU par image, le temps que les pipelines (reflet de la piscine sur six faces,
+caustiques, cibles de la chaîne) soient créés. Pas de précompilation sous le voile en WebGPU :
+`compileAsync` compile pour le format du canevas, la scène est dessinée dans la cible de la chaîne
+(MSAA, MRT, demi-flottant).
+
+**Organisation** : tout ce qui est WebGPU vit dans `apps/web/src/three/gpu/`, chargé à la demande
+(`loadGpuBackend`) : le moteur par défaut ne le télécharge pas. Le contrat entre les deux,
+`apps/web/src/three/core/renderBackend.ts` (`GpuBackend` : créer le renderer, la chaîne d'effets,
+préparer chaque image), n'importe rien de `three/webgpu`. `HouseScene` reçoit le backend dans ses
+dépendances (`deps.gpu`), attend `init()` avant la première image, et ne teste `isWebGPU` que là où les
+API diffèrent. Un canevas qui a ouvert un contexte WebGL ne peut pas ouvrir un contexte WebGPU, et la
+vue Maison est gardée en vie (`<keep-alive>`) : changer de moteur recharge la page.
+`?renderer=webgl|webgpu` impose le moteur pour un chargement, sans l'enregistrer (bancs, essai sur
+tablette). Un navigateur sans WebGPU reçoit WebGL.
+
+**Chaque effet existe deux fois**, en GLSL pour WebGL et en TSL pour WebGPU, lisant les **mêmes
+objets d'uniforms** : la scène les règle une fois pour les deux. Correspondance :
+
+| GLSL (WebGL) | TSL (WebGPU) |
+|---|---|
+| `core/levelLight.ts` (boucle des lampes patchée) | `gpu/levelLight.ts` : `PointLightNode` dérivé, `PointLight.registerNode` |
+| `levelFade`, `roomFocus`, `heightMist` sur `Material.prototype.onBeforeCompile` | `gpu/materialHooks.ts` : `setupDiffuseColor` et `setupOutput` patchés sur `NodeMaterial.prototype` |
+| `core/post.ts` (`EffectComposer`, `GTAOPass`, bloom, sortie, tilt-shift) | `gpu/post.ts` (`RenderPipeline`, `GTAONode` + débruitage, `BloomNode`, `renderOutput`), `gpu/tiltShift.ts` |
+| `ShaderMaterial` des ondes de marqueurs, de l'art des écrans, des caustiques | `gpu/shaderMaterials.ts` : une classe enregistrée pour le type `ShaderMaterial`, qui lit `userData.kasbahGpu` |
+| `effects/water.ts` (surface, fond, absorption) | `gpu/water.ts` : `normalNode` / `opacityNode`, `finish` du modèle d'éclairage, sortie |
+| `Points` dimensionnés | `gpu/points.ts` : un sprite instancié jumeau par `Points` |
+
+**Pièges rencontrés** (tous vérifiés par une sonde qui pose l'uniform à la main et compare l'image avec
+et sans) :
+- **Le cache de shaders ignore `userData`** : WebGPU partage le shader de deux matières aux réglages
+  identiques ; la clé se lit sur la matière **d'origine** (`RenderObject.getMaterialCacheKey`), pas sur
+  sa copie en nœuds. La brume tombait sur le toit et pas sur la pelouse. `noLamps` et l'étiquette
+  `kasbahGpu` entrent dans `Material.prototype.customProgramCacheKey` (patché seulement par le module
+  WebGPU), et l'opacité propre à chaque matière est relue **par objet** (`onObjectUpdate`).
+- **Un point WebGPU fait un pixel** : neige, étincelles, poignées du relief seraient des points
+  minuscules. Chaque `Points` a un jumeau `Sprite` instancié, enfant de lui, qui lit les mêmes
+  attributs ; le `Points` garde le pointage mais son matériau est rendu invisible.
+  `PointsNodeMaterial` en mode sprite divise par `viewportSize`, faux dans les passes de la chaîne (un
+  flocon couvrait la moitié de l'image) : le jumeau est un `SpriteNodeMaterial` dimensionné en mètres
+  (`taille × tan(fov/2)` pour un point atténué, le pixel converti à sa distance sinon), plafonné à 64 px
+  et éliminé derrière la caméra, comme WebGL.
+- **`fragmentNode` casse la MRT** : une matière qui fournit son fragment complet ne sort pas les
+  normales, et WebGPU refuse le pipeline en qualité haute. Passer par `colorNode`.
+- Les caustiques ne modulent que la lumière directe diffuse : au `finish` du modèle d'éclairage, three
+  l'a déjà additionnée ; on ajoute son excès (`× facteur − 1`), même produit que le GLSL.
+
+**Écarts connus** : l'ombre d'un étage qui s'efface ne pâlit pas avec lui (le GLSL trame aussi la carte
+d'ombre) ; en moyenne, WebGPU fait de l'anticrénelage 4× (il ne connaît que 1 ou 4) contre 2× ; les
+halos additifs figurent dans les normales de l'occlusion ; l'à-coup au premier usage. Image : écart
+moyen de 0,5 à 1,9 niveau sur 255 entre les deux moteurs (eau, vitres, bord des ombres).
+
+**Banc** : `kasbah-webgpu.mjs` (temps GPU par requêtes en WebGL, horodatages WebGPU en développement
+seulement — `trackTimestamp`), `probe-hooks.mjs` (chaque effet posé à la main, captures), `compare.mjs`
+(écart de luminance et carte de chaleur), hors dépôt dans `_generated-ai-doc/perf/`. **Pièges du
+banc** : la simulation réimpose sa météo pendant la mesure (verrouiller `setAppearance`) ; les niveaux
+de la maison de démonstration sont `rdc` et `toit` ; la preview masquée reste sous le voile
+(`holdFrames`) ; une sonde qui importe un module modifié obtient une autre instance (voir
+[6_0](../6_faq/6_0_pieges-outillage.md)). À relancer à chaque montée de version de three. Non mesuré :
+les tablettes.
+Sources : `apps/web/src/three/core/renderBackend.ts`, `apps/web/src/three/gpu/*.ts`,
+`apps/web/src/three/HouseScene.ts`, `apps/web/src/composables/useHouseScene.ts`,
+`apps/web/src/three/effects/water.ts`, `apps/web/src/views/SettingsView.vue`.

@@ -18,6 +18,7 @@ import { loadFinishTextures, loadPackTextures, packById, packTexturesSettled, ty
 import { createSkyEnvironment, overcastSky } from './core/sky'
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { setLevelHeights } from './core/levelLight'
+import { isWebGPU, type GpuBackend } from './core/renderBackend'
 import { setHeightMist } from './core/heightMist'
 import { materialOpacity, setLevelFade } from './core/levelFade'
 import { roomFocusUniforms, setRoomFocusShape, setRoomFocusStrength } from './core/roomFocus'
@@ -86,6 +87,8 @@ export interface SceneAppearance {
 
 export interface HouseSceneDeps {
   createRenderer?: (canvas: HTMLCanvasElement) => WebGLRenderer | null
+  /** The WebGPU side, already loaded (`core/renderBackend.ts`): the scene is then drawn by `WebGPURenderer`. */
+  gpu?: GpuBackend
   createLabelRenderer?: (layer: HTMLElement) => CSS2DRenderer
   requestFrame?: (cb: (now: number) => void) => number
   cancelFrame?: (h: number) => void
@@ -395,6 +398,10 @@ export class HouseScene {
   /** Built on the first switch to orthographic, kept afterward (going back and forth is a setting, not an animation). */
   private orthoCamera: OrthographicCamera | null = null
   readonly renderer: WebGLRenderer | null
+  /** Set when the renderer is `WebGPURenderer`: its effect chain and node materials come from there. */
+  private readonly gpu: GpuBackend | null
+  /** `WebGPURenderer.init()` has resolved: no frame before it. */
+  private gpuReady = false
   readonly labelRenderer: CSS2DRenderer | null
   readonly controls: OrbitControls | null
   readonly loop: RenderLoop
@@ -666,7 +673,9 @@ export class HouseScene {
     // `Raycaster` only sees layer 0 and the drag never starts (observed).
     this.raycaster.layers.enable(DECOR_LAYER)
 
-    const create = deps.createRenderer ?? defaultCreateRenderer
+    this.gpu = deps.headless ? null : deps.gpu ?? null
+    const gpu = this.gpu
+    const create = deps.createRenderer ?? (gpu ? (c: HTMLCanvasElement) => gpu.createRenderer(c) : defaultCreateRenderer)
     this.renderer = deps.headless ? null : create(canvas)
     this.supported = deps.headless ? true : this.renderer !== null
     // VSM (Variance Shadow Maps) and not PCFSoftShadowMap: since three 0.184 the latter is
@@ -674,6 +683,9 @@ export class HouseScene {
     // VSM blurs natively, driven by `shadow.radius` / `shadow.blurSamples`.
     if (this.renderer) { this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = VSMShadowMap }
     if (this.renderer) { this.caustics = new WaterCaustics(this.water); this.water.caustics.value = this.caustics.texture }
+    if (this.renderer && this.gpu) {
+      void (this.renderer as unknown as { init(): Promise<unknown> }).init().then(() => { this.gpuReady = true; this.loop.invalidate() })
+    }
     this.applySky()
     this.applyQuality()
     this.labelRenderer = deps.labelLayer ? (deps.createLabelRenderer ?? ((el) => new CSS2DRenderer({ element: el })))(deps.labelLayer) : null
@@ -841,7 +853,7 @@ export class HouseScene {
       // reads each material's program without a guard, and a material destroyed during the wait (the
       // markers are rebuilt when the descriptors arrive) makes it crash silently — the
       // promise never resolved and the veil stayed (observed on 2026-09-25).
-      r.compile(this.scene, this.camera)
+      if (!this.gpu) r.compile(this.scene, this.camera)
       r.setRenderTarget(previous)
       await this.shadersReady(r, () => gen === this.prepareGen)
       if (gen !== this.prepareGen) return
@@ -895,7 +907,7 @@ export class HouseScene {
    */
   private async compileBeforeShow(): Promise<void> {
     const r = this.renderer
-    if (!r || this.holdFrames) return      // a preparation already holds the frames, and will compile everything
+    if (!r || this.holdFrames || this.gpu) return      // a preparation already holds the frames, and will compile everything
     const gen = ++this.compileGen
     this.scene.updateMatrixWorld()
     const previous = r.getRenderTarget()
@@ -3782,7 +3794,8 @@ export class HouseScene {
       fps: Math.round(this.perf.fps),
       cpuMs: Math.round(this.perf.cpuMs * 10) / 10,
       outsideMs: Math.round(this.perf.outsideMs * 10) / 10,
-      calls: info?.render.calls ?? 0,
+      // `WebGPURenderer` names it `drawCalls`
+      calls: info?.render.calls ?? (info?.render as { drawCalls?: number } | undefined)?.drawCalls ?? 0,
       triangles: info?.render.triangles ?? 0,
       programs: info?.programs?.length ?? 0,
       geometries: info?.memory.geometries ?? 0,
@@ -4262,7 +4275,7 @@ export class HouseScene {
     this.post?.dispose()
     this.post = null
     const auto = this.options.quality === 'auto'
-    const wanted = this.options.quality === 'auto' ? (this.autoQuality ?? detectQuality(this.renderer ? gpuName(this.renderer) : '')) : this.options.quality
+    const wanted = this.options.quality === 'auto' ? (this.autoQuality ?? detectQuality(this.renderer && !isWebGPU(this.renderer) ? gpuName(this.renderer) : '')) : this.options.quality
     this.quality = wanted
     this.syncPrecipitation()               // low quality cuts the rain
     this.syncBats()                        // …and the bats
@@ -4277,6 +4290,15 @@ export class HouseScene {
       // No chain: tone mapping goes back to the renderer, and the image goes straight to the screen.
       this.renderer.toneMapping = toneMappingOf(this.look.post)
       this.renderer.toneMappingExposure = this.look.post.exposure
+      return
+    }
+    if (this.gpu) {
+      const r = this.renderer
+      this.post = this.gpu.createPostPipeline({
+        renderer: r, scene: this.scene, camera: this.camera, quality: wanted, beforeRender: () => this.renderScene(r, true),
+        ...(auto ? { onDowngrade: (to: EffectiveQuality) => { this.autoQuality = to; this.applyQuality(); this.loop.invalidate() } } : {}),
+      })
+      this.post.setLook(this.look.post)
       return
     }
     this.post = createPostPipeline({
@@ -4376,6 +4398,7 @@ export class HouseScene {
 
   private render(interactive = true): void {
     if (this.holdFrames || this.compiling) return
+    if (this.gpu && !this.gpuReady) return
     this.probe?.begin()
     const t0 = this.deps.now?.() ?? performance.now()
     // The world matrices, ONCE per frame. Three recomputes them at the start of EVERY `render()` —
@@ -4407,7 +4430,7 @@ export class HouseScene {
    * the height mask each material carries (`core/levelLight.ts`), no longer through rendering in passes.
    * What remains, as before: within the same level, a lamp still lights through a partition.
    */
-  private renderScene(r: WebGLRenderer): void {
+  private renderScene(r: WebGLRenderer, prepareOnly = false): void {
     // the mask's slices: the WORLD elevations of the levels (the root may be moved)
     if (this.nodes) setLevelHeights([...this.nodes.levels.values()].map((n) => n.group.matrixWorld.elements[13]!))
     // The shadows are only redone after a scene change, not because the camera turned:
@@ -4415,6 +4438,11 @@ export class HouseScene {
     const rebuildShadows = (this.deps.now?.() ?? performance.now()) <= this.shadowsDirtyUntil || this.shadowFramesPending > 0
     if (this.shadowFramesPending > 0) this.shadowFramesPending--
     this.perf.shadowsRebuilt = rebuildShadows
+    if (this.gpu) {
+      this.gpu.prepareFrame(this.scene, this.camera, rebuildShadows)
+      if (!prepareOnly) r.render(this.scene, this.camera)
+      return
+    }
     r.shadowMap.autoUpdate = rebuildShadows
     r.render(this.scene, this.camera)
     r.shadowMap.autoUpdate = false

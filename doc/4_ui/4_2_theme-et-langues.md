@@ -1,7 +1,7 @@
 # Thème et langues
 
-> Dernière mise à jour : 2026-10-06
-> Sources : `apps/web/src/stores/settings.ts`, `apps/web/src/lib/daylight.ts`, `apps/web/src/themes/*.ts`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/i18n/index.ts`, `apps/web/src/i18n/locales/{fr,en}.json`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/PetkitLinkCard.vue`
+> Dernière mise à jour : 2026-11-04
+> Sources : `apps/web/src/stores/settings.ts`, `apps/web/src/lib/daylight.ts`, `apps/web/src/themes/*.ts`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/i18n/index.ts`, `apps/web/src/i18n/locales/{fr,en}.json`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/PetkitLinkCard.vue`, `apps/web/src/three/core/renderBackend.ts`
 
 ## Apparence
 
@@ -334,6 +334,7 @@ position gps, du soleil, de la météo ». Trois préférences nouvelles, persis
 | `kasbah.sceneQuality` | `auto` (défaut), `high`, `medium`, `low` | le budget du post-traitement |
 | `kasbah.sceneAssets` | `true` (défaut), `false` — depuis le 2026-09-15 | matières en images (pack photo du style) plutôt que procédurales, pour les styles qui en portent un |
 | `kasbah.sceneProjection` | `perspective` (défaut), `ortho`, `iso` — depuis le 2026-09-18 | comment la maison est projetée : fuite, à plat, ou isométrie aux angles verrouillés |
+| `kasbah.sceneRenderer` | `webgl` (défaut), `webgpu` — depuis le 2026-11-04 | le moteur qui dessine la vue Maison ; lu à la création de la scène, d'où le rechargement de la page au changement (voir [1_11, « Deux moteurs de rendu »](../1_architecture/1_11_scene-3d-rendu.md)) |
 
 > Mis à jour le 2026-10-06 (lint) : `kasbah.sceneStyle` accepte les 13 styles de `RENDER_STYLES` (`apps/web/src/three/styles/index.ts`) : `realistic` (défaut), `nature`, `indigo`, `maquette`, `cyberpunk`, `candy`, `haunted`, `disco`, `halloween`, `noel`, `tatooine`, `akira`, `girlyversaire`. Un id inconnu est refusé par `setSceneStyle`.
 
