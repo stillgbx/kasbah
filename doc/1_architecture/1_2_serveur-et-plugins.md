@@ -1,6 +1,6 @@
 # Serveur et hôte de plugins
 
-> Dernière mise à jour : 2026-11-03
+> Dernière mise à jour : 2026-11-04
 > Sources : `apps/server/src/{app,main}.ts`, `apps/server/src/core/*.ts`, `apps/server/src/plugins/index.ts`, `apps/server/src/core/scene-registry.ts`, `apps/server/src/core/{plugin,plugin-host,scene-seeder}.ts`, `packages/shared/src/house/schema.ts`, `apps/server/src/plugins/comap/{history,state}.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/core/playbackBridge.ts`, `apps/server/src/music/{player,sources}.ts`, `apps/server/src/core/automations/engine.ts`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/main.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/plugins/shopping/index.ts` (2026-10-11)
 
 ## Assemblage (`app.ts`)
@@ -660,3 +660,21 @@ Garde-fous :
 
 **Pas encore éprouvé sur le serveur réel** (non redémarré ; le lien Nest ↔ zone 1 reste à poser dans le
 panneau). Tests : `core/climateLinks.test.ts`, `place.test.ts`. Interface : `../4_ui/4_6_autres-vues.md`.
+
+### Mise à jour 2026-11-04 — thermostats liés : chaque copie écartée dit pourquoi
+
+**Constat.** Premier essai sur la vraie maison : une consigne posée depuis Kasbah sur le Nest n'a
+atteint personne, et le journal n'en gardait aucune trace ; un second essai a marché. Cause non
+trouvée : avant ce jour, toutes les sorties silencieuses du module se ressemblaient.
+
+**Désormais** (`core/climateLinks.ts`), tout changement de consigne d'un membre qui n'est pas recopié
+écrit une ligne `info` `linked thermostat skipped` avec un champ `reason` :
+- côté source : `first reading` (première lecture après le démarrage), `echo of a copy` (fenêtre
+  anti-écho), `source in mode off` / `eco` ;
+- côté destinataire (`device`) : `not a known thermostat`, `unavailable`, `takes no setpoint`,
+  `in mode off` / `eco`, `already at that setpoint`.
+
+Une copie réussie donne aussi une ligne `echo of a copy` quand le destinataire confirme. Une simple
+relecture de la même consigne ne journalise rien. Recherche en production :
+`Select-String -Path logs\kasbah.log -Pattern 'linked thermostat'` (avec `linked thermostat set` /
+`not set` déjà existants). Test : « says in the log why a setpoint change was not copied ».

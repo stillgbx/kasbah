@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-04] update | Thermostats liés : chaque copie écartée dit pourquoi
+
+**Trigger** : premier essai du lien sur la vraie maison, une consigne posée sur le Nest depuis Kasbah n'a pas atteint la pompe à chaleur, sans trace au journal ; second essai réussi, cause non trouvée.
+
+**Pages modified** :
+- `1_architecture/1_2_serveur-et-plugins.md` - mise à jour 2026-11-04 : ligne `linked thermostat skipped` avec ses raisons, côté source et destinataire, et la recherche en production.
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-11-03] update | Consigne plus fine, zone MELCloud pilotable, thermostats liés
 
 **Trigger** : demande de régler la consigne de chauffage plus finement que par demi-degré ; en chemin, la zone MELCloud sur l'ambiante devient pilotable et un lien entre thermostats voisins est ajouté (non commité à la rédaction).

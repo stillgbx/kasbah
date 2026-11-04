@@ -62,27 +62,34 @@ export class ClimateLinks {
     const value = state.targetTempC
     const before = this.seen.get(id)
     this.seen.set(id, value)
-    // first read (server start): nothing changed, and the group is not realigned behind the user's back
-    if (before === undefined || before === value) return
+    if (before === value) return
     const group = this.opts.links().find((g) => g.includes(id))
     if (!group) return
+    // Every setpoint change of a member that is not copied says why: on 2026-11-04 a change made
+    // from Kasbah on the Nest reached nobody and left nothing in the log.
+    const skip = (reason: string) => this.opts.logger.info({ source: id, targetTempC: value, reason }, 'linked thermostat skipped')
+    // first read (server start): nothing changed, and the group is not realigned behind the user's back
+    if (before === undefined) return skip('first reading')
 
     // Within the window, the pushed value and the one from before are echoes, in any order: a poll
     // that left before the command can land AFTER the device confirmed. The price: putting the
     // device back to its former setpoint from the vendor's app is not copied for these few minutes.
     const pushed = this.pushed.get(id)
-    if (pushed && this.opts.clock.now() < pushed.until && (value === pushed.value || value === pushed.from)) return
+    if (pushed && this.opts.clock.now() < pushed.until && (value === pushed.value || value === pushed.from)) return skip('echo of a copy')
     this.pushed.delete(id)
-    if (!followsSetpoint(state)) return
+    if (!followsSetpoint(state)) return skip(`source in mode ${state.mode}`)
     for (const other of group) if (other !== id) this.push(other, value, id)
   }
 
   private push(id: DeviceId, value: number, source: DeviceId): void {
     const entry = this.opts.registry.get(id)
-    if (!entry || !entry.state.available || entry.state.kind !== 'climate') return
-    if (!entry.descriptor.capabilities.includes('target_temp') || !followsSetpoint(entry.state)) return
+    const skip = (reason: string) => this.opts.logger.info({ source, device: id, targetTempC: value, reason }, 'linked thermostat skipped')
+    if (!entry || entry.state.kind !== 'climate') return skip('not a known thermostat')
+    if (!entry.state.available) return skip('unavailable')
+    if (!entry.descriptor.capabilities.includes('target_temp')) return skip('takes no setpoint')
+    if (!followsSetpoint(entry.state)) return skip(`in mode ${entry.state.mode}`)
     const targetTempC = linkedSetpoint(value, entry)
-    if (entry.state.targetTempC === targetTempC) return
+    if (entry.state.targetTempC === targetTempC) return skip('already at that setpoint')
     this.pushed.set(id, { value: targetTempC, from: entry.state.targetTempC, until: this.opts.clock.now() + CONFIRM_WITHIN_MS })
     this.opts.execute(id, { type: 'climate.set_target_temp', targetTempC }).then(
       () => this.opts.logger.info({ source, device: id, targetTempC }, 'linked thermostat set'),

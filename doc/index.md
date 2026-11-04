@@ -20,13 +20,13 @@ Vision du projet, principes structurants et vocabulaire commun. Résumés : [0_o
 ## 1 — Architecture
 
 <!-- section:1_architecture:begin (généré par scripts/wiki-index.mjs depuis 1_architecture/README.md - ne pas éditer ici) -->
-Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses, notifications push, pont Matter. Résumés : [1_architecture/README.md](1_architecture/README.md) (18 pages, dernière mise à jour 2026-11-03).
+Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses, notifications push, pont Matter. Résumés : [1_architecture/README.md](1_architecture/README.md) (18 pages, dernière mise à jour 2026-11-04).
 
 | Pages | Dernière mise à jour |
 |---|---|
 | [1_0 Monorepo et flux de données](1_architecture/1_0_monorepo-et-flux.md) | 2026-10-20 |
 | [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-11-03 |
-| [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-11-03 |
+| [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-11-04 |
 | [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-11-01 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-11-01 |
 | [1_5 Scène 3D (Three.js)](1_architecture/1_5_scene-3d.md) | 2026-10-29 |

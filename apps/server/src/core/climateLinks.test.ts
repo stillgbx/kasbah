@@ -33,13 +33,15 @@ function setup(o: { links?: DeviceId[][]; fail?: boolean } = {}) {
     if (o.fail) throw new Error('vendor down')
     if (command.type === 'climate.set_target_temp') registry.applyPatch(id, { targetTempC: command.targetTempC } as StatePatch)
   })
-  new ClimateLinks({ links: () => o.links ?? [[NEST, PAC]], registry, bus, clock, logger: pino({ level: 'silent' }), execute })
+  const logs: Record<string, unknown>[] = []
+  const logger = pino({ level: 'info' }, { write: (line: string) => { logs.push(JSON.parse(line)) } })
+  new ClimateLinks({ links: () => o.links ?? [[NEST, PAC]], registry, bus, clock, logger, execute })
   const report = (id: string, patch: Record<string, unknown>) => registry.applyPatch(id, { available: true, ...patch } as StatePatch)
   // the first read of each: what the server finds at start
   report(NEST, { mode: 'heat', targetTempC: 19.5 })
   report(PAC, { mode: 'heat', targetTempC: 19.5 })
   report(OTHER, { mode: 'heat', targetTempC: 21 })
-  return { registry, clock, sent, report }
+  return { registry, clock, sent, report, logs }
 }
 
 const target = (r: DeviceRegistry, id: string) => (r.get(id)!.state as { targetTempC: number }).targetTempC
@@ -117,6 +119,17 @@ describe('ClimateLinks', () => {
       { id: NEST, command: { type: 'climate.set_target_temp', targetTempC: 19.7 } },
       { id: PAC, command: { type: 'climate.set_target_temp', targetTempC: 20 } },
     ])
+  })
+
+  it('says in the log why a setpoint change was not copied', () => {
+    const { report, logs } = setup()
+    const skipped = () => logs.filter((l) => l.msg === 'linked thermostat skipped').map((l) => l.reason)
+    expect(skipped()).toEqual(['first reading', 'first reading'])   // the Nest and the heat pump, not OTHER
+    report(PAC, { mode: 'off' })
+    report(NEST, { targetTempC: 21 })
+    expect(skipped().at(-1)).toBe('in mode off')
+    report(NEST, { mode: 'eco', targetTempC: 14 })
+    expect(skipped().at(-1)).toBe('source in mode eco')
   })
 
   it('forgets a copy the vendor refused: the next real change still goes', async () => {
