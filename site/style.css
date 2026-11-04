@@ -270,6 +270,43 @@ section { padding: 72px 0; }
 
 .plugin em.local { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 
+/* Tutorials: video cards */
+
+.tutos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.tuto {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
+  padding: 0 0 18px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  text-decoration: none;
+  transition: background .15s, border-color .15s;
+}
+
+.tuto:hover { background: var(--surface2); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.tuto__media { position: relative; display: block; aspect-ratio: 16 / 9; margin-bottom: 12px; }
+.tuto__media img { width: 100%; height: 100%; object-fit: cover; }
+.tuto strong { font-weight: 700; padding: 0 18px; }
+.tuto > span:last-child { color: var(--muted); font-size: 14px; padding: 0 18px; }
+/* In the corner: the thumbnail's own title sits in its middle */
+.tuto .video__play { inset: auto 12px 12px auto; width: 44px; height: 44px; }
+.tuto .video__play svg { width: 18px; height: 18px; }
+.tuto:hover .video__play { transform: scale(1.06); background: var(--accent); }
+.tuto:hover .video__play svg { fill: var(--on-accent); }
+
 /* Get started */
 
 .start { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }

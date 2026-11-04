@@ -1,6 +1,6 @@
 # Production
 
-> Dernière mise à jour : 2026-11-03
+> Dernière mise à jour : 2026-11-04
 > Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts`, `site/`, `.github/workflows/pages.yml`, `apps/web/src/stores/push.ts` (2026-10-29)
 
 ## Build
@@ -572,6 +572,18 @@ Une page publique qui se partage (X, Discord, README), montre la vidéo, et port
   `data-id` de l'affiche, lien du pied de page) ; l'affiche locale est commune. Même partage pour les
   README : `README.fr.md` pointe sur la vidéo française (bannière et « Voir la vidéo »), `README.md`
   sur l'anglaise.
+- **Playlists et tutos** (2026-11-04) : la chaîne a une playlist par langue (EN `PLafIQZ_WgF34`, FR
+  `PLIs8W3H_CjZ4`), avec la vidéo de promo puis les tutos. Le lien du pied de page devient
+  « Videos » / « Vidéos » et pointe sur la playlist de la langue : l'identifiant de la vidéo de promo
+  ne revient plus que deux fois par page (`og:video`, affiche). Une section **Tutorials / Tutos**
+  (`#tutorials`, après « Démarrer », entrée dans le menu) aligne des cartes vidéo (`.tutos` / `.tuto`
+  de `style.css`, grille `auto-fill` à 280 px) : miniature, titre, une phrase, lien
+  `watch?v=<id>&list=<playlist>` pour que YouTube enchaîne sur la suite. Pas d'intégration ni de
+  miniature `i.ytimg.com` : l'image est locale (`assets/tuto-install-en.webp` / `-fr.webp`, WebP
+  800 × 450, ~17 Ko, réduits des miniatures `@2x` fournies par l'utilisateur), si bien que le site ne
+  charge toujours rien de YouTube avant un clic. Le bouton lecture de `.video__play` est réduit et
+  posé dans le coin bas-droit : centré, il cachait le titre que la miniature porte en son milieu.
+  Ajouter un tuto = un `<li>` de plus sur chacune des deux pages.
 - **Politique de confidentialité** : écrite d'après le code de `apps/android` (ce que garde
   `KasbahClient`, le géorepérage d'`Approach.kt`, le micro de `Voice.kt`, l'écran Voiture de
   `ProbeScreen.kt`, qui affiche sans rien envoyer). À relire à chaque permission ajoutée au manifeste.

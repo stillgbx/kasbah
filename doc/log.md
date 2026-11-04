@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-04] update | Site vitrine : playlists par langue et cartes de tutos
+
+**Trigger** : deux playlists YouTube (EN, FR) avec la vidéo de promo et un premier tuto (installer l'app sur Android avec le raccourci « Demander ») ; demande de faire pointer le lien du pied de page sur la playlist et d'ajouter les cartes des tutos.
+
+**Pages modified** :
+- `5_setup/5_2_production.md` - site vitrine : lien « Vidéos » vers la playlist de la langue, section Tutos (cartes, miniatures locales, bouton lecture en coin).
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-11-04] update | Zone MELCloud retenue par un thermostat lié : ni « Chauffe », ni repos muet
 
 **Trigger** : sur la vraie maison, la zone de la pompe à chaleur était dite « Chauffe » alors que le Nest en série, satisfait, retenait la machine ; demande de l'afficher correctement, en disant qui la retient.
