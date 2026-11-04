@@ -584,6 +584,17 @@ Une page publique qui se partage (X, Discord, README), montre la vidéo, et port
   charge toujours rien de YouTube avant un clic. Le bouton lecture de `.video__play` est réduit et
   posé dans le coin bas-droit : centré, il cachait le titre que la miniature porte en son milieu.
   Ajouter un tuto = un `<li>` de plus sur chacune des deux pages.
+- **Vidéos envoyées en 1440p** (2026-11-04) : envoyées en 1080p60, les vidéos n'avaient reçu de YouTube
+  qu'un jeu de formats réduit (VP9 en 360p seulement, AV1 incomplet), et la qualité automatique restait
+  en 240p AV1, dans le lecteur intégré au site comme sur youtube.com, connecté, lecteur de 2545 px.
+  Une autre vidéo, dans le même navigateur, partait en 720p. Les mêmes vidéos agrandies en
+  2560 × 1440 avant l'envoi (`ffmpeg -vf scale=2560:1440:flags=lanczos -c:v libx264 -preset slow
+  -crf 16 -g 30 -c:a copy`) reçoivent d'emblée l'échelle VP9 complète, de 144p à 1440p60, et le
+  lecteur du site (1118 × 628) passe en 1080p dès la première seconde. Les quatre vidéos ont été
+  renvoyées ainsi : les identifiants du site et des README ont changé. Pour mesurer : le panneau
+  navigateur intégré ne vaut rien (240p partout, y compris sur une vidéo témoin) ; Claude in Chrome
+  oui, formats lus dans `ytInitialPlayerResponse.streamingData.adaptiveFormats`, qualité du lecteur
+  intégré par `enablejsapi=1` et les messages `infoDelivery`.
 - **Politique de confidentialité** : écrite d'après le code de `apps/android` (ce que garde
   `KasbahClient`, le géorepérage d'`Approach.kt`, le micro de `Voice.kt`, l'écran Voiture de
   `ProbeScreen.kt`, qui affiche sans rien envoyer). À relire à chaque permission ajoutée au manifeste.
