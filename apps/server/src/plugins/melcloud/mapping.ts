@@ -278,6 +278,10 @@ export const machineHeating = (f: Record<string, unknown>): boolean => num(f, 'O
  * activity is NOT KNOWN: MELCloud does not say which zone the cascade serves, and on site zone 2
  * was not heating while zone 1 was. `action` is then left out (neither "heating" nor "idle", both
  * would be guesses) and `unitHeating` says what is known: the machine is heating.
+ *
+ * The other way round, a zone that ASKS (not idle) while the machine does not heat is idle: on
+ * 2026-11-04 zone 1, under its setpoint on its own sensor, asked while a Nest in series, satisfied,
+ * held the machine back. "Heating" there was the zone's wish, not what happened.
  */
 export function toStatePatch(fields: Record<string, unknown>, z: ZoneReading, now: number): StatePatch<'climate'> {
   const prohibited = bool(fields, `Prohibit${z.cooling ? 'Cooling' : 'Heating'}Zone${z.zone}`)
@@ -289,7 +293,7 @@ export function toStatePatch(fields: Record<string, unknown>, z: ZoneReading, no
     mode: !on ? 'off' : bool(fields, 'HolidayMode') ? 'eco' : z.cooling ? 'cool' : 'heat',
     unitHeating,
     // `null` CLEARS the field: left out, the previous poll's action would stay in the registry
-    action: unknown ? null : !on ? 'off' : z.idle ? 'idle' : z.cooling ? 'cooling' : 'heating',
+    action: unknown ? null : !on ? 'off' : z.idle || (!z.cooling && !unitHeating) ? 'idle' : z.cooling ? 'cooling' : 'heating',
     ...(z.currentTempC !== null ? { currentTempC: z.currentTempC } : {}),
     ...(z.targetTempC !== null ? { targetTempC: z.targetTempC } : {}),
   }

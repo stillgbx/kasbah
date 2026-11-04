@@ -10,6 +10,7 @@ import HeatingHistoryChart from '../components/heating/HeatingHistoryChart.vue'
 import HeatingUnitCard from '../components/heating/HeatingUnitCard.vue'
 import type { HeatingPoint, MelcloudUnit } from '../api/transport'
 import { useDevicesStore } from '../stores/devices'
+import { useClimateHold } from '../composables/useClimateHold'
 
 // Heating view. Only two tiers:
 //
@@ -62,6 +63,7 @@ const heating = (e: DeviceEntry) => climate(e)?.action === 'heating'
  * zone whose MACHINE heats: the machine is there, even though MELCloud cannot say which zone it serves.
  */
 const warm = (e: DeviceEntry) => heating(e) || climate(e)?.unitHeating === true
+const { heldByName } = useClimateHold()
 </script>
 
 <template>
@@ -85,7 +87,8 @@ const warm = (e: DeviceEntry) => heating(e) || climate(e)?.unitHeating === true
         <template #status-after="{ entry }">
           <!-- no word when the activity is not known (a heat pump zone while its machine heats):
                "idle" would be as much a guess as "heating" -->
-          <span v-if="climate(entry as DeviceEntry)?.action" class="act" :data-hot="heating(entry as DeviceEntry) ? '1' : '0'">· {{ $t(`climate.actions.${climate(entry as DeviceEntry)!.action}`) }}</span>
+          <!-- idle because a linked thermostat holds it back: say which, rather than "idle" -->
+          <span v-if="climate(entry as DeviceEntry)?.action" class="act" :data-hot="heating(entry as DeviceEntry) ? '1' : '0'">· {{ heldByName((entry as DeviceEntry).descriptor.id) ? $t('climate.heldBy', { name: heldByName((entry as DeviceEntry).descriptor.id) }) : $t(`climate.actions.${climate(entry as DeviceEntry)!.action}`) }}</span>
         </template>
         <!-- the controls on their own row, like a cover's buttons or a light's slider:
              nothing can overlap the name or the link pill -->

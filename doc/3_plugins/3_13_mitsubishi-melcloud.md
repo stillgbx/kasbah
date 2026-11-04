@@ -1,6 +1,6 @@
 # Plugin Mitsubishi MELCloud (pompes à chaleur Ecodan Zubadan)
 
-> Dernière mise à jour : 2026-11-03
+> Dernière mise à jour : 2026-11-04
 > Sources : `apps/server/src/plugins/melcloud/{index,auth,client,mapping,history,types}.ts`, tests `mapping.test.ts`, `plugin.test.ts`, `history.test.ts`, capture anonymisée `apps/server/src/plugins/melcloud/__fixtures__/melcloud.ts`, `apps/server/src/plugins/index.ts`, `apps/server/.env.example`, `apps/web/src/components/MelcloudLinkCard.vue`, `apps/web/src/api/transport.ts`, journal de session `_generated-ai-doc/sessions/2026-09-17-melcloud-chauffage/journal.md`
 
 ## Ce que la maison chauffe, et ce que MELCloud en montre
@@ -352,3 +352,22 @@ lien se pose dans le panneau de l'appareil (« Thermostat lié »). **Pas encore
 de l'utilisateur (non redémarré à la rédaction).
 
 Tests : `plugin.test.ts`, `mapping.test.ts`. Interface : `../4_ui/4_6_autres-vues.md` (2026-11-03).
+
+### Mise à jour 2026-11-04 — une zone qui demande sans que la machine chauffe est « au repos »
+
+**Constat sur la vraie maison.** La zone 1, sous sa consigne d'après sa propre sonde, était donnée
+« Chauffe » alors que la machine ne tournait pas : un thermostat Nest en série, satisfait, la
+retenait. MELCloud disait la zone non inactive (`IdleZone1` faux), mais `OperationMode` n'était pas 2
+(`unitHeating` faux). « Chauffe » était le souhait de la zone, pas ce qui se passait.
+
+**Règle** (`toStatePatch`, `mapping.ts`), complément de la mise à jour du 2026-10-21 (bis) :
+- zone inactive, ou zone qui demande alors que la machine ne chauffe pas → `action: 'idle'` ;
+- zone qui demande et machine qui chauffe (`OperationMode` 2) → `'heating'` ;
+- machine qui chauffe et zone donnée inactive → activité inconnue (`action` effacée), inchangé.
+
+Le refroidissement n'est pas touché (`machineHeating` ne regarde que le chauffage). Production d'eau
+chaude : la machine tourne mais `OperationMode` n'est pas 2, la zone reste au repos, ce qui est juste
+pour la maison. Hypothèse assumée : `OperationMode` dit fidèlement quand la cascade chauffe (constaté
+le 2026-10-21) ; si un jour elle chauffait sans, la zone serait dite au repos à tort. Pourquoi le
+thermostat lié retient la zone : `../4_ui/4_6_autres-vues.md` (mise à jour 2026-11-04). Test :
+« calls a zone that asks while the machine does not heat idle, and heating once it does ».

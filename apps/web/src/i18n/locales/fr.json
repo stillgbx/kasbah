@@ -275,7 +275,7 @@
   },
   "climate": {
     "current": "Température", "humidity": "Humidité", "target": "Consigne", "mode": "Mode",
-    "flowCurrent": "Eau de départ", "flowTarget": "Consigne de départ", "ecoTarget": "Consigne éco", "unitHeating": "Machine en chauffe",
+    "flowCurrent": "Eau de départ", "flowTarget": "Consigne de départ", "ecoTarget": "Consigne éco", "unitHeating": "Machine en chauffe", "heldBy": "Retenu par {name}",
     "typeTarget": "Saisir la consigne", "link": {"title": "Thermostat lié", "none": "Aucun", "hint": "La consigne de l'un est recopiée sur l'autre, quelle que soit la marque.", "saveError": "Liaison non enregistrée : {message}"},
     "actions": { "heating": "Chauffe", "cooling": "Refroidit", "idle": "Au repos", "off": "Arrêté" },
     "modes": { "off": "Arrêt", "heat": "Chauffage", "cool": "Refroidissement", "auto": "Auto", "eco": "Éco", "fan_only": "Ventilation" }

@@ -59,7 +59,7 @@ La maison décrite en JSON : format et validation, géométrie dérivée (murs, 
 ## 3 — Plugins
 
 <!-- section:3_plugins:begin (généré par scripts/wiki-index.mjs depuis 3_plugins/README.md - ne pas éditer ici) -->
-Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (28 pages, dernière mise à jour 2026-11-03).
+Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (28 pages, dernière mise à jour 2026-11-04).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -79,7 +79,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_10 Open-Meteo](3_plugins/3_10_open-meteo.md) | 2026-10-09 |
 | [3_11 Husqvarna Automower](3_plugins/3_11_husqvarna-automower.md) | 2026-10-14 |
 | [3_12 COMAP Proteo 2](3_plugins/3_12_comap-proteo.md) | 2026-10-06 |
-| [3_13 Mitsubishi MELCloud](3_plugins/3_13_mitsubishi-melcloud.md) | 2026-11-03 |
+| [3_13 Mitsubishi MELCloud](3_plugins/3_13_mitsubishi-melcloud.md) | 2026-11-04 |
 | [3_14 iRobot (Roomba)](3_plugins/3_14_irobot-roomba.md) | 2026-10-27 |
 | [3_15 Sonos](3_plugins/3_15_sonos.md) | 2026-10-24 |
 | [3_16 YouTube Music (non officiel)](3_plugins/3_16_ytmusic.md) | 2026-10-30 |
@@ -99,7 +99,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 ## 4 — UI
 
 <!-- section:4_ui:begin (généré par scripts/wiki-index.mjs depuis 4_ui/README.md - ne pas éditer ici) -->
-Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-11-03).
+Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-11-04).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -112,7 +112,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | [4_3 Vues Lumières, Ouvrants et Caméras](4_ui/4_3_vues-lumieres-ouvrants-cameras.md) | 2026-10-26 |
 | [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-31 |
 | [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-10-30 |
-| [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-11-03 |
+| [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-11-04 |
 | [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-11-01 |
 | [4_8 Mode édition et propriétés](4_ui/4_8_mode-edition-et-proprietes.md) | 2026-10-21 |
 <!-- section:4_ui:end -->

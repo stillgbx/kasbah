@@ -3,8 +3,10 @@ import { computed } from 'vue'
 import { CLIMATE_MODES, type CommandInput, type DeviceDescriptor, type StateFor } from '@kasbah/shared'
 import { formatPercent, formatTemp } from '../../lib/format'
 import { useSetpointDraft } from '../../composables/useSetpointDraft'
+import { useClimateHold } from '../../composables/useClimateHold'
 import { stepSetpoint } from '../../lib/setpoint'
 import SetpointValue from './SetpointValue.vue'
+import MarqueeText from '../ui/MarqueeText.vue'
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: StateFor<'climate'>; pending?: boolean; disabled?: boolean }>()
 const emit = defineEmits<{ command: [cmd: CommandInput] }>()
@@ -38,6 +40,13 @@ const setpoint = useSetpointDraft(() => props.descriptor.id, () => props.state.t
 const stepC = computed(() => props.descriptor.meta.climate?.stepC)
 // half-degrees on the buttons; a tenth is typed on the figure (`SetpointValue`)
 const step = (dir: 1 | -1) => setpoint.set(stepSetpoint(setpoint.value.value, dir, range.value, stepC.value))
+// idle because a linked thermostat holds it back: its name goes under the "idle" chip, on a line
+// that a linked thermostat always keeps, so that the chip does not jump when it appears
+const hold = useClimateHold()
+const heldBy = computed(() => hold.heldByName(props.descriptor.id))
+const linked = computed(() => hold.linked(props.descriptor.id))
+/** what the reserved line holds when nothing holds the device back: it keeps its height */
+const NBSP = '\u00a0'
 </script>
 
 <template>
@@ -51,9 +60,15 @@ const step = (dir: 1 | -1) => setpoint.set(stepSetpoint(setpoint.value.value, di
       <!-- a heat pump zone whose machine heats without saying which zone (MELCloud): the
            machine's activity, not a guess about the zone -->
       <v-chip v-if="!state.action && state.unitHeating" variant="tonal" color="warning">{{ $t('climate.unitHeating') }}</v-chip>
-      <v-chip v-else variant="tonal" :color="state.action === 'heating' ? 'error' : state.action === 'cooling' ? 'info' : undefined">
-        {{ $t(`climate.actions.${state.action ?? 'idle'}`) }}
-      </v-chip>
+      <!-- held back by a linked thermostat: the reason goes UNDER the chip, in the height the
+           temperature column already takes (the chip itself overflowed by 19 px with the name) -->
+      <div v-else class="activity" :class="{ 'activity--linked': linked }">
+        <v-chip variant="tonal" :color="state.action === 'heating' ? 'error' : state.action === 'cooling' ? 'info' : undefined">
+          {{ $t(`climate.actions.${state.action ?? 'idle'}`) }}
+        </v-chip>
+        <MarqueeText v-if="linked" class="activity__held text-caption text-medium-emphasis" :data-on="heldBy ? '1' : '0'"
+                     :text="heldBy ? $t('climate.heldBy', { name: heldBy }) : NBSP" />
+      </div>
     </div>
     <div class="text-caption text-medium-emphasis mb-1">{{ $t('climate.mode') }}</div>
     <v-chip-group v-if="canSetMode" :model-value="state.mode" mandatory selected-class="text-primary" column
@@ -84,4 +99,9 @@ const step = (dir: 1 | -1) => setpoint.set(stepSetpoint(setpoint.value.value, di
 .justify-center .target { text-align: center; }
 .mode-readonly { margin-top: 2px; }
 .btn-hidden { visibility: hidden; }
+.activity { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 0; }
+/* the reason needs a width of its own: the marquee does not count its text (`contain: inline-size`) */
+.activity--linked { flex: 0 1 60%; }
+.activity__held { align-self: stretch; text-align: right; }
+.activity__held[data-on="0"] { visibility: hidden; }
 </style>

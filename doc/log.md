@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-04] update | Zone MELCloud retenue par un thermostat lié : ni « Chauffe », ni repos muet
+
+**Trigger** : sur la vraie maison, la zone de la pompe à chaleur était dite « Chauffe » alors que le Nest en série, satisfait, retenait la machine ; demande de l'afficher correctement, en disant qui la retient.
+
+**Pages modified** :
+- `3_plugins/3_13_mitsubishi-melcloud.md` - mise à jour 2026-11-04 : une zone qui demande sans que la machine chauffe est au repos ; hypothèse sur `OperationMode`.
+- `4_ui/4_6_autres-vues.md` - mise à jour 2026-11-04 : règle `heldBy`, « Retenu par » dans la vue Chauffage et sous la puce du panneau, ligne réservée sur un thermostat lié.
+
+**Index** : catalogues mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-11-04] update | Thermostats liés : chaque copie écartée dit pourquoi
 
 **Trigger** : premier essai du lien sur la vraie maison, une consigne posée sur le Nest depuis Kasbah n'a pas atteint la pompe à chaleur, sans trace au journal ; second essai réussi, cause non trouvée.

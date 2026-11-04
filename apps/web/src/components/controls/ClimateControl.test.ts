@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import type { DeviceDescriptor, StateFor } from '@kasbah/shared'
 import ClimateControl from './ClimateControl.vue'
 import { SETPOINT_SEND_AFTER_MS } from '../../composables/useSetpointDraft'
@@ -29,6 +30,9 @@ const flowZone: DeviceDescriptor = {
 }
 
 describe('ClimateControl', () => {
+  // the chip reads the linked thermostats in the stores (`useClimateHold`)
+  beforeEach(() => setActivePinia(createPinia()))
+
   it('offers the gestures when the device declares them', () => {
     const w = mount(ClimateControl, { props: { descriptor: thermostat, state } })
     expect(w.findAll('.v-btn')).toHaveLength(2)      // minus / plus

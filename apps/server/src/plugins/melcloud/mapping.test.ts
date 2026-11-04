@@ -163,6 +163,16 @@ describe('MELCloud — the two zones, read on the capture', () => {
     expect(toSystem({ ...link, fields: heating }, NOW).heating).toBe(true)
     expect(toSystem(link, NOW).heating).toBe(false)   // September, OperationMode 0
   })
+
+  /** Seen on site: zone 1 under its setpoint asked for heat while a Nest in series held the machine. */
+  it('calls a zone that asks while the machine does not heat idle, and heating once it does', () => {
+    const asking = { ...link.fields, IdleZone1: false }
+    const z1 = toZones(asking).find((z) => z.zone === 1)!
+    expect(z1.idle).toBe(false)
+    expect(toStatePatch(asking, z1, NOW)).toMatchObject({ action: 'idle', unitHeating: false })
+    const running = { ...asking, OperationMode: 2 }
+    expect(toStatePatch(running, toZones(running).find((z) => z.zone === 1)!, NOW)).toMatchObject({ action: 'heating', unitHeating: true })
+  })
 })
 
 describe('MELCloud — the machine’s state', () => {

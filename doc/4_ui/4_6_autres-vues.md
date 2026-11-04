@@ -1,6 +1,6 @@
 # Autres vues : Météo, Robots, Eau, Chauffage, Animaux, Agenda, École, Courses, Automatisations
 
-> Dernière mise à jour : 2026-11-03
+> Dernière mise à jour : 2026-11-04
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre les vues propres à un domaine : Météo et radar, Robots (tondeuse, aspirateur), Eau, Chauffage, Animaux, Agenda, École, Courses, Automatisations. Elle est née du découpage de
@@ -1263,3 +1263,29 @@ l'ambiante déclare désormais `target_temp` (`../3_plugins/3_13_mitsubishi-melc
   http et mock. Ce que le lien fait : `../1_architecture/1_2_serveur-et-plugins.md` (même date).
 
 Tests : `setpoint.test.ts`, `HeatingControl.test.ts`.
+
+### Mise à jour 2026-11-04 — vue Chauffage et panneau : « Retenu par » un thermostat lié
+
+**Pourquoi.** Deux thermostats en série (un Nest devant la zone de la pompe à chaleur) : la zone, sous
+sa consigne d'après sa propre sonde, voudrait chauffer, mais le Nest satisfait garde la machine à
+l'arrêt. La carte disait « Chauffe » (corrigé côté plugin, `../3_plugins/3_13_mitsubishi-melcloud.md`),
+puis « Au repos » sans raison.
+
+**Règle** (`heldBy`, `apps/web/src/composables/useClimateHold.ts`), aveugle aux marques : un membre
+d'un groupe `climateLinks` est **retenu** quand il est au repos en mode chauffage, plus froid que sa
+consigne, et qu'un autre membre du groupe est au repos en mode chauffage. Kasbah ne connaît pas le
+câblage : c'est le lien déclaré par l'utilisateur qui dit qu'ils sont en série. Aucun membre éteint,
+en éco, indisponible ou qui chauffe n'est désigné.
+
+**Affichage.**
+- Vue Chauffage : le mot après les températures devient « · Retenu par <nom> » (« Held back by »),
+  sur une ligne à 375 px.
+- Panneau (`ClimateControl.vue`) : le nom dans la puce la faisait déborder de 19 px. La puce garde
+  « Au repos » et la raison passe dessous, en `MarqueeText`. Sur un thermostat **lié**, cette ligne
+  est toujours réservée (vide et invisible quand rien ne retient) : la puce ne saute pas quand la
+  raison apparaît. Le marquee ne compte pas son texte (`contain: inline-size`) : la colonne reçoit
+  `flex: 0 1 60%`, sinon la ligne faisait 0 px de large.
+
+Vérifié en mode simulé (thermostat lié injecté dans le pinia) : puce et ligne suivante immobiles,
+retenu ou non, aux zooms 1 / 1,25 / 1,5, fr et en, avec et sans humidité. Tests :
+`useClimateHold.test.ts`, `ClimateControl.test.ts` (pinia actif, la puce lit les magasins).
