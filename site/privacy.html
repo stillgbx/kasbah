@@ -13,9 +13,9 @@
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="stylesheet" href="style.css">
   <script>
-    // A French-speaking browser lands on the French page, unless the EN / FR switch was used once.
+    // The language picked with the EN / FR switch wins; without one, a French-speaking browser lands on the French page.
     try { var chosen = localStorage.getItem('kasbah-lang') } catch (e) {}
-    if (!chosen && /^fr\b/i.test((navigator.languages || [navigator.language])[0] || '')) {
+    if (chosen === 'fr' || (!chosen && /^fr\b/i.test((navigator.languages || [navigator.language])[0] || ''))) {
       location.replace('fr/' + location.pathname.split('/').pop() + location.hash)
     }
   </script>

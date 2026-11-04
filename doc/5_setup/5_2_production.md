@@ -605,6 +605,12 @@ Une page publique qui se partage (X, Discord, README), montre la vidéo, et port
   n'exécutent pas de script et voient la page demandée. La section « Ce site » des deux politiques le
   dit. Le titre français, plus long, a droit à `18ch` au lieu de `14ch` (`.hero h1:lang(fr)`) pour
   rester sur deux lignes comme l'anglais ; sur téléphone il en prend trois.
+  *Correction 2026-11-04* : la condition était `!chosen && navigateur français`, si bien qu'un choix
+  mémorisé, **même `fr`**, coupait la redirection : avoir cliqué FR une fois laissait la racine en
+  anglais. Elle est devenue `chosen === 'fr' || (!chosen && navigateur français)` dans `index.html` et
+  `privacy.html` : le choix de la pastille l'emporte, sinon la langue du navigateur. Pour tester en
+  local, recharger vraiment la page (`location.reload()`) : une navigation qui ne change que le `#`
+  ne relance pas le script.
 - **Vérifier en local** : config `kasbah-site` de `.claude/launch.json`
   (`python -m http.server 8090 --directory site`), puis la page à 375 px et sur bureau.
 
