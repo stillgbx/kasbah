@@ -329,3 +329,8 @@ Vérifié : tests `lightsync/{analyze,sync}.test.ts` (signal synthétique, faux 
 démarrage, pause, morceau suivant, saut, passage d'une enceinte à l'autre, reprise après coupure),
 route dans `player.test.ts`, flux réel sur le pont par la sonde. **Pas encore vérifié** : la chaîne
 complète avec de la musique sur une vraie enceinte.
+
+Vérifié le même soir sur la vraie maison, une fois le serveur redémarré avec `HUE_APP_KEY` et
+`HUE_CLIENT_KEY` issus du réappairage : un morceau lancé par Kasbah sur une enceinte Cast, touche
+ampoule de la carte Écoute, la lampe de la zone de divertissement de la pièce suit la musique.
+Constat de l'utilisateur : ça marche, mais on ne règle rien (palette, ambiance, effet) — suite à venir.

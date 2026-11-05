@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-05] update | Lumières en rythme : vérifié avec de la musique
+
+**Déclencheur** : « ça fonctionne », après le redémarrage du serveur avec les nouvelles clés Hue.
+
+**Pages modifiées** :
+- `1_architecture/1_6_lecteur-musique.md` - la chaîne complète (morceau sur une enceinte Cast, lampe de la pièce) est vérifiée sur la vraie maison ; manque de réglages noté.
+
+**Index** : rien à changer (page déjà datée du jour).
+
+
 ## [2026-11-05] update | Lumières de la pièce en rythme avec la musique (flux Hue Entertainment)
 
 **Déclencheur** : « est-ce qu'il serait possible de sync les lumières d'une pièce avec le son d'une enceinte de la pièce ? » ; étape 1 livrée (YouTube Music et Mixcloud, interrupteur sur la carte Écoute), radio et TV laissées de côté.
