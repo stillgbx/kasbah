@@ -100,8 +100,14 @@ export interface OpenStreamOpts {
   logger: Logger
 }
 
+/** The stream, plus what only the plugin may do: end it from outside (the bridge said it stopped). */
+export interface HueLightStream extends LightStream {
+  /** Ends the stream as if the bridge had closed it: `onEnded` callbacks get `reason`. */
+  abort(reason: string): Promise<void>
+}
+
 /** Starts the area, opens the DTLS session, and returns the stream once the handshake is done. */
-export async function openStream(o: OpenStreamOpts): Promise<LightStream> {
+export async function openStream(o: OpenStreamOpts): Promise<HueLightStream> {
   await o.client.entertainmentAction(o.area.id, 'start')
   let socket: DtlsSocket
   try {
@@ -123,7 +129,10 @@ export async function openStream(o: OpenStreamOpts): Promise<LightStream> {
   const ended: ((reason: string) => void)[] = []
 
   const write = (colors: readonly ChannelColor[]) => {
-    socket.send(encodeFrame(o.area.id, seq++, colors))
+    // the library throws on a socket it closed itself (fatal alert, UDP error): end the stream,
+    // never let it escape into a timer callback
+    try { socket.send(encodeFrame(o.area.id, seq++, colors)) }
+    catch (err) { void finish(`sending failed (${(err as Error).message})`); return }
     lastSentAt = o.clock.now()
   }
   const keepalive = () => {
@@ -152,6 +161,7 @@ export async function openStream(o: OpenStreamOpts): Promise<LightStream> {
       write(colors)
     },
     close: () => finish(null),
+    abort: (reason) => finish(reason),
     onEnded(cb) { ended.push(cb) },
   }
 }

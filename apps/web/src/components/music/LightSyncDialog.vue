@@ -127,6 +127,8 @@ const subtitle = computed(() => [props.name, props.status.room?.name, props.stat
         </button>
       </div>
       <div class="box__body">
+        <!-- reserved line: why the lights are not following, while it is being retried -->
+        <p class="problem" :title="status.on && status.problem ? $t(`music.lightSyncProblem.${status.problem}`) : undefined">{{ status.on && status.problem ? $t(`music.lightSyncProblem.${status.problem}`) : '' }}</p>
         <!-- the colours being played, cover included once known -->
         <div class="strip" :style="{ background: preview(status.palette ?? []) }" :title="$t('music.lightSyncPanel.current')" />
 
@@ -227,6 +229,8 @@ const subtitle = computed(() => [props.name, props.status.room?.name, props.stat
 .box__close:hover { background: var(--surface2); color: var(--text); }
 .box__body { overflow-y: auto; overscroll-behavior: contain; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-content: start; margin-right: -8px; padding-right: 8px; }
 .strip { height: 8px; border-radius: 999px; }
+/* one line, always reserved: the warning appears without pushing anything */
+.problem { margin: 0 0 -10px; height: 1.4em; line-height: 1.4; font-size: 12.5px; color: rgb(var(--v-theme-warning)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sec { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
 /* five tiles on one row when they fit; narrower (phone zoomed in) they wrap rather than cut their
    names — the height depends on the width only, never on a choice */

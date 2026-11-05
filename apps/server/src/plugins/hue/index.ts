@@ -1,7 +1,7 @@
 import type { Command, DeviceDescriptor, PluginHealth, PluginScene, SceneGroupKind, SceneRecall, SceneUpdate } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { setLightStreamer, type LightStream, type LightStreamer } from '../../core/lightStreamBridge'
+import { setLightStreamer, type LightStreamer } from '../../core/lightStreamBridge'
 import { stateFile } from '../../core/paths'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { connectSse, type FetchLike } from '../../core/sse'
@@ -9,7 +9,7 @@ import { TlsPin, createPinFile, type PinFile } from '../../core/tls-pin'
 import { describeError, sendError } from '../../http/errors'
 import { HueClient } from './client'
 import { findBridge } from './discovery'
-import { defaultDtlsConnect, openStream, pickArea, toLightArea, type DtlsConnect } from './entertainment'
+import { defaultDtlsConnect, openStream, pickArea, toLightArea, type DtlsConnect, type HueLightStream } from './entertainment'
 import { roomKey } from '@kasbah/shared'
 import {
   connectivityToAvailability, indexResources, sceneStatusToActive, sceneTargetLights, toCreateSceneBody, toDescriptor,
@@ -63,7 +63,9 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
   /** Entertainment areas (Hue app): where the music light sync can stream. */
   let areas: HueEntertainmentConfiguration[] = []
   /** The bridge streams one area at a time: the stream in progress, if any. */
-  let activeStream: LightStream | null = null
+  let activeStream: HueLightStream | null = null
+  /** When it opened: the "inactive" event of the stream it replaced may still be on its way. */
+  let activeSince = 0
   /** rid of a room OR a zone → rid of its `grouped_light` (used to switch off a light scene). */
   let groupedLightOfGroup = new Map<string, string>()
   let sseCtrl: AbortController | null = null
@@ -201,6 +203,15 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
               }
             }
           }
+          else if (item.type === 'entertainment_configuration') {
+            // the bridge stopped the area we stream to (Hue app, Sync box, a silent DTLS drop): UDP never
+            // tells, this event does — end the stream so the music sync opens a new one
+            const status = (item as { status?: string }).status
+            if (status === 'inactive' && activeStream && activeStream.area.id === item.id && ctx!.clock.now() - activeSince > 2000) {
+              log().warn({ area: item.id }, 'Hue entertainment area stopped by the bridge')
+              void activeStream.abort('the bridge stopped the entertainment area')
+            }
+          }
           else if (item.type === 'zigbee_connectivity') {
             const z = hueZigbeeConnectivitySchema.safeParse(item)
             if (z.success) for (const [lightId, available] of connectivityToAvailability([z.data], index)) ctx!.setAvailable(lightId, available)
@@ -264,6 +275,7 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
         connect: deps.dtlsConnect ?? defaultDtlsConnect,
       })
       activeStream = stream
+      activeSince = ctx!.clock.now()
       stream.onEnded(() => { if (activeStream === stream) activeStream = null })
       const close = stream.close
       return { ...stream, close: async () => { if (activeStream === stream) activeStream = null; await close() } }

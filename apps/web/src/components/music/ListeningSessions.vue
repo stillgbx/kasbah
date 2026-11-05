@@ -137,6 +137,7 @@ const syncOf = (r: Row) => props.lightSync?.get(r.id)
 const syncTitle = (r: Row) => {
   const s = syncOf(r)
   if (!s?.available) return undefined
+  if (s.on && s.problem) return t(`music.lightSyncProblem.${s.problem}`)
   return s.on ? t('music.lightSyncOff', { area: s.area ?? '' }) : t('music.lightSyncOn', { area: s.area ?? '' })
 }
 
@@ -219,6 +220,7 @@ function tap(r: Row) {
                bulb switches, the arrow next to it opens the room's settings -->
           <span v-if="lightSyncColumn" class="sync-slot" :class="{ 'is-hidden': !syncOf(r)?.available }">
             <button type="button" class="key sync" :data-on="syncOf(r)?.on ? '1' : '0'" :data-active="syncOf(r)?.active ? '1' : '0'"
+                    :data-problem="syncOf(r)?.on && syncOf(r)?.problem ? '1' : '0'"
                     :disabled="!syncOf(r)?.available || transferMode" :tabindex="syncOf(r)?.available ? 0 : -1"
                     :title="syncTitle(r)" :aria-label="syncTitle(r)" :aria-pressed="syncOf(r)?.on ? 'true' : 'false'"
                     @click.stop="emit('lightSync', r.id, !syncOf(r)?.on)">
@@ -305,6 +307,8 @@ function tap(r: Row) {
 .sync-slot .sync { width: 34px; }
 .sync-slot .sync-more { width: 18px; justify-items: start; }
 .sync[data-on='1'] { color: var(--accent); }
+/* switched on but not following (stream or analysis being retried) */
+.sync[data-problem='1'] { color: rgb(var(--v-theme-warning)); }
 /* streaming right now: the bulb is lit, not only switched on */
 .sync[data-active='1'] :deep(svg) { fill: color-mix(in srgb, currentColor 35%, transparent); }
 .empty { padding: 16px 8px; }

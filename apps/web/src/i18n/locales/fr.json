@@ -132,6 +132,7 @@
     "filterPlayers": "Filtrer les lecteurs", "favorites": "Favoris", "otherPlayers": "Autres lecteurs",
     "favoriteAdd": "Ajouter aux favoris", "favoriteRemove": "Retirer des favoris",
     "lightSync": "Lumières en rythme", "lightSyncOn": "Lumières de la pièce en rythme ({area})", "lightSyncOff": "Arrêter les lumières en rythme ({area})",
+    "lightSyncProblem": { "stream": "Flux coupé par le pont Hue, nouvel essai…", "decode": "Analyse de la musique impossible, nouvel essai…" },
     "lightSyncSettings": "Réglages des lumières en rythme",
     "lightSyncPanel": {
       "current": "Couleurs jouées", "effect": "Effet", "mood": "Ambiance", "calm": "Calme", "energetic": "Énergique", "brightness": "Luminosité", "colors": "Couleurs",

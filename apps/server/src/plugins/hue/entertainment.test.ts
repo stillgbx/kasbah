@@ -130,3 +130,25 @@ describe('openStream', () => {
     expect(entertainmentAction).toHaveBeenLastCalledWith(AREA_ID, 'stop')
   })
 })
+
+describe('openStream on a socket the library closed by itself', () => {
+  it('ends the stream instead of throwing out of the caller', async () => {
+    const clock = new ManualClock(0)
+    const socket = new FakeSocket()
+    const entertainmentAction = vi.fn(async () => {})
+    const stream = await openStream({
+      client: { entertainmentAction } as unknown as HueClient,
+      area: toLightArea(area('1a8d99cc-967b-44f2-9202-43f976c0fa6b', ['l1'])),
+      host: 'h', appKey: 'k', clientKey: '00'.repeat(16),
+      connect: () => { setTimeout(() => socket.emit('connected'), 0); return socket },
+      clock, logger: pino({ level: 'silent' }),
+    })
+    const ended = vi.fn()
+    stream.onEnded(ended)
+    socket.send = () => { throw new Error('The socket is closed. Cannot send data.') }
+    expect(() => stream.send([{ id: 0, r: 1, g: 0, b: 0 }])).not.toThrow()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(ended).toHaveBeenCalledWith(expect.stringContaining('sending failed'))
+    expect(entertainmentAction).toHaveBeenLastCalledWith('1a8d99cc-967b-44f2-9202-43f976c0fa6b', 'stop')
+  })
+})

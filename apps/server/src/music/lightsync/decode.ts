@@ -10,6 +10,8 @@ export interface Decoding {
   readonly features: FeatureSource
   /** True once ffmpeg has finished (end of the source or failure). */
   readonly done: boolean
+  /** True if it finished on an error (source refused, cut, unreadable): the features stop early. */
+  readonly failed: boolean
   stop(): void
 }
 
@@ -24,6 +26,9 @@ export function decode(sourceUrl: string, startS: number, opts: DecodeOpts): Dec
   const spawnImpl = opts.spawnImpl ?? (spawn as unknown as SpawnFn)
   const proc = spawnImpl(opts.ffmpegPath, [
     '-hide_banner', '-loglevel', 'error',
+    // a connection the source drops is taken up again from where it was (HTTP range); HTTP only:
+    // ffmpeg rejects these options for any other input
+    ...(/^https?:\/\//i.test(sourceUrl) ? ['-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5'] : []),
     // `-ss` before `-i`: ffmpeg seeks in the source without decoding what comes before
     ...(startS > 0 ? ['-ss', startS.toFixed(3)] : []),
     '-i', sourceUrl,
@@ -31,6 +36,7 @@ export function decode(sourceUrl: string, startS: number, opts: DecodeOpts): Dec
   ], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
 
   let done = false
+  let failed = false
   let stopped = false
   // f32le samples can straddle two chunks: the leftover bytes wait for the next one
   let rest = Buffer.alloc(0)
@@ -46,15 +52,19 @@ export function decode(sourceUrl: string, startS: number, opts: DecodeOpts): Dec
   })
   let stderr = ''
   proc.stderr.on('data', (c: Buffer) => { if (stderr.length < 2000) stderr += c.toString() })
-  proc.on('error', (err) => { done = true; opts.logger?.warn({ err }, 'lightsync: ffmpeg did not start') })
+  proc.on('error', (err) => { done = true; failed = true; opts.logger?.warn({ err }, 'lightsync: ffmpeg did not start') })
   proc.on('close', (code) => {
     done = true
-    if (!stopped && code !== 0) opts.logger?.warn({ code, stderr: stderr.trim() }, 'lightsync: decoding stopped early')
+    if (!stopped && code !== 0) {
+      failed = true
+      opts.logger?.warn({ code, stderr: stderr.trim(), reachedS: Math.round(features.endS) }, 'lightsync: decoding stopped early')
+    }
   })
 
   return {
     features,
     get done() { return done },
+    get failed() { return failed },
     stop() {
       stopped = true
       if (!done) proc.kill('SIGKILL')

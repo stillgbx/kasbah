@@ -232,3 +232,19 @@ aucun instantané à prendre côté Kasbah.
 Piège : une **zone** Hue ordinaire (regroupement pour les scènes) n'est pas une **zone de
 divertissement** ; seule la seconde se diffuse. Elle se crée dans l'appli Hue (Paramètres → Zones de
 divertissement), et l'API CLIP v2 permet aussi d'en créer une (non utilisé).
+
+### Mise à jour 2026-11-05 (nuit) — un flux que le pont arrête sans le dire
+
+Constat de l'utilisateur : « parfois ça s'arrête de fonctionner […] ensuite plus possible de remettre la
+sync en marche » (logs non relevés : correctif à l'aveugle, sur les angles morts trouvés à la lecture).
+- **Le flux UDP ne dit jamais qu'il est mort** : si le pont abandonne la session (coupure réseau de plus de
+  10 s, appli Hue, autre diffuseur), `node-dtls-client` n'émet rien, Kasbah envoie dans le vide et la
+  synchro se croit active. Le pont, lui, publie sur le flux SSE une mise à jour
+  `entertainment_configuration` `status: "inactive"` : `handleEvents` la suit désormais et termine le flux
+  de la zone en cours (`HueLightStream.abort`, `onEnded` → la synchro rouvre 10 s plus tard). L'événement
+  est ignoré pendant les 2 s qui suivent une ouverture : celui de la fermeture du flux qu'elle remplace
+  peut encore arriver.
+- `node-dtls-client` **lève une exception** sur `send()` d'un socket qu'il a fermé lui-même (alerte fatale,
+  erreur UDP) : l'envoi est protégé et termine le flux au lieu de jeter depuis un minuteur.
+
+Tests : `plugin.test.ts` (événement du pont, délai de grâce), `entertainment.test.ts` (envoi qui lève).

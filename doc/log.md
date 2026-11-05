@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-05] update | Lumières en rythme : un arrêt sans reprise, deux angles morts corrigés
+
+**Déclencheur** : « parfois ça s'arrête de fonctionner […] ensuite plus possible de remettre la sync en marche » ; logs non relevés, correctif choisi à l'aveugle.
+
+**Pages modifiées** :
+- `3_plugins/3_1_philips-hue.md` - mise à jour 2026-11-05 (nuit) : fin de zone annoncée par le pont (SSE) suivie, délai de grâce, envoi protégé.
+- `1_architecture/1_6_lecteur-musique.md` - mise à jour 2026-11-05 (nuit) : échec d'analyse distingué de la fin, reprise à délais croissants, `-reconnect`, `status.problem` affiché ; cause non confirmée.
+
+**Index** : rien à changer (pages déjà datées du jour).
+
+
 ## [2026-11-05] update | Lumières en rythme : couleurs au hasard qui vont ensemble
 
 **Déclencheur** : « sur la palette perso on peut ajouter un bouton random qui si possible sort des couleurs qui peuvent s'assembler selon différentes méthodes ».

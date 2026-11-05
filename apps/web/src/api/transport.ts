@@ -464,6 +464,8 @@ export interface MusicLightSync {
   settings?: LightSyncSettings
   /** Colours in use (hex): the cover's once known. */
   palette?: string[]
+  /** Switched on but not following, being retried: the stream to the bridge, or the sound analysis. */
+  problem?: 'stream' | 'decode'
 }
 
 /** The last listen of a player that no longer plays anything of ours (server restarted, stop): enough to resume it. */

@@ -386,3 +386,25 @@ sombre entre deux attaques, respiration sans saut), `palette.test.ts` (sources, 
 synthétiques, faux `fetch` / ffmpeg), réglages dans `sync.test.ts` (défauts, partage par pièce,
 persistance, application en direct, scène, pochette par morceau) et route dans `player.test.ts`. Pas
 encore jugé à l'œil sur la vraie lampe.
+
+### Mise à jour 2026-11-05 (nuit) — la synchro qui s'arrête : reprise et motif affiché
+
+Même constat que la mise à jour du même jour de [3_1 Philips Hue](../3_plugins/3_1_philips-hue.md) ;
+sans les logs du serveur, et sans pouvoir reproduire YouTube sur le poste (pas de générateur de PO Token
+local), deux angles morts corrigés à l'aveugle :
+- **Analyse coupée en cours de morceau** : le second ffmpeg n'avait jamais été essayé sur un vrai flux
+  YouTube (le plugin connaît une coupure après le premier Mo). Avant, une analyse en échec passait pour
+  une fin de morceau : lumières figées jusqu'au morceau suivant. `Decoding.failed` distingue l'échec de la
+  fin ; quand l'analyse ne couvre pas la position de l'enceinte (échec, ou retard de plus de 8 s), elle
+  repart de cette position après 2 s, puis 4, 8… jusqu'à 30 s (journal `lightsync: sound analysis behind
+  the speaker`). ffmpeg reçoit `-reconnect` (HTTP seulement : il refuse ces options pour un fichier) et
+  reprend une connexion coupée par plage.
+- **Motif visible** : `status.problem` = `stream` (flux ouvert en échec ou terminé par le pont, nouvel
+  essai) ou `decode` (l'analyse ne suit pas, d'après ce qui est observé et non un compteur). Ampoule
+  orange avec le motif en infobulle, ligne réservée dans le panneau. Rallumer l'interrupteur relance
+  aussitôt, sans attendre les 10 s.
+
+Vérifié : `sync.test.ts` (reprise avec délais croissants, pas de reprise en fin normale, motif `stream`
+puis relance immédiate), ffmpeg réel par HTTP depuis 0 et 60 s avec les options de reconnexion, source
+injoignable marquée en échec ; preview : motif affiché sans rien déplacer, une ligne en fr / en sur
+téléphone. **Cause réelle non confirmée** : à vérifier avec `grep -i lightsync logs/kasbah.log` au prochain arrêt.

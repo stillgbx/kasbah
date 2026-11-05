@@ -132,6 +132,7 @@
     "filterPlayers": "Filter players", "favorites": "Favorites", "otherPlayers": "Other players",
     "favoriteAdd": "Add to favorites", "favoriteRemove": "Remove from favorites",
     "lightSync": "Lights in rhythm", "lightSyncOn": "Room lights in rhythm ({area})", "lightSyncOff": "Stop the lights in rhythm ({area})",
+    "lightSyncProblem": { "stream": "Stream cut by the Hue bridge, retrying…", "decode": "Cannot analyse the music, retrying…" },
     "lightSyncSettings": "Lights in rhythm settings",
     "lightSyncPanel": {
       "current": "Colours playing", "effect": "Effect", "mood": "Mood", "calm": "Calm", "energetic": "Energetic", "brightness": "Brightness", "colors": "Colours",

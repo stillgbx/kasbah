@@ -29,11 +29,17 @@ function setup(saved: LightSyncSettingsByRoom = {}) {
       return stream
     }),
   }
-  const decodes: { url: string; startS: number; stop: ReturnType<typeof vi.fn> }[] = []
+  const decodes: { url: string; startS: number; stop: ReturnType<typeof vi.fn>; state: { done: boolean; failed: boolean; span: number } }[] = []
   const decode = vi.fn((url: string, startS: number): Decoding => {
     const stop = vi.fn()
-    decodes.push({ url, startS, stop })
-    return { features: { startS, endS: startS + 30, at: () => ({ low: 1, mid: 0, high: 0, onset: 0 }) }, done: false, stop }
+    const state = { done: false, failed: false, span: 30 }
+    decodes.push({ url, startS, stop, state })
+    const features = {
+      startS,
+      get endS() { return startS + state.span },
+      at: (pos: number) => (pos >= startS && pos < startS + state.span ? { low: 1, mid: 0, high: 0, onset: 0 } : undefined),
+    }
+    return { features, get done() { return state.done }, get failed() { return state.failed }, stop }
   })
   const sessions = new Map<string, { sid: string; sourceUrl: string; artUrl?: string }>()
   const settingsStore = memoryLightSyncSettings(saved)
@@ -226,5 +232,52 @@ describe('LightSync settings', () => {
     await t.step(300)
     expect(t.sync.status('cast:speaker-1').palette).toEqual(['#0000ff', '#00ffff'])
     expect(t.coverColors).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('LightSync recovery', () => {
+  it('restarts a sound analysis that failed partway, less and less often, and says so meanwhile', async () => {
+    const t = setup()
+    t.play('cast:speaker-1', 'sid-1', 0)
+    await t.sync.set('cast:speaker-1', true)
+    await t.step(300)
+    Object.assign(t.decodes[0]!.state, { done: true, failed: true, span: 1 })   // the source cut after 1 s
+    await t.step(1500)
+    expect(t.decodes).toHaveLength(2)                                       // restarted at the speaker's position
+    expect(t.decodes[1]!.startS).toBeGreaterThan(0)
+    Object.assign(t.decodes[1]!.state, { done: true, failed: true, span: 0 })   // fails again at once
+    await t.step(1000)
+    expect(t.sync.status('cast:speaker-1').problem).toBe('decode')          // the lights are not following
+    expect(t.decodes).toHaveLength(2)                                       // waiting: 2 s before the second try
+    await t.step(1500)
+    expect(t.decodes).toHaveLength(3)
+    await t.step(300)                                                       // this one works
+    expect(t.sync.status('cast:speaker-1').problem).toBeUndefined()
+  })
+
+  it('never restarts an analysis that simply reached the end of the track', async () => {
+    const t = setup()
+    t.play('cast:speaker-1', 'sid-1', 0)
+    await t.sync.set('cast:speaker-1', true)
+    await t.step(300)
+    Object.assign(t.decodes[0]!.state, { done: true, failed: false, span: 0.2 })
+    await t.step(12_000)
+    expect(t.decodes).toHaveLength(1)
+  })
+
+  it('reports a stream the bridge ended until a new one opens, and switching on again retries at once', async () => {
+    const t = setup()
+    t.play('cast:speaker-1', 'sid-1')
+    await t.sync.set('cast:speaker-1', true)
+    await t.step(300)
+    t.streams[0]!.end('the bridge stopped the entertainment area')
+    await t.step(500)
+    expect(t.sync.status('cast:speaker-1')).toMatchObject({ on: true, active: false, problem: 'stream' })
+    await t.sync.set('cast:speaker-1', false)
+    await t.sync.set('cast:speaker-1', true)
+    await t.step(300)
+    expect(t.streamer.open).toHaveBeenCalledTimes(2)                        // not 10 s later
+    expect(t.sync.status('cast:speaker-1')).toMatchObject({ active: true })
+    expect(t.sync.status('cast:speaker-1').problem).toBeUndefined()
   })
 })

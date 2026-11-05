@@ -34,8 +34,13 @@ const REBASE_S = 1.2
 const SEEK_AHEAD_S = 8
 /** After a failed open or a stream the bridge ended: wait before trying again. */
 const RETRY_MS = 10_000
+/** Decoding that failed or fell behind: restarted after 2 s, then twice as long each time, up to 30 s. */
+const DECODE_RETRY_MS = 2000
+const DECODE_RETRY_MAX_MS = 30_000
 
 export type LightSyncReason = 'no_hue' | 'no_room' | 'no_area'
+/** Why the lights do not follow while the switch is on: the stream to the bridge, or the sound analysis. */
+export type LightSyncProblem = 'stream' | 'decode'
 
 export interface LightSyncStatus {
   deviceId: string
@@ -50,6 +55,8 @@ export interface LightSyncStatus {
   on: boolean
   /** Lights being driven right now. */
   active: boolean
+  /** Switched on but not following: what is being retried. */
+  problem?: LightSyncProblem
   /** The room's settings (defaults until changed); absent without a room. */
   settings?: LightSyncSettings
   /** The colours in use, sRGB hex: the cover's once known for the playing track. */
@@ -95,6 +102,11 @@ interface Active {
   base: { pos: number; at: number } | null
   pausedSince: number | null
   lastTick: number
+  /** Decoding restarts for the current track since it last worked, and when the next one may happen. */
+  decodeFailures: number
+  decodeRetryAt: number
+  /** The analysis does not cover where the speaker is (failed or far behind): the lights are not following. */
+  behind: boolean
 }
 
 export class LightSync {
@@ -102,6 +114,8 @@ export class LightSync {
   private active: Active | null = null
   private opening = false
   private retryAt = 0
+  /** The stream to the bridge failed or was ended, and is being retried. */
+  private streamTrouble = false
   private timer: unknown = null
   private settings: LightSyncSettingsByRoom = {}
   /** Cover colours of the playing track, by cover URL, once known. */
@@ -147,7 +161,13 @@ export class LightSync {
     if (!lights || !room) return { deviceId, available: false, reason: 'no_room', on, active, ...extra }
     const area = streamer.areaFor(lights)
     if (!area) return { deviceId, available: false, reason: 'no_area', on, active, ...extra }
-    return { deviceId, available: true, area: area.name, on, active, ...extra }
+    return { deviceId, available: true, area: area.name, on, active, ...extra, ...(on ? this.problemOf(deviceId) : {}) }
+  }
+
+  private problemOf(deviceId: string): { problem?: LightSyncProblem } {
+    const a = this.active
+    if (a?.deviceId === deviceId) return a.behind ? { problem: 'decode' } : {}
+    return this.streamTrouble ? { problem: 'stream' } : {}
   }
 
   /** Switches the sync of a speaker; switching one on switches the others off (one stream per bridge). */
@@ -158,7 +178,9 @@ export class LightSync {
       for (const other of [...this.enabled]) if (other !== deviceId) this.enabled.delete(other)
       if (this.active && this.active.deviceId !== deviceId) await this.teardown()
       this.enabled.add(deviceId)
+      // switching on again is also how the user says "try again now"
       this.retryAt = 0
+      this.streamTrouble = false
       this.schedule(0)
     } else {
       this.enabled.delete(deviceId)
@@ -252,13 +274,27 @@ export class LightSync {
     a.pausedSince = null
     const pos = this.position(a, st!, now)
     if (session!.sid !== a.sid) {
+      a.decodeFailures = 0
+      a.decodeRetryAt = 0
+      a.behind = false
       this.restartDecoding(a, session!, pos)
       // a new track: a new cover, for the cover palette
       if (this.settingsOf(a.roomId).palette.source === 'cover') this.applySettings(a)
     } else if (a.decoding) {
-      const f = a.decoding.features
-      // a jump back before what was analysed, or far beyond what decoding has reached: decode from there
-      if (pos < f.startS - HOP_S || (pos > f.endS + SEEK_AHEAD_S && !(a.decoding.done && f.endS > f.startS))) this.restartDecoding(a, session!, pos)
+      const d = a.decoding
+      const f = d.features
+      if (pos < f.startS - HOP_S) this.restartDecoding(a, session!, pos)          // a jump back before what was analysed
+      else if (pos > f.endS + HOP_S && (d.failed || (!d.done && pos > f.endS + SEEK_AHEAD_S))) {
+        // the analysis does not cover where the speaker is: it failed (source refused or cut), or it
+        // fell far behind (a seek ahead, a slow source). Decode from there again, less and less often
+        a.behind = true
+        if (now >= a.decodeRetryAt) {
+          a.decodeFailures++
+          a.decodeRetryAt = now + Math.min(DECODE_RETRY_MAX_MS, DECODE_RETRY_MS * 2 ** (a.decodeFailures - 1))
+          this.deps.logger.warn({ deviceId, failures: a.decodeFailures, failed: d.failed, positionS: Math.round(pos), analysedToS: Math.round(f.endS) }, 'lightsync: sound analysis behind the speaker, restarting it')
+          this.restartDecoding(a, session!, pos)
+        }
+      } else if (f.at(pos + LEAD_S)) { a.behind = false; a.decodeFailures = 0 }   // following again
     }
     a.stream.send(a.effect.next(a.decoding?.features.at(pos + LEAD_S), dtS))
     this.schedule(TICK_MS)
@@ -300,21 +336,24 @@ export class LightSync {
       const a: Active = {
         deviceId, roomId: room.id, stream,
         effect: createEffect(settings.effect, stream.area.channels, this.paramsFor(settings, palette)), effectKind: settings.effect, palette,
-        sid: null, decoding: null, base: null, pausedSince: null, lastTick: now,
+        sid: null, decoding: null, base: null, pausedSince: null, lastTick: now, decodeFailures: 0, decodeRetryAt: 0, behind: false,
       }
       this.active = a
+      this.streamTrouble = false
       if (settings.palette.source === 'cover') this.fetchCover(a)
       stream.onEnded((reason) => {
         if (this.active !== a) return
         this.deps.logger.warn({ deviceId, reason }, 'lightsync: stream ended')
         a.decoding?.stop()
         this.active = null
+        this.streamTrouble = true
         this.retryAt = this.deps.clock.now() + RETRY_MS
       })
       this.deps.logger.info({ deviceId, area: area.name, effect: settings.effect }, 'lightsync: streaming')
       this.schedule(0)
     } catch (err) {
       this.deps.logger.warn({ err, deviceId }, 'lightsync: could not open the stream')
+      this.streamTrouble = true
       this.retryAt = this.deps.clock.now() + RETRY_MS
     } finally {
       this.opening = false

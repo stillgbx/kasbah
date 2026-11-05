@@ -9,6 +9,9 @@ import type { FetchLike } from '../../core/sse'
 import { selfSignedCertificate, startTlsServer, type TestCertificate } from '../../core/test-tls'
 import { HueClient } from './client'
 import { createHuePlugin, hueConfigSchema } from './index'
+import { getLightStreamer } from '../../core/lightStreamBridge'
+import type { DtlsSocket } from './entertainment'
+import { EventEmitter } from 'node:events'
 import { DEVICES, GROUPED_LIGHTS, LIGHTS, PAIR_101, PAIR_OK, ROOMS, SCENES, SSE_FRAME, ZIGBEE, ZONES } from './__fixtures__/bridge'
 import { hueSceneSchema } from './types'
 
@@ -18,7 +21,7 @@ const flush = () => new Promise((r) => setTimeout(r, 0))
 const json = (data: unknown, status = 200) => ({ ok: status < 400, status, body: null, json: async () => data, text: async () => JSON.stringify(data) })
 
 /** Fake bridge: serves the fixtures, logs the PUTs, leaves the SSE stream open after one frame. */
-function fakeBridge(opts: { pairResponse?: unknown; lights?: unknown[] } = {}) {
+function fakeBridge(opts: { pairResponse?: unknown; lights?: unknown[]; areas?: unknown[] } = {}) {
   const puts: { url: string; body: unknown }[] = []
   const posts: { url: string; body: unknown }[] = []
   const deletes: string[] = []
@@ -43,11 +46,16 @@ function fakeBridge(opts: { pairResponse?: unknown; lights?: unknown[] } = {}) {
     const table: Record<string, unknown[]> = {
       light: opts.lights ?? LIGHTS, device: DEVICES, room: ROOMS, grouped_light: GROUPED_LIGHTS,
       zigbee_connectivity: ZIGBEE, scene: SCENES, zone: ZONES,
+      ...(opts.areas ? { entertainment_configuration: opts.areas } : {}),
     }
     if (resource in table) return json({ errors: [], data: table[resource] })
     return json({ errors: [{ description: 'not found' }], data: [] }, 404)
   })
-  return { fetchImpl, puts, posts, deletes, closeSse: () => sseController?.close() }
+  return {
+    fetchImpl, puts, posts, deletes, closeSse: () => sseController?.close(),
+    /** One more event frame on the open SSE stream. */
+    push: (events: unknown[]) => sseController?.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(events)}\n\n`)),
+  }
 }
 
 function fakeContext(config: Record<string, unknown>, clock: ManualClock) {
@@ -246,5 +254,46 @@ describe('hue bridge certificate pin', () => {
     await plugin.stop()
     await app.close()
     await server.close()
+  })
+})
+
+describe('hue entertainment stream', () => {
+  const AREA = '1a8d99cc-967b-44f2-9202-43f976c0fa6b'
+  const areas = [{ id: AREA, type: 'entertainment_configuration', metadata: { name: 'Zone 1' }, status: 'inactive',
+    channels: [{ channel_id: 0, position: { x: 0, y: 0, z: 0 }, members: [] }], light_services: [{ rid: 'l-color', rtype: 'light' }] }]
+  const stopped = { creationtime: '2026-11-05T20:00:00Z', id: 'e9', type: 'update', data: [{ id: AREA, type: 'entertainment_configuration', status: 'inactive' }] }
+
+  async function streaming() {
+    const bridge = fakeBridge({ areas })
+    const clock = new ManualClock(0)
+    const socket = Object.assign(new EventEmitter(), { send: vi.fn(), close: vi.fn() }) as unknown as DtlsSocket
+    const plugin = createHuePlugin({ fetchImpl: bridge.fetchImpl, dtlsConnect: () => { setTimeout(() => socket.emit('connected'), 0); return socket } })
+    const { ctx } = fakeContext(hueConfigSchema.parse({ HUE_BRIDGE_HOST: '10.0.0.2', HUE_APP_KEY: 'key', HUE_CLIENT_KEY: '00112233445566778899aabbccddeeff' }), clock)
+    await plugin.init(ctx)
+    await plugin.start()
+    const streamer = getLightStreamer()!
+    expect(streamer.areaFor(['hue:l-color'])?.id).toBe(AREA)
+    const stream = await streamer.open(AREA)
+    const ended = vi.fn()
+    stream.onEnded(ended)
+    return { bridge, clock, plugin, ended }
+  }
+
+  it('ends the stream when the bridge says it stopped the area (UDP never would)', async () => {
+    const { bridge, clock, plugin, ended } = await streaming()
+    clock.advance(3000)
+    bridge.push([stopped])
+    await flush(); await flush()
+    expect(ended).toHaveBeenCalledWith('the bridge stopped the entertainment area')
+    expect(bridge.puts.at(-1)).toEqual({ url: `/clip/v2/resource/entertainment_configuration/${AREA}`, body: { action: 'stop' } })
+    await plugin.stop()
+  })
+
+  it('ignores that event right after opening: it may be the one of the stream just replaced', async () => {
+    const { bridge, plugin, ended } = await streaming()
+    bridge.push([stopped])
+    await flush(); await flush()
+    expect(ended).not.toHaveBeenCalled()
+    await plugin.stop()
   })
 })
