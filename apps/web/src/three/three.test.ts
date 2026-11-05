@@ -30,7 +30,7 @@ import type { DeviceMarker } from './markers/DeviceMarker'
 import { yawToRad } from '../lib/orientation'
 import { HouseScene } from './HouseScene'
 import type { Animation } from './core/renderLoop'
-import { Precipitation } from './effects/precipitation'
+import { Precipitation, coverMap, precipitationCovers } from './effects/precipitation'
 import { createWaterUniforms, makeWaterAlive, setWaterWind, WAVES } from './effects/water'
 
 /** The rate `HouseScene` requests for the water (`WATER_HZ`) — repeated here, the test checks it. */
@@ -2675,6 +2675,46 @@ describe('precipitation (tier C)', () => {
     expect(snow.count).toBe(1000)
     expect(snow.object.name).toBe('precipitation:snow')
     snow.dispose()
+  })
+
+  it('stops on the roofs and the closed rooms: a slope by its plane, a gable not at all, terraces left open', () => {
+    const slope = { type: 'gable', levelId: 'l', rooms: [], outline: [], zBase: 3, zRidge: 5, thickness: 0.2, faces: [
+      [[0, 0, 3], [10, 0, 3], [10, 5, 5], [0, 5, 5]],   // a slope rising toward +y
+      [[0, 5, 3], [0, 0, 3], [0, 5, 5]],                // a vertical gable: nothing falls on it
+    ] }
+    const flat = { type: 'flat', levelId: 'l', rooms: [], outline: [[20, 0], [24, 0], [24, 4], [20, 4]], zBase: 3, zRidge: 3, thickness: 0.3, faces: [] }
+    const floor = (kind: string, x: number) => ({ roomId: kind, levelId: 'l', polygon: [[x, 10], [x + 4, 10], [x + 4, 14], [x, 14]], z0: 0, z1: 0, kind })
+    const g = { roofs: [slope, flat], levels: [{ levelId: 'l', elevation: 0, height: 2.5, floors: [floor('room', 0), floor('terrace', 10)] }] }
+    const covers = precipitationCovers(g as unknown as Parameters<typeof precipitationCovers>[0])
+    expect(covers).toHaveLength(3)                     // the slope, the flat roof, the room — not the gable nor the terrace
+    expect(covers[0]!.zAt(5, 2.5)).toBeCloseTo(4.2)    // halfway up the slope, plus its thickness
+    expect(covers[1]!.zAt(22, 2)).toBeCloseTo(3.3)
+    expect(covers[2]!.zAt(2, 12)).toBeCloseTo(2.5)
+    // the map: 0.2 m cells over 30 × 20 m, the height as a share of 14 m, rounded up
+    const map = coverMap({ x: 0, y: 0 }, { x: 30, y: 20, z: 14 }, covers)
+    expect([map.width, map.height]).toEqual([150, 100])
+    const at = (x: number, y: number) => map.data[(Math.floor(y / 0.2) * map.width + Math.floor(x / 0.2)) * 4]!
+    expect(at(22, 2)).toBe(Math.ceil((3.3 / 14) * 255))
+    expect(at(2, 12)).toBe(Math.ceil((2.5 / 14) * 255))
+    expect(at(1, 4.9)).toBeGreaterThan(at(1, 0.1))     // higher up the slope
+    expect(at(12, 12)).toBe(0)                          // the terrace
+    expect(at(28, 18)).toBe(0)                          // the garden
+    // the demo house: every closed room is covered at least up to the top of its level
+    const demoGeometry = computeHouseGeometry(parseHouse(demo))
+    const { min: [bx, by] } = demoGeometry.bounds
+    const demoSize = { x: demoGeometry.bounds.max[0] - bx, y: demoGeometry.bounds.max[1] - by, z: 14 }
+    const demoMap = coverMap({ x: bx, y: by }, demoSize, precipitationCovers(demoGeometry))
+    const cellW = demoSize.x / demoMap.width, cellH = demoSize.y / demoMap.height
+    let rooms = 0
+    for (const level of demoGeometry.levels) {
+      for (const f of level.floors.filter((fl) => fl.kind === 'room')) {
+        const [cx, cy] = f.polygon.reduce(([x, y], p) => [x + p[0] / f.polygon.length, y + p[1] / f.polygon.length], [0, 0])
+        const cell = demoMap.data[(Math.floor((cy - by) / cellH) * demoMap.width + Math.floor((cx - bx) / cellW)) * 4]!
+        expect(cell).toBeGreaterThanOrEqual(Math.floor(((level.elevation + level.height) / 14) * 255))
+        rooms++
+      }
+    }
+    expect(rooms).toBeGreaterThan(0)
   })
 
   it('the scene sets the rain on its root and animates the loop, then removes it when it stops raining or in low quality', () => {

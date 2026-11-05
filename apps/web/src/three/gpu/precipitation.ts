@@ -1,16 +1,16 @@
-import type { Color, Vector2, Vector3 } from 'three'
+import type { Color, Texture, Vector2, Vector3 } from 'three'
 import type { Node } from 'three/webgpu'
 import {
   abs, cameraProjectionMatrix, cos, cross, float, floor, fract, instanceIndex, length, max, mix, modelViewMatrix, normalize,
   positionGeometry, select, sin, smoothstep, varying, vec2, vec3, vec4,
 } from 'three/tsl'
-import { sharedUniform } from './shared'
+import { sharedTexture, sharedUniform } from './shared'
 import {
   LAPS, RAIN_MIN_SCREEN, RAIN_STREAK_M, RAIN_WIDTH_M, SNOW_MIN_SCREEN, SNOW_SIZE_M, SNOW_SWAY_M, SNOW_SWAY_X, SNOW_SWAY_Y, TOP_FADE_M,
 } from '../effects/precipitation'
 
 // `effects/precipitation.ts` in TSL: the same placement from the instance number, the same uniform
-// objects (the CPU moves only the offset and the clock).
+// objects (the CPU moves only the offset and the clock), the same cover map.
 
 type F = Node<'float'>
 
@@ -64,5 +64,8 @@ export function precipitationPass(u: Record<string, { value: unknown }>, snow: b
   const q = varying(quad)
   const a = snow ? smoothstep(1, 0, length(q)) : abs(q.y).oneMinus().mul(mix(float(1), float(0.2), q.x))
   const colour = vec4(sharedUniform(u.uColor!.value as Color), follow(u.uOpacity as { value: number }).mul(a).mul(fade))
-  return { vertex: cameraProjectionMatrix.mul(vec4(p, 1)), colour }
+  // under a roof or a level: out of the clip volume, the particle is not drawn
+  const cover = sharedTexture(u.uCover!.value as Texture).sample(xy.sub(boxMin.xy).div(boxSize.xy)).level(float(0)).r.mul(boxSize.z)
+  const vertex = select(z.lessThan(cover), vec4(2, 2, 2, 1), cameraProjectionMatrix.mul(vec4(p, 1)))
+  return { vertex, colour }
 }

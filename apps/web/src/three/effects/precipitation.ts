@@ -1,4 +1,5 @@
-import { BufferAttribute, Color, InstancedBufferGeometry, Mesh, ShaderMaterial, Vector2, Vector3, type Camera, type Object3D, type PerspectiveCamera } from 'three'
+import { BufferAttribute, Color, DataTexture, InstancedBufferGeometry, Mesh, NearestFilter, ShaderMaterial, Vector2, Vector3, type Camera, type Object3D, type PerspectiveCamera } from 'three'
+import type { HouseGeometry, Vec3 } from '@kasbah/shared'
 
 // Rain and snow: particles above the plot, in the house's LOCAL reference frame (Z-up, the object
 // is a child of the root). Everything is drawn by the GPU: ONE quad, instanced `count` times, that
@@ -10,6 +11,11 @@ import { BufferAttribute, Color, InstancedBufferGeometry, Mesh, ShaderMaterial, 
 // couple of pixels wide whatever the distance (the former 1-pixel lines were barely visible). A flake
 // is a soft disc facing the camera. Each particle falls back to the top of the volume, at a new spot
 // drawn from its lap number: the volume is closed, nothing is allocated per frame.
+//
+// It does not rain INSIDE the house: a cover map (one cell per 20 cm of the plan) holds the height of
+// what covers each point — a roof slope, a flat roof, the top of a level's closed rooms — and a
+// particle below it is not drawn. It stops there even when the roof is hidden (cut-away view): an
+// invisible lid rather than rain falling on the furniture.
 //
 // It is the only weather effect that COSTS: it forces the render loop to run as long as it rains
 // (capped at 20 Hz like every decorative animation, `core/renderLoop.ts`). Hence the cutoff in low
@@ -30,8 +36,11 @@ export interface PrecipitationParams {
   windDirDeg: number
 }
 
-/** The volume where it rains: the house footprint (local reference frame, meters) and the ceiling height. */
-export interface PrecipitationBox { min: readonly [number, number]; max: readonly [number, number]; height: number }
+/** A surface the precipitation stops on: a polygon in plan, and its height at a point of it. */
+export interface PrecipitationCover { polygon: readonly (readonly [number, number])[]; zAt: (x: number, y: number) => number }
+
+/** The volume where it rains: the house footprint (local reference frame, meters), the ceiling height, and what covers the house. */
+export interface PrecipitationBox { min: readonly [number, number]; max: readonly [number, number]; height: number; covers?: readonly PrecipitationCover[] }
 
 /** Margin around the footprint: it also rains a little beyond the plot, otherwise the edge shows. */
 const MARGIN_M = 3
@@ -60,6 +69,88 @@ export const LAPS = 16
 /** Height (m) under the ceiling over which a particle appears, instead of popping in. */
 export const TOP_FADE_M = 1
 
+/** Cell of the cover map (m), and its largest side (texels). */
+const COVER_CELL_M = 0.2
+const COVER_MAX_PX = 256
+
+/**
+ * What stops the precipitation above the house: each roof slope (its top surface), a flat roof (its
+ * top), and the top of each level's closed rooms — a house without a roof, or a part no roof covers.
+ * Terraces and balconies stay open to the sky.
+ */
+export function precipitationCovers(g: HouseGeometry): PrecipitationCover[] {
+  const covers: PrecipitationCover[] = []
+  for (const roof of g.roofs) {
+    if (roof.faces.length === 0) {
+      const top = roof.zBase + roof.thickness
+      covers.push({ polygon: roof.outline, zAt: () => top })
+      continue
+    }
+    for (const face of roof.faces) {
+      const zAt = planeOf(face, roof.thickness)
+      // a gable or a high wall is vertical: nothing falls on it from above
+      if (zAt) covers.push({ polygon: face.map((p) => [p[0], p[1]] as const), zAt })
+    }
+  }
+  for (const level of g.levels) {
+    const top = level.elevation + level.height
+    for (const floor of level.floors) {
+      if (floor.kind !== 'terrace' && floor.kind !== 'balcony') covers.push({ polygon: floor.polygon, zAt: () => top })
+    }
+  }
+  return covers
+}
+
+/** Height of a flat face's plane above a point, raised by `lift`; `null` for a vertical face. */
+function planeOf(face: readonly Vec3[], lift: number): ((x: number, y: number) => number) | null {
+  const [a, b, c] = face
+  if (!a || !b || !c) return null
+  const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2]
+  const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2]
+  const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx
+  if (Math.abs(nz) < 1e-6 * Math.hypot(nx, ny, nz)) return null
+  return (x, y) => a[2] + lift - (nx * (x - a[0]) + ny * (y - a[1])) / nz
+}
+
+/**
+ * The cover map over the volume's plan: per cell, the height under which nothing falls, as a share
+ * of the volume's height (red channel, 0-255, rounded UP: a drop never shows just under a roof).
+ */
+export function coverMap(min: { x: number; y: number }, size: { x: number; y: number; z: number }, covers: readonly PrecipitationCover[]): { data: Uint8Array; width: number; height: number } {
+  const width = Math.min(COVER_MAX_PX, Math.max(1, Math.ceil(size.x / COVER_CELL_M)))
+  const height = Math.min(COVER_MAX_PX, Math.max(1, Math.ceil(size.y / COVER_CELL_M)))
+  const data = new Uint8Array(width * height * 4)
+  const cw = size.x / width, ch = size.y / height
+  for (const { polygon, zAt } of covers) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+    for (const [x, y] of polygon) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y) }
+    const i0 = Math.max(0, Math.floor((x0 - min.x) / cw)), i1 = Math.min(width - 1, Math.floor((x1 - min.x) / cw))
+    const j0 = Math.max(0, Math.floor((y0 - min.y) / ch)), j1 = Math.min(height - 1, Math.floor((y1 - min.y) / ch))
+    for (let j = j0; j <= j1; j++) {
+      const y = min.y + (j + 0.5) * ch
+      for (let i = i0; i <= i1; i++) {
+        const x = min.x + (i + 0.5) * cw
+        if (!inside(polygon, x, y)) continue
+        const v = Math.ceil(clamp01(zAt(x, y) / size.z) * 255)
+        const k = (j * width + i) * 4
+        if (v > data[k]!) data[k] = v
+      }
+    }
+  }
+  for (let k = 3; k < data.length; k += 4) data[k] = 255
+  return { data, width, height }
+}
+
+/** Even-odd test: is (x, y) inside the polygon? */
+function inside(polygon: readonly (readonly [number, number])[], x: number, y: number): boolean {
+  let hit = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i]!, [xj, yj] = polygon[j]!
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit
+  }
+  return hit
+}
+
 /** The uniforms of one precipitation, shared by the GLSL and its TSL twin. */
 export interface PrecipitationUniforms {
   uBoxMin: { value: Vector3 }
@@ -69,6 +160,8 @@ export interface PrecipitationUniforms {
   uTime: { value: number }
   /** x: metres per image height (at 1 m in perspective), y: 1 in perspective, 0 in orthographic. */
   uScreen: { value: Vector2 }
+  /** The cover map (`coverMap`): red = height under which nothing falls, share of `uBoxSize.z`. */
+  uCover: { value: DataTexture }
   uColor: { value: Color }
   uOpacity: { value: number }
 }
@@ -84,6 +177,7 @@ uniform vec3 uOffset;
 uniform vec3 uVelocity;
 uniform float uTime;
 uniform vec2 uScreen;
+uniform sampler2D uCover;
 varying vec2 vQuad;
 varying float vFade;
 float kHash(float n) { return fract(sin(n) * 43758.5453123); }
@@ -121,7 +215,9 @@ void main() {
   vec3 p = mix(h, t, position.x) + side * position.y * width * 0.5;
 #endif
   vFade = smoothstep(uBoxSize.z, uBoxSize.z - ${glsl(TOP_FADE_M)}, z);
-  gl_Position = projectionMatrix * vec4(p, 1.0);
+  // under a roof or a level: out of the clip volume, the particle is not drawn
+  float cover = textureLod(uCover, (xy - uBoxMin.xy) / uBoxSize.xy, 0.0).r * uBoxSize.z;
+  gl_Position = z < cover ? vec4(2.0, 2.0, 2.0, 1.0) : projectionMatrix * vec4(p, 1.0);
 }
 `
 
@@ -166,13 +262,19 @@ export class Precipitation {
     const rain = this.kind === 'rain'
     this.count = Math.round(rain ? RAIN_MIN + (RAIN_MAX - RAIN_MIN) * intensity : SNOW_MIN + (SNOW_MAX - SNOW_MIN) * intensity)
     const min = new Vector3(box.min[0] - MARGIN_M, box.min[1] - MARGIN_M, 0)
+    const size = new Vector3(box.max[0] + MARGIN_M - min.x, box.max[1] + MARGIN_M - min.y, box.height)
+    const map = coverMap(min, size, box.covers ?? [])
+    const cover = new DataTexture(map.data, map.width, map.height)
+    cover.magFilter = cover.minFilter = NearestFilter
+    cover.needsUpdate = true
     this.uniforms = {
       uBoxMin: { value: min },
-      uBoxSize: { value: new Vector3(box.max[0] + MARGIN_M - min.x, box.max[1] + MARGIN_M - min.y, box.height) },
+      uBoxSize: { value: size },
       uOffset: { value: new Vector3() },
       uVelocity: { value: new Vector3(0, 0, -RAIN_FALL_MS) },
       uTime: { value: 0 },
       uScreen: { value: new Vector2(1, 1) },
+      uCover: { value: cover },
       uColor: { value: new Color(rain ? 0xa9c0d6 : 0xffffff) },
       uOpacity: { value: 1 },
     }
@@ -228,6 +330,7 @@ export class Precipitation {
     this.object.removeFromParent()
     this.geometry.dispose()
     this.material.dispose()
+    this.uniforms.uCover.value.dispose()
   }
 }
 

@@ -975,6 +975,36 @@ tombe encore dans les pièces de la maison de poupée (aucune occultation par le
 Sources : `apps/web/src/three/effects/precipitation.ts`, `apps/web/src/three/gpu/precipitation.ts`,
 `apps/web/src/three/gpu/shaderMaterials.ts`, `apps/web/src/three/three.test.ts`.
 
+### Mise à jour 2026-11-05 (suite) — plus de pluie ni de neige dans les pièces
+
+Le « pas traité » de la section précédente est fait le même jour : le volume couvre la maison, mais
+une particule sous ce qui la couvre n'est plus dessinée.
+
+- **Ce qui couvre** (`precipitationCovers`, à partir de la `HouseGeometry`) : chaque pente de toit à
+  la hauteur de sa surface (plan de la face + épaisseur du toit), un toit plat à son dessus, et le
+  haut de chaque niveau (`elevation + height`) au-dessus de ses pièces fermées, ce qui couvre une
+  maison sans toit ou une partie qu'aucun toit ne couvre. Restent à découvert : les terrasses, les
+  balcons, et les faces verticales (pignons, mur haut d'un toit en appentis).
+- **La carte** (`coverMap`) : une texture d'une case par 20 cm du plan du volume (256 au plus par
+  côté), rouge = hauteur couverte en part de la hauteur du volume, **arrondie vers le haut** pour
+  qu'aucune goutte ne se montre juste sous un toit. Le maximum l'emporte quand deux surfaces se
+  recouvrent. Calculée une fois à la création de l'effet, jamais par image.
+- **Dans le shader** : lecture de la carte au point de la particule (`textureLod` niveau 0 en GLSL,
+  `.level(0)` en TSL : pas de dérivées dans le vertex shader) ; en dessous, la particule est envoyée
+  hors du volume de découpe et n'est pas dessinée.
+- **Toit masqué** (vue d'un niveau, coupe) : la pluie s'arrête quand même à la hauteur du toit, un
+  couvercle invisible plutôt que de la pluie sur les meubles.
+- **Limites** : le bord des débords et le pied des murs sont précis à la case près (20 cm). Une
+  maison modifiée sans rechargement pendant qu'il pleut garde l'ancienne carte jusqu'à la
+  reconstruction de l'effet (un `load` la reconstruit, `HouseScene.syncPrecipitation`).
+
+Vérifié dans la preview en vue d'un niveau (toit enlevé) : pièces sèches, pluie sur le gazon et le
+dallage, en WebGL et en WebGPU, neige comprise, sans erreur console.
+
+Sources : `apps/web/src/three/effects/precipitation.ts` (`precipitationCovers`, `coverMap`),
+`apps/web/src/three/gpu/precipitation.ts`, `apps/web/src/three/HouseScene.ts`,
+`apps/web/src/three/three.test.ts`.
+
 ## Banc de réglage de la lumière (2026-09-18)
 
 De nuit, l'image **brûlait les yeux** : les lampes allumées noyaient des pans de mur entiers dans du

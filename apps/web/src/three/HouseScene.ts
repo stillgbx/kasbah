@@ -28,7 +28,7 @@ import { Bats } from './effects/bats'
 import { Disco } from './effects/disco'
 import { Parade } from './effects/parade'
 import type { Box, Circle } from './effects/roam'
-import { Precipitation } from './effects/precipitation'
+import { Precipitation, precipitationCovers } from './effects/precipitation'
 import { createWaterUniforms, makeWaterAlive, setWaterSun, setWaterTint, setWaterWind, WaterCaustics, type WaterStrength } from './effects/water'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, type PostLook, type RenderStyle, type StyleLook } from './styles'
 import { applyTuning, NEUTRAL_TUNING, type SceneTuning } from './styles/tuning'
@@ -3919,7 +3919,7 @@ export class HouseScene {
     }
     this.removePrecipitation()
     const b = this.geometry.bounds
-    this.precip = new Precipitation({ min: [b.min[0], b.min[1]], max: [b.max[0], b.max[1]], height: PRECIP_HEIGHT_M }, params)
+    this.precip = new Precipitation({ min: [b.min[0], b.min[1]], max: [b.max[0], b.max[1]], height: PRECIP_HEIGHT_M, covers: precipitationCovers(this.geometry) }, params)
     this.precipIntensity = p.intensity
     this.nodes.root.add(this.precip.object)
     const effect = this.precip
