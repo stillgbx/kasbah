@@ -139,6 +139,8 @@
       "effectHints": { "pulse": "The light beats with the bass, colours pass from lamp to lamp on strong beats.", "wave": "Colours roll from one lamp to the next, faster as the music rises.", "spectrum": "Each lamp takes a band: bass on the left, mids, highs on the right.", "strobe": "Dark between beats, a flash of colour on each strong attack.", "breathe": "Slow and soft: the light follows the energy over a few seconds, colours drift." },
       "sources": { "preset": "Palettes", "scene": "Scene", "custom": "Custom", "cover": "Cover" },
       "presets": { "warm": "Warm", "cool": "Cool", "neon": "Neon", "forest": "Forest", "ocean": "Ocean", "rainbow": "Rainbow" },
+      "random": "Random colours that go together", "harmonyUsed": "Harmony: {rule}",
+      "harmonies": { "analogous": "analogous (neighbouring hues)", "complementary": "complementary (opposite)", "splitComplementary": "split complementary", "triadic": "triadic (hues 120° apart)", "tetradic": "square (hues 90° apart)", "monochromatic": "monochromatic (one hue, several strengths)" },
       "noScene": "No light scene in this room.", "colorN": "Colour {n}", "addColor": "Add a colour", "removeColor": "Remove the chosen colour",
       "coverHint": "The dominant colours of the track's cover art, renewed with each track."
     },

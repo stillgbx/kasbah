@@ -139,6 +139,8 @@
       "effectHints": { "pulse": "La lumière bat avec les basses, les couleurs passent d'une lampe à l'autre sur les temps forts.", "wave": "Les couleurs défilent d'une lampe à la suivante, plus vite quand la musique monte.", "spectrum": "Chaque lampe prend une bande : basses à gauche, médiums, aigus à droite.", "strobe": "Noir entre les temps, un éclair de couleur sur chaque attaque franche.", "breathe": "Lent et doux : la lumière suit l'énergie sur quelques secondes, les couleurs glissent." },
       "sources": { "preset": "Palettes", "scene": "Scène", "custom": "Perso", "cover": "Pochette" },
       "presets": { "warm": "Chaud", "cool": "Froid", "neon": "Néon", "forest": "Forêt", "ocean": "Océan", "rainbow": "Arc-en-ciel" },
+      "random": "Couleurs au hasard, qui vont ensemble", "harmonyUsed": "Harmonie : {rule}",
+      "harmonies": { "analogous": "analogue (teintes voisines)", "complementary": "complémentaire (opposées)", "splitComplementary": "complémentaire adjacente", "triadic": "triade (teintes à 120°)", "tetradic": "carré (teintes à 90°)", "monochromatic": "monochrome (une teinte, plusieurs intensités)" },
       "noScene": "Aucune scène de lumière dans cette pièce.", "colorN": "Couleur {n}", "addColor": "Ajouter une couleur", "removeColor": "Retirer la couleur choisie",
       "coverHint": "Les couleurs dominantes de la pochette du morceau, renouvelées à chaque titre."
     },

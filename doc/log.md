@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-05] update | Lumières en rythme : couleurs au hasard qui vont ensemble
+
+**Déclencheur** : « sur la palette perso on peut ajouter un bouton random qui si possible sort des couleurs qui peuvent s'assembler selon différentes méthodes ».
+
+**Pages modifiées** :
+- `4_ui/4_5_musique-et-medias.md` - mise à jour 2026-11-05 (nuit) : bouton « au hasard », six règles de la roue chromatique (`lib/colorHarmony.ts`), règle affichée sur une ligne réservée.
+
+**Index** : rien à changer (page déjà datée du jour).
+
+
 ## [2026-11-05] update | Lumières en rythme : effets, palettes, ambiance, panneau de réglages
 
 **Déclencheur** : « il va falloir aller plus loin en ajoutant des réglages car là on ne peut pas contrôler grand chose » (gamme de couleurs, ambiance, effets).

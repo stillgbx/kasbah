@@ -7,6 +7,7 @@ import {
   type LightSyncEffect, type LightSyncPalette, type LightSyncPreset, type LightSyncSettings, type LightSyncSettingsPatch,
 } from '@kasbah/shared'
 import type { MusicLightSync } from '../../api'
+import { randomHarmony, type Harmony } from '../../lib/colorHarmony'
 import type { IconName } from '../../lib/strokeIcons'
 import { useScenesStore } from '../../stores/scenes'
 import Segmented from '../ui/Segmented.vue'
@@ -34,6 +35,8 @@ const local = ref<LightSyncSettings>({ ...DEFAULT_LIGHTSYNC_SETTINGS })
 /** Last hand-picked colours, kept while another source is shown. */
 const custom = ref<string[]>(['#ff5a0d', '#8c1fff'])
 const picked = ref(0)
+/** Rule of the last random draw, shown under the colours (and never drawn twice in a row). */
+const harmony = ref<Harmony | null>(null)
 
 watch(open, (v) => {
   if (!v) return
@@ -43,6 +46,7 @@ watch(open, (v) => {
   custom.value = p.source === 'custom' ? [...p.colors] : (props.status.palette ?? custom.value).slice(0, 5)
   if (custom.value.length < 2) custom.value = ['#ff5a0d', '#8c1fff']
   picked.value = 0
+  harmony.value = null
 }, { immediate: true })
 
 let pending: LightSyncSettingsPatch = {}
@@ -91,6 +95,12 @@ function addColor() {
   if (custom.value.length >= 5) return
   setCustom([...custom.value, custom.value[custom.value.length - 1]!])
   picked.value = custom.value.length - 1
+}
+function randomize() {
+  const draw = randomHarmony(custom.value.length, harmony.value ?? undefined)
+  harmony.value = draw.method
+  picked.value = 0
+  setCustom(draw.colors)
 }
 function removeColor() {
   if (custom.value.length <= 2) return
@@ -186,7 +196,13 @@ const subtitle = computed(() => [props.name, props.status.room?.name, props.stat
                       :aria-label="$t('music.lightSyncPanel.removeColor')" @click="removeColor">
                 <StrokeIcon name="minus" :size="16" />
               </button>
+              <button type="button" class="dot dot--act dot--random" :title="$t('music.lightSyncPanel.random')"
+                      :aria-label="$t('music.lightSyncPanel.random')" @click="randomize">
+                <StrokeIcon name="sparkle" :size="16" />
+              </button>
             </div>
+            <!-- reserved line: the rule behind the last random draw -->
+            <p class="muted harmony" :title="harmony ? $t(`music.lightSyncPanel.harmonies.${harmony}`) : undefined">{{ harmony ? $t('music.lightSyncPanel.harmonyUsed', { rule: $t(`music.lightSyncPanel.harmonies.${harmony}`) }) : '' }}</p>
             <v-color-picker :model-value="custom[picked]" mode="hsl" :modes="['hsl']" hide-inputs width="100%" elevation="0" class="bg-transparent"
                             @update:model-value="(h: string) => pickColor(h)" />
           </div>
@@ -248,4 +264,7 @@ const subtitle = computed(() => [props.name, props.status.room?.name, props.stat
 .dot--act { display: grid; place-items: center; background: transparent; color: var(--muted); border: 1px dashed var(--line); box-shadow: none; }
 .dot--act:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
 .dot--act:disabled { opacity: .35; }
+.dot--random { margin-left: auto; }
+/* one line, always: a long rule name on a phone must not push the picker down on a click */
+.harmony { margin: -4px 0 0; font-size: 12.5px; height: 1.4em; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>

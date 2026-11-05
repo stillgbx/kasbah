@@ -1077,3 +1077,20 @@ réglages à l'ouverture plantait le rendu de la page) — copie JSON à la plac
 Vérifié dans la preview `kasbah-mock` par mesure, état injecté : une seule mise en page sur les 5 effets
 et les 4 sources, à 600 px, aux zooms 1 / 1,25 / 1,5, en anglais et sur téléphone ; aucun débordement ;
 contraste ≥ 4,9:1 en clair et en sombre.
+
+### Mise à jour 2026-11-05 (nuit) — palette Perso : le bouton « au hasard »
+
+Demande de l'utilisateur : « un bouton random qui si possible sort des couleurs qui peuvent
+s'assembler selon différentes méthodes ». Bouton étincelle à droite des + / − de la palette Perso :
+`apps/web/src/lib/colorHarmony.ts` tire une règle de la roue chromatique et une teinte de départ au
+hasard — analogue (voisines tous les 30°), complémentaire, complémentaire adjacente (±150°), triade
+(120°), carré (90°), monochrome (une teinte, de pleine à pastel) —, jamais deux fois la même règle de
+suite. Le nombre de couleurs choisi est gardé (2 à 5) ; quand la règle a moins de teintes, le tour
+suivant les reprend plus pâles et légèrement tournées, sans doublon. Toujours pleine valeur et forte
+saturation (une teinte terne rend une lampe faible). La règle tirée s'affiche sur une ligne réservée
+sous les pastilles (« Harmonie : triade (teintes à 120°) »), une seule ligne quoi qu'il arrive
+(ellipse) ; libellés sans nombre de teintes, un carré pouvant ne donner que trois couleurs.
+
+Vérifié : `colorHarmony.test.ts` (nombre, écarts de teinte par règle, pas de répétition) ; preview
+`kasbah-mock`, état injecté : 12 tirages sur téléphone avec 5 couleurs, les six règles sorties, une seule
+mise en page, rangée de pastilles sur une ligne, aucun débordement.
