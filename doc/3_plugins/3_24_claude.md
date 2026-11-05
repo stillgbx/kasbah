@@ -1,6 +1,6 @@
 # Plugin Claude (moteur de l'assistant, `claude -p`)
 
-> Dernière mise à jour : 2026-10-11
+> Dernière mise à jour : 2026-11-05
 > Sources : `apps/server/src/plugins/claude/{index,run}.ts`, tests `apps/server/src/plugins/claude/{plugin,run}.test.ts` et `test-claude.ts`, `apps/server/src/assistant/engines.ts`, `apps/server/src/plugins/index.ts`, `apps/web/src/components/ClaudeLinkCard.vue`, `apps/web/src/components/settings/PluginSection.vue`, CLI Claude Code 2.1.288 (`claude --help`), session du 2026-10-07, page utilisateur `docs/plugins/claude-assistant.md` (2026-10-08)
 
 ## Ce que c'est
@@ -137,3 +137,25 @@ la carte Assistant de Réglages.
 
 Tests : `run.test.ts` (+2 : coût et jetons lus ; `result` sans coût → fin sans `usage`), contrôle
 négatif fait.
+
+### Mise à jour 2026-11-05 — « OAuth session expired and could not be refreshed »
+
+**Symptôme** : en production, chaque instruction échoue avec « Failed to authenticate: OAuth session
+expired and could not be refreshed ».
+
+**Diagnostic** : ce message vient de la CLI quand elle doit **rafraîchir** une connexion faite par
+`claude` / `/login` (fichier `~/.claude/.credentials.json`, qui porte un `refreshToken` et un
+`refreshTokenExpiresAt`). Un jeton `claude setup-token` passé par `CLAUDE_CODE_OAUTH_TOKEN` ne se
+rafraîchit pas : le message ne peut donc venir que du **troisième repli**, la connexion `claude` du
+compte Windows qui fait tourner la tâche planifiée, quand ni le compte ni la maison n'ont de jeton.
+Cette connexion finit par expirer si personne ne relance `claude` sur la machine. La santé du plugin le
+dit : « no house token: the server's claude sign-in is used ».
+
+**Solution** : `claude setup-token` sur n'importe quel poste, puis coller le jeton dans Réglages →
+Plugins → claude (depuis le réseau local : jeton de la maison ; depuis l'adresse publique : jeton du
+compte). Relu à chaque instruction, sans redémarrage. Se reconnecter par `claude` → `/login` sur la
+machine dépanne aussi, mais expirera de nouveau.
+
+Le message ne porte pas d'`api_error_status` 401 : il sort en `CLAUDE_ERROR`, pas en `CLAUDE_AUTH`
+(non vérifié sur la ligne `result` réelle). Ces échecs sont désormais aussi dans `logs/kasbah.log`
+([1_9 Assistant](../1_architecture/1_9_assistant.md), mise à jour du 2026-11-05).

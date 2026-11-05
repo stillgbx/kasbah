@@ -1,6 +1,6 @@
 # Assistant (« Demander à Kasbah »)
 
-> Dernière mise à jour : 2026-11-01
+> Dernière mise à jour : 2026-11-05
 > Sources : `apps/web/src/api/demoAssistant.ts`, `apps/server/src/assistant/{assistant,engines}.ts`, tests `apps/server/src/assistant/assistant.test.ts`, `apps/server/src/mcp/auth.ts` (`runToken`), `apps/server/src/app.ts`, `apps/web/src/composables/useAssistant.ts`, `apps/web/src/components/layout/{AssistantReply,SearchPalette,PageHeader}.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/views/AskView.vue`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.ts`, `apps/android/app/src/main/kotlin/org/kasbah/auto/VoiceScreen.kt`, session du 2026-10-22
 
 ## Ce que c'est
@@ -309,3 +309,20 @@ retirés avec le code qu'ils couvraient. Preview sur le mock : `/?ask&source=sho
 375 × 812 (barre du bas), 812 × 375 (rail de 60 px, 139 px pour la réponse), 1 280 × 800 et
 853 × 533 (zoom 1,5) ; clair et sombre, fr et en ; ni débordement ni erreur console. Non joués : la
 dictée (le panneau navigateur refuse le micro) et « Réécouter » (le mock n'a pas de réponse parlée).
+
+### Mise à jour 2026-11-05 — les échecs passent aussi dans le log du serveur
+
+**Constat** : en production, l'assistant répondait « l'assistant a échoué : Failed to authenticate:
+OAuth session expired and could not be refreshed », et `logs/kasbah.log` ne disait rien. Un moteur
+signale un échec par un **événement** `error`, pas par une exception : seul le journal ci-dessus
+(`.state/assistant-log.json`, carte Assistant de Réglages) le gardait ; le log du serveur n'avait que
+les exceptions (`assistant engine failed`, `assistant run failed`).
+
+- **Maintenant** : à la fin de chaque instruction en erreur, la route `/ask` écrit un `warn`
+  « assistant instruction failed » avec `user`, `code` et `message` (`assistant/assistant.ts`, à côté de
+  l'ajout au journal). Le texte de l'instruction n'y est pas : il reste dans le journal.
+- **Sauf `ABORTED`** (client parti, panneau fermé) : ce n'est pas un échec, il ferait du bruit.
+- Cause de ce message-là : [3_24 Claude](../3_plugins/3_24_claude.md), mise à jour du 2026-11-05.
+
+Tests : `assistant.test.ts` (+1 : un échec est écrit, ni une réussite ni un `ABORTED`), contrôle
+négatif fait (sans l'exclusion d'`ABORTED`, le test échoue).

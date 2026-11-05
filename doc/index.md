@@ -33,7 +33,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-10-09 |
 | [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-11-01 |
 | [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-28 |
-| [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-11-01 |
+| [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-11-05 |
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-10-11 |
 | [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-11-05 |
 | [1_12 Scène 3D : objets dessinés](1_architecture/1_12_scene-3d-objets.md) | 2026-10-26 |
@@ -59,7 +59,7 @@ La maison décrite en JSON : format et validation, géométrie dérivée (murs, 
 ## 3 — Plugins
 
 <!-- section:3_plugins:begin (généré par scripts/wiki-index.mjs depuis 3_plugins/README.md - ne pas éditer ici) -->
-Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (28 pages, dernière mise à jour 2026-11-04).
+Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (28 pages, dernière mise à jour 2026-11-05).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -90,7 +90,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_21 TENS actiTENS mini (Web Bluetooth)](3_plugins/3_21_actitens-tens.md) | 2026-10-06 |
 | [3_22 Agenda (adresse iCal secrète)](3_plugins/3_22_agenda.md) | 2026-10-25 |
 | [3_23 TouteMonAnnée](3_plugins/3_23_toutemonannee.md) | 2026-10-19 |
-| [3_24 Claude (moteur de l'assistant)](3_plugins/3_24_claude.md) | 2026-10-11 |
+| [3_24 Claude (moteur de l'assistant)](3_plugins/3_24_claude.md) | 2026-11-05 |
 | [3_25 Transcription (la voix de l'assistant)](3_plugins/3_25_transcription.md) | 2026-10-12 |
 | [3_26 Hörmann (portes de garage)](3_plugins/3_26_hormann.md) | 2026-10-21 |
 | [3_27 Home Assistant](3_plugins/3_27_home-assistant.md) | 2026-10-30 |

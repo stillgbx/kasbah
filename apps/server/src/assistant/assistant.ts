@@ -162,6 +162,8 @@ export function registerAssistantRoutes(app: FastifyInstance, deps: AssistantDep
           running.delete(key)
           out.end()
           entry.ms = Date.now() - entry.at
+          // the engine's failures are events, not exceptions: without this, only the Settings log has them
+          if (entry.error && entry.error.code !== 'ABORTED') deps.logger.warn({ user, ...entry.error }, 'assistant instruction failed')
           void appendLog(entry, deps.logger)
         })
       return reply.header('cache-control', 'no-store').type('application/x-ndjson; charset=utf-8').send(out)

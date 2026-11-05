@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-05] update | Assistant : échecs dans le log du serveur, connexion `claude` expirée
+
+**Déclencheur** : en production, « l'assistant a échoué : Failed to authenticate: OAuth session expired and could not be refreshed », et rien dans `logs/kasbah.log`.
+
+**Pages modifiées** :
+- `1_architecture/1_9_assistant.md` - mise à jour 2026-11-05 : la route `/ask` écrit un `warn` « assistant instruction failed » (compte, code, message) pour chaque échec sauf `ABORTED`.
+- `3_plugins/3_24_claude.md` - mise à jour 2026-11-05 : diagnostic du message (repli sur la connexion `claude` de la machine, jeton de rafraîchissement expiré) et solution (`claude setup-token` dans Réglages).
+
+**Index** : catalogues mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-11-05] update | Pluie et neige placées par le GPU, plus rien dans les pièces
 
 **Trigger** : question « on n'utilise pas de système de particules pour la pluie ? » ; la pluie existait (CPU, traits d'un pixel peu visibles), prototype GPU validé à l'œil par l'utilisateur ; puis « on peut traiter la pluie/neige dans les pièces ? ».

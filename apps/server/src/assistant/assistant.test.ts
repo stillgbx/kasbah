@@ -92,13 +92,15 @@ it('gives a last word to a silent or broken engine, and only one', async () => {
 
 describe('routes', () => {
   let app: FastifyInstance
+  let logs: { level: number; msg: string; user?: string | null; code?: string; message?: string }[]
   beforeEach(async () => {
+    logs = []
     app = Fastify()
     app.setErrorHandler((err, _req, reply) => { const d = describeError(err); return sendError(reply, d.status, d.code, d.message) })
     // the request's account, as the session gate sets it
     app.decorateRequest('sessionUser', null)
     app.addHook('onRequest', async (req) => { const u = req.headers['x-test-user']; req.sessionUser = typeof u === 'string' ? u : null })
-    registerAssistantRoutes(app, deps())
+    registerAssistantRoutes(app, deps({ logger: pino({ level: 'info' }, { write: (line: string) => { logs.push(JSON.parse(line) as typeof logs[number]) } }) }))
     await app.ready()
   })
   afterEach(() => app.close())
@@ -138,6 +140,21 @@ describe('routes', () => {
     })
     expect(last).toMatchObject({ user: null, text: 'Éteins tout', tools: [], answer: '', error: { code: 'MCP_UNAVAILABLE' } })
     expect(last).not.toHaveProperty('usage')
+  })
+
+  it('writes a failed instruction to the server log, not a successful one nor a closed request', async () => {
+    await app.inject({ method: 'POST', url: '/api/assistant/ask', payload: { text: 'Allume le salon' } })
+    behave = async (run) => { run.emit({ type: 'error', code: 'CLAUDE_ERROR', message: 'OAuth session expired' }) }
+    await app.inject({ method: 'POST', url: '/api/assistant/ask', headers: { 'x-test-user': 'lou' }, payload: { text: 'Éteins tout' } })
+    await assistantLogWritten()
+    expect(logs).toEqual([expect.objectContaining({ level: 40, msg: 'assistant instruction failed', user: 'lou', code: 'CLAUDE_ERROR', message: 'OAuth session expired' })])
+
+    // the core's last word when the client leaves: not a failure
+    logs = []
+    behave = async (run) => { run.emit({ type: 'error', code: 'ABORTED', message: 'request closed' }) }
+    await app.inject({ method: 'POST', url: '/api/assistant/ask', payload: { text: 'Éteins' } })
+    await assistantLogWritten()
+    expect(logs).toEqual([])
   })
 
   it('shows the log only to the local network', async () => {
