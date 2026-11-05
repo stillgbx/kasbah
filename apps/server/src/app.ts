@@ -220,6 +220,13 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     logger: opts.logger.child({ component: 'music' }),
     now: () => clock.now(),
     clock,
+    room: (deviceId) => {
+      const view = roomView.context(clock.now(), () => true)
+      const roomId = view.roomOf(deviceId)
+      const room = roomId ? view.index.roomsById.get(roomId) : undefined
+      return room ? { id: room.id, name: room.name } : null
+    },
+    sceneColors: (sceneId) => scenes.get(sceneId)?.scene.swatches,
     roomLights: (deviceId) => {
       const view = roomView.context(clock.now(), () => true)
       const roomId = view.roomOf(deviceId)

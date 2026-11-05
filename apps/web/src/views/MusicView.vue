@@ -14,12 +14,13 @@ import { useLocalStorage, useMediaQuery, useResizeObserver } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import type { CommandInput, DeviceEntry } from '@kasbah/shared'
+import type { CommandInput, DeviceEntry, LightSyncSettingsPatch } from '@kasbah/shared'
 import { getTransport } from '../api'
 import type { YtmusicAlbum, YtmusicArtist, YtmusicExplore, YtmusicExploreCategory, YtmusicExploreShelf, YtmusicPlaylist, MusicLastPlayed, MusicQueue, MusicTrack, MusicRepeat, MusicSession, MusicLightSync, RadioStation, YtmusicTrack } from '../api/transport'
 import PageHeader from '../components/layout/PageHeader.vue'
 import ChipRow from '../components/music/ChipRow.vue'
 import ListeningSessions from '../components/music/ListeningSessions.vue'
+import LightSyncDialog from '../components/music/LightSyncDialog.vue'
 import MixcloudBrowser from '../components/music/MixcloudBrowser.vue'
 import MusicItemRow from '../components/music/MusicItemRow.vue'
 import MusicPlayerBar from '../components/music/MusicPlayerBar.vue'
@@ -341,6 +342,30 @@ async function toggleLightSync(deviceId: string, on: boolean): Promise<void> {
     void refreshLightSync()
     // the stream opens on the next server tick: read again once it had the time
     setTimeout(() => { void refreshLightSync() }, 1500)
+  } catch (err) {
+    notifications.error(t('errors.UNKNOWN', { name: t('music.lightSync'), message: (err as Error).message }))
+  }
+}
+/** Player whose room light settings are open (the arrow next to the bulb). */
+const lightSyncFor = ref<string | null>(null)
+const lightSyncOpen = computed({ get: () => lightSyncFor.value !== null, set: (v: boolean) => { if (!v) lightSyncFor.value = null } })
+const lightSyncStatus = computed(() => (lightSyncFor.value ? lightSync.value.get(lightSyncFor.value) ?? null : null))
+const lightSyncName = computed(() => {
+  const e = lightSyncFor.value ? players.value.find((p) => p.descriptor.id === lightSyncFor.value) : undefined
+  return e ? (house.houseDeviceFor(e.descriptor.id)?.name ?? e.descriptor.name) : ''
+})
+async function changeLightSync(patch: LightSyncSettingsPatch): Promise<void> {
+  const id = lightSyncFor.value
+  if (!id) return
+  try {
+    // the room's settings: the other speakers of that room show them too
+    const s = await getTransport().setMusicLightSyncSettings(id, patch)
+    const next = new Map(lightSync.value)
+    for (const [other, st] of next) if (st.room && s.room && st.room.id === s.room.id && s.settings) next.set(other, { ...st, settings: s.settings })
+    next.set(id, s)
+    lightSync.value = next
+    // a cover palette arrives once the cover is read: look again shortly
+    if (s.settings?.palette.source === 'cover') setTimeout(() => { void refreshLightSync() }, 1500)
   } catch (err) {
     notifications.error(t('errors.UNKNOWN', { name: t('music.lightSync'), message: (err as Error).message }))
   }
@@ -1237,7 +1262,9 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
           <ListeningSessions :players="players" :selected-id="sessionId || null" :transfer-mode="transferMode" :transfer-busy-id="transferBusyId"
                              :pending-id="pendingTrack && selected ? selected.descriptor.id : null" :light-sync="lightSync"
                              @select="selectSession" @transfer-to="transferTo" @locate="locate"
-                             @command="panelCommand" @light-sync="toggleLightSync" />
+                             @command="panelCommand" @light-sync="toggleLightSync" @light-sync-settings="(id: string) => (lightSyncFor = id)" />
+          <LightSyncDialog v-if="lightSyncStatus" v-model="lightSyncOpen" :status="lightSyncStatus" :name="lightSyncName"
+                           @toggle="(on: boolean) => lightSyncFor && toggleLightSync(lightSyncFor, on)" @change="changeLightSync" />
         </div>
       </div>
     </div>

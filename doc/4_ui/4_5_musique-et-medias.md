@@ -1049,3 +1049,31 @@ Une quatrième touche de 36 px, une **ampoule** entre « voir dans la maison » 
 Vérifié dans la preview `kasbah-mock` par mesure, état injecté dans la page : lignes immobiles, colonne
 au même x sur toutes les lignes, noms raccourcis de 36 px partout, aucun débordement aux zooms 1 / 1,25
 / 1,5, contraste ≥ 5,5:1 en clair et en sombre.
+
+### Mise à jour 2026-11-05 (soir) — le panneau des lumières en rythme
+
+Sources : `apps/web/src/components/music/{LightSyncDialog,ListeningSessions}.vue`, `apps/web/src/views/MusicView.vue`.
+
+L'emplacement de l'ampoule devient double (52 px) : l'ampoule bascule, une petite flèche à côté ouvre
+`LightSyncDialog` (`v-dialog`, plein écran sur téléphone comme `NewPropertyDialog`). Pas de bouton
+« Enregistrer » : chaque changement part 150 ms plus tard et s'applique aux lampes en cours ; les autres
+enceintes de la même pièce affichent les mêmes réglages.
+- En-tête : titre, enceinte · pièce · zone, interrupteur ; sous lui, une bande des couleurs jouées
+  (pochette comprise une fois lue).
+- Ordre choisi pour que rien ne bouge : **effet** (5 tuiles icône + nom, avec une phrase d'explication
+  sur deux lignes réservées), **ambiance** (Calme ↔ Énergique), **luminosité** (10 à 100 %), puis
+  **couleurs** en dernier (Palettes / Scène / Perso / Pochette). Les quatre panneaux de couleurs sont
+  empilés dans la même cellule de grille, les inactifs invisibles et `inert` : la section garde la
+  hauteur du plus grand (Perso, avec son sélecteur). Sans cela, le dialogue étant centré, changer de
+  source déplaçait tout de 60 px (mesuré).
+- Perso : 2 à 5 pastilles, + / −, `v-color-picker` HSL réglé comme celui de `LightControl.vue`. Scène :
+  les scènes de la pièce (`stores/scenes.ts : forRoom`) avec leur dégradé.
+- Les tuiles d'effet passent sur deux rangées quand la place manque (zoom 1,5, téléphone) au lieu de
+  couper leur nom : la hauteur ne dépend que de la largeur, jamais d'un choix.
+
+Piège attrapé dans la preview : `structuredClone` refuse les proxys réactifs de Vue (la copie des
+réglages à l'ouverture plantait le rendu de la page) — copie JSON à la place.
+
+Vérifié dans la preview `kasbah-mock` par mesure, état injecté : une seule mise en page sur les 5 effets
+et les 4 sources, à 600 px, aux zooms 1 / 1,25 / 1,5, en anglais et sur téléphone ; aucun débordement ;
+contraste ≥ 4,9:1 en clair et en sombre.

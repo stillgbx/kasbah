@@ -132,6 +132,16 @@
     "filterPlayers": "Filtrer les lecteurs", "favorites": "Favoris", "otherPlayers": "Autres lecteurs",
     "favoriteAdd": "Ajouter aux favoris", "favoriteRemove": "Retirer des favoris",
     "lightSync": "Lumières en rythme", "lightSyncOn": "Lumières de la pièce en rythme ({area})", "lightSyncOff": "Arrêter les lumières en rythme ({area})",
+    "lightSyncSettings": "Réglages des lumières en rythme",
+    "lightSyncPanel": {
+      "current": "Couleurs jouées", "effect": "Effet", "mood": "Ambiance", "calm": "Calme", "energetic": "Énergique", "brightness": "Luminosité", "colors": "Couleurs",
+      "effects": { "pulse": "Pulsation", "wave": "Vague", "spectrum": "Spectre", "strobe": "Strobo", "breathe": "Respiration" },
+      "effectHints": { "pulse": "La lumière bat avec les basses, les couleurs passent d'une lampe à l'autre sur les temps forts.", "wave": "Les couleurs défilent d'une lampe à la suivante, plus vite quand la musique monte.", "spectrum": "Chaque lampe prend une bande : basses à gauche, médiums, aigus à droite.", "strobe": "Noir entre les temps, un éclair de couleur sur chaque attaque franche.", "breathe": "Lent et doux : la lumière suit l'énergie sur quelques secondes, les couleurs glissent." },
+      "sources": { "preset": "Palettes", "scene": "Scène", "custom": "Perso", "cover": "Pochette" },
+      "presets": { "warm": "Chaud", "cool": "Froid", "neon": "Néon", "forest": "Forêt", "ocean": "Océan", "rainbow": "Arc-en-ciel" },
+      "noScene": "Aucune scène de lumière dans cette pièce.", "colorN": "Couleur {n}", "addColor": "Ajouter une couleur", "removeColor": "Retirer la couleur choisie",
+      "coverHint": "Les couleurs dominantes de la pochette du morceau, renouvelées à chaque titre."
+    },
     "stereo": "stéréo", "streamSource": "source {format}", "megabytes": "{size} Mo",
     "queue": "File d'attente", "queueShow": "Voir la file d'attente", "queueHide": "Fermer la file d'attente", "queueClear": "Vider la file",
     "playerExpand": "Agrandir le lecteur", "playerCollapse": "Réduire le lecteur", "choosePlayer": "Choisir le lecteur", "searchOptions": "Options de recherche",

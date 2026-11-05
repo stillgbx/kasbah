@@ -1,7 +1,7 @@
 # Lecteur musique commun (`/api/music`)
 
 > Dernière mise à jour : 2026-11-05
-> Sources : `apps/server/src/music/{player,proxy,queue,sources,ytdlp}.ts`, tests `apps/server/src/music/{proxy,queue}.test.ts`, `apps/server/src/plugins/ytmusic/plugin.test.ts`, `apps/server/src/app.ts`, `apps/server/src/plugins/{ytmusic,mixcloud}/{index,resolve}.ts`, `apps/server/.env.example`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue`, arbre de travail non commité du 2026-09-23 (après 5c43833) ; `apps/server/src/music/lastPlayed.ts` et son test, `apps/web/src/stores/localPlayer.test.ts`, arbre de travail non commité du 2026-09-28 (après c6fe7c1) ; `apps/server/src/music/lightsync/{analyze,decode,effect,sync}.ts` et leurs tests, `apps/server/src/core/lightStreamBridge.ts`, `apps/web/src/components/music/ListeningSessions.vue` (2026-11-05)
+> Sources : `apps/server/src/music/{player,proxy,queue,sources,ytdlp}.ts`, tests `apps/server/src/music/{proxy,queue}.test.ts`, `apps/server/src/plugins/ytmusic/plugin.test.ts`, `apps/server/src/app.ts`, `apps/server/src/plugins/{ytmusic,mixcloud}/{index,resolve}.ts`, `apps/server/.env.example`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue`, arbre de travail non commité du 2026-09-23 (après 5c43833) ; `apps/server/src/music/lastPlayed.ts` et son test, `apps/web/src/stores/localPlayer.test.ts`, arbre de travail non commité du 2026-09-28 (après c6fe7c1) ; `apps/server/src/music/lightsync/{analyze,decode,effects/*,palette,settingsFile,sync}.ts`, `packages/shared/src/music/lightsync.ts` et leurs tests, `apps/server/src/core/lightStreamBridge.ts`, `apps/web/src/components/music/ListeningSessions.vue` (2026-11-05)
 
 ## Pourquoi un noyau, et pourquoi maintenant
 
@@ -334,3 +334,55 @@ Vérifié le même soir sur la vraie maison, une fois le serveur redémarré ave
 `HUE_CLIENT_KEY` issus du réappairage : un morceau lancé par Kasbah sur une enceinte Cast, touche
 ampoule de la carte Écoute, la lampe de la zone de divertissement de la pièce suit la musique.
 Constat de l'utilisateur : ça marche, mais on ne règle rien (palette, ambiance, effet) — suite à venir.
+
+### Mise à jour 2026-11-05 (soir) — les réglages : effet, couleurs, ambiance, luminosité
+
+Demande de l'utilisateur après la première vérification : « on ne peut pas contrôler grand chose. on
+veut peut être une gamme de couleur différente, un mood différent, des effets différents ». Inspiration
+annoncée : Hue Sync (sa page publique parle d'un réglage d'immersion « de normal à intense », de la
+luminosité et de presets de couleurs, sans plus de détail).
+
+**Contrat partagé** (`packages/shared/src/music/lightsync.ts`) : `LIGHTSYNC_EFFECTS` (`pulse`, `wave`,
+`spectrum`, `strobe`, `breathe`), `LIGHTSYNC_PRESETS` (six palettes hex : chaud, froid, néon, forêt, océan,
+arc-en-ciel — la même table sert au serveur et aux pastilles de l'écran), `lightSyncSettingsSchema`
+(`effect`, `palette` = preset | scène `{ sceneId }` | perso `{ colors: 2 à 5 hex }` | pochette, `energy`
+0..1, `brightness` 0,1..1), défaut = le comportement d'avant (pulsation, chaud, 0,5, 1).
+
+**Par pièce** : les réglages sont ceux de la pièce de la maison (deux enceintes d'une pièce les
+partagent), gardés dans `.state/lightsync.json` (`settingsFile.ts`, patron de `lastPlayed.ts` ; une entrée
+illisible retombe seule aux défauts). `app.ts` fournit `room(deviceId)` (même `HouseView` que
+`roomLights`) et `sceneColors(sceneId)` (`swatches` du `SceneRegistry`).
+
+**Effets** (`lightsync/effects/`) : interface commune `next(frame, dtS)` + `configure(params)` qui change
+les paramètres **sans remettre l'état à zéro** (réglage en direct sans à-coup ; changer d'effet en crée
+un nouveau). Briques partagées (`common.ts`) : bande rapportée à sa propre crête récente, enveloppe,
+fondu de couleur par canal, front montant d'une attaque, échantillonnage interpolé de la palette.
+`energy` déplace tout de façon monotone (retombée 0,6 → 0,12 s, plancher 25 → 5 %, contraste, seuil et
+écart des changements de couleur, vitesse) :
+- Pulsation : l'effet de la première version, paramétré.
+- Vague : la palette défile de gauche à droite, poussée par le niveau.
+- Spectre : canaux triés par `x` répartis basses / médiums / aigus ; une bande n'est jamais lue contre
+  moins de 15 % de la crête de la bande la plus forte — sinon une bande presque vide, rapportée à sa
+  propre crête minuscule, s'allumait en plein (attrapé par le test « les basses à gauche »).
+- Strobo : noir (lueur de 8 % en calme) et éclair de 80 ms de la couleur suivante sur une attaque franche.
+- Respiration : niveau global lissé sur 1,5 à 4 s dans les deux sens, palette qui glisse.
+
+**Palettes** (`palette.ts`) : la **pochette** vient de `ProxySession.meta.artUrl` (l'URL d'origine, pas
+le relais Cast) ; `fetch` (2 Mo, 5 s), puis le **ffmpeg déjà présent** la réduit en 16 × 16 RGB brut
+(`-f rawvideo -pix_fmt rgb24`, aucune bibliothèque d'image), puis `dominantColors` : seaux de teinte
+pondérés par saturation × valeur, gris et noirs écartés, teintes voisines comptées une fois, couleurs
+poussées à pleine saturation ; une seule teinte → une voisine à 40° ajoutée ; pochette grise → rien,
+repli. Mesuré : 107 ms pour une image générée. Cache par URL ; au changement de morceau, les couleurs du
+morceau précédent restent tant que la nouvelle pochette n'est pas lue (pas de saut vers la palette par
+défaut).
+
+**Route** : `PUT /api/music/lightsync/:deviceId/settings` (patch partiel, 400 si invalide, 409 sans pièce) ;
+`GET /api/music/lightsync` rend en plus `room`, `settings` et `palette` (couleurs effectives, pochette
+comprise). Panneau : [4_5 Musique et médias](../4_ui/4_5_musique-et-medias.md).
+
+Vérifié : `effects/effects.test.ts` (chaque effet borné et qui s'apaise, retombée plus courte en
+énergique, couleurs passées sur une attaque, réglage en direct, vague plus rapide, spectre, strobo
+sombre entre deux attaques, respiration sans saut), `palette.test.ts` (sources, dominantes sur pixels
+synthétiques, faux `fetch` / ffmpeg), réglages dans `sync.test.ts` (défauts, partage par pièce,
+persistance, application en direct, scène, pochette par morceau) et route dans `player.test.ts`. Pas
+encore jugé à l'œil sur la vraie lampe.

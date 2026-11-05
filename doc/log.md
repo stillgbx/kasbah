@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-05] update | Lumières en rythme : effets, palettes, ambiance, panneau de réglages
+
+**Déclencheur** : « il va falloir aller plus loin en ajoutant des réglages car là on ne peut pas contrôler grand chose » (gamme de couleurs, ambiance, effets).
+
+**Pages modifiées** :
+- `1_architecture/1_6_lecteur-musique.md` - mise à jour 2026-11-05 (soir) : contrat partagé des réglages, réglages par pièce persistés, cinq effets reconfigurables en direct, palettes (presets, scène, perso, pochette par ffmpeg), route `settings`.
+- `4_ui/4_5_musique-et-medias.md` - mise à jour 2026-11-05 (soir) : ampoule + flèche, `LightSyncDialog`, ordre des sections et panneaux de couleurs empilés pour que rien ne bouge, piège `structuredClone`.
+
+**Index** : rien à changer (pages déjà datées du jour).
+
+
 ## [2026-11-05] update | Lumières en rythme : vérifié avec de la musique
 
 **Déclencheur** : « ça fonctionne », après le redémarrage du serveur avec les nouvelles clés Hue.

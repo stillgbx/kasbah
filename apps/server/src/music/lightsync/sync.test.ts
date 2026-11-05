@@ -3,14 +3,14 @@ import { ManualClock } from '@kasbah/mock-sim'
 import pino from 'pino'
 import type { ChannelColor, LightArea, LightStream, LightStreamer } from '../../core/lightStreamBridge'
 import type { Decoding } from './decode'
-import { PulseEffect } from './effect'
+import { memoryLightSyncSettings, type LightSyncSettingsByRoom } from './settingsFile'
 import { LightSync, type PlayerReading } from './sync'
 
 const flush = async () => { for (let i = 0; i < 5; i++) await Promise.resolve() }
 
 const AREA: LightArea = { id: 'area-1', name: 'Chambre 2', channels: [{ id: 0, x: -1, y: 0, z: 0 }, { id: 1, x: 1, y: 0, z: 0 }] }
 
-function setup() {
+function setup(saved: LightSyncSettingsByRoom = {}) {
   const clock = new ManualClock(1_000_000)
   const frames: ChannelColor[][] = []
   const streams: { closed: boolean; end: (reason: string) => void }[] = []
@@ -35,26 +35,32 @@ function setup() {
     decodes.push({ url, startS, stop })
     return { features: { startS, endS: startS + 30, at: () => ({ low: 1, mid: 0, high: 0, onset: 0 }) }, done: false, stop }
   })
-  const sessions = new Map<string, { sid: string; sourceUrl: string }>()
+  const sessions = new Map<string, { sid: string; sourceUrl: string; artUrl?: string }>()
+  const settingsStore = memoryLightSyncSettings(saved)
+  const coverColors = vi.fn(async (url: string) => (url.includes('blue') ? ['#0000ff', '#00ffff'] : []))
   const states = new Map<string, PlayerReading>()
   let hue: LightStreamer | null = streamer
   const sync = new LightSync({
     session: (id) => sessions.get(id),
     playerState: (id) => states.get(id),
+    room: (id) => (id === 'cast:speaker-1' || id === 'cast:speaker-2' ? { id: 'room-2', name: 'Chambre 2' } : id === 'cast:hall' ? { id: 'hall', name: 'Entrée' } : null),
+    sceneColors: (id) => (id === 'scene-green' ? ['#00ff00', '#008800'] : undefined),
+    coverColors,
+    settingsStore,
     roomLights: (id) => (id === 'cast:speaker-1' || id === 'cast:speaker-2' ? ['hue:lamp-1'] : id === 'cast:hall' ? ['hue:other'] : null),
     streamer: () => hue,
     decode,
     clock,
     logger: pino({ level: 'silent' }),
   })
-  const play = (id: string, sid: string, positionS = 0) => {
-    sessions.set(id, { sid, sourceUrl: `https://source.example.org/${sid}` })
+  const play = (id: string, sid: string, positionS = 0, artUrl?: string) => {
+    sessions.set(id, { sid, sourceUrl: `https://source.example.org/${sid}`, ...(artUrl ? { artUrl } : {}) })
     states.set(id, { playback: 'playing', positionS, updatedAt: clock.now() })
   }
   const step = async (ms: number) => {
     for (let t = 0; t < ms; t += 10) { clock.advance(10); await flush() }
   }
-  return { clock, sync, streamer, streams, frames, decode, decodes, sessions, states, play, step, noHue: () => { hue = null } }
+  return { settingsStore, coverColors, clock, sync, streamer, streams, frames, decode, decodes, sessions, states, play, step, noHue: () => { hue = null } }
 }
 
 describe('LightSync', () => {
@@ -160,31 +166,65 @@ describe('LightSync', () => {
   })
 })
 
-describe('PulseEffect', () => {
-  const channels = AREA.channels
-  const peak = (c: ChannelColor[]) => Math.max(...c.map((x) => Math.max(x.r, x.g, x.b)))
+describe('LightSync settings', () => {
+  const peak = (frame: ChannelColor[]) => Math.max(...frame.map((c) => Math.max(c.r, c.g, c.b)))
 
-  it('follows the bass: bright on a hit, settling back towards the floor, never dark', () => {
-    const fx = new PulseEffect(channels)
-    for (let i = 0; i < 10; i++) fx.next({ low: 0.5, mid: 0, high: 0, onset: 0 }, 0.02)
-    expect(peak(fx.next({ low: 0.5, mid: 0, high: 0, onset: 0 }, 0.02))).toBeGreaterThan(0.9)
-    let out: ChannelColor[] = []
-    for (let i = 0; i < 100; i++) out = fx.next({ low: 0, mid: 0, high: 0, onset: 0 }, 0.02)
-    expect(peak(out)).toBeLessThan(0.2)
-    expect(peak(out)).toBeGreaterThan(0.05)
+  it('starts from the defaults, per room, and says which colours it uses', async () => {
+    const t = setup()
+    await t.sync.ready
+    const s = t.sync.status('cast:speaker-1')
+    expect(s.room).toEqual({ id: 'room-2', name: 'Chambre 2' })
+    expect(s.settings).toEqual({ effect: 'pulse', palette: { source: 'preset', preset: 'warm' }, energy: 0.5, brightness: 1 })
+    expect(s.palette?.length).toBeGreaterThan(1)
   })
 
-  it('swaps the colours on a strong attack, once per attack', () => {
-    const fx = new PulseEffect(channels)
-    const quiet = { low: 0.5, mid: 0, high: 0, onset: 0 }
-    for (let i = 0; i < 50; i++) fx.next(quiet, 0.02)
-    const before = fx.next(quiet, 0.02)
-    fx.next({ ...quiet, onset: 1 }, 0.02)
-    fx.next({ ...quiet, onset: 1 }, 0.02)               // same attack, second frame: no second swap
-    let after: ChannelColor[] = []
-    for (let i = 0; i < 50; i++) after = fx.next(quiet, 0.02)
-    // the left channel now shows what the right one showed
-    expect(after[0]!.r).toBeCloseTo(before[1]!.r, 2)
-    expect(after[0]!.b).toBeCloseTo(before[1]!.b, 2)
+  it('saves a change for the room, shared by the speakers of that room, and refuses where there is no room', async () => {
+    const t = setup()
+    const s = await t.sync.setSettings('cast:speaker-1', { effect: 'wave', energy: 0.9 })
+    expect(s?.settings).toMatchObject({ effect: 'wave', energy: 0.9, brightness: 1 })
+    expect(t.sync.status('cast:speaker-2').settings?.effect).toBe('wave')
+    expect(await t.settingsStore.load()).toMatchObject({ 'room-2': { effect: 'wave' } })
+    expect(await t.sync.setSettings('cast:nowhere', { effect: 'wave' })).toBeNull()
+    await expect(t.sync.setSettings('cast:speaker-1', { energy: 3 })).rejects.toThrow()
+  })
+
+  it('finds the saved settings again after a restart', async () => {
+    const t = setup({ 'room-2': { effect: 'strobe', palette: { source: 'preset', preset: 'neon' }, energy: 1, brightness: 0.5 } })
+    await t.sync.ready
+    expect(t.sync.status('cast:speaker-1').settings?.effect).toBe('strobe')
+  })
+
+  it('applies a change to the running lights at once: brightness, then another effect', async () => {
+    const t = setup()
+    t.play('cast:speaker-1', 'sid-1')
+    await t.sync.set('cast:speaker-1', true)
+    await t.step(500)
+    expect(peak(t.frames.at(-1)!)).toBeGreaterThan(0.9)
+    await t.sync.setSettings('cast:speaker-1', { brightness: 0.4 })
+    await t.step(40)
+    expect(peak(t.frames.at(-1)!)).toBeLessThanOrEqual(0.4 + 1e-9)
+    await t.sync.setSettings('cast:speaker-1', { effect: 'strobe', energy: 1, brightness: 1 })
+    await t.step(200)
+    expect(peak(t.frames.at(-1)!)).toBe(0)        // strobe: dark without an attack (the fake features have none)
+    expect(t.streamer.open).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses a scene of the room, and the cover of each track once known', async () => {
+    const t = setup()
+    await t.sync.setSettings('cast:speaker-1', { palette: { source: 'scene', sceneId: 'scene-green' } })
+    expect(t.sync.status('cast:speaker-1').palette).toEqual(['#00ff00', '#008800'])
+    t.play('cast:speaker-1', 'sid-1', 0, 'https://img.example.org/blue.jpg')
+    await t.sync.set('cast:speaker-1', true)
+    await t.sync.setSettings('cast:speaker-1', { palette: { source: 'cover' } })
+    await t.step(300)
+    expect(t.coverColors).toHaveBeenCalledWith('https://img.example.org/blue.jpg')
+    expect(t.sync.status('cast:speaker-1').palette).toEqual(['#0000ff', '#00ffff'])
+    const last = t.frames.at(-1)!
+    expect(Math.max(...last.map((c) => c.b))).toBeGreaterThan(Math.max(...last.map((c) => c.r)))
+    // a grey cover (no colours): the last colours stay rather than a jump to the default
+    t.play('cast:speaker-1', 'sid-2', 0, 'https://img.example.org/grey.jpg')
+    await t.step(300)
+    expect(t.sync.status('cast:speaker-1').palette).toEqual(['#0000ff', '#00ffff'])
+    expect(t.coverColors).toHaveBeenCalledTimes(2)
   })
 })

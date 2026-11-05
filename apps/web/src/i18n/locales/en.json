@@ -132,6 +132,16 @@
     "filterPlayers": "Filter players", "favorites": "Favorites", "otherPlayers": "Other players",
     "favoriteAdd": "Add to favorites", "favoriteRemove": "Remove from favorites",
     "lightSync": "Lights in rhythm", "lightSyncOn": "Room lights in rhythm ({area})", "lightSyncOff": "Stop the lights in rhythm ({area})",
+    "lightSyncSettings": "Lights in rhythm settings",
+    "lightSyncPanel": {
+      "current": "Colours playing", "effect": "Effect", "mood": "Mood", "calm": "Calm", "energetic": "Energetic", "brightness": "Brightness", "colors": "Colours",
+      "effects": { "pulse": "Pulse", "wave": "Wave", "spectrum": "Spectrum", "strobe": "Strobe", "breathe": "Breathe" },
+      "effectHints": { "pulse": "The light beats with the bass, colours pass from lamp to lamp on strong beats.", "wave": "Colours roll from one lamp to the next, faster as the music rises.", "spectrum": "Each lamp takes a band: bass on the left, mids, highs on the right.", "strobe": "Dark between beats, a flash of colour on each strong attack.", "breathe": "Slow and soft: the light follows the energy over a few seconds, colours drift." },
+      "sources": { "preset": "Palettes", "scene": "Scene", "custom": "Custom", "cover": "Cover" },
+      "presets": { "warm": "Warm", "cool": "Cool", "neon": "Neon", "forest": "Forest", "ocean": "Ocean", "rainbow": "Rainbow" },
+      "noScene": "No light scene in this room.", "colorN": "Colour {n}", "addColor": "Add a colour", "removeColor": "Remove the chosen colour",
+      "coverHint": "The dominant colours of the track's cover art, renewed with each track."
+    },
     "stereo": "stereo", "streamSource": "source {format}", "megabytes": "{size} MB",
     "queue": "Queue", "queueShow": "Show the queue", "queueHide": "Close the queue", "queueClear": "Clear the queue",
     "playerExpand": "Expand the player", "playerCollapse": "Collapse the player", "choosePlayer": "Choose the player", "searchOptions": "Search options",

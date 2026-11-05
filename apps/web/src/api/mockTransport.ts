@@ -461,6 +461,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     // no Hue bridge in the simulation: every room says so, the button stays hidden
     async musicLightSync(deviceIds) { return { lightsync: deviceIds.map((deviceId) => ({ deviceId, available: false, reason: 'no_hue' as const, on: false, active: false })) } },
     async setMusicLightSync(deviceId) { return { deviceId, available: false, reason: 'no_hue' as const, on: false, active: false } },
+    async setMusicLightSyncSettings() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Hue bridge in mock mode') },
     async musicLast() { return { last: [] } },
     async musicResume() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async musicTransfer() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },

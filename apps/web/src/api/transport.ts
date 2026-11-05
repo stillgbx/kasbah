@@ -1,4 +1,4 @@
-import type { ClimateLinkBody, GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEnergyDays, DeviceEntry, DeviceKind, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, MatterSettingsPatch, MatterStatus, PropertiesResponse, PropertyMode, NewPropertyBody, PushSubscribeBody, Right, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor } from '@kasbah/shared'
+import type { ClimateLinkBody, GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEnergyDays, DeviceEntry, DeviceKind, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, MatterSettingsPatch, MatterStatus, PropertiesResponse, PropertyMode, NewPropertyBody, PushSubscribeBody, Right, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor, LightSyncSettings, LightSyncSettingsPatch } from '@kasbah/shared'
 
 // Abstraction of the server channel. Two implementations: HTTP + WebSocket (real) and in-process
 // simulation (tests, static demo without a server). Commands ALWAYS go through a request
@@ -458,6 +458,12 @@ export interface MusicLightSync {
   area?: string
   on: boolean
   active: boolean
+  /** House room of the speaker: the settings are the room's. */
+  room?: { id: string; name: string }
+  /** The room's settings (absent without a room). */
+  settings?: LightSyncSettings
+  /** Colours in use (hex): the cover's once known. */
+  palette?: string[]
 }
 
 /** The last listen of a player that no longer plays anything of ours (server restarted, stop): enough to resume it. */
@@ -758,6 +764,7 @@ export interface Transport {
   musicSessions(): Promise<{ sessions: MusicSession[] }>
   musicLightSync(deviceIds: string[]): Promise<{ lightsync: MusicLightSync[] }>
   setMusicLightSync(deviceId: string, on: boolean): Promise<MusicLightSync>
+  setMusicLightSyncSettings(deviceId: string, patch: LightSyncSettingsPatch): Promise<MusicLightSync>
   /** The last listen of the players that are not playing anything of ours right now. */
   musicLast(): Promise<{ last: MusicLastPlayed[] }>
   /** Restart a player's last listen (queue included), at its position or at `positionS`. */

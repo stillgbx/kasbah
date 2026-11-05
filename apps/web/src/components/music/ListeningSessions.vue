@@ -39,7 +39,7 @@ const props = defineProps<{
   /** Room lights in rhythm, per player (absent = not known yet). */
   lightSync?: ReadonlyMap<string, MusicLightSync>
 }>()
-const emit = defineEmits<{ select: [id: string]; transferTo: [id: string]; command: [id: string, cmd: CommandInput]; locate: [id: string]; lightSync: [id: string, on: boolean] }>()
+const emit = defineEmits<{ select: [id: string]; transferTo: [id: string]; command: [id: string, cmd: CommandInput]; locate: [id: string]; lightSync: [id: string, on: boolean]; lightSyncSettings: [id: string] }>()
 const { t } = useI18n()
 const house = useHouseStore()
 
@@ -215,14 +215,21 @@ function tap(r: Row) {
               <StrokeIcon name="pin" :size="16" />
             </button>
           </template>
-          <!-- lights of the room in rhythm (Hue area): slot kept on every row once one room can -->
-          <button v-if="lightSyncColumn" type="button" class="key sync" :class="{ 'is-hidden': !syncOf(r)?.available }"
-                  :data-on="syncOf(r)?.on ? '1' : '0'" :data-active="syncOf(r)?.active ? '1' : '0'"
-                  :disabled="!syncOf(r)?.available || transferMode" :tabindex="syncOf(r)?.available ? 0 : -1"
-                  :title="syncTitle(r)" :aria-label="syncTitle(r)" :aria-pressed="syncOf(r)?.on ? 'true' : 'false'"
-                  @click.stop="emit('lightSync', r.id, !syncOf(r)?.on)">
-            <StrokeIcon name="light" :size="16" />
-          </button>
+          <!-- lights of the room in rhythm (Hue area): slot kept on every row once one room can; the
+               bulb switches, the arrow next to it opens the room's settings -->
+          <span v-if="lightSyncColumn" class="sync-slot" :class="{ 'is-hidden': !syncOf(r)?.available }">
+            <button type="button" class="key sync" :data-on="syncOf(r)?.on ? '1' : '0'" :data-active="syncOf(r)?.active ? '1' : '0'"
+                    :disabled="!syncOf(r)?.available || transferMode" :tabindex="syncOf(r)?.available ? 0 : -1"
+                    :title="syncTitle(r)" :aria-label="syncTitle(r)" :aria-pressed="syncOf(r)?.on ? 'true' : 'false'"
+                    @click.stop="emit('lightSync', r.id, !syncOf(r)?.on)">
+              <StrokeIcon name="light" :size="16" />
+            </button>
+            <button type="button" class="key sync-more" :disabled="!syncOf(r)?.available || transferMode" :tabindex="syncOf(r)?.available ? 0 : -1"
+                    :title="syncOf(r)?.available ? $t('music.lightSyncSettings') : undefined" :aria-label="$t('music.lightSyncSettings')"
+                    @click.stop="emit('lightSyncSettings', r.id)">
+              <StrokeIcon name="chevronDown" :size="12" />
+            </button>
+          </span>
           <button type="button" class="key star" :data-on="r.favorite ? '1' : '0'"
                   :title="r.favorite ? $t('music.favoriteRemove') : $t('music.favoriteAdd')" :aria-label="r.favorite ? $t('music.favoriteRemove') : $t('music.favoriteAdd')"
                   :aria-pressed="r.favorite ? 'true' : 'false'" @click.stop="toggleFavorite(r.id)">
@@ -293,6 +300,10 @@ function tap(r: Row) {
 .star:hover { color: var(--text); }
 .star[data-on='1'] { color: var(--accent); }
 .star[data-on='1'] :deep(svg) { fill: currentColor; }
+/* bulb + arrow: one fixed slot, the arrow narrow and tucked against the bulb */
+.sync-slot { flex: 0 0 auto; display: flex; width: 52px; }
+.sync-slot .sync { width: 34px; }
+.sync-slot .sync-more { width: 18px; justify-items: start; }
 .sync[data-on='1'] { color: var(--accent); }
 /* streaming right now: the bulb is lit, not only switched on */
 .sync[data-active='1'] :deep(svg) { fill: color-mix(in srgb, currentColor 35%, transparent); }

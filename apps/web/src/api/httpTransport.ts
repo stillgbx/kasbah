@@ -386,6 +386,11 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on }) },
       (j) => j as MusicLightSync,
     ),
+    setMusicLightSyncSettings: (deviceId, patch) => request(
+      `${base}/api/music/lightsync/${encodeURIComponent(deviceId)}/settings`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) },
+      (j) => j as MusicLightSync,
+    ),
     musicLast: () => request(`${base}/api/music/last`, undefined, (j) => j as { last: MusicLastPlayed[] }),
     musicResume: (deviceId, positionS) => request(
       `${base}/api/music/resume`,

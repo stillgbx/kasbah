@@ -1,15 +1,21 @@
 import type { Logger } from 'pino'
+import { DEFAULT_LIGHTSYNC_SETTINGS, lightSyncSettingsSchema, type LightSyncSettings, type LightSyncSettingsPatch } from '@kasbah/shared'
 import type { Clock } from '../../core/clock'
 import type { LightStream, LightStreamer } from '../../core/lightStreamBridge'
 import { HOP_S } from './analyze'
 import type { Decoding } from './decode'
-import { PulseEffect } from './effect'
+import { createEffect, type Effect, type EffectParams } from './effects'
+import { FALLBACK_PALETTE, staticPalette, toRgb } from './palette'
+import type { LightSyncSettingsByRoom, LightSyncSettingsStore } from './settingsFile'
 
 // Lights of a room in rhythm with what Kasbah plays on a speaker of that room. Switched on per
 // speaker; a Hue bridge streams one area at a time, so one speaker is synced at a time (switching
 // on another one hands the stream over). While the switch is on, the stream opens when the speaker
 // plays one of our tracks and closes after a pause of a few seconds; the switch itself stays on
 // for the next track, until it is switched off or the server restarts.
+//
+// Settings (effect, colours, energy, brightness) are per ROOM and persisted; a change applies to the
+// running stream without a jolt (same effect reconfigured, or a new effect if its kind changed).
 //
 // Alignment: the features are indexed by position in the track, read at the speaker's position,
 // extrapolated between two state reports on a local clock. The local clock is only reset on a
@@ -36,12 +42,18 @@ export interface LightSyncStatus {
   /** The room of this speaker can be synced; otherwise `reason` says why. */
   available: boolean
   reason?: LightSyncReason
+  /** House room of the speaker (its settings are the room's). */
+  room?: { id: string; name: string }
   /** Name of the entertainment area that will be used. */
   area?: string
   /** The switch. */
   on: boolean
   /** Lights being driven right now. */
   active: boolean
+  /** The room's settings (defaults until changed); absent without a room. */
+  settings?: LightSyncSettings
+  /** The colours in use, sRGB hex: the cover's once known for the playing track. */
+  palette?: string[]
 }
 
 export interface PlayerReading {
@@ -51,21 +63,32 @@ export interface PlayerReading {
 }
 
 export interface LightSyncDeps {
-  /** What the speaker plays from us (proxy session), if anything. */
-  session(deviceId: string): { sid: string; sourceUrl: string } | undefined
+  /** What the speaker plays from us (proxy session), if anything, with the track's cover URL. */
+  session(deviceId: string): { sid: string; sourceUrl: string; artUrl?: string } | undefined
   playerState(deviceId: string): PlayerReading | undefined
+  /** House room of the speaker; null = in no room. */
+  room(deviceId: string): { id: string; name: string } | null
   /** Light device ids of the speaker's room; null = the speaker is in no room. */
   roomLights(deviceId: string): string[] | null
   streamer(): LightStreamer | null
   decode(sourceUrl: string, startS: number): Decoding
+  /** Swatches (hex) of a light scene, if it still exists. */
+  sceneColors(sceneId: string): readonly string[] | undefined
+  /** Dominant colours of a cover ([] if unavailable). */
+  coverColors(url: string): Promise<string[]>
+  settingsStore: LightSyncSettingsStore
   clock: Clock
   logger: Logger
 }
 
 interface Active {
   deviceId: string
+  roomId: string
   stream: LightStream
-  effect: PulseEffect
+  effect: Effect
+  effectKind: LightSyncSettings['effect']
+  /** Colours in use (hex). */
+  palette: readonly string[]
   sid: string | null
   decoding: Decoding | null
   /** Local clock of the track position: `pos` at `at`. Null = to be taken from the next report. */
@@ -80,19 +103,51 @@ export class LightSync {
   private opening = false
   private retryAt = 0
   private timer: unknown = null
+  private settings: LightSyncSettingsByRoom = {}
+  /** Cover colours of the playing track, by cover URL, once known. */
+  private readonly covers = new Map<string, string[]>()
+  readonly ready: Promise<void>
 
-  constructor(private readonly deps: LightSyncDeps) {}
+  constructor(private readonly deps: LightSyncDeps) {
+    this.ready = deps.settingsStore.load().then((s) => { this.settings = { ...s, ...this.settings } }, (err) => {
+      deps.logger.warn({ err }, 'lightsync: settings not loaded, defaults used')
+    })
+  }
+
+  private settingsOf(roomId: string): LightSyncSettings {
+    return this.settings[roomId] ?? DEFAULT_LIGHTSYNC_SETTINGS
+  }
+
+  /**
+   * The colours for these settings and what the speaker plays: the cover's once known; until then
+   * `previous` (the last track's cover keeps playing rather than a jump to the default).
+   */
+  private paletteFor(settings: LightSyncSettings, deviceId: string, previous?: readonly string[]): readonly string[] {
+    const fixed = staticPalette(settings.palette, (id) => this.deps.sceneColors(id))
+    if (fixed) return fixed
+    const art = this.deps.session(deviceId)?.artUrl
+    return (art && this.covers.get(art)) || previous || FALLBACK_PALETTE
+  }
+
+  private paramsFor(settings: LightSyncSettings, palette: readonly string[]): EffectParams {
+    return { palette: toRgb(palette.length ? palette : FALLBACK_PALETTE), energy: settings.energy, brightness: settings.brightness }
+  }
 
   status(deviceId: string): LightSyncStatus {
     const on = this.enabled.has(deviceId)
     const active = this.active?.deviceId === deviceId
+    const room = this.deps.room(deviceId) ?? undefined
+    const settings = room ? this.settingsOf(room.id) : undefined
+    const extra = room && settings
+      ? { room, settings, palette: [...(this.active?.deviceId === deviceId ? this.active.palette : this.paletteFor(settings, deviceId))] }
+      : {}
     const streamer = this.deps.streamer()
-    if (!streamer) return { deviceId, available: false, reason: 'no_hue', on, active }
+    if (!streamer) return { deviceId, available: false, reason: 'no_hue', on, active, ...extra }
     const lights = this.deps.roomLights(deviceId)
-    if (!lights) return { deviceId, available: false, reason: 'no_room', on, active }
+    if (!lights || !room) return { deviceId, available: false, reason: 'no_room', on, active, ...extra }
     const area = streamer.areaFor(lights)
-    if (!area) return { deviceId, available: false, reason: 'no_area', on, active }
-    return { deviceId, available: true, area: area.name, on, active }
+    if (!area) return { deviceId, available: false, reason: 'no_area', on, active, ...extra }
+    return { deviceId, available: true, area: area.name, on, active, ...extra }
   }
 
   /** Switches the sync of a speaker; switching one on switches the others off (one stream per bridge). */
@@ -112,11 +167,52 @@ export class LightSync {
     return this.status(deviceId)
   }
 
+  /**
+   * Changes the settings of the speaker's room (any field, each one whole), saves them, and applies
+   * them to the running stream. Null if the speaker is in no room; throws if the result is invalid.
+   */
+  async setSettings(deviceId: string, patch: LightSyncSettingsPatch): Promise<LightSyncStatus | null> {
+    const room = this.deps.room(deviceId)
+    if (!room) return null
+    await this.ready
+    const next = lightSyncSettingsSchema.parse({ ...this.settingsOf(room.id), ...patch })
+    this.settings = { ...this.settings, [room.id]: next }
+    await this.deps.settingsStore.save(this.settings)
+    const a = this.active
+    if (a && a.roomId === room.id) this.applySettings(a)
+    return this.status(deviceId)
+  }
+
   async stop(): Promise<void> {
     this.enabled.clear()
     if (this.timer !== null) this.deps.clock.clearTimeout(this.timer)
     this.timer = null
     await this.teardown()
+  }
+
+  /** The room's current settings onto the running effect: same kind reconfigured, another kind replaced. */
+  private applySettings(a: Active): void {
+    const settings = this.settingsOf(a.roomId)
+    const wasCover = a.palette !== FALLBACK_PALETTE && settings.palette.source === 'cover'
+    a.palette = this.paletteFor(settings, a.deviceId, wasCover ? a.palette : undefined)
+    const params = this.paramsFor(settings, a.palette)
+    if (settings.effect !== a.effectKind) {
+      a.effect = createEffect(settings.effect, a.stream.area.channels, params)
+      a.effectKind = settings.effect
+    } else a.effect.configure(params)
+    if (settings.palette.source === 'cover') this.fetchCover(a)
+  }
+
+  /** Cover colours of the playing track: asked once per cover, applied when they arrive if still relevant. */
+  private fetchCover(a: Active): void {
+    const art = this.deps.session(a.deviceId)?.artUrl
+    if (!art || this.covers.has(art)) return
+    void this.deps.coverColors(art).then((colors) => {
+      if (colors.length === 0) return
+      this.covers.set(art, colors)
+      if (this.covers.size > 50) this.covers.delete(this.covers.keys().next().value!)
+      if (this.active === a && this.settingsOf(a.roomId).palette.source === 'cover' && this.deps.session(a.deviceId)?.artUrl === art) this.applySettings(a)
+    })
   }
 
   private schedule(ms: number): void {
@@ -155,8 +251,11 @@ export class LightSync {
     }
     a.pausedSince = null
     const pos = this.position(a, st!, now)
-    if (session!.sid !== a.sid) this.restartDecoding(a, session!, pos)
-    else if (a.decoding) {
+    if (session!.sid !== a.sid) {
+      this.restartDecoding(a, session!, pos)
+      // a new track: a new cover, for the cover palette
+      if (this.settingsOf(a.roomId).palette.source === 'cover') this.applySettings(a)
+    } else if (a.decoding) {
       const f = a.decoding.features
       // a jump back before what was analysed, or far beyond what decoding has reached: decode from there
       if (pos < f.startS - HOP_S || (pos > f.endS + SEEK_AHEAD_S && !(a.decoding.done && f.endS > f.startS))) this.restartDecoding(a, session!, pos)
@@ -186,19 +285,25 @@ export class LightSync {
   private async open(deviceId: string): Promise<void> {
     const streamer = this.deps.streamer()
     const lights = this.deps.roomLights(deviceId)
+    const room = this.deps.room(deviceId)
     const area = streamer && lights ? streamer.areaFor(lights) : undefined
-    if (!streamer || !area) return
+    if (!streamer || !area || !room) return
     this.opening = true
     try {
+      await this.ready
       const stream = await streamer.open(area.id)
       // switched off (or handed to another speaker) while the handshake was running
       if (!this.enabled.has(deviceId) || this.active) { await stream.close(); return }
       const now = this.deps.clock.now()
+      const settings = this.settingsOf(room.id)
+      const palette = this.paletteFor(settings, deviceId)
       const a: Active = {
-        deviceId, stream, effect: new PulseEffect(stream.area.channels),
+        deviceId, roomId: room.id, stream,
+        effect: createEffect(settings.effect, stream.area.channels, this.paramsFor(settings, palette)), effectKind: settings.effect, palette,
         sid: null, decoding: null, base: null, pausedSince: null, lastTick: now,
       }
       this.active = a
+      if (settings.palette.source === 'cover') this.fetchCover(a)
       stream.onEnded((reason) => {
         if (this.active !== a) return
         this.deps.logger.warn({ deviceId, reason }, 'lightsync: stream ended')
@@ -206,7 +311,7 @@ export class LightSync {
         this.active = null
         this.retryAt = this.deps.clock.now() + RETRY_MS
       })
-      this.deps.logger.info({ deviceId, area: area.name }, 'lightsync: streaming')
+      this.deps.logger.info({ deviceId, area: area.name, effect: settings.effect }, 'lightsync: streaming')
       this.schedule(0)
     } catch (err) {
       this.deps.logger.warn({ err, deviceId }, 'lightsync: could not open the stream')

@@ -2,7 +2,7 @@ import { Readable } from 'node:stream'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { Logger } from 'pino'
 import { z } from 'zod'
-import type { Command } from '@kasbah/shared'
+import { lightSyncSettingsPatchSchema, type Command } from '@kasbah/shared'
 import { stateFile } from '../core/paths'
 import { PluginError } from '../core/plugin'
 import { systemClock, type Clock } from '../core/clock'
@@ -16,6 +16,8 @@ import { createLastPlayedFile, type LastPlayedByDevice, type LastPlayedStore } f
 import { getMusicSource, musicUserOf as userOf, type MusicSource, type MusicUser } from './sources'
 import { decode } from './lightsync/decode'
 import { LightSync } from './lightsync/sync'
+import { CoverPalettes } from './lightsync/palette'
+import { createLightSyncSettingsFile, type LightSyncSettingsStore } from './lightsync/settingsFile'
 
 // Player SHARED by the music sources, mounted under /api/music. What was the core of the YouTube Music
 // plugin (2026-09-22) moved out of it on 2026-09-23 to serve Mixcloud too: a source only provides its
@@ -81,6 +83,12 @@ export interface MusicPlayerDeps {
   publicHosts?: string[]
   /** Light device ids of a speaker's room (`app.ts`, from the house), for the light sync; null = no room. */
   roomLights?: (deviceId: string) => string[] | null
+  /** House room of a speaker (`app.ts`): the light sync settings are the room's. */
+  room?: (deviceId: string) => { id: string; name: string } | null
+  /** Swatches (hex) of a light scene (`app.ts`, the scene registry), for the scene palette. */
+  sceneColors?: (sceneId: string) => readonly string[] | undefined
+  /** Where the light sync settings are kept (tests); otherwise `.state/lightsync.json`. */
+  lightSyncSettings?: LightSyncSettingsStore
   /** The light stream (tests); otherwise the bridge a lights plugin registers with. */
   lightStreamer?: () => LightStreamer | null
   /** Timers of the light sync (tests); otherwise the system clock. */
@@ -243,10 +251,15 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   }
 
   /** Room lights in rhythm with what a speaker plays from us (`lightsync/sync.ts`). */
+  const coverPalettes = new CoverPalettes({
+    ffmpegPath: cfg.FFMPEG_PATH, logger: log,
+    ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}),
+    ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+  })
   const lightSync = new LightSync({
     session: (deviceId) => {
       const s = proxy.forDevice(deviceId)
-      return s && sessionActive(s) ? { sid: s.sid, sourceUrl: s.sourceUrl } : undefined
+      return s && sessionActive(s) ? { sid: s.sid, sourceUrl: s.sourceUrl, ...(s.meta.artUrl ? { artUrl: s.meta.artUrl } : {}) } : undefined
     },
     playerState: (deviceId) => {
       const st = resolvePlay().get(deviceId)?.state as { kind?: string; playback?: string; updatedAt?: number; nowPlaying?: { positionS?: number } } | undefined
@@ -257,9 +270,13 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
         ...(typeof st.updatedAt === 'number' ? { updatedAt: st.updatedAt } : {}),
       }
     },
+    room: (deviceId) => deps.room?.(deviceId) ?? null,
     roomLights: (deviceId) => deps.roomLights?.(deviceId) ?? null,
     streamer: deps.lightStreamer ?? getLightStreamer,
     decode: (url, startS) => decode(url, startS, { ffmpegPath: cfg.FFMPEG_PATH, ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}), logger: log }),
+    sceneColors: (sceneId) => deps.sceneColors?.(sceneId),
+    coverColors: (url) => coverPalettes.get(url),
+    settingsStore: deps.lightSyncSettings ?? createLightSyncSettingsFile(stateFile('lightsync.json'), log),
     clock: deps.clock ?? systemClock,
     logger: log,
   })
@@ -834,6 +851,15 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'on (boolean) is required')
       const status = await lightSync.set(req.params.deviceId, body.data.on)
       if (body.data.on && !status.available) return sendError(reply, 409, 'UNSUPPORTED_COMMAND', `light sync not available here (${status.reason})`)
+      return status
+    })
+
+    /** Light sync settings of the speaker's room (effect, colours, energy, brightness): any field, applied live. */
+    app.put<{ Params: { deviceId: string }; Body: unknown }>('/lightsync/:deviceId/settings', async (req, reply) => {
+      const patch = lightSyncSettingsPatchSchema.safeParse(req.body)
+      if (!patch.success) return sendError(reply, 400, 'INVALID_BODY', patch.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '))
+      const status = await lightSync.setSettings(req.params.deviceId, patch.data)
+      if (!status) return sendError(reply, 409, 'UNSUPPORTED_COMMAND', 'this speaker is in no room: its lights cannot be set')
       return status
     })
 
