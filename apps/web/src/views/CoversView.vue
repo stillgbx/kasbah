@@ -7,6 +7,7 @@ import CoversMaster from '../components/devices/CoversMaster.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
 import RoomShutterKeys from '../components/devices/RoomShutterKeys.vue'
 import CoverPill from '../components/covers/CoverPill.vue'
+import CoverCalibrationDialog from '../components/controls/CoverCalibrationDialog.vue'
 import PulseDot from '../components/ui/PulseDot.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { coverActivity, coverWords, fromClosure, toClosure } from '../lib/cover'
@@ -134,6 +135,13 @@ const pillClosure = (e: DeviceEntry) => {
 // Favorite position of the motor: mark on the thumbnail, and value in the button's accessible
 // label (a list row has no room to write it out).
 const presetClosure = (s: StateFor<'cover'>) => s.presetPosition === undefined ? undefined : toClosure(s.presetPosition)
+// Calibration: ONE box for the whole view, opened on the shutter whose key was pressed
+const calibratingId = ref<string | null>(null)
+const calibrating = computed(() => (calibratingId.value ? devices.list.find((e) => e.descriptor.id === calibratingId.value) : undefined))
+const calibrationOpen = computed({
+  get: () => !!calibrating.value,
+  set: (v: boolean) => { if (!v) calibratingId.value = null },
+})
 function drag(id: string, v: number) { draft.value = { ...draft.value, [id]: v } }
 function commit(id: string, v: number) {
   void devices.sendCommand(id, { type: 'cover.set_position', position: fromClosure(Math.round(v)) })
@@ -248,11 +256,23 @@ function commit(id: string, v: number) {
                       @click="devices.sendCommand(entry.descriptor.id, { type: 'cover.set_quiet', on: !(entry.state as StateFor<'cover'>).quiet })">
                 <StrokeIcon name="moon" :size="18" />
               </button>
+              <!-- calibration: a setting too, it opens its box (the marks need the motor moved) -->
+              <button v-if="entry.descriptor.capabilities.includes('calibration')" type="button" class="key key--toggle"
+                      :disabled="!entry.state.available" :aria-haspopup="'dialog'"
+                      :aria-pressed="!!(entry.state as StateFor<'cover'>).calibration"
+                      :title="`${$t('cover.calibration.title')} · ${(entry.state as StateFor<'cover'>).calibration ? $t('cover.calibration.on') : $t('cover.calibration.off')}`"
+                      :aria-label="$t('cover.calibration.title')"
+                      @click="calibratingId = entry.descriptor.id">
+                <StrokeIcon name="wrench" :size="18" />
+              </button>
             </div>
           </div>
         </template>
       </RoomBands>
     </div>
+    <CoverCalibrationDialog v-if="calibrating" v-model="calibrationOpen" :descriptor="calibrating.descriptor"
+                            :state="calibrating.state as StateFor<'cover'>" :disabled="!calibrating.state.available"
+                            @command="(cmd) => devices.sendCommand(calibrating!.descriptor.id, cmd)" />
   </div>
 </template>
 

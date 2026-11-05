@@ -17,6 +17,7 @@
 - **Covers**: open, close, stop mid-travel; aim for a **position** as a percentage when the motor can do it (io-homecontrol motors).
 - **Preset position** (Somfy's "my" button): recall it from Kasbah, and on io shutters **save** it again ("Save this position").
 - **Quiet mode** (compatible io shutters): moves started from Kasbah run at low speed, which is quieter. This is a Kasbah setting; the wall remote keeps its speed.
+- **Calibration** (io roller shutters): Somfy's percentage measures the motor's travel, not the share of the window it hides. In **Calibration** (shutter panel, or the wrench key on its card in Covers), bring the shutter to a few marks and mark them: the top of the glass and the sill are required, a quarter, half and three quarters are optional. Afterwards 25 % covers a quarter of the window, **100 %** stops on the sill with the slats still apart ("Covered, slats apart"), and **Close** presses them together, so no light passes. A Kasbah setting: the box and the wall remote keep their own percentages.
 - **Battery** of the solar shutters, and the **light level** picked up by their panel, with a Day / Month / Year chart built by Kasbah (the box keeps none).
 - **State feedback**: the box is polled every 2 seconds (it pushes nothing), so a shutter operated with the remote is seen almost at once.
 - **RTS** motors (one-way radio, no feedback) can be controlled, but their position is only **assumed** from the last command, and flagged as such: with no command sent through Kasbah since startup, the state is "Unknown".
@@ -58,6 +59,7 @@ The plugin's status in Settings tells you where you stand:
 | `TAHOMA_COMMAND_MODE` | `queue` | Sending several commands at once (automation, scene): `queue` sends them one by one, `batch` groups them into a single execution, like a TaHoma scenario |
 | `TAHOMA_LIGHT_HISTORY_FILE` | `apps/server/.state/tahoma-light-history.json` | Light-level history of the solar shutters; empty = not saved |
 | `TAHOMA_QUIET_FILE` | `apps/server/.state/tahoma-quiet.json` | Shutters in quiet mode; empty = not saved |
+| `TAHOMA_CALIBRATION_FILE` | `apps/server/.state/tahoma-calibration.json` | Calibrated shutters; empty = not saved |
 
 ## Limitations
 
@@ -66,6 +68,7 @@ The plugin's status in Settings tells you where you stand:
 - Gates with a single "cycle" command (no separate open and close) are ignored. Slat tilt exists but has not been verified on hardware.
 - The light level of the solar shutters is only recorded while the server is running: an hour when it was stopped stays empty. Whether the box actually relays luminance locally remains to be confirmed in sunny weather.
 - **Saving** a preset position has not been tried on a real box (simulation only): quiet mode, on the other hand, has been verified on a real shutter.
+- **Calibration** has only been tried in simulation so far. It is offered for io roller shutters only: RTS motors cannot aim at a position, and blinds keep the motor's percentage.
 
 ## Further reading
 

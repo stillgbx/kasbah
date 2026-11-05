@@ -26,8 +26,9 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
         case 'cover.close': return { motion: state.position !== undefined && state.position <= 0 ? 'stopped' : 'closing' } as Partial<DeviceState>
         case 'cover.stop': return { motion: 'stopped' } as Partial<DeviceState>
         case 'cover.set_position': {
-          if (state.position === undefined) return { motion: 'opening' } as Partial<DeviceState>
-          const p = state.position
+          // `motor`: the target is on the motor's own scale, published apart once calibrated
+          const p = cmd.motor ? state.motorPosition ?? state.position : state.position
+          if (p === undefined) return { motion: 'opening' } as Partial<DeviceState>
           return { motion: cmd.position > p ? 'opening' : cmd.position < p ? 'closing' : 'stopped' } as Partial<DeviceState>
         }
         // same reasoning as `set_position`, on the motor's favorite position: without it we

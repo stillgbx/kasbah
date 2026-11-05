@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-05] update | Étalonnage des volets : la part réelle de la fenêtre, lames ajourées ou serrées
+
+**Déclencheur** : « un volet fermé à 50 % ne cache pas 50 % de la fenêtre » ; demande de réglages par volet pour que 25 / 50 / 75 % soient la vraie couverture, et de distinguer un volet couvrant (jours ouverts) d'un volet fermé (lames serrées).
+
+**Pages modifiées** :
+- `1_architecture/1_1_contrat-appareils.md` - mise à jour 2026-11-05 : capacité `calibration`, commande `cover.set_calibration`, champs `calibration` / `motorPosition` / `sealed`, `set_position { motor }`, conversions de `cover-calibration.ts`.
+- `3_plugins/3_4_somfy-tahoma.md` - mise à jour 2026-11-05 : pourquoi le pourcentage Somfy ment, application dans le plugin (sortie, entrée, sens du mouvement en valeurs moteur), « Fermé » contre « couvert à 100 % », arrondi du moteur, fichier d'état, geste d'étalonnage (panneau du volet et cartes de la vue Ouvrants) ; pas encore essayé sur un vrai volet.
+
+**Index** : catalogues mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-11-05] update | Assistant : échecs dans le log du serveur, connexion `claude` expirée
 
 **Déclencheur** : en production, « l'assistant a échoué : Failed to authenticate: OAuth session expired and could not be refreshed », et rien dans `logs/kasbah.log`.

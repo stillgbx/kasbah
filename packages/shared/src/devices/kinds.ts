@@ -21,7 +21,9 @@ export const CAPABILITIES = [
   // `quiet` = quiet mode: the motor can run at slow speed (Somfy `LinearSpeed`). The box
   // does not store it, it is an option of each maneuver: the plugin holds the switch
   // (`CoverState.quiet`) and applies it to all the travels made through Kasbah
-  'open_close', 'position', 'tilt', 'stop', 'preset', 'preset_set', 'quiet',
+  // `calibration` = the plugin translates the motor's travel into the real share of the window
+  // (`cover-calibration.ts`); a Kasbah setting, measured by eye on the shutter
+  'open_close', 'position', 'tilt', 'stop', 'preset', 'preset_set', 'quiet', 'calibration',
   // media_player — `play_url`: load an HTTP(S) stream (MP3, HLS…); distinct from `playback`
   // (play / pause / stop on the session already there). Cast and Sonos declare it; a player that
   // can only be remote-controlled (native app without LOAD) does not declare it.
@@ -93,7 +95,7 @@ export type Capability = (typeof CAPABILITIES)[number]
 /** Legal capabilities per kind — a descriptor that declares others is rejected. */
 export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   light: ['on_off', 'brightness', 'color_temp', 'color', 'effect'],
-  cover: ['open_close', 'position', 'tilt', 'stop', 'preset', 'preset_set', 'quiet', 'battery'],
+  cover: ['open_close', 'position', 'tilt', 'stop', 'preset', 'preset_set', 'quiet', 'calibration', 'battery'],
   media_player: ['playback', 'volume', 'mute', 'now_playing', 'track_skip', 'seek', 'play_url'],
   climate: ['hvac_mode', 'target_temp', 'current_temp', 'humidity', 'fan_mode'],
   vacuum: ['clean', 'dock', 'battery', 'locate', 'mop'],

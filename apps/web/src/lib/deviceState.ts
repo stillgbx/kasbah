@@ -99,7 +99,8 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
       // The "(assumed)" is what prevents the word from becoming an assertion.
       return s.motion !== 'stopped' ? t(`cover.${w}.${s.motion}`)
         : s.position === undefined ? t('cover.assumed', { state: t(coverRestKey(descriptor)) })
-        : s.position <= 0 ? t(`cover.${w}.closed`)
+        // calibrated shutter on its sill: covered, but light still passes between the slats
+        : s.position <= 0 ? (s.sealed === false ? t('cover.coveredGaps') : t(`cover.${w}.closed`))
         : s.position >= 100 ? t(`cover.${w}.open`)
         : formatPercent(toClosure(s.position), locale)
     }

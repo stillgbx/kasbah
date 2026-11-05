@@ -190,7 +190,8 @@ export const useDevicesStore = defineStore('devices', () => {
     if (prev.kind === 'cover') {
       const aimed = command.type === 'cover.open' ? 100
         : command.type === 'cover.close' ? 0
-        : command.type === 'cover.set_position' ? command.position
+        // a MOTOR target (calibration gesture) is not on the scale of `position`: nothing to hold
+        : command.type === 'cover.set_position' ? (command.motor ? null : command.position)
         // Recall of the favorite position: the target is the one the motor publishes. Without it
         // (one-way motor), we do not know where it goes — nothing to aim at.
         : command.type === 'cover.preset' ? prev.presetPosition ?? null

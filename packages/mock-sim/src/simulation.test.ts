@@ -61,6 +61,25 @@ describe('Simulation', () => {
     expect(sim.getState('cover-living')).toMatchObject({ motion: 'stopped', position: 35 })
   })
 
+  it('a calibrated shutter publishes the real position and stops on the sill for position 0', async () => {
+    const sim = make()
+    const cal = [{ position: 0, motor: 10 }, { position: 100, motor: 90 }]
+    await sim.execute('cover-living', { type: 'cover.set_calibration', points: cal })
+    // a setting: the motor stays at its top end stop, read as fully open
+    expect(sim.getState('cover-living')).toMatchObject({ motion: 'stopped', position: 100, motorPosition: 100, sealed: false, calibration: cal })
+    await sim.execute('cover-living', { type: 'cover.set_position', position: 0 })
+    for (let i = 0; i < 20; i++) sim.tick(1)
+    expect(sim.getState('cover-living')).toMatchObject({ motion: 'stopped', position: 0, motorPosition: 10, sealed: false })
+    await sim.execute('cover-living', { type: 'cover.close' })
+    for (let i = 0; i < 3; i++) sim.tick(1)
+    expect(sim.getState('cover-living')).toMatchObject({ position: 0, motorPosition: 0, sealed: true })
+    await sim.execute('cover-living', { type: 'cover.set_calibration', points: null })
+    const s = sim.getState('cover-living') as StateFor<'cover'>
+    expect(s.position).toBe(0)
+    expect(s).not.toHaveProperty('motorPosition')
+    expect(s).not.toHaveProperty('calibration')
+  })
+
   it('favorite position: recall, then rewrite that moves nothing', async () => {
     const sim = make()
     // `cover-living` stores 27; the recall drives the cover there

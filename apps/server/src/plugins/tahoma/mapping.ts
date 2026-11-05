@@ -155,6 +155,9 @@ export function toDescriptor(device: OverkizDevice): DeviceDescriptor {
   // or rewrite it (observed: 18 recalls, 16 reads, 16 writes out of 19 covers)
   if (cmd.presetSet) capabilities.push('preset_set')
   if (cmd.quiet) capabilities.push('quiet')
+  // calibration: a SHUTTER that can target a position. Only a shutter has slats whose gaps close at
+  // the bottom of the travel; an awning or a blind keeps its motor's percentage.
+  if (cmd.position && cls === 'shutter') capabilities.push('calibration')
   // battery-powered motor (solar shutter): the state is published from `/setup` on, we read it there
   if (device.states.some((st) => st.name === 'core:BatteryLevelState')) capabilities.push('battery')
   return {

@@ -25,7 +25,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | Pages | Dernière mise à jour |
 |---|---|
 | [1_0 Monorepo et flux de données](1_architecture/1_0_monorepo-et-flux.md) | 2026-10-20 |
-| [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-11-03 |
+| [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-11-05 |
 | [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-11-04 |
 | [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-11-01 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-11-01 |
@@ -70,7 +70,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | Intégrations | Dernière mise à jour |
 |---|---|
 | [3_1 Philips Hue](3_plugins/3_1_philips-hue.md) | 2026-10-24 |
-| [3_4 Somfy TaHoma](3_plugins/3_4_somfy-tahoma.md) | 2026-10-24 |
+| [3_4 Somfy TaHoma](3_plugins/3_4_somfy-tahoma.md) | 2026-11-05 |
 | [3_5 Google Nest (caméras, sonnettes)](3_plugins/3_5_google-nest.md) | 2026-11-03 |
 | [3_6 Google Cast](3_plugins/3_6_google-cast.md) | 2026-10-24 |
 | [3_7 Enphase](3_plugins/3_7_enphase.md) | 2026-10-31 |

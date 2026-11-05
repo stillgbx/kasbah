@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { CLIMATE_MODES, FAN_DIRECTIONS, PET_PUMP_MODES, SETTABLE_CHARGE_MODES, type Capability, type DeviceKind } from './kinds'
+import { coverCalibrationSchema } from './cover-calibration'
 import { xySchema } from './state'
 
 // Commands named `<kind>.<verb>`: the prefix gives the kind for free and
@@ -24,7 +25,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('cover.open') }),
   z.object({ type: z.literal('cover.close') }),
   z.object({ type: z.literal('cover.stop') }),
-  z.object({ type: z.literal('cover.set_position'), position: pct }),
+  // `motor`: target the motor's own scale, past the calibration — the gesture used to calibrate
+  z.object({ type: z.literal('cover.set_position'), position: pct, motor: z.boolean().optional() }),
   z.object({ type: z.literal('cover.set_tilt'), tilt: pct }),
   // recall of the motor's favorite position: no parameter, the value lives in the device
   z.object({ type: z.literal('cover.preset') }),
@@ -33,6 +35,8 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('cover.set_preset'), position: pct }),
   // quiet mode: a switch held by the plugin, applied to the following travels — it moves nothing
   z.object({ type: z.literal('cover.set_quiet'), on: z.boolean() }),
+  // calibration: a setting held by the plugin, it moves nothing; `null` clears it
+  z.object({ type: z.literal('cover.set_calibration'), points: coverCalibrationSchema.nullable() }),
   // media_player
   z.object({ type: z.literal('media_player.play') }),
   z.object({ type: z.literal('media_player.pause') }),
@@ -171,7 +175,7 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'light.set': 'on_off',
   'cover.open': 'open_close', 'cover.close': 'open_close', 'cover.stop': 'stop',
   'cover.set_position': 'position', 'cover.set_tilt': 'tilt', 'cover.preset': 'preset',
-  'cover.set_preset': 'preset_set', 'cover.set_quiet': 'quiet',
+  'cover.set_preset': 'preset_set', 'cover.set_quiet': 'quiet', 'cover.set_calibration': 'calibration',
   'media_player.play': 'playback', 'media_player.pause': 'playback', 'media_player.stop': 'playback',
   'media_player.next': 'track_skip', 'media_player.previous': 'track_skip',
   'media_player.set_volume': 'volume', 'media_player.set_mute': 'mute', 'media_player.seek': 'seek',

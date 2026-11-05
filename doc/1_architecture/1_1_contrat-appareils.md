@@ -1,7 +1,7 @@
 # Contrat des appareils (packages/shared)
 
-> Dernière mise à jour : 2026-11-03
-> Sources : `packages/shared/src/devices/{kinds,descriptor,state,command,rules,color}.ts`, `packages/shared/src/scenes/scene.ts`, `packages/shared/src/devices/activity.ts`, `packages/shared/src/house/geo.ts`
+> Dernière mise à jour : 2026-11-05
+> Sources : `packages/shared/src/devices/{kinds,descriptor,state,command,rules,color,cover-calibration}.ts`, `packages/shared/src/scenes/scene.ts`, `packages/shared/src/devices/activity.ts`, `packages/shared/src/house/geo.ts`
 
 ## Principe
 
@@ -1149,3 +1149,32 @@ Il sert à deux endroits : l'interface arrondit une valeur **tapée** à ce pas,
 `max(0,5, stepC)` (`apps/web/src/lib/setpoint.ts`) ; le serveur arrondit **vers le haut** à ce pas la
 consigne qu'il recopie sur un thermostat lié (`core/climateLinks.ts`, `1_2`). Voir
 `../3_plugins/3_13_mitsubishi-melcloud.md` (2026-11-03).
+
+## Mise à jour 2026-11-05 — ouvrant : étalonnage (part réelle de la fenêtre)
+
+Ajouts au kind `cover`, tous optionnels, sans effet sur un ouvrant non étalonné :
+
+- **`calibration`** (capacité) + **`cover.set_calibration { points | null }`** (commande, `null` efface)
+  + **`CoverState.calibration`** (les points enregistrés) : un réglage **tenu par le plugin**, comme
+  `quiet`, qui ne déplace rien.
+- Les points (`cover-calibration.ts`, `coverCalibrationSchema`) relient une **position réelle** (part
+  de la fenêtre découverte, même échelle que `position`) à la **position du moteur**. Deux sont
+  obligatoires : `position: 0` = tablier sur l'appui, lames encore ajourées ; `position: 100` = bas du
+  tablier en haut de la vitre. Les deux valeurs montent strictement. Entre deux points : une droite.
+- Une fois étalonné, **`position` et `presetPosition` sont la part réelle**, la valeur moteur passe
+  dans **`motorPosition`**, et **`sealed`** distingue, à `position` 0, les lames serrées (`true`, ce que
+  laisse `cover.close`) de la fenêtre couverte mais ajourée (`false`, ce que laisse
+  `cover.set_position 0`). `sealed` vaut `true` quand le moteur est plus près de sa fin de course basse
+  que du repère de l'appui.
+- `calibratedToMotor` envoie 100 à la fin de course haute (et non au repère du haut de la vitre) :
+  « ouvert » veut dire remonté. `motorToCalibrated` lit la zone morte comme 100 et accepte la position
+  demandée (`requested`) quand le moteur est exactement là où elle l'a envoyé, pour qu'un moteur à pas
+  entiers ne transforme pas 75 % en 76 %.
+- **`cover.set_position { motor: true }`** vise l'échelle du moteur sans passer par l'étalonnage :
+  c'est le geste de la mesure. Un plugin sans étalonnage peut l'ignorer, les deux échelles y sont la
+  même. Côté app, ni cible de curseur (`devices.ts`) ni sens optimiste sur `position` pour ce cas
+  (`optimistic.ts` compare à `motorPosition`).
+
+Premier usage : TaHoma (`../3_plugins/3_4_somfy-tahoma.md`) ; la simulation le porte aussi
+(`calibratable` dans `packages/mock-sim/src/behaviours/cover.ts`). Ce que dessine la scène 3D suit
+`position`, donc la vraie hauteur du tablier une fois le volet étalonné.

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { coverCalibrationSchema } from './cover-calibration'
 import { AQI_LEVELS, CHARGE_MODES, CLIMATE_MODES, FAN_DIRECTIONS, PET_PUMP_MODES, POLLEN_TYPES, WEATHER_CONDITIONS, type DeviceKind } from './kinds'
 
 // Current state of a device, discriminated by `kind`. `updatedAt` is set by the server
@@ -46,6 +47,19 @@ export const coverStateSchema = z.object({
    * Absent = the device cannot run slowly.
    */
   quiet: z.boolean().optional(),
+  /**
+   * Calibration of the shutter (`calibration` capability), see `cover-calibration.ts`. When present,
+   * `position` and `presetPosition` are the REAL share of the window, and the motor's own value is
+   * in `motorPosition`. Absent = not calibrated: `position` is the motor's.
+   */
+  calibration: coverCalibrationSchema.optional(),
+  /** The motor's own position, published only when a calibration translates it. */
+  motorPosition: pct.optional(),
+  /**
+   * Calibrated shutter at position 0: `true` = slats pressed together, no light (a "close");
+   * `false` = the window is covered but light passes between the slats.
+   */
+  sealed: z.boolean().optional(),
   /**
    * Battery charge of a standalone motor (`battery` capability): a SOLAR shutter lives on its
    * battery, recharged by its panel. Absent = the motor does not publish it.

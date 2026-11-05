@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import type { Command, DeviceDescriptor, PluginHealth } from '@kasbah/shared'
+import { calibratedToMotor, coverCalibrationSchema, motorToCalibrated, type Command, type CoverCalibration, type DeviceDescriptor, type PluginHealth, type StatePatch } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { writeFileAtomic } from '../../core/atomic-file'
@@ -61,6 +61,8 @@ export const tahomaConfigSchema = z.object({
   TAHOMA_LIGHT_HISTORY_FILE: z.string().trim().default(stateFile('tahoma-light-history.json')),
   /** Shutters in quiet mode (a Kasbah setting, the box does not keep it); empty = no persistence. */
   TAHOMA_QUIET_FILE: z.string().trim().default(stateFile('tahoma-quiet.json')),
+  /** Calibrated shutters (a Kasbah setting measured by eye); empty = no persistence. */
+  TAHOMA_CALIBRATION_FILE: z.string().trim().default(stateFile('tahoma-calibration.json')),
 })
 export type TahomaConfig = z.infer<typeof tahomaConfigSchema>
 
@@ -107,6 +109,53 @@ async function saveQuiet(path: string, quiet: Set<string>): Promise<void> {
   await writeFileAtomic(path, JSON.stringify({ quiet: [...quiet].sort() }))
 }
 
+/** Calibrations, read back at startup. Unreadable file = none; an invalid entry is dropped alone. */
+async function loadCalibrations(path: string): Promise<Map<string, CoverCalibration>> {
+  const out = new Map<string, CoverCalibration>()
+  try {
+    const raw = z.object({ calibrations: z.record(z.string(), z.unknown()) }).safeParse(JSON.parse(await readFile(path, 'utf8')))
+    for (const [id, points] of Object.entries(raw.success ? raw.data.calibrations : {})) {
+      const parsed = coverCalibrationSchema.safeParse(points)
+      if (parsed.success) out.set(id, parsed.data)
+    }
+  } catch { /* missing file: nothing calibrated */ }
+  return out
+}
+
+async function saveCalibrations(path: string, calibrations: Map<string, CoverCalibration>): Promise<void> {
+  const sorted = Object.fromEntries([...calibrations].sort(([a], [b]) => a.localeCompare(b)))
+  await writeFileAtomic(path, JSON.stringify({ calibrations: sorted }))
+}
+
+/**
+ * Motor patch -> patch of a calibrated shutter: `position` and `presetPosition` become the real share
+ * of the window, the motor's value moves to `motorPosition`. Without calibration, unchanged.
+ * `requested`: the real position last asked for (see `motorToCalibrated`).
+ */
+export function calibratePatch(patch: StatePatch<'cover'>, cal: CoverCalibration | undefined, requested?: number): StatePatch<'cover'> {
+  if (!cal) return patch
+  const out = { ...patch }
+  if (typeof patch.position === 'number') {
+    const real = motorToCalibrated(cal, patch.position, requested)
+    out.position = real.position
+    out.motorPosition = patch.position
+    out.sealed = real.sealed
+  }
+  if (typeof patch.presetPosition === 'number') out.presetPosition = motorToCalibrated(cal, patch.presetPosition).position
+  return out
+}
+
+/**
+ * Command on the real scale -> command on the motor's scale. `set_position` with `motor: true` is
+ * already on it (the calibration gesture). `open` and `close` go to the end stops either way.
+ */
+export function toMotorCommand(command: Command, cal: CoverCalibration | undefined): Command {
+  if (!cal) return command
+  if (command.type === 'cover.set_position' && !command.motor) return { type: 'cover.set_position', position: calibratedToMotor(cal, command.position) }
+  if (command.type === 'cover.set_preset') return { type: 'cover.set_preset', position: calibratedToMotor(cal, command.position) }
+  return command
+}
+
 export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
   let ctx: PluginContext | null = null
   let config: TahomaConfig | null = null
@@ -119,8 +168,16 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
   let historyStore: LightHistoryStore | null = null
   /** Shutters in quiet mode (`externalId`). */
   let quiet = new Set<string>()
+  /** Calibrated shutters (`externalId` -> points). */
+  let calibrations = new Map<string, CoverCalibration>()
+  /** Real position last asked for on a calibrated shutter, until another move. */
+  const requested = new Map<string, number>()
   let descriptors: DeviceDescriptor[] = []
-  /** Last known position, to guess the direction of movement and for devices without feedback. */
+  /**
+   * Last known MOTOR position, to guess the direction of movement and for devices without feedback.
+   * Never the calibrated one: two motor positions in the dead zone read as the same real position,
+   * and the direction would be lost.
+   */
   const positions = new Map<string, number>()
   let listenerId: string | null = null
   let poller: { stop(): void } | null = null
@@ -180,10 +237,12 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
   function emitAll(): void {
     for (const [externalId, entry] of entries) {
       const patch = toCoverPatch(entry.states, positions.get(externalId))
+      const cal = calibrations.get(externalId)
       // even empty, the patch marks the device available (`emitState` adds `available: true`)
-      ctx!.emitState(externalId, patch)
+      ctx!.emitState(externalId, calibratePatch(patch, cal, requested.get(externalId)))
       if (typeof patch.position === 'number') positions.set(externalId, patch.position)
       if (entry.commands.quiet) ctx!.emitState(externalId, { quiet: quiet.has(externalId) })
+      if (cal) ctx!.emitState(externalId, { calibration: cal })
       ctx!.setAvailable(externalId, toAvailability(entry.device, entry.states))
     }
     for (const [externalId, entry] of sensors) {
@@ -244,7 +303,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
           const frame = readStates(ev.deviceStates)
           for (const [name, value] of frame) entry.states.set(name, value)
           const patch = toCoverPatch(entry.states, positions.get(externalId))
-          if (Object.keys(patch).length > 0) ctx!.emitState(externalId, patch)
+          if (Object.keys(patch).length > 0) ctx!.emitState(externalId, calibratePatch(patch, calibrations.get(externalId), requested.get(externalId)))
           if (typeof patch.position === 'number') positions.set(externalId, patch.position)
           const status = frame.get('core:StatusState')      // only if the frame mentioned it
           if (status === 'available' || status === 'unavailable') ctx!.setAvailable(externalId, status === 'available')
@@ -331,6 +390,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       historyStore = deps.lightHistoryStore ?? (config.TAHOMA_LIGHT_HISTORY_FILE ? createLightHistoryFile(config.TAHOMA_LIGHT_HISTORY_FILE, c.logger) : null)
       history = new LightHistory(await historyStore?.load())
       quiet = config.TAHOMA_QUIET_FILE ? await loadQuiet(config.TAHOMA_QUIET_FILE) : new Set()
+      calibrations = config.TAHOMA_CALIBRATION_FILE ? await loadCalibrations(config.TAHOMA_CALIBRATION_FILE) : new Map()
       if (!config.TAHOMA_HOST) {
         lastError = 'TAHOMA_HOST is not set'
         return
@@ -394,9 +454,27 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
         ctx!.emitState(externalId, { quiet: command.on })
         return
       }
-      const action = toAction(entry.device.deviceURL, command, entry.commands, quiet.has(externalId))
+      if (command.type === 'cover.set_calibration') {
+        // a setting, like quiet mode: nothing is sent to the box
+        if (!toDescriptor(entry.device).capabilities.includes('calibration')) {
+          throw new PluginError('UNSUPPORTED_COMMAND', `${command.type} on ${entry.device.controllableName ?? externalId}`)
+        }
+        if (command.points) calibrations.set(externalId, command.points)
+        else calibrations.delete(externalId)
+        requested.delete(externalId)                    // asked on the previous scale
+        if (config?.TAHOMA_CALIBRATION_FILE) await saveCalibrations(config.TAHOMA_CALIBRATION_FILE, calibrations)
+        // the current position, read again on the new scale (or back on the motor's)
+        const patch = toCoverPatch(entry.states, positions.get(externalId))
+        if (command.points) ctx!.emitState(externalId, { ...calibratePatch(patch, command.points), calibration: command.points })
+        else ctx!.emitState(externalId, { ...patch, calibration: null, motorPosition: null, sealed: null })
+        return
+      }
+      const action = toAction(entry.device.deviceURL, toMotorCommand(command, calibrations.get(externalId)), entry.commands, quiet.has(externalId))
       if (!action) throw new PluginError('UNSUPPORTED_COMMAND', `${command.type} on ${entry.device.controllableName ?? externalId}`)
       await enqueue(action, command.type)
+      // any other move makes the request stale; a setting (tilt, favorite) leaves it alone
+      if (command.type === 'cover.set_position' && !command.motor) requested.set(externalId, command.position)
+      else if (command.type !== 'cover.set_tilt' && command.type !== 'cover.set_preset') requested.delete(externalId)
       if (entry.feedback) return
       // unidirectional radio: the box will never say where the cover is, we set what we asked for
       const assumed = assumedPosition(command)

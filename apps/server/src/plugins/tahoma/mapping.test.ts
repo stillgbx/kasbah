@@ -62,7 +62,7 @@ describe('tahoma mapping', () => {
   it('descriptor: capabilities follow the declared commands', () => {
     expect(toDescriptor(ioShutter)).toMatchObject({
       id: 'tahoma:io.1234-5678-9012.11110001', kind: 'cover', name: 'Volet salon',
-      capabilities: ['open_close', 'position', 'stop', 'preset', 'preset_set'],
+      capabilities: ['open_close', 'position', 'stop', 'preset', 'preset_set', 'calibration'],
       meta: { manufacturer: 'Somfy', model: 'io:RollerShutterGenericIOComponent' },
     })
     // the local API exposes no room: the attachment comes from house.json

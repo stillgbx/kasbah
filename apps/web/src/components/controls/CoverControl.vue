@@ -8,6 +8,7 @@ import { useDevicesStore } from '../../stores/devices'
 import CoverPill from '../covers/CoverPill.vue'
 import PulseDot from '../ui/PulseDot.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
+import CoverCalibrationDialog from './CoverCalibrationDialog.vue'
 import LightHistoryChart from './LightHistoryChart.vue'
 
 // Control of a cover in the device panel. The percentage is a CLOSURE (0 % = open),
@@ -56,7 +57,9 @@ const lineText = computed(() => {
   // height without repeating it (it speaks again as soon as a movement starts).
   if (!hasPosition.value) return '—'
   if (shown.value <= 0) return t(`cover.${w.value}.open`)
-  if (shown.value >= 100) return t(`cover.${w.value}.closed`)
+  // calibrated shutter on its sill: the window is covered but the slats are still apart — only a
+  // "close" presses them together
+  if (shown.value >= 100) return props.state.sealed === false ? t('cover.coveredGaps') : t(`cover.${w.value}.closed`)
   return t(`cover.${w.value}.level`)
 })
 const hasTilt = computed(() => props.descriptor.capabilities.includes('tilt'))
@@ -77,6 +80,9 @@ const canSavePreset = computed(() => !props.disabled && !moving.value && props.s
 // Quiet mode: a switch held by the server, applied to the NEXT maneuvers (slow
 // speed). Toggling it moves nothing, so it stays active during a travel.
 const hasQuiet = computed(() => props.descriptor.capabilities.includes('quiet'))
+// Calibration: a Kasbah setting measured by eye, in its own box (the marks need the motor moved)
+const hasCalibration = computed(() => props.descriptor.capabilities.includes('calibration'))
+const calibrating = ref(false)
 /** Battery-powered motor (solar shutter): the line is reserved as soon as the capability exists, the value may be missing. */
 const hasBattery = computed(() => props.descriptor.capabilities.includes('battery'))
 
@@ -149,6 +155,15 @@ function send(cmd: CommandInput) { emit('command', cmd) }
                 @update:model-value="(v: boolean | null) => send({ type: 'cover.set_quiet', on: !!v })" />
     </label>
 
+    <button v-if="hasCalibration" type="button" class="calib" :disabled="disabled" :aria-haspopup="'dialog'" @click="calibrating = true">
+      <StrokeIcon name="wrench" :size="16" />
+      <span class="calib__text">{{ $t('cover.calibration.title') }}</span>
+      <span class="calib__state">{{ state.calibration ? $t('cover.calibration.on') : $t('cover.calibration.off') }}</span>
+      <StrokeIcon class="calib__chevron" name="chevron" :size="16" />
+    </button>
+    <CoverCalibrationDialog v-if="hasCalibration" v-model="calibrating" :descriptor="descriptor" :state="state" :disabled="disabled"
+                            @command="send" />
+
     <div v-if="hasBattery" class="battery">
       <StrokeIcon name="battery" :size="16" />
       <span class="battery__text">{{ $t('cover.battery') }}</span>
@@ -201,6 +216,16 @@ function send(cmd: CommandInput) { emit('command', cmd) }
 .quiet { display: flex; align-items: center; gap: 8px; height: 40px; margin-top: 6px; font-size: 12px; color: var(--text); cursor: pointer; }
 .quiet__text { flex: 1 1 auto; min-width: 0; }
 .quiet :deep(.v-switch) { flex: 0 0 auto; }
+/* Calibration: same template as the quiet-mode line, the whole line opens the box. */
+.calib {
+  display: flex; align-items: center; gap: 8px; height: 40px; margin-top: 6px; padding: 0; width: 100%;
+  border: 0; background: transparent; font: inherit; font-size: 12px; color: var(--text); text-align: left;
+}
+.calib:disabled { opacity: .4; }
+.calib__text { flex: 1 1 auto; min-width: 0; }
+.calib__state { flex: 0 0 auto; color: var(--muted); }
+.calib__chevron { flex: 0 0 auto; color: var(--muted); }
+.calib:hover:not(:disabled) .calib__text { color: var(--accent); }
 /* Battery: same template as the quiet-mode line, the value on the right in fixed digits. */
 .battery { display: flex; align-items: center; gap: 8px; height: 32px; font-size: 12px; color: var(--text); }
 .battery__text { flex: 1 1 auto; min-width: 0; }

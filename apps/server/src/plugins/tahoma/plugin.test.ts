@@ -1,4 +1,7 @@
 import { X509Certificate } from 'node:crypto'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { ManualClock } from '@kasbah/mock-sim'
 import pino from 'pino'
 import { describe, expect, it, vi } from 'vitest'
@@ -6,7 +9,7 @@ import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { selfSignedCertificate, startTlsServer, type TestCertificate } from '../../core/test-tls'
 import { EVENTS, EVENTS_STOPPED, IO_SHUTTER, IO_VENETIAN, RTS_SHUTTER, SETUP } from './__fixtures__/box'
-import { createTahomaPlugin, tahomaConfigSchema } from './index'
+import { calibratePatch, createTahomaPlugin, tahomaConfigSchema } from './index'
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
 const json = (data: unknown, status = 200) =>
@@ -50,7 +53,8 @@ function fakeContext(config: Record<string, unknown>, clock: ManualClock) {
   return { ctx, ctrl }
 }
 
-const CONFIG = { TAHOMA_HOST: '192.168.1.30', TAHOMA_TOKEN: 'secret-token' }
+// no calibration file: the tests must never read the one of the real house
+const CONFIG = { TAHOMA_HOST: '192.168.1.30', TAHOMA_TOKEN: 'secret-token', TAHOMA_CALIBRATION_FILE: '' }
 const config = (extra: Record<string, string> = {}) => tahomaConfigSchema.parse({ ...CONFIG, ...extra })
 const BATCH = { TAHOMA_COMMAND_MODE: 'batch' }
 
@@ -155,6 +159,56 @@ describe('tahoma plugin', () => {
       { deviceURL: IO_VENETIAN.deviceURL, commands: [{ name: 'setOrientation', parameters: [25] }] },
     ])
     await plugin.stop()
+  })
+
+  it('calibrates a shutter: real positions out, motor positions to the box, kept across restarts', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tahoma-cal-'))
+    const file = join(dir, 'calibration.json')
+    const shutter = 'io.1234-5678-9012.11110001'
+    // invented shutter: on the sill at motor 12, half covered at 40, clear of the glass at 85
+    const cal = [{ position: 0, motor: 12 }, { position: 50, motor: 40 }, { position: 100, motor: 85 }]
+    const box = fakeBox({ events: [] })
+    const { plugin, ctx } = await started(box, { TAHOMA_CALIBRATION_FILE: file })
+    vi.mocked(ctx.emitState).mockClear()
+
+    await plugin.execute(shutter, { type: 'cover.set_calibration', points: cal })
+    expect(box.applied).toEqual([])                                     // a setting: nothing moves
+    // motor 70 (fixture) reads as 83 % open; the favorite position (motor 27) as 27 %
+    expect(ctx.emitState).toHaveBeenCalledWith(shutter, {
+      position: 83, motorPosition: 70, sealed: false, presetPosition: 27, motion: 'stopped', calibration: cal,
+    })
+
+    const closures = async (cmd: Parameters<typeof plugin.execute>[1]) => {
+      box.applied.length = 0
+      await plugin.execute(shutter, cmd)
+      return (box.applied[0]!.actions as { commands: unknown[] }[])[0]!.commands[0]
+    }
+    expect(await closures({ type: 'cover.set_position', position: 50 })).toEqual({ name: 'setClosure', parameters: [60] })
+    // position 0 = the sill point, gaps open; `close` = the end stop, sealed
+    expect(await closures({ type: 'cover.set_position', position: 0 })).toEqual({ name: 'setClosure', parameters: [88] })
+    expect(await closures({ type: 'cover.close' })).toEqual({ name: 'close', parameters: [] })
+    // the calibration gesture targets the motor's own scale
+    expect(await closures({ type: 'cover.set_position', position: 30, motor: true })).toEqual({ name: 'setClosure', parameters: [70] })
+    // 75 % goes out as motor 63 (closure 37), which reads back as 76 % unless the request is known
+    expect(calibratePatch({ position: 63 }, cal)).toMatchObject({ position: 76 })
+    expect(calibratePatch({ position: 63 }, cal, 75)).toMatchObject({ position: 75, motorPosition: 63 })
+    await plugin.stop()
+
+    expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({ calibrations: { [shutter]: cal } })
+    const again = await started(fakeBox({ events: [] }), { TAHOMA_CALIBRATION_FILE: file })
+    expect(again.ctx.emitState).toHaveBeenCalledWith(shutter, { calibration: cal })
+    expect(again.ctx.emitState).toHaveBeenCalledWith(shutter, { position: 83, motorPosition: 70, sealed: false, presetPosition: 27, motion: 'stopped' })
+
+    // cleared: back to the motor's scale, the calibrated fields erased
+    await again.plugin.execute(shutter, { type: 'cover.set_calibration', points: null })
+    expect(again.ctx.emitState).toHaveBeenCalledWith(shutter, {
+      position: 70, presetPosition: 27, motion: 'stopped', calibration: null, motorPosition: null, sealed: null,
+    })
+    // a venetian blind keeps its motor's percentage
+    await expect(again.plugin.execute('io.1234-5678-9012.11110002', { type: 'cover.set_calibration', points: cal }))
+      .rejects.toMatchObject({ code: 'UNSUPPORTED_COMMAND' })
+    await again.plugin.stop()
+    await rm(dir, { recursive: true, force: true })
   })
 
   it('assumes the position of a one-way RTS device, and refuses what it cannot do', async () => {

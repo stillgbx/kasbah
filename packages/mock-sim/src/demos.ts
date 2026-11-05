@@ -61,7 +61,7 @@ export function tilleulsDevices(opts: { winter?: boolean } = {}): AnySimDevice[]
     ceilingFan('tl-fan-suite_fan', { name: 'Ventilateur suite', linkedLightId: 'mock:tl-fan-suite_light' }),
 
     // solar and quiet shutter, whose panel is declared as a light sensor
-    cover('tl-cover-baie', { name: 'Volet baie salon', deviceClass: 'shutter', position: 100, preset: 27, quiet: true }),
+    cover('tl-cover-baie', { name: 'Volet baie salon', deviceClass: 'shutter', position: 100, preset: 27, quiet: true, calibratable: true }),
     sensors.shutterLight('tl-sensor-baie-light', 'Volet baie salon · luminosité', 'mock:tl-cover-baie'),
     cover('tl-cover-salon', { name: 'Volet fenêtre salon', deviceClass: 'shutter', position: 100 }),
     cover('tl-cover-cuisine', { name: 'Volet cuisine', deviceClass: 'shutter', position: 100 }),
@@ -156,7 +156,7 @@ export function embrunsDevices(opts: { winter?: boolean } = {}): AnySimDevice[] 
     cover('em-cover-baie1', { name: 'Brise-soleil baie ouest', deviceClass: 'blind', position: 100, tilt: true }),
     cover('em-cover-baie2', { name: 'Brise-soleil baie est', deviceClass: 'blind', position: 100, tilt: true }),
     cover('em-cover-chambre', { name: 'Brise-soleil chambre', deviceClass: 'blind', position: w ? 100 : 20, tilt: true }),
-    cover('em-cover-chambre2', { name: 'Volet chambre 2', deviceClass: 'shutter', position: 100 }),
+    cover('em-cover-chambre2', { name: 'Volet chambre 2', deviceClass: 'shutter', position: 100, calibratable: true }),
     cover('em-cover-chambre3', { name: 'Volet chambre 3', deviceClass: 'shutter', position: 100 }),
     cover('em-cover-voile', { name: "Voile d'ombrage", deviceClass: 'awning', position: w ? 100 : 30 }),
     cover('em-cover-portail', { name: 'Portail coulissant', deviceClass: 'gate', position: 0 }),

@@ -1,6 +1,6 @@
 # Plugin Somfy TaHoma
 
-> Dernière mise à jour : 2026-10-24
+> Dernière mise à jour : 2026-11-05
 > Sources : `apps/server/src/plugins/tahoma/{index,client,mapping,types}.ts`, tests `mapping.test.ts`,, `history.ts`, `solar.test.ts` (volets solaires, 2026-09-24)
 > `plugin.test.ts`, fixtures `__fixtures__/box.ts`, `apps/server/.env.example`,
 > [Somfy-Developer/Somfy-TaHoma-Developer-Mode](https://github.com/Somfy-Developer/Somfy-TaHoma-Developer-Mode)
@@ -391,3 +391,55 @@ d'appairage dans Kasbah : pour accepter un nouveau certificat (box remplacée, m
 régénère), **supprimer `.state/tahoma-tls-pin.json` puis redémarrer le serveur**. Test sur un vrai
 serveur TLS local (`tahoma/plugin.test.ts`). Pas encore essayé sur la vraie box : au premier démarrage,
 le journal doit montrer `device certificate pinned`.
+
+## Mise à jour 2026-11-05 — étalonnage d'un volet : le pourcentage de la fenêtre, pas celui du moteur
+
+**Le problème.** Le pourcentage Somfy (`core:ClosureState`) mesure la COURSE du moteur entre ses deux
+fins de course, pas la part de la fenêtre cachée. Sur cette course : une zone morte en haut (le
+tablier sort du coffre sans rien couvrir), une descente lames écartées, puis, une fois la dernière
+lame sur l'appui, un tassement qui ne sert qu'à fermer les jours entre les lames. Le diamètre du
+rouleau qui diminue rend en plus la descente non linéaire. « 50 % » Somfy cache donc rarement la
+moitié de la fenêtre.
+
+**La réponse : des repères mesurés à l'œil, par volet.** Capacité `calibration`, déclarée par
+`toDescriptor` pour un **volet roulant** (`cls === 'shutter'`) qui sait viser une position (io) ; ni
+les stores, ni les BSO, ni les RTS (qui ne visent rien). Le modèle et les conversions sont dans le
+contrat (`packages/shared/src/devices/cover-calibration.ts`, voir
+`../1_architecture/1_1_contrat-appareils.md`) ; le plugin les applique :
+
+- **en sortie** (`calibratePatch`) : la position moteur reçue devient la part réelle de la fenêtre
+  dans `position`, la valeur moteur passe dans `motorPosition`, et `sealed` dit si les lames sont
+  serrées ; `presetPosition` (« my ») est convertie de même ;
+- **en entrée** (`toMotorCommand`) : `cover.set_position` et `cover.set_preset` sont traduits en
+  fermeture moteur ; `cover.open` et `cover.close` restent les fins de course ;
+- la carte `positions`, qui sert à deviner le sens du mouvement, reste en valeurs **moteur** : deux
+  positions de la zone morte se lisent pareil une fois converties, et le sens serait perdu.
+
+**« Fermé » et « couvert à 100 % » sont deux choses.** `cover.close` = fin de course basse, lames
+serrées, plus de lumière ; `cover.set_position 0` = arrêt au repère « sur l'appui », fenêtre couverte,
+jours ouverts. L'interface écrit « Couvert, lames ajourées » dans le second cas.
+
+**Arrondi du moteur.** `setClosure` ne prend que des entiers : 75 % peut partir en moteur 63 et se
+relire 76 %. Le plugin garde la dernière position réelle demandée (`requested`) et la republie telle
+quelle tant que le moteur est exactement là où elle l'a envoyé ; tout autre mouvement l'oublie.
+
+**Réglage et persistance.** Comme le mode discret, c'est un réglage Kasbah, rien n'est écrit dans la
+box : commande `cover.set_calibration { points | null }`, fichier `TAHOMA_CALIBRATION_FILE` (défaut
+`.state/tahoma-calibration.json`, `{ calibrations: { <externalId>: points } }`, une entrée invalide est
+écartée seule). Les tests du plugin fixent `TAHOMA_CALIBRATION_FILE: ''` : ils ne doivent jamais lire
+le fichier de la vraie maison.
+
+**Le geste d'étalonnage** (boîte « Étalonnage » du panneau du volet,
+`apps/web/src/components/controls/CoverCalibrationDialog.vue`) : un curseur et des pas de ±1 / ±5 %
+qui envoient `cover.set_position` avec **`motor: true`** (l'échelle du moteur, sans passer par
+l'étalonnage en cours), puis « Marquer » à chaque repère : haut de la vitre et appui obligatoires,
+quart, moitié et trois quarts facultatifs. Rien n'est enregistré avant « Enregistrer » ; l'étalonnage
+en place continue de servir pendant la mesure. La même boîte s'ouvre depuis les cartes de la vue
+Ouvrants (touche clé, rangée des réglages, allumée une fois le volet étalonné ; une seule boîte pour la
+vue, `CoversView.vue`), et la ligne d'état des cartes (`statusLabel`) dit aussi « Couvert, lames
+ajourées ».
+
+**Vérifié** sur la simulation (`kasbah-mock`, « Volet chambre 2 » des Embruns, « Volet baie salon » des
+Tilleuls) : 25 / 50 / 75 % demandés relus exactement, 100 % = « Couvert, lames ajourées », Fermer =
+« Fermé ». **Pas encore essayé sur un vrai volet io** : à faire, en surveillant qu'un moteur arrêté sur
+la valeur envoyée la republie bien à l'identique (sinon le repli `requested` ne joue pas).
