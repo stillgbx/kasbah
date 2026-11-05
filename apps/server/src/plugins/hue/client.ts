@@ -149,6 +149,12 @@ export class HueClient {
     if (raw.errors.length) throw new PluginError('UPSTREAM_ERROR', raw.errors[0]?.description ?? `Hue rejected deleting the ${type}`)
   }
 
+  /** Starts or stops an entertainment area's stream. Not rate-limited: one gesture, never a burst. */
+  async entertainmentAction(id: string, action: 'start' | 'stop'): Promise<void> {
+    const raw = hueResponseSchema.parse(await this.request('PUT', `/clip/v2/resource/entertainment_configuration/${id}`, { action }))
+    if (raw.errors.length) throw new PluginError('UPSTREAM_ERROR', raw.errors[0]?.description ?? `Hue refused to ${action} the stream`)
+  }
+
   /** Pairing (API v1): requires a press on the bridge's button within 30 s. */
   async pair(deviceType = 'kasbah#server'): Promise<{ appKey: string; clientKey?: string }> {
     let res: Awaited<ReturnType<FetchLike>>

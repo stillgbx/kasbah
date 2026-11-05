@@ -458,6 +458,9 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async musicPlay() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music cookie in mock mode') },
     // no stream served by the simulation: the Music page shows its players, without transfer possible
     async musicSessions() { return { sessions: [] } },
+    // no Hue bridge in the simulation: every room says so, the button stays hidden
+    async musicLightSync(deviceIds) { return { lightsync: deviceIds.map((deviceId) => ({ deviceId, available: false, reason: 'no_hue' as const, on: false, active: false })) } },
+    async setMusicLightSync(deviceId) { return { deviceId, available: false, reason: 'no_hue' as const, on: false, active: false } },
     async musicLast() { return { last: [] } },
     async musicResume() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async musicTransfer() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },

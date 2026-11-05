@@ -1,7 +1,7 @@
 # Lecteur musique commun (`/api/music`)
 
-> Dernière mise à jour : 2026-10-09
-> Sources : `apps/server/src/music/{player,proxy,queue,sources,ytdlp}.ts`, tests `apps/server/src/music/{proxy,queue}.test.ts`, `apps/server/src/plugins/ytmusic/plugin.test.ts`, `apps/server/src/app.ts`, `apps/server/src/plugins/{ytmusic,mixcloud}/{index,resolve}.ts`, `apps/server/.env.example`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue`, arbre de travail non commité du 2026-09-23 (après 5c43833) ; `apps/server/src/music/lastPlayed.ts` et son test, `apps/web/src/stores/localPlayer.test.ts`, arbre de travail non commité du 2026-09-28 (après c6fe7c1)
+> Dernière mise à jour : 2026-11-05
+> Sources : `apps/server/src/music/{player,proxy,queue,sources,ytdlp}.ts`, tests `apps/server/src/music/{proxy,queue}.test.ts`, `apps/server/src/plugins/ytmusic/plugin.test.ts`, `apps/server/src/app.ts`, `apps/server/src/plugins/{ytmusic,mixcloud}/{index,resolve}.ts`, `apps/server/.env.example`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue`, arbre de travail non commité du 2026-09-23 (après 5c43833) ; `apps/server/src/music/lastPlayed.ts` et son test, `apps/web/src/stores/localPlayer.test.ts`, arbre de travail non commité du 2026-09-28 (après c6fe7c1) ; `apps/server/src/music/lightsync/{analyze,decode,effect,sync}.ts` et leurs tests, `apps/server/src/core/lightStreamBridge.ts`, `apps/web/src/components/music/ListeningSessions.vue` (2026-11-05)
 
 ## Pourquoi un noyau, et pourquoi maintenant
 
@@ -279,3 +279,53 @@ interrompre, démarre si rien ne joue) et `control_music` (`next`, `previous`, `
 2026-09-23 (`media_player.next` / `previous` ne sautent pas dans la file) a désormais un chemin par MCP.
 
 Sources : `apps/server/src/mcp/server.ts`.
+
+### Mise à jour 2026-11-05 — lumières de la pièce en rythme avec la musique
+
+Ce que le lecteur joue sur une enceinte peut piloter les lampes Hue de la même pièce, par le flux
+Entertainment du pont ([3_1 Philips Hue](../3_plugins/3_1_philips-hue.md), mise à jour du même jour).
+L'enceinte ne renvoie jamais le son : le serveur **relit la même source** et l'analyse.
+
+**Périmètre v1 : YouTube Music et Mixcloud**, les sources qui passent par le proxy : l'URL d'origine est
+dans `proxy.forDevice(id).sourceUrl` et la position de l'enceinte est connue, donc l'alignement est
+automatique. La radio est laissée pour plus tard : `plugins/radio` envoie l'URL de la station
+directement à l'enceinte (pas de session), et un direct n'a pas de position — il faudrait un réglage
+de délai à l'oreille.
+
+**Analyse** (`lightsync/decode.ts`, `analyze.ts`) : un second ffmpeg lit `sourceUrl` (`-ss` avant `-i`)
+en PCM mono flottant à 12 kHz, **plus vite que le temps réel** (pas de `-re`) : les caractéristiques
+devancent l'enceinte. `FeatureExtractor` calcule toutes les 20 ms (240 échantillons) l'énergie de trois
+bandes (30-150 Hz, 150-2000 Hz, 2-6 kHz) par une FFT radix-2 maison de 512 points, et une **attaque**
+(flux spectral au-dessus de 1,5 × sa moyenne de la dernière seconde, plancher contre le souffle). Rien
+du PCM n'est gardé au-delà d'une fenêtre : un mix de plusieurs heures coûte quelques Mo. Mesuré sur le
+poste : 3 min de son décodées et analysées en 0,9 s (~0,7 s de processeur).
+
+**Orchestration** (`lightsync/sync.ts`, `LightSync`, créé dans `createMusicPlayer`) :
+- Interrupteur **par enceinte**, en mémoire (perdu au redémarrage) ; un pont ne diffuse qu'une zone, donc
+  **une enceinte à la fois** : en allumer une autre éteint la première.
+- Interrupteur allumé : le flux s'ouvre quand l'enceinte joue un de nos flux (`sessionActive`), se ferme
+  après **5 s** de pause ou d'arrêt ; l'interrupteur reste pour le morceau suivant. Échec d'ouverture ou
+  flux coupé par le pont : nouvel essai 10 s plus tard.
+- Boucle de 20 ms : position de l'enceinte (`positionS` + temps écoulé depuis `updatedAt`) sur une
+  **horloge locale**, recalée seulement au-delà de 1,2 s d'écart (saut, reprise, nouveau morceau) ; les
+  caractéristiques sont lues 0,1 s en avance (latence pont + Zigbee). Nouveau `sid` (la file passe au
+  suivant) ou saut hors de ce qui est décodé → le décodage repart de la nouvelle position.
+- Effet unique `PulseEffect` (`effect.ts`) : luminosité qui suit les basses rapportées à leur propre
+  crête récente (attaque immédiate, retombée de 0,25 s, jamais sous 12 %), palette chaude répartie de
+  gauche à droite selon la position des canaux, couleurs permutées sur une attaque franche.
+- Limite connue : un Sonos publie sa position en secondes entières, d'où jusqu'à ~1 s de retard ; le
+  Cast donne une position fine.
+
+**La pièce** : `app.ts` passe `roomLights(deviceId)`, calculé sur la maison effective
+(`HouseView`, placement automatique compris, invalidé sur l'événement `devices`) : les lampes rangées
+dans la même pièce que l'enceinte. Le plugin Hue choisit ensuite la zone de divertissement.
+
+**Routes** (droit `media`, comme tout `/api/music`) : `GET /api/music/lightsync?deviceIds=a,b` rend pour
+chaque enceinte `{ available, reason?: 'no_hue' | 'no_room' | 'no_area', area?, on, active }` ;
+`PUT /api/music/lightsync/:deviceId { on }` (409 là où la pièce ne peut pas). Interface : une touche
+ampoule sur les lignes de la carte Écoute ([4_5 Musique et médias](../4_ui/4_5_musique-et-medias.md)).
+
+Vérifié : tests `lightsync/{analyze,sync}.test.ts` (signal synthétique, faux flux et fausse horloge :
+démarrage, pause, morceau suivant, saut, passage d'une enceinte à l'autre, reprise après coupure),
+route dans `player.test.ts`, flux réel sur le pont par la sonde. **Pas encore vérifié** : la chaîne
+complète avec de la musique sur une vraie enceinte.

@@ -131,6 +131,7 @@
     "stop": "Arrêter", "onDevice": "sur {name}",
     "filterPlayers": "Filtrer les lecteurs", "favorites": "Favoris", "otherPlayers": "Autres lecteurs",
     "favoriteAdd": "Ajouter aux favoris", "favoriteRemove": "Retirer des favoris",
+    "lightSync": "Lumières en rythme", "lightSyncOn": "Lumières de la pièce en rythme ({area})", "lightSyncOff": "Arrêter les lumières en rythme ({area})",
     "stereo": "stéréo", "streamSource": "source {format}", "megabytes": "{size} Mo",
     "queue": "File d'attente", "queueShow": "Voir la file d'attente", "queueHide": "Fermer la file d'attente", "queueClear": "Vider la file",
     "playerExpand": "Agrandir le lecteur", "playerCollapse": "Réduire le lecteur", "choosePlayer": "Choisir le lecteur", "searchOptions": "Options de recherche",
@@ -561,6 +562,7 @@
       "title": "Philips Hue", "pair": "Appairer le bridge", "pairing": "Appairage…",
       "instructions": "Appuyez sur le bouton central du bridge Hue, puis lancez l'appairage dans les 30 secondes.",
       "success": "Bridge appairé. Ajoutez HUE_APP_KEY={key} dans apps/server/.env pour conserver l'appairage.",
+      "successWithClientKey": "Bridge appairé. Ajoutez HUE_APP_KEY={key} et HUE_CLIENT_KEY={clientKey} dans apps/server/.env pour conserver l'appairage.",
       "buttonNotPressed": "Le bouton du bridge n'a pas été pressé. Appuyez dessus puis réessayez.",
       "paired": "Le pont est apparié.", "repair": "Réappairer le bridge",
       "repairHint": "À refaire seulement si la clé a été perdue : appuyez sur le bouton central du bridge, puis lancez l'appairage dans les 30 secondes. La nouvelle clé est à recopier dans apps/server/.env."

@@ -16,7 +16,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import type { CommandInput, DeviceEntry } from '@kasbah/shared'
 import { getTransport } from '../api'
-import type { YtmusicAlbum, YtmusicArtist, YtmusicExplore, YtmusicExploreCategory, YtmusicExploreShelf, YtmusicPlaylist, MusicLastPlayed, MusicQueue, MusicTrack, MusicRepeat, MusicSession, RadioStation, YtmusicTrack } from '../api/transport'
+import type { YtmusicAlbum, YtmusicArtist, YtmusicExplore, YtmusicExploreCategory, YtmusicExploreShelf, YtmusicPlaylist, MusicLastPlayed, MusicQueue, MusicTrack, MusicRepeat, MusicSession, MusicLightSync, RadioStation, YtmusicTrack } from '../api/transport'
 import PageHeader from '../components/layout/PageHeader.vue'
 import ChipRow from '../components/music/ChipRow.vue'
 import ListeningSessions from '../components/music/ListeningSessions.vue'
@@ -215,6 +215,8 @@ const selected = computed<DeviceEntry | null>(() => players.value.find((e) => e.
 const selectedName = computed(() => selected.value ? (house.houseDeviceFor(selected.value.descriptor.id)?.name ?? selected.value.descriptor.name) : '')
 /** The players currently playing a stream served by Kasbah, by plugin id — transferable, movable. */
 const ourSessions = ref<Map<string, MusicSession>>(new Map())
+/** Room lights in rhythm with each player (Hue area of its room): read with the sessions. */
+const lightSync = ref<Map<string, MusicLightSync>>(new Map())
 const selectedSession = computed(() => (localSelected.value ? local.barSession : selected.value ? ourSessions.value.get(selected.value.descriptor.id) ?? null : null))
 /** The last radio launched on each player: the bar draws its quality from it (the speaker does not say it). */
 const radioStations = ref<Map<string, RadioStation>>(new Map())
@@ -314,6 +316,7 @@ async function refreshSessions(): Promise<void> {
     ourSessions.value = new Map(r.sessions.map((s) => [s.deviceId, s]))
     lastPlayed.value = new Map(l.last.map((e) => [e.deviceId, e]))
   } catch { /* plugin absent or server silent: nothing to transfer */ }
+  void refreshLightSync()
   // the station only makes sense for a live stream: no point asking for it the rest of the time
   const st = selected.value?.state
   if (st?.kind !== 'media_player' || !st.nowPlaying?.live) return
@@ -321,6 +324,26 @@ async function refreshSessions(): Promise<void> {
     const r = await getTransport().radioPlaying()
     radioStations.value = new Map(r.playing.map((p) => [p.deviceId, p.station]))
   } catch { /* radio plugin absent: no quality to show */ }
+}
+async function refreshLightSync(): Promise<void> {
+  const ids = players.value.map((e) => e.descriptor.id).filter((id) => !isLocalPlayer(id))
+  if (!ids.length) return
+  try {
+    const r = await getTransport().musicLightSync(ids)
+    lightSync.value = new Map(r.lightsync.map((s) => [s.deviceId, s]))
+  } catch { /* older server: no light sync, the button stays away */ }
+}
+async function toggleLightSync(deviceId: string, on: boolean): Promise<void> {
+  try {
+    const s = await getTransport().setMusicLightSync(deviceId, on)
+    // switching one on switches the others off: re-read them all
+    lightSync.value = new Map(lightSync.value).set(deviceId, s)
+    void refreshLightSync()
+    // the stream opens on the next server tick: read again once it had the time
+    setTimeout(() => { void refreshLightSync() }, 1500)
+  } catch (err) {
+    notifications.error(t('errors.UNKNOWN', { name: t('music.lightSync'), message: (err as Error).message }))
+  }
 }
 let sessionsTicker: ReturnType<typeof setInterval> | undefined
 // The server chains on its own: when the player changes track or state, re-read the sessions
@@ -1212,9 +1235,9 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
         <div class="sessions-sheet__panel">
           <button type="button" class="sessions-sheet__grip" :aria-label="$t('common.close')" @click="sessionsOpen = false"><span /></button>
           <ListeningSessions :players="players" :selected-id="sessionId || null" :transfer-mode="transferMode" :transfer-busy-id="transferBusyId"
-                             :pending-id="pendingTrack && selected ? selected.descriptor.id : null"
+                             :pending-id="pendingTrack && selected ? selected.descriptor.id : null" :light-sync="lightSync"
                              @select="selectSession" @transfer-to="transferTo" @locate="locate"
-                             @command="panelCommand" />
+                             @command="panelCommand" @light-sync="toggleLightSync" />
         </div>
       </div>
     </div>

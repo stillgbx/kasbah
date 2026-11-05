@@ -7,6 +7,18 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-05] update | Lumières de la pièce en rythme avec la musique (flux Hue Entertainment)
+
+**Déclencheur** : « est-ce qu'il serait possible de sync les lumières d'une pièce avec le son d'une enceinte de la pièce ? » ; étape 1 livrée (YouTube Music et Mixcloud, interrupteur sur la carte Écoute), radio et TV laissées de côté.
+
+**Pages modifiées** :
+- `3_plugins/3_1_philips-hue.md` - mise à jour 2026-11-05 : clé cliente gardée à l'appairage (`HUE_CLIENT_KEY`, réappairage nécessaire), flux DTLS (trame `HueStream` v2, PSK, maintien, une zone à la fois, choix de la zone d'une pièce), sonde `tools/hue-entertainment-probe.mts`, vérifié sur le vrai pont (159 ms, le pont restaure seul les lampes), piège zone ordinaire / zone de divertissement.
+- `1_architecture/1_6_lecteur-musique.md` - mise à jour 2026-11-05 : `music/lightsync/` (second ffmpeg, caractéristiques toutes les 20 ms, orchestrateur `LightSync`, effet pulsation), routes `/api/music/lightsync`, pièce calculée dans `app.ts`, radio écartée pour l'instant.
+- `4_ui/4_5_musique-et-medias.md` - mise à jour 2026-11-05 : touche ampoule de la carte Écoute, colonne réservée dès qu'une pièce peut, vérifications de la preview.
+
+**Index** : catalogues mis à jour (3 lignes), index.md régénéré.
+
+
 ## [2026-11-05] update | Étalonnage des volets : la part réelle de la fenêtre, lames ajourées ou serrées
 
 **Déclencheur** : « un volet fermé à 50 % ne cache pas 50 % de la fenêtre » ; demande de réglages par volet pour que 25 / 50 / 75 % soient la vraie couverture, et de distinguer un volet couvrant (jours ouverts) d'un volet fermé (lames serrées).

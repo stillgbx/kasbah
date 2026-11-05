@@ -218,7 +218,7 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 | **Météo** | Conditions, prévisions, qualité de l'air et pollens (Open-Meteo). |
 | **Agenda** | Agendas partagés de la famille (iCal) : mois, semaine, jour. |
 | **École** | Devoirs, cahier de liaison et publications de la classe (TouteMonAnnée). |
-| **Musique** | Lecteur commun : recherche et file d'attente YouTube Music, Mixcloud ou radios, joués sur une enceinte Cast ou Sonos. |
+| **Musique** | Lecteur commun : recherche et file d'attente YouTube Music, Mixcloud ou radios, joués sur une enceinte Cast ou Sonos ; les lampes Hue de la pièce peuvent suivre le rythme. |
 | **Lumières** | Bandes par niveau et pièce, interrupteur d'ensemble, curseur de luminosité ; ventilateurs (Tuya) au même endroit. |
 | **Ouvrants** | Volets, stores, portails : position, favori « my », gestes d'ensemble (sécuriser / ouvrir la maison, volets d'une pièce). |
 | **Médias** | Lecteurs Cast et Sonos : transport, volume, pochette, relais son (barre HDMI ARC). |

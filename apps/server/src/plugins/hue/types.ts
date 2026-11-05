@@ -100,6 +100,19 @@ export const hueZigbeeConnectivitySchema = z.looseObject({
 })
 export type HueZigbeeConnectivity = z.infer<typeof hueZigbeeConnectivitySchema>
 
+/** Entertainment area (set up in the Hue app): the channels a stream addresses, and their lights. */
+export const hueEntertainmentConfigurationSchema = z.looseObject({
+  id: z.string(),
+  metadata: z.looseObject({ name: z.string().optional() }).optional(),
+  status: z.string().optional(),
+  channels: z.array(z.looseObject({
+    channel_id: z.number(),
+    position: z.object({ x: z.number(), y: z.number(), z: z.number() }),
+  })).default([]),
+  light_services: z.array(hueRefSchema).default([]),
+})
+export type HueEntertainmentConfiguration = z.infer<typeof hueEntertainmentConfigurationSchema>
+
 export const hueResponseSchema = z.object({
   errors: z.array(z.looseObject({ description: z.string().optional() })).default([]),
   data: z.array(z.looseObject({ id: z.string().optional() })).default([]),

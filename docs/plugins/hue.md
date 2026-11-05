@@ -20,6 +20,7 @@
 - **Real time**: any change made elsewhere (Hue app, wall switch, another screen) is displayed immediately, through the bridge's event stream.
 - **Automatic placement**: a light not declared in the house file is placed in the house room that has **the same name** as its Hue room. Otherwise, it stays controllable in the Lights view, flagged "Not placed".
 - Option: expose each **Hue room** as a group light (`HUE_EXPOSE_ROOMS=true`).
+- **Lights in rhythm with the music**: when Kasbah plays YouTube Music or Mixcloud on a speaker, the lights of that speaker's room can pulse with the bass and change color on the beats (bulb button on the player's row in the Music page, **Listening** panel). It uses the bridge's Entertainment stream, so the room needs an **entertainment area** (Hue app: Settings → Entertainment areas) whose lights are all in that room.
 
 ## Connection
 
@@ -30,9 +31,9 @@ Everything goes over the local network: the Kasbah server talks directly to the 
 1. Tick **Hue** in **Settings → Plugins**.
 2. Without `HUE_BRIDGE_HOST`, the bridge is looked up through `discovery.meethue.com`; its address appears in the server log. Then copy it into `.env` (and give it a DHCP reservation).
 3. The plugin goes to **"Pairing required"**. In the Hue section of Settings → Plugins: press the **round button on the bridge**, then within 30 s **Pair the bridge**.
-4. The key is displayed and works right away. Copy it into `apps/server/.env` (`HUE_APP_KEY=…`) so that it survives a restart: the server never writes this file.
+4. The key is displayed and works right away. Copy it into `apps/server/.env` (`HUE_APP_KEY=…`, and `HUE_CLIENT_KEY=…` shown with it) so that it survives a restart: the server never writes this file.
 
-A lost key is replaced with the same gesture (**Pair the bridge again**).
+A lost key is replaced with the same gesture (**Pair the bridge again**). A pairing made before the light sync existed did not keep the client key: pair again to get it.
 
 ## Configuration (`apps/server/.env`)
 
@@ -40,6 +41,7 @@ A lost key is replaced with the same gesture (**Pair the bridge again**).
 |---|---|---|
 | `HUE_BRIDGE_HOST` | — (discovery) | IP address of the bridge |
 | `HUE_APP_KEY` | — | Application key obtained from pairing |
+| `HUE_CLIENT_KEY` | — | Client key given with it (32 hex characters); needed for the lights in rhythm with the music |
 | `HUE_EXPOSE_ROOMS` | `false` | Also exposes Hue rooms as group lights |
 | `HUE_TLS_INSECURE` | `true` | Accepts the bridge's self-signed certificate |
 
@@ -48,6 +50,7 @@ A lost key is replaced with the same gesture (**Pair the bridge again**).
 - Online discovery is rate-limited by Philips (about one call per quarter of an hour): set the address.
 - Throughput: the bridge accepts about ten commands per second; while a slider is being dragged, only the last value is sent.
 - A light cannot receive an effect and a color at the same time: the effect takes priority.
+- Lights in rhythm: one room at a time (the bridge streams one entertainment area at a time); radio is not followed yet; on a Sonos speaker the lights may lag by up to a second (it reports its position in whole seconds). When the music stops, the bridge puts the lights back as they were.
 
 ## Further reading
 

@@ -5,6 +5,8 @@ import { z } from 'zod'
 import type { Command } from '@kasbah/shared'
 import { stateFile } from '../core/paths'
 import { PluginError } from '../core/plugin'
+import { systemClock, type Clock } from '../core/clock'
+import { getLightStreamer, type LightStreamer } from '../core/lightStreamBridge'
 import { getPlaybackBridge } from '../core/playbackBridge'
 import { sendError } from '../http/errors'
 import { isPublicRequest } from '../mcp/auth'
@@ -12,6 +14,8 @@ import { LengthLock, OUT_BITRATE_KBPS, OUT_CHANNELS, OUT_SAMPLE_RATE_HZ, parseRa
 import { afterEnd, insert, jumpTo, removeAt, REPEAT_MODES, upcoming, type PlayQueue, type QueueTrack, type RepeatMode } from './queue'
 import { createLastPlayedFile, type LastPlayedByDevice, type LastPlayedStore } from './lastPlayed'
 import { getMusicSource, musicUserOf as userOf, type MusicSource, type MusicUser } from './sources'
+import { decode } from './lightsync/decode'
+import { LightSync } from './lightsync/sync'
 
 // Player SHARED by the music sources, mounted under /api/music. What was the core of the YouTube Music
 // plugin (2026-09-22) moved out of it on 2026-09-23 to serve Mixcloud too: a source only provides its
@@ -75,6 +79,12 @@ export interface MusicPlayerDeps {
   lastStore?: LastPlayedStore
   /** Public names (NAS proxy): a speaker cannot read the public address, which requires a session. */
   publicHosts?: string[]
+  /** Light device ids of a speaker's room (`app.ts`, from the house), for the light sync; null = no room. */
+  roomLights?: (deviceId: string) => string[] | null
+  /** The light stream (tests); otherwise the bridge a lights plugin registers with. */
+  lightStreamer?: () => LightStreamer | null
+  /** Timers of the light sync (tests); otherwise the system clock. */
+  clock?: Clock
 }
 
 export interface MusicPlayer {
@@ -231,6 +241,28 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     if (!t || /^[0-9a-f]{24}(\.[a-z0-9]{2,4})?$/i.test(t) || /^https?:\/\//i.test(t)) return true
     return !!s.meta.title && t.toLowerCase() === s.meta.title.trim().toLowerCase()
   }
+
+  /** Room lights in rhythm with what a speaker plays from us (`lightsync/sync.ts`). */
+  const lightSync = new LightSync({
+    session: (deviceId) => {
+      const s = proxy.forDevice(deviceId)
+      return s && sessionActive(s) ? { sid: s.sid, sourceUrl: s.sourceUrl } : undefined
+    },
+    playerState: (deviceId) => {
+      const st = resolvePlay().get(deviceId)?.state as { kind?: string; playback?: string; updatedAt?: number; nowPlaying?: { positionS?: number } } | undefined
+      if (st?.kind !== 'media_player') return undefined
+      return {
+        ...(st.playback ? { playback: st.playback } : {}),
+        ...(typeof st.nowPlaying?.positionS === 'number' ? { positionS: st.nowPlaying.positionS } : {}),
+        ...(typeof st.updatedAt === 'number' ? { updatedAt: st.updatedAt } : {}),
+      }
+    },
+    roomLights: (deviceId) => deps.roomLights?.(deviceId) ?? null,
+    streamer: deps.lightStreamer ?? getLightStreamer,
+    decode: (url, startS) => decode(url, startS, { ffmpegPath: cfg.FFMPEG_PATH, ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}), logger: log }),
+    clock: deps.clock ?? systemClock,
+    logger: log,
+  })
 
   // ---- starting a track ----------------------------------------------------------------------------
 
@@ -791,6 +823,20 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       return { ok: true as const }
     })
 
+    /** Light sync of the given speakers (`?deviceIds=a,b`): whether their room can, the switch, the stream. */
+    app.get<{ Querystring: { deviceIds?: string } }>('/lightsync', async (req) => {
+      const ids = (req.query.deviceIds ?? '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 200)
+      return { lightsync: ids.map((id) => lightSync.status(id)) }
+    })
+
+    app.put<{ Params: { deviceId: string }; Body: unknown }>('/lightsync/:deviceId', async (req, reply) => {
+      const body = z.object({ on: z.boolean() }).safeParse(req.body)
+      if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'on (boolean) is required')
+      const status = await lightSync.set(req.params.deviceId, body.data.on)
+      if (body.data.on && !status.available) return sendError(reply, 409, 'UNSUPPORTED_COMMAND', `light sync not available here (${status.reason})`)
+      return status
+    })
+
     /** What our players are playing from us right now: title, duration and transfer on the UI side. */
     app.get('/sessions', async () => ({ sessions: proxy.list().filter(sessionActive).map(sessionView) }))
 
@@ -1065,6 +1111,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     stop() {
       unwatch?.()
       unwatch = null
+      void lightSync.stop()
       queues.clear()
       prefetched.clear()
       // the most recent position, not the one from 15 s ago

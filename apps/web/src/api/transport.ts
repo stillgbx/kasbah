@@ -448,6 +448,18 @@ export interface MusicSession {
   queue?: { length: number; index: number; repeat: MusicRepeat } | null
 }
 
+/** Room lights in rhythm with a speaker (Hue Entertainment): can its room, is it switched on, is it streaming. */
+export interface MusicLightSync {
+  deviceId: string
+  available: boolean
+  /** Why the room cannot: no paired Hue bridge with a client key, speaker in no room, no entertainment area there. */
+  reason?: 'no_hue' | 'no_room' | 'no_area'
+  /** The entertainment area used. */
+  area?: string
+  on: boolean
+  active: boolean
+}
+
 /** The last listen of a player that no longer plays anything of ours (server restarted, stop): enough to resume it. */
 export interface MusicLastPlayed {
   deviceId: string
@@ -637,7 +649,7 @@ export interface Transport {
   duplicateProperty(id: string, name: string): Promise<string>
   /** Switches to demo or real (server without an imposed house); the server reopens the property remembered for the mode. */
   setPropertyMode(mode: PropertyMode): Promise<void>
-  pairHue(): Promise<{ appKey: string; hint: string }>
+  pairHue(): Promise<{ appKey: string; clientKey?: string; hint: string }>
   /** Google consent URL to open in a browser to link the Nest account. */
   nestAuthUrl(): Promise<{ url: string; redirectUri: string }>
   /** State of the Enphase gateway pairing. Never carries the token itself. */
@@ -744,6 +756,8 @@ export interface Transport {
   }): Promise<{ ok: true; streamUrl: string; sid: string }>
   /** Players currently playing a YouTube Music stream served by Kasbah. */
   musicSessions(): Promise<{ sessions: MusicSession[] }>
+  musicLightSync(deviceIds: string[]): Promise<{ lightsync: MusicLightSync[] }>
+  setMusicLightSync(deviceId: string, on: boolean): Promise<MusicLightSync>
   /** The last listen of the players that are not playing anything of ours right now. */
   musicLast(): Promise<{ last: MusicLastPlayed[] }>
   /** Restart a player's last listen (queue included), at its position or at `positionS`. */

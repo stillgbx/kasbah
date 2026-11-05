@@ -30,7 +30,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-11-01 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-11-01 |
 | [1_5 Scène 3D (Three.js)](1_architecture/1_5_scene-3d.md) | 2026-10-29 |
-| [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-10-09 |
+| [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-11-05 |
 | [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-11-01 |
 | [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-28 |
 | [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-11-05 |
@@ -69,7 +69,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 
 | Intégrations | Dernière mise à jour |
 |---|---|
-| [3_1 Philips Hue](3_plugins/3_1_philips-hue.md) | 2026-10-24 |
+| [3_1 Philips Hue](3_plugins/3_1_philips-hue.md) | 2026-11-05 |
 | [3_4 Somfy TaHoma](3_plugins/3_4_somfy-tahoma.md) | 2026-11-05 |
 | [3_5 Google Nest (caméras, sonnettes)](3_plugins/3_5_google-nest.md) | 2026-11-03 |
 | [3_6 Google Cast](3_plugins/3_6_google-cast.md) | 2026-10-24 |
@@ -99,7 +99,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 ## 4 — UI
 
 <!-- section:4_ui:begin (généré par scripts/wiki-index.mjs depuis 4_ui/README.md - ne pas éditer ici) -->
-Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-11-04).
+Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-11-05).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -111,7 +111,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 |---|---|
 | [4_3 Vues Lumières, Ouvrants et Caméras](4_ui/4_3_vues-lumieres-ouvrants-cameras.md) | 2026-10-26 |
 | [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-31 |
-| [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-10-30 |
+| [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-11-05 |
 | [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-11-04 |
 | [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-11-01 |
 | [4_8 Mode édition et propriétés](4_ui/4_8_mode-edition-et-proprietes.md) | 2026-10-21 |

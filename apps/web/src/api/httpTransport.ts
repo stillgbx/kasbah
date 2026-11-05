@@ -1,7 +1,7 @@
 import { shoppingResponseSchema, type ShoppingList, apiErrorSchema, automationResponseSchema, automationRunResponseSchema, automationsResponseSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, propertiesResponseSchema, propertyCreatedSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, deviceEnergyDaysSchema, deviceReleaseNotesSchema, siteMapSchema, type SiteMap, type AutomationBody, type AutomationEntry, type AutomationRun, type CommandInput, type DeviceConsumption, type DeviceEnergyDays, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type MatterSettingsPatch, type MatterStatus, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId, type Right } from '@kasbah/shared'
 import { t } from '../i18n'
-import { ApiRequestError, type AgendaCalendar, type AssistantEvent, type ClaudeAccount, type HaEntities,type TranscriptionSettings, type AssistantLogEntry, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type McpUser, type SystemVersion, type UpdateStatus, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultContract, type RenaultStatus, type SchoolData, type TeslaStatus, type Transport, type TransportHandlers, type WeatherAlerts, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicLastPlayed, type MusicQueue, type YtmusicSearchResult, type MusicSession, type YtmusicStatus, type YtmusicTrack } from './transport'
+import { ApiRequestError, type AgendaCalendar, type AssistantEvent, type ClaudeAccount, type HaEntities,type TranscriptionSettings, type AssistantLogEntry, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type McpUser, type SystemVersion, type UpdateStatus, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultContract, type RenaultStatus, type SchoolData, type TeslaStatus, type Transport, type TransportHandlers, type WeatherAlerts, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicLastPlayed, type MusicQueue, type YtmusicSearchResult, type MusicSession, type MusicLightSync, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // Relative URLs: same origin in prod (Fastify serves the build) and through the Vite proxy in dev.
 
@@ -259,7 +259,7 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(origin) },
       (j) => houseSchema.parse((j as { house: unknown }).house) as House,
     ),
-    pairHue: () => request(`${base}/api/plugins/hue/pair`, { method: 'POST' }, (j) => j as { appKey: string; hint: string }),
+    pairHue: () => request(`${base}/api/plugins/hue/pair`, { method: 'POST' }, (j) => j as { appKey: string; clientKey?: string; hint: string }),
     nestAuthUrl: () => request(`${base}/api/plugins/nest/auth/url`, undefined, (j) => j as { url: string; redirectUri: string }),
     enphaseTokenStatus: () => request(`${base}/api/plugins/enphase/token`, undefined, (j) => j as EnphaseTokenStatus),
     // the body may carry a password: POST, never in the query (it would end up in the logs)
@@ -377,6 +377,15 @@ export function createHttpTransport(base = ''): Transport {
       (j) => j as { ok: true; streamUrl: string; sid: string },
     ),
     musicSessions: () => request(`${base}/api/music/sessions`, undefined, (j) => j as { sessions: MusicSession[] }),
+    musicLightSync: (deviceIds) => request(
+      `${base}/api/music/lightsync?deviceIds=${encodeURIComponent(deviceIds.join(','))}`, undefined,
+      (j) => j as { lightsync: MusicLightSync[] },
+    ),
+    setMusicLightSync: (deviceId, on) => request(
+      `${base}/api/music/lightsync/${encodeURIComponent(deviceId)}`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on }) },
+      (j) => j as MusicLightSync,
+    ),
     musicLast: () => request(`${base}/api/music/last`, undefined, (j) => j as { last: MusicLastPlayed[] }),
     musicResume: (deviceId, positionS) => request(
       `${base}/api/music/resume`,

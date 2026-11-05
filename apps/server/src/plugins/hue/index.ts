@@ -1,6 +1,7 @@
 import type { Command, DeviceDescriptor, PluginHealth, PluginScene, SceneGroupKind, SceneRecall, SceneUpdate } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { setLightStreamer, type LightStream, type LightStreamer } from '../../core/lightStreamBridge'
 import { stateFile } from '../../core/paths'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { connectSse, type FetchLike } from '../../core/sse'
@@ -8,14 +9,16 @@ import { TlsPin, createPinFile, type PinFile } from '../../core/tls-pin'
 import { describeError, sendError } from '../../http/errors'
 import { HueClient } from './client'
 import { findBridge } from './discovery'
+import { defaultDtlsConnect, openStream, pickArea, toLightArea, type DtlsConnect } from './entertainment'
 import { roomKey } from '@kasbah/shared'
 import {
   connectivityToAvailability, indexResources, sceneStatusToActive, sceneTargetLights, toCreateSceneBody, toDescriptor,
   toGroupDescriptor, toLightPatch, toPutBody, toSceneDescriptor, toSceneRecallBody, type HueIndex,
 } from './mapping'
 import {
-  hueDeviceSchema, hueEventFrameSchema, hueGroupedLightSchema, hueLightSchema, hueRoomSchema, hueSceneSchema,
-  hueZigbeeConnectivitySchema, type HueGroupedLight, type HueLight, type HueRoom, type HueScene, type HueZigbeeConnectivity,
+  hueDeviceSchema, hueEntertainmentConfigurationSchema, hueEventFrameSchema, hueGroupedLightSchema, hueLightSchema, hueRoomSchema,
+  hueSceneSchema, hueZigbeeConnectivitySchema, type HueEntertainmentConfiguration, type HueGroupedLight, type HueLight, type HueRoom,
+  type HueScene, type HueZigbeeConnectivity,
 } from './types'
 
 // Philips Hue plugin: local CLIP v2 API + SSE event stream. Without a key: `needs_pairing` mode
@@ -27,6 +30,8 @@ const bool = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' |
 export const hueConfigSchema = z.object({
   HUE_BRIDGE_HOST: z.string().min(1).optional(),
   HUE_APP_KEY: z.string().min(1).optional(),
+  /** PSK of the Entertainment stream (DTLS), given with the app key at pairing. */
+  HUE_CLIENT_KEY: z.string().regex(/^[0-9a-fA-F]{32}$/).optional(),
   HUE_EXPOSE_ROOMS: bool.default(false),
   HUE_TLS_INSECURE: bool.default(true),
 })
@@ -37,6 +42,8 @@ export interface HuePluginDeps {
   fetchImpl?: FetchLike
   /** Injection for the tests: the bridge certificate pin (otherwise a file under `.state/`). */
   pinFile?: PinFile
+  /** Injection for the tests: the DTLS socket of the Entertainment stream. */
+  dtlsConnect?: DtlsConnect
 }
 
 export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
@@ -45,6 +52,7 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
   let client: HueClient | null = null
   let host: string | null = null
   let appKey: string | undefined
+  let clientKey: string | undefined
   /** Bridge certificate, pinned on first use: the bridge has no other state file to keep it in. */
   let pin: TlsPin | null = null
   let index: HueIndex = indexResources([], [], [])
@@ -52,6 +60,10 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
   /** The bridge's zones (groupings that cross rooms): same shape as a room. */
   let zones = new Map<string, HueRoom>()
   let scenes: HueScene[] = []
+  /** Entertainment areas (Hue app): where the music light sync can stream. */
+  let areas: HueEntertainmentConfiguration[] = []
+  /** The bridge streams one area at a time: the stream in progress, if any. */
+  let activeStream: LightStream | null = null
   /** rid of a room OR a zone → rid of its `grouped_light` (used to switch off a light scene). */
   let groupedLightOfGroup = new Map<string, string>()
   let sseCtrl: AbortController | null = null
@@ -71,14 +83,20 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
   async function fetchAll(): Promise<{ lights: HueLight[]; groups: HueGroupedLight[]; zigbee: HueZigbeeConnectivity[] }> {
     const c = client!
     const signal = ctx!.signal
-    const [lights, devices, rooms, zigbee, sceneList, zoneList] = await Promise.all([
+    const [lights, devices, rooms, zigbee, sceneList, zoneList, areaList] = await Promise.all([
       c.getResources('light', hueLightSchema, signal),
       c.getResources('device', hueDeviceSchema, signal),
       c.getResources('room', hueRoomSchema, signal),
       c.getResources('zigbee_connectivity', hueZigbeeConnectivitySchema, signal),
       c.getResources('scene', hueSceneSchema, signal),
       c.getResources('zone', hueRoomSchema, signal),
+      // optional: a failure here must not take the lights down with it
+      c.getResources('entertainment_configuration', hueEntertainmentConfigurationSchema, signal).catch((err) => {
+        log().debug({ err }, 'Hue entertainment areas unreadable')
+        return [] as HueEntertainmentConfiguration[]
+      }),
     ])
+    areas = areaList
     index = indexResources(lights, devices, rooms)
     zones = new Map(zoneList.map((z) => [z.id, z]))
     scenes = sceneList
@@ -188,7 +206,8 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
             if (z.success) for (const [lightId, available] of connectivityToAvailability([z.data], index)) ctx!.setAvailable(lightId, available)
           }
         } else if ((ev.type === 'add' || ev.type === 'delete')
-          && (item.type === 'light' || item.type === 'device' || item.type === 'room' || item.type === 'scene' || item.type === 'zone')) {
+          && (item.type === 'light' || item.type === 'device' || item.type === 'room' || item.type === 'scene' || item.type === 'zone'
+            || item.type === 'entertainment_configuration')) {
           scheduleResync()
         }
       }
@@ -225,6 +244,35 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
     client = makeClient()
     await resync(true)
     startEventStream()
+    publishStreamer()
+  }
+
+  const streamer: LightStreamer = {
+    areaFor(lightDeviceIds) {
+      const rids = new Set(lightDeviceIds.filter((id) => id.startsWith('hue:')).map((id) => id.slice('hue:'.length)))
+      const area = pickArea(areas, rids)
+      return area ? toLightArea(area) : undefined
+    },
+    async open(areaId) {
+      if (!client || !appKey || !clientKey || !host) throw new PluginError('NEEDS_PAIRING', 'Hue client key missing: pair the bridge again')
+      const cfg = areas.find((a) => a.id === areaId)
+      if (!cfg) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Hue entertainment area ${areaId}`)
+      // one area at a time on a bridge: the newer request wins
+      await activeStream?.close()
+      const stream = await openStream({
+        client, area: toLightArea(cfg), host, appKey, clientKey, clock: ctx!.clock, logger: ctx!.logger,
+        connect: deps.dtlsConnect ?? defaultDtlsConnect,
+      })
+      activeStream = stream
+      stream.onEnded(() => { if (activeStream === stream) activeStream = null })
+      const close = stream.close
+      return { ...stream, close: async () => { if (activeStream === stream) activeStream = null; await close() } }
+    },
+  }
+
+  /** The stream needs the client key; without it the sync says why instead of failing later. */
+  function publishStreamer(): void {
+    setLightStreamer(client && appKey && clientKey ? streamer : null)
   }
 
   return {
@@ -235,6 +283,7 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
       ctx = c
       config = c.config as HueConfig   // already validated/transformed by the host via configSchema
       appKey = config.HUE_APP_KEY
+      clientKey = config.HUE_CLIENT_KEY
       const pinFile = deps.pinFile ?? createPinFile(stateFile('hue-tls-pin.json'), c.logger)
       pin = new TlsPin(await pinFile.load(), (fp) => { void pinFile.save(fp) }, { device: 'Hue bridge', logger: c.logger })
       if (config.HUE_BRIDGE_HOST) host = config.HUE_BRIDGE_HOST
@@ -268,6 +317,7 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
       emitFullStates(lights, grouped, zigbee)
       emitScenes()
       startEventStream()
+      publishStreamer()
     },
 
     async execute(externalId: string, command: Command) {
@@ -335,6 +385,9 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
     },
 
     async stop() {
+      setLightStreamer(null)
+      await activeStream?.close()
+      activeStream = null
       sseCtrl?.abort()
       if (resyncTimer !== null) ctx?.clock.clearTimeout(resyncTimer)
       client?.close()
@@ -348,8 +401,13 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
           pin!.clear()
           const result = await client.pair()
           appKey = result.appKey
+          clientKey = result.clientKey
           await connectWithKey()
-          return { appKey: result.appKey, hint: 'Add HUE_APP_KEY=<appKey> to apps/server/.env to persist the pairing.' }
+          return {
+            appKey: result.appKey,
+            ...(result.clientKey ? { clientKey: result.clientKey } : {}),
+            hint: 'Add HUE_APP_KEY=<appKey> (and HUE_CLIENT_KEY=<clientKey>, for the light sync) to apps/server/.env to persist the pairing.',
+          }
         } catch (err) {
           const d = describeError(err)
           return sendError(reply, d.status, d.code === 'NEEDS_PAIRING' ? 'LINK_BUTTON_NOT_PRESSED' : d.code, d.message)

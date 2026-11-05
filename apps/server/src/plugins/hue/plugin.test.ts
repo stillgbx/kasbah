@@ -189,6 +189,7 @@ describe('hue plugin', () => {
     const r2 = await app.inject({ method: 'POST', url: '/api/plugins/hue/pair' })
     expect(r2.statusCode).toBe(200)
     expect(r2.json().appKey).toBe('abcdefgh-app-key')
+    expect(r2.json().clientKey).toBe('CLIENTKEY')   // the Entertainment PSK is no longer thrown away
     expect(ctx.emitDevices).toHaveBeenCalled()
     expect(plugin.health!().status).toBe('ok')
     await plugin.stop()

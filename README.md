@@ -218,7 +218,7 @@ On a large (landscape) screen, a three-column layout: the **rail** on the left, 
 | **Weather** | Conditions, forecasts, air quality and pollen (Open-Meteo). |
 | **Calendar** | The family's shared calendars (iCal): month, week, day. |
 | **School** | Homework, the parent-teacher notebook and the class's posts (TouteMonAnnée). |
-| **Music** | Shared player: search and queue from YouTube Music, Mixcloud or radio, played on a Cast or Sonos speaker. |
+| **Music** | Shared player: search and queue from YouTube Music, Mixcloud or radio, played on a Cast or Sonos speaker; the room's Hue lights can follow the rhythm. |
 | **Lights** | Strips per level and room, all-on/all-off switch, brightness slider; fans (Tuya) in the same place. |
 | **Covers** | Shutters, blinds, gates: position, “my” favorite, house-wide actions (secure / open the house, a room's shutters). |
 | **Media** | Cast and Sonos players: transport, volume, artwork, audio relay (HDMI ARC soundbar). |

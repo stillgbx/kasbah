@@ -22,7 +22,9 @@ async function pair() {
   result.value = null
   try {
     const r = await getTransport().pairHue()
-    result.value = t('settings.hue.success', { key: r.appKey })
+    result.value = r.clientKey
+      ? t('settings.hue.successWithClientKey', { key: r.appKey, clientKey: r.clientKey })
+      : t('settings.hue.success', { key: r.appKey })
     notifications.success(t('settings.hue.title'))
     await devices.refreshHealth()
   } catch (err) {

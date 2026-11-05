@@ -1,7 +1,7 @@
 # Plugin Philips Hue
 
-> Dernière mise à jour : 2026-10-24
-> Sources : `apps/server/src/plugins/hue/{index,client,discovery,mapping,types}.ts`, `apps/server/src/core/sse.ts`, tests `mapping.test.ts`, `plugin.test.ts`
+> Dernière mise à jour : 2026-11-05
+> Sources : `apps/server/src/plugins/hue/{index,client,discovery,mapping,types,entertainment}.ts`, `apps/server/src/core/lightStreamBridge.ts`, `tools/hue-entertainment-probe.mts`, `apps/server/src/core/sse.ts`, tests `mapping.test.ts`, `plugin.test.ts`
 
 ## API utilisée
 
@@ -141,7 +141,8 @@ effet en cours pilote lui-même la couleur, lui en imposer une dans le même PUT
   D'où les pastilles calculées depuis la palette.
 - **Le sync divertissement** (boîtier HDMI, sync musique) ne passe pas par CLIP v2 : il demande l'API
   entertainment en DTLS (la clé cliente est déjà demandée à l'appairage, `generateclientkey: true`).
-  Hors périmètre de cette itération.
+  Hors périmètre de cette itération. Fait le 2026-11-05 pour la synchro musique : voir la mise à jour
+  « flux Entertainment » en fin de page.
 - `smart_scene` (scènes qui suivent l'heure) : aucune sur ce pont, non implémenté côté Kasbah.
 
 **Tests** : fixtures `__fixtures__/bridge.ts` complétées (une zone, deux scènes — une fixe sur la
@@ -190,3 +191,44 @@ certificat, et la clé `hue-application-key` partait vers quiconque prenait l'ad
 `error` (« Le certificat du pont Hue a changé… »). `POST /pair` efface l'épingle (au début de
 l'appairage, pas après sa réussite) et la connexion suivante réapprend. La vérification par l'AC Signify
 a été écartée pour rester simple. Mécanisme commun : `apps/server/src/core/tls-pin.ts` (empreinte SHA-256 apprise au premier contact, contrôle sur le socket établi avant toute écriture ; reprise de session TLS coupée, car une session TLS 1.3 reprise n'expose pas de certificat ; un certificat absent est refusé). Rien n'a encore été essayé sur le vrai matériel : au premier démarrage, le journal doit montrer `device certificate pinned`. Une mise à jour de firmware qui change le certificat met le plugin en erreur jusqu'au ré-appairage : c'est voulu.
+
+### Mise à jour 2026-11-05 — flux Entertainment (lumières en rythme avec la musique)
+
+Première brique de la synchro musique / lumières (orchestration côté lecteur :
+[1_6 Lecteur musique commun](../1_architecture/1_6_lecteur-musique.md), mise à jour du même jour).
+
+**Clé cliente gardée à l'appairage.** `client.ts : pair()` demandait déjà `generateclientkey: true`,
+mais `index.ts` jetait la `clientkey`. Désormais `POST /pair` la rend (`clientKey`) et la carte
+d'appairage des Réglages dit de recopier `HUE_APP_KEY` **et** `HUE_CLIENT_KEY` dans `.env` (nouvelle
+variable, 32 caractères hexadécimaux, `.env.example`). Un appairage antérieur n'a pas gardé sa clé
+cliente : il faut **réappairer** (bouton du pont), ce qui crée aussi une nouvelle clé d'application.
+
+**Le flux** (`entertainment.ts`) :
+- CLIP v2 ne fait que démarrer et arrêter la zone (`PUT /clip/v2/resource/entertainment_configuration/<id>`
+  `{ action: "start" | "stop" }`, `client.ts : entertainmentAction`) ; les trames passent en **DTLS
+  sur UDP 2100**, identité PSK = clé d'application, PSK = clé cliente décodée de l'hexadécimal, suite
+  `TLS_PSK_WITH_AES_128_GCM_SHA256`, par la dépendance `node-dtls-client` (Node n'a pas de DTLS).
+- Trame `HueStream` v2 (`encodeFrame`, testée octet par octet) : en-tête de 16 octets (version 2.0,
+  séquence, espace RGB), UUID de la zone en 36 caractères ASCII, puis 7 octets par canal (id + R, G, B
+  sur 16 bits gros-boutiste), 20 canaux au plus.
+- Le pont coupe un flux muet depuis 10 s : la dernière trame est renvoyée après 1 s de silence. Un
+  `close` ou une erreur du socket arrête la zone et prévient l'appelant (`onEnded`).
+- **Une seule zone à la fois par pont** : ouvrir un flux ferme celui en cours.
+- Choix de la zone d'une pièce (`pickArea`) : **toutes** ses lampes sont dans la pièce (une lampe
+  voisine clignoterait au mauvais endroit), puis celle qui couvre le plus de lampes de la pièce, puis
+  le plus de canaux. Les lampes de la pièce viennent de la maison (`app.ts`), pas d'un nom Hue.
+- Les zones sont lues avec le reste dans `fetchAll` (lecture facultative : un échec ne fait pas tomber
+  les lampes) et relues sur `add` / `delete` d'une `entertainment_configuration` du flux SSE.
+- Le plugin s'inscrit au démarrage dans `core/lightStreamBridge.ts` (même patron que
+  `playbackBridge.ts`) si la clé cliente est là, et s'en retire à l'arrêt.
+
+**Vérifié sur le vrai pont (2026-11-05)**, avec la sonde `tools/hue-entertainment-probe.mts`
+(`pair` attend le bouton jusqu'à 10 min et range les clés dans `.state/`, `list`, `stream <zone>`) :
+poignée de main DTLS en 159 ms, alternance rouge / bleu vue sur la lampe, 37 trames/s envoyées depuis
+le poste Windows (les minuteries y étirent les 20 ms prévus ; le pont n'en relaie que 25/s aux lampes).
+**Après `stop`, le pont remet seul les lampes dans leur état d'avant** (allumage, luminosité, couleur) :
+aucun instantané à prendre côté Kasbah.
+
+Piège : une **zone** Hue ordinaire (regroupement pour les scènes) n'est pas une **zone de
+divertissement** ; seule la seconde se diffuse. Elle se crée dans l'appli Hue (Paramètres → Zones de
+divertissement), et l'API CLIP v2 permet aussi d'en créer une (non utilisé).

@@ -1,6 +1,6 @@
 # Musique et médias
 
-> Dernière mise à jour : 2026-10-30
+> Dernière mise à jour : 2026-11-05
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Médias, les lignes et le panneau d'un lecteur, la page Musique (sources, recherche, file, genres, détail d'album, lecture dans le navigateur). Elle est née du découpage de
@@ -1027,3 +1027,25 @@ liste qu'une). **Non fait** : fermer la feuille ou le lecteur agrandi en les tir
 
 Sources : `apps/web/src/components/music/MusicPlayerBar.vue`, `apps/web/src/views/MusicView.vue`,
 `apps/web/src/i18n/locales/{fr,en}.json`.
+
+### Mise à jour 2026-11-05 — carte Écoute : la touche « lumières en rythme »
+
+Sources : `apps/web/src/components/music/ListeningSessions.vue`, `apps/web/src/views/MusicView.vue`,
+`apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/i18n/locales/{fr,en}.json`.
+
+Une quatrième touche de 36 px, une **ampoule** entre « voir dans la maison » et l'étoile, allume ou
+éteint les lampes de la pièce en rythme avec ce que joue le lecteur (serveur :
+[1_6 Lecteur musique commun](../1_architecture/1_6_lecteur-musique.md), même date).
+- La colonne n'existe que si **au moins une** pièce peut être synchronisée (pont Hue appairé avec sa
+  clé cliente, zone de divertissement dans la pièce) ; elle garde alors sa place sur **toutes** les
+  lignes, invisible là où la pièce ne peut pas : rien ne se décale d'une ligne à l'autre.
+- Accent quand l'interrupteur est allumé, ampoule remplie quand les lampes sont pilotées
+  (`data-active`). Infobulle avec le nom de la zone (`music.lightSyncOn` / `lightSyncOff`). Inactive en
+  mode transfert.
+- État lu avec les sessions (`refreshSessions`, toutes les 20 s et à chaque changement du lecteur
+  choisi), relu juste après un basculement puis 1,5 s plus tard (le flux s'ouvre au tick suivant du
+  serveur). La simulation n'a pas de pont : `mockTransport` répond `no_hue`, la colonne reste absente.
+
+Vérifié dans la preview `kasbah-mock` par mesure, état injecté dans la page : lignes immobiles, colonne
+au même x sur toutes les lignes, noms raccourcis de 36 px partout, aucun débordement aux zooms 1 / 1,25
+/ 1,5, contraste ≥ 5,5:1 en clair et en sombre.

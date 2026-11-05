@@ -131,6 +131,7 @@
     "stop": "Stop", "onDevice": "on {name}",
     "filterPlayers": "Filter players", "favorites": "Favorites", "otherPlayers": "Other players",
     "favoriteAdd": "Add to favorites", "favoriteRemove": "Remove from favorites",
+    "lightSync": "Lights in rhythm", "lightSyncOn": "Room lights in rhythm ({area})", "lightSyncOff": "Stop the lights in rhythm ({area})",
     "stereo": "stereo", "streamSource": "source {format}", "megabytes": "{size} MB",
     "queue": "Queue", "queueShow": "Show the queue", "queueHide": "Close the queue", "queueClear": "Clear the queue",
     "playerExpand": "Expand the player", "playerCollapse": "Collapse the player", "choosePlayer": "Choose the player", "searchOptions": "Search options",
@@ -561,6 +562,7 @@
       "title": "Philips Hue", "pair": "Pair the bridge", "pairing": "Pairing…",
       "instructions": "Press the round button on the Hue bridge, then start pairing within 30 seconds.",
       "success": "Bridge paired. Add HUE_APP_KEY={key} to apps/server/.env to keep the pairing.",
+      "successWithClientKey": "Bridge paired. Add HUE_APP_KEY={key} and HUE_CLIENT_KEY={clientKey} to apps/server/.env to keep the pairing.",
       "buttonNotPressed": "The bridge button was not pressed. Press it, then retry.",
       "paired": "The bridge is paired.", "repair": "Pair the bridge again",
       "repairHint": "Only needed if the key was lost: press the round button on the bridge, then start pairing within 30 seconds. The new key must be copied into apps/server/.env."

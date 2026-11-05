@@ -6,6 +6,7 @@ import { registerAssistantRoutes } from './assistant/assistant'
 import type { Env } from './config/env'
 import { loadHouse, type LoadedHouse } from './config/house'
 import type { PropertyHost } from './config/properties'
+import { HouseView } from './core/automations/context'
 import { AutomationEngine } from './core/automations/engine'
 import { createRevertsFile } from './core/automations/reverts'
 import { automationsPathFor, createAutomationsFile } from './core/automations/store'
@@ -207,6 +208,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     execute: (id, command) => host.execute(id, command),
     onState: (cb) => bus.on('state', cb),
   })
+  // The effective house (auto-placement included) answers "which lights share this speaker's room"
+  // for the music light sync.
+  const roomView = new HouseView(house, registry)
+  bus.on('devices', () => roomView.invalidate())
   // The SHARED player of the music sources (queue, LAN relay, transfer, local listening): sources
   // register with it when they start, it goes through the bridge above for the speakers.
   const music = createMusicPlayer({
@@ -214,6 +219,15 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     publicHosts: mcpAuth.publicHosts,
     logger: opts.logger.child({ component: 'music' }),
     now: () => clock.now(),
+    clock,
+    roomLights: (deviceId) => {
+      const view = roomView.context(clock.now(), () => true)
+      const roomId = view.roomOf(deviceId)
+      if (!roomId) return null
+      return (view.index.devicesByRoom.get(roomId) ?? [])
+        .map((d) => d.deviceId)
+        .filter((id): id is string => !!id && registry.get(id)?.descriptor.kind === 'light')
+    },
   })
   await app.register(async (sub) => music.registerRoutes(sub), { prefix: MUSIC_PREFIX })
   if (opts.serveStatic ?? true) {

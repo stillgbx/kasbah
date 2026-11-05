@@ -3,6 +3,7 @@ import { useLocalStorage } from '@vueuse/core'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CommandInput, DeviceEntry, MediaPlayerClass, StateFor } from '@kasbah/shared'
+import type { MusicLightSync } from '../../api'
 import { deviceIcon } from '../../lib/deviceIcons'
 import { isMediaActive } from '../../lib/deviceState'
 import { useHouseStore } from '../../stores/house'
@@ -35,8 +36,10 @@ const props = defineProps<{
   transferBusyId: string | null
   /** Player receiving a track being sent (stream resolution): hourglass on its row. */
   pendingId: string | null
+  /** Room lights in rhythm, per player (absent = not known yet). */
+  lightSync?: ReadonlyMap<string, MusicLightSync>
 }>()
-const emit = defineEmits<{ select: [id: string]; transferTo: [id: string]; command: [id: string, cmd: CommandInput]; locate: [id: string] }>()
+const emit = defineEmits<{ select: [id: string]; transferTo: [id: string]; command: [id: string, cmd: CommandInput]; locate: [id: string]; lightSync: [id: string, on: boolean] }>()
 const { t } = useI18n()
 const house = useHouseStore()
 
@@ -125,6 +128,18 @@ const groups = computed<Group[]>(() => {
   ]
 })
 
+/**
+ * The light sync column exists as soon as ONE room can be synced (a Hue area somewhere): then every
+ * row keeps its slot, hidden where the room cannot, and nothing shifts from one row to the next.
+ */
+const lightSyncColumn = computed(() => [...(props.lightSync?.values() ?? [])].some((s) => s.available))
+const syncOf = (r: Row) => props.lightSync?.get(r.id)
+const syncTitle = (r: Row) => {
+  const s = syncOf(r)
+  if (!s?.available) return undefined
+  return s.on ? t('music.lightSyncOff', { area: s.area ?? '' }) : t('music.lightSyncOn', { area: s.area ?? '' })
+}
+
 const loaded = (r: Row) => r.entry.state.available && (r.heardPlayback === 'playing' || r.heardPlayback === 'paused')
 function togglePlayback(r: Row) {
   emit('command', r.heardId, { type: r.heardPlayback === 'playing' ? 'media_player.pause' : 'media_player.play' })
@@ -200,6 +215,14 @@ function tap(r: Row) {
               <StrokeIcon name="pin" :size="16" />
             </button>
           </template>
+          <!-- lights of the room in rhythm (Hue area): slot kept on every row once one room can -->
+          <button v-if="lightSyncColumn" type="button" class="key sync" :class="{ 'is-hidden': !syncOf(r)?.available }"
+                  :data-on="syncOf(r)?.on ? '1' : '0'" :data-active="syncOf(r)?.active ? '1' : '0'"
+                  :disabled="!syncOf(r)?.available || transferMode" :tabindex="syncOf(r)?.available ? 0 : -1"
+                  :title="syncTitle(r)" :aria-label="syncTitle(r)" :aria-pressed="syncOf(r)?.on ? 'true' : 'false'"
+                  @click.stop="emit('lightSync', r.id, !syncOf(r)?.on)">
+            <StrokeIcon name="light" :size="16" />
+          </button>
           <button type="button" class="key star" :data-on="r.favorite ? '1' : '0'"
                   :title="r.favorite ? $t('music.favoriteRemove') : $t('music.favoriteAdd')" :aria-label="r.favorite ? $t('music.favoriteRemove') : $t('music.favoriteAdd')"
                   :aria-pressed="r.favorite ? 'true' : 'false'" @click.stop="toggleFavorite(r.id)">
@@ -270,5 +293,8 @@ function tap(r: Row) {
 .star:hover { color: var(--text); }
 .star[data-on='1'] { color: var(--accent); }
 .star[data-on='1'] :deep(svg) { fill: currentColor; }
+.sync[data-on='1'] { color: var(--accent); }
+/* streaming right now: the bulb is lit, not only switched on */
+.sync[data-active='1'] :deep(svg) { fill: color-mix(in srgb, currentColor 35%, transparent); }
 .empty { padding: 16px 8px; }
 </style>
