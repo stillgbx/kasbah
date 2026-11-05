@@ -2,6 +2,7 @@ import { Texture, type Color, type Vector2 } from 'three'
 import { NodeMaterial, type NodeBuilder } from 'three/webgpu'
 import { atan, cos, float, mix, positionLocal, uv, vec4 } from 'three/tsl'
 import { sharedTexture, sharedUniform } from './shared'
+import { precipitationPass } from './precipitation'
 import { causticPass } from './water'
 
 // Our `ShaderMaterial`s in TSL. `WebGPURenderer` cannot draw GLSL: it converts a material through
@@ -13,7 +14,7 @@ import { causticPass } from './water'
 // Each tagged material gets its own shader (`materialHooks.ts` adds its uuid to the cache key): the
 // uniforms below are read from THIS material's objects.
 
-export type GpuShaderTag = 'marker-wave' | 'screen-art' | 'water-caustics'
+export type GpuShaderTag = 'marker-wave' | 'screen-art' | 'water-caustics' | 'precipitation'
 
 type Uniforms = Record<string, { value: unknown }>
 const follow = (u: { value: unknown }) => sharedUniform(u.value as number).onRenderUpdate(() => u.value as number)
@@ -44,6 +45,13 @@ export class KasbahShaderNodeMaterial extends NodeMaterial {
       // `water.ts`, `WaterCaustics`: the refracted grid, drawn additively into the caustics map
       case 'water-caustics': {
         const { vertex, colour } = causticPass(u)
+        this.vertexNode = vertex
+        this.colorNode = colour
+        break
+      }
+      // `effects/precipitation.ts`: the drops and flakes placed from the instance number
+      case 'precipitation': {
+        const { vertex, colour } = precipitationPass(u, (this.userData as { kasbahPrecipitation?: string }).kasbahPrecipitation === 'snow')
         this.vertexNode = vertex
         this.colorNode = colour
         break

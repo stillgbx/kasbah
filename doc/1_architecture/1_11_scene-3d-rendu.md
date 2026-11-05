@@ -1,6 +1,6 @@
 # Scène 3D : rendu
 
-> Dernière mise à jour : 2026-11-04
+> Dernière mise à jour : 2026-11-05
 > Sources : sections reprises telles quelles de `1_5_scene-3d.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre le rendu de la scène : styles et thèmes, lumière du jour et de la nuit, ombres, météo (nuages, pluie, neige, brume), eau de la piscine, matières photo, chaîne d'image et étalonnage, tilt-shift, banc de réglage, performance GPU (passes, MSAA, shaders précompilés, voile de mesure). Elle est née du découpage de
@@ -938,6 +938,42 @@ rentre par l'autre bord. Nombre fixe, aucune allocation par image.
 
 Sources : `apps/web/src/three/effects/precipitation.ts`, `apps/web/src/three/HouseScene.ts`,
 `apps/web/src/three/core/ambience.ts`, `apps/web/src/three/three.test.ts`.
+
+### Mise à jour 2026-11-05 — pluie et neige placées par le GPU, la pluie en vraies traînées
+
+Jusqu'ici (section ci-dessus), le CPU déplaçait chaque particule et renvoyait le tableau de positions
+au GPU à chaque image, la pluie en `LineSegments` d'un pixel : à 0,28-0,58 d'opacité, elle se voyait
+à peine. Depuis le 2026-11-05, **un seul quad instancié** `count` fois (`InstancedBufferGeometry`, un
+`ShaderMaterial`) : le vertex shader place chaque particule à partir de son numéro d'instance.
+
+- **Placement** : une graine par particule (hachage de `gl_InstanceID`), une hauteur qui descend dans
+  le volume, et un **numéro de tour** qui lui donne un nouvel endroit à chaque fois qu'elle retombe
+  en haut. Le CPU ne garde que deux nombres partagés : un **décalage** (chute + vent), qui boucle sur
+  des volumes entiers (16 tours pour la hauteur, `LAPS`), et une **horloge** de balancement des
+  flocons, qui boucle sur 20π s (période commune de ses deux fréquences). Le vent et l'intensité
+  changent donc sans saut, et les nombres restent petits même après des heures de pluie.
+- **Pluie** : des traînées de 45 cm tournées vers la caméra, inclinées par la vitesse, plus brillantes
+  à la tête, larges d'au moins 0,22 % de la hauteur d'image (~2 px), quelle que soit la distance.
+  **Neige** : des disques doux de 6 cm, au moins 0,4 % de la hauteur d'image. Une particule apparaît
+  en fondu sur le dernier mètre sous le plafond au lieu de surgir.
+- **Nombres** : 1 500 à 6 000 gouttes, 1 000 à 3 500 flocons. Plus aucun tampon par particule :
+  seul l'appel de dessin grossit.
+- **Taille minimale à l'écran** : `uScreen` est lu dans `onBeforeRender`, sur la projection de la
+  caméra qui dessine (mètres par hauteur d'image, perspective ou orthographique), et non dans
+  `viewportSize`, faux dans les passes de la chaîne d'effets (même piège que `gpu/points.ts`).
+- **WebGPU** : le jumeau TSL est `gpu/precipitation.ts`, branché par le tag `precipitation` dans
+  `gpu/shaderMaterials.ts` (comme les caustiques). Le modulo y est écrit `a − b·floor(a/b)` dans les
+  deux langages : le `%` de WGSL tronque, un tour négatif tomberait ailleurs.
+- **Ce qui ne change pas** : l'API de `Precipitation` (`HouseScene.syncPrecipitation` intact), la
+  coupure en qualité basse et le régime de la boucle à 20 Hz. Le coût reste celui de redessiner la
+  scène, pas celui des particules.
+
+Vérifié dans la preview : pluie et neige, en WebGL et en WebGPU, sans erreur console. Le coût GPU
+n'est **pas mesuré** : le WebGPU du volet tourne à 1 img/s même sans pluie. Pas traité : la pluie
+tombe encore dans les pièces de la maison de poupée (aucune occultation par le toit).
+
+Sources : `apps/web/src/three/effects/precipitation.ts`, `apps/web/src/three/gpu/precipitation.ts`,
+`apps/web/src/three/gpu/shaderMaterials.ts`, `apps/web/src/three/three.test.ts`.
 
 ## Banc de réglage de la lumière (2026-09-18)
 

@@ -2654,23 +2654,25 @@ describe('weather in the scene', () => {
 describe('precipitation (tier C)', () => {
   const box = { min: [0, 0] as const, max: [10, 8] as const, height: 14 }
 
-  it('keeps every drop in the volume, makes it fall back to the top, and tilts it with the wind', () => {
+  it('draws one instanced quad per drop, pushed by the wind, its offset kept in the volume', () => {
     const rain = new Precipitation(box, { kind: 'rain', intensity: 1, windKmh: 36, windDirDeg: 270 })   // WEST wind: pushes toward +x
-    expect(rain.count).toBe(2600)
-    const pos = (rain.object as unknown as { geometry: { getAttribute(n: string): { array: Float32Array } } }).geometry.getAttribute('position').array
-    // a drop's streak leans toward where it comes from: the tail is to the west (smaller x) and higher
-    expect(pos[3]!).toBeLessThan(pos[0]!)
-    expect(pos[5]!).toBeGreaterThan(pos[2]!)
-    for (let f = 0; f < 60; f++) rain.step(0.05)                   // three seconds: everything has fallen back at least once
-    for (let i = 0; i < rain.count; i++) {
-      const x = pos[i * 6]!, y = pos[i * 6 + 1]!, z = pos[i * 6 + 2]!
-      expect(x).toBeGreaterThanOrEqual(-3); expect(x).toBeLessThanOrEqual(13)
-      expect(y).toBeGreaterThanOrEqual(-3); expect(y).toBeLessThanOrEqual(11)
-      expect(z).toBeGreaterThanOrEqual(0); expect(z).toBeLessThanOrEqual(14)
-    }
+    expect(rain.count).toBe(6000)
+    expect((rain.object as unknown as { geometry: { instanceCount: number } }).geometry.instanceCount).toBe(6000)
+    // the volume: the footprint plus 3 m all around, 14 m high
+    expect(rain.uniforms.uBoxMin.value.toArray()).toEqual([-3, -3, 0])
+    expect(rain.uniforms.uBoxSize.value.toArray()).toEqual([16, 14, 14])
+    // a west wind pushes toward +x, and the drop falls
+    expect(rain.uniforms.uVelocity.value.x).toBeGreaterThan(0)
+    expect(rain.uniforms.uVelocity.value.z).toBeLessThan(0)
+    for (let f = 0; f < 600; f++) rain.step(0.05)                  // thirty seconds: the offset has looped several times
+    const o = rain.uniforms.uOffset.value
+    expect(o.x).toBeGreaterThanOrEqual(0); expect(o.x).toBeLessThan(16)
+    expect(o.y).toBeGreaterThanOrEqual(0); expect(o.y).toBeLessThan(14)
+    expect(o.z).toBeGreaterThanOrEqual(0); expect(o.z).toBeLessThan(14 * 16)
+    expect(o.z).toBeCloseTo((30 * 9) % (14 * 16), 3)               // 9 m/s for 30 s, looped on 16 laps
     rain.dispose()
     const snow = new Precipitation(box, { kind: 'snow', intensity: 0, windKmh: 0, windDirDeg: 0 })
-    expect(snow.count).toBe(500)
+    expect(snow.count).toBe(1000)
     expect(snow.object.name).toBe('precipitation:snow')
     snow.dispose()
   })

@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-05] update | Pluie et neige placées par le GPU
+
+**Trigger** : question « on n'utilise pas de système de particules pour la pluie ? » ; la pluie existait (CPU, traits d'un pixel peu visibles), prototype GPU validé à l'œil par l'utilisateur.
+
+**Pages modified** :
+- `1_architecture/1_11_scene-3d-rendu.md` - sous-section « pluie et neige placées par le GPU » : quad instancié placé par le shader, décalage et horloge qui bouclent, traînées de largeur minimale à l'écran, jumeau TSL, modulo de WGSL, ce qui reste (coût non mesuré, pluie dans les pièces).
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-11-04] update | Lampes WebGPU : lampes masquées ou éteintes sautées
 
 **Trigger** : suite de la décomposition de l'écart WebGL / WebGPU, demande « les lampes maintenant ? ».
