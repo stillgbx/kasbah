@@ -109,6 +109,7 @@ function removeColor() {
   setCustom(next)
 }
 
+const showProblem = computed(() => props.status.on && !!props.status.problem)
 const subtitle = computed(() => [props.name, props.status.room?.name, props.status.area].filter(Boolean).join(' · '))
 </script>
 
@@ -128,7 +129,11 @@ const subtitle = computed(() => [props.name, props.status.room?.name, props.stat
       </div>
       <div class="box__body">
         <!-- reserved line: why the lights are not following, while it is being retried -->
-        <p class="problem" :title="status.on && status.problem ? $t(`music.lightSyncProblem.${status.problem}`) : undefined">{{ status.on && status.problem ? $t(`music.lightSyncProblem.${status.problem}`) : '' }}</p>
+        <div class="problem">
+          <p class="problem__what" :title="showProblem ? $t(`music.lightSyncProblem.${status.problem}`) : undefined">{{ showProblem ? $t(`music.lightSyncProblem.${status.problem}`) : '' }}</p>
+          <!-- the server's own words (bridge reason, ffmpeg error): readable without the logs -->
+          <p class="problem__detail" :title="showProblem ? status.problemDetail : undefined">{{ showProblem ? status.problemDetail ?? '' : '' }}</p>
+        </div>
         <!-- the colours being played, cover included once known -->
         <div class="strip" :style="{ background: preview(status.palette ?? []) }" :title="$t('music.lightSyncPanel.current')" />
 
@@ -230,7 +235,10 @@ const subtitle = computed(() => [props.name, props.status.room?.name, props.stat
 .box__body { overflow-y: auto; overscroll-behavior: contain; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-content: start; margin-right: -8px; padding-right: 8px; }
 .strip { height: 8px; border-radius: 999px; }
 /* one line, always reserved: the warning appears without pushing anything */
-.problem { margin: 0 0 -10px; height: 1.4em; line-height: 1.4; font-size: 12.5px; color: rgb(var(--v-theme-warning)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.problem { margin-bottom: -10px; display: grid; min-width: 0; }
+.problem p { margin: 0; height: 1.4em; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.problem__what { font-size: 12.5px; color: rgb(var(--v-theme-warning)); }
+.problem__detail { font-size: 11.5px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .sec { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
 /* five tiles on one row when they fit; narrower (phone zoomed in) they wrap rather than cut their
    names — the height depends on the width only, never on a choice */

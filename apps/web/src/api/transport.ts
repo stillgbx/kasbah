@@ -466,6 +466,8 @@ export interface MusicLightSync {
   palette?: string[]
   /** Switched on but not following, being retried: the stream to the bridge, or the sound analysis. */
   problem?: 'stream' | 'decode'
+  /** The error behind it (bridge reason, DTLS or ffmpeg message), as the server saw it. */
+  problemDetail?: string
 }
 
 /** The last listen of a player that no longer plays anything of ours (server restarted, stop): enough to resume it. */

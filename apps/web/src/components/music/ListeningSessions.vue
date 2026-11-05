@@ -137,7 +137,7 @@ const syncOf = (r: Row) => props.lightSync?.get(r.id)
 const syncTitle = (r: Row) => {
   const s = syncOf(r)
   if (!s?.available) return undefined
-  if (s.on && s.problem) return t(`music.lightSyncProblem.${s.problem}`)
+  if (s.on && s.problem) return [t(`music.lightSyncProblem.${s.problem}`), s.problemDetail].filter(Boolean).join(' — ')
   return s.on ? t('music.lightSyncOff', { area: s.area ?? '' }) : t('music.lightSyncOn', { area: s.area ?? '' })
 }
 

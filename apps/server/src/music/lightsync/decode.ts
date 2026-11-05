@@ -12,6 +12,8 @@ export interface Decoding {
   readonly done: boolean
   /** True if it finished on an error (source refused, cut, unreadable): the features stop early. */
   readonly failed: boolean
+  /** Why it failed, in ffmpeg's words (its last error line), when it did. */
+  readonly error: string | undefined
   stop(): void
 }
 
@@ -37,6 +39,7 @@ export function decode(sourceUrl: string, startS: number, opts: DecodeOpts): Dec
 
   let done = false
   let failed = false
+  let error: string | undefined
   let stopped = false
   // f32le samples can straddle two chunks: the leftover bytes wait for the next one
   let rest = Buffer.alloc(0)
@@ -52,11 +55,14 @@ export function decode(sourceUrl: string, startS: number, opts: DecodeOpts): Dec
   })
   let stderr = ''
   proc.stderr.on('data', (c: Buffer) => { if (stderr.length < 2000) stderr += c.toString() })
-  proc.on('error', (err) => { done = true; failed = true; opts.logger?.warn({ err }, 'lightsync: ffmpeg did not start') })
+  proc.on('error', (err) => { done = true; failed = true; error = err.message; opts.logger?.warn({ err }, 'lightsync: ffmpeg did not start') })
   proc.on('close', (code) => {
     done = true
     if (!stopped && code !== 0) {
       failed = true
+      // its last line, without the source URL it starts with (long, signed): the reason is what follows
+      error = stderr.trim().split(/\r?\n/).filter(Boolean).at(-1)?.replace(/https?:\/\/\S+?(?=:\s|\s|$)/g, 'source').slice(0, 200)
+        ?? `ffmpeg exited with code ${code}`
       opts.logger?.warn({ code, stderr: stderr.trim(), reachedS: Math.round(features.endS) }, 'lightsync: decoding stopped early')
     }
   })
@@ -65,6 +71,7 @@ export function decode(sourceUrl: string, startS: number, opts: DecodeOpts): Dec
     features,
     get done() { return done },
     get failed() { return failed },
+    get error() { return error },
     stop() {
       stopped = true
       if (!done) proc.kill('SIGKILL')

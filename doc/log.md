@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-05] update | Lumières en rythme : réactivation coupée par un événement tardif du pont
+
+**Déclencheur** : « si j'active la sync, que je la coupe, et que j'essaie de la réactiver alors ça donne ça » (capture : « Flux coupé par le pont Hue »).
+
+**Pages modifiées** :
+- `3_plugins/3_1_philips-hue.md` - mise à jour 2026-11-05 (nuit, suite) : événements du pont en ordre mais tardifs (mesuré), confirmation par ordre au lieu d'un délai, zone suivie dès l'ouverture.
+- `1_architecture/1_6_lecteur-musique.md` - mise à jour 2026-11-05 (nuit, suite) : `problemDetail` affiché (raison du pont, erreur ffmpeg sans l'URL).
+
+**Index** : rien à changer (pages déjà datées du jour).
+
+
 ## [2026-11-05] update | Lumières en rythme : un arrêt sans reprise, deux angles morts corrigés
 
 **Déclencheur** : « parfois ça s'arrête de fonctionner […] ensuite plus possible de remettre la sync en marche » ; logs non relevés, correctif choisi à l'aveugle.

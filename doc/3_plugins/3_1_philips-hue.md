@@ -248,3 +248,23 @@ sync en marche » (logs non relevés : correctif à l'aveugle, sur les angles mo
   erreur UDP) : l'envoi est protégé et termine le flux au lieu de jeter depuis un minuteur.
 
 Tests : `plugin.test.ts` (événement du pont, délai de grâce), `entertainment.test.ts` (envoi qui lève).
+
+### Mise à jour 2026-11-05 (nuit, suite) — la fin de zone se juge à l'ordre des événements, pas à un délai
+
+Constat de l'utilisateur, capture à l'appui : activer, couper puis réactiver la synchro affichait « Flux
+coupé par le pont Hue ». Le délai de grâce de 2 s de la mise à jour précédente était un pari sur la
+latence du pont. Mesuré sur le vrai pont (sonde ponctuelle qui lit le flux SSE pendant des
+ouvertures / fermetures) : les événements `entertainment_configuration` arrivent **dans l'ordre mais en
+retard et groupés** — un `active` reçu 700 ms après que le flux était déjà ouvert, et pendant la poignée
+de main DTLS lors de la première ouverture. Un `inactive` du flux qu'on vient de fermer, livré plus de
+2 s en retard, coupait donc le flux rouvert.
+
+Désormais : `streamArea` est posé **dès le début de l'ouverture** (la confirmation peut arriver pendant
+la poignée de main), et un `inactive` ne compte qu'une fois que le pont a confirmé ce flux par un
+`active` (`activeConfirmed`) — le `inactive` de l'ancien flux, si tard qu'il arrive, précède toujours le
+`active` du nouveau.
+
+Vérifié sur le vrai pont : activer / couper / réactiver avec la vraie synchro (musique simulée), flux
+rouvert sans incident ; arrêt de la zone depuis l'extérieur (comme le ferait l'appli Hue) : événement
+reçu en 250 ms, le pont ferme aussi la session DTLS (`close_notify`), la synchro rouvre 10 s plus tard.
+Tests `plugin.test.ts` : fin confirmée, confirmation pendant la poignée de main, arrêt tardif ignoré.

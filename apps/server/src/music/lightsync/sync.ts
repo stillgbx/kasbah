@@ -57,6 +57,8 @@ export interface LightSyncStatus {
   active: boolean
   /** Switched on but not following: what is being retried. */
   problem?: LightSyncProblem
+  /** The last error behind  (bridge reason, DTLS or ffmpeg message), for the tooltip. */
+  problemDetail?: string
   /** The room's settings (defaults until changed); absent without a room. */
   settings?: LightSyncSettings
   /** The colours in use, sRGB hex: the cover's once known for the playing track. */
@@ -107,6 +109,7 @@ interface Active {
   decodeRetryAt: number
   /** The analysis does not cover where the speaker is (failed or far behind): the lights are not following. */
   behind: boolean
+  behindDetail?: string
 }
 
 export class LightSync {
@@ -116,6 +119,7 @@ export class LightSync {
   private retryAt = 0
   /** The stream to the bridge failed or was ended, and is being retried. */
   private streamTrouble = false
+  private streamError: string | undefined
   private timer: unknown = null
   private settings: LightSyncSettingsByRoom = {}
   /** Cover colours of the playing track, by cover URL, once known. */
@@ -164,10 +168,10 @@ export class LightSync {
     return { deviceId, available: true, area: area.name, on, active, ...extra, ...(on ? this.problemOf(deviceId) : {}) }
   }
 
-  private problemOf(deviceId: string): { problem?: LightSyncProblem } {
+  private problemOf(deviceId: string): { problem?: LightSyncProblem; problemDetail?: string } {
     const a = this.active
-    if (a?.deviceId === deviceId) return a.behind ? { problem: 'decode' } : {}
-    return this.streamTrouble ? { problem: 'stream' } : {}
+    if (a?.deviceId === deviceId) return a.behind ? { problem: 'decode', ...(a.behindDetail ? { problemDetail: a.behindDetail } : {}) } : {}
+    return this.streamTrouble ? { problem: 'stream', ...(this.streamError ? { problemDetail: this.streamError } : {}) } : {}
   }
 
   /** Switches the sync of a speaker; switching one on switches the others off (one stream per bridge). */
@@ -288,6 +292,7 @@ export class LightSync {
         // the analysis does not cover where the speaker is: it failed (source refused or cut), or it
         // fell far behind (a seek ahead, a slow source). Decode from there again, less and less often
         a.behind = true
+        a.behindDetail = d.error ?? (d.failed ? 'the analysis stopped' : `analysis behind the speaker (${Math.round(f.endS)} s analysed, speaker at ${Math.round(pos)} s)`)
         if (now >= a.decodeRetryAt) {
           a.decodeFailures++
           a.decodeRetryAt = now + Math.min(DECODE_RETRY_MAX_MS, DECODE_RETRY_MS * 2 ** (a.decodeFailures - 1))
@@ -347,6 +352,7 @@ export class LightSync {
         a.decoding?.stop()
         this.active = null
         this.streamTrouble = true
+        this.streamError = reason
         this.retryAt = this.deps.clock.now() + RETRY_MS
       })
       this.deps.logger.info({ deviceId, area: area.name, effect: settings.effect }, 'lightsync: streaming')
@@ -354,6 +360,7 @@ export class LightSync {
     } catch (err) {
       this.deps.logger.warn({ err, deviceId }, 'lightsync: could not open the stream')
       this.streamTrouble = true
+      this.streamError = (err as Error).message
       this.retryAt = this.deps.clock.now() + RETRY_MS
     } finally {
       this.opening = false

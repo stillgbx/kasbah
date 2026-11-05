@@ -408,3 +408,12 @@ Vérifié : `sync.test.ts` (reprise avec délais croissants, pas de reprise en f
 puis relance immédiate), ffmpeg réel par HTTP depuis 0 et 60 s avec les options de reconnexion, source
 injoignable marquée en échec ; preview : motif affiché sans rien déplacer, une ligne en fr / en sur
 téléphone. **Cause réelle non confirmée** : à vérifier avec `grep -i lightsync logs/kasbah.log` au prochain arrêt.
+
+### Mise à jour 2026-11-05 (nuit, suite) — le motif exact affiché, sans les logs
+
+`status.problemDetail` porte l'erreur derrière `problem` : la raison donnée par le pont ou la couche DTLS
+pour `stream`, la dernière ligne de ffmpeg pour `decode` (`Decoding.error`, l'URL de la source — longue et
+signée — remplacée par « source » pour que la raison reste lisible, par ex. « source: Server returned 403
+Forbidden »). Affiché sur une seconde ligne réservée du panneau, en petit, et dans l'infobulle de
+l'ampoule : l'utilisateur peut le lire sans aller dans les logs du serveur. Cause de l'arrêt signalé à
+la réactivation : voir la mise à jour du même jour de [3_1 Philips Hue](../3_plugins/3_1_philips-hue.md).

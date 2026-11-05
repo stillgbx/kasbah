@@ -261,39 +261,61 @@ describe('hue entertainment stream', () => {
   const AREA = '1a8d99cc-967b-44f2-9202-43f976c0fa6b'
   const areas = [{ id: AREA, type: 'entertainment_configuration', metadata: { name: 'Zone 1' }, status: 'inactive',
     channels: [{ channel_id: 0, position: { x: 0, y: 0, z: 0 }, members: [] }], light_services: [{ rid: 'l-color', rtype: 'light' }] }]
-  const stopped = { creationtime: '2026-11-05T20:00:00Z', id: 'e9', type: 'update', data: [{ id: AREA, type: 'entertainment_configuration', status: 'inactive' }] }
+  const event = (status: string) => ({ creationtime: '2026-11-05T20:00:00Z', id: 'e-' + status, type: 'update', data: [{ id: AREA, type: 'entertainment_configuration', status }] })
 
-  async function streaming() {
+  /** `during`: events pushed while the handshake runs (the bridge confirms before the stream is up). */
+  async function streaming(during: string[] = []) {
     const bridge = fakeBridge({ areas })
     const clock = new ManualClock(0)
     const socket = Object.assign(new EventEmitter(), { send: vi.fn(), close: vi.fn() }) as unknown as DtlsSocket
-    const plugin = createHuePlugin({ fetchImpl: bridge.fetchImpl, dtlsConnect: () => { setTimeout(() => socket.emit('connected'), 0); return socket } })
+    const plugin = createHuePlugin({
+      fetchImpl: bridge.fetchImpl,
+      dtlsConnect: () => {
+        for (const st of during) bridge.push([event(st)])
+        setTimeout(() => socket.emit('connected'), 20)
+        return socket
+      },
+    })
     const { ctx } = fakeContext(hueConfigSchema.parse({ HUE_BRIDGE_HOST: '10.0.0.2', HUE_APP_KEY: 'key', HUE_CLIENT_KEY: '00112233445566778899aabbccddeeff' }), clock)
     await plugin.init(ctx)
     await plugin.start()
+    await flush(); await flush()
     const streamer = getLightStreamer()!
     expect(streamer.areaFor(['hue:l-color'])?.id).toBe(AREA)
     const stream = await streamer.open(AREA)
     const ended = vi.fn()
     stream.onEnded(ended)
-    return { bridge, clock, plugin, ended }
+    return { bridge, plugin, ended }
   }
+  const settle = async () => { for (let i = 0; i < 4; i++) await flush() }
 
-  it('ends the stream when the bridge says it stopped the area (UDP never would)', async () => {
-    const { bridge, clock, plugin, ended } = await streaming()
-    clock.advance(3000)
-    bridge.push([stopped])
-    await flush(); await flush()
+  it('ends the stream when the bridge says it stopped the area it had confirmed (UDP never would)', async () => {
+    const { bridge, plugin, ended } = await streaming()
+    bridge.push([event('active')])
+    bridge.push([event('inactive')])
+    await settle()
     expect(ended).toHaveBeenCalledWith('the bridge stopped the entertainment area')
     expect(bridge.puts.at(-1)).toEqual({ url: `/clip/v2/resource/entertainment_configuration/${AREA}`, body: { action: 'stop' } })
     await plugin.stop()
   })
 
-  it('ignores that event right after opening: it may be the one of the stream just replaced', async () => {
-    const { bridge, plugin, ended } = await streaming()
-    bridge.push([stopped])
-    await flush(); await flush()
+  it('counts a confirmation that arrives during the handshake', async () => {
+    const { bridge, plugin, ended } = await streaming(['active'])
+    bridge.push([event('inactive')])
+    await settle()
+    expect(ended).toHaveBeenCalled()
+    await plugin.stop()
+  })
+
+  it('ignores a stop that comes before the bridge confirmed the new stream: the one just replaced, however late', async () => {
+    const { bridge, plugin, ended } = await streaming(['inactive'])
+    bridge.push([event('inactive')])
+    await settle()
     expect(ended).not.toHaveBeenCalled()
+    bridge.push([event('active')])
+    bridge.push([event('inactive')])
+    await settle()
+    expect(ended).toHaveBeenCalledTimes(1)
     await plugin.stop()
   })
 })

@@ -29,17 +29,17 @@ function setup(saved: LightSyncSettingsByRoom = {}) {
       return stream
     }),
   }
-  const decodes: { url: string; startS: number; stop: ReturnType<typeof vi.fn>; state: { done: boolean; failed: boolean; span: number } }[] = []
+  const decodes: { url: string; startS: number; stop: ReturnType<typeof vi.fn>; state: { done: boolean; failed: boolean; span: number; error?: string } }[] = []
   const decode = vi.fn((url: string, startS: number): Decoding => {
     const stop = vi.fn()
-    const state = { done: false, failed: false, span: 30 }
+    const state: { done: boolean; failed: boolean; span: number; error?: string } = { done: false, failed: false, span: 30 }
     decodes.push({ url, startS, stop, state })
     const features = {
       startS,
       get endS() { return startS + state.span },
       at: (pos: number) => (pos >= startS && pos < startS + state.span ? { low: 1, mid: 0, high: 0, onset: 0 } : undefined),
     }
-    return { features, get done() { return state.done }, get failed() { return state.failed }, stop }
+    return { features, get done() { return state.done }, get failed() { return state.failed }, get error() { return state.error }, stop }
   })
   const sessions = new Map<string, { sid: string; sourceUrl: string; artUrl?: string }>()
   const settingsStore = memoryLightSyncSettings(saved)
@@ -245,9 +245,9 @@ describe('LightSync recovery', () => {
     await t.step(1500)
     expect(t.decodes).toHaveLength(2)                                       // restarted at the speaker's position
     expect(t.decodes[1]!.startS).toBeGreaterThan(0)
-    Object.assign(t.decodes[1]!.state, { done: true, failed: true, span: 0 })   // fails again at once
+    Object.assign(t.decodes[1]!.state, { done: true, failed: true, span: 0, error: 'HTTP error 403 Forbidden' })   // fails again at once
     await t.step(1000)
-    expect(t.sync.status('cast:speaker-1').problem).toBe('decode')          // the lights are not following
+    expect(t.sync.status('cast:speaker-1')).toMatchObject({ problem: 'decode', problemDetail: 'HTTP error 403 Forbidden' })   // ffmpeg's own words
     expect(t.decodes).toHaveLength(2)                                       // waiting: 2 s before the second try
     await t.step(1500)
     expect(t.decodes).toHaveLength(3)
@@ -272,7 +272,7 @@ describe('LightSync recovery', () => {
     await t.step(300)
     t.streams[0]!.end('the bridge stopped the entertainment area')
     await t.step(500)
-    expect(t.sync.status('cast:speaker-1')).toMatchObject({ on: true, active: false, problem: 'stream' })
+    expect(t.sync.status('cast:speaker-1')).toMatchObject({ on: true, active: false, problem: 'stream', problemDetail: 'the bridge stopped the entertainment area' })
     await t.sync.set('cast:speaker-1', false)
     await t.sync.set('cast:speaker-1', true)
     await t.step(300)

@@ -64,8 +64,14 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
   let areas: HueEntertainmentConfiguration[] = []
   /** The bridge streams one area at a time: the stream in progress, if any. */
   let activeStream: HueLightStream | null = null
-  /** When it opened: the "inactive" event of the stream it replaced may still be on its way. */
-  let activeSince = 0
+  /**
+   * The bridge has confirmed the current stream ("active" event since it opened). Its events come in
+   * order but late and batched (an "active" seen 700 ms after the stream was up): an "inactive" only
+   * counts after this one, otherwise it may be the stop of the stream just replaced.
+   */
+  let activeConfirmed = false
+  /** Area of the stream being opened or running: its "active" event can come during the handshake. */
+  let streamArea: string | null = null
   /** rid of a room OR a zone → rid of its `grouped_light` (used to switch off a light scene). */
   let groupedLightOfGroup = new Map<string, string>()
   let sseCtrl: AbortController | null = null
@@ -207,7 +213,9 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
             // the bridge stopped the area we stream to (Hue app, Sync box, a silent DTLS drop): UDP never
             // tells, this event does — end the stream so the music sync opens a new one
             const status = (item as { status?: string }).status
-            if (status === 'inactive' && activeStream && activeStream.area.id === item.id && ctx!.clock.now() - activeSince > 2000) {
+            if (streamArea !== item.id) { /* not an area we stream to */ }
+            else if (status === 'active') activeConfirmed = true
+            else if (status === 'inactive' && activeConfirmed && activeStream) {
               log().warn({ area: item.id }, 'Hue entertainment area stopped by the bridge')
               void activeStream.abort('the bridge stopped the entertainment area')
             }
@@ -270,15 +278,25 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
       if (!cfg) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Hue entertainment area ${areaId}`)
       // one area at a time on a bridge: the newer request wins
       await activeStream?.close()
-      const stream = await openStream({
-        client, area: toLightArea(cfg), host, appKey, clientKey, clock: ctx!.clock, logger: ctx!.logger,
-        connect: deps.dtlsConnect ?? defaultDtlsConnect,
-      })
+      // from here, this area's events are about the new stream; a late "inactive" of the one just
+      // closed comes before the bridge confirms the new one, and is ignored
+      streamArea = cfg.id
+      activeConfirmed = false
+      let stream: HueLightStream
+      try {
+        stream = await openStream({
+          client, area: toLightArea(cfg), host, appKey, clientKey, clock: ctx!.clock, logger: ctx!.logger,
+          connect: deps.dtlsConnect ?? defaultDtlsConnect,
+        })
+      } catch (err) {
+        streamArea = null
+        throw err
+      }
       activeStream = stream
-      activeSince = ctx!.clock.now()
-      stream.onEnded(() => { if (activeStream === stream) activeStream = null })
+      const release = () => { if (activeStream === stream) { activeStream = null; streamArea = null } }
+      stream.onEnded(release)
       const close = stream.close
-      return { ...stream, close: async () => { if (activeStream === stream) activeStream = null; await close() } }
+      return { ...stream, close: async () => { release(); await close() } }
     },
   }
 
