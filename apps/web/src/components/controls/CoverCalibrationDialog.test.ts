@@ -43,6 +43,24 @@ describe('CoverCalibrationDialog', () => {
     expect(shown()).toBe('10 %')
   })
 
+  it('a mark can be typed, and one mark cleared without the others', async () => {
+    const cal = [{ position: 0, motor: 18 }, { position: 50, motor: 65 }, { position: 100, motor: 100 }]
+    await open(state({ calibration: cal }))
+    const inputs = () => [...document.querySelectorAll<HTMLInputElement>('.mark__input')]
+    // top of the glass · quarter · half · three quarters · sill, as motor CLOSURES
+    expect(inputs().map((i) => i.value)).toEqual(['0', '', '35', '', '82'])
+    // clear the half mark alone
+    document.querySelectorAll<HTMLButtonElement>('.mark__clear')[2]!.click(); await nextTick()
+    expect(inputs().map((i) => i.value)).toEqual(['0', '', '', '', '82'])
+    // type the quarter mark
+    const quarter = inputs()[1]!
+    quarter.value = '20'; quarter.dispatchEvent(new Event('change')); await nextTick()
+    document.querySelectorAll<HTMLButtonElement>('.pill')[2]!.click(); await nextTick()          // Save
+    expect(w!.emitted('command')!.at(-1)).toEqual([{ type: 'cover.set_calibration', points: [
+      { position: 0, motor: 18 }, { position: 75, motor: 80 }, { position: 100, motor: 100 },
+    ] }])
+  })
+
   it('hands back to the real position when the motor stopped elsewhere', async () => {
     await open(state({ position: 100 }))
     nudge('+5'); await nextTick()

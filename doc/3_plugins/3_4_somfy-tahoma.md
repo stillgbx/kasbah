@@ -433,7 +433,11 @@ le fichier de la vraie maison.
 `apps/web/src/components/controls/CoverCalibrationDialog.vue`) : un curseur et des pas de ±1 / ±5 %
 qui envoient `cover.set_position` avec **`motor: true`** (l'échelle du moteur, sans passer par
 l'étalonnage en cours), puis « Marquer » à chaque repère : haut de la vitre et appui obligatoires,
-quart, moitié et trois quarts facultatifs. Rien n'est enregistré avant « Enregistrer » ; l'étalonnage
+quart, moitié et trois quarts facultatifs. La valeur d'un repère (fermeture moteur) peut aussi se
+SAISIR (une mesure déjà connue) et chaque repère s'efface seul, croix à place réservée ; vide = effacé.
+En boîte étroite (téléphone), le nom passe sur sa ligne et la valeur, la croix et « Marquer » dessous
+(requêtes de conteneur, deux seuils : 400 px, puis 300 px où « Marquer » garde son icône seule).
+Rien n'est enregistré avant « Enregistrer » ; l'étalonnage
 en place continue de servir pendant la mesure.
 
 On ne l'ouvre qu'une fois, à l'installation : elle vit avec les RÉGLAGES, pas avec les manœuvres

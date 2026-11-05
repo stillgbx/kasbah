@@ -86,6 +86,17 @@ const canMark = computed(() => !props.disabled && !moving.value && motor.value !
 function mark(covered: number) {
   if (canMark.value) marks.value = { ...marks.value, [covered]: motor.value }
 }
+/** A mark typed by hand, as a motor CLOSURE like the rest of the box; empty = cleared. */
+function typeMark(covered: number, raw: string) {
+  const n = raw.trim() === '' ? NaN : Number(raw.replace(',', '.'))
+  if (!Number.isFinite(n)) { unmark(covered); return }
+  marks.value = { ...marks.value, [covered]: 100 - Math.min(100, Math.max(0, Math.round(n))) }
+}
+function unmark(covered: number) {
+  const next = { ...marks.value }
+  delete next[covered]
+  marks.value = next
+}
 
 /** Points sorted from the sill (position 0) to the top of the glass (position 100). */
 const points = computed<CoverCalibration>(() => MARKS
@@ -149,13 +160,27 @@ function clear() {
         <section class="sec">
           <div class="section-label">{{ $t('cover.calibration.marks') }}</div>
           <div v-for="m in MARKS" :key="m.key" class="mark">
-            <span class="mark__text">
+            <span class="mark__text" :title="$t(`cover.calibration.${m.key}Hint`)">
               <span class="mark__name">{{ $t(`cover.calibration.${m.key}`) }}<span v-if="m.required" class="muted"> · {{ $t('cover.calibration.required') }}</span></span>
               <span class="muted mark__hint">{{ $t(`cover.calibration.${m.key}Hint`) }}</span>
             </span>
-            <span class="mark__pct">{{ marks[m.covered] === undefined ? '—' : `${100 - marks[m.covered]!} %` }}</span>
-            <button type="button" class="key mark__btn" :disabled="!canMark" @click="mark(m.covered)">
-              <StrokeIcon name="crosshair" :size="16" /><span>{{ $t('cover.calibration.mark') }}</span>
+            <!-- the value can be typed (a measure already known) or cleared on its own; the cross keeps
+                 its place when there is nothing to clear, so the row does not move -->
+            <label class="mark__val">
+              <input class="mark__input" type="text" inputmode="numeric" maxlength="3" :disabled="disabled"
+                     :value="marks[m.covered] === undefined ? '' : String(100 - marks[m.covered]!)" placeholder="—"
+                     :aria-label="$t('cover.calibration.markValue', { mark: $t(`cover.calibration.${m.key}`) })"
+                     @change="typeMark(m.covered, ($event.target as HTMLInputElement).value)"
+                     @keydown.enter="($event.target as HTMLInputElement).blur()" />
+              <span class="muted">%</span>
+            </label>
+            <button type="button" class="mark__clear" :class="{ 'mark__clear--off': marks[m.covered] === undefined }"
+                    :disabled="disabled || marks[m.covered] === undefined" :tabindex="marks[m.covered] === undefined ? -1 : 0"
+                    :title="$t('cover.calibration.clearMark')" :aria-label="$t('cover.calibration.clearMark')" @click="unmark(m.covered)">
+              <StrokeIcon name="close" :size="14" />
+            </button>
+            <button type="button" class="key mark__btn" :disabled="!canMark" :title="$t('cover.calibration.mark')" :aria-label="$t('cover.calibration.mark')" @click="mark(m.covered)">
+              <StrokeIcon name="crosshair" :size="16" /><span class="mark__btnlabel">{{ $t('cover.calibration.mark') }}</span>
             </button>
           </div>
           <!-- a reserved line: the warning appears without pushing the buttons -->
@@ -177,16 +202,18 @@ function clear() {
 </template>
 
 <style scoped>
-.box { width: 100%; padding: 18px 20px 20px; display: grid; gap: 12px; box-shadow: var(--shadow); max-height: 85vh; grid-template-rows: auto minmax(0, 1fr); }
+.box { width: 100%; container-type: inline-size; padding: 18px 20px 20px; display: grid; gap: 12px; box-shadow: var(--shadow); max-height: 85vh; grid-template-rows: auto minmax(0, 1fr); }
 .box__head { display: flex; align-items: flex-start; gap: 12px; }
 .min0 { min-width: 0; flex: 1 1 auto; }
 .box__title { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.3; }
 .box__sub { font-size: 13px; margin-top: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .box__close { flex: 0 0 auto; width: 32px; height: 32px; margin: -4px -6px 0 0; border: 0; border-radius: 10px; background: transparent; color: var(--muted); display: grid; place-items: center; }
 .box__close:hover { background: var(--surface2); color: var(--text); }
-.box__body { overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 18px; align-content: start; margin-right: -8px; padding-right: 8px; }
+.box__body { overflow-y: auto; overscroll-behavior: contain; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-content: start; margin-right: -8px; padding-right: 8px; }
 .intro { margin: 0; font-size: 13px; line-height: 1.45; }
-.sec { display: grid; gap: 8px; }
+/* `min-width: 0` down the grid: a grid item is otherwise as wide as its content, and a mark's name
+   (one line, not wrapped) widened the whole box at phone width zoomed in */
+.sec { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
 .motor { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .motor__pct { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .motor__pct[data-moving='1'] { color: var(--accent); }
@@ -202,14 +229,39 @@ function clear() {
 }
 .key:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .key:disabled { opacity: .4; }
-.mark { display: flex; align-items: center; gap: 10px; height: 48px; }
+.mark { display: flex; align-items: center; gap: 10px; height: 48px; min-width: 0; }
 .mark__text { flex: 1 1 auto; min-width: 0; display: grid; }
 .mark__name, .mark__hint { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .mark__name { font-size: 14px; font-weight: 500; }
 .mark__hint { font-size: 12px; }
-.mark__pct { flex: 0 0 4.5ch; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.mark__val { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.mark__input {
+  width: 4.5ch; box-sizing: content-box; height: 28px; padding: 0 6px; text-align: right; font: inherit; font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
+}
+.mark__input::placeholder { color: var(--muted); }
+.mark__input:focus { outline: none; border-color: var(--accent); }
+.mark__clear {
+  flex: 0 0 auto; width: 24px; height: 24px; padding: 0; display: grid; place-items: center;
+  border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer;
+}
+.mark__clear:hover:not(:disabled) { background: var(--surface2); color: var(--text); }
+.mark__clear--off { visibility: hidden; }
 .mark__btn { flex: 0 0 auto; }
+/* narrow box (phone): the name on its own line, full width, and the value, its cross and "Mark" under
+   it, on the right. Two lines for EVERY mark, decided by the width alone, never by the state. */
+@container (max-width: 400px) {
+  .mark { display: grid; grid-template-columns: 1fr auto auto auto; column-gap: 8px; row-gap: 4px; height: auto; }
+  .mark__text { grid-column: 1 / -1; }
+  .mark__name { white-space: normal; }
+  .mark__val { grid-column: 2; }
+}
+/* narrower still (phone zoomed in): "Mark" keeps only its icon, its name stays in the tooltip */
+@container (max-width: 300px) {
+  .mark__btnlabel { display: none; }
+  .mark__btn { width: 40px; padding: 0; }
+}
 .problem { height: 18px; font-size: 12px; color: rgb(var(--v-theme-warning)); }
 .acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.acts__end { display: inline-flex; gap: 8px; margin-left: auto; }
+.acts__end { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
 </style>
