@@ -109,8 +109,9 @@ export function cover(externalId: string, o: CoverOptions): SimDevice<'cover'> {
           break
         case 'cover.set_preset':
           if (preset === undefined) throw new SimError('UNSUPPORTED_COMMAND', 'no preset')
-          // rewriting the memory does NOT MOVE the cover: it is a setting, not a maneuver
-          preset = toMotor(cmd.position)
+          // rewriting the memory does NOT MOVE the cover: it is a setting, not a maneuver. Saving
+          // the position shown saves where the motor IS (a sealed shutter and the sill both read 0)
+          preset = calibration && motorToCalibrated(calibration, motor, requested).position === cmd.position ? motor : toMotor(cmd.position)
           publish()
           return
         case 'cover.set_quiet':

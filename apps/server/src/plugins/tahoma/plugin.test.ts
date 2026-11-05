@@ -9,7 +9,7 @@ import type { PluginContext } from '../../core/plugin'
 import type { FetchLike } from '../../core/sse'
 import { selfSignedCertificate, startTlsServer, type TestCertificate } from '../../core/test-tls'
 import { EVENTS, EVENTS_STOPPED, IO_SHUTTER, IO_VENETIAN, RTS_SHUTTER, SETUP } from './__fixtures__/box'
-import { calibratePatch, createTahomaPlugin, tahomaConfigSchema } from './index'
+import { calibratePatch, createTahomaPlugin, tahomaConfigSchema, toMotorCommand } from './index'
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
 const json = (data: unknown, status = 200) =>
@@ -192,6 +192,11 @@ describe('tahoma plugin', () => {
     // 75 % goes out as motor 63 (closure 37), which reads back as 76 % unless the request is known
     expect(calibratePatch({ position: 63 }, cal)).toMatchObject({ position: 76 })
     expect(calibratePatch({ position: 63 }, cal, 75)).toMatchObject({ position: 75, motorPosition: 63 })
+    // the favorite position: converted like a position, except the one the shutter SHOWS, which keeps
+    // the motor's value (sealed at motor 0 and the sill at motor 12 both show 0 %)
+    expect(toMotorCommand({ type: 'cover.set_preset', position: 50 }, cal)).toEqual({ type: 'cover.set_preset', position: 40 })
+    expect(toMotorCommand({ type: 'cover.set_preset', position: 0 }, cal, { motor: 0 })).toEqual({ type: 'cover.set_preset', position: 0 })
+    expect(toMotorCommand({ type: 'cover.set_preset', position: 0 }, cal, { motor: 60 })).toEqual({ type: 'cover.set_preset', position: 12 })
     await plugin.stop()
 
     expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({ calibrations: { [shutter]: cal } })

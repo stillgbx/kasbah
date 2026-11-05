@@ -207,6 +207,19 @@ function commit(id: string, v: number) {
             <StrokeIcon name="battery" :size="12" />{{ batteryText(entry.state as StateFor<'cover'>) }}
           </span>
         </template>
+        <!-- calibration, done once when the shutter is installed: a small tool on the NAME line, just
+             before the location pin — not one more key that would wrap the row of maneuvers. Its place
+             is RESERVED on every cover row, so the tools line up from one shutter to the next. -->
+        <template #tools="{ entry }">
+          <button v-if="entry.descriptor.capabilities.includes('calibration')" type="button" class="tool"
+                  :disabled="!entry.state.available" :aria-haspopup="'dialog'"
+                  :title="`${$t('cover.calibration.title')} · ${(entry.state as StateFor<'cover'>).calibration ? $t('cover.calibration.on') : $t('cover.calibration.off')}`"
+                  :aria-label="$t('cover.calibration.title')"
+                  @click="calibratingId = entry.descriptor.id">
+            <StrokeIcon name="wrench" :size="14" />
+          </button>
+          <span v-else class="tool tool--empty" aria-hidden="true" />
+        </template>
         <template #control="{ entry }">
           <!-- cover without opening: it is assigned HERE — no sense showing Open/Close
                as long as we do not know which window it dresses -->
@@ -256,15 +269,6 @@ function commit(id: string, v: number) {
                       @click="devices.sendCommand(entry.descriptor.id, { type: 'cover.set_quiet', on: !(entry.state as StateFor<'cover'>).quiet })">
                 <StrokeIcon name="moon" :size="18" />
               </button>
-              <!-- calibration: a setting too, it opens its box (the marks need the motor moved) -->
-              <button v-if="entry.descriptor.capabilities.includes('calibration')" type="button" class="key key--toggle"
-                      :disabled="!entry.state.available" :aria-haspopup="'dialog'"
-                      :aria-pressed="!!(entry.state as StateFor<'cover'>).calibration"
-                      :title="`${$t('cover.calibration.title')} · ${(entry.state as StateFor<'cover'>).calibration ? $t('cover.calibration.on') : $t('cover.calibration.off')}`"
-                      :aria-label="$t('cover.calibration.title')"
-                      @click="calibratingId = entry.descriptor.id">
-                <StrokeIcon name="wrench" :size="18" />
-              </button>
             </div>
           </div>
         </template>
@@ -313,6 +317,14 @@ function commit(id: string, v: number) {
 }
 .key:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .key:disabled { opacity: .4; }
+/* same footprint and look as the row's location pin (`RoomBands`, `.badge--show`) */
+.tool {
+  flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; padding: 0;
+  border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; transition: background .15s, color .15s;
+}
+.tool:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.tool:disabled { opacity: .4; cursor: default; }
+.tool--empty { cursor: default; }
 .key--toggle[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .fact { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; flex: 0 0 auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fact--lux { min-width: 8ch; }

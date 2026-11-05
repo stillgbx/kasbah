@@ -148,11 +148,19 @@ export function calibratePatch(patch: StatePatch<'cover'>, cal: CoverCalibration
 /**
  * Command on the real scale -> command on the motor's scale. `set_position` with `motor: true` is
  * already on it (the calibration gesture). `open` and `close` go to the end stops either way.
+ *
+ * `current`: where the motor stands, and the real position last asked for. Saving the favorite
+ * position saves where the shutter IS (bring it there, then memorize): when the position sent is the
+ * one the shutter shows, the motor's own value is kept. Otherwise a shutter closed with its slats
+ * pressed (shown 0 %) would memorize the sill point, also 0 %, slats apart.
  */
-export function toMotorCommand(command: Command, cal: CoverCalibration | undefined): Command {
+export function toMotorCommand(command: Command, cal: CoverCalibration | undefined, current?: { motor: number; requested?: number }): Command {
   if (!cal) return command
   if (command.type === 'cover.set_position' && !command.motor) return { type: 'cover.set_position', position: calibratedToMotor(cal, command.position) }
-  if (command.type === 'cover.set_preset') return { type: 'cover.set_preset', position: calibratedToMotor(cal, command.position) }
+  if (command.type === 'cover.set_preset') {
+    const here = current && motorToCalibrated(cal, current.motor, current.requested).position === command.position
+    return { type: 'cover.set_preset', position: here ? current.motor : calibratedToMotor(cal, command.position) }
+  }
   return command
 }
 
@@ -469,7 +477,9 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
         else ctx!.emitState(externalId, { ...patch, calibration: null, motorPosition: null, sealed: null })
         return
       }
-      const action = toAction(entry.device.deviceURL, toMotorCommand(command, calibrations.get(externalId)), entry.commands, quiet.has(externalId))
+      const motor = positions.get(externalId)
+      const current = motor === undefined ? undefined : { motor, requested: requested.get(externalId) }
+      const action = toAction(entry.device.deviceURL, toMotorCommand(command, calibrations.get(externalId), current), entry.commands, quiet.has(externalId))
       if (!action) throw new PluginError('UNSUPPORTED_COMMAND', `${command.type} on ${entry.device.controllableName ?? externalId}`)
       await enqueue(action, command.type)
       // any other move makes the request stale; a setting (tilt, favorite) leaves it alone

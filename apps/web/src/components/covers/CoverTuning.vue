@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { OPENING_MATERIALS, type DeviceDescriptor, type OpeningMaterial } from '@kasbah/shared'
 import { coverLeaves, hasLeaves } from '../../lib/orientation'
+import { useDevicesStore } from '../../stores/devices'
 import { useHouseStore } from '../../stores/house'
+import CoverCalibrationDialog from '../controls/CoverCalibrationDialog.vue'
 
 /**
  * What only the HOUSE knows about a cover: its leaves, its material, its color. The vendor says
@@ -19,6 +21,15 @@ import { useHouseStore } from '../../stores/house'
  * publishes.
  */
 const props = defineProps<{ descriptor: DeviceDescriptor }>()
+const devices = useDevicesStore()
+// Calibration: done once, when the shutter is installed — a setting, hence here and not among the
+// maneuvers. The box needs the motor moved, so it reads the live state.
+const coverState = computed(() => {
+  const s = devices.states[props.descriptor.id]
+  return s?.kind === 'cover' ? s : undefined
+})
+const calibratable = computed(() => props.descriptor.capabilities.includes('calibration') && !!coverState.value)
+const calibrating = ref(false)
 const house = useHouseStore()
 
 const houseDevice = computed(() => house.houseDeviceFor(props.descriptor.id))
@@ -96,6 +107,16 @@ onBeforeUnmount(() => preview(null))
                @change="setColor(($event.target as HTMLInputElement).value)" />
       </span>
     </label>
+    <div v-if="calibratable" class="tune__row">
+      <span class="muted tune__k">{{ $t('cover.calibration.title') }}</span>
+      <span class="tune__fields">
+        <button type="button" class="tune__btn" :disabled="!coverState!.available" :aria-haspopup="'dialog'" @click="calibrating = true">
+          {{ coverState!.calibration ? $t('cover.calibration.on') : $t('cover.calibration.off') }}
+        </button>
+      </span>
+    </div>
+    <CoverCalibrationDialog v-if="calibratable" v-model="calibrating" :descriptor="descriptor" :state="coverState!"
+                            :disabled="!coverState!.available" @command="(cmd) => devices.sendCommand(descriptor.id, cmd)" />
   </div>
 </template>
 
@@ -118,4 +139,12 @@ onBeforeUnmount(() => preview(null))
   font: inherit; font-size: 13px; cursor: pointer;
 }
 .tune__reset--off { visibility: hidden; }
+/* same footprint as the selectors (96 px): the column of fields stays aligned */
+.tune__btn {
+  width: 96px; height: 28px; padding: 0 6px; overflow: hidden; text-overflow: ellipsis;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
+  font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer;
+}
+.tune__btn:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.tune__btn:disabled { opacity: .4; cursor: default; }
 </style>

@@ -206,17 +206,23 @@ defineExpose({ count: computed(() => entries.value.length) })
                 <slot name="status-badge" :entry="r.entry" /><MarqueeText class="row__statustext" :text="r.status" /><slot name="status-after" :entry="r.entry" />
               </div>
             </div>
-            <!-- not placed: not a badge but an action, putting the device in the house -->
-            <button v-if="r.origin === 'unplaced'" type="button" class="badge badge--place" :title="$t('rooms.origins.placeHint')"
-                    :aria-label="$t('rooms.origins.place')" @click="place(r.entry)">
-              <StrokeIcon name="pin" :size="14" /><span class="badge__label">{{ $t('rooms.origins.place') }}</span>
-            </button>
-            <!-- placed: the pill leads to the device in the 3D house (framing its room, panel) -->
-            <button v-else type="button" class="badge badge--show" :data-kind="r.origin"
-                    :title="`${$t(`rooms.origins.${r.origin}Hint`)} · ${$t('common.showIn3d')}`"
-                    :aria-label="`${$t(`rooms.origins.${r.origin}`)} · ${$t('common.showIn3d')}`" @click="show(r.entry)">
-              <StrokeIcon name="pin" :size="14" />
-            </button>
+            <!-- the row's small tools, ONE grid cell: the location pin always at the far right, and what a
+                 view adds (`tools` slot: a shutter's calibration) just before it — the pin keeps its place
+                 whether the view's tool is there or not -->
+            <div class="row__end">
+              <slot name="tools" :entry="r.entry" />
+              <!-- not placed: not a badge but an action, putting the device in the house -->
+              <button v-if="r.origin === 'unplaced'" type="button" class="badge badge--place" :title="$t('rooms.origins.placeHint')"
+                      :aria-label="$t('rooms.origins.place')" @click="place(r.entry)">
+                <StrokeIcon name="pin" :size="14" /><span class="badge__label">{{ $t('rooms.origins.place') }}</span>
+              </button>
+              <!-- placed: the pill leads to the device in the 3D house (framing its room, panel) -->
+              <button v-else type="button" class="badge badge--show" :data-kind="r.origin"
+                      :title="`${$t(`rooms.origins.${r.origin}Hint`)} · ${$t('common.showIn3d')}`"
+                      :aria-label="`${$t(`rooms.origins.${r.origin}`)} · ${$t('common.showIn3d')}`" @click="show(r.entry)">
+                <StrokeIcon name="pin" :size="14" />
+              </button>
+            </div>
             <slot name="control" :entry="r.entry" :on="r.on" />
             <!-- Device that its plugin REMEMBERS although it no longer answers, and that is not in the
                  house: this is where a ghost shows up ("Not in the house"), so this is where it is
@@ -290,6 +296,7 @@ defineExpose({ count: computed(() => entries.value.length) })
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
 /* the forget row takes the full width of the row, under the control */
 .row__forget { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
+.row__end { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .badge {
   flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; color: var(--muted);
 }

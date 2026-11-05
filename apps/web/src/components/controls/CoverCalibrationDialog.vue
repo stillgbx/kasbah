@@ -41,14 +41,45 @@ const motorClosure = computed(() => (motor.value === undefined ? undefined : 100
 const moving = computed(() => props.state.motion !== 'stopped')
 const dragging = ref(false)
 const drag = ref(0)
-watch(motorClosure, (v) => { if (!dragging.value) drag.value = v ?? 0 }, { immediate: true })
-const shownClosure = computed(() => (dragging.value ? drag.value : motorClosure.value))
+
+/**
+ * The motor closure ASKED FOR, held until the motor gets there — the same rule as the store's target
+ * for the other sliders (`devices.ts`, `resolveTarget`), which cannot hold this one: it is on the
+ * motor's scale, not on `position`'s. Without it, a motor that only publishes its position at the end
+ * of the travel sends the thumb back to its start on release, then to the target 20 s later.
+ * `since`: the state's `updatedAt` when the command left. The optimistic patch keeps that date, so a
+ * frame with the same date is the app's own guess, not the device speaking.
+ */
+const TARGET_TTL_MS = 90_000
+const aim = ref<{ closure: number; since: number; moved: boolean; at: number } | null>(null)
+watch(() => props.state, (s) => {
+  const a = aim.value
+  if (!a || s.updatedAt === a.since) return
+  const arrived = motorClosure.value !== undefined && Math.abs(motorClosure.value - a.closure) <= 1
+  const stillMoving = s.motion !== 'stopped'
+  // stopped elsewhere AFTER having moved: it did not go as asked, back to the real position
+  if (arrived || (a.moved && !stillMoving) || Date.now() - a.at > TARGET_TTL_MS || !s.available) aim.value = null
+  else if (stillMoving && !a.moved) aim.value = { ...a, moved: true }
+})
+watch(open, (v) => { if (!v) aim.value = null })
+
+const shownClosure = computed(() => (dragging.value ? drag.value : aim.value?.closure ?? motorClosure.value))
 
 function goTo(closure: number) {
-  emit('command', { type: 'cover.set_position', position: 100 - Math.min(100, Math.max(0, Math.round(closure))), motor: true })
+  const c = Math.min(100, Math.max(0, Math.round(closure)))
+  const since = props.state.updatedAt
+  emit('command', { type: 'cover.set_position', position: 100 - c, motor: true })
+  // already there: nothing to hold (the device will publish nothing new)
+  aim.value = motorClosure.value !== undefined && Math.abs(motorClosure.value - c) <= 1 ? null : { closure: c, since, moved: false, at: Date.now() }
 }
+/** From what the box SHOWS: two quick taps on +5 add up to 10, even before the motor has moved. */
 function nudge(delta: number) {
-  if (motorClosure.value !== undefined) goTo(motorClosure.value + delta)
+  const from = aim.value?.closure ?? motorClosure.value
+  if (from !== undefined) goTo(from + delta)
+}
+function stop() {
+  aim.value = null
+  emit('command', { type: 'cover.stop' })
 }
 
 const canMark = computed(() => !props.disabled && !moving.value && motor.value !== undefined)
@@ -98,14 +129,15 @@ function clear() {
             <span class="section-label">{{ $t('cover.calibration.motor') }}</span>
             <span class="motor__pct" :data-moving="moving ? '1' : '0'">{{ shownClosure === undefined ? '—' : `${Math.round(shownClosure)} %` }}</span>
           </div>
-          <v-slider :model-value="shownClosure ?? 0" :min="0" :max="100" :step="1" :disabled="disabled" color="primary"
+          <v-slider class="motor__slider" :model-value="shownClosure ?? 0" :min="0" :max="100" :step="1" :disabled="disabled" color="primary"
                     density="compact" hide-details :aria-label="$t('cover.calibration.motor')"
-                    @update:model-value="(v: number) => { dragging = true; drag = v }"
+                    @start="(v: number) => { dragging = true; drag = v }"
+                    @update:model-value="(v: number) => { if (dragging) drag = v }"
                     @end="(v: number) => { dragging = false; goTo(v) }" />
           <div class="nudges">
             <button type="button" class="key" :disabled="disabled || motorClosure === undefined" :aria-label="$t('cover.calibration.nudgeUp', { n: 5 })" @click="nudge(-5)">−5</button>
             <button type="button" class="key" :disabled="disabled || motorClosure === undefined" :aria-label="$t('cover.calibration.nudgeUp', { n: 1 })" @click="nudge(-1)">−1</button>
-            <button type="button" class="key" :disabled="disabled" :aria-label="$t('common.stop')" @click="emit('command', { type: 'cover.stop' })">
+            <button type="button" class="key" :disabled="disabled" :aria-label="$t('common.stop')" @click="stop">
               <StrokeIcon name="stop" :size="16" />
             </button>
             <button type="button" class="key" :disabled="disabled || motorClosure === undefined" :aria-label="$t('cover.calibration.nudgeDown', { n: 1 })" @click="nudge(1)">+1</button>
@@ -152,13 +184,15 @@ function clear() {
 .box__sub { font-size: 13px; margin-top: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .box__close { flex: 0 0 auto; width: 32px; height: 32px; margin: -4px -6px 0 0; border: 0; border-radius: 10px; background: transparent; color: var(--muted); display: grid; place-items: center; }
 .box__close:hover { background: var(--surface2); color: var(--text); }
-/* `overflow-x: hidden`: the slider's thumb halo, at the end of its track, made the body scroll sideways */
-.box__body { overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; display: grid; gap: 18px; align-content: start; margin-right: -8px; padding-right: 8px; }
+.box__body { overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 18px; align-content: start; margin-right: -8px; padding-right: 8px; }
 .intro { margin: 0; font-size: 13px; line-height: 1.45; }
 .sec { display: grid; gap: 8px; }
 .motor { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .motor__pct { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .motor__pct[data-moving='1'] { color: var(--accent); }
+/* the thumb (and its halo) overhangs both ends of the track: room kept for it inside the box, rather
+   than an `overflow: hidden` that cut it in half at 0 % */
+.motor__slider { margin-inline: 14px; }
 .nudges { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .key {
   min-width: 0; display: flex; align-items: center; justify-content: center; gap: 5px;

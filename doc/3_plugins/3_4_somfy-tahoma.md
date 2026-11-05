@@ -429,15 +429,38 @@ box : commande `cover.set_calibration { points | null }`, fichier `TAHOMA_CALIBR
 écartée seule). Les tests du plugin fixent `TAHOMA_CALIBRATION_FILE: ''` : ils ne doivent jamais lire
 le fichier de la vraie maison.
 
-**Le geste d'étalonnage** (boîte « Étalonnage » du panneau du volet,
+**Le geste d'étalonnage** (boîte « Étalonnage »,
 `apps/web/src/components/controls/CoverCalibrationDialog.vue`) : un curseur et des pas de ±1 / ±5 %
 qui envoient `cover.set_position` avec **`motor: true`** (l'échelle du moteur, sans passer par
 l'étalonnage en cours), puis « Marquer » à chaque repère : haut de la vitre et appui obligatoires,
 quart, moitié et trois quarts facultatifs. Rien n'est enregistré avant « Enregistrer » ; l'étalonnage
-en place continue de servir pendant la mesure. La même boîte s'ouvre depuis les cartes de la vue
-Ouvrants (touche clé, rangée des réglages, allumée une fois le volet étalonné ; une seule boîte pour la
-vue, `CoversView.vue`), et la ligne d'état des cartes (`statusLabel`) dit aussi « Couvert, lames
-ajourées ».
+en place continue de servir pendant la mesure.
+
+On ne l'ouvre qu'une fois, à l'installation : elle vit avec les RÉGLAGES, pas avec les manœuvres
+(retour de l'utilisateur, 2026-11-05). Dans le panneau de la vue 3D, une ligne « Étalonnage » du bloc
+replié « Réglages » (`CoverTuning.vue`, bouton de 96 px comme les sélecteurs) ; sur les cartes de la vue
+Ouvrants, une petite clé sur la ligne du NOM, juste avant l'épingle de localisation, qui reste tout
+à droite (`CoversView.vue`, une seule boîte pour la vue) — une touche de plus dans la rangée des
+manœuvres la faisait passer sur deux lignes. Les deux tiennent dans une même cellule de la rangée
+(`RoomBands.vue`, `.row__end`, slot `tools` avant l'épingle), et la place de la clé est réservée sur
+chaque rangée d'ouvrant, étalonnable ou non : clé et épingle s'alignent d'un volet à l'autre.
+**Piège rencontré** : posée entre le `v-if` du sélecteur « Affecter à » et le `v-else` de la rangée
+des manœuvres, la clé avait pris le `v-else` pour elle et un volet étalonnable perdait ses touches
+(`CoversView.test.ts` le verrouille). La ligne d'état des cartes (`statusLabel`) dit aussi
+« Couvert, lames ajourées ».
+
+Le curseur moteur de la boîte **tient la position demandée** jusqu'à l'arrivée, avec la règle de la cible
+du store (`resolveTarget`), qui ne peut pas servir ici (échelle du moteur) : un io ne publiant sa
+position qu'en fin de course, le pouce revenait à son départ au relâcher puis sautait à la cible. Une
+trame de même `updatedAt` que l'envoi est le patch optimiste de l'app, pas l'appareil. Les pas ±1 / ±5
+partent de la valeur affichée (deux appuis sur +5 font 10). Le pouce garde une marge de 14 px dans la
+boîte : un `overflow-x: hidden` posé d'abord le coupait en deux à 0 %.
+
+**Position favorite et étalonnage.** Le rappel `my` va à la mémoire du moteur, un endroit physique : rien
+à convertir. L'affichage (`presetPosition`) et la mémorisation (`cover.set_preset`) sont convertis. Un
+cas faisait faux : « mémoriser » un volet fermé lames serrées envoyait la position 0, que la conversion
+envoyait au repère de l'appui (lames ajourées). Quand la position envoyée est celle que le volet
+affiche, `toMotorCommand` garde donc la valeur MOTEUR courante (mémoriser = « là où il est »).
 
 **Vérifié** sur la simulation (`kasbah-mock`, « Volet chambre 2 » des Embruns, « Volet baie salon » des
 Tilleuls) : 25 / 50 / 75 % demandés relus exactement, 100 % = « Couvert, lames ajourées », Fermer =

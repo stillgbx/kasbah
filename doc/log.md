@@ -13,7 +13,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 
 **Pages modifiées** :
 - `1_architecture/1_1_contrat-appareils.md` - mise à jour 2026-11-05 : capacité `calibration`, commande `cover.set_calibration`, champs `calibration` / `motorPosition` / `sealed`, `set_position { motor }`, conversions de `cover-calibration.ts`.
-- `3_plugins/3_4_somfy-tahoma.md` - mise à jour 2026-11-05 : pourquoi le pourcentage Somfy ment, application dans le plugin (sortie, entrée, sens du mouvement en valeurs moteur), « Fermé » contre « couvert à 100 % », arrondi du moteur, fichier d'état, geste d'étalonnage (panneau du volet et cartes de la vue Ouvrants) ; pas encore essayé sur un vrai volet.
+- `3_plugins/3_4_somfy-tahoma.md` - mise à jour 2026-11-05 : pourquoi le pourcentage Somfy ment, application dans le plugin (sortie, entrée, sens du mouvement en valeurs moteur), « Fermé » contre « couvert à 100 % », arrondi du moteur, fichier d'état, geste d'étalonnage (bloc Réglages du panneau, petite clé sur la ligne du nom des cartes), curseur qui tient la cible, position favorite mémorisée là où est le moteur ; pas encore essayé sur un vrai volet.
 
 **Index** : catalogues mis à jour (2 lignes), index.md régénéré.
 
