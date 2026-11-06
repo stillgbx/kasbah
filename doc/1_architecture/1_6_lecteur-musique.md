@@ -1,6 +1,6 @@
 # Lecteur musique commun (`/api/music`)
 
-> Dernière mise à jour : 2026-11-05
+> Dernière mise à jour : 2026-11-06
 > Sources : `apps/server/src/music/{player,proxy,queue,sources,ytdlp}.ts`, tests `apps/server/src/music/{proxy,queue}.test.ts`, `apps/server/src/plugins/ytmusic/plugin.test.ts`, `apps/server/src/app.ts`, `apps/server/src/plugins/{ytmusic,mixcloud}/{index,resolve}.ts`, `apps/server/.env.example`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue`, arbre de travail non commité du 2026-09-23 (après 5c43833) ; `apps/server/src/music/lastPlayed.ts` et son test, `apps/web/src/stores/localPlayer.test.ts`, arbre de travail non commité du 2026-09-28 (après c6fe7c1) ; `apps/server/src/music/lightsync/{analyze,decode,effects/*,palette,settingsFile,sync}.ts`, `packages/shared/src/music/lightsync.ts` et leurs tests, `apps/server/src/core/lightStreamBridge.ts`, `apps/web/src/components/music/ListeningSessions.vue` (2026-11-05)
 
 ## Pourquoi un noyau, et pourquoi maintenant
@@ -417,3 +417,21 @@ signée — remplacée par « source » pour que la raison reste lisible, par ex
 Forbidden »). Affiché sur une seconde ligne réservée du panneau, en petit, et dans l'infobulle de
 l'ampoule : l'utilisateur peut le lire sans aller dans les logs du serveur. Cause de l'arrêt signalé à
 la réactivation : voir la mise à jour du même jour de [3_1 Philips Hue](../3_plugins/3_1_philips-hue.md).
+
+### Mise à jour 2026-11-06 — une troisième source du relais brut : les podcasts
+
+Le plugin Podcasts (`../3_plugins/3_28_podcasts.md`) s'inscrit comme source du lecteur commun
+(`id: 'podcasts'`, `resolve` + `onProgress`). Deux conséquences pour le noyau :
+
+- **Le relais brut accepte le MP3** : `RAW_MIME` (`apps/server/src/music/player.ts`) gagne
+  `mp3: 'audio/mpeg'`, une seule ligne. Avant, un MP3 de taille connue n'avait pas de type de relais brut
+  et passait par le **repli ffmpeg** (ré-encodage en MP3), sans déplacement possible ; il est maintenant
+  relayé tel quel, par plages. Le profil qui compte reste « fichier direct, taille et `accept-ranges` connus ».
+- **`onProgress` n'est plus propre à Mixcloud** : la phrase « Seul Mixcloud s'en sert aujourd'hui »
+  (section « `onProgress` », plus haut) est **datée**, Podcasts s'en sert aussi, pour la reprise et pour
+  l'état « écouté » de chaque épisode (mêmes règles de reprise que Mixcloud, fonctions importées de
+  `plugins/mixcloud/store.ts`).
+
+**Lumières en rythme** (section du 2026-11-05) : les podcasts passent par le proxy comme YouTube Music
+et Mixcloud, donc la synchro devrait aussi marcher. **Déduit du code, non vérifié sur une vraie lampe.**
+La phrase « Périmètre v1 : YouTube Music et Mixcloud » est de même datée.

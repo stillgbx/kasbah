@@ -630,7 +630,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   }
 
   /** Content type of a source stream relayed as is (the container decides, not the codec). */
-  const RAW_MIME: Record<string, string> = { m4a: 'audio/mp4', mp4: 'audio/mp4', webm: 'audio/webm', opus: 'audio/ogg' }
+  const RAW_MIME: Record<string, string> = { m4a: 'audio/mp4', mp4: 'audio/mp4', webm: 'audio/webm', opus: 'audio/ogg', mp3: 'audio/mpeg' }
 
   const sessionView = (s: ProxySession) => ({
     deviceId: s.deviceId, source: s.track.source, id: s.track.id, sid: s.sid,

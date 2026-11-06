@@ -22,6 +22,7 @@ import ChipRow from '../components/music/ChipRow.vue'
 import ListeningSessions from '../components/music/ListeningSessions.vue'
 import LightSyncDialog from '../components/music/LightSyncDialog.vue'
 import MixcloudBrowser from '../components/music/MixcloudBrowser.vue'
+import PodcastBrowser from '../components/music/PodcastBrowser.vue'
 import MusicItemRow from '../components/music/MusicItemRow.vue'
 import MusicPlayerBar from '../components/music/MusicPlayerBar.vue'
 import QueueList from '../components/music/QueueList.vue'
@@ -121,10 +122,11 @@ const RECENT_PLAYS_MAX = 20
 const SIMPLE_MAX = 12
 
 /** The music sources: YouTube Music, then each active source plugin (the radios). */
-type SourceId = 'ytmusic' | 'radio' | 'mixcloud'
+type SourceId = 'ytmusic' | 'radio' | 'mixcloud' | 'podcasts'
 const sources = computed(() => {
   const out: { id: SourceId; label: string; icon: IconName }[] = [{ id: 'ytmusic', label: 'YouTube Music', icon: 'sourceYtmusic' }]
   if (plugins.byId.mixcloud?.enabled) out.push({ id: 'mixcloud', label: 'Mixcloud', icon: 'sourceMixcloud' })
+  if (plugins.byId.podcasts?.enabled) out.push({ id: 'podcasts', label: t('podcasts.source'), icon: 'sourcePodcasts' })
   if (plugins.byId.radio?.enabled) out.push({ id: 'radio', label: t('radio.source'), icon: 'sourceRadio' })
   return out
 })
@@ -983,6 +985,8 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
         <RadioBrowser v-if="activeSource === 'radio'" v-show="!queueOpen" :target="playTarget ? selected : null" :local-selected="localSelected" />
         <MixcloudBrowser v-else-if="activeSource === 'mixcloud'" v-show="!queueOpen" :now-playing="nowPlayingTrack" :pulsing="nowPulsing" :playing-id="playingId"
                          :can-play="playTarget" @play="playTracks" />
+        <PodcastBrowser v-else-if="activeSource === 'podcasts'" v-show="!queueOpen" :now-playing="nowPlayingTrack" :pulsing="nowPulsing" :playing-id="playingId"
+                        :can-play="playTarget" @play="playTracks" />
         <template v-else>
         <form class="search" @submit.prevent="runSearch">
           <div class="search__field">

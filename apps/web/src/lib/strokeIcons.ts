@@ -25,6 +25,8 @@ export const ICONS = {
   sourceYtmusic: 'M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 12m-5 0a5 5 0 1 0 10 0a5 5 0 1 0-10 0M10.5 9.8v4.4l3.6-2.2z',
   sourceRadio: 'M3 9h18v11H3zM7 9l11-5M8 14.5m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M14 13h4M14 16h4',
   sourceMixcloud: 'M7 19h10.5a4.5 4.5 0 0 0 .4-8.98A7 7 0 0 0 4.6 12.6 4 4 0 0 0 7 19zM9 16v-3.5l1.5 2 1.5-2 1.5 2 1.5-2V16',
+  /** Podcast: a point that broadcasts, two waves around it, on its stem. */
+  sourcePodcasts: 'M12 11m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M12 14v7M7.8 15.2a6 6 0 1 1 8.4 0M5 18a10 10 0 1 1 14 0',
   /** Artist silhouette (cover placeholder). */
   person: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   /** Disc / album (cover placeholder). */

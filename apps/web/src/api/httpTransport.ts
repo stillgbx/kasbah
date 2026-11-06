@@ -1,7 +1,7 @@
 import { shoppingResponseSchema, type ShoppingList, apiErrorSchema, automationResponseSchema, automationRunResponseSchema, automationsResponseSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, propertiesResponseSchema, propertyCreatedSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, deviceEnergyDaysSchema, deviceReleaseNotesSchema, siteMapSchema, type SiteMap, type AutomationBody, type AutomationEntry, type AutomationRun, type CommandInput, type DeviceConsumption, type DeviceEnergyDays, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type MatterSettingsPatch, type MatterStatus, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId, type Right } from '@kasbah/shared'
 import { t } from '../i18n'
-import { ApiRequestError, type AgendaCalendar, type AssistantEvent, type ClaudeAccount, type HaEntities,type TranscriptionSettings, type AssistantLogEntry, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type McpUser, type SystemVersion, type UpdateStatus, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultContract, type RenaultStatus, type SchoolData, type TeslaStatus, type Transport, type TransportHandlers, type WeatherAlerts, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicLastPlayed, type MusicQueue, type YtmusicSearchResult, type MusicSession, type MusicLightSync, type YtmusicStatus, type YtmusicTrack } from './transport'
+import { ApiRequestError, type AgendaCalendar, type AssistantEvent, type ClaudeAccount, type HaEntities,type TranscriptionSettings, type AssistantLogEntry, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type McpUser, type SystemVersion, type UpdateStatus, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type PodcastEpisode, type PodcastShow, type PodcastShowPage, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultContract, type RenaultStatus, type SchoolData, type TeslaStatus, type Transport, type TransportHandlers, type WeatherAlerts, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicLastPlayed, type MusicQueue, type YtmusicSearchResult, type MusicSession, type MusicLightSync, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // Relative URLs: same origin in prod (Fastify serves the build) and through the Vite proxy in dev.
 
@@ -511,6 +511,15 @@ export function createHttpTransport(base = ''): Transport {
     mixcloudSearch: (q, next) => request(`${base}/api/plugins/mixcloud/search?q=${encodeURIComponent(q)}${next ? `&next=${encodeURIComponent(next)}` : ''}`, undefined, (j) => j as MixcloudPage),
     mixcloudForgetResume: async (key) => {
       await request(`${base}/api/plugins/mixcloud/resume?key=${encodeURIComponent(key)}`, { method: 'DELETE' }, () => undefined)
+    },
+    podcastsSearch: (q) => request(`${base}/api/plugins/podcasts/search?q=${encodeURIComponent(q)}`, undefined, (j) => j as { shows: PodcastShow[] }),
+    podcastsSubscriptions: () => request(`${base}/api/plugins/podcasts/subscriptions`, undefined, (j) => j as { shows: PodcastShow[] }),
+    podcastsSubscribe: (id, on) => request(`${base}/api/plugins/podcasts/subscriptions/${encodeURIComponent(id)}`, { method: on ? 'PUT' : 'DELETE' }, (j) => j as { shows: PodcastShow[] }),
+    podcastsAddFeed: (url) => request(`${base}/api/plugins/podcasts/subscriptions/rss`, json('POST', { url }), (j) => j as { show: PodcastShow; shows: PodcastShow[] }),
+    podcastsShow: (id, offset) => request(`${base}/api/plugins/podcasts/shows/${encodeURIComponent(id)}${offset ? `?offset=${offset}` : ''}`, undefined, (j) => j as PodcastShowPage),
+    podcastsLatest: () => request(`${base}/api/plugins/podcasts/latest`, undefined, (j) => j as { episodes: PodcastEpisode[] }),
+    podcastsForgetResume: async (id) => {
+      await request(`${base}/api/plugins/podcasts/resume?id=${encodeURIComponent(id)}`, { method: 'DELETE' }, () => undefined)
     },
     radioSearch: (q) => request(`${base}/api/plugins/radio/search?q=${encodeURIComponent(q)}`, undefined, (j) => j as { stations: RadioStation[] }),
     radioTop: (country) => request(`${base}/api/plugins/radio/top${country ? `?country=${encodeURIComponent(country)}` : ''}`, undefined, (j) => j as { stations: RadioStation[] }),

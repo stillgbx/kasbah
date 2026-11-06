@@ -7,6 +7,24 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-06] update | Plugin Podcasts : quatrième source du lecteur commun
+
+**Déclencheur** : demande d'une source « Spotify » ; écartée (flux chiffré DRM, API officielle = simple télécommande Connect), les podcasts RSS retenus à la place. Plugin codé dans la session, non commité.
+
+**Pages créées** :
+- `3_plugins/3_28_podcasts.md` - le plugin : trois voies pour trouver une émission (Apple, Podcast Index, adresse RSS), ids, routes, flux RSS, résolution, reprise et « écouté » par compte, santé, limites, pièges.
+
+**Pages modifiées** :
+- `1_architecture/1_6_lecteur-musique.md` - mise à jour 2026-11-06 : `RAW_MIME` accepte le MP3 (avant : repli ffmpeg), `onProgress` n'est plus propre à Mixcloud, lumières en rythme déduites du code pour les podcasts (non vérifié).
+- `5_setup/5_1_configuration-env.md` - `PODCASTS_*` et `PODCASTINDEX_*`.
+- `4_ui/4_5_musique-et-medias.md` - la source Podcasts, son gabarit, le bouton réduit sous 520 px.
+
+**Contradictions** : aucune ; deux phrases de `1_6` (« Seul Mixcloud s'en sert aujourd'hui », « Périmètre v1 ») sont dépassées, signalées par renvoi daté sans réécriture.
+
+**Non vérifié** : Podcast Index réel (pas de clé), enceinte Cast/Sonos réelle, zooms 1,25 et 1,5, lumières en rythme sur un podcast.
+
+**Index** : 4 catalogues mis à jour (1 ligne ajoutée, 3 dates), index.md régénéré.
+
 ## [2026-11-05] update | Lumières en rythme : réactivation coupée par un événement tardif du pont
 
 **Déclencheur** : « si j'active la sync, que je la coupe, et que j'essaie de la réactiver alors ça donne ça » (capture : « Flux coupé par le pont Hue »).
@@ -16,7 +34,6 @@ Entrées les plus récentes en haut. Une session = une entrée.
 - `1_architecture/1_6_lecteur-musique.md` - mise à jour 2026-11-05 (nuit, suite) : `problemDetail` affiché (raison du pont, erreur ffmpeg sans l'URL).
 
 **Index** : rien à changer (pages déjà datées du jour).
-
 
 ## [2026-11-05] update | Lumières en rythme : un arrêt sans reprise, deux angles morts corrigés
 
@@ -28,7 +45,6 @@ Entrées les plus récentes en haut. Une session = une entrée.
 
 **Index** : rien à changer (pages déjà datées du jour).
 
-
 ## [2026-11-05] update | Lumières en rythme : couleurs au hasard qui vont ensemble
 
 **Déclencheur** : « sur la palette perso on peut ajouter un bouton random qui si possible sort des couleurs qui peuvent s'assembler selon différentes méthodes ».
@@ -37,7 +53,6 @@ Entrées les plus récentes en haut. Une session = une entrée.
 - `4_ui/4_5_musique-et-medias.md` - mise à jour 2026-11-05 (nuit) : bouton « au hasard », six règles de la roue chromatique (`lib/colorHarmony.ts`), règle affichée sur une ligne réservée.
 
 **Index** : rien à changer (page déjà datée du jour).
-
 
 ## [2026-11-05] update | Lumières en rythme : effets, palettes, ambiance, panneau de réglages
 
@@ -49,7 +64,6 @@ Entrées les plus récentes en haut. Une session = une entrée.
 
 **Index** : rien à changer (pages déjà datées du jour).
 
-
 ## [2026-11-05] update | Lumières en rythme : vérifié avec de la musique
 
 **Déclencheur** : « ça fonctionne », après le redémarrage du serveur avec les nouvelles clés Hue.
@@ -58,7 +72,6 @@ Entrées les plus récentes en haut. Une session = une entrée.
 - `1_architecture/1_6_lecteur-musique.md` - la chaîne complète (morceau sur une enceinte Cast, lampe de la pièce) est vérifiée sur la vraie maison ; manque de réglages noté.
 
 **Index** : rien à changer (page déjà datée du jour).
-
 
 ## [2026-11-05] update | Lumières de la pièce en rythme avec la musique (flux Hue Entertainment)
 
@@ -70,7 +83,6 @@ Entrées les plus récentes en haut. Une session = une entrée.
 - `4_ui/4_5_musique-et-medias.md` - mise à jour 2026-11-05 : touche ampoule de la carte Écoute, colonne réservée dès qu'une pièce peut, vérifications de la preview.
 
 **Index** : catalogues mis à jour (3 lignes), index.md régénéré.
-
 
 ## [2026-11-05] update | Étalonnage des volets : la part réelle de la fenêtre, lames ajourées ou serrées
 

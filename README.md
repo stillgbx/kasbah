@@ -7,7 +7,7 @@
 
 ▶ **[Watch the video](https://youtu.be/o9AGEPgTgdQ)** (YouTube) · **[Website](https://stillgbx.github.io/kasbah/)** · **[Live demo](https://stillgbx.github.io/kasbah/demo/)** (in the browser, nothing to install)
 
-A web app (**tablet, computer, phone**) that shows the house and garden in **3D** (mouse and touch) and lets you **see and control the connected devices** placed in its rooms: lights, fans, covers, players, cameras, heating, robots, water, solar power, vehicles and pets. On top of that: music (YouTube Music, Mixcloud, radio), weather, the family calendar, the school homework diary, and automations run by the server.
+A web app (**tablet, computer, phone**) that shows the house and garden in **3D** (mouse and touch) and lets you **see and control the connected devices** placed in its rooms: lights, fans, covers, players, cameras, heating, robots, water, solar power, vehicles and pets. On top of that: music (YouTube Music, Mixcloud, podcasts, radio), weather, the family calendar, the school homework diary, and automations run by the server.
 
 - The house (floors, rooms, openings, terrain, GPS origin, active plugins) is described in a **JSON file**: see [docs/house-json.md](docs/house-json.md) and the [wiki](doc/index.md) (in French).
 - Each vendor is a server-side **plugin**; API secrets live in a **server** `.env`, never in the browser.
@@ -218,7 +218,7 @@ On a large (landscape) screen, a three-column layout: the **rail** on the left, 
 | **Weather** | Conditions, forecasts, air quality and pollen (Open-Meteo). |
 | **Calendar** | The family's shared calendars (iCal): month, week, day. |
 | **School** | Homework, the parent-teacher notebook and the class's posts (TouteMonAnnée). |
-| **Music** | Shared player: search and queue from YouTube Music, Mixcloud or radio, played on a Cast or Sonos speaker; the room's Hue lights can follow the rhythm. |
+| **Music** | Shared player: search and queue from YouTube Music, Mixcloud, podcasts or radio, played on a Cast or Sonos speaker; the room's Hue lights can follow the rhythm. |
 | **Lights** | Strips per level and room, all-on/all-off switch, brightness slider; fans (Tuya) in the same place. |
 | **Covers** | Shutters, blinds, gates: position, “my” favorite, house-wide actions (secure / open the house, a room's shutters). |
 | **Media** | Cast and Sonos players: transport, volume, artwork, audio relay (HDMI ARC soundbar). |
@@ -302,6 +302,7 @@ Each plugin has its own **page**: what it does, how it connects, step-by-step se
 | `home_assistant` | Home Assistant (lights, covers, heaters, sensors, players) | `light`, `cover`, `climate`, `sensor`, `media_player` | local (WebSocket API, long-lived token) | [home_assistant](docs/plugins/home_assistant.md) |
 | `ytmusic` | YouTube Music | — (music source) | unofficial cloud (account cookie) | [ytmusic](docs/plugins/ytmusic.md) |
 | `mixcloud` | Mixcloud | — (music source) | public cloud, no key | [mixcloud](docs/plugins/mixcloud.md) |
+| `podcasts` | Podcasts (Apple Podcasts, Podcast Index, RSS) | — (music source) | public cloud, optional free key | [podcasts](docs/plugins/podcasts.md) |
 | `radio` | Radio stations (radio-browser.info) | — (music source) | free cloud, no key | [radio](docs/plugins/radio.md) |
 | `agenda` | Shared Google calendars | — (Calendar view) | secret iCal address | [agenda](docs/plugins/agenda.md) |
 | `toutemonannee` | TouteMonAnnée (school) | — (School view) | private cloud (parent account) | [toutemonannee](docs/plugins/toutemonannee.md) |
@@ -429,7 +430,7 @@ Desktop and development clients (with the Kasbah server running):
 | `KASBAH_LOGIN_MAX_FAILURES` / `KASBAH_LOGIN_LOCK_MINUTES` | `5` / `15` | Failed sign-ins in a row that lock an account (`0` = never), lockout duration |
 | `KASBAH_SESSIONS_FILE` | `.state/sessions.json` | Public-address sessions (hashed); deleting it signs everyone out |
 
-Each plugin validates its own variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST_*`, `SONOS_*`, `ENPHASE_*`, `TESLA_*`, `RENAULT_*`, `AUTOMOWER_*`, `COMAP_*`, `MELCLOUD_*`, `IROBOT_*`, `OPEN_METEO_*`, `PETKIT_*`, `TUYA_*`, `YTM_*`, `MIXCLOUD_*`, `RADIO_*`, `MUSIC_*`, `AGENDA_*`, `TMA_*`), detailed on [each plugin's page](#plugins). Commented list: [apps/server/.env.example](apps/server/.env.example).
+Each plugin validates its own variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST_*`, `SONOS_*`, `ENPHASE_*`, `TESLA_*`, `RENAULT_*`, `AUTOMOWER_*`, `COMAP_*`, `MELCLOUD_*`, `IROBOT_*`, `OPEN_METEO_*`, `PETKIT_*`, `TUYA_*`, `YTM_*`, `MIXCLOUD_*`, `PODCASTS_*`, `PODCASTINDEX_*`, `RADIO_*`, `MUSIC_*`, `AGENDA_*`, `TMA_*`), detailed on [each plugin's page](#plugins). Commented list: [apps/server/.env.example](apps/server/.env.example).
 
 **Which plugins are active is not set here.**
 

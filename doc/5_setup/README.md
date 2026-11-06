@@ -1,6 +1,6 @@
 # 5 — Setup
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-11-06
 > Catalogue de la section : source unique de sa liste de pages, d'où `scripts/wiki-index.mjs` génère le bloc `5_setup` de [`index.md`](../index.md). Historique de la section : `Grep 5_setup/` dans [`log/`](../log/README.md).
 
 Un résumé dit **ce que couvre** la page, en 350 caractères au plus, jamais ce qui a changé : l'historique
@@ -14,6 +14,6 @@ Installer, configurer et mettre en production.
 | Page | Résumé | Dernière mise à jour |
 |---|---|---|
 | [5_0 Installation et scripts](5_0_installation-et-scripts.md) | Prérequis, installation, scripts npm, versions épinglées et leurs raisons, preview Claude Code et sa pile séparée (`kasbah-mock`, ports), ffmpeg, textures CC0 (`scripts/fetch-textures.mjs`), GitNexus. | 2026-10-31 |
-| [5_1 Configuration (.env)](5_1_configuration-env.md) | Où vivent les secrets, variables du serveur validées par zod (`config/env.ts`), variables par plugin, côté web. | 2026-10-27 |
+| [5_1 Configuration (.env)](5_1_configuration-env.md) | Où vivent les secrets, variables du serveur validées par zod (`config/env.ts`), variables par plugin, côté web. | 2026-11-06 |
 | [5_2 Production](5_2_production.md) | Build web et bundle serveur esbuild, service statique et repli SPA, écran sur le LAN, app installable, accès extérieur par proxy inverse, bandeau de mise à jour, superviseur et mise à jour depuis Réglages (tâche planifiée Windows, service systemd), site vitrine, politique de confidentialité et démo web statique sur GitHub Pages. | 2026-11-04 |
 <!-- catalogue:end -->

@@ -367,6 +367,34 @@ export type MixcloudHomeSection =
   | { kind: 'mixes'; id: 'popular'; genre: { slug: string; name: string }; items: MixcloudMix[] }
 export interface MixcloudPage { items: MixcloudMix[]; next: string | null }
 
+/** A podcast of the Apple Podcasts directory (`podcasts` plugin); `id` is its Apple id. */
+export interface PodcastShow {
+  id: string
+  title: string
+  author: string
+  artUrl: string | null
+  genre: string | null
+  /** The current account is subscribed to it. */
+  subscribed: boolean
+}
+/** An episode; `id` (`<show id>:<hash>`) is its id for the common player. */
+export interface PodcastEpisode {
+  id: string
+  showId: string
+  showTitle: string
+  title: string
+  /** Publication time (ms). */
+  publishedAt: number | null
+  durationS: number | null
+  artUrl: string | null
+  /** Position kept by the server (s), if it was partly listened to. */
+  resumeS?: number
+  /** Listened to the end. */
+  played?: true
+}
+/** A show and a page of its episodes, newest first; `next` = offset of the following page. */
+export interface PodcastShowPage { show: PodcastShow; episodes: PodcastEpisode[]; next: number | null }
+
 /** A web radio of the radio-browser directory (`radio` plugin). */
 export interface RadioStation {
   id: string
@@ -897,6 +925,18 @@ export interface Transport {
   mixcloudSearch(q: string, next?: string): Promise<MixcloudPage>
   /** Start over: forget a mix's remembered position. */
   mixcloudForgetResume(key: string): Promise<void>
+  /** Shows of the Apple Podcasts directory matching `q`. */
+  podcastsSearch(q: string): Promise<{ shows: PodcastShow[] }>
+  /** The current account's subscriptions, the latest first. */
+  podcastsSubscriptions(): Promise<{ shows: PodcastShow[] }>
+  podcastsSubscribe(id: string, on: boolean): Promise<{ shows: PodcastShow[] }>
+  /** Subscribe to a feed missing from the directories, by its address. */
+  podcastsAddFeed(url: string): Promise<{ show: PodcastShow; shows: PodcastShow[] }>
+  podcastsShow(id: string, offset?: number): Promise<PodcastShowPage>
+  /** The latest episodes of every subscription, newest first. */
+  podcastsLatest(): Promise<{ episodes: PodcastEpisode[] }>
+  /** Start over: forget an episode's position and that it was listened to. */
+  podcastsForgetResume(id: string): Promise<void>
   /** Radios of the directory whose name contains `q`, most listened first. */
   radioSearch(q: string): Promise<{ stations: RadioStation[] }>
   /** The most listened of a country (server default: `RADIO_COUNTRY`). */

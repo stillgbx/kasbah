@@ -7,7 +7,7 @@
 
 ▶ **[Voir la vidéo](https://youtu.be/iTtMqHqYWvo)** (YouTube) · **[Site web](https://stillgbx.github.io/kasbah/fr/)** · **[Démo en ligne](https://stillgbx.github.io/kasbah/demo/)** (dans le navigateur, rien à installer)
 
-Application web (**tablette, ordinateur, téléphone**) qui montre la maison et le jardin en **3D** (souris et tactile) et permet de **visualiser et piloter les appareils connectés** placés dans les pièces : lumières, ventilateurs, ouvrants, lecteurs, caméras, chauffage, robots, eau, énergie solaire, véhicules et animaux. S'y ajoutent la musique (YouTube Music, Mixcloud, radios), la météo, l'agenda de la famille, le cahier de texte de l'école et des automatisations exécutées par le serveur.
+Application web (**tablette, ordinateur, téléphone**) qui montre la maison et le jardin en **3D** (souris et tactile) et permet de **visualiser et piloter les appareils connectés** placés dans les pièces : lumières, ventilateurs, ouvrants, lecteurs, caméras, chauffage, robots, eau, énergie solaire, véhicules et animaux. S'y ajoutent la musique (YouTube Music, Mixcloud, podcasts, radios), la météo, l'agenda de la famille, le cahier de texte de l'école et des automatisations exécutées par le serveur.
 
 - La maison (étages, pièces, ouvertures, terrain, origine GPS, plugins actifs) est décrite dans un **fichier JSON** : voir [docs/house-json.md](docs/house-json.md) et le [wiki](doc/index.md).
 - Chaque fabricant est un **plugin** côté serveur ; les secrets d'API vivent dans un `.env` **serveur**, jamais dans le navigateur.
@@ -218,7 +218,7 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 | **Météo** | Conditions, prévisions, qualité de l'air et pollens (Open-Meteo). |
 | **Agenda** | Agendas partagés de la famille (iCal) : mois, semaine, jour. |
 | **École** | Devoirs, cahier de liaison et publications de la classe (TouteMonAnnée). |
-| **Musique** | Lecteur commun : recherche et file d'attente YouTube Music, Mixcloud ou radios, joués sur une enceinte Cast ou Sonos ; les lampes Hue de la pièce peuvent suivre le rythme. |
+| **Musique** | Lecteur commun : recherche et file d'attente YouTube Music, Mixcloud, podcasts ou radios, joués sur une enceinte Cast ou Sonos ; les lampes Hue de la pièce peuvent suivre le rythme. |
 | **Lumières** | Bandes par niveau et pièce, interrupteur d'ensemble, curseur de luminosité ; ventilateurs (Tuya) au même endroit. |
 | **Ouvrants** | Volets, stores, portails : position, favori « my », gestes d'ensemble (sécuriser / ouvrir la maison, volets d'une pièce). |
 | **Médias** | Lecteurs Cast et Sonos : transport, volume, pochette, relais son (barre HDMI ARC). |
@@ -302,6 +302,7 @@ Chaque plugin a sa **page** : ce qu'il fait, comment il se connecte, sa mise en 
 | `home_assistant` | Home Assistant (lampes, volets, chauffages, capteurs, lecteurs) | `light`, `cover`, `climate`, `sensor`, `media_player` | local (API WebSocket, jeton longue durée) | [home_assistant](docs/plugins/home_assistant.md) |
 | `ytmusic` | YouTube Music | — (source musicale) | cloud non officiel (cookie du compte) | [ytmusic](docs/plugins/ytmusic.md) |
 | `mixcloud` | Mixcloud | — (source musicale) | cloud public sans clé | [mixcloud](docs/plugins/mixcloud.md) |
+| `podcasts` | Podcasts (Apple Podcasts, Podcast Index, RSS) | — (source musicale) | cloud public, clé gratuite facultative | [podcasts](docs/plugins/podcasts.md) |
 | `radio` | Radios (radio-browser.info) | — (source musicale) | cloud libre sans clé | [radio](docs/plugins/radio.md) |
 | `agenda` | Agendas Google partagés | — (vue Agenda) | adresse iCal secrète | [agenda](docs/plugins/agenda.md) |
 | `toutemonannee` | TouteMonAnnée (école) | — (vue École) | cloud privé (compte parent) | [toutemonannee](docs/plugins/toutemonannee.md) |
@@ -429,7 +430,7 @@ Clients de bureau et de développement (serveur Kasbah lancé) :
 | `KASBAH_LOGIN_MAX_FAILURES` / `KASBAH_LOGIN_LOCK_MINUTES` | `5` / `15` | Échecs de connexion d'affilée qui bloquent un compte (`0` = jamais), durée du blocage |
 | `KASBAH_SESSIONS_FILE` | `.state/sessions.json` | Sessions de l'adresse publique (hachées) ; le supprimer déconnecte tout le monde |
 
-Chaque plugin valide ses propres variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST_*`, `SONOS_*`, `ENPHASE_*`, `TESLA_*`, `RENAULT_*`, `AUTOMOWER_*`, `COMAP_*`, `MELCLOUD_*`, `IROBOT_*`, `OPEN_METEO_*`, `PETKIT_*`, `TUYA_*`, `YTM_*`, `MIXCLOUD_*`, `RADIO_*`, `MUSIC_*`, `AGENDA_*`, `TMA_*`), détaillées sur la [page de chaque plugin](#plugins). Liste commentée : [apps/server/.env.example](apps/server/.env.example).
+Chaque plugin valide ses propres variables (`HUE_*`, `TAHOMA_*`, `NEST_*`, `CAST_*`, `SONOS_*`, `ENPHASE_*`, `TESLA_*`, `RENAULT_*`, `AUTOMOWER_*`, `COMAP_*`, `MELCLOUD_*`, `IROBOT_*`, `OPEN_METEO_*`, `PETKIT_*`, `TUYA_*`, `YTM_*`, `MIXCLOUD_*`, `PODCASTS_*`, `PODCASTINDEX_*`, `RADIO_*`, `MUSIC_*`, `AGENDA_*`, `TMA_*`), détaillées sur la [page de chaque plugin](#plugins). Liste commentée : [apps/server/.env.example](apps/server/.env.example).
 
 **Quels plugins sont actifs ne se règle pas ici.**
 

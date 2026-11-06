@@ -166,6 +166,19 @@
     "genres": "Genres", "genresReset": "Tout remettre", "genresEmpty": "Aucun mix ne correspond à ces genres.",
     "genreNeutral": "{name} : toucher pour ne garder que ce genre", "genreOn": "{name} gardé : toucher pour l'écarter", "genreOff": "{name} écarté : toucher pour l'oublier"
   },
+  "podcasts": {
+    "source": "Podcasts", "searchPlaceholder": "Rechercher un podcast, une émission…",
+    "tabLatest": "Nouveautés", "tabSubscriptions": "Abonnements",
+    "latestHint": "Les derniers épisodes de tes abonnements (rafraîchis toutes les 30 min).",
+    "latestEmpty": "Rien de neuf : cherche un podcast, ouvre-le, puis « S'abonner ».",
+    "noSubscriptions": "Pas encore d'abonnement : cherche un podcast, ouvre-le, puis « S'abonner ».",
+    "noResults": "Aucun podcast trouvé.", "noEpisodes": "Aucun épisode à écouter dans ce podcast.", "unavailable": "Le podcast ne répond pas.",
+    "subscribe": "S'abonner", "subscribed": "Abonné", "more": "Épisodes plus anciens",
+    "resumeAt": "Reprendre à {time}", "played": "Écouté", "restart": "Repartir du début", "play": "Écouter {name}",
+    "addFeed": "Ajouter par adresse RSS", "feedUrl": "Adresse du flux RSS (https…)", "feedAdd": "S'abonner", "feedCancel": "Annuler",
+    "addFeedHint": "Un podcast que la recherche ne trouve pas : colle l'adresse de son flux RSS (souvent derrière « S'abonner » ou « RSS » sur la page de l'émission).",
+    "addFeedFailed": "Impossible d'ajouter ce flux : {message}"
+  },
   "radio": {
     "source": "Radios", "searchPlaceholder": "Rechercher une radio (franceinfo, FIP, Nova…)", "favorites": "Favorites", "top": "Les plus écoutées",
     "noFavorites": "Aucune radio favorite : ajoutez-en avec l'étoile.", "empty": "Aucune radio trouvée.", "unavailable": "L'annuaire des radios ne répond pas.",

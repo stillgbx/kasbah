@@ -166,6 +166,19 @@
     "genres": "Genres", "genresReset": "Reset", "genresEmpty": "No mix matches these genres.",
     "genreNeutral": "{name}: tap to keep only this genre", "genreOn": "{name} kept: tap to rule it out", "genreOff": "{name} ruled out: tap to clear"
   },
+  "podcasts": {
+    "source": "Podcasts", "searchPlaceholder": "Search a podcast, a show…",
+    "tabLatest": "New", "tabSubscriptions": "Subscriptions",
+    "latestHint": "The latest episodes of your subscriptions (refreshed every 30 min).",
+    "latestEmpty": "Nothing new: search a podcast, open it, then \"Subscribe\".",
+    "noSubscriptions": "No subscription yet: search a podcast, open it, then \"Subscribe\".",
+    "noResults": "No podcast found.", "noEpisodes": "No episode to listen to in this podcast.", "unavailable": "The podcast is not answering.",
+    "subscribe": "Subscribe", "subscribed": "Subscribed", "more": "Older episodes",
+    "resumeAt": "Resume at {time}", "played": "Played", "restart": "Start over", "play": "Listen to {name}",
+    "addFeed": "Add by RSS address", "feedUrl": "RSS feed address (https…)", "feedAdd": "Subscribe", "feedCancel": "Cancel",
+    "addFeedHint": "A podcast the search does not find: paste the address of its RSS feed (often behind \"Subscribe\" or \"RSS\" on the show's page).",
+    "addFeedFailed": "Could not add this feed: {message}"
+  },
   "radio": {
     "source": "Radios", "searchPlaceholder": "Search a radio station (franceinfo, FIP, Nova…)", "favorites": "Favorites", "top": "Most listened",
     "noFavorites": "No favorite station yet: add some with the star.", "empty": "No station found.", "unavailable": "The radio directory is not answering.",

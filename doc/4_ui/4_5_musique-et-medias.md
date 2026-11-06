@@ -1,6 +1,6 @@
 # Musique et médias
 
-> Dernière mise à jour : 2026-11-05
+> Dernière mise à jour : 2026-11-06
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Médias, les lignes et le panneau d'un lecteur, la page Musique (sources, recherche, file, genres, détail d'album, lecture dans le navigateur). Elle est née du découpage de
@@ -1094,3 +1094,25 @@ sous les pastilles (« Harmonie : triade (teintes à 120°) »), une seule ligne
 Vérifié : `colorHarmony.test.ts` (nombre, écarts de teinte par règle, pas de répétition) ; preview
 `kasbah-mock`, état injecté : 12 tirages sur téléphone avec 5 couleurs, les six règles sorties, une seule
 mise en page, rangée de pastilles sur une ligne, aucun débordement.
+
+### Mise à jour 2026-11-06 — la source Podcasts
+
+Nouvelle source de la page Musique (`components/music/PodcastBrowser.vue`, icône `sourcePodcasts` de
+`lib/strokeIcons.ts`, textes `podcasts.*` fr et en), visible si le plugin est actif ; côté serveur :
+`../3_plugins/3_28_podcasts.md`. Gabarit, sur le modèle de Mixcloud et des Radios :
+
+- **Recherche**, puis deux onglets **Nouveautés** et **Abonnements**, grisés (non masqués) pendant une
+  recherche.
+- **Page d'une émission** : Retour, bouton S'abonner / Abonné. Les deux libellés sont **superposés dans
+  une même cellule de grille** pour que le bouton garde la largeur du plus long : rien ne bouge au clic
+  (règle « rien ne bouge »). Épisodes avec « Reprendre à… » ou « Écouté », la date, et le nom de
+  l'émission dans Nouveautés ; bouton « Repartir du début » dans une **place réservée** ; « Épisodes plus
+  anciens » pour la page suivante.
+- **Un épisode se lance seul**, sans file des suivants.
+- **« Ajouter par adresse RSS »** : bouton et formulaire comme « Ajouter une station » des Radios.
+  **Sous 520 px de large** (container query sur le composant, pas sur la fenêtre) le bouton n'affiche plus
+  que son icône : à 375 px, son libellé rognait de **61 px** l'onglet « Abonnements » (mesuré).
+- Mock : les méthodes `podcasts*` rendent `501`.
+
+Vérifié : mesures `getBoundingClientRect` entre onglets et au bouton S'abonner, aucun débordement à
+1 280 et 375 px, fr et en, thèmes clair et sombre. **Non joué** : zooms 1,25 et 1,5.

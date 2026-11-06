@@ -1,6 +1,6 @@
 # 4 — UI
 
-> Dernière mise à jour : 2026-10-13
+> Dernière mise à jour : 2026-11-06
 > Catalogue de la section : source unique de sa liste de pages, d'où `scripts/wiki-index.mjs` génère le bloc `4_ui` de [`index.md`](../index.md). Historique de la section : `Grep 4_ui/` dans [`log/`](../log/README.md).
 
 Un résumé dit **ce que couvre** la page, en 350 caractères au plus, jamais ce qui a changé : l'historique
@@ -23,7 +23,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 |---|---|---|
 | [4_3 Vues Lumières, Ouvrants et Caméras](4_3_vues-lumieres-ouvrants-cameras.md) | Vues en bandes par niveau (`RoomBands`), pièces réordonnables, interrupteurs maîtres, contrôles d'ouvrant (vocabulaires, position inconnue, position favorite, vignette verticale), volets solaires, cartes et tuiles caméra avec leur vidéo. | 2026-10-26 |
 | [4_4 Vues Énergie et Véhicules](4_4_vues-energie-vehicules.md) | Vue Énergie (schéma de flux, historique par période, onduleurs, champs de panneaux, tuiles par voiture) et vue Véhicules : carte du véhicule, carte plan / satellite, réveil, charge, limite et intensité, climatisation, logiciel, apparence. | 2026-10-31 |
-| [4_5 Musique et médias](4_5_musique-et-medias.md) | Vue Médias et lignes de lecteur (diffusion, direct, barre de son), panneau et barre du lecteur, page Musique : sources (YouTube Music, radios, Mixcloud), recherche, file d'attente, genres, détail d'album, lecture dans le navigateur. | 2026-11-05 |
+| [4_5 Musique et médias](4_5_musique-et-medias.md) | Vue Médias et lignes de lecteur (diffusion, direct, barre de son), panneau et barre du lecteur, page Musique : sources (YouTube Music, radios, Mixcloud), recherche, file d'attente, genres, détail d'album, lecture dans le navigateur. | 2026-11-06 |
 | [4_6 Autres vues](4_6_autres-vues.md) | Vues d'un domaine : Météo (radar, autre lieu, tendance, lune, vigilance), Robots (tondeuse, aspirateur, journal, zones, carte), Eau, Chauffage, Animaux, Agenda, École, Courses, Automatisations. | 2026-11-04 |
 | [4_7 Vue Réglages](4_7_reglages.md) | Organisation de la vue Réglages, carte Plugins (un interrupteur par fabricant, sous-items), grille de thèmes, carte Rendu 3D, entrées locales au poste, carte Comptes, « Caler sur la photo », ordre du rail par appareil. | 2026-11-01 |
 | [4_8 Mode édition et propriétés](4_8_mode-edition-et-proprietes.md) | Mode édition de la maison : ouvertures et menuiserie, places de stationnement, fenêtres de toit, jardin, contour du terrain et cadastre, relief, apparence et dimensions des pièces, pièces et niveaux ; propriétés et démos. | 2026-10-21 |

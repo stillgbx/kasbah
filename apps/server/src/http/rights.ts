@@ -62,6 +62,8 @@ export const PLUGIN_RIGHTS: Readonly<Record<string, { right: Right | null; setti
   nest: { right: 'cameras' },
   open_meteo: { right: 'weather' },
   petkit: { right: 'pets', settings: ['login', 'logout'] },
+  // subscriptions are each person's own, like Mixcloud's resume points
+  podcasts: { right: 'media' },
   radio: { right: 'media' },
   renault: { right: 'vehicles', settings: ['login', 'logout'] },
   sonos: { right: 'media', settings: ['devices'] },
