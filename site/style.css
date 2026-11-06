@@ -270,6 +270,64 @@ section { padding: 72px 0; }
 
 .plugin em.local { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
 
+/* Manufacturers and retailers: text beside a contact form */
+
+.partner {
+  display: grid;
+  gap: 32px;
+  margin-top: 40px;
+  padding: 28px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.partner h3 { font-size: clamp(22px, 3vw, 28px); font-weight: 700; margin-top: 10px; }
+.partner__text p:not(.label) { color: var(--muted); margin: 12px 0 0; }
+.partner__text .label { color: var(--sand); }
+
+.form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; align-content: start; }
+.form__wide { grid-column: 1 / -1; }
+.form label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; min-width: 0; }
+
+.form input, .form textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font: 400 15px/1.5 var(--font);
+}
+
+.form textarea { resize: vertical; min-height: 120px; }
+.form input:focus, .form textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+.form input::placeholder { color: var(--muted); }
+
+/* The honeypot: a field people never see, which only robots fill in. */
+.form__trap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+
+.form__foot { display: flex; align-items: center; gap: 16px; }
+.form__foot .btn { flex: none; }
+.form__foot .btn:disabled { opacity: .6; cursor: wait; }
+/* Two lines reserved, so a status message never pushes the note below it. */
+.form__status { margin: 0; min-height: 3.2em; display: flex; align-items: center; font-size: 14px; line-height: 1.6; color: var(--muted); }
+.form__status.is-ok { color: var(--accent); }
+.form__status.is-error { color: var(--sand); }
+.form__note { margin: 0; font-size: 13px; color: var(--muted); }
+.form__note a { color: var(--muted); }
+
+@media (min-width: 900px) {
+  .partner { grid-template-columns: 5fr 7fr; gap: 48px; padding: 36px; }
+}
+
+@media (max-width: 520px) {
+  .partner { padding: 20px; }
+  .form { grid-template-columns: 1fr; }
+  .form__foot { flex-wrap: wrap; gap: 8px; }
+  .form__status { flex-basis: 100%; }
+}
+
 /* Tutorials: video cards */
 
 .tutos {

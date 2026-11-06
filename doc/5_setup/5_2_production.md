@@ -1,6 +1,6 @@
 # Production
 
-> Dernière mise à jour : 2026-11-04
+> Dernière mise à jour : 2026-11-06
 > Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts`, `site/`, `.github/workflows/pages.yml`, `apps/web/src/stores/push.ts` (2026-10-29)
 
 ## Build
@@ -611,6 +611,20 @@ Une page publique qui se partage (X, Discord, README), montre la vidéo, et port
   `privacy.html` : le choix de la pastille l'emporte, sinon la langue du navigateur. Pour tester en
   local, recharger vraiment la page (`location.reload()`) : une navigation qui ne change que le `#`
   ne relance pas le script.
+- **Formulaire des fabricants et commerçants** (2026-11-06) : un encadré `#partners` à la fin de la
+  section Plugins des deux pages (`.partner` / `.form` de `style.css`) invite à prêter du matériel pour
+  qu'on l'intègre. Le formulaire est envoyé à **Web3Forms** (`api.web3forms.com/submit`, en JSON par
+  `fetch`, la page reste affichée ; sans JavaScript, le POST classique mène à la page de confirmation de
+  Web3Forms), qui le transmet par mail. La clé d'accès (`access_key`, champ caché) est **publique par
+  nature** : elle ne fait qu'envoyer vers l'adresse qui l'a créée, un alias Proton Pass de la boîte du
+  projet, désactivable en cas de spam sans toucher à l'adresse principale, qui n'apparaît nulle part.
+  Écartés : le `mailto:` masqué (rien ne se passe chez qui n'a pas de client mail configuré),
+  Formspree (50 messages par mois, compte obligatoire), Formsubmit (adresse dans l'URL). Anti-spam :
+  la case `botcheck`, hors écran, que seuls les robots cochent. La ligne d'état (`.form__status`,
+  `role="status"`) réserve deux lignes ; sous 520 px elle passe sous le bouton, sinon le message
+  français en prenait trois et repoussait la note de 23 px. Les simples utilisateurs sont renvoyés vers
+  les issues GitHub. La section « Ce site » des deux politiques (ancre `#website`) décrit l'envoi.
+  Envoi réel vérifié depuis la preview locale, message reçu.
 - **Vérifier en local** : config `kasbah-site` de `.claude/launch.json`
   (`python -m http.server 8090 --directory site`), puis la page à 375 px et sur bureau.
 

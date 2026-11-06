@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-06] update | Site vitrine : formulaire de contact des fabricants et commerçants
+
+**Déclencheur** : un moyen d'être contacté par les fabricants et commerçants qui voudraient prêter du matériel, sans exposer l'adresse de la boîte du projet sur le site statique (GitHub Pages).
+
+**Pages modified** :
+- 5_setup/5_2_production.md - puce datée dans la section du site vitrine : encadré `#partners`, envoi par Web3Forms, clé publique liée à un alias Proton Pass, options écartées (`mailto:` masqué, Formspree, Formsubmit), ligne d'état réservée, politiques de confidentialité.
+
+**Index** : catalogue 5_setup (date), index.md régénéré.
+
 ## [2026-11-06] ingest | Plugin IKEA DIRIGERA, préparé sans hub
 
 **Déclencheur** : « préparer l'intégration des solutions ikea tradfri et symfonisk sans pour l'instant avoir le matériel ». SYMFONISK = Sonos (rien à écrire) ; TRÅDFRI par le hub DIRIGERA. Plugin codé dans la session, non commité ; hypothèses confrontées aux sources du paquet npm `dirigera` 2.0.2 (trois corrections).

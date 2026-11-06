@@ -207,6 +207,32 @@
       <li><a class="plugin" href="https://github.com/stillgbx/kasbah/blob/main/docs/plugins/transcription.md"><strong>Transcription</strong><span>La voix de l'assistant</span><em class="local">local ou cloud</em></a></li>
       <li><a class="plugin" href="https://github.com/stillgbx/kasbah/blob/main/docs/plugins/actitens.md"><strong>actiTENS mini</strong><span>Électrostimulation</span><em class="local">dans le navigateur</em></a></li>
     </ul>
+
+    <div class="partner" id="partners">
+      <div class="partner__text">
+        <p class="label">Fabricants et commerçants</p>
+        <h3>Votre matériel dans Kasbah</h3>
+        <p>Vous fabriquez ou vendez des appareils connectés&nbsp;? Prêtez-nous en un&nbsp;: nous écrivons le plugin et sa documentation, puis l'ajoutons à cette liste. Une API locale ouverte est le meilleur point de départ. Nous ne pouvons pas tout intégrer, mais chaque message est lu.</p>
+        <p class="partner__aside">Vous utilisez Kasbah et un appareil vous manque&nbsp;? Demandez-le sur <a href="https://github.com/stillgbx/kasbah/issues">GitHub</a>.</p>
+      </div>
+      <form class="form" id="partner-form" action="https://api.web3forms.com/submit" method="POST"
+        data-sending="Envoi…" data-sent="Merci, votre message est parti. Nous vous répondrons par mail." data-failed="Le message n'a pas pu partir. Réessayez dans un instant.">
+        <input type="hidden" name="access_key" value="f2d0cb2c-9c88-4d8a-846c-278cdaa18959">
+        <input type="hidden" name="subject" value="Kasbah : proposition de matériel">
+        <input type="hidden" name="from_name" value="Site Kasbah (FR)">
+        <input type="checkbox" name="botcheck" class="form__trap" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <label>Société<input name="company" required autocomplete="organization"></label>
+        <label>Votre nom<input name="name" autocomplete="name"></label>
+        <label>E-mail<input type="email" name="email" required autocomplete="email"></label>
+        <label>Appareil(s)<input name="device" placeholder="Modèle, gamme…"></label>
+        <label class="form__wide">Message<textarea name="message" rows="5" required></textarea></label>
+        <div class="form__foot form__wide">
+          <button class="btn btn--accent" type="submit">Envoyer</button>
+          <p class="form__status" role="status" aria-live="polite"></p>
+        </div>
+        <p class="form__note form__wide">Envoyé via Web3Forms, voir la <a href="privacy.html#website">politique de confidentialité</a>.</p>
+      </form>
+    </div>
   </div>
 </section>
 
@@ -272,6 +298,35 @@ npm run dev</code></pre>
     frame.allowFullscreen = true
     this.replaceWith(Object.assign(document.createElement('div'), { className: 'video' }))
     document.querySelector('.hero .video').appendChild(frame)
+  })
+
+  // The manufacturers' form: sent in the background so the visitor stays on the page; without JavaScript,
+  // the browser posts it and Web3Forms shows its own confirmation page.
+  document.getElementById('partner-form').addEventListener('submit', function (e) {
+    e.preventDefault()
+    var form = this
+    var status = form.querySelector('.form__status')
+    var button = form.querySelector('button')
+    button.disabled = true
+    status.className = 'form__status'
+    status.textContent = form.dataset.sending
+    fetch(form.action, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(Object.fromEntries(new FormData(form)))
+    })
+      .then(function (r) { return r.json() })
+      .then(function (data) {
+        if (!data.success) throw new Error(data.message)
+        form.reset()
+        status.classList.add('is-ok')
+        status.textContent = form.dataset.sent
+      })
+      .catch(function () {
+        status.classList.add('is-error')
+        status.textContent = form.dataset.failed
+      })
+      .then(function () { button.disabled = false })
   })
 </script>
 </body>
