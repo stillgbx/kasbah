@@ -50,6 +50,7 @@ export const PLUGIN_RIGHTS: Readonly<Record<string, { right: Right | null; setti
   automower: { right: 'robots', settings: ['usage'] },
   claude: { right: null },
   comap: { right: 'water' },
+  dirigera: { right: 'lights', settings: ['pair'] },
   enphase: { right: 'energy', settings: ['token', 'subscription'] },
   google_cast: { right: 'media', settings: ['devices'] },
   home_assistant: { right: 'media', settings: ['entities'] },

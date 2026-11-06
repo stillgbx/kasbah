@@ -300,6 +300,7 @@ Each plugin has its own **page**: what it does, how it connects, step-by-step se
 | `tuya` | Tuya (fan light) | `fan`, `light` | local (Tuya protocol 3.5) | [tuya](docs/plugins/tuya.md) |
 | `hormann` | Hörmann (SupraMatic 4 garage doors) | `cover`, `light` | local (HCPBridgeMqtt bridge on the motor bus, HTTP) | [hormann](docs/plugins/hormann.md) |
 | `home_assistant` | Home Assistant (lights, covers, heaters, sensors, players) | `light`, `cover`, `climate`, `sensor`, `media_player` | local (WebSocket API, long-lived token) | [home_assistant](docs/plugins/home_assistant.md) |
+| `dirigera` | IKEA DIRIGERA hub (TRÅDFRI and Matter lights, outlets, blinds, sensors), not yet tried on a real hub | `light`, `cover`, `sensor` | local (unofficial hub API, button pairing) | [dirigera](docs/plugins/dirigera.md) |
 | `ytmusic` | YouTube Music | — (music source) | unofficial cloud (account cookie) | [ytmusic](docs/plugins/ytmusic.md) |
 | `mixcloud` | Mixcloud | — (music source) | public cloud, no key | [mixcloud](docs/plugins/mixcloud.md) |
 | `podcasts` | Podcasts (Apple Podcasts, Podcast Index, RSS) | — (music source) | public cloud, optional free key | [podcasts](docs/plugins/podcasts.md) |

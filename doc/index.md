@@ -59,7 +59,7 @@ La maison décrite en JSON : format et validation, géométrie dérivée (murs, 
 ## 3 — Plugins
 
 <!-- section:3_plugins:begin (généré par scripts/wiki-index.mjs depuis 3_plugins/README.md - ne pas éditer ici) -->
-Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (29 pages, dernière mise à jour 2026-11-06).
+Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (30 pages, dernière mise à jour 2026-11-06).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -95,6 +95,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_26 Hörmann (portes de garage)](3_plugins/3_26_hormann.md) | 2026-10-21 |
 | [3_27 Home Assistant](3_plugins/3_27_home-assistant.md) | 2026-10-30 |
 | [3_28 Podcasts](3_plugins/3_28_podcasts.md) | 2026-11-06 |
+| [3_29 IKEA DIRIGERA](3_plugins/3_29_ikea-dirigera.md) | 2026-11-06 |
 <!-- section:3_plugins:end -->
 
 ## 4 — UI

@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-06] ingest | Plugin IKEA DIRIGERA, préparé sans hub
+
+**Déclencheur** : « préparer l'intégration des solutions ikea tradfri et symfonisk sans pour l'instant avoir le matériel ». SYMFONISK = Sonos (rien à écrire) ; TRÅDFRI par le hub DIRIGERA. Plugin codé dans la session, non commité ; hypothèses confrontées aux sources du paquet npm `dirigera` 2.0.2 (trois corrections).
+
+**Pages créées** :
+- `3_plugins/3_29_ikea-dirigera.md` - voies écartées, bibliothèque lue et non utilisée, correspondances, appairage, épinglage TLS du WebSocket, vérifié / non joué, liste à vérifier sur le premier hub.
+
+**Index** : catalogue `3_plugins` (3_29), index.md régénéré.
+
 ## [2026-11-06] update | Recherches récentes sur toutes les sources de la page Musique
 
 **Déclencheur** : « pour ytm on a une zone qui contient les dernières recherches, on peut généraliser ça sur toutes les sources ? […] l'historique affiché est par source ».

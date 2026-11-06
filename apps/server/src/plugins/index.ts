@@ -3,6 +3,7 @@ import { createAgendaPlugin } from './agenda'
 import { createAutomowerPlugin } from './automower'
 import { createClaudePlugin } from './claude'
 import { createComapPlugin } from './comap'
+import { createDirigeraPlugin } from './dirigera'
 import { createEnphasePlugin } from './enphase'
 import { createGoogleCastPlugin } from './google_cast'
 import { createHomeAssistantPlugin } from './home_assistant'
@@ -58,4 +59,5 @@ export const PLUGIN_FACTORIES: Record<string, PluginFactory> = {
   transcription: () => createTranscriptionPlugin(),
   shopping: createShoppingPlugin,
   home_assistant: () => createHomeAssistantPlugin(),
+  dirigera: () => createDirigeraPlugin(),
 }

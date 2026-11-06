@@ -77,6 +77,7 @@ export const NATIVE_PLUGIN: Readonly<Record<string, string>> = {
   enphase_envoy: 'enphase',
   melcloud: 'melcloud',
   tuya: 'tuya',
+  dirigera_platform: 'dirigera',
   tesla_fleet: 'tesla',
   teslemetry: 'tesla',
   tessie: 'tesla',
