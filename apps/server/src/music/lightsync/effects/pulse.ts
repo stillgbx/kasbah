@@ -22,10 +22,10 @@ export class PulseEffect implements Effect {
   next(frame: FeatureFrame | undefined, dtS: number): ChannelColor[] {
     const { palette, energy, brightness } = this.params
     const level = this.bass.level(frame?.low ?? 0, dtS)
-    const env = this.env.follow(level, dtS, lerp(0.6, 0.12, energy))
-    const floor = lerp(0.25, 0.05, energy)
-    const b = (floor + (1 - floor) * env ** lerp(1, 2, energy)) * brightness
-    if (this.gate.fire(frame?.onset ?? 0, lerp(0.6, 0.2, energy), lerp(1.2, 0.2, energy), dtS)) this.shift++
-    return this.ordered.map((c, i) => out(c.id, this.fader.toward(c.id, palette[(i + this.shift) % palette.length]!, dtS, lerp(0.4, 0.08, energy)), b))
+    const env = this.env.follow(level, dtS, lerp(0.8, 0.25, energy), lerp(0.15, 0.04, energy))
+    const floor = lerp(0.4, 0.2, energy)
+    const b = (floor + (1 - floor) * env ** lerp(1, 1.5, energy)) * brightness
+    if (this.gate.fire(frame?.onset ?? 0, lerp(0.7, 0.35, energy), lerp(2, 0.5, energy), dtS)) this.shift++
+    return this.ordered.map((c, i) => out(c.id, this.fader.toward(c.id, palette[(i + this.shift) % palette.length]!, dtS, lerp(0.8, 0.2, energy)), b))
   }
 }

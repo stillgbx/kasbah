@@ -43,7 +43,7 @@ describe('PulseEffect', () => {
     const before = run(50, () => fx.next(steady, 0.02))
     fx.next({ ...steady, onset: 1 }, 0.02)
     fx.next({ ...steady, onset: 1 }, 0.02)
-    const after = run(50, () => fx.next(steady, 0.02))
+    const after = run(100, () => fx.next(steady, 0.02))
     expect(after[0]!.b).toBeCloseTo(before[1]!.b, 2)
     expect(after[1]!.r).toBeCloseTo(before[0]!.r, 2)
   })

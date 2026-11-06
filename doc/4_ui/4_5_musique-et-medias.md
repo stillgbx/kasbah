@@ -1173,3 +1173,24 @@ puces, interrupteur et réglages bloqués puis débloqués par le choix, ampoule
 lignes de la carte Écoute au pixel près avant et après ; aucun débordement ni libellé coupé aux zooms
 1 / 1,25 / 1,5 ; console vide. Thème clair et anglais non rejoués (aucune couleur nouvelle, phrases
 d'une longueur voisine).
+
+### Mise à jour 2026-11-06 (nuit) — le panneau sans barre de défilement inutile
+
+Sources : `apps/web/src/components/music/LightSyncDialog.vue`, `packages/shared/src/music/lightsync.ts`.
+
+Constat de l'utilisateur : une barre de défilement verticale alors que tout est affiché. Cause : les
+quatre panneaux de couleurs empilés gardaient la hauteur du plus grand (Perso et son sélecteur, voir
+la mise à jour du 2026-11-05 plus haut), soit un vide sous Palettes, Scène et Pochette qui dépassait
+les 85 % de l'écran.
+
+Depuis cette date, seul le panneau choisi prend de la place (`display: none` pour les autres), et le
+dialogue est **ancré en haut** (`content-class` `lightsync-top`, 7,5 % du haut de l'écran, style non
+scopé puisque le dialogue est téléporté) au lieu d'être centré : changer de source ne déplace que le
+bas du cadre, rien au-dessus. Sur téléphone le dialogue reste plein écran.
+
+La tuile **Vague** est désormais la première et le choix par défaut (ordre de `LIGHTSYNC_EFFECTS`).
+
+Vérifié dans la preview `kasbah-mock` par mesure, état injecté, à 1280 × 1000 : aucun défilement sur
+Palettes, Scène et Pochette ; Perso défile encore de 133 px (le sélecteur est réellement plus haut que
+l'écran) ; le haut du cadre et la bande des couleurs restent au même pixel sur les quatre sources ;
+console vide. Zooms 1,25 et 1,5 non rejoués.

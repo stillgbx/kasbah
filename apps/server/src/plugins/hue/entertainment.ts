@@ -66,18 +66,28 @@ export function toLightArea(cfg: HueEntertainmentConfiguration): LightArea {
 }
 
 /**
- * The area for a room: all its lights are in the room (a light next door would blink in the wrong
- * room), it covers the most room lights, then has the most channels. `roomLights` = Hue light rids.
+ * The area for a room. At least half its lights are in the room: an area drawn over an open space
+ * (a lamp of the next room in it) still serves, that lamp following the music too; one that is
+ * mostly elsewhere does not. Preferred, in order: no light outside the room, the most room lights,
+ * the fewest outside, the most channels. `roomLights` = Hue light rids.
  */
 export function pickArea(areas: readonly HueEntertainmentConfiguration[], roomLights: ReadonlySet<string>): HueEntertainmentConfiguration | undefined {
-  let best: HueEntertainmentConfiguration | undefined
+  let best: { area: HueEntertainmentConfiguration; key: number[] } | undefined
   for (const a of areas) {
     const lights = a.light_services.filter((s) => s.rtype === 'light').map((s) => s.rid)
-    if (lights.length === 0 || !lights.every((rid) => roomLights.has(rid)) || a.channels.length === 0) continue
-    const bestLights = best?.light_services.length ?? 0
-    if (!best || lights.length > bestLights || (lights.length === bestLights && a.channels.length > best.channels.length)) best = a
+    const inside = lights.filter((rid) => roomLights.has(rid)).length
+    if (inside === 0 || inside * 2 < lights.length || a.channels.length === 0) continue
+    const outside = lights.length - inside
+    const key = [outside === 0 ? 1 : 0, inside, -outside, a.channels.length]
+    if (!best || isGreater(key, best.key)) best = { area: a, key }
   }
-  return best
+  return best?.area
+}
+
+/** Lexicographic comparison of two keys of the same length. */
+function isGreater(a: readonly number[], b: readonly number[]): boolean {
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i]! > b[i]!
+  return false
 }
 
 /** What the stream needs from a DTLS socket (`node-dtls-client`'s, or a fake in the tests). */

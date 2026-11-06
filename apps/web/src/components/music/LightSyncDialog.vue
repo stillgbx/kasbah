@@ -119,7 +119,7 @@ const subtitle = computed(() => [props.name, props.status.room?.name, props.stat
 </script>
 
 <template>
-  <v-dialog v-model="open" max-width="460" scrollable :fullscreen="phone">
+  <v-dialog v-model="open" max-width="460" scrollable :fullscreen="phone" :content-class="phone ? undefined : 'lightsync-top'">
     <div class="card box" :data-phone="phone ? '1' : '0'">
       <div class="box__head">
         <div class="min0">
@@ -189,8 +189,9 @@ const subtitle = computed(() => [props.name, props.status.room?.name, props.stat
           <div class="section-label">{{ $t('music.lightSyncPanel.colors') }}</div>
           <Segmented v-model="source" dense fill :options="sourceOptions" :label="$t('music.lightSyncPanel.colors')" />
 
-          <!-- the four panels share one grid cell: the section keeps the height of the tallest,
-               switching source moves nothing (the dialog is centred: a height change moved it all) -->
+          <!-- only the chosen panel takes room: the box is anchored at the top, so switching source
+               only moves its bottom edge (reserving the colour picker's height left an empty
+               space and a scrollbar on the other sources) -->
           <div class="sources">
           <div class="source chips" :data-on="source === 'preset' ? '1' : '0'" :inert="source !== 'preset'">
             <button v-for="id in LIGHTSYNC_PRESET_IDS" :key="id" type="button" class="chip" :data-on="isPreset(id) ? '1' : '0'"
@@ -282,7 +283,7 @@ const subtitle = computed(() => [props.name, props.status.room?.name, props.stat
 .pct { font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .sources { display: grid; grid-template-columns: minmax(0, 1fr); }
 .source { grid-area: 1 / 1; align-self: start; min-width: 0; }
-.source[data-on='0'] { visibility: hidden; }
+.source[data-on='0'] { display: none; }
 .chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
 .chip {
   min-width: 0; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
@@ -302,4 +303,10 @@ const subtitle = computed(() => [props.name, props.status.room?.name, props.stat
 .dot--random { margin-left: auto; }
 /* one line, always: a long rule name on a phone must not push the picker down on a click */
 .harmony { margin: -4px 0 0; font-size: 12.5px; height: 1.4em; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+
+<style>
+/* the dialog is teleported: not reachable from the scoped block. Anchored at the top, not centred:
+   a change of the box's height (colour source) leaves everything above in place */
+.v-dialog > .v-overlay__content.lightsync-top { align-self: flex-start; margin-top: 7.5vh; }
 </style>

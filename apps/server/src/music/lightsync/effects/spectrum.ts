@@ -22,13 +22,14 @@ export class SpectrumEffect implements Effect {
 
   next(frame: FeatureFrame | undefined, dtS: number): ChannelColor[] {
     const { palette, energy, brightness } = this.params
-    const release = lerp(0.5, 0.1, energy)
+    const release = lerp(0.7, 0.2, energy)
+    const attack = lerp(0.15, 0.04, energy)
     // each band against its own peak (highs are quieter than bass by nature), but never against
     // less than a share of the loudest band: a band with almost nothing in it stays dark
     const loudest = Math.max(...this.norms.map((n) => n.currentPeak))
-    const levels = BANDS.map((band, k) => this.envs[k]!.follow(this.norms[k]!.level(frame?.[band] ?? 0, dtS, MIN_SHARE * loudest), dtS, release))
-    const floor = lerp(0.2, 0.03, energy)
-    const gamma = lerp(1, 2, energy)
+    const levels = BANDS.map((band, k) => this.envs[k]!.follow(this.norms[k]!.level(frame?.[band] ?? 0, dtS, MIN_SHARE * loudest), dtS, release, attack))
+    const floor = lerp(0.3, 0.12, energy)
+    const gamma = lerp(1, 1.5, energy)
     const colorOf = (k: number): Rgb => palette[k % palette.length]!
     const n = this.ordered.length
     if (n === 1) {

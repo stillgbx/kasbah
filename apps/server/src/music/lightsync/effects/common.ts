@@ -42,11 +42,12 @@ export class Normalizer {
   }
 }
 
-/** Instant attack, exponential release. */
+/** Exponential attack (instant when `attackS` is 0) and release. */
 export class Envelope {
   value = 0
-  follow(level: number, dtS: number, releaseS: number): number {
-    this.value = Math.max(level, this.value * Math.exp(-dtS / Math.max(0.01, releaseS)))
+  follow(level: number, dtS: number, releaseS: number, attackS = 0): number {
+    if (level > this.value) this.value += (level - this.value) * (attackS > 0 ? 1 - Math.exp(-dtS / attackS) : 1)
+    else this.value = Math.max(level, this.value * Math.exp(-dtS / Math.max(0.01, releaseS)))
     return this.value
   }
 }

@@ -226,7 +226,7 @@ describe('LightSync settings', () => {
     await t.sync.ready
     const s = t.sync.status('cast:speaker-1')
     expect(s.room).toEqual({ id: 'room-2', name: 'Chambre 2' })
-    expect(s.settings).toEqual({ effect: 'pulse', palette: { source: 'preset', preset: 'warm' }, energy: 0.5, brightness: 1 })
+    expect(s.settings).toEqual({ effect: 'wave', palette: { source: 'preset', preset: 'warm' }, energy: 0.5, brightness: 1 })
     expect(s.palette?.length).toBeGreaterThan(1)
   })
 

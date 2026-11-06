@@ -470,3 +470,27 @@ Vérifié : `sync.test.ts` (pièces proposées, pas de pièce avant le choix pui
 pièce, passage d'une pièce à l'autre sans éteindre, pièce sans zone), `player.test.ts` (routes, flux
 ouvert après le premier relevé du navigateur, refermé quand il se tait), `localPlayer.test.ts`
 (relevés sur lecture, saut, pause, arrêt). **Pas encore vérifié** sur les vraies lampes.
+
+### Mise à jour 2026-11-06 (nuit) — Vague par défaut, ambiance adoucie
+
+Retour de l'utilisateur : « rendre moins agressif l'ambiance, même au minimum ce n'est pas très calme,
+et le max est presque insupportable ».
+
+- **Défaut** : `DEFAULT_LIGHTSYNC_SETTINGS.effect` passe de `pulse` à `wave`, et `LIGHTSYNC_EFFECTS`
+  met `wave` en tête (l'ordre est celui des tuiles). Seules les pièces jamais réglées changent : les
+  réglages gardés dans `.state/lightsync.json` restent.
+- **Attaque progressive** : `Envelope.follow` prend une constante de montée (`attackS`, 0 = instantané
+  comme avant). Une basse fait gonfler la lumière au lieu de l'allumer d'un coup : 0,3 → 0,08 s pour
+  Vague, 0,15 → 0,04 s pour Pulsation et Spectre (calme → énergique).
+- **Bornes resserrées des deux côtés**, `energy` toujours monotone : Vague, plancher 45 → 20 % (au lieu
+  de 35 → 10), retombée 1,5 → 0,5 s, défilement 0,04 → 0,3 couleur/s (au lieu de 0,08 → 0,6) ;
+  Pulsation, plancher 40 → 20 % (au lieu de 25 → 5), contraste ≤ 1,5, attaques comptées au plus toutes
+  les 2 → 0,5 s, fondu de couleur 0,8 → 0,2 s ; Spectre, plancher 30 → 12 %, retombée 0,7 → 0,2 s.
+- **Strobo** : au plus un éclair toutes les 0,35 s même énergique (environ trois par seconde : plus vite
+  est pénible, et c'est la limite d'usage pour la photosensibilité) ; lueur de 15 % en calme.
+- Respiration, déjà l'effet doux, est inchangée.
+
+Valeurs choisies sans les lampes sous les yeux : à juger en vrai par l'utilisateur. Tests
+`effects.test.ts` (le test du passage de couleur laisse 2 s au fondu, plus lent) et `sync.test.ts`
+(défaut). Le choix de la zone d'une pièce s'est assoupli le même jour (voir
+[3_1 Philips Hue](../3_plugins/3_1_philips-hue.md)).

@@ -20,11 +20,13 @@ export class StrobeEffect implements Effect {
   next(frame: FeatureFrame | undefined, dtS: number): ChannelColor[] {
     const { palette, energy, brightness } = this.params
     this.flash *= Math.exp(-dtS / FLASH_S)
-    if (this.gate.fire(frame?.onset ?? 0, lerp(0.7, 0.25, energy), lerp(0.5, 0.08, energy), dtS)) {
+    // at most about three flashes a second, even energetic (faster is hard to bear, and the usual
+    // photosensitivity limit)
+    if (this.gate.fire(frame?.onset ?? 0, lerp(0.75, 0.4, energy), lerp(1, 0.35, energy), dtS)) {
       this.flash = 1
       this.index = (this.index + 1) % palette.length
     }
-    const glow = lerp(0.08, 0, energy)
+    const glow = lerp(0.15, 0, energy)
     const color = palette[this.index % palette.length]!
     return this.channels.map((c) => out(c.id, color, Math.max(glow, this.flash) * brightness))
   }

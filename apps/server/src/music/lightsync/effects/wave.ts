@@ -21,10 +21,11 @@ export class WaveEffect implements Effect {
   next(frame: FeatureFrame | undefined, dtS: number): ChannelColor[] {
     const { palette, energy, brightness } = this.params
     const level = this.loud.level(frame ? frame.low + 0.5 * frame.mid : 0, dtS)
-    const env = this.env.follow(level, dtS, lerp(1.2, 0.3, energy))
+    // a soft rise even when energetic: the room swells with the beat rather than flashing
+    const env = this.env.follow(level, dtS, lerp(1.5, 0.5, energy), lerp(0.3, 0.08, energy))
     // colours per second: a slow drift when calm, a run when energetic, both pushed by the music
-    this.phase += dtS * lerp(0.08, 0.6, energy) * (0.4 + 1.2 * env)
-    const floor = lerp(0.35, 0.1, energy)
+    this.phase += dtS * lerp(0.04, 0.3, energy) * (0.4 + 1.2 * env)
+    const floor = lerp(0.45, 0.2, energy)
     const b = (floor + (1 - floor) * env) * brightness
     const n = this.ordered.length
     // the whole room spans one colour step of the palette: neighbours differ, the wave stays readable

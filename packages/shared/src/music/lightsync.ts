@@ -3,7 +3,8 @@ import { z } from 'zod'
 // Settings of the room lights in rhythm with the music (Hue Entertainment), shared by the server,
 // which applies them, and the screen, which edits them and draws the presets' swatches.
 
-export const LIGHTSYNC_EFFECTS = ['pulse', 'wave', 'spectrum', 'strobe', 'breathe'] as const
+/** In the order of the screen's tiles: the default first. */
+export const LIGHTSYNC_EFFECTS = ['wave', 'pulse', 'spectrum', 'strobe', 'breathe'] as const
 export type LightSyncEffect = (typeof LIGHTSYNC_EFFECTS)[number]
 
 /** Ready-made palettes, sRGB hex. Saturated enough to read as colour at low brightness. */
@@ -40,9 +41,9 @@ export const lightSyncSettingsSchema = z.object({
 })
 export type LightSyncSettings = z.infer<typeof lightSyncSettingsSchema>
 
-/** What the first version did: the pulse on a warm palette, half energy, full brightness. */
+/** The wave on a warm palette, half energy, full brightness. */
 export const DEFAULT_LIGHTSYNC_SETTINGS: LightSyncSettings = {
-  effect: 'pulse',
+  effect: 'wave',
   palette: { source: 'preset', preset: 'warm' },
   energy: 0.5,
   brightness: 1,

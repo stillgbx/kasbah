@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-06] update | Lumières en rythme : Vague par défaut, ambiance adoucie, zones qui débordent acceptées
+
+**Déclencheur** : retours de l'utilisateur sur le panneau : Vague en premier choix, ambiance trop agressive aux deux bouts, des pièces absentes du choix, barre de défilement alors que tout est affiché.
+
+**Pages modified** :
+- 1_architecture/1_6_lecteur-musique.md - section datée : Vague par défaut et en tête, attaque progressive de l'enveloppe, bornes de l'ambiance resserrées par effet, strobo plafonné à ~3 éclairs/s
+- 3_plugins/3_1_philips-hue.md - section datée : `pickArea` accepte une zone dont au moins la moitié des lampes sont dans la pièce, zone propre préférée
+- 4_ui/4_5_musique-et-medias.md - section datée : seul le panneau de couleurs choisi prend de la place, dialogue ancré en haut, tuile Vague en premier
+
+**Index** : catalogues (déjà datés du jour), index.md régénéré.
+
 ## [2026-11-06] update | Hue : poignée de main DTLS réessayée, zone relancée entre deux essais
 
 **Déclencheur** : échec `1 packet(s) from the bridge` sur le serveur, et « si je coupe et que j'essaie de rallumer la sync alors même erreur. il ne faut pas fermer des choses ? ».

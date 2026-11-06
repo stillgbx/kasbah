@@ -41,8 +41,21 @@ const area = (id: string, lights: string[], channels = lights.length) => hueEnte
 describe('pickArea', () => {
   const room = new Set(['l1', 'l2', 'l3'])
 
-  it('never picks an area that would light up a lamp outside the room', () => {
-    expect(pickArea([area('a', ['l1', 'next-door'])], room)).toBeUndefined()
+  it('takes an area with a lamp next door when at least half of it is in the room', () => {
+    expect(pickArea([area('open-space', ['l1', 'next-door'])], room)?.id).toBe('open-space')
+  })
+
+  it('never picks an area mostly outside the room', () => {
+    expect(pickArea([area('a', ['l1', 'next-door', 'other-room'])], room)).toBeUndefined()
+  })
+
+  it('prefers an area all in the room to one spilling over, even with fewer lights', () => {
+    expect(pickArea([area('spill', ['l1', 'l2', 'next-door']), area('clean', ['l1'])], room)?.id).toBe('clean')
+  })
+
+  it('among areas spilling over, prefers the most room lights, then the fewest outside', () => {
+    const picked = pickArea([area('one', ['l1', 'x']), area('two-many-out', ['l1', 'l2', 'x', 'y']), area('two', ['l1', 'l2', 'x'])], room)
+    expect(picked?.id).toBe('two')
   })
 
   it('prefers the area covering the most lights of the room, then the most channels', () => {

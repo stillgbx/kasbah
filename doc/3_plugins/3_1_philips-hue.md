@@ -322,3 +322,18 @@ volontairement rendu sourd, flux ouvert en 2,3 s au lieu de l'échec. Tests `ent
 (trois essais puis abandon, réussite au deuxième, pas de nouvel essai sur une alerte).
 
 **Reste** : la cause des pertes, le réseau du serveur (même moment que les autres appareils injoignables).
+
+### Mise à jour 2026-11-06 (nuit) — une zone qui déborde sur la pièce voisine est acceptée
+
+Constat de l'utilisateur : des pièces manquaient au choix de « Ce navigateur ». Lecture des zones sur
+le pont : deux zones contiennent chacune une lampe d'une pièce voisine (pièces ouvertes l'une sur
+l'autre). La règle « **toutes** ses lampes dans la pièce »
+(plus haut) les écartait.
+
+Depuis cette date, `pickArea` (`entertainment.ts`) accepte une zone dont **au moins la moitié** des
+lampes sont dans la pièce : la lampe d'à côté suit alors la musique elle aussi (choix de l'utilisateur,
+plutôt que de redécouper la zone dans l'appli Hue). Une zone surtout ailleurs reste écartée. Ordre de
+préférence : aucune lampe hors de la pièce (une pièce qui avait déjà sa zone la garde), puis le plus de
+lampes de la pièce, le moins de lampes dehors, le plus de canaux. Tests `entertainment.test.ts` (zone
+moitié dedans prise, zone surtout dehors refusée, zone propre préférée, départage). La page
+`docs/plugins/hue.md` dit la même règle. **Pas encore vérifié** sur le vrai serveur.
