@@ -76,6 +76,8 @@ export function pickArea(areas: readonly HueEntertainmentConfiguration[], roomLi
 export interface DtlsSocket extends EventEmitter {
   send(data: Buffer): void
   close(): void
+  /** The plain UDP socket underneath (`node-dtls-client`'s): only read to tell a failed handshake apart. */
+  udp?: EventEmitter
 }
 export type DtlsConnect = (opts: { host: string; port: number; identity: string; psk: Buffer }) => DtlsSocket
 
@@ -106,12 +108,29 @@ export interface HueLightStream extends LightStream {
   abort(reason: string): Promise<void>
 }
 
+/** How often the event loop is sampled during the handshake (a late timer = a busy process). */
+const LAG_SAMPLE_MS = 100
+
 /** Starts the area, opens the DTLS session, and returns the stream once the handshake is done. */
 export async function openStream(o: OpenStreamOpts): Promise<HueLightStream> {
   await o.client.entertainmentAction(o.area.id, 'start')
   let socket: DtlsSocket
+  // A failed handshake says only "timed out". Two things tell its causes apart: whether the bridge
+  // answered at all (key or network), and how late the timers ran (a process too busy to read the
+  // answers before its own timeout fires)
+  let packets = 0
+  let maxLagMs = 0
+  let sampler: unknown = null
+  const sample = (expected: number) => {
+    sampler = o.clock.setTimeout(() => {
+      maxLagMs = Math.max(maxLagMs, o.clock.now() - expected)
+      sample(o.clock.now() + LAG_SAMPLE_MS)
+    }, LAG_SAMPLE_MS)
+  }
+  sample(o.clock.now() + LAG_SAMPLE_MS)
   try {
     socket = await o.connect({ host: o.host, port: DTLS_PORT, identity: o.appKey, psk: Buffer.from(o.clientKey, 'hex') })
+    socket.udp?.on('message', () => { packets++ })
     await new Promise<void>((resolve, reject) => {
       const timer = o.clock.setTimeout(() => reject(new Error('DTLS handshake timed out')), CONNECT_TIMEOUT_MS + 500)
       socket.once('connected', () => { o.clock.clearTimeout(timer); resolve() })
@@ -119,7 +138,11 @@ export async function openStream(o: OpenStreamOpts): Promise<HueLightStream> {
     })
   } catch (err) {
     await o.client.entertainmentAction(o.area.id, 'stop').catch(() => {})
-    throw err
+    const why = `${(err as Error).message} (${packets} packet(s) from the bridge, timers up to ${Math.round(maxLagMs)} ms late)`
+    o.logger.warn({ host: o.host, area: o.area.id, packets, maxLagMs: Math.round(maxLagMs) }, 'Hue: DTLS handshake failed')
+    throw new Error(why, { cause: err })
+  } finally {
+    if (sampler !== null) o.clock.clearTimeout(sampler)
   }
 
   let seq = 0

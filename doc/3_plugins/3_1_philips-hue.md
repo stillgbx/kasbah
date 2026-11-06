@@ -1,6 +1,6 @@
 # Plugin Philips Hue
 
-> Dernière mise à jour : 2026-11-05
+> Dernière mise à jour : 2026-11-06
 > Sources : `apps/server/src/plugins/hue/{index,client,discovery,mapping,types,entertainment}.ts`, `apps/server/src/core/lightStreamBridge.ts`, `tools/hue-entertainment-probe.mts`, `apps/server/src/core/sse.ts`, tests `mapping.test.ts`, `plugin.test.ts`
 
 ## API utilisée
@@ -268,3 +268,33 @@ Vérifié sur le vrai pont : activer / couper / réactiver avec la vraie synchro
 rouvert sans incident ; arrêt de la zone depuis l'extérieur (comme le ferait l'appli Hue) : événement
 reçu en 250 ms, le pont ferme aussi la session DTLS (`close_notify`), la synchro rouvre 10 s plus tard.
 Tests `plugin.test.ts` : fin confirmée, confirmation pendant la poignée de main, arrêt tardif ignoré.
+
+### Mise à jour 2026-11-06 — une poignée de main DTLS qui expire : ce que dit maintenant l'échec
+
+Constat sur la vraie maison : la synchro de « Ce navigateur » ([1_6](../1_architecture/1_6_lecteur-musique.md),
+mise à jour du même jour) démarre bien la zone par CLIP v2, puis `The DTLS handshake timed out` à chaque
+essai. Ce qui a été écarté, mesuré le jour même :
+- **la zone et le pont** : la sonde `tools/hue-entertainment-probe.mts stream`, lancée depuis le poste de
+  développement puis depuis le serveur avec les clés de son `.env`, se connecte en 22 à 41 ms ;
+- **le code du plugin** : `openStream` + `defaultDtlsConnect`, appelés hors du serveur (script jetable),
+  se connectent en ~0,5 s ;
+- **une clé cliente fausse** : le pont ne se tait pas, il répond par une alerte fatale
+  `bad_record_mac` en 0,8 s. Une **expiration** ne vient donc pas d'une paire de clés mal assortie.
+
+Au même moment, le serveur ne joignait plus une bonne partie du réseau local (passerelle solaire,
+filtration, une porte de garage, l'aspirateur, la plupart des enceintes), alors que le pont (HTTPS) et
+la box des volets répondaient. **Cause non trouvée** : réseau du serveur, ou processus trop occupé pour lire les
+réponses avant son propre délai (sur un minuteur en retard, Node traite les minuteurs avant les
+entrées-sorties : le délai de 3 s de `node-dtls-client` expire alors même si la réponse attend).
+
+Pour trancher au prochain échec, `openStream` (`entertainment.ts`) compte les datagrammes reçus du pont
+sur le socket UDP sous-jacent de `node-dtls-client` (`socket.udp`) et échantillonne le retard des
+minuteurs toutes les 100 ms pendant la poignée de main ; le message d'erreur (journal
+`Hue: DTLS handshake failed` et détail affiché dans le panneau des lumières en rythme) devient par ex.
+`DTLS handshake timed out (0 packet(s) from the bridge, timers up to 40 ms late)`. 0 paquet et peu de
+retard : le réseau ; un retard d'une seconde ou plus : le processus. Test `entertainment.test.ts`
+(horloge qui saute, comme un processus bloqué).
+
+Rappel des deux clés : `HUE_APP_KEY` (le `username` de l'appairage) authentifie les appels HTTPS et sert
+d'**identité** PSK en DTLS ; `HUE_CLIENT_KEY` (rendue au même appairage, `generateclientkey`) est la
+**clé secrète** PSK du flux. Chaque appairage crée une nouvelle paire ; les deux doivent venir du même.

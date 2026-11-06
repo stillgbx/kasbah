@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-06] update | Hue : ce que dit une poignée de main DTLS qui expire
+
+**Déclencheur** : la synchro de « Ce navigateur » échoue sur la vraie maison (`The DTLS handshake timed out`) alors que la sonde passe depuis le poste et depuis le serveur.
+
+**Pages modified** :
+- 3_plugins/3_1_philips-hue.md - section datée : pistes écartées (pont, code du plugin, clé fausse = `bad_record_mac` et non expiration), cause non trouvée, message d'échec enrichi (paquets du pont, retard des minuteurs), rappel des deux clés
+
+**Index** : catalogue 3_plugins (date), index.md régénéré.
+
 ## [2026-11-06] update | Lumières en rythme pour « Ce navigateur » : la pièce choisie
 
 **Déclencheur** : « quand je suis dans kasbah et que l'écoute est "sur cet appareil" alors je souhaite pouvoir choisir la cible des lights à activer », précisé ensuite : la cible ne dépend pas de la pièce où se trouve l'ordinateur.

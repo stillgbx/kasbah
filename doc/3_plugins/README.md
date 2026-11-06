@@ -21,7 +21,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 
 | Page | Résumé | Dernière mise à jour |
 |---|---|---|
-| [3_1 Philips Hue](3_1_philips-hue.md) | API CLIP v2 locale : TLS auto-signé, découverte et appairage, flux d'événements SSE, mappage pur, limitation de débit, scènes (fixes et palettes animées), effets de lampe, flux Entertainment (DTLS) vers une zone de divertissement. | 2026-11-05 |
+| [3_1 Philips Hue](3_1_philips-hue.md) | API CLIP v2 locale : TLS auto-signé, découverte et appairage, flux d'événements SSE, mappage pur, limitation de débit, scènes (fixes et palettes animées), effets de lampe, flux Entertainment (DTLS) vers une zone de divertissement. | 2026-11-06 |
 | [3_4 Somfy TaHoma](3_4_somfy-tahoma.md) | API locale Overkiz du mode développeur (activée depuis l'appli mobile) : io-homecontrol et RTS distingués, événements en deltas, position inconnue d'un RTS, position favorite « my », pièges relevés sur la vraie box, volets solaires (luminosité, mode discret), rafales de commandes (file ou exécution groupée), étalonnage par volet. | 2026-11-05 |
 | [3_5 Google Nest (caméras, sonnettes)](3_5_google-nest.md) | API cloud Smart Device Management : prérequis Google, liaison du compte, mappage en `camera` et thermostat en `climate`, ce que l'API refuse, vidéo RTSP relayée en MSE, vignettes de la vue Caméras et budget de sessions, fixtures relevées. | 2026-11-03 |
 | [3_6 Google Cast](3_6_google-cast.md) | Enceintes, réveils, Chromecast et barres de son par Cast v2 local : ce que le protocole permet, trame protobuf faite main, connexion TLS par appareil, volume fixe, nature déduite de l'annonce mDNS, mappage `media_player`, pochettes relayées, mise en route. | 2026-10-24 |

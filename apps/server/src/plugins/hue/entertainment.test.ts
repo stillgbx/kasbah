@@ -129,6 +129,35 @@ describe('openStream', () => {
     await expect(opening).rejects.toThrow('handshake refused')
     expect(entertainmentAction).toHaveBeenLastCalledWith(AREA_ID, 'stop')
   })
+
+  it('says whether the bridge answered and how late the timers ran when the handshake fails', async () => {
+    const manual = new ManualClock(0)
+    // a process that was blocked: its clock jumps ahead of the timers that were due
+    let skew = 0
+    const clock = {
+      now: () => manual.now() + skew,
+      setTimeout: (fn: () => void, ms: number) => manual.setTimeout(fn, ms),
+      clearTimeout: (h: unknown) => manual.clearTimeout(h),
+      setInterval: (fn: () => void, ms: number) => manual.setInterval(fn, ms),
+      clearInterval: (h: unknown) => manual.clearInterval(h),
+    }
+    const socket = Object.assign(new FakeSocket(), { udp: new EventEmitter() })
+    const opening = openStream({
+      client: { entertainmentAction: async () => {} } as unknown as HueClient,
+      area: toLightArea(area(AREA_ID, ['l1'])),
+      host: 'h', appKey: 'k', clientKey: '00'.repeat(16),
+      connect: () => socket,
+      clock, logger: pino({ level: 'silent' }),
+    })
+    const failure = expect(opening).rejects.toThrow('DTLS handshake timed out (1 packet(s) from the bridge, timers up to 1200 ms late)')
+    await new Promise((r) => setTimeout(r, 0))
+    socket.udp.emit('message', Buffer.alloc(1))
+    skew = 1200
+    manual.advance(100)          // the 100 ms sampler runs, 1200 ms late
+    skew = 0
+    manual.advance(3500)
+    await failure
+  })
 })
 
 describe('openStream on a socket the library closed by itself', () => {
