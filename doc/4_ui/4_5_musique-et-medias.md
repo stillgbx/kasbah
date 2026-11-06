@@ -1149,3 +1149,27 @@ que la liaison, sans recherche) ; thèmes et zooms non rejoués (composant incha
 **Piège de sonde** : dans la preview, chercher un bouton par son nom (« Radios ») sur toute la page en
 trouve un autre que celui du sélecteur de sources ; la sonde avait cru voir une fuite d'historique entre
 sources. Cibler `.sources button[aria-label="…"]`.
+
+### Mise à jour 2026-11-06 — « Ce navigateur » : choisir la pièce des lumières en rythme
+
+Sources : `apps/web/src/components/music/{ListeningSessions,LightSyncDialog}.vue`,
+`apps/web/src/views/MusicView.vue`, `apps/web/src/stores/localPlayer.ts`. Serveur :
+[1_6 Lecteur musique commun](../1_architecture/1_6_lecteur-musique.md), mise à jour du même jour.
+
+- **La ligne « Ce navigateur »** prend l'ampoule dès qu'une pièce a une zone de divertissement
+  (`lightSyncRooms`, nombre de pièces proposées ; la colonne existe alors sur toutes les lignes, rien ne
+  bouge). Tant qu'aucune pièce n'est choisie, l'ampoule **ouvre le panneau** (infobulle
+  `music.lightSyncPickRoom`) au lieu d'allumer.
+- **Le panneau** reçoit `rooms` pour ce navigateur seulement : une rangée **Pièce** en tête (puces du
+  même gabarit que les palettes, la zone en infobulle, phrase d'aide sur deux lignes réservées). Avant le
+  choix, l'interrupteur est désactivé et les réglages (ceux de la pièce) sont `inert` et estompés.
+  N'importe quelle pièce proposée, où que soit l'appareil.
+- **Mémoire** : le choix est gardé dans le navigateur (`kasbah.music.lightSyncRoom`) ; le serveur
+  l'oublie à son redémarrage, `refreshLightSync` le lui redit quand l'état du navigateur revient sans
+  pièce.
+
+Vérifié dans la preview (simulation, pièces simulées le temps de la vérification puis retirées) :
+puces, interrupteur et réglages bloqués puis débloqués par le choix, ampoule allumée sur la ligne ;
+lignes de la carte Écoute au pixel près avant et après ; aucun débordement ni libellé coupé aux zooms
+1 / 1,25 / 1,5 ; console vide. Thème clair et anglais non rejoués (aucune couleur nouvelle, phrases
+d'une longueur voisine).

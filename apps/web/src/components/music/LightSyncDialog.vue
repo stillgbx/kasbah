@@ -6,7 +6,7 @@ import {
   DEFAULT_LIGHTSYNC_SETTINGS, LIGHTSYNC_EFFECTS, LIGHTSYNC_PRESET_IDS, LIGHTSYNC_PRESETS,
   type LightSyncEffect, type LightSyncPalette, type LightSyncPreset, type LightSyncSettings, type LightSyncSettingsPatch,
 } from '@kasbah/shared'
-import type { MusicLightSync } from '../../api'
+import type { MusicLightSync, MusicLightSyncRoom } from '../../api'
 import { randomHarmony, type Harmony } from '../../lib/colorHarmony'
 import type { IconName } from '../../lib/strokeIcons'
 import { useScenesStore } from '../../stores/scenes'
@@ -19,9 +19,12 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 //
 // Layout: effect, mood and brightness first, colours last — switching the colour source only
 // changes the end of the box, nothing above it moves.
+//
+// This browser has no place in the house: `rooms` is given for it, and the box opens on the choice
+// of its room. Until one is chosen, the switch and the settings (the room's) are out of reach.
 
-const props = defineProps<{ status: MusicLightSync; name: string }>()
-const emit = defineEmits<{ toggle: [on: boolean]; change: [patch: LightSyncSettingsPatch] }>()
+const props = defineProps<{ status: MusicLightSync; name: string; rooms?: MusicLightSyncRoom[] }>()
+const emit = defineEmits<{ toggle: [on: boolean]; change: [patch: LightSyncSettingsPatch]; room: [roomId: string] }>()
 const open = defineModel<boolean>({ required: true })
 const { t } = useI18n()
 const scenes = useScenesStore()
@@ -110,6 +113,8 @@ function removeColor() {
 }
 
 const showProblem = computed(() => props.status.on && !!props.status.problem)
+/** A browser whose room is not chosen yet: nothing to switch or set before. */
+const noRoom = computed(() => !!props.rooms && !props.status.room)
 const subtitle = computed(() => [props.name, props.status.room?.name, props.status.area].filter(Boolean).join(' · '))
 </script>
 
@@ -121,19 +126,32 @@ const subtitle = computed(() => [props.name, props.status.room?.name, props.stat
           <h2 class="box__title">{{ $t('music.lightSync') }}</h2>
           <div class="muted box__sub">{{ subtitle }}</div>
         </div>
-        <v-switch :model-value="status.on" color="primary" density="compact" hide-details inset class="box__switch"
+        <v-switch :model-value="status.on" :disabled="noRoom" color="primary" density="compact" hide-details inset class="box__switch"
                   :aria-label="$t('music.lightSync')" @update:model-value="(v: boolean | null) => emit('toggle', !!v)" />
         <button type="button" class="box__close" :title="$t('common.close')" :aria-label="$t('common.close')" @click="open = false">
           <StrokeIcon name="close" :size="18" />
         </button>
       </div>
       <div class="box__body">
+        <section v-if="rooms" class="sec">
+          <div class="section-label">{{ $t('music.lightSyncPanel.room') }}</div>
+          <div class="chips" role="radiogroup" :aria-label="$t('music.lightSyncPanel.room')">
+            <button v-for="r in rooms" :key="r.id" type="button" class="chip" role="radio" :data-on="status.room?.id === r.id ? '1' : '0'"
+                    :aria-checked="status.room?.id === r.id ? 'true' : 'false'" :title="r.area" @click="emit('room', r.id)">
+              <StrokeIcon name="light" :size="16" class="chip__icon" />
+              <span class="chip__label">{{ r.name }}</span>
+            </button>
+          </div>
+          <p class="muted hint">{{ rooms.length ? $t('music.lightSyncPanel.roomHint') : $t('music.lightSyncPanel.noRoom') }}</p>
+        </section>
         <!-- reserved line: why the lights are not following, while it is being retried -->
         <div class="problem">
           <p class="problem__what" :title="showProblem ? $t(`music.lightSyncProblem.${status.problem}`) : undefined">{{ showProblem ? $t(`music.lightSyncProblem.${status.problem}`) : '' }}</p>
           <!-- the server's own words (bridge reason, ffmpeg error): readable without the logs -->
           <p class="problem__detail" :title="showProblem ? status.problemDetail : undefined">{{ showProblem ? status.problemDetail ?? '' : '' }}</p>
         </div>
+        <!-- before the room of this browser is chosen, the settings are the room's: out of reach -->
+        <div class="settings" :data-off="noRoom ? '1' : '0'" :inert="noRoom">
         <!-- the colours being played, cover included once known -->
         <div class="strip" :style="{ background: preview(status.palette ?? []) }" :title="$t('music.lightSyncPanel.current')" />
 
@@ -217,6 +235,7 @@ const subtitle = computed(() => [props.name, props.status.room?.name, props.stat
           <p class="source muted hint" :data-on="source === 'cover' ? '1' : '0'" :inert="source !== 'cover'">{{ $t('music.lightSyncPanel.coverHint') }}</p>
           </div>
         </section>
+        </div>
       </div>
     </div>
   </v-dialog>
@@ -234,6 +253,10 @@ const subtitle = computed(() => [props.name, props.status.room?.name, props.stat
 .box__close:hover { background: var(--surface2); color: var(--text); }
 .box__body { overflow-y: auto; overscroll-behavior: contain; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-content: start; margin-right: -8px; padding-right: 8px; }
 .strip { height: 8px; border-radius: 999px; }
+.settings { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; min-width: 0; transition: opacity .15s; }
+.settings[data-off='1'] { opacity: .35; }
+.chip__icon { flex: 0 0 auto; color: var(--muted); }
+.chip[data-on='1'] .chip__icon { color: var(--accent); }
 /* one line, always reserved: the warning appears without pushing anything */
 .problem { margin-bottom: -10px; display: grid; min-width: 0; }
 .problem p { margin: 0; height: 1.4em; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

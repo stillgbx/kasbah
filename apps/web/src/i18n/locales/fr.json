@@ -133,7 +133,7 @@
     "favoriteAdd": "Ajouter aux favoris", "favoriteRemove": "Retirer des favoris",
     "lightSync": "Lumières en rythme", "lightSyncOn": "Lumières de la pièce en rythme ({area})", "lightSyncOff": "Arrêter les lumières en rythme ({area})",
     "lightSyncProblem": { "stream": "Flux coupé par le pont Hue, nouvel essai…", "decode": "Analyse de la musique impossible, nouvel essai…" },
-    "lightSyncSettings": "Réglages des lumières en rythme",
+    "lightSyncSettings": "Réglages des lumières en rythme", "lightSyncPickRoom": "Choisir la pièce dont les lumières suivent ce navigateur",
     "lightSyncPanel": {
       "current": "Couleurs jouées", "effect": "Effet", "mood": "Ambiance", "calm": "Calme", "energetic": "Énergique", "brightness": "Luminosité", "colors": "Couleurs",
       "effects": { "pulse": "Pulsation", "wave": "Vague", "spectrum": "Spectre", "strobe": "Strobo", "breathe": "Respiration" },
@@ -142,6 +142,7 @@
       "presets": { "warm": "Chaud", "cool": "Froid", "neon": "Néon", "forest": "Forêt", "ocean": "Océan", "rainbow": "Arc-en-ciel" },
       "random": "Couleurs au hasard, qui vont ensemble", "harmonyUsed": "Harmonie : {rule}",
       "harmonies": { "analogous": "analogue (teintes voisines)", "complementary": "complémentaire (opposées)", "splitComplementary": "complémentaire adjacente", "triadic": "triade (teintes à 120°)", "tetradic": "carré (teintes à 90°)", "monochromatic": "monochrome (une teinte, plusieurs intensités)" },
+      "room": "Pièce", "roomHint": "Les lumières de cette pièce suivent la musique jouée dans ce navigateur.", "noRoom": "Aucune pièce n'a de zone de divertissement Hue : créez-en une dans l'application Hue.",
       "noScene": "Aucune scène de lumière dans cette pièce.", "colorN": "Couleur {n}", "addColor": "Ajouter une couleur", "removeColor": "Retirer la couleur choisie",
       "coverHint": "Les couleurs dominantes de la pochette du morceau, renouvelées à chaque titre."
     },

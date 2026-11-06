@@ -85,6 +85,10 @@ export interface MusicPlayerDeps {
   roomLights?: (deviceId: string) => string[] | null
   /** House room of a speaker (`app.ts`): the light sync settings are the room's. */
   room?: (deviceId: string) => { id: string; name: string } | null
+  /** The rooms of the house (`app.ts`): the room of this browser's lights is chosen among them. */
+  rooms?: () => { id: string; name: string }[]
+  /** Light device ids of a room (`app.ts`, from the house). */
+  lightsOfRoom?: (roomId: string) => string[]
   /** Swatches (hex) of a light scene (`app.ts`, the scene registry), for the scene palette. */
   sceneColors?: (sceneId: string) => readonly string[] | undefined
   /** Where the light sync settings are kept (tests); otherwise `.state/lightsync.json`. */
@@ -208,6 +212,14 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   const LOCAL_PREFIX = 'local:'
   const isLocal = (deviceId: string) => deviceId.startsWith(LOCAL_PREFIX)
 
+  /**
+   * What a browser says of its own playback (`POST /local/state`), with the server time it arrived:
+   * nothing else tells the light sync where it stands in the track.
+   */
+  const localStates = new Map<string, { playback: 'idle' | 'playing' | 'paused'; positionS: number; updatedAt: number }>()
+  /** A browser that stopped saying so (tab closed while playing): no longer counted as playing. */
+  const LOCAL_STATE_STALE_MS = 25_000
+
   /** A transfer's target takes about a second to start: it is placed that much further on. */
   const TRANSFER_LEAD_S = 1
 
@@ -259,9 +271,16 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
   const lightSync = new LightSync({
     session: (deviceId) => {
       const s = proxy.forDevice(deviceId)
-      return s && sessionActive(s) ? { sid: s.sid, sourceUrl: s.sourceUrl, ...(s.meta.artUrl ? { artUrl: s.meta.artUrl } : {}) } : undefined
+      // a browser holds its playback itself: its last track is what it plays
+      return s && (isLocal(deviceId) || sessionActive(s)) ? { sid: s.sid, sourceUrl: s.sourceUrl, ...(s.meta.artUrl ? { artUrl: s.meta.artUrl } : {}) } : undefined
     },
     playerState: (deviceId) => {
+      if (isLocal(deviceId)) {
+        const l = localStates.get(deviceId)
+        if (!l) return undefined
+        const stale = l.playback === 'playing' && now() - l.updatedAt > LOCAL_STATE_STALE_MS
+        return stale ? { playback: 'paused' } : { ...l }
+      }
       const st = resolvePlay().get(deviceId)?.state as { kind?: string; playback?: string; updatedAt?: number; nowPlaying?: { positionS?: number } } | undefined
       if (st?.kind !== 'media_player') return undefined
       return {
@@ -272,6 +291,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
     },
     room: (deviceId) => deps.room?.(deviceId) ?? null,
     roomLights: (deviceId) => deps.roomLights?.(deviceId) ?? null,
+    rooms: () => deps.rooms?.() ?? [],
+    lightsOfRoom: (roomId) => deps.lightsOfRoom?.(roomId) ?? [],
     streamer: deps.lightStreamer ?? getLightStreamer,
     decode: (url, startS) => decode(url, startS, { ffmpegPath: cfg.FFMPEG_PATH, ...(deps.spawnImpl ? { spawnImpl: deps.spawnImpl } : {}), logger: log }),
     sceneColors: (sceneId) => deps.sceneColors?.(sceneId),
@@ -840,6 +861,22 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       return { ok: true as const }
     })
 
+    /** A browser's own playback, told on play, pause, seek and every few seconds: for the light sync. */
+    app.post<{ Body: unknown }>('/local/state', async (req, reply) => {
+      const body = z.object({
+        clientId: z.string().regex(/^[A-Za-z0-9-]{8,64}$/),
+        playback: z.enum(['idle', 'playing', 'paused']),
+        positionS: z.number().min(0),
+      }).safeParse(req.body)
+      if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'clientId, playback and positionS are required')
+      const { clientId, playback, positionS } = body.data
+      localStates.set(`${LOCAL_PREFIX}${clientId}`, { playback, positionS, updatedAt: now() })
+      return { ok: true as const }
+    })
+
+    /** The rooms a browser can sync the lights of: those with a light area, and its name. */
+    app.get('/lightsync/rooms', async () => ({ rooms: lightSync.roomChoices() }))
+
     /** Light sync of the given speakers (`?deviceIds=a,b`): whether their room can, the switch, the stream. */
     app.get<{ Querystring: { deviceIds?: string } }>('/lightsync', async (req) => {
       const ids = (req.query.deviceIds ?? '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 200)
@@ -851,6 +888,16 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'on (boolean) is required')
       const status = await lightSync.set(req.params.deviceId, body.data.on)
       if (body.data.on && !status.available) return sendError(reply, 409, 'UNSUPPORTED_COMMAND', `light sync not available here (${status.reason})`)
+      return status
+    })
+
+    /** The room whose lights follow a BROWSER (it has no place in the house); null forgets it. */
+    app.put<{ Params: { deviceId: string }; Body: unknown }>('/lightsync/:deviceId/room', async (req, reply) => {
+      if (!isLocal(req.params.deviceId)) return sendError(reply, 400, 'INVALID_BODY', 'only a browser has its room chosen; a speaker is placed in the house')
+      const body = z.object({ roomId: z.string().min(1).nullable() }).safeParse(req.body)
+      if (!body.success) return sendError(reply, 400, 'INVALID_BODY', 'roomId (string or null) is required')
+      const status = await lightSync.setRoom(req.params.deviceId, body.data.roomId)
+      if (!status) return sendError(reply, 404, 'NOT_FOUND', 'no such room')
       return status
     })
 

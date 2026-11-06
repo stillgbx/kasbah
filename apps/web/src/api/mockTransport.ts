@@ -462,6 +462,8 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async musicLightSync(deviceIds) { return { lightsync: deviceIds.map((deviceId) => ({ deviceId, available: false, reason: 'no_hue' as const, on: false, active: false })) } },
     async setMusicLightSync(deviceId) { return { deviceId, available: false, reason: 'no_hue' as const, on: false, active: false } },
     async setMusicLightSyncSettings() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Hue bridge in mock mode') },
+    async musicLightSyncRooms() { return { rooms: [] } },
+    async setMusicLightSyncRoom() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Hue bridge in mock mode') },
     async musicLast() { return { last: [] } },
     async musicResume() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async musicTransfer() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
@@ -475,6 +477,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async musicQueueRepeat() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async musicQueueRemove() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async musicProgress() {},
+    async musicLocalState() {},
     async musicQueueClear() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
     async session() { return { user: null } },
     // assistant: no `claude` here, a demonstration reply

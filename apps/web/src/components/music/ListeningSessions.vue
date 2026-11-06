@@ -38,6 +38,8 @@ const props = defineProps<{
   pendingId: string | null
   /** Room lights in rhythm, per player (absent = not known yet). */
   lightSync?: ReadonlyMap<string, MusicLightSync>
+  /** How many rooms this browser could sync the lights of (its room is chosen, it has no place). */
+  lightSyncRooms?: number
 }>()
 const emit = defineEmits<{ select: [id: string]; transferTo: [id: string]; command: [id: string, cmd: CommandInput]; locate: [id: string]; lightSync: [id: string, on: boolean]; lightSyncSettings: [id: string] }>()
 const { t } = useI18n()
@@ -132,10 +134,18 @@ const groups = computed<Group[]>(() => {
  * The light sync column exists as soon as ONE room can be synced (a Hue area somewhere): then every
  * row keeps its slot, hidden where the room cannot, and nothing shifts from one row to the next.
  */
-const lightSyncColumn = computed(() => [...(props.lightSync?.values() ?? [])].some((s) => s.available))
+const lightSyncColumn = computed(() => (props.lightSyncRooms ?? 0) > 0 || [...(props.lightSync?.values() ?? [])].some((s) => s.available))
 const syncOf = (r: Row) => props.lightSync?.get(r.id)
+/** This browser, before its room is chosen: the bulb opens the settings, where the room is picked. */
+const pickRoom = (r: Row) => r.local && !syncOf(r)?.available && (props.lightSyncRooms ?? 0) > 0
+const syncUsable = (r: Row) => !!syncOf(r)?.available || pickRoom(r)
+function tapSync(r: Row) {
+  if (pickRoom(r)) emit('lightSyncSettings', r.id)
+  else emit('lightSync', r.id, !syncOf(r)?.on)
+}
 const syncTitle = (r: Row) => {
   const s = syncOf(r)
+  if (pickRoom(r)) return t('music.lightSyncPickRoom')
   if (!s?.available) return undefined
   if (s.on && s.problem) return [t(`music.lightSyncProblem.${s.problem}`), s.problemDetail].filter(Boolean).join(' — ')
   return s.on ? t('music.lightSyncOff', { area: s.area ?? '' }) : t('music.lightSyncOn', { area: s.area ?? '' })
@@ -217,17 +227,18 @@ function tap(r: Row) {
             </button>
           </template>
           <!-- lights of the room in rhythm (Hue area): slot kept on every row once one room can; the
-               bulb switches, the arrow next to it opens the room's settings -->
-          <span v-if="lightSyncColumn" class="sync-slot" :class="{ 'is-hidden': !syncOf(r)?.available }">
+               bulb switches, the arrow next to it opens the room's settings. This browser has no
+               room: until one is chosen, its bulb opens the settings, where the room is picked -->
+          <span v-if="lightSyncColumn" class="sync-slot" :class="{ 'is-hidden': !syncUsable(r) }">
             <button type="button" class="key sync" :data-on="syncOf(r)?.on ? '1' : '0'" :data-active="syncOf(r)?.active ? '1' : '0'"
                     :data-problem="syncOf(r)?.on && syncOf(r)?.problem ? '1' : '0'"
-                    :disabled="!syncOf(r)?.available || transferMode" :tabindex="syncOf(r)?.available ? 0 : -1"
+                    :disabled="!syncUsable(r) || transferMode" :tabindex="syncUsable(r) ? 0 : -1"
                     :title="syncTitle(r)" :aria-label="syncTitle(r)" :aria-pressed="syncOf(r)?.on ? 'true' : 'false'"
-                    @click.stop="emit('lightSync', r.id, !syncOf(r)?.on)">
+                    @click.stop="tapSync(r)">
               <StrokeIcon name="light" :size="16" />
             </button>
-            <button type="button" class="key sync-more" :disabled="!syncOf(r)?.available || transferMode" :tabindex="syncOf(r)?.available ? 0 : -1"
-                    :title="syncOf(r)?.available ? $t('music.lightSyncSettings') : undefined" :aria-label="$t('music.lightSyncSettings')"
+            <button type="button" class="key sync-more" :disabled="!syncUsable(r) || transferMode" :tabindex="syncUsable(r) ? 0 : -1"
+                    :title="syncUsable(r) ? $t('music.lightSyncSettings') : undefined" :aria-label="$t('music.lightSyncSettings')"
                     @click.stop="emit('lightSyncSettings', r.id)">
               <StrokeIcon name="chevronDown" :size="12" />
             </button>

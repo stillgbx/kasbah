@@ -1,7 +1,7 @@
 import { shoppingResponseSchema, type ShoppingList, apiErrorSchema, automationResponseSchema, automationRunResponseSchema, automationsResponseSchema, devicesResponseSchema, energyHistorySchema, healthResponseSchema, houseSchema, pluginsResponseSchema, propertiesResponseSchema, propertyCreatedSchema, scenesResponseSchema, serverMessageSchema, weatherForecastSchema, deviceJournalSchema, deviceConsumptionSchema, deviceEnergyDaysSchema, deviceReleaseNotesSchema, siteMapSchema, type SiteMap, type AutomationBody, type AutomationEntry, type AutomationRun, type CommandInput, type DeviceConsumption, type DeviceEnergyDays, type DeviceJournal, type DeviceEntry, type DevicePlacement, type EnergyHistory, type HealthResponse, type House, type PluginInfo, type PluginSceneEntry, type PluginSettingsPatch, type MatterSettingsPatch, type MatterStatus, type SceneRecallInput, type SceneUpdate, type WeatherForecast } from '@kasbah/shared'
 import { parseDeviceId, type Right } from '@kasbah/shared'
 import { t } from '../i18n'
-import { ApiRequestError, type AgendaCalendar, type AssistantEvent, type ClaudeAccount, type HaEntities,type TranscriptionSettings, type AssistantLogEntry, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type McpUser, type SystemVersion, type UpdateStatus, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type PodcastEpisode, type PodcastShow, type PodcastShowPage, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultContract, type RenaultStatus, type SchoolData, type TeslaStatus, type Transport, type TransportHandlers, type WeatherAlerts, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicLastPlayed, type MusicQueue, type YtmusicSearchResult, type MusicSession, type MusicLightSync, type YtmusicStatus, type YtmusicTrack } from './transport'
+import { ApiRequestError, type AgendaCalendar, type AssistantEvent, type ClaudeAccount, type HaEntities,type TranscriptionSettings, type AssistantLogEntry, type AgendaEvent, type ConnectionStatus, type EnphasePairing, type EnphaseTokenStatus, type HeatingPoint, type IrobotStatus, type LightHistory, type McpUser, type SystemVersion, type UpdateStatus, type MelcloudStatus, type MelcloudUnit, type MixcloudHomeSection, type MixcloudPage, type MixcloudStatus, type PodcastEpisode, type PodcastShow, type PodcastShowPage, type MixcloudUser, type PetkitStatus, type RadioStation, type RenaultContract, type RenaultStatus, type SchoolData, type TeslaStatus, type Transport, type TransportHandlers, type WeatherAlerts, type WeatherElsewhere, type WeatherPlace, type YtmusicExplore, type YtmusicExploreShelf, type YtmusicPlaylist, type MusicLastPlayed, type MusicQueue, type YtmusicSearchResult, type MusicSession, type MusicLightSync, type MusicLightSyncRoom, type YtmusicStatus, type YtmusicTrack } from './transport'
 
 // Relative URLs: same origin in prod (Fastify serves the build) and through the Vite proxy in dev.
 
@@ -391,6 +391,12 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) },
       (j) => j as MusicLightSync,
     ),
+    musicLightSyncRooms: () => request(`${base}/api/music/lightsync/rooms`, undefined, (j) => j as { rooms: MusicLightSyncRoom[] }),
+    setMusicLightSyncRoom: (deviceId, roomId) => request(
+      `${base}/api/music/lightsync/${encodeURIComponent(deviceId)}/room`,
+      { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ roomId }) },
+      (j) => j as MusicLightSync,
+    ),
     musicLast: () => request(`${base}/api/music/last`, undefined, (j) => j as { last: MusicLastPlayed[] }),
     musicResume: (deviceId, positionS) => request(
       `${base}/api/music/resume`,
@@ -432,6 +438,9 @@ export function createHttpTransport(base = ''): Transport {
     musicQueueRemove: (deviceId, index) => queueStep('remove', { deviceId, index }),
     musicProgress: async (body) => {
       await request(`${base}/api/music/progress`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }, () => undefined)
+    },
+    musicLocalState: async (body) => {
+      await request(`${base}/api/music/local/state`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }, () => undefined)
     },
     musicQueueClear: (deviceId) => request(
       `${base}/api/music/queue?deviceId=${encodeURIComponent(deviceId)}`, { method: 'DELETE' }, (j) => j as MusicQueue,

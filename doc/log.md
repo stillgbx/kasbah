@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-06] update | Lumières en rythme pour « Ce navigateur » : la pièce choisie
+
+**Déclencheur** : « quand je suis dans kasbah et que l'écoute est "sur cet appareil" alors je souhaite pouvoir choisir la cible des lights à activer », précisé ensuite : la cible ne dépend pas de la pièce où se trouve l'ordinateur.
+
+**Pages modified** :
+- 1_architecture/1_6_lecteur-musique.md - section datée : pièce choisie (`setRoom`, `roomChoices`, dépendances `rooms` / `lightsOfRoom`), relevés de lecture du navigateur (`POST /local/state`, 10 s, muet après 25 s), routes `lightsync/rooms` et `lightsync/:deviceId/room`, ce qui a été écarté
+- 4_ui/4_5_musique-et-medias.md - section datée : ampoule de « Ce navigateur », rangée Pièce du panneau, réglages bloqués avant le choix, mémoire dans le navigateur
+
+**Index** : catalogues 1_architecture et 4_ui (déjà datés du jour), index.md régénéré.
+
 ## [2026-11-06] update | Site vitrine : formulaire de contact des fabricants et commerçants
 
 **Déclencheur** : un moyen d'être contacté par les fabricants et commerçants qui voudraient prêter du matériel, sans exposer l'adresse de la boîte du projet sur le site statique (GitHub Pages).

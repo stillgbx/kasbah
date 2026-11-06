@@ -16,7 +16,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import type { CommandInput, DeviceEntry, LightSyncSettingsPatch } from '@kasbah/shared'
 import { getTransport } from '../api'
-import type { YtmusicAlbum, YtmusicArtist, YtmusicExplore, YtmusicExploreCategory, YtmusicExploreShelf, YtmusicPlaylist, MusicLastPlayed, MusicQueue, MusicTrack, MusicRepeat, MusicSession, MusicLightSync, RadioStation, YtmusicTrack } from '../api/transport'
+import type { YtmusicAlbum, YtmusicArtist, YtmusicExplore, YtmusicExploreCategory, YtmusicExploreShelf, YtmusicPlaylist, MusicLastPlayed, MusicQueue, MusicTrack, MusicRepeat, MusicSession, MusicLightSync, MusicLightSyncRoom, RadioStation, YtmusicTrack } from '../api/transport'
 import PageHeader from '../components/layout/PageHeader.vue'
 import ChipRow from '../components/music/ChipRow.vue'
 import ListeningSessions from '../components/music/ListeningSessions.vue'
@@ -220,6 +220,10 @@ const selectedName = computed(() => selected.value ? (house.houseDeviceFor(selec
 const ourSessions = ref<Map<string, MusicSession>>(new Map())
 /** Room lights in rhythm with each player (Hue area of its room): read with the sessions. */
 const lightSync = ref<Map<string, MusicLightSync>>(new Map())
+/** The rooms whose lights this browser can sync (it has no place in the house: its room is chosen). */
+const lightSyncRooms = ref<MusicLightSyncRoom[]>([])
+/** The room chosen for this browser, remembered here: the server forgets it when it restarts. */
+const localSyncRoom = useLocalStorage<string | null>('kasbah.music.lightSyncRoom', null)
 const selectedSession = computed(() => (localSelected.value ? local.barSession : selected.value ? ourSessions.value.get(selected.value.descriptor.id) ?? null : null))
 /** The last radio launched on each player: the bar draws its quality from it (the speaker does not say it). */
 const radioStations = ref<Map<string, RadioStation>>(new Map())
@@ -329,12 +333,31 @@ async function refreshSessions(): Promise<void> {
   } catch { /* radio plugin absent: no quality to show */ }
 }
 async function refreshLightSync(): Promise<void> {
-  const ids = players.value.map((e) => e.descriptor.id).filter((id) => !isLocalPlayer(id))
+  const ids = players.value.map((e) => e.descriptor.id)
   if (!ids.length) return
   try {
-    const r = await getTransport().musicLightSync(ids)
-    lightSync.value = new Map(r.lightsync.map((s) => [s.deviceId, s]))
+    const [r, rooms] = await Promise.all([getTransport().musicLightSync(ids), getTransport().musicLightSyncRooms()])
+    lightSyncRooms.value = rooms.rooms
+    const next = new Map(r.lightsync.map((s) => [s.deviceId, s]))
+    // the server restarted and forgot this browser's room: tell it again
+    const mine = next.get(local.id)
+    if (mine && !mine.room && localSyncRoom.value && rooms.rooms.some((x) => x.id === localSyncRoom.value)) {
+      next.set(local.id, await getTransport().setMusicLightSyncRoom(local.id, localSyncRoom.value))
+    }
+    lightSync.value = next
   } catch { /* older server: no light sync, the button stays away */ }
+}
+/** The room whose lights follow this browser, chosen in the settings box. */
+async function chooseLightSyncRoom(roomId: string): Promise<void> {
+  try {
+    const s = await getTransport().setMusicLightSyncRoom(local.id, roomId)
+    localSyncRoom.value = roomId
+    lightSync.value = new Map(lightSync.value).set(local.id, s)
+    // switched on: the stream moves to the new room's area on the next server tick
+    if (s.on) setTimeout(() => { void refreshLightSync() }, 1500)
+  } catch (err) {
+    notifications.error(t('errors.UNKNOWN', { name: t('music.lightSync'), message: (err as Error).message }))
+  }
 }
 async function toggleLightSync(deviceId: string, on: boolean): Promise<void> {
   try {
@@ -1248,10 +1271,11 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
         <div class="sessions-sheet__panel">
           <button type="button" class="sessions-sheet__grip" :aria-label="$t('common.close')" @click="sessionsOpen = false"><span /></button>
           <ListeningSessions :players="players" :selected-id="sessionId || null" :transfer-mode="transferMode" :transfer-busy-id="transferBusyId"
-                             :pending-id="pendingTrack && selected ? selected.descriptor.id : null" :light-sync="lightSync"
+                             :pending-id="pendingTrack && selected ? selected.descriptor.id : null" :light-sync="lightSync" :light-sync-rooms="lightSyncRooms.length"
                              @select="selectSession" @transfer-to="transferTo" @locate="locate"
                              @command="panelCommand" @light-sync="toggleLightSync" @light-sync-settings="(id: string) => (lightSyncFor = id)" />
           <LightSyncDialog v-if="lightSyncStatus" v-model="lightSyncOpen" :status="lightSyncStatus" :name="lightSyncName"
+                           :rooms="lightSyncFor && isLocalPlayer(lightSyncFor) ? lightSyncRooms : undefined" @room="chooseLightSyncRoom"
                            @toggle="(on: boolean) => lightSyncFor && toggleLightSync(lightSyncFor, on)" @change="changeLightSync" />
         </div>
       </div>

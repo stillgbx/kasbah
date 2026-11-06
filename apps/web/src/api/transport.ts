@@ -476,6 +476,9 @@ export interface MusicSession {
   queue?: { length: number; index: number; repeat: MusicRepeat } | null
 }
 
+/** A room whose lights a browser can sync, with the entertainment area that would be used. */
+export interface MusicLightSyncRoom { id: string; name: string; area: string }
+
 /** Room lights in rhythm with a speaker (Hue Entertainment): can its room, is it switched on, is it streaming. */
 export interface MusicLightSync {
   deviceId: string
@@ -797,6 +800,10 @@ export interface Transport {
   musicLightSync(deviceIds: string[]): Promise<{ lightsync: MusicLightSync[] }>
   setMusicLightSync(deviceId: string, on: boolean): Promise<MusicLightSync>
   setMusicLightSyncSettings(deviceId: string, patch: LightSyncSettingsPatch): Promise<MusicLightSync>
+  /** The rooms whose lights THIS browser can sync (those with a Hue entertainment area). */
+  musicLightSyncRooms(): Promise<{ rooms: MusicLightSyncRoom[] }>
+  /** The room whose lights follow this browser (`local:…`); null forgets it. */
+  setMusicLightSyncRoom(deviceId: string, roomId: string | null): Promise<MusicLightSync>
   /** The last listen of the players that are not playing anything of ours right now. */
   musicLast(): Promise<{ last: MusicLastPlayed[] }>
   /** Restart a player's last listen (queue included), at its position or at `positionS`. */
@@ -829,6 +836,8 @@ export interface Transport {
   musicQueueRemove(deviceId: string, index: number): Promise<MusicQueue>
   /** Position reached in a track played by THIS browser (resuming a mix); never blocking. */
   musicProgress(body: { source: string; id: string; positionS: number; durationS?: number; ended?: boolean }): Promise<void>
+  /** Where THIS browser stands in its track (play, pause, seek, now and then): the lights in rhythm follow it. */
+  musicLocalState(body: { clientId: string; playback: 'idle' | 'playing' | 'paused'; positionS: number }): Promise<void>
   /** Clear the queue: the current track continues, alone. */
   musicQueueClear(deviceId: string): Promise<MusicQueue>
   /**

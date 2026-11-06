@@ -83,10 +83,14 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
     a.volume = volume.value / 100
     // the silent unlock sound says nothing about playback: its events are ignored
     const silent = () => a.src.startsWith('data:')
-    a.addEventListener('playing', () => { if (!silent()) { playback.value = 'playing'; publish(a.currentTime) } })
-    a.addEventListener('pause', () => { if (!silent() && playback.value === 'playing') { playback.value = 'paused'; publish(a.currentTime) } })
-    a.addEventListener('timeupdate', () => { if (!silent() && Math.floor(a.currentTime) !== positionS.value) publish(a.currentTime) })
-    a.addEventListener('seeked', () => { if (!silent()) publish(a.currentTime) })
+    a.addEventListener('playing', () => { if (!silent()) { playback.value = 'playing'; publish(a.currentTime); reportState() } })
+    a.addEventListener('pause', () => { if (!silent() && playback.value === 'playing') { playback.value = 'paused'; publish(a.currentTime); reportState() } })
+    a.addEventListener('timeupdate', () => {
+      if (silent()) return
+      if (Math.floor(a.currentTime) !== positionS.value) publish(a.currentTime)
+      if (playback.value === 'playing' && Date.now() - stateAt > STATE_EVERY_MS) reportState()
+    })
+    a.addEventListener('seeked', () => { if (!silent()) { publish(a.currentTime); reportState() } })
     a.addEventListener('ended', () => { if (!silent()) void onEnded() })
     a.addEventListener('error', () => { if (!silent()) void onError() })
     audio = a
@@ -113,6 +117,18 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
       ...(durationS ? { durationS } : {}), ...(ended ? { ended: true } : {}),
     }).catch(() => { /* resuming is a comfort: a lost send does not hinder listening */ })
   }
+  /**
+   * Where this browser stands, to the frame, told to the server on play, pause, seek and every few
+   * seconds: it is what the lights in rhythm follow (the server sees nothing playing here).
+   */
+  let stateAt = 0
+  const STATE_EVERY_MS = 10_000
+  function reportState() {
+    stateAt = Date.now()
+    void getTransport().musicLocalState({ clientId: clientId.value, playback: playback.value, positionS: audio?.currentTime ?? positionS.value })
+      .catch(() => { /* the lights are a comfort: a lost send is made up by the next one */ })
+  }
+  watch(playback, (p) => { if (p === 'idle') reportState() })
   watch(volume, (v) => { if (audio) audio.volume = v / 100 })
   watch(muted, (m) => { if (audio) audio.muted = m })
 

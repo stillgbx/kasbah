@@ -20,6 +20,9 @@ import type { LightSyncSettingsByRoom, LightSyncSettingsStore } from './settings
 // Alignment: the features are indexed by position in the track, read at the speaker's position,
 // extrapolated between two state reports on a local clock. The local clock is only reset on a
 // jump (seek, track change, resume): the reports of a Sonos come in whole seconds.
+//
+// A player with no place in the house (a browser playing the music itself) gets its room CHOSEN
+// (`setRoom`): that room's lights and settings, as if it stood there.
 
 const TICK_MS = 20
 /** Idle check while the switch is on but nothing plays: cheap, and quick enough to start. */
@@ -79,6 +82,10 @@ export interface LightSyncDeps {
   room(deviceId: string): { id: string; name: string } | null
   /** Light device ids of the speaker's room; null = the speaker is in no room. */
   roomLights(deviceId: string): string[] | null
+  /** The rooms of the house, for a player whose room is chosen. */
+  rooms(): { id: string; name: string }[]
+  /** Light device ids of a room. */
+  lightsOfRoom(roomId: string): string[]
   streamer(): LightStreamer | null
   decode(sourceUrl: string, startS: number): Decoding
   /** Swatches (hex) of a light scene, if it still exists. */
@@ -114,6 +121,8 @@ interface Active {
 
 export class LightSync {
   private readonly enabled = new Set<string>()
+  /** Room chosen for a player with no place in the house, by player id (in memory, like the switch). */
+  private readonly chosenRooms = new Map<string, string>()
   private active: Active | null = null
   private opening = false
   private retryAt = 0
@@ -136,6 +145,47 @@ export class LightSync {
     return this.settings[roomId] ?? DEFAULT_LIGHTSYNC_SETTINGS
   }
 
+  /** The player's room: the chosen one, else its place in the house. */
+  private roomOf(deviceId: string): { id: string; name: string } | null {
+    const chosen = this.chosenRooms.get(deviceId)
+    if (chosen !== undefined) return this.deps.rooms().find((r) => r.id === chosen) ?? null
+    return this.deps.room(deviceId)
+  }
+
+  private lightsOf(deviceId: string): string[] | null {
+    const chosen = this.chosenRooms.get(deviceId)
+    if (chosen !== undefined) return this.roomOf(deviceId) ? this.deps.lightsOfRoom(chosen) : null
+    return this.deps.roomLights(deviceId)
+  }
+
+  /** The rooms that can be chosen: those with an area to stream to, with its name. */
+  roomChoices(): { id: string; name: string; area: string }[] {
+    const streamer = this.deps.streamer()
+    if (!streamer) return []
+    return this.deps.rooms().flatMap((r) => {
+      const area = streamer.areaFor(this.deps.lightsOfRoom(r.id))
+      return area ? [{ ...r, area: area.name }] : []
+    })
+  }
+
+  /**
+   * Chooses the room of a player with no place in the house (null forgets it). A running stream to
+   * another room's area is closed; the switch stays, and the next tick opens the new room's area.
+   * Null if the room is unknown.
+   */
+  async setRoom(deviceId: string, roomId: string | null): Promise<LightSyncStatus | null> {
+    if (roomId !== null && !this.deps.rooms().some((r) => r.id === roomId)) return null
+    const before = this.roomOf(deviceId)?.id
+    if (roomId === null) this.chosenRooms.delete(deviceId)
+    else this.chosenRooms.set(deviceId, roomId)
+    if (this.active?.deviceId === deviceId && before !== roomId) await this.teardown()
+    if (this.enabled.has(deviceId)) {
+      if (!this.status(deviceId).available) this.enabled.delete(deviceId)
+      else this.schedule(0)
+    }
+    return this.status(deviceId)
+  }
+
   /**
    * The colours for these settings and what the speaker plays: the cover's once known; until then
    * `previous` (the last track's cover keeps playing rather than a jump to the default).
@@ -154,14 +204,14 @@ export class LightSync {
   status(deviceId: string): LightSyncStatus {
     const on = this.enabled.has(deviceId)
     const active = this.active?.deviceId === deviceId
-    const room = this.deps.room(deviceId) ?? undefined
+    const room = this.roomOf(deviceId) ?? undefined
     const settings = room ? this.settingsOf(room.id) : undefined
     const extra = room && settings
       ? { room, settings, palette: [...(this.active?.deviceId === deviceId ? this.active.palette : this.paletteFor(settings, deviceId))] }
       : {}
     const streamer = this.deps.streamer()
     if (!streamer) return { deviceId, available: false, reason: 'no_hue', on, active, ...extra }
-    const lights = this.deps.roomLights(deviceId)
+    const lights = this.lightsOf(deviceId)
     if (!lights || !room) return { deviceId, available: false, reason: 'no_room', on, active, ...extra }
     const area = streamer.areaFor(lights)
     if (!area) return { deviceId, available: false, reason: 'no_area', on, active, ...extra }
@@ -198,7 +248,7 @@ export class LightSync {
    * them to the running stream. Null if the speaker is in no room; throws if the result is invalid.
    */
   async setSettings(deviceId: string, patch: LightSyncSettingsPatch): Promise<LightSyncStatus | null> {
-    const room = this.deps.room(deviceId)
+    const room = this.roomOf(deviceId)
     if (!room) return null
     await this.ready
     const next = lightSyncSettingsSchema.parse({ ...this.settingsOf(room.id), ...patch })
@@ -325,8 +375,8 @@ export class LightSync {
 
   private async open(deviceId: string): Promise<void> {
     const streamer = this.deps.streamer()
-    const lights = this.deps.roomLights(deviceId)
-    const room = this.deps.room(deviceId)
+    const lights = this.lightsOf(deviceId)
+    const room = this.roomOf(deviceId)
     const area = streamer && lights ? streamer.areaFor(lights) : undefined
     if (!streamer || !area || !room) return
     this.opening = true

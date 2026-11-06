@@ -435,3 +435,38 @@ Le plugin Podcasts (`../3_plugins/3_28_podcasts.md`) s'inscrit comme source du l
 **Lumières en rythme** (section du 2026-11-05) : les podcasts passent par le proxy comme YouTube Music
 et Mixcloud, donc la synchro devrait aussi marcher. **Déduit du code, non vérifié sur une vraie lampe.**
 La phrase « Périmètre v1 : YouTube Music et Mixcloud » est de même datée.
+
+### Mise à jour 2026-11-06 — lumières en rythme pour « Ce navigateur » : la pièce est choisie
+
+Demande de l'utilisateur : quand la musique joue **dans le navigateur** (écoute locale,
+`local:<clientId>`), pouvoir choisir la cible des lumières, **quelle que soit la pièce où se trouve
+l'appareil** (synchroniser le salon depuis l'ordinateur du bureau). Deux choses manquaient : le
+navigateur n'a pas de place dans la maison, et le serveur ne le voit pas jouer.
+
+**La pièce est choisie, pas déduite** (`lightsync/sync.ts`) : `setRoom(deviceId, roomId | null)` range
+le choix dans `chosenRooms` (en mémoire, comme l'interrupteur) ; `roomOf` / `lightsOf` prennent la
+pièce choisie avant la place dans la maison, et tout le reste (zone, réglages de la pièce, palette de
+scène) suit sans cas particulier. Deux dépendances de plus, fournies par `app.ts` sur la même
+`HouseView` : `rooms()` et `lightsOfRoom(roomId)`. `roomChoices()` ne propose que les pièces dont les
+lampes ont une zone de divertissement (`areaFor`). Changer de pièce pendant la diffusion ferme le flux ;
+l'interrupteur reste, le tick suivant ouvre la zone de la nouvelle pièce ; une pièce sans zone éteint
+l'interrupteur. Écarté : choisir directement une zone Hue — les réglages sont par pièce, et la pièce
+est ce que l'utilisateur nomme.
+
+**Où en est le morceau** (`player.ts`) : le navigateur le dit lui-même, `POST /api/music/local/state
+{ clientId, playback, positionS }`, sur `playing` (chaque nouveau morceau compris : la lecture ne
+change pas d'état d'un morceau à l'autre), `pause`, `seeked`, au passage à l'arrêt, et toutes les 10 s
+en lecture (`stores/localPlayer.ts`, `reportState`). Le serveur date le relevé à l'arrivée ; la même
+horloge locale de `LightSync` extrapole entre deux relevés. Un onglet qui se tait **25 s** en lecture
+(fermé sans pause) ne compte plus comme jouant, et les lumières se rendent 5 s plus tard. La session
+d'un navigateur compte toujours (`sessionActive` l'écarte pour les enceintes seulement). `/progress`
+(15 s, reprise des mix) n'a pas été réutilisé : il appelle l'`onProgress` des sources, qui écrit.
+
+**Routes** : `GET /api/music/lightsync/rooms` → `{ rooms: [{ id, name, area }] }` ;
+`PUT /api/music/lightsync/:deviceId/room { roomId | null }` (400 pour une enceinte : elle est placée
+dans la maison ; 404 pièce inconnue). Écran : [4_5 Musique et médias](../4_ui/4_5_musique-et-medias.md).
+
+Vérifié : `sync.test.ts` (pièces proposées, pas de pièce avant le choix puis zone et réglages de la
+pièce, passage d'une pièce à l'autre sans éteindre, pièce sans zone), `player.test.ts` (routes, flux
+ouvert après le premier relevé du navigateur, refermé quand il se tait), `localPlayer.test.ts`
+(relevés sur lecture, saut, pause, arrêt). **Pas encore vérifié** sur les vraies lampes.

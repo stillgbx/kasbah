@@ -9,19 +9,22 @@ import { LightSync, type PlayerReading } from './sync'
 const flush = async () => { for (let i = 0; i < 5; i++) await Promise.resolve() }
 
 const AREA: LightArea = { id: 'area-1', name: 'Chambre 2', channels: [{ id: 0, x: -1, y: 0, z: 0 }, { id: 1, x: 1, y: 0, z: 0 }] }
+const AREA_B: LightArea = { id: 'area-b', name: 'Bureau', channels: [{ id: 0, x: 0, y: 0, z: 0 }] }
+const ROOM_LIGHTS: Record<string, string[]> = { 'room-2': ['hue:lamp-1'], hall: ['hue:other'], office: ['hue:lamp-3'], attic: [] }
+const ROOMS = [{ id: 'room-2', name: 'Chambre 2' }, { id: 'hall', name: 'Entrée' }, { id: 'office', name: 'Bureau' }, { id: 'attic', name: 'Grenier' }]
 
 function setup(saved: LightSyncSettingsByRoom = {}) {
   const clock = new ManualClock(1_000_000)
   const frames: ChannelColor[][] = []
   const streams: { closed: boolean; end: (reason: string) => void }[] = []
   const streamer: LightStreamer = {
-    areaFor: (lights) => (lights.includes('hue:lamp-1') ? AREA : undefined),
-    open: vi.fn(async () => {
+    areaFor: (lights) => (lights.includes('hue:lamp-1') ? AREA : lights.includes('hue:lamp-3') ? AREA_B : undefined),
+    open: vi.fn(async (id: string) => {
       let ended: (reason: string) => void = () => {}
       const s = { closed: false, end: (r: string) => ended(r) }
       streams.push(s)
       const stream: LightStream = {
-        area: AREA,
+        area: id === AREA_B.id ? AREA_B : AREA,
         send: (c) => { if (!s.closed) frames.push([...c]) },
         close: async () => { s.closed = true },
         onEnded: (cb) => { ended = cb },
@@ -54,6 +57,8 @@ function setup(saved: LightSyncSettingsByRoom = {}) {
     coverColors,
     settingsStore,
     roomLights: (id) => (id === 'cast:speaker-1' || id === 'cast:speaker-2' ? ['hue:lamp-1'] : id === 'cast:hall' ? ['hue:other'] : null),
+    rooms: () => ROOMS,
+    lightsOfRoom: (id) => ROOM_LIGHTS[id] ?? [],
     streamer: () => hue,
     decode,
     clock,
@@ -70,6 +75,47 @@ function setup(saved: LightSyncSettingsByRoom = {}) {
 }
 
 describe('LightSync', () => {
+  describe('a player with no place in the house (a browser)', () => {
+    const BROWSER = 'local:abcdef12'
+
+    it('offers the rooms that have an area to stream to', () => {
+      expect(setup().sync.roomChoices()).toEqual([{ id: 'room-2', name: 'Chambre 2', area: 'Chambre 2' }, { id: 'office', name: 'Bureau', area: 'Bureau' }])
+    })
+
+    it('has no room until one is chosen, then the area and settings of that room', async () => {
+      const t = setup({ office: { effect: 'wave', palette: { source: 'preset', preset: 'cool' }, energy: 0.2, brightness: 0.5 } })
+      await t.sync.ready
+      expect(t.sync.status(BROWSER)).toMatchObject({ available: false, reason: 'no_room' })
+      expect(await t.sync.setRoom(BROWSER, 'office')).toMatchObject({ available: true, area: 'Bureau', room: { id: 'office' }, settings: { effect: 'wave' } })
+      expect(await t.sync.setRoom(BROWSER, 'nowhere')).toBeNull()
+      expect(await t.sync.setRoom(BROWSER, null)).toMatchObject({ available: false, reason: 'no_room' })
+    })
+
+    it('streams to the chosen room, and moves to another room without being switched off', async () => {
+      const t = setup()
+      await t.sync.setRoom(BROWSER, 'office')
+      t.play(BROWSER, 'sid-1', 10)
+      await t.sync.set(BROWSER, true)
+      await t.step(500)
+      expect(t.streamer.open).toHaveBeenLastCalledWith('area-b')
+      await t.sync.setRoom(BROWSER, 'room-2')
+      expect(t.streams[0]!.closed).toBe(true)
+      await t.step(500)
+      expect(t.streamer.open).toHaveBeenLastCalledWith('area-1')
+      expect(t.sync.status(BROWSER)).toMatchObject({ on: true, active: true, area: 'Chambre 2' })
+    })
+
+    it('is switched off when moved to a room it cannot sync', async () => {
+      const t = setup()
+      await t.sync.setRoom(BROWSER, 'office')
+      t.play(BROWSER, 'sid-1')
+      await t.sync.set(BROWSER, true)
+      await t.step(500)
+      expect(await t.sync.setRoom(BROWSER, 'attic')).toMatchObject({ on: false, active: false, reason: 'no_area' })
+      expect(t.streams[0]!.closed).toBe(true)
+    })
+  })
+
   it('says why a room cannot be synced', () => {
     const t = setup()
     expect(t.sync.status('cast:nowhere')).toMatchObject({ available: false, reason: 'no_room' })

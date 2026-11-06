@@ -1,7 +1,11 @@
+import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
 import Fastify from 'fastify'
 import pino from 'pino'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
+import { ManualClock } from '@kasbah/mock-sim'
 import { createMusicPlayer } from './player'
+import type { SpawnFn } from './proxy'
 import { memoryLightSyncSettings } from './lightsync/settingsFile'
 
 // The address the player gives the speakers is derived from the page issuing the command. Opened
@@ -68,6 +72,56 @@ it('light sync routes: status per speaker, refusal where the room cannot, switch
   expect(set.json()).toMatchObject({ settings: { effect: 'spectrum', energy: 0.5 }, palette: ['#ff0000', '#0000ff'], room: { name: 'Chambre 2' } })
   expect((await app.inject({ method: 'PUT', url: '/api/music/lightsync/cast:speaker-1/settings', payload: { effect: 'disco' } })).statusCode).toBe(400)
   expect((await app.inject({ method: 'PUT', url: '/api/music/lightsync/cast:nowhere/settings', payload: { energy: 1 } })).statusCode).toBe(409)
+  player.stop()
+  await app.close()
+})
+
+it('a browser playing the music itself: its room is chosen, its own reports place it in the track', async () => {
+  const clock = new ManualClock(1_000_000)
+  const area = { id: 'area-b', name: 'Bureau', channels: [{ id: 0, x: 0, y: 0, z: 0 }] }
+  const streams: { closed: boolean }[] = []
+  const open = vi.fn(async () => {
+    const s = { closed: false }
+    streams.push(s)
+    return { area, send: () => {}, close: async () => { s.closed = true }, onEnded: () => {} }
+  })
+  // an ffmpeg that never says anything: the stream opens whatever the analysis does
+  const spawnImpl = vi.fn(() => Object.assign(new EventEmitter(), { stdout: new PassThrough(), stderr: new PassThrough(), kill: () => true })) as unknown as SpawnFn
+  const player = createMusicPlayer({
+    logger: pino({ level: 'silent' }), now: () => clock.now(), clock, spawnImpl,
+    source: (id) => (id === 'fake' ? { id: 'fake', label: 'Fake', resolve: async () => ({ url: 'https://cdn.example/a.m4a', formatId: '141', ext: 'm4a', abrKbps: 256, sizeBytes: 1_000_000, durationS: 600 }) } : undefined),
+    getDevice: () => undefined,
+    execute: async () => {},
+    rooms: () => [{ id: 'office', name: 'Bureau' }, { id: 'attic', name: 'Grenier' }],
+    lightsOfRoom: (id) => (id === 'office' ? ['hue:lamp-1'] : []),
+    lightSyncSettings: memoryLightSyncSettings(),
+    lightStreamer: () => ({ areaFor: (lights) => (lights.length ? area : undefined), open }),
+  })
+  const app = Fastify()
+  await app.register(async (sub) => player.registerRoutes(sub), { prefix: '/api/music' })
+  const browser = 'local:browser-1234'
+  const step = async (ms: number) => { for (let t = 0; t < ms; t += 50) { clock.advance(50); await new Promise((r) => setImmediate(r)) } }
+
+  expect((await app.inject({ method: 'GET', url: '/api/music/lightsync/rooms' })).json()).toEqual({ rooms: [{ id: 'office', name: 'Bureau', area: 'Bureau' }] })
+  expect((await app.inject({ method: 'PUT', url: '/api/music/lightsync/cast:speaker-1/room', payload: { roomId: 'office' } })).statusCode).toBe(400)
+  expect((await app.inject({ method: 'PUT', url: `/api/music/lightsync/${browser}/room`, payload: { roomId: 'nowhere' } })).statusCode).toBe(404)
+  const chosen = await app.inject({ method: 'PUT', url: `/api/music/lightsync/${browser}/room`, payload: { roomId: 'office' } })
+  expect(chosen.json()).toMatchObject({ available: true, area: 'Bureau', room: { id: 'office', name: 'Bureau' } })
+  expect((await app.inject({ method: 'PUT', url: `/api/music/lightsync/${browser}`, payload: { on: true } })).json()).toMatchObject({ on: true })
+
+  expect((await app.inject({ method: 'POST', url: '/api/music/local', payload: { source: 'fake', id: 'a', title: 'Alpha', clientId: 'browser-1234' } })).statusCode).toBe(200)
+  await step(500)
+  expect(open).not.toHaveBeenCalled()          // nothing said yet: not playing
+  expect((await app.inject({ method: 'POST', url: '/api/music/local/state', payload: { clientId: 'browser-1234', playback: 'playing' } })).statusCode).toBe(400)
+  expect((await app.inject({ method: 'POST', url: '/api/music/local/state', payload: { clientId: 'browser-1234', playback: 'playing', positionS: 12 } })).statusCode).toBe(200)
+  await step(500)
+  expect(open).toHaveBeenCalledWith('area-b')
+  expect(vi.mocked(spawnImpl).mock.calls[0]![1]).toEqual(expect.arrayContaining(['-ss', 'https://cdn.example/a.m4a']))
+  // the tab goes silent while playing: after 25 s it no longer counts as playing, 5 s later the lights go back
+  await step(29_000)
+  expect(streams[0]!.closed).toBe(false)
+  await step(2000)
+  expect(streams[0]!.closed).toBe(true)
   player.stop()
   await app.close()
 })

@@ -133,7 +133,7 @@
     "favoriteAdd": "Add to favorites", "favoriteRemove": "Remove from favorites",
     "lightSync": "Lights in rhythm", "lightSyncOn": "Room lights in rhythm ({area})", "lightSyncOff": "Stop the lights in rhythm ({area})",
     "lightSyncProblem": { "stream": "Stream cut by the Hue bridge, retrying…", "decode": "Cannot analyse the music, retrying…" },
-    "lightSyncSettings": "Lights in rhythm settings",
+    "lightSyncSettings": "Lights in rhythm settings", "lightSyncPickRoom": "Choose the room whose lights follow this browser",
     "lightSyncPanel": {
       "current": "Colours playing", "effect": "Effect", "mood": "Mood", "calm": "Calm", "energetic": "Energetic", "brightness": "Brightness", "colors": "Colours",
       "effects": { "pulse": "Pulse", "wave": "Wave", "spectrum": "Spectrum", "strobe": "Strobe", "breathe": "Breathe" },
@@ -142,6 +142,7 @@
       "presets": { "warm": "Warm", "cool": "Cool", "neon": "Neon", "forest": "Forest", "ocean": "Ocean", "rainbow": "Rainbow" },
       "random": "Random colours that go together", "harmonyUsed": "Harmony: {rule}",
       "harmonies": { "analogous": "analogous (neighbouring hues)", "complementary": "complementary (opposite)", "splitComplementary": "split complementary", "triadic": "triadic (hues 120° apart)", "tetradic": "square (hues 90° apart)", "monochromatic": "monochromatic (one hue, several strengths)" },
+      "room": "Room", "roomHint": "The lights of this room follow the music played in this browser.", "noRoom": "No room has a Hue entertainment area: create one in the Hue app.",
       "noScene": "No light scene in this room.", "colorN": "Colour {n}", "addColor": "Add a colour", "removeColor": "Remove the chosen colour",
       "coverHint": "The dominant colours of the track's cover art, renewed with each track."
     },

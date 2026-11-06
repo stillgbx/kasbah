@@ -235,6 +235,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
         .map((d) => d.deviceId)
         .filter((id): id is string => !!id && registry.get(id)?.descriptor.kind === 'light')
     },
+    rooms: () => [...roomView.context(clock.now(), () => true).index.roomsById.values()].map((r) => ({ id: r.id, name: r.name })),
+    lightsOfRoom: (roomId) => (roomView.context(clock.now(), () => true).index.devicesByRoom.get(roomId) ?? [])
+      .map((d) => d.deviceId)
+      .filter((id): id is string => !!id && registry.get(id)?.descriptor.kind === 'light'),
   })
   await app.register(async (sub) => music.registerRoutes(sub), { prefix: MUSIC_PREFIX })
   if (opts.serveStatic ?? true) {
