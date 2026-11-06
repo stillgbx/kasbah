@@ -34,6 +34,7 @@ import ExplicitBadge from '../components/ui/ExplicitBadge.vue'
 import Segmented from '../components/ui/Segmented.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
 import { formatClock } from '../composables/useMediaPosition'
+import { useRecentQueries } from '../composables/useRecentQueries'
 import { artAt } from '../lib/artUrl'
 import type { IconName } from '../lib/strokeIcons'
 import { splitCredit } from '../lib/wikiCredit'
@@ -91,7 +92,7 @@ const advanced = useLocalStorage('kasbah.music.advanced', false)
 const browseTab = useLocalStorage<BrowseTab>('kasbah.music.browse', 'recent')
 /** Latest tracks played. */
 const recentPlays = useLocalStorage<YtmusicTrack[]>('kasbah.ytmusic.recentPlays', [])
-const recentQueries = useLocalStorage<string[]>('kasbah.ytmusic.recentQueries', [])
+const recentQueries = useRecentQueries('ytmusic')
 /** True after a search: the central zone shows the results, not the browsing. */
 const searched = ref(false)
 const tracks = ref<YtmusicTrack[]>([])
@@ -116,7 +117,6 @@ const sortSingles = useLocalStorage<SectionSort>('kasbah.ytmusic.sort.singles', 
 const sortCompilations = useLocalStorage<SectionSort>('kasbah.ytmusic.sort.compilations', 'relevance')
 const sortTracks = useLocalStorage<SectionSort>('kasbah.ytmusic.sort.tracks', 'relevance')
 const hideExplicit = useLocalStorage('kasbah.ytmusic.hideExplicit', false)
-const RECENT_MAX = 10
 const RECENT_PLAYS_MAX = 20
 /** Tiles per row in simple search (the rest waits for "See all"). */
 const SIMPLE_MAX = 12
@@ -636,22 +636,6 @@ function clearSearchResults() {
   searchCompilations.value = []
   searchTracks.value = []
 }
-function rememberQuery(q: string) {
-  const trimmed = q.trim()
-  if (!trimmed) return
-  const key = trimmed.toLowerCase()
-  const cur = recentQueries.value
-  const idx = cur.findIndex((x) => x.toLowerCase() === key)
-  if (idx === 0) return
-  if (idx > 0) {
-    const copy = [...cur]
-    const [hit] = copy.splice(idx, 1)
-    recentQueries.value = [hit!, ...copy]
-    return
-  }
-  recentQueries.value = [trimmed, ...cur].slice(0, RECENT_MAX)
-}
-function removeRecent(q: string) { recentQueries.value = recentQueries.value.filter((x) => x !== q) }
 function rememberPlay(track: YtmusicTrack) {
   const rest = recentPlays.value.filter((t) => t.videoId !== track.videoId)
   recentPlays.value = [track, ...rest].slice(0, RECENT_PLAYS_MAX)
@@ -675,7 +659,7 @@ async function runSearch() {
   backStack.value = []
   queueOpen.value = false
   searched.value = true
-  rememberQuery(q)
+  recentQueries.remember(q)
   // Same term as on the last pass: we redisplay, we do not ask again.
   if (lastSearch?.query === q) {
     applySearch(lastSearch.result)
@@ -1025,8 +1009,8 @@ const searching = computed(() => busy.value && searched.value && !browse.value)
             <span class="muted small">{{ $t('ytmusic.hideExplicit') }}</span>
           </label>
         </form>
-        <ChipRow :label="$t('ytmusic.recent')" :items="recentQueries.map((q) => ({ key: q, label: q }))" :disabled="busy || !linked"
-                 :remove-label="$t('ytmusic.recentRemove')" @pick="runRecent" @remove="removeRecent" />
+        <ChipRow :label="$t('music.recentSearches')" :items="recentQueries.items.value" :disabled="busy || !linked"
+                 :remove-label="$t('music.recentRemove')" @pick="runRecent" @remove="recentQueries.remove" />
 
         <div class="main__body">
         <!-- the veil of a detail's cover art (album, playlist, artist), blurred, behind "Back" and the

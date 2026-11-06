@@ -4,9 +4,11 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getTransport } from '../../api'
 import type { MusicTrack, PodcastEpisode, PodcastShow } from '../../api/transport'
+import { useRecentQueries } from '../../composables/useRecentQueries'
 import { useNotificationsStore } from '../../stores/notifications'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
+import ChipRow from './ChipRow.vue'
 import MusicItemRow from './MusicItemRow.vue'
 
 // "Podcasts" source of the Music page (`podcasts` plugin). Shows are found in the Apple Podcasts
@@ -189,6 +191,17 @@ function clearSearch() {
     void loadTab()
   }
 }
+/** The podcasts' own recent searches, under the search like on the other sources. */
+const recent = useRecentQueries('podcasts')
+/** A search launched by hand (form, or a recent search): it goes into the history. */
+function submitSearch() {
+  if (query.value.trim().length >= 2) recent.remember(query.value)
+  void runSearch()
+}
+function pickRecent(q: string) {
+  query.value = q
+  submitSearch()
+}
 
 watch(tab, () => { if (!searching.value) void loadTab() })
 onMounted(() => {
@@ -199,7 +212,7 @@ onMounted(() => {
 
 <template>
   <div class="pc">
-    <form class="search" @submit.prevent="runSearch">
+    <form class="search" @submit.prevent="submitSearch">
       <div class="search__field">
         <StrokeIcon name="search" :size="18" class="search__icon" />
         <input v-model="query" type="search" class="search__input" :placeholder="$t('podcasts.searchPlaceholder')" :aria-label="$t('music.search')" />
@@ -208,6 +221,8 @@ onMounted(() => {
         </button>
       </div>
     </form>
+    <ChipRow :label="$t('music.recentSearches')" :items="recent.items.value" :disabled="busy" :remove-label="$t('music.recentRemove')"
+             @pick="pickRecent" @remove="recent.remove" />
     <!-- tabs: their place kept during a search (greyed out) -->
     <div class="tabs">
       <div :class="{ 'is-dim': searching }">

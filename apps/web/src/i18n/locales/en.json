@@ -150,6 +150,7 @@
     "playerExpand": "Expand the player", "playerCollapse": "Collapse the player", "choosePlayer": "Choose the player", "searchOptions": "Search options",
     "queueEmpty": "Nothing from Kasbah is playing on this player.", "queueNothingNext": "Nothing after this track.", "queueRemove": "Remove from the queue",
     "queueWaiting": "{n} track waiting | {n} tracks waiting", "playAll": "Play all", "playNext": "Play next", "addToQueue": "Add to the end of the queue",
+    "recentSearches": "Recent searches", "recentRemove": "Remove this search",
     "repeatOff": "Repeat the track", "repeatOnce": "Track replays once — tap to loop it", "repeatLoop": "Track loops — tap to stop repeating"
   },
 
@@ -208,8 +209,6 @@
     "backArtists": "Artists",
     "lastPlayed": "Recent plays",
     "lastPlayedRemove": "Remove from history",
-    "recent": "Recent searches",
-    "recentRemove": "Remove this search",
     "sectionArtists": "Artist",
     "sectionAlbums": "Album",
     "sectionEp": "EP",

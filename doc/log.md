@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-06] update | Recherches récentes sur toutes les sources de la page Musique
+
+**Déclencheur** : « pour ytm on a une zone qui contient les dernières recherches, on peut généraliser ça sur toutes les sources ? […] l'historique affiché est par source ».
+
+**Pages modifiées** :
+- `4_ui/4_5_musique-et-medias.md` - mise à jour 2026-11-06 : `useRecentQueries` (un historique par source, clé de YouTube Music conservée), `ChipRow` réutilisé sous la recherche des Radios, Mixcloud et Podcasts, mémorisation au lancement seulement, libellés passés en `music.*`, piège de sonde (bouton « Radios » homonyme).
+
+**Index** : catalogue `4_ui` (résumé : podcasts et recherches récentes), index.md régénéré.
+
 ## [2026-11-06] update | Plugin Podcasts : quatrième source du lecteur commun
 
 **Déclencheur** : demande d'une source « Spotify » ; écartée (flux chiffré DRM, API officielle = simple télécommande Connect), les podcasts RSS retenus à la place. Plugin codé dans la session, non commité.

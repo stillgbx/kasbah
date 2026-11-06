@@ -150,6 +150,7 @@
     "playerExpand": "Agrandir le lecteur", "playerCollapse": "Réduire le lecteur", "choosePlayer": "Choisir le lecteur", "searchOptions": "Options de recherche",
     "queueEmpty": "Rien ne joue depuis Kasbah sur ce lecteur.", "queueNothingNext": "Rien après ce titre.", "queueRemove": "Retirer de la file",
     "queueWaiting": "{n} titre en attente | {n} titres en attente", "playAll": "Tout lire", "playNext": "Lire ensuite", "addToQueue": "Ajouter à la fin de la file",
+    "recentSearches": "Recherches récentes", "recentRemove": "Retirer cette recherche",
     "repeatOff": "Répéter le titre", "repeatOnce": "Titre rejoué une fois — toucher pour le rejouer en boucle", "repeatLoop": "Titre en boucle — toucher pour arrêter de répéter"
   },
 
@@ -208,8 +209,6 @@
     "backArtists": "Artistes",
     "lastPlayed": "Lectures récentes",
     "lastPlayedRemove": "Retirer de l'historique",
-    "recent": "Recherches récentes",
-    "recentRemove": "Retirer cette recherche",
     "sectionArtists": "Artiste",
     "sectionAlbums": "Album",
     "sectionEp": "EP",

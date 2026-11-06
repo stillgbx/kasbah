@@ -1116,3 +1116,36 @@ Nouvelle source de la page Musique (`components/music/PodcastBrowser.vue`, icôn
 
 Vérifié : mesures `getBoundingClientRect` entre onglets et au bouton S'abonner, aucun débordement à
 1 280 et 375 px, fr et en, thèmes clair et sombre. **Non joué** : zooms 1,25 et 1,5.
+
+### Mise à jour 2026-11-06 — les recherches récentes sur toutes les sources
+
+La rangée « Recherches récentes » n'existait que sous la recherche de YouTube Music (`MusicView.vue`,
+logique en ligne `rememberQuery` / `removeRecent`). Demande de l'utilisateur : la même sur toutes les
+sources, avec le même composant, mais **un historique par source**.
+
+- **Logique** sortie dans `composables/useRecentQueries.ts` : `useRecentQueries(source)` rend la liste,
+  `remember`, `remove` et `items` (la forme que prend `ChipRow`). Rangée dans le navigateur sous
+  `kasbah.<source>.recentQueries` ; YouTube Music garde ainsi sa clé d'avant (`kasbah.ytmusic.recentQueries`)
+  et son historique. La plus récente d'abord, sans doublon (casse ignorée), 10 au plus — les règles
+  d'avant, inchangées.
+- **Affichage** : `components/music/ChipRow.vue`, réutilisé **sans modification**, placé juste sous la
+  recherche dans `RadioBrowser.vue`, `MixcloudBrowser.vue` et `PodcastBrowser.vue`, comme dans la page
+  YouTube Music. `ChipRow` garde sa hauteur même vide : la rangée est au même endroit sur les quatre
+  sources (mesuré : même `top`, contenu suivant au même `top`).
+- **Quand une recherche entre dans l'historique** (Radios, Mixcloud, Podcasts) : seulement quand on la
+  **lance** (formulaire, ou clic sur une recherche récente, `submitSearch`), à partir de 2 caractères
+  (le minimum des routes). La recherche restaurée à l'ouverture de la source (`query` gardé en
+  `localStorage`) n'y entre pas : une recherche retirée de la rangée ne revient pas toute seule.
+  YouTube Music garde son comportement (mémorisée dans son `runSearch`).
+- **Textes** : `ytmusic.recent` / `ytmusic.recentRemove` deviennent `music.recentSearches` /
+  `music.recentRemove` (fr et en), puisqu'ils servent à toutes les sources.
+
+Vérifié : `composables/useRecentQueries.test.ts` (ordre, doublons, limite, une liste par source, clé de
+YouTube Music relue) ; preview sur une copie de la maison de démo : Radios « nova, fip » et Podcasts
+« jardin » sans mélange, un clic relance et remet en tête, la croix retire, aucun débordement à 1 280 et
+375 px. **Non vu à l'écran** : Mixcloud (la maison de démo n'a pas de compte relié, la source n'affiche
+que la liaison, sans recherche) ; thèmes et zooms non rejoués (composant inchangé).
+
+**Piège de sonde** : dans la preview, chercher un bouton par son nom (« Radios ») sur toute la page en
+trouve un autre que celui du sélecteur de sources ; la sonde avait cru voir une fuite d'historique entre
+sources. Cibler `.sources button[aria-label="…"]`.

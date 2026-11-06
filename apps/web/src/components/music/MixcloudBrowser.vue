@@ -4,9 +4,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getTransport } from '../../api'
 import type { MixcloudHomeSection, MixcloudList, MixcloudMix, MixcloudPage, MixcloudStatus, MixcloudUser, MusicTrack } from '../../api/transport'
+import { useRecentQueries } from '../../composables/useRecentQueries'
 import { useNotificationsStore } from '../../stores/notifications'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
+import ChipRow from './ChipRow.vue'
 import GenrePills from './GenrePills.vue'
 import MusicItemRow from './MusicItemRow.vue'
 import MusicTile from './MusicTile.vue'
@@ -283,6 +285,17 @@ function clearSearch() {
     else { drill.value = null; mixes.value = [] }
   }
 }
+/** Mixcloud's own recent searches, under the search like on the other sources. */
+const recent = useRecentQueries('mixcloud')
+/** A search launched by hand (form, or a recent search): it goes into the history. */
+function submitSearch() {
+  if (query.value.trim().length >= 2) recent.remember(query.value)
+  void runSearch()
+}
+function pickRecent(q: string) {
+  query.value = q
+  submitSearch()
+}
 
 async function link() {
   const name = usernameInput.value.trim()
@@ -322,7 +335,7 @@ onMounted(async () => {
     </form>
 
     <template v-else>
-      <form class="search" @submit.prevent="runSearch">
+      <form class="search" @submit.prevent="submitSearch">
         <div class="search__field">
           <StrokeIcon name="search" :size="18" class="search__icon" />
           <input v-model="query" type="search" class="search__input" :placeholder="$t('mixcloud.searchPlaceholder')" :aria-label="$t('music.search')" />
@@ -331,6 +344,8 @@ onMounted(async () => {
           </button>
         </div>
       </form>
+      <ChipRow :label="$t('music.recentSearches')" :items="recent.items.value" :disabled="busy" :remove-label="$t('music.recentRemove')"
+               @pick="pickRecent" @remove="recent.remove" />
       <!-- tabs: their place kept during a search (greyed out); anonymous, nothing personal to show -->
       <div v-if="linked" class="tabs">
         <div :class="{ 'is-dim': searching }">

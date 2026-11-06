@@ -5,9 +5,11 @@ import { useI18n } from 'vue-i18n'
 import type { DeviceEntry } from '@kasbah/shared'
 import { getTransport } from '../../api'
 import type { RadioStation } from '../../api/transport'
+import { useRecentQueries } from '../../composables/useRecentQueries'
 import { useNotificationsStore } from '../../stores/notifications'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
+import ChipRow from './ChipRow.vue'
 import MusicItemRow from './MusicItemRow.vue'
 
 // "Radios" source of the Music page: the free radio-browser directory (via the `radio` plugin), the
@@ -83,6 +85,17 @@ function clearSearch() {
   query.value = ''
   results.value = null
 }
+/** The radios' own recent searches, under the search like on the other sources. */
+const recent = useRecentQueries('radio')
+/** A search launched by hand (form, or a recent search): it goes into the history. */
+function submitSearch() {
+  if (query.value.trim().length >= 2) recent.remember(query.value)
+  void runSearch()
+}
+function pickRecent(q: string) {
+  query.value = q
+  submitSearch()
+}
 
 async function toggleFavorite(s: RadioStation) {
   try {
@@ -133,7 +146,7 @@ onMounted(async () => {
 
 <template>
   <div class="radio">
-    <form class="search" @submit.prevent="runSearch">
+    <form class="search" @submit.prevent="submitSearch">
       <div class="search__field">
         <StrokeIcon name="search" :size="18" class="search__icon" />
         <input v-model="query" type="search" class="search__input" :placeholder="$t('radio.searchPlaceholder')" :aria-label="$t('music.search')" />
@@ -142,6 +155,8 @@ onMounted(async () => {
         </button>
       </div>
     </form>
+    <ChipRow :label="$t('music.recentSearches')" :items="recent.items.value" :disabled="busy" :remove-label="$t('music.recentRemove')"
+             @pick="pickRecent" @remove="recent.remove" />
     <!-- the tabs row keeps its place during a search (greyed out): the list does not move up -->
     <div class="tabs">
       <div :class="{ 'is-dim': results !== null }">
