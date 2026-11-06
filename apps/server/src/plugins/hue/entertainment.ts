@@ -24,7 +24,15 @@ export const MAX_CHANNELS = 20
 export const DTLS_PORT = 2100
 /** Silence after which the last frame is sent again: well within the bridge's 10 s. */
 const KEEPALIVE_MS = 1000
-const CONNECT_TIMEOUT_MS = 3000
+/**
+ * One handshake attempt. `node-dtls-client` never retransmits a lost flight: one packet lost on the
+ * network is a dead handshake, so it is cut short and tried again. A good handshake on the local
+ * network takes a few tens of milliseconds. Measured on the real bridge: a handshake cut after its
+ * second answer leaves the bridge deaf to any new one for 2 to 3 s, unless the area is stopped and
+ * started again through CLIP — then the next handshake goes through at once.
+ */
+const CONNECT_TIMEOUT_MS = 1500
+const HANDSHAKE_ATTEMPTS = 3
 
 const to16 = (v: number) => Math.round(Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0)) * 0xffff)
 
@@ -128,18 +136,42 @@ export async function openStream(o: OpenStreamOpts): Promise<HueLightStream> {
     }, LAG_SAMPLE_MS)
   }
   sample(o.clock.now() + LAG_SAMPLE_MS)
+  const attempt = async (): Promise<DtlsSocket> => {
+    const s = await o.connect({ host: o.host, port: DTLS_PORT, identity: o.appKey, psk: Buffer.from(o.clientKey, 'hex') })
+    s.udp?.on('message', () => { packets++ })
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timer = o.clock.setTimeout(() => reject(new Error('DTLS handshake timed out')), CONNECT_TIMEOUT_MS + 500)
+        s.once('connected', () => { o.clock.clearTimeout(timer); resolve() })
+        s.once('error', (err: Error) => { o.clock.clearTimeout(timer); reject(err) })
+      })
+      return s
+    } catch (err) {
+      try { s.close() } catch { /* the library already closed it */ }
+      throw err
+    }
+  }
+  let attempts = 0
   try {
-    socket = await o.connect({ host: o.host, port: DTLS_PORT, identity: o.appKey, psk: Buffer.from(o.clientKey, 'hex') })
-    socket.udp?.on('message', () => { packets++ })
-    await new Promise<void>((resolve, reject) => {
-      const timer = o.clock.setTimeout(() => reject(new Error('DTLS handshake timed out')), CONNECT_TIMEOUT_MS + 500)
-      socket.once('connected', () => { o.clock.clearTimeout(timer); resolve() })
-      socket.once('error', (err: Error) => { o.clock.clearTimeout(timer); reject(err) })
-    })
+    for (;;) {
+      attempts++
+      try {
+        socket = await attempt()
+        break
+      } catch (err) {
+        // only silence is worth another try: an alert (wrong key) would be answered the same way
+        if (attempts >= HANDSHAKE_ATTEMPTS || !/timed out/i.test((err as Error).message)) throw err
+        o.logger.debug({ area: o.area.id, attempts, packets }, 'Hue: DTLS handshake timed out, trying again')
+        // the half-done handshake would keep the bridge deaf: stopping and starting the area clears it
+        await o.client.entertainmentAction(o.area.id, 'stop').catch(() => {})
+        await o.client.entertainmentAction(o.area.id, 'start')
+      }
+    }
+    if (attempts > 1) o.logger.info({ area: o.area.id, attempts }, 'Hue: DTLS handshake done after a retry')
   } catch (err) {
     await o.client.entertainmentAction(o.area.id, 'stop').catch(() => {})
-    const why = `${(err as Error).message} (${packets} packet(s) from the bridge, timers up to ${Math.round(maxLagMs)} ms late)`
-    o.logger.warn({ host: o.host, area: o.area.id, packets, maxLagMs: Math.round(maxLagMs) }, 'Hue: DTLS handshake failed')
+    const why = `${(err as Error).message} (${attempts} attempt(s), ${packets} packet(s) from the bridge, timers up to ${Math.round(maxLagMs)} ms late)`
+    o.logger.warn({ host: o.host, area: o.area.id, attempts, packets, maxLagMs: Math.round(maxLagMs) }, 'Hue: DTLS handshake failed')
     throw new Error(why, { cause: err })
   } finally {
     if (sampler !== null) o.clock.clearTimeout(sampler)

@@ -119,18 +119,20 @@ describe('openStream', () => {
     const clock = new ManualClock(0)
     const socket = new FakeSocket()
     const entertainmentAction = vi.fn(async () => {})
+    const connect = vi.fn(() => { setTimeout(() => socket.emit('error', new Error('handshake refused')), 0); return socket })
     const opening = openStream({
       client: { entertainmentAction } as unknown as HueClient,
       area: toLightArea(area(AREA_ID, ['l1'])),
       host: 'h', appKey: 'k', clientKey: '00'.repeat(16),
-      connect: () => { setTimeout(() => socket.emit('error', new Error('handshake refused')), 0); return socket },
+      connect,
       clock, logger: pino({ level: 'silent' }),
     })
     await expect(opening).rejects.toThrow('handshake refused')
     expect(entertainmentAction).toHaveBeenLastCalledWith(AREA_ID, 'stop')
+    expect(connect).toHaveBeenCalledTimes(1)      // an answer, not silence: not worth another try
   })
 
-  it('says whether the bridge answered and how late the timers ran when the handshake fails', async () => {
+  it('tries the handshake again on silence (the library never resends a lost packet), and says why it gave up', async () => {
     const manual = new ManualClock(0)
     // a process that was blocked: its clock jumps ahead of the timers that were due
     let skew = 0
@@ -141,22 +143,51 @@ describe('openStream', () => {
       setInterval: (fn: () => void, ms: number) => manual.setInterval(fn, ms),
       clearInterval: (h: unknown) => manual.clearInterval(h),
     }
-    const socket = Object.assign(new FakeSocket(), { udp: new EventEmitter() })
+    const sockets: (FakeSocket & { udp: EventEmitter })[] = []
+    const entertainmentAction = vi.fn(async (_id: string, _action: string) => {})
     const opening = openStream({
-      client: { entertainmentAction: async () => {} } as unknown as HueClient,
+      client: { entertainmentAction } as unknown as HueClient,
       area: toLightArea(area(AREA_ID, ['l1'])),
       host: 'h', appKey: 'k', clientKey: '00'.repeat(16),
-      connect: () => socket,
+      connect: () => { const sk = Object.assign(new FakeSocket(), { udp: new EventEmitter() }); sockets.push(sk); return sk },
       clock, logger: pino({ level: 'silent' }),
     })
-    const failure = expect(opening).rejects.toThrow('DTLS handshake timed out (1 packet(s) from the bridge, timers up to 1200 ms late)')
+    const failure = expect(opening).rejects.toThrow('DTLS handshake timed out (3 attempt(s), 1 packet(s) from the bridge, timers up to 1200 ms late)')
     await new Promise((r) => setTimeout(r, 0))
-    socket.udp.emit('message', Buffer.alloc(1))
+    sockets[0]!.udp.emit('message', Buffer.alloc(1))     // the bridge answered once, then silence
     skew = 1200
     manual.advance(100)          // the 100 ms sampler runs, 1200 ms late
     skew = 0
-    manual.advance(3500)
+    for (let t = 0; t < 7000; t += 100) { manual.advance(100); await new Promise((r) => setTimeout(r, 0)) }
     await failure
+    expect(sockets).toHaveLength(3)
+    expect(sockets.every((sk) => sk.closed)).toBe(true)
+    // between two tries, the area is stopped and started again (a half-done handshake keeps the bridge deaf)
+    expect(entertainmentAction.mock.calls.map((c) => (c as unknown[])[1])).toEqual(['start', 'stop', 'start', 'stop', 'start', 'stop'])
+  })
+
+  it('keeps the area on and connects on a second try', async () => {
+    const clock = new ManualClock(0)
+    const sockets: FakeSocket[] = []
+    const entertainmentAction = vi.fn(async () => {})
+    const opening = openStream({
+      client: { entertainmentAction } as unknown as HueClient,
+      area: toLightArea(area(AREA_ID, ['l1'])),
+      host: 'h', appKey: 'k', clientKey: '00'.repeat(16),
+      connect: () => {
+        const sk = new FakeSocket()
+        sockets.push(sk)
+        if (sockets.length === 2) setTimeout(() => sk.emit('connected'), 0)
+        return sk
+      },
+      clock, logger: pino({ level: 'silent' }),
+    })
+    for (let t = 0; t < 2500; t += 100) { clock.advance(100); await new Promise((r) => setTimeout(r, 0)) }
+    const stream = await opening
+    expect(sockets).toHaveLength(2)
+    expect(sockets[0]!.closed).toBe(true)
+    expect(entertainmentAction.mock.calls.map((c) => (c as unknown[])[1])).toEqual(['start', 'stop', 'start'])
+    await stream.close()
   })
 })
 

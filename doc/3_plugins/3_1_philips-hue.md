@@ -298,3 +298,27 @@ retard : le réseau ; un retard d'une seconde ou plus : le processus. Test `ente
 Rappel des deux clés : `HUE_APP_KEY` (le `username` de l'appairage) authentifie les appels HTTPS et sert
 d'**identité** PSK en DTLS ; `HUE_CLIENT_KEY` (rendue au même appairage, `generateclientkey`) est la
 **clé secrète** PSK du flux. Chaque appairage crée une nouvelle paire ; les deux doivent venir du même.
+
+### Mise à jour 2026-11-06 (soir) — un paquet perdu, et le pont devient sourd : la zone relancée entre deux essais
+
+Avec le message enrichi, l'échec du serveur s'est lu `1 packet(s) from the bridge, timers up to 16 ms late` :
+processus pas en cause, première réponse du pont reçue puis plus rien. Constat de l'utilisateur : couper
+puis rallumer la synchro redonnait la même erreur. Mesuré le jour même sur le vrai pont, par le code du
+plugin (scripts jetables) :
+- `node-dtls-client` **ne retransmet jamais** un vol perdu (`TODO: implement retransmission` dans sa
+  source) : un paquet perdu = une poignée de main morte, jusqu'à son délai.
+- Une poignée de main **coupée après la deuxième réponse du pont** (simulée en fermant le socket UDP) le
+  rend **sourd à toute nouvelle poignée de main pendant 2 à 3 s** (0 paquet en retour). Coupée après la
+  première réponse seulement : sans effet.
+- **Arrêter puis redémarrer la zone par CLIP le débloque aussitôt** (poignée de main en 242 ms, 19 ms après
+  la coupure).
+- Fermer puis rouvrir un flux sain, aussitôt et trois fois de suite, marche (clés du serveur comprises) :
+  la fermeture de Kasbah (`close_notify` puis `stop`) n'était pas en cause.
+
+`openStream` (`entertainment.ts`) : délai d'une tentative ramené à 1,5 s, **3 tentatives** ; entre deux,
+la zone est arrêtée puis redémarrée. Seule une expiration est réessayée (une alerte, clé fausse, serait
+rendue de la même façon). Le message d'échec dit le nombre de tentatives. Vérifié sur le vrai pont : pont
+volontairement rendu sourd, flux ouvert en 2,3 s au lieu de l'échec. Tests `entertainment.test.ts`
+(trois essais puis abandon, réussite au deuxième, pas de nouvel essai sur une alerte).
+
+**Reste** : la cause des pertes, le réseau du serveur (même moment que les autres appareils injoignables).

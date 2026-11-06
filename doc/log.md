@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-06] update | Hue : poignée de main DTLS réessayée, zone relancée entre deux essais
+
+**Déclencheur** : échec `1 packet(s) from the bridge` sur le serveur, et « si je coupe et que j'essaie de rallumer la sync alors même erreur. il ne faut pas fermer des choses ? ».
+
+**Pages modified** :
+- 3_plugins/3_1_philips-hue.md - section datée : pas de retransmission dans `node-dtls-client`, pont sourd 2 à 3 s après une poignée de main coupée, débloqué par stop / start CLIP, 3 tentatives dans `openStream`, fermeture hors de cause
+
+**Index** : catalogue 3_plugins (déjà daté du jour), index.md régénéré.
+
 ## [2026-11-06] update | Hue : ce que dit une poignée de main DTLS qui expire
 
 **Déclencheur** : la synchro de « Ce navigateur » échoue sur la vraie maison (`The DTLS handshake timed out`) alors que la sonde passe depuis le poste et depuis le serveur.
