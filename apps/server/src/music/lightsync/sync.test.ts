@@ -277,7 +277,9 @@ describe('LightSync', () => {
     t.play('cast:speaker-1', 'sid-1')
     await t.sync.set('cast:speaker-1', true)
     await t.step(500)
+    expect(Math.max(...t.frames.at(-1)!.map((c) => c.r))).toBeGreaterThan(0.5)
     await t.sync.set('cast:speaker-1', false)
+    expect(t.frames.at(-1)!.every((c) => c.r === 0 && c.g === 0 && c.b === 0)).toBe(true)   // black before the close
     expect(t.lights).toEqual(['save', 'open', 'close', 'restore'])
     expect(t.lightsState()).toBe('before')
     // switched on and off without anything playing: the lights were never taken, nothing to put back

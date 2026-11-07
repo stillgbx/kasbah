@@ -440,3 +440,24 @@ le `LightStreamer`. Constat au passage : pendant un flux et après sa fermeture,
 « remise dans l'état d'avant » vue par la sonde du 2026-11-05 était lue par CLIP, ce qui peut expliquer la
 contradiction notée plus haut avec le constat visuel de l'utilisateur (lampes restées sur la dernière
 image). L'aspect réel à la fermeture reste à regarder sur place.
+
+### Mise à jour 2026-11-07 (fin d'après-midi) — rendre l'état d'avant : passer par « éteint »
+
+Constat de l'utilisateur sur la vraie maison, la synchro par ailleurs fonctionnelle : en changeant de
+pièce, l'ancienne zone ne reprenait pas son état d'avant, alors que le journal du serveur montre
+`lightsync: lights put back` à chaque changement. Explication retenue (déduite, cohérente avec le constat
+de la section précédente : CLIP rapporte pendant et après un flux l'état **d'avant**) : la remise
+envoyait exactement l'état que le pont croit déjà en place, et rien n'atteignait les lampes, restées sur
+la dernière trame. Après une pause, la remise marchait parce que `switchOff` avait changé l'état CLIP.
+
+Désormais :
+- `restoreLights` (`index.ts`) : une lampe qui était **allumée** reçoit d'abord `on: false` (file
+  `restore` de `putLimited`, envoyée avant), puis son état d'avant avec la transition de 1 s ; une lampe
+  éteinte reste un simple `on: false`.
+- `LightSync.teardown` (`lightsync/sync.ts`) envoie une trame noire juste avant de fermer le flux : une
+  lampe éteinte avant la synchro, qu'aucune commande CLIP ne peut plus atteindre, reste noire au lieu
+  d'une couleur figée.
+
+Tests `plugin.test.ts` (« éteint » puis état d'avant), `sync.test.ts` (dernière trame noire avant la
+fermeture). **À confirmer sur place** : changement de pièce, désactivation, lampe éteinte avant la
+synchro.

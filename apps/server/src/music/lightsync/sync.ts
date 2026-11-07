@@ -453,6 +453,8 @@ export class LightSync {
     if (!a) return
     this.active = null
     a.decoding?.stop()
+    // the lamps keep the last frame once the stream is closed: leave them black, not on a colour
+    a.stream.send(a.stream.area.channels.map((c) => ({ id: c.id, r: 0, g: 0, b: 0 })))
     await a.stream.close().catch((err) => this.deps.logger.debug({ err }, 'lightsync: closing the stream failed'))
     this.deps.logger.info({ deviceId: a.deviceId }, 'lightsync: stopped')
   }

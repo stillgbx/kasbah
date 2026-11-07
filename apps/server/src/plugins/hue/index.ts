@@ -310,7 +310,12 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
     async restoreLights(saved) {
       const c = client
       if (!c) return
-      await Promise.all((saved as HueSavedLights).lights.map(({ id, body }) => c.putLimited('light', id, body)))
+      // CLIP still reports the state from before the stream while the lamps show its last frame: a PUT
+      // of that very state changes nothing on the bridge, so a light that was on is switched off first
+      await Promise.all((saved as HueSavedLights).lights.map(async ({ id, body }) => {
+        if (body.on?.on) await c.putLimited('light', id, { on: { on: false } }, 'restore')
+        await c.putLimited('light', id, body)
+      }))
     },
     async switchOff(areaId) {
       const c = client

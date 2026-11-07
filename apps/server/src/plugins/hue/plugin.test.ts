@@ -328,11 +328,12 @@ describe('hue entertainment stream', () => {
     expect(bridge.puts).toEqual([{ url: '/clip/v2/resource/light/l-color', body: { on: { on: false } } }])
     bridge.puts.length = 0
     await streamer.restoreLights(saved)
-    // only the area's light (l-color), as it was: on, brightness, white temperature
-    expect(bridge.puts).toEqual([{
-      url: '/clip/v2/resource/light/l-color',
-      body: { on: { on: true }, dimming: { brightness: 63.5 }, color_temperature: { mirek: 366 }, dynamics: { duration: 1000 } },
-    }])
+    // only the area's light (l-color), as it was: on, brightness, white temperature — after an "off",
+    // since CLIP still reports that state and a PUT of the same state would not reach the lamp
+    expect(bridge.puts).toEqual([
+      { url: '/clip/v2/resource/light/l-color', body: { on: { on: false } } },
+      { url: '/clip/v2/resource/light/l-color', body: { on: { on: true }, dimming: { brightness: 63.5 }, color_temperature: { mirek: 366 }, dynamics: { duration: 1000 } } },
+    ])
     await plugin.stop()
   })
 })

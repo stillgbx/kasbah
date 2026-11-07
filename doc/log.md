@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-07] update | Hue : l'état d'avant rendu en passant par « éteint », trame noire avant la fermeture
+
+**Déclencheur** : constat de l'utilisateur — au changement de pièce, l'ancienne zone ne reprend pas son état d'avant.
+
+**Pages modifiées** :
+- `3_plugins/3_1_philips-hue.md` - mise à jour 2026-11-07 (fin d'après-midi) : remise ignorée quand elle vaut l'état que CLIP croit en place ; `on: false` d'abord pour une lampe allumée, trame noire avant la fermeture.
+
+**Index** : catalogue déjà à la date du jour, index.md régénéré.
+
+**Non vérifié** : la vraie maison (changement de pièce, désactivation, lampe éteinte avant la synchro).
+
 ## [2026-11-07] update | Hue : la poignée de main DTLS renvoyée comme Hue Sync, le flux se referme de nouveau en pause
 
 **Déclencheur** : question de l'utilisateur — l'appli officielle Hue Sync n'a pas de coupure, comment fait-elle ?
