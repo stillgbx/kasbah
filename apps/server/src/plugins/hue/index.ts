@@ -312,12 +312,6 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
       if (!c) return
       await Promise.all((saved as HueSavedLights).lights.map(({ id, body }) => c.putLimited('light', id, body)))
     },
-    async switchOff(areaId) {
-      const c = client
-      const cfg = areas.find((a) => a.id === areaId)
-      if (!c || !cfg) return
-      await Promise.all(areaLights(cfg).map((id) => c.putLimited('light', id, { on: { on: false } })))
-    },
   }
 
   /** The stream needs the client key; without it the sync says why instead of failing later. */

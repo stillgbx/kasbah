@@ -7,6 +7,20 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-07] update | Lumières en rythme : le pont refuse un nouveau flux après le précédent, le flux reste ouvert
+
+**Déclencheur** : constat de l'utilisateur après la mise en service (« on a toujours les pbs de connexion »), DTLS en échec pendant plusieurs minutes ; cause recherchée sur le vrai pont.
+
+**Pages modifiées** :
+- `3_plugins/3_1_philips-hue.md` - mise à jour 2026-11-07 (suite) : trace d'une poignée de main saine, refus de 15 s à 3 min après n'importe quelle fin de flux (pistes écartées : `close_notify`, trames, rythme des essais, même port, zone laissée active), message d'échec explicite, `switchOff` retiré.
+- `1_architecture/1_6_lecteur-musique.md` - mise à jour 2026-11-07 (suite) : le flux ne se ferme plus pendant une pause (choix de l'utilisateur), noir tenu par le keepalive ; puces de la section précédente datées.
+
+**Contradictions** : la mise à jour 2026-11-06 (soir) de 3_1 (« fermer puis rouvrir aussitôt marche ») n'est plus vraie ; notée, l'ancienne gardée. La contradiction du 2026-11-07 sur l'arrêt du flux n'a plus d'effet sur le code.
+
+**Index** : catalogues déjà à la date du jour, index.md régénéré.
+
+**Non vérifié** : la vraie maison avec ce code.
+
 ## [2026-11-07] update | Lumières en rythme : fondu à l'arrêt du son, état des lampes rendu à la désactivation
 
 **Déclencheur** : demande de l'utilisateur (à l'arrêt de l'écoute les lampes semblent rester dans leur dernier état ; synchro active sans son → fondu jusqu'à l'extinction ; synchro désactivée → état d'avant la synchro).

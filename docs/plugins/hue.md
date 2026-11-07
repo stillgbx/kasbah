@@ -50,7 +50,7 @@ A lost key is replaced with the same gesture (**Pair the bridge again**). A pair
 - Online discovery is rate-limited by Philips (about one call per quarter of an hour): set the address.
 - Throughput: the bridge accepts about ten commands per second; while a slider is being dragged, only the last value is sent.
 - A light cannot receive an effect and a color at the same time: the effect takes priority.
-- Lights in rhythm: one room at a time (the bridge streams one entertainment area at a time); radio is not followed yet; on a Sonos speaker the lights may lag by up to a second (it reports its position in whole seconds). When the music stops, the bridge puts the lights back as they were.
+- Lights in rhythm: one room at a time (the bridge streams one entertainment area at a time); radio is not followed yet; on a Sonos speaker the lights may lag by up to a second (it reports its position in whole seconds). When the music stops, the lights fade to black and stay held by the sync (the Hue app cannot control them meanwhile); switching the sync off puts them back as they were. The bridge refuses a new stream for 15 s to 3 min after the previous one ended, which is why the stream is not closed during a pause.
 
 ## Further reading
 

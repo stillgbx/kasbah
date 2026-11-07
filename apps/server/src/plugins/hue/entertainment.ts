@@ -165,6 +165,8 @@ export async function openStream(o: OpenStreamOpts): Promise<HueLightStream> {
   // answered at all (key or network), and how late the timers ran (a process too busy to read the
   // answers before its own timeout fires)
   let packets = 0
+  /** Tries the bridge did not answer at all. */
+  let unanswered = 0
   let maxLagMs = 0
   let sampler: unknown = null
   const sample = (expected: number) => {
@@ -176,7 +178,8 @@ export async function openStream(o: OpenStreamOpts): Promise<HueLightStream> {
   sample(o.clock.now() + LAG_SAMPLE_MS)
   const attempt = async (): Promise<DtlsSocket> => {
     const s = await o.connect({ host: o.host, port: DTLS_PORT, identity: o.appKey, psk: Buffer.from(o.clientKey, 'hex') })
-    s.udp?.on('message', () => { packets++ })
+    let got = 0
+    s.udp?.on('message', () => { packets++; got++ })
     try {
       await new Promise<void>((resolve, reject) => {
         const timer = o.clock.setTimeout(() => reject(new Error('DTLS handshake timed out')), CONNECT_TIMEOUT_MS + 500)
@@ -185,6 +188,7 @@ export async function openStream(o: OpenStreamOpts): Promise<HueLightStream> {
       })
       return s
     } catch (err) {
+      if (got === 0) unanswered++
       try { s.close() } catch { /* the library already closed it */ }
       throw err
     }
@@ -208,7 +212,12 @@ export async function openStream(o: OpenStreamOpts): Promise<HueLightStream> {
     if (attempts > 1) o.logger.info({ area: o.area.id, attempts }, 'Hue: DTLS handshake done after a retry')
   } catch (err) {
     await o.client.entertainmentAction(o.area.id, 'stop').catch(() => {})
-    const why = `${(err as Error).message} (${attempts} attempt(s), ${packets} packet(s) from the bridge, timers up to ${Math.round(maxLagMs)} ms late)`
+    // measured on a real bridge: after a stream ends, it answers the first message of a new handshake
+    // and then nothing, for 15 s to over 3 min, whatever the client does (area restarted, same port…)
+    const refused = unanswered === 0 && /timed out/i.test((err as Error).message)
+      ? ': the bridge answered the first message of each try only, as it does for 15 s to 3 min after a stream ended'
+      : ''
+    const why = `${(err as Error).message} (${attempts} attempt(s), ${packets} packet(s) from the bridge, timers up to ${Math.round(maxLagMs)} ms late)${refused}`
     o.logger.warn({ host: o.host, area: o.area.id, attempts, packets, maxLagMs: Math.round(maxLagMs) }, 'Hue: DTLS handshake failed')
     throw new Error(why, { cause: err })
   } finally {

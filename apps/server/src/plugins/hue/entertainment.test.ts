@@ -192,6 +192,27 @@ describe('openStream', () => {
     expect(entertainmentAction.mock.calls.map((c) => (c as unknown[])[1])).toEqual(['start', 'stop', 'start', 'stop', 'start', 'stop'])
   })
 
+  it('says the bridge is refusing a new stream when it answers each try once, then nothing', async () => {
+    const clock = new ManualClock(0)
+    const sockets: (FakeSocket & { udp: EventEmitter })[] = []
+    const opening = openStream({
+      client: { entertainmentAction: vi.fn(async () => {}) } as unknown as HueClient,
+      area: toLightArea(area(AREA_ID, ['l1'])),
+      host: 'h', appKey: 'k', clientKey: '00'.repeat(16),
+      connect: () => {
+        const sk = Object.assign(new FakeSocket(), { udp: new EventEmitter() })
+        sockets.push(sk)
+        setTimeout(() => sk.udp.emit('message', Buffer.alloc(1)), 0)      // HelloVerifyRequest, then silence
+        return sk
+      },
+      clock, logger: pino({ level: 'silent' }),
+    })
+    const failure = expect(opening).rejects.toThrow(/3 packet\(s\).*answered the first message of each try only/)
+    for (let t = 0; t < 7000; t += 100) { clock.advance(100); await new Promise((r) => setTimeout(r, 0)) }
+    await failure
+    expect(sockets).toHaveLength(3)
+  })
+
   it('keeps the area on and connects on a second try', async () => {
     const clock = new ManualClock(0)
     const sockets: FakeSocket[] = []

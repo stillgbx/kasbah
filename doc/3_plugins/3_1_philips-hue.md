@@ -370,3 +370,38 @@ PUT renvoie le même). Il en dépend pour l'extinction après une pause : si le 
 `stop`, les lampes peuvent se rallumer un instant entre la fermeture du flux et `switchOff`. Publié sur
 décision de l'utilisateur sans essai préalable ; **à trancher sur la vraie maison** (arrêter l'écoute,
 regarder s'il y a un éclat avant l'extinction ; si oui, éteindre avant de fermer le flux).
+
+### Mise à jour 2026-11-07 (suite) — le pont refuse un nouveau flux pendant 15 s à 3 min après le précédent
+
+Constat sur la vraie maison, juste après la mise en service du code ci-dessus : la synchro de « Ce
+navigateur » ne s'ouvre plus, `The DTLS handshake timed out (3 attempt(s), 3 packet(s) from the bridge,
+timers up to 13 ms late)` toutes les 15 s pendant plusieurs minutes. Le même échec figure dans les journaux
+du matin **avec la version d'avant** : flux fermé 5 s après un changement de morceau lent, refus pendant
+~100 s, puis ouverture d'elle-même.
+
+Reproduit le jour même sur le vrai pont, avec les clés du serveur, par scripts jetables qui tracent chaque
+datagramme (zone démarrée et arrêtée par CLIP à chaque essai) :
+- poignée de main saine : `ClientHello` → `HelloVerifyRequest` → `ClientHello` avec cookie → `ServerHello` +
+  `ServerHelloDone` → `ClientKeyExchange` + `ChangeCipherSpec` + `Finished` → `ChangeCipherSpec` + `Finished`,
+  3 datagrammes reçus, ~25 ms ;
+- **après la fin de n'importe quelle session**, le pont répond au premier `ClientHello` (`HelloVerifyRequest`)
+  puis plus rien au second : d'où « 1 paquet par tentative ». Durée mesurée de 15 s à plus de 3 min, quelle
+  que soit la fin de la session précédente (`close_notify` puis `stop`, ou coupée sans un mot), avec ou
+  sans trames envoyées, en réessayant toutes les 5 s ou en attendant 40 s avant le premier essai, depuis un
+  port UDP local neuf **ou le même** que la session précédente ;
+- laisser la zone active entre deux sessions (pas de `stop`) est pire : le pont ne répond plus du tout.
+
+**Contradiction avec la mise à jour 2026-11-06 (soir)** ci-dessus (« fermer puis rouvrir un flux sain,
+aussitôt et trois fois de suite, marche ») : plus vrai le 2026-11-07 sur ce pont. Version du pont non
+relevée ; la mise à jour du 2026-11-06 reste telle quelle, celle-ci la remplace pour la conduite à tenir.
+
+Conséquences :
+- La synchro ne ferme plus le flux pendant une pause ([1_6](../1_architecture/1_6_lecteur-musique.md), même
+  jour) : un flux gardé ouvert n'a pas à être rouvert.
+- `openStream` (`entertainment.ts`) ajoute au message d'échec, quand chaque tentative a reçu une réponse puis
+  plus rien : `the bridge answered the first message of each try only, as it does for 15 s to 3 min after a
+  stream ended` — lisible dans le panneau des lumières en rythme. Test `entertainment.test.ts`.
+- `switchOff` (extinction des lampes après une pause, section 2026-11-07 ci-dessus) est retiré du
+  `LightStreamer` : plus de fermeture pendant une pause. La **contradiction du 2026-11-07** sur l'arrêt du flux
+  (éclat possible entre la fermeture et l'extinction) n'a donc plus d'objet ; reste ouvert, sans conséquence
+  pour le code, ce que le pont fait des lampes à `stop` (l'état d'avant est rendu par Kasbah de toute façon).

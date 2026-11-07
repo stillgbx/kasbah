@@ -47,8 +47,6 @@ export interface LightStreamer {
   saveLights(areaId: string): Promise<SavedLights>
   /** Puts the lights back as saved, with a short transition. Call it once the stream is closed. */
   restoreLights(saved: SavedLights): Promise<void>
-  /** Switches the area's lights off. Call it once the stream is closed. */
-  switchOff(areaId: string): Promise<void>
 }
 
 /** What `saveLights` keeps: only the streamer that made it can read the rest. */

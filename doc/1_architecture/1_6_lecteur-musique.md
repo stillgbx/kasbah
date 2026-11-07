@@ -530,3 +530,25 @@ instantané pris une seule fois, état rendu à la désactivation, au passage à
 l'arrêt du serveur, rien à rendre sans flux). **Pas vérifié sur la vraie maison** : que le flux rallume
 des lampes éteintes après une pause, et l'ordre des gestes à la fermeture (voir la contradiction notée
 dans 3_1).
+
+### Mise à jour 2026-11-07 (suite) — le flux reste ouvert tant que l'interrupteur est allumé
+
+Cause trouvée des échecs « DTLS handshake timed out » : après la fin d'un flux, le pont Hue refuse tout
+nouveau flux pendant 15 s à 3 min (mesures dans [3_1 Philips Hue](../3_plugins/3_1_philips-hue.md), même
+jour). Fermer le flux après 5 s de pause, comme depuis le 2026-11-05, faisait buter la reprise ou le morceau
+suivant sur ce refus.
+
+Choix de l'utilisateur : **ne plus jamais fermer le flux pendant une pause** ; il faut couper la synchro
+pour rendre les lampes. `lightsync/sync.ts` : sans son, le fondu au noir de 3 s reste, puis la boucle passe
+au rythme d'attente (250 ms) sans calculer de trame — le `keepalive` du flux renvoie la dernière (noire)
+chaque seconde, le pont ne coupe pas. À la reprise, même flux, `fade` à 1. `PAUSE_CLOSE_MS`, `settling` et
+l'extinction `switchOff` qui suivait la fermeture sont retirés (section « fondu à l'arrêt du son » plus haut :
+les puces « À 5 s … `switchOff` » et `settling` sont **datées**).
+
+Prix : pendant une pause, les lampes de la zone restent tenues par le flux (noires) ; l'appli Hue ne les
+pilote pas tant que la synchro est allumée. L'état d'avant est rendu à la désactivation, au passage à une
+autre enceinte, au changement de pièce choisie et à l'arrêt du serveur, comme avant.
+
+Vérifié : `sync.test.ts` (flux gardé 60 s de pause puis repris sans réouverture, noir tenu sans trame
+calculée, état d'avant pris une fois), `player.test.ts` (« Ce navigateur » muet : noir, flux gardé, rendu à la
+désactivation). **Pas encore vérifié sur la vraie maison.**
