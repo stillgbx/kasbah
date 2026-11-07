@@ -552,3 +552,16 @@ autre enceinte, au changement de pièce choisie et à l'arrêt du serveur, comme
 Vérifié : `sync.test.ts` (flux gardé 60 s de pause puis repris sans réouverture, noir tenu sans trame
 calculée, état d'avant pris une fois), `player.test.ts` (« Ce navigateur » muet : noir, flux gardé, rendu à la
 désactivation). **Pas encore vérifié sur la vraie maison.**
+
+### Mise à jour 2026-11-07 (soir) — le flux se referme de nouveau en pause
+
+Le refus du pont de la section précédente tenait à un message de la poignée de main que
+`node-dtls-client` ne renvoie jamais ; `openStream` le renvoie maintenant et rouvre un flux en moins
+d'une seconde juste après le précédent ([3_1 Philips Hue](../3_plugins/3_1_philips-hue.md), même jour).
+
+Choix de l'utilisateur, une fois la réouverture fiable : **refermer le flux en pause**, pour rendre les
+lampes à l'appli Hue. Le comportement de la section « fondu à l'arrêt du son » revient tel quel : fondu
+au noir en 3 s, fermeture du flux à 5 s puis `switchOff`, `settling` avant toute réouverture ou remise
+à l'état d'avant. La section « le flux reste ouvert tant que l'interrupteur est allumé » est **datée**.
+Vérifié : `sync.test.ts` et `player.test.ts` de nouveau dans leur version du commit 88a975c, verts.
+**Pas encore vérifié sur la vraie maison** avec la synchro complète.

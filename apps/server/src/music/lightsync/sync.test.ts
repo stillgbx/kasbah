@@ -17,12 +17,13 @@ function setup(saved: LightSyncSettingsByRoom = {}) {
   const clock = new ManualClock(1_000_000)
   const frames: ChannelColor[][] = []
   const streams: { closed: boolean; end: (reason: string) => void }[] = []
-  /** What happened to the lights, in order: `save`, `open`, `close`, `restore`. */
+  /** What happened to the lights, in order: `save`, `open`, `close`, `off`, `restore`. */
   const lights: string[] = []
   let lightsState = 'before'
   const streamer: LightStreamer = {
     saveLights: vi.fn(async (areaId: string) => { lights.push('save'); return { areaId, state: lightsState } }),
     restoreLights: vi.fn(async (saved) => { lights.push('restore'); lightsState = (saved as unknown as { state: string }).state }),
+    switchOff: vi.fn(async () => { lights.push('off'); lightsState = 'off' }),
     areaFor: (lights) => (lights.includes('hue:lamp-1') ? AREA : lights.includes('hue:lamp-3') ? AREA_B : undefined),
     open: vi.fn(async (id: string) => {
       let ended: (reason: string) => void = () => {}
@@ -167,18 +168,21 @@ describe('LightSync', () => {
     expect(t.streamer.open).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the stream through a pause (the bridge would refuse a new one for a while), and goes on with it on resume', async () => {
+  it('hands the lights back after a pause of 5 s, and takes them again on resume', async () => {
     const t = setup()
     t.play('cast:speaker-1', 'sid-1')
     await t.sync.set('cast:speaker-1', true)
     await t.step(500)
     t.states.set('cast:speaker-1', { playback: 'paused', positionS: 0.5, updatedAt: t.clock.now() })
-    await t.step(60_000)
+    await t.step(4000)
     expect(t.streams[0]!.closed).toBe(false)
-    expect(t.sync.status('cast:speaker-1')).toMatchObject({ on: true, active: true })
+    await t.step(1500)
+    expect(t.streams[0]!.closed).toBe(true)
+    expect(t.decodes[0]!.stop).toHaveBeenCalled()
+    expect(t.sync.status('cast:speaker-1')).toMatchObject({ on: true, active: false })
     t.states.set('cast:speaker-1', { playback: 'playing', positionS: 0.5, updatedAt: t.clock.now() })
     await t.step(500)
-    expect(t.streamer.open).toHaveBeenCalledTimes(1)
+    expect(t.streamer.open).toHaveBeenCalledTimes(2)
   })
 
   it('decodes the next track when the queue moves on, and the new position after a seek', async () => {
@@ -225,7 +229,7 @@ describe('LightSync', () => {
     expect(t.sync.status('cast:speaker-1')).toMatchObject({ on: false, active: false })
   })
 
-  it('fades the lights to black when the sound stops, and keeps them so without computing frames', async () => {
+  it('fades the lights out when the sound stops, then switches them off', async () => {
     const t = setup()
     const peak = (frame: ChannelColor[]) => Math.max(...frame.map((c) => Math.max(c.r, c.g, c.b)))
     t.play('cast:speaker-1', 'sid-1')
@@ -239,14 +243,13 @@ describe('LightSync', () => {
     expect(peak(t.frames.at(-1)!)).toBe(0)                 // black after 3 s
     expect(midway).toBeGreaterThan(0)
     expect(midway).toBeLessThan(0.6)
-    const sent = t.frames.length
-    await t.step(60_000)
-    expect(t.frames.length).toBe(sent)                    // black kept by the stream's keepalive
     expect(t.lights).toEqual(['save', 'open'])
-    expect(t.sync.status('cast:speaker-1')).toMatchObject({ on: true, active: true })
+    await t.step(2000)
+    expect(t.lights).toEqual(['save', 'open', 'close', 'off'])
+    expect(t.sync.status('cast:speaker-1')).toMatchObject({ on: true, active: false })
   })
 
-  it('a resume lights them again, and the state from before the sync is saved once', async () => {
+  it('a resume lights them again at once, and the next stream keeps the state from before the first one', async () => {
     const t = setup()
     t.play('cast:speaker-1', 'sid-1')
     await t.sync.set('cast:speaker-1', true)
@@ -260,16 +263,16 @@ describe('LightSync', () => {
     await t.step(300)
     expect(peak(t.frames.at(-1)!)).toBeGreaterThan(playing * 0.8)
     t.states.set('cast:speaker-1', { playback: 'paused', positionS: 0.6, updatedAt: t.clock.now() })
-    await t.step(60_000)
+    await t.step(6000)                                     // off after the pause
     t.states.set('cast:speaker-1', { playback: 'playing', positionS: 0.6, updatedAt: t.clock.now() })
     await t.step(500)
-    expect(t.lights).toEqual(['save', 'open'])
+    expect(t.lights).toEqual(['save', 'open', 'close', 'off', 'open'])   // saved once
     await t.sync.set('cast:speaker-1', false)
     expect(t.lights.slice(-2)).toEqual(['close', 'restore'])
     expect(t.lightsState()).toBe('before')
   })
 
-  it('switching off puts the lights back as they were before the sync', async () => {
+  it('switching off puts the lights back as they were before the sync, even once they are off', async () => {
     const t = setup()
     t.play('cast:speaker-1', 'sid-1')
     await t.sync.set('cast:speaker-1', true)

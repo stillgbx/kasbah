@@ -7,6 +7,20 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-07] update | Hue : la poignée de main DTLS renvoyée comme Hue Sync, le flux se referme de nouveau en pause
+
+**Déclencheur** : question de l'utilisateur — l'appli officielle Hue Sync n'a pas de coupure, comment fait-elle ?
+
+**Pages modifiées** :
+- `3_plugins/3_1_philips-hue.md` - mise à jour 2026-11-07 (soir) : Hue Sync = `huestream` sur mbedTLS, qui renvoie les vols ; le pont ignore le premier `ClientHello` à cookie après un flux et répond au renvoi ; `retransmitHandshake` ; piège de la fenêtre anti-rejeu ; CLIP rapporte l'état d'avant pendant et après un flux.
+- `1_architecture/1_6_lecteur-musique.md` - mise à jour 2026-11-07 (soir) : fermeture après 5 s de pause et extinction de retour (choix de l'utilisateur) ; la section « flux reste ouvert » datée.
+
+**Contradictions** : la conclusion « quoi que fasse le client » de la section 2026-11-07 (suite) de 3_1 est datée ; la contradiction du 2026-11-07 sur l'arrêt du flux reçoit une explication possible (sonde lue par CLIP), à confirmer sur place.
+
+**Index** : catalogues déjà à la date du jour, index.md régénéré.
+
+**Non vérifié** : la synchro complète sur la vraie maison (aspect des lampes à la fermeture, rallumage à la reprise).
+
 ## [2026-11-07] update | Lumières en rythme : le pont refuse un nouveau flux après le précédent, le flux reste ouvert
 
 **Déclencheur** : constat de l'utilisateur après la mise en service (« on a toujours les pbs de connexion »), DTLS en échec pendant plusieurs minutes ; cause recherchée sur le vrai pont.

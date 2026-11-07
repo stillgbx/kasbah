@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ManualClock } from '@kasbah/mock-sim'
 import pino from 'pino'
 import type { HueClient } from './client'
-import { encodeFrame, MAX_CHANNELS, openStream, pickArea, restoreBody, toLightArea, type DtlsSocket } from './entertainment'
+import { encodeFrame, MAX_CHANNELS, openStream, pickArea, restoreBody, retransmitHandshake, toLightArea, type DtlsSocket } from './entertainment'
 import { hueEntertainmentConfigurationSchema } from './types'
 
 const AREA = '1a8d99cc-967b-44f2-9202-43f976c0fa6b'
@@ -87,6 +87,60 @@ class FakeSocket extends EventEmitter implements DtlsSocket {
   send(data: Buffer) { this.sent.push(data) }
   close() { this.closed = true }
 }
+
+describe('retransmitHandshake', () => {
+  /** A DTLS record: content type, epoch, 48-bit sequence number, then `body`. */
+  const record = (epoch: number, seq: number, body = Buffer.from([1, 0, 0, 0])) => {
+    const r = Buffer.alloc(13 + body.length)
+    r[0] = 22; r[1] = 0xfe; r[2] = 0xfd
+    r.writeUInt16BE(epoch, 3)
+    r.writeUIntBE(seq, 5, 6)
+    r.writeUInt16BE(body.length, 11)
+    body.copy(r, 13)
+    return r
+  }
+  function setup() {
+    const clock = new ManualClock(0)
+    const sent: Buffer[] = []
+    const udp = Object.assign(new EventEmitter(), { send: (msg: Buffer) => { sent.push(Buffer.from(msg)) } })
+    const socket = Object.assign(new FakeSocket(), { udp })
+    retransmitHandshake(socket, clock)
+    return { clock, sent, udp, socket }
+  }
+  const seqs = (bufs: Buffer[]) => bufs.map((b) => b.readUIntBE(5, 6))
+
+  it('sends an unanswered ClientHello again, with new record numbers, until the bridge answers', () => {
+    const t = setup()
+    t.udp.send(record(0, 1))                 // the ClientHello with the cookie
+    t.clock.advance(499)
+    expect(t.sent).toHaveLength(1)
+    t.clock.advance(1)
+    t.clock.advance(500)
+    expect(seqs(t.sent)).toEqual([1, 16, 17])
+    expect(t.sent[1]!.subarray(13)).toEqual(t.sent[0]!.subarray(13))   // the same message
+    t.udp.emit('message', Buffer.alloc(1))   // ServerHello: nothing more
+    t.clock.advance(5000)
+    expect(t.sent).toHaveLength(3)
+  })
+
+  it('never resends an encrypted flight, nor anything once connected', () => {
+    const t = setup()
+    t.udp.send(Buffer.concat([record(0, 2), record(1, 0)]))   // ClientKeyExchange … Finished
+    t.clock.advance(2000)
+    expect(t.sent).toHaveLength(1)
+    t.udp.send(record(0, 0))
+    t.socket.emit('connected')
+    t.clock.advance(2000)
+    expect(t.sent).toHaveLength(2)
+  })
+
+  it('gives up after ten resends', () => {
+    const t = setup()
+    t.udp.send(record(0, 0))
+    t.clock.advance(20_000)
+    expect(t.sent).toHaveLength(11)
+  })
+})
 
 describe('openStream', () => {
   const AREA_ID = '1a8d99cc-967b-44f2-9202-43f976c0fa6b'

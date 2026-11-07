@@ -319,10 +319,13 @@ describe('hue entertainment stream', () => {
     await plugin.stop()
   })
 
-  it('saves the area\'s lights as the bridge has them, and puts them back', async () => {
+  it('saves the area\'s lights as the bridge has them, puts them back, and switches them off', async () => {
     const { bridge, plugin } = await streaming()
     const streamer = getLightStreamer()!
     const saved = await streamer.saveLights(AREA)
+    bridge.puts.length = 0
+    await streamer.switchOff(AREA)
+    expect(bridge.puts).toEqual([{ url: '/clip/v2/resource/light/l-color', body: { on: { on: false } } }])
     bridge.puts.length = 0
     await streamer.restoreLights(saved)
     // only the area's light (l-color), as it was: on, brightness, white temperature

@@ -57,7 +57,7 @@ it('light sync routes: status per speaker, refusal where the room cannot, switch
     lightSyncSettings: memoryLightSyncSettings(),
     lightStreamer: () => {
       const notHere = async (): Promise<never> => { throw new Error('not in this test') }
-      return { areaFor: (lights) => (lights.length ? area : undefined), open: notHere, saveLights: notHere, restoreLights: notHere }
+      return { areaFor: (lights) => (lights.length ? area : undefined), open: notHere, saveLights: notHere, restoreLights: notHere, switchOff: notHere }
     },
   })
   const app = Fastify()
@@ -100,7 +100,7 @@ it('a browser playing the music itself: its room is chosen, its own reports plac
     lightSyncSettings: memoryLightSyncSettings(),
     lightStreamer: () => ({
       areaFor: (lights) => (lights.length ? area : undefined), open,
-      saveLights: async (areaId) => ({ areaId }), restoreLights: async () => {},
+      saveLights: async (areaId) => ({ areaId }), restoreLights: async () => {}, switchOff: async () => {},
     }),
   })
   const app = Fastify()
@@ -123,12 +123,10 @@ it('a browser playing the music itself: its room is chosen, its own reports plac
   await step(500)
   expect(open).toHaveBeenCalledWith('area-b')
   expect(vi.mocked(spawnImpl).mock.calls[0]![1]).toEqual(expect.arrayContaining(['-ss', 'https://cdn.example/a.m4a']))
-  // the tab goes silent while playing: after 25 s it no longer counts as playing, the lights go black
-  // but the stream stays (the bridge would refuse a new one for a while); switching off hands it back
-  await step(31_000)
-  expect((await app.inject({ method: 'GET', url: `/api/music/lightsync?deviceIds=${browser}` })).json().lightsync[0]).toMatchObject({ on: true, active: true })
+  // the tab goes silent while playing: after 25 s it no longer counts as playing, 5 s later the lights go back
+  await step(29_000)
   expect(streams[0]!.closed).toBe(false)
-  expect((await app.inject({ method: 'PUT', url: `/api/music/lightsync/${browser}`, payload: { on: false } })).json()).toMatchObject({ on: false, active: false })
+  await step(2000)
   expect(streams[0]!.closed).toBe(true)
   player.stop()
   await app.close()

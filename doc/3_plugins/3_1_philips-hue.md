@@ -405,3 +405,38 @@ Conséquences :
   `LightStreamer` : plus de fermeture pendant une pause. La **contradiction du 2026-11-07** sur l'arrêt du flux
   (éclat possible entre la fermeture et l'extinction) n'a donc plus d'objet ; reste ouvert, sans conséquence
   pour le code, ce que le pont fait des lampes à `stop` (l'état d'avant est rendu par Kasbah de toute façon).
+
+### Mise à jour 2026-11-07 (soir) — la poignée de main renvoyée, comme Hue Sync : le refus disparaît
+
+Question de l'utilisateur : l'appli officielle Hue Sync (installée sur le poste) n'a pas ces coupures,
+comment fait-elle ? Les chaînes de `HueSync.exe` et son `LICENSES.html` montrent `huestream`, le SDK
+Entertainment de Philips, sur **mbedTLS** — qui, comme le prévoit DTLS (RFC 6347), **renvoie** un vol de
+la poignée de main resté sans réponse ; `node-dtls-client` ne le fait jamais.
+
+Mesuré sur le vrai pont (scripts jetables qui tracent chaque datagramme, `message_seq` et numéro de
+record) : le « refus de 15 s à 3 min » de la section précédente est en fait **un seul message ignoré**.
+Après la fin d'un flux, le pont ne répond pas au `ClientHello` qui porte le cookie, mais répond au **même
+message renvoyé 500 ms plus tard** (`ServerHello` + `ServerHelloDone`, puis la poignée de main se
+termine) : 8 fois sur 8, 1,6 s après la fin de la session précédente. La section précédente reste juste
+pour un client qui ne renvoie rien ; sa conclusion (« quoi que fasse le client ») est **datée**.
+
+Piège rencontré : la réponse du pont reprend le numéro de record du message qu'elle reçoit. Un renvoi
+numéroté au-delà de 127 fait jeter cette réponse par la fenêtre anti-rejeu de `node-dtls-client` (64
+au-dessus de 63) : la poignée de main reste bloquée alors que le pont a répondu.
+
+`retransmitHandshake` (`entertainment.ts`, appelé à chaque tentative de `openStream`) remplace
+`udp.send` du socket : un vol **en clair** (epoch 0, les deux `ClientHello`) sans réponse est renvoyé
+toutes les 500 ms, 10 fois au plus, avec des numéros de record à partir de 16 (au-dessus de ceux que la
+bibliothèque utilise, dans sa fenêtre) ; une réponse arrête le minuteur (écouteur placé **avant** celui
+de la bibliothèque), `connected` / `error` / `close` l'arrêtent pour de bon. Les vols chiffrés ne sont pas
+renvoyés : le numéro de record entre dans ce que le record authentifie. Vérifié : le vrai `openStream`
+rouvre un flux 1 s après la fermeture du précédent, 4 fois sur 4, en 0,6 à 0,8 s ; tests
+`entertainment.test.ts` (renvoi jusqu'à la réponse, rien de chiffré ni après connexion, abandon après 10).
+
+Conséquence, choix de l'utilisateur : la synchro **referme de nouveau le flux après 5 s de pause** et
+éteint les lampes ([1_6](../1_architecture/1_6_lecteur-musique.md), même jour) ; `switchOff` revient dans
+le `LightStreamer`. Constat au passage : pendant un flux et après sa fermeture, CLIP v2 rapporte l'état
+**d'avant** le flux (allumage, luminosité inchangés), quel que soit ce que les lampes affichent — la
+« remise dans l'état d'avant » vue par la sonde du 2026-11-05 était lue par CLIP, ce qui peut expliquer la
+contradiction notée plus haut avec le constat visuel de l'utilisateur (lampes restées sur la dernière
+image). L'aspect réel à la fermeture reste à regarder sur place.
