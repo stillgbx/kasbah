@@ -43,6 +43,17 @@ export interface LightStreamer {
   areaFor(lightDeviceIds: readonly string[]): LightArea | undefined
   /** Opens a stream; the bridge streams one area at a time. */
   open(areaId: string): Promise<LightStream>
+  /** The area's lights as they are now (on, brightness, colour), to put back once the sync is over. */
+  saveLights(areaId: string): Promise<SavedLights>
+  /** Puts the lights back as saved, with a short transition. Call it once the stream is closed. */
+  restoreLights(saved: SavedLights): Promise<void>
+  /** Switches the area's lights off. Call it once the stream is closed. */
+  switchOff(areaId: string): Promise<void>
+}
+
+/** What `saveLights` keeps: only the streamer that made it can read the rest. */
+export interface SavedLights {
+  readonly areaId: string
 }
 
 let streamer: LightStreamer | null = null

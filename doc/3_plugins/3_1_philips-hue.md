@@ -1,7 +1,7 @@
 # Plugin Philips Hue
 
-> Dernière mise à jour : 2026-11-06
-> Sources : `apps/server/src/plugins/hue/{index,client,discovery,mapping,types,entertainment}.ts`, `apps/server/src/core/lightStreamBridge.ts`, `tools/hue-entertainment-probe.mts`, `apps/server/src/core/sse.ts`, tests `mapping.test.ts`, `plugin.test.ts`
+> Dernière mise à jour : 2026-11-07
+> Sources : `apps/server/src/plugins/hue/{index,client,discovery,mapping,types,entertainment}.ts`, `apps/server/src/core/lightStreamBridge.ts`, `tools/hue-entertainment-probe.mts`, `apps/server/src/core/sse.ts`, tests `mapping.test.ts`, `plugin.test.ts`, `entertainment.test.ts`
 
 ## API utilisée
 
@@ -337,3 +337,36 @@ préférence : aucune lampe hors de la pièce (une pièce qui avait déjà sa zo
 lampes de la pièce, le moins de lampes dehors, le plus de canaux. Tests `entertainment.test.ts` (zone
 moitié dedans prise, zone surtout dehors refusée, zone propre préférée, départage). La page
 `docs/plugins/hue.md` dit la même règle. **Pas encore vérifié** sur le vrai serveur.
+
+### Mise à jour 2026-11-07 — garder et rendre l'état des lampes de la zone
+
+Pour la synchro musique ([1_6 Lecteur musique commun](../1_architecture/1_6_lecteur-musique.md), mise à
+jour du même jour), le `LightStreamer` du plugin (`index.ts`) gagne trois gestes :
+- `saveLights(zone)` : **relit** `GET /clip/v2/resource/light` (l'index de `fetchAll` n'est pas tenu à
+  jour par les événements SSE) et garde, pour chaque lampe de la zone (`areaLights`), le PUT qui la
+  ramène (`restoreBody`, `entertainment.ts`) : allumage, luminosité, puis température (`mirek` si
+  `mirek_valid`) ou couleur `xy`, avec une transition de 1 s (`dynamics.duration`).
+- `restoreLights(instantané)` : ces PUT, par la file limitée `putLimited`.
+- `switchOff(zone)` : `on: false` sur chaque lampe de la zone.
+
+Limite : une lampe **éteinte** avant la synchro n'est que rééteinte. Le pont ne garantit pas qu'il
+prenne une couleur ou une luminosité pour une lampe éteinte, donc rien n'est envoyé d'autre ; elle peut
+se rallumer plus tard dans la dernière couleur du flux.
+
+Vérifié : `entertainment.test.ts` (`restoreBody` : couleur, blanc, lampe éteinte) et `plugin.test.ts`
+(seule la lampe de la zone, relue au pont, rendue telle quelle ; extinction).
+
+### Contradiction détectée 2026-11-07 — ce que fait le pont à l'arrêt du flux
+
+- **Version du 2026-11-05** (section « flux Entertainment » ci-dessus, sonde
+  `tools/hue-entertainment-probe.mts` sur le vrai pont) : après `stop`, le pont remet seul les lampes dans
+  leur état d'avant ; aucun instantané à prendre côté Kasbah.
+- **Constat de l'utilisateur du 2026-11-07**, avec la synchro musique : à l'arrêt de l'écoute, les lampes
+  semblent rester dans leur dernier état. Non tranché : avec l'ancien code, les lampes restaient 5 s au
+  plancher de l'effet avant la fermeture, ce qui peut aussi expliquer ce constat.
+
+Le code du même jour ne dépend pas de la réponse pour rendre l'état d'avant (s'il est déjà rendu, le
+PUT renvoie le même). Il en dépend pour l'extinction après une pause : si le pont rend l'état d'avant à
+`stop`, les lampes peuvent se rallumer un instant entre la fermeture du flux et `switchOff`. Publié sur
+décision de l'utilisateur sans essai préalable ; **à trancher sur la vraie maison** (arrêter l'écoute,
+regarder s'il y a un éclat avant l'extinction ; si oui, éteindre avant de fermer le flux).

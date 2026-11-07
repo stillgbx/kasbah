@@ -1,9 +1,9 @@
 import type { EventEmitter } from 'node:events'
 import type { Logger } from 'pino'
 import type { Clock } from '../../core/clock'
-import type { ChannelColor, LightArea, LightStream } from '../../core/lightStreamBridge'
+import type { ChannelColor, LightArea, LightStream, SavedLights } from '../../core/lightStreamBridge'
 import type { HueClient } from './client'
-import type { HueEntertainmentConfiguration } from './types'
+import type { HueEntertainmentConfiguration, HueLight, HuePutBody } from './types'
 
 // Hue Entertainment API: colour frames streamed over DTLS (UDP 2100) to an "entertainment
 // configuration" (an area set up in the Hue app). CLIP v2 only starts and stops the stream; the
@@ -63,6 +63,34 @@ export function toLightArea(cfg: HueEntertainmentConfiguration): LightArea {
     name: cfg.metadata?.name ?? cfg.id,
     channels: cfg.channels.map((c) => ({ id: c.channel_id, x: c.position.x, y: c.position.y, z: c.position.z })),
   }
+}
+
+/** Hue light rids of an area. */
+export function areaLights(cfg: HueEntertainmentConfiguration): string[] {
+  return cfg.light_services.filter((s) => s.rtype === 'light').map((s) => s.rid)
+}
+
+/** The lights of an area before a stream: the PUT that brings each one back. */
+export interface HueSavedLights extends SavedLights {
+  lights: { id: string; body: HuePutBody }[]
+}
+
+/** Transition when the lights get their state back after the music sync. */
+const RESTORE_TRANSITION_MS = 1000
+
+/**
+ * PUT that brings a light back to `saved`, its state before a stream. A light that was off only
+ * gets switched off: the bridge does not take a colour or a brightness for a light that is off.
+ */
+export function restoreBody(saved: HueLight): HuePutBody {
+  const dynamics = { duration: RESTORE_TRANSITION_MS }
+  if (saved.on?.on === false) return { on: { on: false }, dynamics }
+  const body: HuePutBody = { on: { on: true }, dynamics }
+  if (saved.dimming) body.dimming = { brightness: saved.dimming.brightness }
+  const ct = saved.color_temperature
+  if (ct?.mirek_valid && typeof ct.mirek === 'number') body.color_temperature = { mirek: ct.mirek }
+  else if (saved.color?.xy) body.color = { xy: saved.color.xy }
+  return body
 }
 
 /**

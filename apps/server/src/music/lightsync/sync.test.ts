@@ -17,16 +17,24 @@ function setup(saved: LightSyncSettingsByRoom = {}) {
   const clock = new ManualClock(1_000_000)
   const frames: ChannelColor[][] = []
   const streams: { closed: boolean; end: (reason: string) => void }[] = []
+  /** What happened to the lights, in order: `save`, `open`, `close`, `off`, `restore`. */
+  const lights: string[] = []
+  let lightsState = 'before'
   const streamer: LightStreamer = {
+    saveLights: vi.fn(async (areaId: string) => { lights.push('save'); return { areaId, state: lightsState } }),
+    restoreLights: vi.fn(async (saved) => { lights.push('restore'); lightsState = (saved as unknown as { state: string }).state }),
+    switchOff: vi.fn(async () => { lights.push('off'); lightsState = 'off' }),
     areaFor: (lights) => (lights.includes('hue:lamp-1') ? AREA : lights.includes('hue:lamp-3') ? AREA_B : undefined),
     open: vi.fn(async (id: string) => {
       let ended: (reason: string) => void = () => {}
       const s = { closed: false, end: (r: string) => ended(r) }
       streams.push(s)
+      lights.push('open')
+      lightsState = 'streamed'
       const stream: LightStream = {
         area: id === AREA_B.id ? AREA_B : AREA,
         send: (c) => { if (!s.closed) frames.push([...c]) },
-        close: async () => { s.closed = true },
+        close: async () => { if (!s.closed) lights.push('close'); s.closed = true },
         onEnded: (cb) => { ended = cb },
       }
       return stream
@@ -71,7 +79,7 @@ function setup(saved: LightSyncSettingsByRoom = {}) {
   const step = async (ms: number) => {
     for (let t = 0; t < ms; t += 10) { clock.advance(10); await flush() }
   }
-  return { settingsStore, coverColors, clock, sync, streamer, streams, frames, decode, decodes, sessions, states, play, step, noHue: () => { hue = null } }
+  return { lights, lightsState: () => lightsState, settingsStore, coverColors, clock, sync, streamer, streams, frames, decode, decodes, sessions, states, play, step, noHue: () => { hue = null } }
 }
 
 describe('LightSync', () => {
@@ -103,6 +111,9 @@ describe('LightSync', () => {
       await t.step(500)
       expect(t.streamer.open).toHaveBeenLastCalledWith('area-1')
       expect(t.sync.status(BROWSER)).toMatchObject({ on: true, active: true, area: 'Chambre 2' })
+      // the first room's lights go back before the second room's are saved
+      expect(t.lights).toEqual(['save', 'open', 'close', 'restore', 'save', 'open'])
+      expect(t.streamer.saveLights).toHaveBeenLastCalledWith('area-1')
     })
 
     it('is switched off when moved to a room it cannot sync', async () => {
@@ -113,6 +124,7 @@ describe('LightSync', () => {
       await t.step(500)
       expect(await t.sync.setRoom(BROWSER, 'attic')).toMatchObject({ on: false, active: false, reason: 'no_area' })
       expect(t.streams[0]!.closed).toBe(true)
+      expect(t.lights.slice(-2)).toEqual(['close', 'restore'])
     })
   })
 
@@ -215,6 +227,85 @@ describe('LightSync', () => {
     await t.sync.set('cast:speaker-1', false)
     expect(t.streams[1]!.closed).toBe(true)
     expect(t.sync.status('cast:speaker-1')).toMatchObject({ on: false, active: false })
+  })
+
+  it('fades the lights out when the sound stops, then switches them off', async () => {
+    const t = setup()
+    const peak = (frame: ChannelColor[]) => Math.max(...frame.map((c) => Math.max(c.r, c.g, c.b)))
+    t.play('cast:speaker-1', 'sid-1')
+    await t.sync.set('cast:speaker-1', true)
+    await t.step(500)
+    t.states.set('cast:speaker-1', { playback: 'stopped', updatedAt: t.clock.now() })
+    t.sessions.delete('cast:speaker-1')
+    await t.step(1500)
+    const midway = peak(t.frames.at(-1)!)
+    await t.step(1600)
+    expect(peak(t.frames.at(-1)!)).toBe(0)                 // black after 3 s
+    expect(midway).toBeGreaterThan(0)
+    expect(midway).toBeLessThan(0.6)
+    expect(t.lights).toEqual(['save', 'open'])
+    await t.step(2000)
+    expect(t.lights).toEqual(['save', 'open', 'close', 'off'])
+    expect(t.sync.status('cast:speaker-1')).toMatchObject({ on: true, active: false })
+  })
+
+  it('a resume lights them again at once, and the next stream keeps the state from before the first one', async () => {
+    const t = setup()
+    t.play('cast:speaker-1', 'sid-1')
+    await t.sync.set('cast:speaker-1', true)
+    const peak = (frame: ChannelColor[]) => Math.max(...frame.map((c) => Math.max(c.r, c.g, c.b)))
+    await t.step(500)
+    const playing = peak(t.frames.at(-1)!)
+    t.states.set('cast:speaker-1', { playback: 'paused', positionS: 0.5, updatedAt: t.clock.now() })
+    await t.step(2000)
+    expect(peak(t.frames.at(-1)!)).toBeLessThan(playing / 2)
+    t.states.set('cast:speaker-1', { playback: 'playing', positionS: 0.5, updatedAt: t.clock.now() })
+    await t.step(300)
+    expect(peak(t.frames.at(-1)!)).toBeGreaterThan(playing * 0.8)
+    t.states.set('cast:speaker-1', { playback: 'paused', positionS: 0.6, updatedAt: t.clock.now() })
+    await t.step(6000)                                     // off after the pause
+    t.states.set('cast:speaker-1', { playback: 'playing', positionS: 0.6, updatedAt: t.clock.now() })
+    await t.step(500)
+    expect(t.lights).toEqual(['save', 'open', 'close', 'off', 'open'])   // saved once
+    await t.sync.set('cast:speaker-1', false)
+    expect(t.lights.slice(-2)).toEqual(['close', 'restore'])
+    expect(t.lightsState()).toBe('before')
+  })
+
+  it('switching off puts the lights back as they were before the sync, even once they are off', async () => {
+    const t = setup()
+    t.play('cast:speaker-1', 'sid-1')
+    await t.sync.set('cast:speaker-1', true)
+    await t.step(500)
+    await t.sync.set('cast:speaker-1', false)
+    expect(t.lights).toEqual(['save', 'open', 'close', 'restore'])
+    expect(t.lightsState()).toBe('before')
+    // switched on and off without anything playing: the lights were never taken, nothing to put back
+    await t.sync.set('cast:speaker-1', true)
+    t.sessions.delete('cast:speaker-1')
+    await t.step(500)
+    await t.sync.set('cast:speaker-1', false)
+    expect(t.lights).toEqual(['save', 'open', 'close', 'restore'])
+  })
+
+  it('handing over to another speaker puts the first one\'s lights back', async () => {
+    const t = setup()
+    t.play('cast:speaker-1', 'sid-1')
+    t.play('cast:speaker-2', 'sid-2')
+    await t.sync.set('cast:speaker-1', true)
+    await t.step(300)
+    await t.sync.set('cast:speaker-2', true)
+    await t.step(300)
+    expect(t.lights).toEqual(['save', 'open', 'close', 'restore', 'save', 'open'])
+  })
+
+  it('the server stopping puts the lights back', async () => {
+    const t = setup()
+    t.play('cast:speaker-1', 'sid-1')
+    await t.sync.set('cast:speaker-1', true)
+    await t.step(300)
+    await t.sync.stop()
+    expect(t.lights).toEqual(['save', 'open', 'close', 'restore'])
   })
 })
 

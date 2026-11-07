@@ -1,6 +1,6 @@
 # Lecteur musique commun (`/api/music`)
 
-> Dernière mise à jour : 2026-11-06
+> Dernière mise à jour : 2026-11-07
 > Sources : `apps/server/src/music/{player,proxy,queue,sources,ytdlp}.ts`, tests `apps/server/src/music/{proxy,queue}.test.ts`, `apps/server/src/plugins/ytmusic/plugin.test.ts`, `apps/server/src/app.ts`, `apps/server/src/plugins/{ytmusic,mixcloud}/{index,resolve}.ts`, `apps/server/.env.example`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue`, arbre de travail non commité du 2026-09-23 (après 5c43833) ; `apps/server/src/music/lastPlayed.ts` et son test, `apps/web/src/stores/localPlayer.test.ts`, arbre de travail non commité du 2026-09-28 (après c6fe7c1) ; `apps/server/src/music/lightsync/{analyze,decode,effects/*,palette,settingsFile,sync}.ts`, `packages/shared/src/music/lightsync.ts` et leurs tests, `apps/server/src/core/lightStreamBridge.ts`, `apps/web/src/components/music/ListeningSessions.vue` (2026-11-05)
 
 ## Pourquoi un noyau, et pourquoi maintenant
@@ -494,3 +494,39 @@ Valeurs choisies sans les lampes sous les yeux : à juger en vrai par l'utilisat
 `effects.test.ts` (le test du passage de couleur laisse 2 s au fondu, plus lent) et `sync.test.ts`
 (défaut). Le choix de la zone d'une pièce s'est assoupli le même jour (voir
 [3_1 Philips Hue](../3_plugins/3_1_philips-hue.md)).
+
+### Mise à jour 2026-11-07 — fondu à l'arrêt du son, état des lampes rendu à la désactivation
+
+Demande de l'utilisateur : quand on arrête l'écoute, les lampes semblent rester dans leur dernier
+état ; synchro active et plus de son → un fondu jusqu'à l'extinction ; synchro désactivée → les lampes
+reprennent leur état d'avant la synchro.
+
+Avant : sans son, l'effet retombait à son plancher (12 à 25 % selon `energy`) pendant les 5 s de pause,
+puis le flux était rendu au pont ; Kasbah ne gardait ni ne rendait rien de l'état des lampes.
+
+Désormais (`lightsync/sync.ts`) :
+- **Plus de son** (pause, arrêt, fin de file : l'enceinte ne joue plus un de nos flux) : chaque trame
+  est multipliée par `fade`, qui descend linéairement de 1 à 0 en **3 s** (`FADE_OUT_MS`) ; la reprise
+  du son le remet à 1 aussitôt. À **5 s** (`PAUSE_CLOSE_MS`, inchangé), le flux se ferme puis
+  `streamer.switchOff(zone)` éteint les lampes de la zone. Un silence **dans** un morceau n'éteint rien :
+  l'effet garde son plancher.
+- **État d'avant** : juste avant le premier flux qui suit l'allumage de l'interrupteur,
+  `streamer.saveLights(zone)` relit les lampes ; l'instantané reste le même pour les flux suivants (une
+  pause qui a éteint les lampes ne le remplace pas). `restoreLights` le rend quand l'interrupteur
+  s'éteint, quand une autre enceinte prend la main, et à l'arrêt du serveur. Rien n'est rendu si aucun
+  flux ne s'est ouvert.
+- `settling` : l'extinction qui suit une pause se termine avant qu'un nouveau flux s'ouvre ou que
+  l'état d'avant soit rendu.
+- Pièce choisie de « Ce navigateur » (`setRoom`, mise à jour du 2026-11-06 ci-dessus) : changer de
+  pièce rend aussitôt l'état d'avant de l'ancienne zone ; celui de la nouvelle est pris à son premier
+  flux. `open` rend aussi un instantané d'une autre zone (enceinte déplacée dans la maison).
+
+Contrat `core/lightStreamBridge.ts` : `LightStreamer` gagne `saveLights`, `restoreLights` et
+`switchOff` ; `SavedLights` est opaque pour le lecteur. Implémentation Hue :
+[3_1 Philips Hue](../3_plugins/3_1_philips-hue.md), mise à jour du même jour.
+
+Vérifié : `sync.test.ts` (fondu au noir en 3 s puis fermeture et extinction, reprise immédiate,
+instantané pris une seule fois, état rendu à la désactivation, au passage à une autre enceinte et à
+l'arrêt du serveur, rien à rendre sans flux). **Pas vérifié sur la vraie maison** : que le flux rallume
+des lampes éteintes après une pause, et l'ordre des gestes à la fermeture (voir la contradiction notée
+dans 3_1).

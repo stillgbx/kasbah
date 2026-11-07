@@ -7,6 +7,20 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-07] update | Lumières en rythme : fondu à l'arrêt du son, état des lampes rendu à la désactivation
+
+**Déclencheur** : demande de l'utilisateur (à l'arrêt de l'écoute les lampes semblent rester dans leur dernier état ; synchro active sans son → fondu jusqu'à l'extinction ; synchro désactivée → état d'avant la synchro).
+
+**Pages modifiées** :
+- `1_architecture/1_6_lecteur-musique.md` - mise à jour 2026-11-07 : fondu de 3 s, extinction à la fermeture après 5 s de pause, instantané avant le premier flux rendu à la désactivation, au passage à une autre enceinte et à l'arrêt du serveur ; `LightStreamer` gagne `saveLights` / `restoreLights` / `switchOff`.
+- `3_plugins/3_1_philips-hue.md` - mise à jour 2026-11-07 : les trois gestes côté Hue (`restoreBody`, relecture des lampes au pont), limite d'une lampe éteinte ; section « Contradiction détectée ».
+
+**Contradictions** : la section du 2026-11-05 de 3_1 dit que le pont rend seul l'état d'avant à `stop` (sonde) ; le constat de l'utilisateur dit l'inverse. Les deux versions sont gardées, à trancher sur la vraie maison (publié sans essai, sur décision de l'utilisateur).
+
+**Index** : catalogues 1_architecture et 3_plugins (1 ligne chacun), index.md régénéré.
+
+**Non vérifié** : la vraie lampe (rallumage par le flux après une extinction, éclat possible entre la fermeture et l'extinction).
+
 ## [2026-11-06] update | Lumières en rythme : Vague par défaut, ambiance adoucie, zones qui débordent acceptées
 
 **Déclencheur** : retours de l'utilisateur sur le panneau : Vague en premier choix, ambiance trop agressive aux deux bouts, des pièces absentes du choix, barre de défilement alors que tout est affiché.

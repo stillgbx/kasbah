@@ -9,7 +9,7 @@ import { TlsPin, createPinFile, type PinFile } from '../../core/tls-pin'
 import { describeError, sendError } from '../../http/errors'
 import { HueClient } from './client'
 import { findBridge } from './discovery'
-import { defaultDtlsConnect, openStream, pickArea, toLightArea, type DtlsConnect, type HueLightStream } from './entertainment'
+import { areaLights, defaultDtlsConnect, openStream, pickArea, restoreBody, toLightArea, type DtlsConnect, type HueLightStream, type HueSavedLights } from './entertainment'
 import { roomKey } from '@kasbah/shared'
 import {
   connectivityToAvailability, indexResources, sceneStatusToActive, sceneTargetLights, toCreateSceneBody, toDescriptor,
@@ -297,6 +297,26 @@ export function createHuePlugin(deps: HuePluginDeps = {}): DevicePlugin {
       stream.onEnded(release)
       const close = stream.close
       return { ...stream, close: async () => { release(); await close() } }
+    },
+    async saveLights(areaId) {
+      const cfg = areas.find((a) => a.id === areaId)
+      if (!client || !cfg) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Hue entertainment area ${areaId}`)
+      const rids = new Set(areaLights(cfg))
+      // read now, not from the last resync: the index is not kept up to date by the events
+      const lights = await client.getResources('light', hueLightSchema, ctx!.signal)
+      const saved: HueSavedLights = { areaId, lights: lights.filter((l) => rids.has(l.id)).map((l) => ({ id: l.id, body: restoreBody(l) })) }
+      return saved
+    },
+    async restoreLights(saved) {
+      const c = client
+      if (!c) return
+      await Promise.all((saved as HueSavedLights).lights.map(({ id, body }) => c.putLimited('light', id, body)))
+    },
+    async switchOff(areaId) {
+      const c = client
+      const cfg = areas.find((a) => a.id === areaId)
+      if (!c || !cfg) return
+      await Promise.all(areaLights(cfg).map((id) => c.putLimited('light', id, { on: { on: false } })))
     },
   }
 

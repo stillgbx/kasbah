@@ -1,7 +1,7 @@
 import type { Logger } from 'pino'
 import { DEFAULT_LIGHTSYNC_SETTINGS, lightSyncSettingsSchema, type LightSyncSettings, type LightSyncSettingsPatch } from '@kasbah/shared'
 import type { Clock } from '../../core/clock'
-import type { LightStream, LightStreamer } from '../../core/lightStreamBridge'
+import type { ChannelColor, LightStream, LightStreamer, SavedLights } from '../../core/lightStreamBridge'
 import { HOP_S } from './analyze'
 import type { Decoding } from './decode'
 import { createEffect, type Effect, type EffectParams } from './effects'
@@ -11,8 +11,10 @@ import type { LightSyncSettingsByRoom, LightSyncSettingsStore } from './settings
 // Lights of a room in rhythm with what Kasbah plays on a speaker of that room. Switched on per
 // speaker; a Hue bridge streams one area at a time, so one speaker is synced at a time (switching
 // on another one hands the stream over). While the switch is on, the stream opens when the speaker
-// plays one of our tracks and closes after a pause of a few seconds; the switch itself stays on
-// for the next track, until it is switched off or the server restarts.
+// plays one of our tracks; when the sound stops the lights fade out, and after a pause of a few
+// seconds the stream closes and the lights are switched off. The switch itself stays on for the
+// next track, until it is switched off or the server restarts: the lights then get back the state
+// they had before the first stream.
 //
 // Settings (effect, colours, energy, brightness) are per ROOM and persisted; a change applies to the
 // running stream without a jolt (same effect reconfigured, or a new effect if its kind changed).
@@ -27,8 +29,10 @@ import type { LightSyncSettingsByRoom, LightSyncSettingsStore } from './settings
 const TICK_MS = 20
 /** Idle check while the switch is on but nothing plays: cheap, and quick enough to start. */
 const IDLE_MS = 250
-/** Pause (or stop) after which the stream is handed back. */
+/** Pause (or stop) after which the stream is handed back and the lights switched off. */
 const PAUSE_CLOSE_MS = 5000
+/** No more sound: the lights fade to black over this time (within the pause above). */
+const FADE_OUT_MS = 3000
 /** The lights answer ~100 ms after the frame (bridge then Zigbee): read the features that much ahead. */
 const LEAD_S = 0.1
 /** Report ↔ local clock gap beyond which it is a jump, not jitter. */
@@ -110,6 +114,8 @@ interface Active {
   /** Local clock of the track position: `pos` at `at`. Null = to be taken from the next report. */
   base: { pos: number; at: number } | null
   pausedSince: number | null
+  /** 1 while the sound plays, down to 0 when it stops (fade out). */
+  fade: number
   lastTick: number
   /** Decoding restarts for the current track since it last worked, and when the next one may happen. */
   decodeFailures: number
@@ -130,6 +136,10 @@ export class LightSync {
   private streamTrouble = false
   private streamError: string | undefined
   private timer: unknown = null
+  /** The lights before the first stream since the switch went on, to put back when it goes off. */
+  private saved: { deviceId: string; streamer: LightStreamer; lights: SavedLights } | null = null
+  /** Closing the stream and switching the lights off after a pause: done before anything else touches them. */
+  private settling: Promise<void> = Promise.resolve()
   private settings: LightSyncSettingsByRoom = {}
   /** Cover colours of the playing track, by cover URL, once known. */
   private readonly covers = new Map<string, string[]>()
@@ -179,6 +189,7 @@ export class LightSync {
     if (roomId === null) this.chosenRooms.delete(deviceId)
     else this.chosenRooms.set(deviceId, roomId)
     if (this.active?.deviceId === deviceId && before !== roomId) await this.teardown()
+    if (this.saved?.deviceId === deviceId && before !== roomId) await this.restore()
     if (this.enabled.has(deviceId)) {
       if (!this.status(deviceId).available) this.enabled.delete(deviceId)
       else this.schedule(0)
@@ -231,6 +242,7 @@ export class LightSync {
       if (!s.available) return s
       for (const other of [...this.enabled]) if (other !== deviceId) this.enabled.delete(other)
       if (this.active && this.active.deviceId !== deviceId) await this.teardown()
+      if (this.saved && this.saved.deviceId !== deviceId) await this.restore()
       this.enabled.add(deviceId)
       // switching on again is also how the user says "try again now"
       this.retryAt = 0
@@ -239,6 +251,7 @@ export class LightSync {
     } else {
       this.enabled.delete(deviceId)
       if (this.active?.deviceId === deviceId) await this.teardown()
+      if (this.saved?.deviceId === deviceId) await this.restore()
     }
     return this.status(deviceId)
   }
@@ -264,6 +277,7 @@ export class LightSync {
     if (this.timer !== null) this.deps.clock.clearTimeout(this.timer)
     this.timer = null
     await this.teardown()
+    await this.restore()
   }
 
   /** The room's current settings onto the running effect: same kind reconfigured, another kind replaced. */
@@ -317,15 +331,18 @@ export class LightSync {
       a.base = null
       a.pausedSince ??= now
       if (now - a.pausedSince >= PAUSE_CLOSE_MS) {
-        void this.teardown()
+        const areaId = a.stream.area.id
+        this.settling = this.teardown().then(() => this.switchOff(deviceId, areaId))
         this.schedule(IDLE_MS)
         return
       }
-      a.stream.send(a.effect.next(undefined, dtS))
+      a.fade = Math.max(0, a.fade - (dtS * 1000) / FADE_OUT_MS)
+      this.send(a, a.effect.next(undefined, dtS))
       this.schedule(TICK_MS)
       return
     }
     a.pausedSince = null
+    a.fade = 1
     const pos = this.position(a, st!, now)
     if (session!.sid !== a.sid) {
       a.decodeFailures = 0
@@ -351,8 +368,13 @@ export class LightSync {
         }
       } else if (f.at(pos + LEAD_S)) { a.behind = false; a.decodeFailures = 0 }   // following again
     }
-    a.stream.send(a.effect.next(a.decoding?.features.at(pos + LEAD_S), dtS))
+    this.send(a, a.effect.next(a.decoding?.features.at(pos + LEAD_S), dtS))
     this.schedule(TICK_MS)
+  }
+
+  private send(a: Active, colors: readonly ChannelColor[]): void {
+    const f = a.fade
+    a.stream.send(f >= 1 ? colors : colors.map((c) => ({ id: c.id, r: c.r * f, g: c.g * f, b: c.b * f })))
   }
 
   /** The speaker's position now, on the local clock, reset only on a jump. */
@@ -382,6 +404,14 @@ export class LightSync {
     this.opening = true
     try {
       await this.ready
+      await this.settling
+      // another room chosen for this player since: its old area's lights go back first
+      if (this.saved && this.saved.lights.areaId !== area.id) await this.restore()
+      if (this.saved?.deviceId !== deviceId) {
+        const lights = await streamer.saveLights(area.id)
+        if (!this.enabled.has(deviceId)) return
+        this.saved = { deviceId, streamer, lights }
+      }
       const stream = await streamer.open(area.id)
       // switched off (or handed to another speaker) while the handshake was running
       if (!this.enabled.has(deviceId) || this.active) { await stream.close(); return }
@@ -391,7 +421,7 @@ export class LightSync {
       const a: Active = {
         deviceId, roomId: room.id, stream,
         effect: createEffect(settings.effect, stream.area.channels, this.paramsFor(settings, palette)), effectKind: settings.effect, palette,
-        sid: null, decoding: null, base: null, pausedSince: null, lastTick: now, decodeFailures: 0, decodeRetryAt: 0, behind: false,
+        sid: null, decoding: null, base: null, pausedSince: null, fade: 1, lastTick: now, decodeFailures: 0, decodeRetryAt: 0, behind: false,
       }
       this.active = a
       this.streamTrouble = false
@@ -424,5 +454,24 @@ export class LightSync {
     a.decoding?.stop()
     await a.stream.close().catch((err) => this.deps.logger.debug({ err }, 'lightsync: closing the stream failed'))
     this.deps.logger.info({ deviceId: a.deviceId }, 'lightsync: stopped')
+  }
+
+  /** After a pause: the lights faded to black, the stream is closed; they are switched off for real. */
+  private async switchOff(deviceId: string, areaId: string): Promise<void> {
+    await this.deps.streamer()?.switchOff(areaId).catch((err) => this.deps.logger.warn({ err, deviceId }, 'lightsync: switching the lights off failed'))
+  }
+
+  /** The switch went off: the lights as they were before the first stream. */
+  private async restore(): Promise<void> {
+    const s = this.saved
+    if (!s) return
+    this.saved = null
+    await this.settling
+    try {
+      await s.streamer.restoreLights(s.lights)
+      this.deps.logger.info({ deviceId: s.deviceId }, 'lightsync: lights put back')
+    } catch (err) {
+      this.deps.logger.warn({ err, deviceId: s.deviceId }, 'lightsync: putting the lights back failed')
+    }
   }
 }

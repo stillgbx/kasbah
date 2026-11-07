@@ -55,7 +55,10 @@ it('light sync routes: status per speaker, refusal where the room cannot, switch
     roomLights: (id) => (id === 'cast:speaker-1' ? ['hue:lamp-1'] : null),
     room: (id) => (id === 'cast:speaker-1' ? { id: 'room-2', name: 'Chambre 2' } : null),
     lightSyncSettings: memoryLightSyncSettings(),
-    lightStreamer: () => ({ areaFor: (lights) => (lights.length ? area : undefined), open: async () => { throw new Error('not in this test') } }),
+    lightStreamer: () => {
+      const notHere = async (): Promise<never> => { throw new Error('not in this test') }
+      return { areaFor: (lights) => (lights.length ? area : undefined), open: notHere, saveLights: notHere, restoreLights: notHere, switchOff: notHere }
+    },
   })
   const app = Fastify()
   await app.register(async (sub) => player.registerRoutes(sub), { prefix: '/api/music' })
@@ -95,7 +98,10 @@ it('a browser playing the music itself: its room is chosen, its own reports plac
     rooms: () => [{ id: 'office', name: 'Bureau' }, { id: 'attic', name: 'Grenier' }],
     lightsOfRoom: (id) => (id === 'office' ? ['hue:lamp-1'] : []),
     lightSyncSettings: memoryLightSyncSettings(),
-    lightStreamer: () => ({ areaFor: (lights) => (lights.length ? area : undefined), open }),
+    lightStreamer: () => ({
+      areaFor: (lights) => (lights.length ? area : undefined), open,
+      saveLights: async (areaId) => ({ areaId }), restoreLights: async () => {}, switchOff: async () => {},
+    }),
   })
   const app = Fastify()
   await app.register(async (sub) => player.registerRoutes(sub), { prefix: '/api/music' })

@@ -3,10 +3,23 @@ import { describe, expect, it, vi } from 'vitest'
 import { ManualClock } from '@kasbah/mock-sim'
 import pino from 'pino'
 import type { HueClient } from './client'
-import { encodeFrame, MAX_CHANNELS, openStream, pickArea, toLightArea, type DtlsSocket } from './entertainment'
+import { encodeFrame, MAX_CHANNELS, openStream, pickArea, restoreBody, toLightArea, type DtlsSocket } from './entertainment'
 import { hueEntertainmentConfigurationSchema } from './types'
 
 const AREA = '1a8d99cc-967b-44f2-9202-43f976c0fa6b'
+
+describe('restoreBody', () => {
+  const dynamics = { duration: 1000 }
+  it('brings back a colour light in its colour, a white one in its temperature', () => {
+    expect(restoreBody({ id: 'a', on: { on: true }, dimming: { brightness: 40 }, color_temperature: { mirek: null, mirek_valid: false }, color: { xy: { x: 0.2, y: 0.3 } } }))
+      .toEqual({ on: { on: true }, dimming: { brightness: 40 }, color: { xy: { x: 0.2, y: 0.3 } }, dynamics })
+    expect(restoreBody({ id: 'b', on: { on: true }, dimming: { brightness: 80 }, color_temperature: { mirek: 300, mirek_valid: true }, color: { xy: { x: 0.45, y: 0.41 } } }))
+      .toEqual({ on: { on: true }, dimming: { brightness: 80 }, color_temperature: { mirek: 300 }, dynamics })
+  })
+  it('only switches off a light that was off', () => {
+    expect(restoreBody({ id: 'c', on: { on: false }, dimming: { brightness: 80 }, color: { xy: { x: 0.2, y: 0.3 } } })).toEqual({ on: { on: false }, dynamics })
+  })
+})
 
 describe('encodeFrame', () => {
   it('writes the HueStream v2 header, the area id and 7 bytes per channel', () => {
