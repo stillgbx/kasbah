@@ -7,6 +7,59 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-07] update | Hue : l'état d'avant rendu en passant par « éteint », trame noire avant la fermeture
+
+**Déclencheur** : constat de l'utilisateur — au changement de pièce, l'ancienne zone ne reprend pas son état d'avant.
+
+**Pages modifiées** :
+- `3_plugins/3_1_philips-hue.md` - mise à jour 2026-11-07 (fin d'après-midi) : remise ignorée quand elle vaut l'état que CLIP croit en place ; `on: false` d'abord pour une lampe allumée, trame noire avant la fermeture.
+
+**Index** : catalogue déjà à la date du jour, index.md régénéré.
+
+**Non vérifié** : la vraie maison (changement de pièce, désactivation, lampe éteinte avant la synchro).
+
+## [2026-11-07] update | Hue : la poignée de main DTLS renvoyée comme Hue Sync, le flux se referme de nouveau en pause
+
+**Déclencheur** : question de l'utilisateur — l'appli officielle Hue Sync n'a pas de coupure, comment fait-elle ?
+
+**Pages modifiées** :
+- `3_plugins/3_1_philips-hue.md` - mise à jour 2026-11-07 (soir) : Hue Sync = `huestream` sur mbedTLS, qui renvoie les vols ; le pont ignore le premier `ClientHello` à cookie après un flux et répond au renvoi ; `retransmitHandshake` ; piège de la fenêtre anti-rejeu ; CLIP rapporte l'état d'avant pendant et après un flux.
+- `1_architecture/1_6_lecteur-musique.md` - mise à jour 2026-11-07 (soir) : fermeture après 5 s de pause et extinction de retour (choix de l'utilisateur) ; la section « flux reste ouvert » datée.
+
+**Contradictions** : la conclusion « quoi que fasse le client » de la section 2026-11-07 (suite) de 3_1 est datée ; la contradiction du 2026-11-07 sur l'arrêt du flux reçoit une explication possible (sonde lue par CLIP), à confirmer sur place.
+
+**Index** : catalogues déjà à la date du jour, index.md régénéré.
+
+**Non vérifié** : la synchro complète sur la vraie maison (aspect des lampes à la fermeture, rallumage à la reprise).
+
+## [2026-11-07] update | Lumières en rythme : le pont refuse un nouveau flux après le précédent, le flux reste ouvert
+
+**Déclencheur** : constat de l'utilisateur après la mise en service (« on a toujours les pbs de connexion »), DTLS en échec pendant plusieurs minutes ; cause recherchée sur le vrai pont.
+
+**Pages modifiées** :
+- `3_plugins/3_1_philips-hue.md` - mise à jour 2026-11-07 (suite) : trace d'une poignée de main saine, refus de 15 s à 3 min après n'importe quelle fin de flux (pistes écartées : `close_notify`, trames, rythme des essais, même port, zone laissée active), message d'échec explicite, `switchOff` retiré.
+- `1_architecture/1_6_lecteur-musique.md` - mise à jour 2026-11-07 (suite) : le flux ne se ferme plus pendant une pause (choix de l'utilisateur), noir tenu par le keepalive ; puces de la section précédente datées.
+
+**Contradictions** : la mise à jour 2026-11-06 (soir) de 3_1 (« fermer puis rouvrir aussitôt marche ») n'est plus vraie ; notée, l'ancienne gardée. La contradiction du 2026-11-07 sur l'arrêt du flux n'a plus d'effet sur le code.
+
+**Index** : catalogues déjà à la date du jour, index.md régénéré.
+
+**Non vérifié** : la vraie maison avec ce code.
+
+## [2026-11-07] update | Lumières en rythme : fondu à l'arrêt du son, état des lampes rendu à la désactivation
+
+**Déclencheur** : demande de l'utilisateur (à l'arrêt de l'écoute les lampes semblent rester dans leur dernier état ; synchro active sans son → fondu jusqu'à l'extinction ; synchro désactivée → état d'avant la synchro).
+
+**Pages modifiées** :
+- `1_architecture/1_6_lecteur-musique.md` - mise à jour 2026-11-07 : fondu de 3 s, extinction à la fermeture après 5 s de pause, instantané avant le premier flux rendu à la désactivation, au passage à une autre enceinte et à l'arrêt du serveur ; `LightStreamer` gagne `saveLights` / `restoreLights` / `switchOff`.
+- `3_plugins/3_1_philips-hue.md` - mise à jour 2026-11-07 : les trois gestes côté Hue (`restoreBody`, relecture des lampes au pont), limite d'une lampe éteinte ; section « Contradiction détectée ».
+
+**Contradictions** : la section du 2026-11-05 de 3_1 dit que le pont rend seul l'état d'avant à `stop` (sonde) ; le constat de l'utilisateur dit l'inverse. Les deux versions sont gardées, à trancher sur la vraie maison (publié sans essai, sur décision de l'utilisateur).
+
+**Index** : catalogues 1_architecture et 3_plugins (1 ligne chacun), index.md régénéré.
+
+**Non vérifié** : la vraie lampe (rallumage par le flux après une extinction, éclat possible entre la fermeture et l'extinction).
+
 ## [2026-11-06] update | Lumières en rythme : Vague par défaut, ambiance adoucie, zones qui débordent acceptées
 
 **Déclencheur** : retours de l'utilisateur sur le panneau : Vague en premier choix, ambiance trop agressive aux deux bouts, des pièces absentes du choix, barre de défilement alors que tout est affiché.

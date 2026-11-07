@@ -3,10 +3,23 @@ import { describe, expect, it, vi } from 'vitest'
 import { ManualClock } from '@kasbah/mock-sim'
 import pino from 'pino'
 import type { HueClient } from './client'
-import { encodeFrame, MAX_CHANNELS, openStream, pickArea, toLightArea, type DtlsSocket } from './entertainment'
+import { encodeFrame, MAX_CHANNELS, openStream, pickArea, restoreBody, retransmitHandshake, toLightArea, type DtlsSocket } from './entertainment'
 import { hueEntertainmentConfigurationSchema } from './types'
 
 const AREA = '1a8d99cc-967b-44f2-9202-43f976c0fa6b'
+
+describe('restoreBody', () => {
+  const dynamics = { duration: 1000 }
+  it('brings back a colour light in its colour, a white one in its temperature', () => {
+    expect(restoreBody({ id: 'a', on: { on: true }, dimming: { brightness: 40 }, color_temperature: { mirek: null, mirek_valid: false }, color: { xy: { x: 0.2, y: 0.3 } } }))
+      .toEqual({ on: { on: true }, dimming: { brightness: 40 }, color: { xy: { x: 0.2, y: 0.3 } }, dynamics })
+    expect(restoreBody({ id: 'b', on: { on: true }, dimming: { brightness: 80 }, color_temperature: { mirek: 300, mirek_valid: true }, color: { xy: { x: 0.45, y: 0.41 } } }))
+      .toEqual({ on: { on: true }, dimming: { brightness: 80 }, color_temperature: { mirek: 300 }, dynamics })
+  })
+  it('only switches off a light that was off', () => {
+    expect(restoreBody({ id: 'c', on: { on: false }, dimming: { brightness: 80 }, color: { xy: { x: 0.2, y: 0.3 } } })).toEqual({ on: { on: false }, dynamics })
+  })
+})
 
 describe('encodeFrame', () => {
   it('writes the HueStream v2 header, the area id and 7 bytes per channel', () => {
@@ -74,6 +87,60 @@ class FakeSocket extends EventEmitter implements DtlsSocket {
   send(data: Buffer) { this.sent.push(data) }
   close() { this.closed = true }
 }
+
+describe('retransmitHandshake', () => {
+  /** A DTLS record: content type, epoch, 48-bit sequence number, then `body`. */
+  const record = (epoch: number, seq: number, body = Buffer.from([1, 0, 0, 0])) => {
+    const r = Buffer.alloc(13 + body.length)
+    r[0] = 22; r[1] = 0xfe; r[2] = 0xfd
+    r.writeUInt16BE(epoch, 3)
+    r.writeUIntBE(seq, 5, 6)
+    r.writeUInt16BE(body.length, 11)
+    body.copy(r, 13)
+    return r
+  }
+  function setup() {
+    const clock = new ManualClock(0)
+    const sent: Buffer[] = []
+    const udp = Object.assign(new EventEmitter(), { send: (msg: Buffer) => { sent.push(Buffer.from(msg)) } })
+    const socket = Object.assign(new FakeSocket(), { udp })
+    retransmitHandshake(socket, clock)
+    return { clock, sent, udp, socket }
+  }
+  const seqs = (bufs: Buffer[]) => bufs.map((b) => b.readUIntBE(5, 6))
+
+  it('sends an unanswered ClientHello again, with new record numbers, until the bridge answers', () => {
+    const t = setup()
+    t.udp.send(record(0, 1))                 // the ClientHello with the cookie
+    t.clock.advance(499)
+    expect(t.sent).toHaveLength(1)
+    t.clock.advance(1)
+    t.clock.advance(500)
+    expect(seqs(t.sent)).toEqual([1, 16, 17])
+    expect(t.sent[1]!.subarray(13)).toEqual(t.sent[0]!.subarray(13))   // the same message
+    t.udp.emit('message', Buffer.alloc(1))   // ServerHello: nothing more
+    t.clock.advance(5000)
+    expect(t.sent).toHaveLength(3)
+  })
+
+  it('never resends an encrypted flight, nor anything once connected', () => {
+    const t = setup()
+    t.udp.send(Buffer.concat([record(0, 2), record(1, 0)]))   // ClientKeyExchange … Finished
+    t.clock.advance(2000)
+    expect(t.sent).toHaveLength(1)
+    t.udp.send(record(0, 0))
+    t.socket.emit('connected')
+    t.clock.advance(2000)
+    expect(t.sent).toHaveLength(2)
+  })
+
+  it('gives up after ten resends', () => {
+    const t = setup()
+    t.udp.send(record(0, 0))
+    t.clock.advance(20_000)
+    expect(t.sent).toHaveLength(11)
+  })
+})
 
 describe('openStream', () => {
   const AREA_ID = '1a8d99cc-967b-44f2-9202-43f976c0fa6b'
@@ -177,6 +244,27 @@ describe('openStream', () => {
     expect(sockets.every((sk) => sk.closed)).toBe(true)
     // between two tries, the area is stopped and started again (a half-done handshake keeps the bridge deaf)
     expect(entertainmentAction.mock.calls.map((c) => (c as unknown[])[1])).toEqual(['start', 'stop', 'start', 'stop', 'start', 'stop'])
+  })
+
+  it('says the bridge is refusing a new stream when it answers each try once, then nothing', async () => {
+    const clock = new ManualClock(0)
+    const sockets: (FakeSocket & { udp: EventEmitter })[] = []
+    const opening = openStream({
+      client: { entertainmentAction: vi.fn(async () => {}) } as unknown as HueClient,
+      area: toLightArea(area(AREA_ID, ['l1'])),
+      host: 'h', appKey: 'k', clientKey: '00'.repeat(16),
+      connect: () => {
+        const sk = Object.assign(new FakeSocket(), { udp: new EventEmitter() })
+        sockets.push(sk)
+        setTimeout(() => sk.udp.emit('message', Buffer.alloc(1)), 0)      // HelloVerifyRequest, then silence
+        return sk
+      },
+      clock, logger: pino({ level: 'silent' }),
+    })
+    const failure = expect(opening).rejects.toThrow(/3 packet\(s\).*answered the first message of each try only/)
+    for (let t = 0; t < 7000; t += 100) { clock.advance(100); await new Promise((r) => setTimeout(r, 0)) }
+    await failure
+    expect(sockets).toHaveLength(3)
   })
 
   it('keeps the area on and connects on a second try', async () => {

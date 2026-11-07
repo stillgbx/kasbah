@@ -1,7 +1,7 @@
 # Plugin Philips Hue
 
-> Dernière mise à jour : 2026-11-06
-> Sources : `apps/server/src/plugins/hue/{index,client,discovery,mapping,types,entertainment}.ts`, `apps/server/src/core/lightStreamBridge.ts`, `tools/hue-entertainment-probe.mts`, `apps/server/src/core/sse.ts`, tests `mapping.test.ts`, `plugin.test.ts`
+> Dernière mise à jour : 2026-11-07
+> Sources : `apps/server/src/plugins/hue/{index,client,discovery,mapping,types,entertainment}.ts`, `apps/server/src/core/lightStreamBridge.ts`, `tools/hue-entertainment-probe.mts`, `apps/server/src/core/sse.ts`, tests `mapping.test.ts`, `plugin.test.ts`, `entertainment.test.ts`
 
 ## API utilisée
 
@@ -337,3 +337,127 @@ préférence : aucune lampe hors de la pièce (une pièce qui avait déjà sa zo
 lampes de la pièce, le moins de lampes dehors, le plus de canaux. Tests `entertainment.test.ts` (zone
 moitié dedans prise, zone surtout dehors refusée, zone propre préférée, départage). La page
 `docs/plugins/hue.md` dit la même règle. **Pas encore vérifié** sur le vrai serveur.
+
+### Mise à jour 2026-11-07 — garder et rendre l'état des lampes de la zone
+
+Pour la synchro musique ([1_6 Lecteur musique commun](../1_architecture/1_6_lecteur-musique.md), mise à
+jour du même jour), le `LightStreamer` du plugin (`index.ts`) gagne trois gestes :
+- `saveLights(zone)` : **relit** `GET /clip/v2/resource/light` (l'index de `fetchAll` n'est pas tenu à
+  jour par les événements SSE) et garde, pour chaque lampe de la zone (`areaLights`), le PUT qui la
+  ramène (`restoreBody`, `entertainment.ts`) : allumage, luminosité, puis température (`mirek` si
+  `mirek_valid`) ou couleur `xy`, avec une transition de 1 s (`dynamics.duration`).
+- `restoreLights(instantané)` : ces PUT, par la file limitée `putLimited`.
+- `switchOff(zone)` : `on: false` sur chaque lampe de la zone.
+
+Limite : une lampe **éteinte** avant la synchro n'est que rééteinte. Le pont ne garantit pas qu'il
+prenne une couleur ou une luminosité pour une lampe éteinte, donc rien n'est envoyé d'autre ; elle peut
+se rallumer plus tard dans la dernière couleur du flux.
+
+Vérifié : `entertainment.test.ts` (`restoreBody` : couleur, blanc, lampe éteinte) et `plugin.test.ts`
+(seule la lampe de la zone, relue au pont, rendue telle quelle ; extinction).
+
+### Contradiction détectée 2026-11-07 — ce que fait le pont à l'arrêt du flux
+
+- **Version du 2026-11-05** (section « flux Entertainment » ci-dessus, sonde
+  `tools/hue-entertainment-probe.mts` sur le vrai pont) : après `stop`, le pont remet seul les lampes dans
+  leur état d'avant ; aucun instantané à prendre côté Kasbah.
+- **Constat de l'utilisateur du 2026-11-07**, avec la synchro musique : à l'arrêt de l'écoute, les lampes
+  semblent rester dans leur dernier état. Non tranché : avec l'ancien code, les lampes restaient 5 s au
+  plancher de l'effet avant la fermeture, ce qui peut aussi expliquer ce constat.
+
+Le code du même jour ne dépend pas de la réponse pour rendre l'état d'avant (s'il est déjà rendu, le
+PUT renvoie le même). Il en dépend pour l'extinction après une pause : si le pont rend l'état d'avant à
+`stop`, les lampes peuvent se rallumer un instant entre la fermeture du flux et `switchOff`. Publié sur
+décision de l'utilisateur sans essai préalable ; **à trancher sur la vraie maison** (arrêter l'écoute,
+regarder s'il y a un éclat avant l'extinction ; si oui, éteindre avant de fermer le flux).
+
+### Mise à jour 2026-11-07 (suite) — le pont refuse un nouveau flux pendant 15 s à 3 min après le précédent
+
+Constat sur la vraie maison, juste après la mise en service du code ci-dessus : la synchro de « Ce
+navigateur » ne s'ouvre plus, `The DTLS handshake timed out (3 attempt(s), 3 packet(s) from the bridge,
+timers up to 13 ms late)` toutes les 15 s pendant plusieurs minutes. Le même échec figure dans les journaux
+du matin **avec la version d'avant** : flux fermé 5 s après un changement de morceau lent, refus pendant
+~100 s, puis ouverture d'elle-même.
+
+Reproduit le jour même sur le vrai pont, avec les clés du serveur, par scripts jetables qui tracent chaque
+datagramme (zone démarrée et arrêtée par CLIP à chaque essai) :
+- poignée de main saine : `ClientHello` → `HelloVerifyRequest` → `ClientHello` avec cookie → `ServerHello` +
+  `ServerHelloDone` → `ClientKeyExchange` + `ChangeCipherSpec` + `Finished` → `ChangeCipherSpec` + `Finished`,
+  3 datagrammes reçus, ~25 ms ;
+- **après la fin de n'importe quelle session**, le pont répond au premier `ClientHello` (`HelloVerifyRequest`)
+  puis plus rien au second : d'où « 1 paquet par tentative ». Durée mesurée de 15 s à plus de 3 min, quelle
+  que soit la fin de la session précédente (`close_notify` puis `stop`, ou coupée sans un mot), avec ou
+  sans trames envoyées, en réessayant toutes les 5 s ou en attendant 40 s avant le premier essai, depuis un
+  port UDP local neuf **ou le même** que la session précédente ;
+- laisser la zone active entre deux sessions (pas de `stop`) est pire : le pont ne répond plus du tout.
+
+**Contradiction avec la mise à jour 2026-11-06 (soir)** ci-dessus (« fermer puis rouvrir un flux sain,
+aussitôt et trois fois de suite, marche ») : plus vrai le 2026-11-07 sur ce pont. Version du pont non
+relevée ; la mise à jour du 2026-11-06 reste telle quelle, celle-ci la remplace pour la conduite à tenir.
+
+Conséquences :
+- La synchro ne ferme plus le flux pendant une pause ([1_6](../1_architecture/1_6_lecteur-musique.md), même
+  jour) : un flux gardé ouvert n'a pas à être rouvert.
+- `openStream` (`entertainment.ts`) ajoute au message d'échec, quand chaque tentative a reçu une réponse puis
+  plus rien : `the bridge answered the first message of each try only, as it does for 15 s to 3 min after a
+  stream ended` — lisible dans le panneau des lumières en rythme. Test `entertainment.test.ts`.
+- `switchOff` (extinction des lampes après une pause, section 2026-11-07 ci-dessus) est retiré du
+  `LightStreamer` : plus de fermeture pendant une pause. La **contradiction du 2026-11-07** sur l'arrêt du flux
+  (éclat possible entre la fermeture et l'extinction) n'a donc plus d'objet ; reste ouvert, sans conséquence
+  pour le code, ce que le pont fait des lampes à `stop` (l'état d'avant est rendu par Kasbah de toute façon).
+
+### Mise à jour 2026-11-07 (soir) — la poignée de main renvoyée, comme Hue Sync : le refus disparaît
+
+Question de l'utilisateur : l'appli officielle Hue Sync (installée sur le poste) n'a pas ces coupures,
+comment fait-elle ? Les chaînes de `HueSync.exe` et son `LICENSES.html` montrent `huestream`, le SDK
+Entertainment de Philips, sur **mbedTLS** — qui, comme le prévoit DTLS (RFC 6347), **renvoie** un vol de
+la poignée de main resté sans réponse ; `node-dtls-client` ne le fait jamais.
+
+Mesuré sur le vrai pont (scripts jetables qui tracent chaque datagramme, `message_seq` et numéro de
+record) : le « refus de 15 s à 3 min » de la section précédente est en fait **un seul message ignoré**.
+Après la fin d'un flux, le pont ne répond pas au `ClientHello` qui porte le cookie, mais répond au **même
+message renvoyé 500 ms plus tard** (`ServerHello` + `ServerHelloDone`, puis la poignée de main se
+termine) : 8 fois sur 8, 1,6 s après la fin de la session précédente. La section précédente reste juste
+pour un client qui ne renvoie rien ; sa conclusion (« quoi que fasse le client ») est **datée**.
+
+Piège rencontré : la réponse du pont reprend le numéro de record du message qu'elle reçoit. Un renvoi
+numéroté au-delà de 127 fait jeter cette réponse par la fenêtre anti-rejeu de `node-dtls-client` (64
+au-dessus de 63) : la poignée de main reste bloquée alors que le pont a répondu.
+
+`retransmitHandshake` (`entertainment.ts`, appelé à chaque tentative de `openStream`) remplace
+`udp.send` du socket : un vol **en clair** (epoch 0, les deux `ClientHello`) sans réponse est renvoyé
+toutes les 500 ms, 10 fois au plus, avec des numéros de record à partir de 16 (au-dessus de ceux que la
+bibliothèque utilise, dans sa fenêtre) ; une réponse arrête le minuteur (écouteur placé **avant** celui
+de la bibliothèque), `connected` / `error` / `close` l'arrêtent pour de bon. Les vols chiffrés ne sont pas
+renvoyés : le numéro de record entre dans ce que le record authentifie. Vérifié : le vrai `openStream`
+rouvre un flux 1 s après la fermeture du précédent, 4 fois sur 4, en 0,6 à 0,8 s ; tests
+`entertainment.test.ts` (renvoi jusqu'à la réponse, rien de chiffré ni après connexion, abandon après 10).
+
+Conséquence, choix de l'utilisateur : la synchro **referme de nouveau le flux après 5 s de pause** et
+éteint les lampes ([1_6](../1_architecture/1_6_lecteur-musique.md), même jour) ; `switchOff` revient dans
+le `LightStreamer`. Constat au passage : pendant un flux et après sa fermeture, CLIP v2 rapporte l'état
+**d'avant** le flux (allumage, luminosité inchangés), quel que soit ce que les lampes affichent — la
+« remise dans l'état d'avant » vue par la sonde du 2026-11-05 était lue par CLIP, ce qui peut expliquer la
+contradiction notée plus haut avec le constat visuel de l'utilisateur (lampes restées sur la dernière
+image). L'aspect réel à la fermeture reste à regarder sur place.
+
+### Mise à jour 2026-11-07 (fin d'après-midi) — rendre l'état d'avant : passer par « éteint »
+
+Constat de l'utilisateur sur la vraie maison, la synchro par ailleurs fonctionnelle : en changeant de
+pièce, l'ancienne zone ne reprenait pas son état d'avant, alors que le journal du serveur montre
+`lightsync: lights put back` à chaque changement. Explication retenue (déduite, cohérente avec le constat
+de la section précédente : CLIP rapporte pendant et après un flux l'état **d'avant**) : la remise
+envoyait exactement l'état que le pont croit déjà en place, et rien n'atteignait les lampes, restées sur
+la dernière trame. Après une pause, la remise marchait parce que `switchOff` avait changé l'état CLIP.
+
+Désormais :
+- `restoreLights` (`index.ts`) : une lampe qui était **allumée** reçoit d'abord `on: false` (file
+  `restore` de `putLimited`, envoyée avant), puis son état d'avant avec la transition de 1 s ; une lampe
+  éteinte reste un simple `on: false`.
+- `LightSync.teardown` (`lightsync/sync.ts`) envoie une trame noire juste avant de fermer le flux : une
+  lampe éteinte avant la synchro, qu'aucune commande CLIP ne peut plus atteindre, reste noire au lieu
+  d'une couleur figée.
+
+Tests `plugin.test.ts` (« éteint » puis état d'avant), `sync.test.ts` (dernière trame noire avant la
+fermeture). **À confirmer sur place** : changement de pièce, désactivation, lampe éteinte avant la
+synchro.
