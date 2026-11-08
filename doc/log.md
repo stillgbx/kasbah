@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-08] update | Scène 3D : WebGPU absent d'une page HTTP, Réglages le dit
+
+**Déclencheur** : capture de l'utilisateur — Réglages affirme que le navigateur n'a pas WebGPU, alors que `chrome://gpu` le donne accéléré.
+
+**Pages modifiées** :
+- `1_architecture/1_11_scene-3d-rendu.md` - « Deux moteurs de rendu » : piège du contexte sécurisé (`navigator.gpu` absent en HTTP sur le réseau local), nouveau message `render.rendererInsecure`.
+
+**Index** : catalogue déjà à la date du jour, index.md inchangé.
+
 ## [2026-11-08] update | Réglages : changer de moteur de rendu recharge sur la vue Maison
 
 **Déclencheur** : demande de l'utilisateur — au changement de moteur, aller directement sur la vue 3D plutôt que recharger la page des Réglages.

@@ -2304,7 +2304,11 @@ vue Maison est gardée en vie (`<keep-alive>`) : changer de moteur recharge la p
 2026-11-08, c'est la vue Maison qui se charge, et non plus la page des Réglages (`chooseRenderer`,
 `apps/web/src/views/SettingsView.vue`).
 `?renderer=webgl|webgpu` impose le moteur pour un chargement, sans l'enregistrer (bancs, essai sur
-tablette). Un navigateur sans WebGPU reçoit WebGL.
+tablette). Un navigateur sans WebGPU reçoit WebGL. **Piège** (constaté le 2026-11-08) : Chrome
+n'expose `navigator.gpu` qu'aux pages sécurisées (HTTPS ou `localhost`). Kasbah servi en HTTP à une
+adresse du réseau local tourne donc toujours en WebGL, même avec WebGPU choisi et un navigateur qui
+l'a. Réglages le dit (`render.rendererInsecure`, d'après `window.isSecureContext`) au lieu de
+accuser le navigateur.
 
 **Chaque effet existe deux fois**, en GLSL pour WebGL et en TSL pour WebGPU, lisant les **mêmes
 objets d'uniforms** : la scène les règle une fois pour les deux. Correspondance :

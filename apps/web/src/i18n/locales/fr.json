@@ -501,6 +501,7 @@
     "renderer": "Moteur de rendu",
     "rendererHint": "WebGPU est le moteur le plus récent, mais il est plus lent aujourd'hui sur les machines mesurées. Changer de moteur recharge la page.",
     "rendererMissing": "Ce navigateur n'a pas WebGPU : la vue reste en WebGL.",
+    "rendererInsecure": "WebGPU ne s'ouvre que sur une page sécurisée (HTTPS ou localhost) : la vue reste en WebGL.",
     "renderers": { "webgl": "WebGL", "webgpu": "WebGPU (expérimental)" },
     "debug": "Débogage", "weather": "Météo forcée", "weatherReal": "Réelle", "weatherHint": "Débogage seulement : impose une météo à la scène 3D pour la regarder sous la pluie ou la neige. Le widget et la vue Météo continuent de dire le vrai temps.",
   "debugHint": "Pose un voile de mesure sur la scène : images par seconde, coût CPU d'une image, appels de dessin, passes et relevés d'ombre. « img/s » à 0 au repos est normal — le rendu est à la demande.",

@@ -501,6 +501,7 @@
     "renderer": "Renderer",
     "rendererHint": "WebGPU is the newer renderer, but it is slower today on the machines measured. Changing the renderer reloads the page.",
     "rendererMissing": "This browser has no WebGPU: the view stays on WebGL.",
+    "rendererInsecure": "WebGPU only opens on a secure page (HTTPS or localhost): the view stays on WebGL.",
     "renderers": { "webgl": "WebGL", "webgpu": "WebGPU (experimental)" },
     "debug": "Debug", "weather": "Forced weather", "weatherReal": "Real", "weatherHint": "Debug only: forces a weather onto the 3D scene to see it under rain or snow. The widget and the Weather view keep showing the real weather.",
   "debugHint": "Puts a measurement overlay on the scene: frames per second, CPU cost of a frame, draw calls, passes and shadow rebuilds. « img/s » at 0 when idle is normal — rendering is on demand.",
