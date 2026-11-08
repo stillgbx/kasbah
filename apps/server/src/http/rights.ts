@@ -1,4 +1,4 @@
-import { deviceRight, EMPTY_SHOPPING_LIST, grants, kindRight, type DeviceDescriptor, type DeviceId, type House, type Right, type ServerMessage } from '@kasbah/shared'
+import { deviceRight, EMPTY_SHOPPING_LIST, grants, kindRight, type DeviceDescriptor, type DeviceId, type House, type Need, type Right, type ServerMessage } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { DeviceRegistry } from '../core/registry'
 import type { UsersFile } from '../mcp/auth'
@@ -6,30 +6,34 @@ import { sendError } from './errors'
 
 // Rights of an account (`rights` in `mcp-users.json`), enforced on every route in one `preHandler`:
 // after the router (the route's PATTERN decides, never the raw URL) and after the `onRequest` hooks
-// that set `req.sessionUser` (session, MCP tool replaying a route). The local network (`null`) is the
-// house and is never checked; an account without a list keeps every right.
+// that set `req.account` (session, MCP tool replaying a route). An admin may everything, and alone
+// the settings (plugins, house plan, accounts, server update, Matter); an account without a list
+// keeps every domain. The machine itself (`null`, `isLoopbackRequest`) is never checked.
 //
 // Reads too: a device's own routes need its right, the device list and the WebSocket leave out what
 // the account may not see (`filterMessage`), and so does the house plan (`filterHouse`): a hidden
 // device leaves no name and no place in the 3D view.
 
 /** `device`: the right of the device the route drives (`:id`). */
-export type RouteRight = Right | null | 'device'
+export type RouteRight = Need | 'device'
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
-// Core writes, by route prefix. `null`: personal (push subscription), local network only already
-// (accounts, server update, Matter), or checked tool by tool (`/mcp`).
-export const CORE_WRITES: readonly [string, Right | null][] = [
-  ['/api/house', 'settings'],
-  ['/api/properties', 'settings'],
+// Admin only, read or write: account management, server update, Matter (its pairing code hands over
+// what it publishes), the instructions of every account. From home only, too (`http/session.ts`).
+const ADMIN_PATHS = ['/api/mcp/users', '/api/system', '/api/matter', '/api/assistant/log']
+
+// Core writes, by route prefix. `null`: personal (push subscription, the assistant), or checked tool
+// by tool (`/mcp`).
+export const CORE_WRITES: readonly [string, Need][] = [
+  ['/api/house', 'admin'],
+  ['/api/properties', 'admin'],
   // vendor scenes are light scenes (Hue)
   ['/api/scenes', 'lights'],
   ['/api/automations', 'automations'],
   ['/api/automation-order', 'automations'],
   ['/api/shopping', 'shopping'],
   ['/api/push', null], ['/api/diag', null], ['/api/assistant', null],
-  ['/api/mcp/users', null], ['/api/system', null], ['/api/matter', null],
   ['/login', null], ['/logout', null], ['/oauth', null], ['/mcp', null],
 ]
 
@@ -42,8 +46,8 @@ const CORE_READS: readonly [string, Right][] = [
 
 /**
  * Plugin routes (`/api/plugins/<id>/…`): the plugin's domain, except the WRITES whose first segment is
- * in `settings` (linking an account, pairing a bridge, forgetting a device). `right: null` = personal
- * to each account (its own Claude token) or a service of the app (speech).
+ * in `settings` (linking an account, pairing a bridge, forgetting a device), which need an admin.
+ * `right: null` = personal to each account (its own Claude token) or a service of the app (speech).
  */
 export const PLUGIN_RIGHTS: Readonly<Record<string, { right: Right | null; settings?: readonly string[] }>> = {
   agenda: { right: 'agenda', settings: ['calendars'] },
@@ -79,29 +83,30 @@ export const PLUGIN_RIGHTS: Readonly<Record<string, { right: Right | null; setti
 const under = (path: string, prefix: string) => path === prefix || path.startsWith(`${prefix}/`)
 
 /**
- * The right a route needs, from its method and its PATTERN (`req.routeOptions.url`). A plugin or a
- * core write missing from the tables above needs `settings` (`mapped: false`): forgetting one refuses
- * too much rather than too little, and the server says so at startup.
+ * What a route needs, from its method and its PATTERN (`req.routeOptions.url`). A plugin or a core
+ * write missing from the tables above needs an admin (`mapped: false`): forgetting one refuses too
+ * much rather than too little, and the server says so at startup.
  */
 export function classifyRoute(method: string, url: string): { right: RouteRight; mapped: boolean } {
   const write = !SAFE_METHODS.has(method)
   const seg = url.split('/')
   if (seg[1] === 'api' && seg[2] === 'plugins' && seg[3] && !seg[3].startsWith(':')) {
     const plugin = PLUGIN_RIGHTS[seg[3]]
-    if (!plugin) return { right: 'settings', mapped: false }
+    if (!plugin) return { right: 'admin', mapped: false }
     const rest = seg.slice(4)
     // vendor dumps and account linking (OAuth: a GET that stores the token) are settings for any method
-    if (rest.includes('raw') || rest[0] === 'auth') return { right: 'settings', mapped: true }
-    return { right: write && rest[0] !== undefined && plugin.settings?.includes(rest[0]) ? 'settings' : plugin.right, mapped: true }
+    if (rest.includes('raw') || rest[0] === 'auth') return { right: 'admin', mapped: true }
+    return { right: write && rest[0] !== undefined && plugin.settings?.includes(rest[0]) ? 'admin' : plugin.right, mapped: true }
   }
+  if (ADMIN_PATHS.some((prefix) => under(url, prefix))) return { right: 'admin', mapped: true }
   if (under(url, '/api/music')) return { right: 'media', mapped: true }
   // the device, its history, forecast, journal, map… and its command
   if (under(url, '/api/devices/:id')) return { right: 'device', mapped: true }
   if (!write) return { right: CORE_READS.find(([prefix]) => under(url, prefix))?.[1] ?? null, mapped: true }
   // turning a plugin on or off
-  if (url === '/api/plugins/:id') return { right: 'settings', mapped: true }
+  if (url === '/api/plugins/:id') return { right: 'admin', mapped: true }
   const core = CORE_WRITES.find(([prefix]) => under(url, prefix))
-  return core ? { right: core[1], mapped: true } : { right: 'settings', mapped: false }
+  return core ? { right: core[1], mapped: true } : { right: 'admin', mapped: false }
 }
 
 export const routeRight = (method: string, url: string): RouteRight => classifyRoute(method, url).right
@@ -111,31 +116,46 @@ export interface RightsDeps {
   registry: Pick<DeviceRegistry, 'get'>
 }
 
-/** May this account use `right`? The house (`null`) may always. */
-export async function mayUse(users: () => Promise<UsersFile>, user: string | null, right: Right | null): Promise<boolean> {
+/** What an account may do. `rights`: its domains, absent = all of them (always for an admin). */
+export interface Access { admin: boolean; house: boolean; rights: readonly Right[] | undefined }
+
+const accessOf = (u: UsersFile['users'][number]): Access => ({ admin: u.admin === true, house: u.house === true, rights: u.admin ? undefined : u.rights })
+/** The domains of an account; a name without an account sees nothing. */
+const rightsOf = async (users: () => Promise<UsersFile>, user: string) => {
+  const u = (await users()).users.find((a) => a.name === user)
+  return u ? accessOf(u).rights : []
+}
+
+/** Does this access allow `need`? No access (no such account) allows nothing but `null`. */
+export const allows = (access: Access | undefined, need: Need): boolean =>
+  need === null || (access !== undefined && (need === 'admin' ? access.admin : grants(access.rights, need)))
+
+/** May this account do what `need` asks? The machine itself (`null`) may always. */
+export async function mayUse(users: () => Promise<UsersFile>, user: string | null, need: Need): Promise<boolean> {
   if (user === null) return true
-  return grants((await users()).users.find((u) => u.name === user)?.rights, right)
+  const u = (await users()).users.find((a) => a.name === user)
+  return allows(u && accessOf(u), need)
 }
 
-/** The rights of each account (`undefined` = every right); a name missing from the map has no account. */
-export async function accountRights(users: () => Promise<UsersFile>): Promise<Map<string, readonly Right[] | undefined>> {
-  return new Map((await users()).users.map((u) => [u.name, u.rights]))
+/** What each account may do; a name missing from the map has no account. */
+export async function accountRights(users: () => Promise<UsersFile>): Promise<Map<string, Access>> {
+  return new Map((await users()).users.map((u) => [u.name, accessOf(u)]))
 }
 
-/** What this account may see of the devices; the house (`null`) sees them all. */
+/** What this account may see of the devices; the machine itself (`null`) sees them all. */
 export async function deviceFilter(users: () => Promise<UsersFile>, user: string | null): Promise<(d: DeviceDescriptor) => boolean> {
   if (user === null) return () => true
-  const rights = (await users()).users.find((u) => u.name === user)?.rights
+  const rights = await rightsOf(users, user)
   return (d) => grants(rights, deviceRight(d))
 }
 
 /**
- * The house plan as an account with these rights (absent = all) sees it: without the devices it may not
- * see. `rightOf` as in `filterMessage`; a device the registry does not know is judged on its kind hint.
- * "settings" sees the whole plan: it edits it (the writes go device by device, never the whole plan).
+ * The house plan as an account with these rights (absent = all, an admin's) sees it: without the
+ * devices it may not see. `rightOf` as in `filterMessage`; a device the registry does not know is
+ * judged on its kind hint. An admin sees the whole plan: it edits it.
  */
 export function filterHouse(house: House, rights: readonly Right[] | undefined, rightOf: (id: DeviceId) => Right | null | undefined): House {
-  if (grants(rights, 'settings')) return house
+  if (rights === undefined) return house
   const rightOfDevice = (d: House['devices'][number]) => {
     const r = d.deviceId ? rightOf(d.deviceId) : undefined
     return r !== undefined ? r : d.kind ? kindRight(d.kind) : null
@@ -149,10 +169,10 @@ export const registryRight = (registry: Pick<DeviceRegistry, 'get'>) => (id: Dev
   return e ? deviceRight(e.descriptor) : undefined
 }
 
-/** The house plan this account may see; the house (`null`) sees it whole. */
+/** The house plan this account may see; the machine itself (`null`) sees it whole. */
 export async function houseView(users: () => Promise<UsersFile>, registry: Pick<DeviceRegistry, 'get'>, user: string | null): Promise<(h: House) => House> {
   if (user === null) return (h) => h
-  const rights = (await users()).users.find((u) => u.name === user)?.rights
+  const rights = await rightsOf(users, user)
   return (h) => filterHouse(h, rights, registryRight(registry))
 }
 
@@ -185,7 +205,7 @@ export function filterMessage(msg: ServerMessage, rights: readonly Right[], righ
   }
 }
 
-export const rightRefused = (right: Right) => `this account may not use "${right}"`
+export const rightRefused = (need: Exclude<Need, null>) => (need === 'admin' ? 'this needs an admin account' : `this account may not use "${need}"`)
 
 /**
  * Enforces the rights on every route registered AFTER this call (a `preHandler`: 403 `NO_RIGHT`), and
@@ -199,9 +219,9 @@ export function registerRights(app: FastifyInstance, deps: RightsDeps): { unmapp
     }
   })
   app.addHook('preHandler', async (req, reply) => {
-    const user = req.sessionUser
+    const user = req.account
     const url = req.routeOptions.url
-    if (!user || url === undefined) return
+    if (user === null || url === undefined) return
     let right = routeRight(req.method, url)
     if (right === 'device') {
       // an unknown device: the route says 404 itself

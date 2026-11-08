@@ -139,47 +139,49 @@ VITE_INPROCESS_MOCK=1 npm run dev -w @kasbah/web
 
 ### Production
 
-Sur le réseau local, l'interface et l'API ne demandent ni compte ni HTTPS : **réseau local de confiance**. Depuis Internet, tout passe par une adresse publique HTTPS où une connexion est exigée (voir [Accès depuis l'extérieur](#accès-depuis-lextérieur)).
+Tout le monde se connecte, à la maison comme dehors : l'application passe par une adresse publique HTTPS (voir [Accès depuis l'extérieur](#accès-depuis-lextérieur)), qu'un enregistrement DNS local garde dans la maison pour les écrans de la maison. Seul le poste du serveur lui-même (`http://localhost:8787`) ouvre Kasbah sans connexion : il est de confiance, comme le script `account` qu'on y lance.
 
 ```bash
 npm run build      # web → apps/web/dist, serveur → apps/server/dist/main.js (bundle esbuild)
 npm start          # sert l'app web et l'API sur KASBAH_PORT (8787)
 ```
 
-Depuis un autre appareil du réseau : `http://<ip-du-serveur>:8787`.
+Depuis un autre appareil du réseau : l'adresse publique, par le proxy inverse. `http://<ip-du-serveur>:8787` ne sert plus que les flux des enceintes ; une page ouverte là part vers l'adresse publique.
 
 Pour mettre le serveur à jour sans aller sur la machine, le lancer par son superviseur plutôt que par
 `npm start` : `node scripts/supervisor.mjs` construit l'application si besoin, relance le serveur s'il
 tombe, et applique la dernière version de `main` sur demande depuis **Réglages → Mise à jour du serveur**
-(depuis le réseau local). La mise à jour enchaîne pull, `npm ci` si les dépendances changent, build et
+(un super-utilisateur, depuis la maison). La mise à jour enchaîne pull, `npm ci` si les dépendances changent, build et
 redémarrage, et revient à la version précédente en cas d'échec. Démarrage avec la machine (tâche planifiée
 Windows, service systemd) : [doc/5_setup/5_2_production.md](doc/5_setup/5_2_production.md).
 
 ### Accès depuis l'extérieur
 
-Depuis un téléphone hors de la maison, sans VPN : un **proxy inverse HTTPS** (celui du NAS Synology, ou un tunnel) publie Kasbah sous une adresse publique, déclarée dans `MCP_PUBLIC_URL`. Kasbah reconnaît ce nom (`Host`, ou `X-Forwarded-Host`) et y exige une **connexion** :
+Depuis un téléphone hors de la maison, sans VPN, et depuis chaque écran de la maison : un **proxy inverse HTTPS** (celui du NAS Synology, ou un tunnel) publie Kasbah sous une adresse publique, déclarée dans `MCP_PUBLIC_URL`. Kasbah reconnaît ce nom (`Host`, ou `X-Forwarded-Host`) et y exige une **connexion** :
 
 - **Sous l'adresse publique** : page de connexion, puis toute l'application (interface, API, caméras, WebSocket). Le serveur MCP y répond aussi, avec ses propres jetons (voir [Serveur MCP](#serveur-mcp)).
-- **Sur le réseau local** (`http://<ip>:8787`, `kasbah.home.internal`) : rien ne change, aucun compte demandé. C'est le **nom** qui décide, pas l'endroit : l'adresse publique demande la connexion même depuis la maison (par le proxy, toutes les requêtes arrivent du NAS).
+- **À la maison** : un enregistrement DNS local (Pi-hole, DNS du routeur…) fait pointer le nom public vers le proxy inverse, qui porte le certificat : la même adresse HTTPS marche sans sortir de la maison.
+- **Sous un nom local** (`http://<ip>:8787`, `kasbah.home.internal`) : personne ne peut se connecter (le cookie de session exige HTTPS). Seuls les flux des enceintes y sont servis (une adresse aléatoire qui vit le temps du flux), une page part vers l'adresse publique, le reste répond 401. Le poste du serveur lui-même (`localhost`, sans proxy entre les deux) n'a pas besoin de compte.
 - **Noms locaux** : une adresse IP, `localhost`, un nom court (`kasbah`) ou un nom en `.internal`, `.local`, `.lan` ou `.home.arpa` ; tout autre nom s'ajoute dans `KASBAH_LAN_HOSTS`. Un autre nom est refusé (protection contre le DNS rebinding), de même qu'une écriture ou un WebSocket qu'une page d'un autre site envoie depuis un navigateur de la maison.
-- **Comptes** : les mêmes que ceux des assistants IA, dans **Réglages → Comptes**, gérés depuis le réseau local seulement (même connecté, l'adresse publique ne les montre pas).
-- **Droits** : sous chaque compte, une liste pliable de domaines (lumières, volets, portail et garage, chauffage, véhicules, musique, caméras, réglages…) à accorder ou retirer. Un compte connecté, et les assistants IA qui agissent pour lui, ne voient ni ne pilotent les appareils d'un domaine qu'il n'a pas, et n'en reçoivent pas les notifications. Tous les domaines sont accordés par défaut ; le réseau local les garde tous. Les vues non accordées quittent le menu, et sans le droit **Réglages** la page Réglages ne garde que les choix de l'écran.
+- **Comptes** : les mêmes que ceux des assistants IA, dans **Réglages → Comptes**. Un **super-utilisateur** règle les plugins, le plan de la maison, les comptes, la mise à jour du serveur et le pont Matter ; les trois derniers depuis la maison seulement (un client que le proxy transmet depuis une adresse privée). Le **compte de la maison** sert aux écrans fixes : ses comptes musicaux et son jeton Claude sont ceux de la maison, et qui n'a pas relié son propre YouTube Music écoute avec lui (les j'aime et la bibliothèque exigent toujours le sien). Le premier super-utilisateur se crée sur le poste du serveur : `npm run account -w @kasbah/server -- add <nom> --admin`.
+- **Droits** : sous chaque compte, une liste pliable de domaines (lumières, volets, portail et garage, chauffage, véhicules, musique, caméras…) à accorder ou retirer. Un compte connecté, et les assistants IA qui agissent pour lui, ne voient ni ne pilotent les appareils d'un domaine qu'il n'a pas, et n'en reçoivent pas les notifications. Tous les domaines sont accordés par défaut ; un super-utilisateur les a tous. Les vues non accordées quittent le menu, et pour un compte qui n'est pas super-utilisateur la page Réglages ne garde que les choix de l'écran.
 - **Session** : un cookie de 90 jours, prolongé à chaque usage ; on se connecte une fois par appareil. Changer le mot de passe d'un compte ferme toutes ses sessions (téléphone perdu) ; le retirer aussi. « Se déconnecter » est dans Réglages → Comptes.
 - **Blocage** : après 5 échecs de connexion d'affilée, le compte est bloqué 15 minutes, même avec le bon mot de passe (application et assistants IA ; `KASBAH_LOGIN_MAX_FAILURES`, `KASBAH_LOGIN_LOCK_MINUTES`). Les sessions ouvertes ne sont pas touchées.
 - **App installable** : en HTTPS, le navigateur propose d'installer Kasbah, dès la page de connexion. Sur iPhone, l'app ajoutée à l'écran d'accueil a ses propres cookies : s'y connecter une fois. Sur Android, un appui long sur l'icône de l'app installée propose le raccourci « Demander », qui ouvre une page à lui, sans la scène 3D, déjà à l'écoute (le micro attend un toucher quand il ne peut pas démarrer seul, et un champ prend les demandes tapées) ; on peut le glisser sur l'écran d'accueil comme une icône à part.
 
 **Mise en service sur un NAS Synology** (DSM 6 : Panneau de configuration → Portail des applications → Proxy inversé ; DSM 7 : Portail de connexion → Avancé → Proxy inversé) :
 
-1. **D'abord** `MCP_PUBLIC_URL=https://<adresse>` dans `apps/server/.env`, et relancer Kasbah. Dans l'autre ordre, la règle publierait l'application **sans** connexion dès son enregistrement.
+1. **D'abord** `MCP_PUBLIC_URL=https://<adresse>` dans `apps/server/.env`, créer un compte super-utilisateur (`npm run account -w @kasbah/server -- add <nom> --admin`), et relancer Kasbah.
 2. Règle de proxy inversé :
    - source : HTTPS, nom d'hôte `<adresse>`, port 443, HTTP/2 activé, pas de contrôle d'accès ;
    - destination : HTTP, IP du poste Kasbah, port 8787 ;
    - **en-têtes personnalisés** : Créer → WebSocket, qui ajoute `Upgrade: $http_upgrade` et `Connection: $connection_upgrade`. Sans eux, l'état en direct ne passe pas (l'app reste « hors ligne »).
 3. Un certificat Let's Encrypt pour `<adresse>` (Sécurité → Certificat), associé à la règle.
 4. Sur le routeur : le port 443 redirigé vers le NAS.
-5. Lecture sur les enceintes (Cast, Sonos) depuis l'extérieur : `MUSIC_PUBLISH_BASE=http://<ip-du-poste>:8787`, sinon le serveur refuse (une enceinte ne peut pas lire l'adresse publique).
+5. Lecture sur les enceintes (Cast, Sonos) : `MUSIC_PUBLISH_BASE=http://<ip-du-poste>:8787`, sinon le serveur refuse (une enceinte va chercher son flux elle-même, sur le réseau local, et ne peut pas se connecter).
+6. À la maison : un enregistrement DNS local `<adresse>` → IP du NAS (Pi-hole : Local DNS Records). Un appareil qui obtient quand même l'IP publique (son propre DNS) est ramené au NAS par le NAT loopback du routeur, toujours en HTTPS.
 
-**Vérifier**, depuis le téléphone en 4G : `https://<adresse>/` ouvre la page de connexion, `https://<adresse>/.well-known/oauth-protected-resource` annonce l'adresse **en https** (sinon le proxy ne transmet pas le nom d'origine, et rien n'est protégé : le corriger avant tout). Une fois connecté, une lumière allumée change d'état à l'écran sans recharger.
+**Vérifier**, depuis le téléphone en 4G et depuis un ordinateur de la maison : `https://<adresse>/` ouvre la page de connexion, `https://<adresse>/.well-known/oauth-protected-resource` annonce l'adresse **en https** (sinon le proxy ne transmet pas le nom d'origine, et rien n'est protégé : le corriger avant tout). Une fois connecté, une lumière allumée change d'état à l'écran sans recharger.
 
 ### Qualité
 
@@ -271,7 +273,7 @@ Le serveur peut servir de **pont Matter** sur le réseau local : les appareils c
 - Publiés aujourd'hui : lampes (marche/arrêt, luminosité), ouvrants (volets, portails, portes de garage, vus comme des stores, ou comme des portes en Matter 1.5 à titre d'essai), ventilateurs (marche/arrêt, vitesse, sens), et serrure et climatisation des véhicules.
 - Ne publier que ce que les assistants ne connaissent pas déjà : une lampe Hue ou un volet Somfy déjà reliés chez eux apparaîtraient deux fois.
 - Pour retirer : l'interrupteur d'un appareil, **Tout retirer** pour un plugin, l'interrupteur du pont, ou **Dissocier** à côté d'un assistant, qui perd alors tous les appareils (le code d'appairage revient quand il n'en reste plus aucun).
-- Le pont se règle depuis le réseau local seulement : son code d'appairage donne la main sur ce qu'il publie, la carte et son API refusent donc l'adresse publique.
+- Le pont se règle par un super-utilisateur, depuis la maison seulement : son code d'appairage donne la main sur ce qu'il publie.
 - Le pont n'est pas certifié : Google Home demande de le déclarer d'abord (gratuitement) dans la Google Home Developer Console, Maison affiche un avertissement. Le serveur doit avoir le port UDP 5540 et le mDNS (5353) ouverts sur le réseau local.
 
 ## Plugins
@@ -356,11 +358,11 @@ Ressource : `kasbah://house` (le `house.json` validé).
 
 **Authentification OAuth, partout** (réseau local compris) : Kasbah est son propre serveur d'autorisation. À la première connexion, le client ouvre une page Kasbah (utilisateur + mot de passe), puis garde un jeton (accès 1 h, renouvellement 90 jours glissants). Les clients s'enregistrent seuls (enregistrement dynamique, ou document de métadonnées pour claude.ai).
 
-- **Comptes** : `apps/server/mcp-users.json`, à côté du `.env`, hors dépôt, mots de passe hachés (scrypt) ; les mêmes ouvrent l'application par l'adresse publique. Les gérer dans **Réglages → Comptes** (ajouter, changer le mot de passe, droits, retirer ; depuis le réseau local seulement), ou en secours :
+- **Comptes** : `apps/server/mcp-users.json`, à côté du `.env`, hors dépôt, mots de passe hachés (scrypt) ; les mêmes ouvrent l'application par l'adresse publique. Les gérer dans **Réglages → Comptes** (ajouter, changer le mot de passe, rôles, droits, retirer ; un super-utilisateur, depuis la maison), ou sur le poste du serveur :
   ```bash
-  npm run mcp-user -w @kasbah/server -- add <nom>
+  npm run account -w @kasbah/server -- add <nom> --admin
   ```
-  (`remove <nom>` coupe aussi ses jetons, `list` les liste). Le fichier est relu à chaque connexion : pas besoin de redémarrer.
+  (`remove <nom>` coupe aussi ses jetons, `admin <nom> on|off` et `house <nom> on|off` règlent les rôles, `list` les liste). Le fichier est relu à chaque connexion : pas besoin de redémarrer.
 - **Jetons et clients enregistrés** : `apps/server/.state/mcp-auth.json` (hachés). Le supprimer déconnecte tous les clients.
 - **Depuis Internet** (Claude sur le téléphone, connecteur claude.ai) : l'adresse publique de [Accès depuis l'extérieur](#accès-depuis-lextérieur). Sous ce nom, `/mcp`, `/oauth/*` et `/.well-known/oauth-*` répondent avec les jetons du MCP ; le reste exige la connexion de l'application. Puis sur claude.ai : Paramètres → Connecteurs → Ajouter un connecteur personnalisé → `https://<adresse>/mcp`.
 - **Réseau local** : les clients bâtis sur le SDK MCP refusent d'envoyer leurs identifiants à un serveur d'autorisation en `http://` hors de la machine : `http://localhost:8787/mcp` sur le poste du serveur, l'adresse publique en https ailleurs.

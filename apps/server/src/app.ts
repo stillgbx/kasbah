@@ -95,8 +95,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
     users: mcpAuth.users,
     logger: opts.logger.child({ component: 'session' }),
   })
-  app.addHook('onRequest', publicHostFilter(mcpAuth.publicHosts, session.gate, mcpConfig.KASBAH_LAN_HOSTS))
-  app.addHook('onRequest', actAsHook)
+  // every screen signs in through the public address (HTTPS): without it, only this machine opens Kasbah
+  if (!mcpConfig.MCP_PUBLIC_URL) opts.logger.warn('MCP_PUBLIC_URL is not set: only this machine can open Kasbah (signing in needs the public HTTPS address)')
+  app.addHook('onRequest', publicHostFilter(mcpAuth.publicHosts, session.gate, mcpConfig.KASBAH_LAN_HOSTS, session.lanGate))
+  app.addHook('onRequest', actAsHook(mcpAuth.users))
   // BEFORE any route: `decorateRequest` only reaches the contexts loaded after it, and the `await`s
   // below load the plugins' routes (`req.sessionUser` was `undefined` there on the local network).
   session.routes(app)
@@ -109,7 +111,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   // the rights of a signed-in account, on every route registered below (`http/rights.ts`)
   const rights = registerRights(app, { users: mcpAuth.users, registry })
   app.addHook('onReady', async () => {
-    if (rights.unmapped.length) opts.logger.warn({ routes: rights.unmapped }, 'routes missing from the rights tables: they need "settings"')
+    if (rights.unmapped.length) opts.logger.warn({ routes: rights.unmapped }, 'routes missing from the rights tables: they need an admin')
   })
   const scenes = new SceneRegistry(bus, clock, opts.logger.child({ component: 'scenes' }))
   // Per-plugin settings: they live IN the house (`house.plugins`), written by the UI. `house` is

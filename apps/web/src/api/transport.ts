@@ -213,13 +213,15 @@ export interface YtmusicStatus {
   browsers: string[]
   /** The account at stake: the logged-in user, or `null` for the house's. */
   user: string | null
-  /** Logged-in user without a cookie: public catalog only, no likes or playlists. */
+  /** Logged-in user without a cookie, and no house account to borrow: public catalog only, no likes or playlists. */
   anonymous: boolean
+  /** Logged-in user without a cookie who listens with the house account's (no likes or playlists either). */
+  houseFallback: boolean
 }
 
 /** An account of the MCP server (`mcp-users.json`): the name only, the hashed password stays on the server. */
 /** `rights` absent = every right. */
-export interface McpUser { name: string; rights?: Right[] }
+export interface McpUser { name: string; rights?: Right[]; admin?: true; house?: true }
 
 /** A commit of the server's repository; `date` ISO 8601. */
 export interface SystemCommit { sha: string; subject: string; date: string }
@@ -844,7 +846,8 @@ export interface Transport {
    * The session's account, under the public address; `null` on the local network (no session).
    * `rights` only when the account has a list (absent = every right).
    */
-  session(): Promise<{ user: string | null; rights?: Right[] }>
+  /** `admin`: settings, accounts, server update; `house`: the house account; `rights` absent = all. */
+  session(): Promise<{ user: string | null; admin?: boolean; house?: boolean; rights?: Right[] }>
   /** The Claude plan (`claude` plugin) of the current account. */
   claudeAccount(): Promise<ClaudeAccount>
   /** Stores the `claude setup-token` token for the current account; it never comes back. */
@@ -870,9 +873,9 @@ export interface Transport {
   /** The voice of spoken replies of the current account (the house on the local network); `null` = the house's, otherwise `TTS_VOICE`. */
   transcriptionSettings(): Promise<TranscriptionSettings>
   setTranscriptionVoice(voice: string | null): Promise<TranscriptionSettings>
-  /** The instruction log, most recent first; refused under the public address (`LAN_ONLY`). */
+  /** The instruction log, most recent first; an admin's, from home only (`LAN_ONLY`). */
   assistantLog(): Promise<{ entries: AssistantLogEntry[] }>
-  /** Accounts of the public address and of the MCP server (AI assistants); local network only. */
+  /** Accounts of the app and of the MCP server (AI assistants); an admin's, from home only. */
   mcpUsers(): Promise<{ users: McpUser[] }>
   /** Creates the account, or changes its password (8 characters at least). */
   mcpSetUser(name: string, password: string): Promise<{ users: McpUser[] }>
@@ -880,7 +883,9 @@ export interface Transport {
   mcpRemoveUser(name: string): Promise<{ users: McpUser[] }>
   /** What the account may use; `null` = every right. */
   mcpSetRights(name: string, rights: Right[] | null): Promise<{ users: McpUser[] }>
-  /** Version in service and available commits; `refresh` forces a `git fetch`. Local network only. */
+  /** Its roles: admin, house account (one at most). `LAST_ADMIN` (409) refuses taking the last admin's. */
+  mcpSetRole(name: string, role: { admin?: boolean; house?: boolean }): Promise<{ users: McpUser[] }>
+  /** Version in service and available commits; `refresh` forces a `git fetch`. An admin's, from home only. */
   systemVersion(refresh?: boolean): Promise<SystemVersion>
   /** Last update (`null`: never). */
   systemUpdateStatus(): Promise<{ status: UpdateStatus | null }>

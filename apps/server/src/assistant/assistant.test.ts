@@ -99,7 +99,8 @@ describe('routes', () => {
     app.setErrorHandler((err, _req, reply) => { const d = describeError(err); return sendError(reply, d.status, d.code, d.message) })
     // the request's account, as the session gate sets it
     app.decorateRequest('sessionUser', null)
-    app.addHook('onRequest', async (req) => { const u = req.headers['x-test-user']; req.sessionUser = typeof u === 'string' ? u : null })
+    app.decorateRequest('account', null)
+    app.addHook('onRequest', async (req) => { const u = req.headers['x-test-user']; req.account = req.sessionUser = typeof u === 'string' ? u : null })
     registerAssistantRoutes(app, deps({ logger: pino({ level: 'info' }, { write: (line: string) => { logs.push(JSON.parse(line) as typeof logs[number]) } }) }))
     await app.ready()
   })
@@ -157,9 +158,5 @@ describe('routes', () => {
     expect(logs).toEqual([])
   })
 
-  it('shows the log only to the local network', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/assistant/log', headers: { 'x-test-user': 'lou' } })
-    expect(res.statusCode).toBe(403)
-    expect(res.json().error.code).toBe('LAN_ONLY')
-  })
+  // the log is an admin's, from home: guarded by `http/rights.ts` and `http/session.ts` (their tests)
 })

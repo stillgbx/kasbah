@@ -5,14 +5,16 @@ import { useI18n } from 'vue-i18n'
 import { getTransport } from '../../api'
 import { ApiRequestError, type McpUser } from '../../api/transport'
 import { useNotificationsStore } from '../../stores/notifications'
+import { useSessionStore } from '../../stores/session'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// Accounts (`apps/server/mcp-users.json`), in Settings: those that open Kasbah through the public
-// address, and the sign-in page of an assistant (Claude on the phone, Claude Desktop…). The
-// server only returns the names. A name already taken in the form = change its password. The
-// `mcp-user` script remains as a fallback. Under the public address, the list is refused
-// (`LAN_ONLY`, the help says so): only the session is shown there, and a way to close it.
-// Under each account, a folded list of its rights: one pill per domain, saved at each press.
+// Accounts (`apps/server/mcp-users.json`), in Settings: those that open Kasbah, at home as from
+// outside, and the sign-in page of an assistant (Claude on the phone, Claude Desktop…). The
+// server only returns the names, rights and roles. A name already taken in the form = change its
+// password. The `account` script remains as a fallback. Managed by an admin from home: an account
+// that is not admin only sees its session and a way to close it, an admin away from home is told
+// (`LAN_ONLY`). Under each account, folded: its two roles (admin, house account), then its rights,
+// one pill per domain, saved at each press.
 
 const NAME = /^[\w.@-]{1,64}$/
 const MIN_PASSWORD = 8
@@ -22,10 +24,12 @@ const { t } = useI18n()
 
 const users = ref<McpUser[]>([])
 const loaded = ref(false)
-/** Account of the session (public address); `null` on the local network. */
-const sessionUser = ref<string | null>(null)
-/** Opened through the public address: accounts are managed from the local network. */
+const session = useSessionStore()
+/** Account of the session; `null` = the machine Kasbah runs on. */
+const sessionUser = computed(() => session.user)
+/** An admin away from home: accounts are managed from home only. */
 const lanOnly = ref(false)
+const canManage = computed(() => session.admin && !lanOnly.value)
 const busy = ref(false)
 const name = ref('')
 const password = ref('')
@@ -46,9 +50,9 @@ const fail = (err: unknown) => notifications.error(t('errors.UNKNOWN', { name: '
 
 onMounted(async () => {
   try {
-    sessionUser.value = (await getTransport().session()).user
-    // A session means the public address: the list would be refused there, no point requesting it.
-    if (sessionUser.value) { lanOnly.value = true; return }
+    await session.ready()
+    // not an admin: the list would be refused, no point requesting it
+    if (!session.admin) return
     users.value = (await getTransport().mcpUsers()).users
   } catch (err) {
     if (err instanceof ApiRequestError && err.code === 'LAN_ONLY') lanOnly.value = true
@@ -63,7 +67,11 @@ async function run(action: () => Promise<{ users: McpUser[] }>, done?: string): 
     users.value = (await action()).users
     if (done) notifications.success(done)
     return true
-  } catch (err) { fail(err); return false }
+  } catch (err) {
+    if (err instanceof ApiRequestError && err.code === 'LAST_ADMIN') notifications.error(t('mcpUsers.lastAdmin'))
+    else fail(err)
+    return false
+  }
   finally { busy.value = false }
 }
 
@@ -72,10 +80,16 @@ function reset() { name.value = ''; password.value = ''; confirm.value = '' }
 // Rights: folded by default. Every pill lit = no list (every right, those to come included).
 const unfolded = reactive(new Set<string>())
 const toggleFold = (n: string) => { if (!unfolded.delete(n)) unfolded.add(n) }
-const granted = (u: McpUser, r: Right) => !u.rights || u.rights.includes(r)
-const rightsSummary = (u: McpUser) => u.rights
-  ? t('mcpUsers.rightsSome', { n: u.rights.length, total: RIGHTS.length })
-  : t('mcpUsers.rightsAll')
+// an admin may everything: its pills stay lit and still
+const granted = (u: McpUser, r: Right) => !!u.admin || !u.rights || u.rights.includes(r)
+const rightsSummary = (u: McpUser) => {
+  const rights = u.admin ? t('mcpUsers.rightsAdmin')
+    : u.rights ? t('mcpUsers.rightsSome', { n: u.rights.length, total: RIGHTS.length }) : t('mcpUsers.rightsAll')
+  return u.house ? `${t('mcpUsers.house')} · ${rights}` : rights
+}
+function setRole(n: string, role: { admin?: boolean; house?: boolean }) {
+  void run(() => getTransport().mcpSetRole(n, role))
+}
 function setRights(n: string, rights: readonly Right[] | null) {
   void run(() => getTransport().mcpSetRights(n, rights && rights.length < RIGHTS.length ? [...rights] : null))
 }
@@ -141,21 +155,28 @@ function remove(n: string) {
         </button>
       </div>
       <div v-if="unfolded.has(u.name)" class="mu__rights">
-        <div class="muted small mu__hint">{{ $t('mcpUsers.rightsHint') }}</div>
+        <!-- the roles first: they decide what the rights below mean -->
+        <div class="muted small mu__hint">{{ $t('mcpUsers.rolesHint') }}</div>
+        <button type="button" class="mu__right" :data-on="u.admin ? '1' : '0'" :aria-pressed="!!u.admin" :disabled="busy"
+                @click="setRole(u.name, { admin: !u.admin })">{{ $t('mcpUsers.admin') }}</button>
+        <button type="button" class="mu__right" :data-on="u.house ? '1' : '0'" :aria-pressed="!!u.house" :disabled="busy"
+                @click="setRole(u.name, { house: !u.house })">{{ $t('mcpUsers.house') }}</button>
+        <div class="muted small mu__hint mu__hint--rights">{{ $t('mcpUsers.rightsHint') }}</div>
         <!-- toggle pills, as for a plugin's sub-items: same footprint lit or not -->
         <button v-for="r in RIGHTS" :key="r" type="button" class="mu__right" :data-on="granted(u, r) ? '1' : '0'"
-                :aria-pressed="granted(u, r)" :disabled="busy" @click="toggleRight(u, r)">
+                :aria-pressed="granted(u, r)" :disabled="busy || !!u.admin" @click="toggleRight(u, r)">
           {{ $t(`rights.${r}`) }}
         </button>
         <div class="mu__rightsall">
-          <button type="button" class="pill mu__btn" :disabled="busy || !u.rights" @click="setRights(u.name, null)">{{ $t('common.all') }}</button>
-          <button type="button" class="pill mu__btn" :disabled="busy || u.rights?.length === 0" @click="setRights(u.name, [])">{{ $t('common.none') }}</button>
+          <button type="button" class="pill mu__btn" :disabled="busy || !!u.admin || !u.rights" @click="setRights(u.name, null)">{{ $t('common.all') }}</button>
+          <button type="button" class="pill mu__btn" :disabled="busy || !!u.admin || u.rights?.length === 0" @click="setRights(u.name, [])">{{ $t('common.none') }}</button>
         </div>
       </div>
     </div>
-    <div v-if="loaded && !lanOnly && !users.length" class="muted small">{{ $t('mcpUsers.none') }}</div>
+    <div v-if="loaded && canManage && !users.length" class="muted small">{{ $t('mcpUsers.none') }}</div>
+    <div v-if="session.admin && lanOnly" class="muted small">{{ $t('mcpUsers.lanOnly') }}</div>
 
-    <form v-if="!lanOnly" class="mu__form" @submit.prevent="save">
+    <form v-if="canManage" class="mu__form" @submit.prevent="save">
       <div class="mu__formtitle">{{ existing ? $t('mcpUsers.changeTitle', { name: name.trim() }) : $t('mcpUsers.addTitle') }}</div>
       <div class="mu__fields">
         <label class="mu__field">
@@ -193,6 +214,7 @@ function remove(n: string) {
 .mu__who > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mu__rights { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 10px 26px; }
 .mu__hint { flex: 0 0 100%; margin-bottom: 2px; }
+.mu__hint--rights { margin-top: 8px; }
 .mu__right { font-size: 12px; line-height: 1; padding: 6px 10px; border-radius: 999px; cursor: pointer;
              border: 1px solid var(--line); background: transparent; color: var(--muted); transition: color .15s, border-color .15s, background .15s; }
 .mu__right[data-on='1'] { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }

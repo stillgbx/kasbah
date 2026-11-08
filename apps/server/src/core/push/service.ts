@@ -42,8 +42,8 @@ export interface PushServiceDeps {
   subject: string
   /** The accounts that exist now; a subscription of another account is dropped. */
   accounts: () => Promise<string[]>
-  /** The rights of each account (`undefined` = every right); absent = no filtering. */
-  rights?: () => Promise<ReadonlyMap<string, readonly Right[] | undefined>>
+  /** What each account may do (`http/rights.ts`, `accountRights`); absent = no filtering. */
+  rights?: () => Promise<ReadonlyMap<string, { admin: boolean; house: boolean; rights: readonly Right[] | undefined }>>
   logger: Logger
   now?: () => number
   fetch?: PushFetch
@@ -98,7 +98,16 @@ export class PushService {
   /** To every screen subscribed to `category`, each in its language. */
   async send(category: NotifyCategory, render: (lang: PushLang) => PushMessage): Promise<SendResult> {
     const rights = await this.deps.rights?.()
-    const allowed = (s: StoredSubscription) => s.user === null || !rights || grants(rights.get(s.user), RIGHT_OF_NOTIFY_CATEGORY[category])
+    const need = RIGHT_OF_NOTIFY_CATEGORY[category]
+    // a screen subscribed without an account (from the local network, before every screen signed in)
+    // is the house's: it gets what the house account may get, everything if there is none
+    const house = rights && [...rights.values()].find((a) => a.house)
+    const allowed = (s: StoredSubscription) => {
+      if (!rights) return true
+      const access = s.user === null ? house : rights.get(s.user)
+      if (s.user === null && !access) return true
+      return access !== undefined && (need === 'admin' ? access.admin : access.admin || grants(access.rights, need))
+    }
     return this.deliver((s) => s.categories.includes(category) && allowed(s), render)
   }
 

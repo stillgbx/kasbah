@@ -1,6 +1,6 @@
 # Production
 
-> Dernière mise à jour : 2026-11-06
+> Dernière mise à jour : 2026-11-08
 > Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts`, `site/`, `.github/workflows/pages.yml`, `apps/web/src/stores/push.ts` (2026-10-29)
 
 ## Build
@@ -806,3 +806,38 @@ Vérifié par `apps/server/src/http/static.test.ts` (cinq en-têtes, dont un nav
 accepte le français et une requête sans en-tête).
 
 Sources : `apps/server/src/http/static.ts`, `apps/web/public/manifest{,.en}.webmanifest`, `apps/web/vite.config.ts`.
+
+## Mise à jour 2026-11-08 — l'adresse publique devient la seule porte, HTTPS en local (« étape 0 »)
+
+Le réseau local n'est plus sans compte : voir [1_13](../1_architecture/1_13_comptes-et-sessions.md), section du
+2026-11-08. Les mentions ci-dessus de « réseau local de confiance » et de `npm run mcp-user` sont **dépassées**.
+Conséquence pour qui déploie : `http://<ip>:8787` ne sert plus l'app (302 vers `MCP_PUBLIC_URL` pour une page,
+401 sinon) ; seule la machine elle-même (`localhost`) ouvre Kasbah sans connexion. Sans `MCP_PUBLIC_URL`,
+Kasbah avertit au démarrage et seule cette machine y entre. Le pare-feu sur 8787 reste **facultatif** : le HTTP
+local ne sert plus que les flux des enceintes (URL à `sid` aléatoire).
+
+**Étape 0 : HTTPS depuis le réseau local, sous le même nom que dehors.** Procédure générique, faite par
+l'utilisateur et vérifiée depuis un PC (certificat valide, `/` renvoie à `/login`) :
+
+1. Un DNS local (Pi-hole ou équivalent) répond au nom public (`kasbah.example.org`) par l'adresse du NAS qui
+   porte le proxy inverse et son certificat Let's Encrypt.
+2. Le proxy transmet à la machine Kasbah (autre machine que le NAS), comme à la procédure plus haut.
+3. Contrôle : depuis un poste du réseau, le nom public résout vers l'adresse **locale** du NAS, et
+   `https://<nom public>/` renvoie à `/login` avec un certificat valide.
+
+Pièges vus :
+- `nslookup` interroge le **premier** DNS de sa liste (ici un DNS IPv6 annoncé par le routeur, même avec l'IPv6
+  désactivé sur le poste) et **ment** ; la résolution Windows (`Resolve-DnsName`, celle des navigateurs) était
+  la bonne. Juger avec `Resolve-DnsName`.
+- Le cache du Pi-hole pouvait rendre l'ancienne adresse publique **en plus** de la locale : redémarrer le
+  résolveur.
+- **Ne pas** faire relayer le routeur vers le Pi-hole quand le Pi-hole a une redirection conditionnelle vers le
+  routeur : boucle. Inutile de toute façon : par l'adresse publique, le NAT loopback ramène au NAS, toujours
+  en HTTPS valide.
+
+**À vérifier sur le vrai proxy** : qu'il ajoute bien `X-Forwarded-For`. C'est lui qui dit « client à la
+maison » (`LAN_ONLY`) et qui empêche de prendre une requête proxifiée pour la machine elle-même.
+
+**Ordre de mise en service** : (1) créer l'admin par le script (`npm run account -w @kasbah/server -- add
+<nom> --admin`) ; (2) marquer le compte de la maison (`… house <nom> on`) ; (3) mettre les écrans fixes (tablette)
+sur l'adresse publique ; (4) seulement alors déployer, sans quoi l'écran fixe tombe sur 302 / 401.

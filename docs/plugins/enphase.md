@@ -31,7 +31,7 @@
 - **Gateway**: the Kasbah server talks directly to the gateway over HTTPS (name `envoy.local` by default, self-signed certificate accepted for it alone). No call to the Internet once the token is set, no quota. The serial number never has to be entered: the gateway provides it.
 - **Token**: software 7.0 and later requires a token, valid for one year. The server keeps it in `apps/server/.state/enphase-token.json`: there is **nothing to copy** into `.env`, and the pairing survives restarts.
 - **Charger**: it is not on the gateway, it only talks to the Enphase cloud. This requires linking the Enphase (Enlighten) account; the session is kept in `apps/server/.state/enphase-cloud.json`. A token pasted by hand is not enough.
-- **Password**: the Enphase account's password is never a configuration key. It is used once for pairing, then forgotten (neither saved nor logged). It does, however, cross your local network in plain HTTP, since Kasbah is not served over HTTPS: the "token" route avoids this, at the cost of the charger.
+- **Password**: the Enphase account's password is never a configuration key. It is used once for pairing, then forgotten (neither saved nor logged). It travels over HTTPS, through the public address: no screen signs in to Kasbah over plain HTTP.
 
 ## Setup
 

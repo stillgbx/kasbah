@@ -68,7 +68,7 @@ beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'kasbah-push-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 /** A push service that records what it receives, and answers `status` per endpoint. */
-function pushHarness(opts: { accounts?: string[]; status?: Record<string, number>; rights?: Record<string, Right[]> } = {}) {
+function pushHarness(opts: { accounts?: string[]; status?: Record<string, number>; rights?: Record<string, Right[]>; admins?: string[]; house?: string } = {}) {
   const received: { endpoint: string; headers: Record<string, string>; body: Uint8Array }[] = []
   const fetch: PushFetch = async (url, init) => {
     received.push({ endpoint: url, headers: init.headers, body: init.body })
@@ -77,7 +77,11 @@ function pushHarness(opts: { accounts?: string[]; status?: Record<string, number
   const service = new PushService({
     path: join(dir, 'push.json'), subject: 'mailto:kasbah@example.org', logger, fetch,
     accounts: async () => opts.accounts ?? [],
-    ...(opts.rights ? { rights: async () => new Map(Object.entries(opts.rights!)) } : {}),
+    ...(opts.rights ? {
+      rights: async () => new Map((opts.accounts ?? []).map((name) => [name, {
+        admin: opts.admins?.includes(name) ?? false, house: name === opts.house, rights: opts.admins?.includes(name) ? undefined : opts.rights![name],
+      }])),
+    } : {}),
   })
   return { service, received }
 }
@@ -217,7 +221,7 @@ describe('AlertNotifier', () => {
     await n.close()
   })
 
-  it("leaves out an account without the category's right, never the local network's screens", async () => {
+  it("leaves out an account without the category's right, never a screen subscribed without an account", async () => {
     const kid = browser(); const adult = browser(); const house = browser()
     const { service, received } = pushHarness({ accounts: ['kid', 'adult'], rights: { kid: ['robots'] } })
     await service.load()
@@ -230,5 +234,19 @@ describe('AlertNotifier', () => {
     expect((await service.send('robots', () => message('x'))).sent).toBe(1)
     // the subscription stays: given the right back, the account is notified again
     expect(service.has(kid.sub.endpoint)).toBe(true)
+  })
+
+  it("sends the plugins' alerts to the admins, and to a screen without an account what the house account may get", async () => {
+    const root = browser(); const adult = browser(); const wall = browser()
+    const { service, received } = pushHarness({ accounts: ['root', 'adult', 'maison'], rights: { maison: ['robots'] }, admins: ['root'], house: 'maison' })
+    await service.load()
+    for (const [b, user] of [[root, 'root'], [adult, 'adult'], [wall, null]] as const) {
+      await service.subscribe({ subscription: b.sub, categories: ['plugins', 'vehicles', 'robots'], lang: 'fr' }, user)
+    }
+    expect((await service.send('plugins', () => message('x'))).sent).toBe(1)
+    expect(received.map((r) => r.endpoint)).toEqual([root.sub.endpoint])
+    // the wall screen (subscribed before every screen signed in) follows the house account's rights
+    expect((await service.send('vehicles', () => message('x'))).sent).toBe(2)
+    expect((await service.send('robots', () => message('x'))).sent).toBe(3)
   })
 })

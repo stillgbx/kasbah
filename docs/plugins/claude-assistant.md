@@ -12,7 +12,7 @@
 
 - **Ask Kasbah**: an instruction typed into search (Ctrl+K or the header's ✦ button, or the Home view bar) — "turn everything off on the ground floor", "put France Inter on in the kitchen" — goes to Claude on the server, which acts through Kasbah's tools (devices, light scenes, music, radio, school, server status) and answers in one sentence. The tools in use are shown while it works.
 - **Dictation**: with the [transcription](transcription.md) plugin, the instruction can be spoken into the microphone, and the answer can be read aloud.
-- **Log**: the last 200 instructions, from all accounts, in Settings → Assistant (visible from the local network only).
+- **Log**: the last 200 instructions, from all accounts, in Settings → Assistant (visible to an admin, from home only).
 
 The plugin publishes no device: it does not appear in the 3D house. Without it, "Ask Kasbah" answers that no assistant is enabled.
 
@@ -23,7 +23,7 @@ No API key: everyone uses **their own Claude subscription**.
 1. On a computer where Claude Code is installed, run `claude setup-token` and sign in to claude.ai: the command prints a token `sk-ant-oat01-…` valid for **one year**.
 2. Paste it into **Settings → Plugins → claude**, then **Save**.
 
-When signed in (public address), the token is the one **for your account**; on the local network, the one **for the house**. For an instruction, Kasbah uses the token of the account that is asking, otherwise the house's, otherwise the `claude` sign-in already done on the server machine. The card says which one is in use. The token is kept by the server (in a file readable only by it) and **never goes back to the browser**. To remove the token: **Remove token**, then confirm. Pasted in the interface, the token crosses your local network in plain HTTP, since Kasbah is not served over HTTPS. To keep it off the network, paste it from the public address (HTTPS) when Kasbah has one (`MCP_PUBLIC_URL`, see the README's **Remote access**).
+The token you paste is the one **for your account**; signed in with the house account (the wall screens), the one **for the house**. For an instruction, Kasbah uses the token of the account that is asking, otherwise the house's, otherwise the `claude` sign-in already done on the server machine. The card says which one is in use. The token is kept by the server (in a file readable only by it) and **never goes back to the browser**. To remove the token: **Remove token**, then confirm. Pasted in the interface, the token crosses your local network in plain HTTP, since Kasbah is not served over HTTPS. To keep it off the network, paste it from the public address (HTTPS) when Kasbah has one (`MCP_PUBLIC_URL`, see the README's **Remote access**).
 
 Anthropic's terms reserve a Claude account for one person: falling back to the house plan makes the other accounts run on it.
 

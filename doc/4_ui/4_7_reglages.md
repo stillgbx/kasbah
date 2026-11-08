@@ -581,3 +581,20 @@ joués** : la liste réelle des plugins, et les cartes de mise en route (Hue, Ne
 pleine largeur sur la vraie maison.
 
 Sources : `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/settings/PluginSection.vue`.
+
+### Mise à jour 2026-11-08 — Réglages se règle sur `session.admin`, la carte Comptes gagne les rôles
+
+Pourquoi : le droit `settings` est fusionné dans admin et le réseau local n'est plus sans compte
+([1_13](../1_architecture/1_13_comptes-et-sessions.md), section du 2026-11-08). Ce que la page dit plus haut
+du « droit `settings` » (sections du 2026-11-01) est donc d'avant : plus de `session.may('settings')`.
+- `stores/session.ts` gagne `admin` (lu dans `GET /api/session`) ; `SettingsView.vue` se règle dessus. Un
+  non-admin garde ses réglages d'appareil (thème, langue, ordre du rail, notifications) et perd ceux du serveur.
+- **Carte Comptes** (`components/settings/McpUsersCard.vue`) : en dépliant un compte, deux interrupteurs
+  « Super-utilisateur » et « Compte de la maison », puis ses droits (figés et allumés pour un admin). Résumé
+  « Compte de la maison · Tous les droits ». Refus du dernier admin : « Il faut garder au moins un
+  super-utilisateur » (409 `LAST_ADMIN`). Un non-admin ne voit que sa session et la déconnexion ; un admin hors de
+  la maison voit « Les comptes se gèrent depuis la maison seulement » (403 `LAN_ONLY`).
+- `ServerUpdateCard` et `AssistantCard` ne déduisent plus « réseau local » de `user === null` ; les textes fr / en
+  ne parlent plus de « réseau local de confiance ». Mock : le compte `parent` est admin.
+- Vérifié dans `kasbah-mock` : rien ne bouge (mesure géométrique), pas de débordement en bureau ni à 375 px, en
+  fr et en. Tests : `McpUsersCard.test.ts` (nouveau), `AssistantCard.test.ts`, `MatterCard.test.ts`.

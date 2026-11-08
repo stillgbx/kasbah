@@ -51,7 +51,7 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
 
   app.get('/api/house', async (req, reply) => {
     reply.header('cache-control', 'no-cache')
-    return deps.houseView ? (await deps.houseView(req.sessionUser))(deps.house.house) : deps.house.house
+    return deps.houseView ? (await deps.houseView(req.account))(deps.house.house) : deps.house.house
   })
 
   app.get('/api/house/warnings', async () => ({ warnings: deps.house.warnings }))
@@ -232,7 +232,7 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
   })
 
   app.get('/api/devices', async (req) => {
-    const visible = deps.deviceFilter ? await deps.deviceFilter(req.sessionUser) : () => true
+    const visible = deps.deviceFilter ? await deps.deviceFilter(req.account) : () => true
     return { devices: deps.registry.list().filter((e) => visible(e.descriptor)) }
   })
 
@@ -356,7 +356,7 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     const id = automationIdSchema.parse(req.params.id)          // ZodError → 400
     const body = automationBodySchema.parse(req.body)
     // written by an assistant: the app will show it "to review" until a write from the app
-    const byAssistant = fromMcp(req) ? (req.sessionUser ? { user: req.sessionUser } : {}) : undefined
+    const byAssistant = fromMcp(req) ? (req.account ? { user: req.account } : {}) : undefined
     return { automation: await deps.automations.upsert(id, body, byAssistant) }
   })
 

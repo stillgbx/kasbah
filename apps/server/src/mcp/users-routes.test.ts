@@ -81,3 +81,54 @@ it('sets the rights of an account, keeps them across a password change, and give
   expect((await rights(['nope'] as string[])).statusCode).toBe(400)
   expect((await app.inject({ method: 'PUT', url: '/api/mcp/users/zoe/rights', payload: { rights: [] } })).statusCode).toBe(404)
 })
+
+const role = (name: string, body: { admin?: boolean; house?: boolean }) =>
+  app.inject({ method: 'PUT', url: `/api/mcp/users/${encodeURIComponent(name)}/role`, payload: body })
+
+it('makes an account an admin, keeps the role across a password and a rights change, and takes it back', async () => {
+  await put('lou', 'premier-mdp')
+  await put('zoe', 'premier-mdp')
+  expect((await role('lou', { admin: true })).json()).toEqual({ users: [{ name: 'lou', admin: true }, { name: 'zoe' }] })
+  await put('lou', 'second-mdp')
+  await app.inject({ method: 'PUT', url: '/api/mcp/users/lou/rights', payload: { rights: ['lights'] } })
+  expect((await app.inject({ method: 'GET', url: '/api/mcp/users' })).json()).toEqual({ users: [{ name: 'lou', rights: ['lights'], admin: true }, { name: 'zoe' }] })
+  await role('zoe', { admin: true })
+  expect((await role('lou', { admin: false })).json()).toEqual({ users: [{ name: 'lou', rights: ['lights'] }, { name: 'zoe', admin: true }] })
+  // nothing written for a false role
+  expect(readFileSync(usersFile, 'utf8')).not.toContain('false')
+})
+
+it('keeps a single house account', async () => {
+  await put('lou', 'premier-mdp')
+  await put('maison', 'premier-mdp')
+  expect((await role('lou', { house: true })).json()).toEqual({ users: [{ name: 'lou', house: true }, { name: 'maison' }] })
+  expect((await role('maison', { house: true })).json()).toEqual({ users: [{ name: 'lou' }, { name: 'maison', house: true }] })
+  await put('maison', 'second-mdp')
+  expect((await role('maison', { house: false })).json()).toEqual({ users: [{ name: 'lou' }, { name: 'maison' }] })
+})
+
+it('never leaves the accounts without an admin once there is one', async () => {
+  await put('lou', 'premier-mdp')
+  await put('zoe', 'premier-mdp')
+  await role('lou', { admin: true })
+  const demote = await role('lou', { admin: false })
+  expect(demote.statusCode).toBe(409)
+  expect(demote.json().error.code).toBe('LAST_ADMIN')
+  const remove = await app.inject({ method: 'DELETE', url: '/api/mcp/users/lou' })
+  expect(remove.statusCode).toBe(409)
+  expect(remove.json().error.code).toBe('LAST_ADMIN')
+  expect((await readUsers(usersFile)).users.map((u) => u.name)).toEqual(['lou', 'zoe'])
+  // with a second admin, the first one may go
+  await role('zoe', { admin: true })
+  expect((await app.inject({ method: 'DELETE', url: '/api/mcp/users/lou' })).json()).toEqual({ users: [{ name: 'zoe', admin: true }] })
+  // accounts that never had an admin are not blocked
+  await put('max', 'premier-mdp')
+  expect((await app.inject({ method: 'DELETE', url: '/api/mcp/users/max' })).statusCode).toBe(200)
+})
+
+it('refuses a role change without a role, or for an unknown account', async () => {
+  await put('lou', 'premier-mdp')
+  expect((await role('lou', {})).statusCode).toBe(400)
+  expect((await app.inject({ method: 'PUT', url: '/api/mcp/users/lou/role', payload: { admin: 'yes' } })).statusCode).toBe(400)
+  expect((await role('zoe', { admin: true })).statusCode).toBe(404)
+})

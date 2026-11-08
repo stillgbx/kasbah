@@ -12,7 +12,8 @@ import { hashPassword } from './auth'
 
 // Under the public name (`MCP_PUBLIC_URL`, that of the NAS reverse proxy), the MCP answers with its
 // tokens and the rest requires a session (details in `http/session.test.ts`): the proxy forwards
-// everything, the assembled application does the sorting. The local network does not change.
+// everything, the assembled application does the sorting. Under a local name, nothing opens but the
+// speakers' streams (`lanGate`), except for the machine itself (`isLoopbackRequest`).
 
 const PUBLIC = 'kasbah.example.org'
 const ORIGIN = `https://${PUBLIC}`
@@ -74,10 +75,15 @@ it('recognizes the public name whatever its letter case or trailing dot, in Host
   }
 })
 
-it('changes nothing on the local network', async () => {
-  expect((await get('/api/devices', { host: 'kasbah:8787' })).statusCode).toBe(200)
+it('opens nothing under a local name, but everything to the machine itself', async () => {
+  for (const url of ['/api/devices', '/api/mcp/users', '/api/session']) {
+    expect((await get(url, { host: 'kasbah:8787' })).statusCode, url).toBe(401)
+  }
+  const page = await get('/settings', { host: 'kasbah:8787', ...HTML })
+  expect(page.statusCode).toBe(302)
+  expect(page.headers.location).toBe(`${ORIGIN}/settings`)
   expect((await get('/api/mcp/users', { host: 'localhost:8787' })).statusCode).toBe(200)
-  expect((await get('/api/session', { host: 'kasbah:8787' })).json()).toEqual({ user: null })
+  expect((await get('/api/session', { host: 'localhost:8787' })).json()).toEqual({ user: null, admin: true })
 })
 
 it('refuses on the local network a name a DNS-rebinding page could take', async () => {
@@ -89,29 +95,35 @@ it('refuses on the local network a name a DNS-rebinding page could take', async 
   const put = await kasbah.app.inject({ method: 'PUT', url: '/api/mcp/users/eve', headers: { host: 'attacker.example.com:8787' }, payload: { password: 'mot-de-passe-long' } })
   expect(put.statusCode).toBe(403)
   await expect(kasbah.app.injectWS('/ws', { headers: { host: 'attacker.example.com:8787' } })).rejects.toThrow('403')
+  // a local name goes on to the local gate (401 without the machine itself), never UNKNOWN_HOST
   for (const host of [
     '192.168.1.90:8787', '192.168.1.90', '[::1]:8787', 'localhost:5173', 'kasbah:8787', 'kasbah.home.internal:8787',
     'KASBAH.HOME.INTERNAL', 'kasbah.local', 'kasbah.lan', 'kasbah.home.arpa', 'app.localhost', 'nas.example.net', 'kasbah.example.net:8787',
   ]) {
-    expect((await get('/api/devices', { host })).statusCode, host).toBe(200)
+    expect([200, 401], host).toContain((await get('/api/devices', { host })).statusCode)
   }
 })
 
 it('refuses on the local network a write or a WebSocket from another site, not a read or a client without Origin', async () => {
-  const host = 'kasbah.home.internal:8787'
+  // before the local gate, under any local name
+  const lanCommand = (origin: string) => kasbah.app.inject({ method: 'POST', url: '/api/devices/unknown/command', headers: { host: 'kasbah.home.internal:8787', origin }, payload: {} })
+  expect((await lanCommand('http://attacker.example.com')).json().error.code).toBe('BAD_ORIGIN')
+  // the machine itself, which the local gate lets through
+  const host = 'localhost:8787'
   const command = (headers: Record<string, string>) => kasbah.app.inject({ method: 'POST', url: '/api/devices/unknown/command', headers: { host, ...headers }, payload: {} })
-  for (const origin of ['http://attacker.example.com', 'http://192.168.1.90:8787', 'http://kasbah.home.internal:5173', 'null']) {
+  for (const origin of ['http://attacker.example.com', 'http://192.168.1.90:8787', 'http://localhost:5173', 'null']) {
     const res = await command({ origin })
     expect(res.statusCode, origin).toBe(403)
     expect(res.json().error.code, origin).toBe('BAD_ORIGIN')
   }
   expect((await command({ origin: `http://${host}` })).statusCode).not.toBe(403)
-  expect((await command({ origin: 'HTTP://KASBAH.home.internal:8787' })).statusCode).not.toBe(403)
+  expect((await command({ origin: 'HTTP://LOCALHOST:8787' })).statusCode).not.toBe(403)
   expect((await command({})).statusCode).not.toBe(403)
   expect((await get('/api/devices', { host, origin: 'http://attacker.example.com' })).statusCode).toBe(200)
   await expect(kasbah.app.injectWS('/ws', { headers: { host, origin: 'http://attacker.example.com' } })).rejects.toThrow('403')
-  const socket = await kasbah.app.injectWS('/ws', { headers: { host, origin: `http://${host}` } })
-  socket.terminate()
+  // the right origin passes the check (an injected WebSocket has no socket, so it is not the machine
+  // itself: the local gate answers 401, not 403)
+  await expect(kasbah.app.injectWS('/ws', { headers: { host, origin: `http://${host}` } })).rejects.toThrow('401')
 })
 
 const login = (username: string, password: string) => kasbah.app.inject({

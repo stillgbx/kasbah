@@ -47,8 +47,9 @@ shutter already linked to Google Home through the vendor's own integration would
   `ip -6 addr show scope link` lists an `fe80::` address).
 - Wi-Fi settings that block multicast between clients (client isolation, some "IGMP snooping" setups)
   stop the assistant from finding the bridge.
-- Open Kasbah **from the local network**: the bridge's card and its API refuse the public address,
-  because the pairing code gives control over everything the bridge publishes.
+- Open Kasbah **with an admin account, from home**: the bridge's card and its API refuse any other
+  account, and a client away from home, because the pairing code gives control over everything the
+  bridge publishes.
 
 ## Turn the bridge on
 
@@ -146,7 +147,7 @@ loses it. You should not need to: **Unpair** does the same, one assistant at a t
 | Symptom | What to check |
 |---|---|
 | The card says the bridge **did not start** | the server log (`component: matter`): port 5540 already used by another Matter program on the machine, for instance |
-| The card only says it is managed from the local network | you opened Kasbah through the public address: open it from the local network |
+| The card is missing, or only says it is managed from home | sign in with an admin account, from a device at home |
 | The assistant does not find the bridge | same network, multicast not blocked by the Wi-Fi, IPv6 on the server, the card shows a code (no assistant holds it already) |
 | A device is missing | it is ticked, its plugin is on, and its kind can be published (see the table above); the card lists ticked ids it cannot find |
 | A device stays "unreachable" | the plugin lost the device (check its view in Kasbah) or the bridge is off; if Kasbah shows it available, switch it off and on again in the card to publish it anew |

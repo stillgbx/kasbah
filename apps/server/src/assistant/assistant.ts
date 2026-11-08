@@ -144,7 +144,8 @@ export function registerAssistantRoutes(app: FastifyInstance, deps: AssistantDep
     // Streamed response, one JSON line per event: no compression (it would hold back the lines).
     sub.post('/ask', { compress: false }, async (req, reply) => {
       const { text } = z.object({ text: z.string().trim().min(1).max(MAX_TEXT) }).parse(req.body)
-      const user = req.sessionUser
+      // the account, not its data's owner: the run acts with its rights (`runToken`)
+      const user = req.account
       const key = user ?? ''
       if (running.has(key)) return sendError(reply, 409, 'BUSY', 'an instruction is already running for this account')
       running.add(key)
@@ -169,10 +170,7 @@ export function registerAssistantRoutes(app: FastifyInstance, deps: AssistantDep
       return reply.header('cache-control', 'no-store').type('application/x-ndjson; charset=utf-8').send(out)
     })
 
-    // The instructions of ALL accounts: from the local network only, like the accounts.
-    sub.get('/log', async (req, reply) => {
-      if (req.sessionUser !== null) return sendError(reply, 403, 'LAN_ONLY', 'the assistant log is read from the local network only')
-      return { entries: await readLog() }
-    })
+    // The instructions of ALL accounts: admins only, from home (`http/rights.ts`, `http/session.ts`).
+    sub.get('/log', async () => ({ entries: await readLog() }))
   }, { prefix: '/api/assistant' })
 }

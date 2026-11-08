@@ -6,13 +6,13 @@ import { sendError } from './errors'
 
 // Push notifications of a screen: the server's public key, subscribing (with its categories),
 // unsubscribing, and a test sent to this screen only. Behind the session under the public name,
-// like the rest of the app: a subscription remembers its account (`req.sessionUser`).
+// like the rest of the app: a subscription remembers its account (`req.account`).
 
 export function registerPushRoutes(app: FastifyInstance, push: PushService): void {
   app.get('/api/push/key', async () => ({ publicKey: push.publicKey() }))
 
   app.put('/api/push/subscription', async (req) => {
-    await push.subscribe(pushSubscribeBodySchema.parse(req.body), req.sessionUser)
+    await push.subscribe(pushSubscribeBodySchema.parse(req.body), req.account)
     return { ok: true }
   })
 

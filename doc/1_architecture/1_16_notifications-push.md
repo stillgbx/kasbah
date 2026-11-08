@@ -1,6 +1,6 @@
 # Notifications push (Web Push)
 
-> Dernière mise à jour : 2026-11-01
+> Dernière mise à jour : 2026-11-08
 > Sources : `packages/shared/src/push/push.ts`, `apps/server/src/core/push/{webpush,service,alerts,texts}.ts`, `apps/server/src/http/push.ts`, `apps/server/src/core/outbound.ts`, `apps/server/src/core/automations/runner.ts`, `apps/server/src/app.ts`, `apps/web/public/sw.js`, `apps/web/src/stores/push.ts`, `apps/web/src/components/settings/PushCard.vue`, tests `apps/server/src/core/push/push.test.ts` et `core/automations/runner.test.ts`, arbre de travail NON COMMITÉ du 2026-10-28 (après 610eff3)
 
 ## Ce que c'est, et pourquoi ce choix
@@ -131,3 +131,12 @@ par le test de déchiffrement.
 `settings`). **L'abonnement est gardé**, pas supprimé : un droit rendu reprend les notifications sans
 se réabonner. `sendTo` (le bouton d'essai) n'est pas filtré : il écrit à l'appareil qui le demande. Sans
 liste de droits (réseau local, compte non limité), rien ne change. Test : `core/push/push.test.ts`.
+
+### Mise à jour 2026-11-08 — l'abonnement suit le compte connecté
+
+Le réseau local n'est plus « sans compte » ([1_13](1_13_comptes-et-sessions.md), section du 2026-11-08) :
+l'abonnement est retenu par `req.account` (le compte connecté), non plus `req.sessionUser`. Les alertes de
+plugins vont aux **admins seulement** (elles demandaient `settings`, fusionné dans admin). Un ancien
+abonnement sans compte (`user: null`) reçoit ce que le compte de la maison peut recevoir, tout s'il n'y en a
+pas. Les mentions plus haut de « `null` sur le réseau local » et de « liste de droits absente » sont d'avant.
+Code : `core/push/service.ts`, `http/push.ts` ; test : `core/push/push.test.ts`.

@@ -109,5 +109,7 @@ export const statusSchema = z.object({
   user: z.string().nullable(),
   /** Signed-in user without a cookie: public catalog only, nothing personal. */
   anonymous: z.boolean(),
+  /** A user without a cookie who listens with the house account's (the family's subscription). */
+  houseFallback: z.boolean(),
 })
 export type YtmusicStatus = z.infer<typeof statusSchema>

@@ -1,6 +1,6 @@
 # Configuration (.env)
 
-> Dernière mise à jour : 2026-11-06
+> Dernière mise à jour : 2026-11-08
 > Sources : `apps/server/src/config/env.ts`, `apps/server/.env.example`, `apps/server/src/plugins/{mock,hue,tahoma,nest}/index.ts`, `apps/server/src/plugins/google_cast/{index,known}.ts`, `apps/server/src/plugins/google_cast/enrich/cover.ts`, `apps/server/src/plugins/google_cast/bravia.ts`, `apps/server/src/plugins/enphase/index.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/plugins/comap/index.ts`, `apps/server/src/plugins/sonos/index.ts`, `apps/server/src/plugins/ytmusic/index.ts`, `apps/server/src/core/paths.ts`, `apps/server/test/state-isolation.ts`, `apps/server/.env.example`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{mixcloud,radio}/index.ts`, `apps/server/src/core/automations/schedule.ts` (`TZ`), `apps/server/src/plugins/claude/index.ts`, `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/main.ts`, `.gitignore`, `apps/server/src/config/{catalog,properties}.ts`
 
 ## Où vivent les secrets
@@ -645,3 +645,11 @@ Aucune clé obligatoire. Bloc « Plugin Podcasts » de `apps/server/.env.example
 | `PODCASTINDEX_URL` | `https://api.podcastindex.org` | Racine de Podcast Index. |
 
 La liste des fichiers d'état passant par `stateFile` s'allonge de `PODCASTS_STATE_FILE`.
+
+### Mise à jour 2026-11-08 — comptes et `MCP_PUBLIC_URL`
+
+`MCP_USERS_FILE` : le script de secours s'appelle désormais `npm run account` (ancien `mcp-user`), et chaque
+compte peut porter `admin: true` et `house: true` ([1_13](../1_architecture/1_13_comptes-et-sessions.md), section
+du 2026-11-08). `MCP_PUBLIC_URL` devient **la seule adresse qui ouvre Kasbah** hors de la machine elle-même :
+sans elle, avertissement au démarrage et rien n'est joignable par le réseau. La suppression d'un compte
+(`deleteUser`) passe par la route ou `npm run account remove`.

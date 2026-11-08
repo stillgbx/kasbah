@@ -11,7 +11,7 @@ import type { SchoolFile, SchoolHomework, SchoolJournal, SchoolMessage, SchoolPo
 import type { SceneRegistry } from '../core/scene-registry'
 import type { AgendaEvent } from '../plugins/agenda/ics'
 import { REPEAT_MODES, type RepeatMode } from '../music/queue'
-import { sha256, type McpAuth } from './auth'
+import { ownerOf, sha256, type McpAuth } from './auth'
 import { deviceFilter, houseView, mayUse } from '../http/rights'
 import { actAsHeaders } from '../http/session'
 
@@ -291,7 +291,8 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     title: 'Santé des plugins',
     description: "État de chaque plugin, par id : statut, détail lisible, nombre d'appareils, quota consommé quand l'API du fabricant est bornée. keys liste les noms des variables d'environnement lues, jamais leurs valeurs. À consulter quand un appareil manque ou ne répond pas.",
     annotations: { readOnlyHint: true },
-  }, async () => json(await deps.host.health(user)))
+  // the health of the account's own music accounts: the house account's are the house's
+  }, async () => json(await deps.host.health(ownerOf(await deps.auth.users(), user))))
 
   server.registerTool('search_music', {
     title: 'Chercher de la musique',
@@ -768,7 +769,7 @@ export async function registerMcp(app: FastifyInstance, deps: McpDeps): Promise<
         // `requireToken` set the token's account: this request's server acts in its name. The token's
         // hash keys its external reads (`ExternalReads`).
         const tokenKey = sha256(/^Bearer (\S+)$/i.exec(req.headers.authorization ?? '')?.[1] ?? '')
-        const authInfo = { token: '', clientId: '', scopes: [], extra: { user: req.sessionUser, tokenKey } }
+        const authInfo = { token: '', clientId: '', scopes: [], extra: { user: req.account, tokenKey } }
         return reply.send(await handler.fetch(new Request(`http://${req.host}${req.url}`, { method: req.method, headers, body }), { authInfo }))
       },
     })

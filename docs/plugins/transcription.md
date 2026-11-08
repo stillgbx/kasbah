@@ -24,8 +24,8 @@ The plugin publishes no device: it does not appear in the 3D house. The micropho
 
 In **Settings → Plugins → transcription**, the "Spoken answers voice" list:
 
-- **on the local network** (not signed in), it sets the **house voice**; "Default voice" goes back to `TTS_VOICE`;
-- **signed in** (public address), it sets the voice **of your account only**. The first option, "House voice", means "no personal choice": the house voice is used, and follows its changes.
+- **signed in with the house account** (the wall screens), it sets the **house voice**; "Default voice" goes back to `TTS_VOICE`;
+- **signed in with any other account**, it sets the voice **of your account only**. The first option, "House voice", means "no personal choice": the house voice is used, and follows its changes.
 
 For each answer, Kasbah takes the voice of the account that spoke, otherwise the house's, otherwise `TTS_VOICE`. The choice applies from the next answer, without a restart. A signed-in account does not change the house voice; a voice deleted at the provider stays displayed ("not found at the provider") until another is chosen.
 

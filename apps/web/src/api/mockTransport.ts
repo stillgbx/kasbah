@@ -159,7 +159,12 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
   let house = opts.house ?? parseHouse(demoHouse)
   let mcpUsers = ['parent']
   const mcpRights = new Map<string, Right[]>()
-  const mcpUserList = () => mcpUsers.map((name) => ({ name, ...(mcpRights.has(name) ? { rights: mcpRights.get(name)! } : {}) }))
+  const mcpAdmins = new Set<string>(['parent'])
+  let mcpHouse: string | null = null
+  const mcpUserList = () => mcpUsers.map((name) => ({
+    name, ...(mcpRights.has(name) ? { rights: mcpRights.get(name)! } : {}),
+    ...(mcpAdmins.has(name) ? { admin: true as const } : {}), ...(mcpHouse === name ? { house: true as const } : {}),
+  }))
   const states = new Map<string, DeviceState>()
   const descriptors = sim.devices()
   for (const d of descriptors) states.set(d.id, { ...sim.getState(d.externalId)!, updatedAt: Date.now() })
@@ -479,7 +484,7 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async musicProgress() {},
     async musicLocalState() {},
     async musicQueueClear() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no YouTube Music stream in mock mode') },
-    async session() { return { user: null } },
+    async session() { return { user: null, admin: true } },
     // assistant: no `claude` here, a demonstration reply
     async claudeAccount() { return { user: null, savedAt: null, house: false } },
     async claudeSetToken() { throw new ApiRequestError(501, 'NOT_IMPLEMENTED', 'no Claude in mock mode') },
@@ -545,6 +550,16 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       if (!mcpUsers.includes(name)) throw new ApiRequestError(404, 'NOT_FOUND', `no MCP user "${name}"`)
       mcpUsers = mcpUsers.filter((n) => n !== name)
       mcpRights.delete(name)
+      mcpAdmins.delete(name)
+      if (mcpHouse === name) mcpHouse = null
+      return { users: mcpUserList() }
+    },
+    async mcpSetRole(name, role) {
+      if (!mcpUsers.includes(name)) throw new ApiRequestError(404, 'NOT_FOUND', `no MCP user "${name}"`)
+      if (role.admin === false && mcpAdmins.has(name) && mcpAdmins.size === 1) throw new ApiRequestError(409, 'LAST_ADMIN', 'the last admin cannot go')
+      if (role.admin === true) mcpAdmins.add(name)
+      if (role.admin === false) mcpAdmins.delete(name)
+      if (role.house !== undefined) mcpHouse = role.house ? name : null
       return { users: mcpUserList() }
     },
     async mcpSetRights(name, rights) {

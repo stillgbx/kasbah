@@ -120,6 +120,13 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
     return a.linked ? raw : null
   }
 
+  /** The house account's cookie, when it is linked and alive: lent to the users who linked nothing. */
+  async function houseCookie(): Promise<string | null> {
+    const house = accountOf(null)
+    const raw = await loadCookie(house)
+    return raw && !house.cookieExpired ? raw : null
+  }
+
   async function refreshPo(): Promise<boolean> {
     const url = config?.YTM_PO_TOKEN_URL ?? 'http://127.0.0.1:4416'
     poTokenOk = await pingPoToken(url, deps.fetchImpl ?? fetch)
@@ -182,6 +189,8 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       const raw = (await a.cookies.read())?.trim()
       if (raw && hasRequiredCookie(raw)) await probeCookie(a, raw)
     }
+    // a user who linked nothing borrows the house account's cookie (`requireCookie`)
+    const lent = a.user !== null && !a.linked && (await houseCookie()) !== null
     return {
       linked: a.linked,
       cookieExpired: a.cookieExpired,
@@ -193,20 +202,22 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       // the import reads a browser on the server machine: the house's, not a user's
       browsers: a.user === null ? [...YTM_BROWSERS] : [],
       user: a.user,
-      anonymous: a.user !== null && !a.linked,
+      anonymous: a.user !== null && !a.linked && !lent,
+      houseFallback: lent,
     }
   }
 
   /**
-   * The account's cookie. A signed-in user who linked nothing goes ANONYMOUS (`''`): public catalog,
-   * nothing personal — except `personal` (likes, library), which requires an account. The house
-   * without a cookie remains to be linked, as before.
+   * The account's cookie. A signed-in user who linked nothing listens with the HOUSE account's cookie
+   * (the family's subscription), or ANONYMOUSLY (`''`, public catalog) when the house has none — except
+   * `personal` (likes, library), which requires their own account: it would land in the house's. The
+   * house without a cookie remains to be linked, as before.
    */
   async function requireCookie(a: Account, opts: { personal?: boolean } = {}): Promise<string> {
     const raw = await loadCookie(a)
     if (raw && a.cookieExpired) throw new PluginError('NEEDS_PAIRING', 'YouTube Music cookie expired — reconnect in Settings')
     if (raw) return raw
-    if (a.user !== null && !opts.personal) return ''
+    if (a.user !== null && !opts.personal) return (await houseCookie()) ?? ''
     throw new PluginError('NEEDS_PAIRING', 'no YouTube Music cookie linked (unofficial)')
   }
 
@@ -601,10 +612,11 @@ export function createYtmusicPlugin(deps: YtmusicPluginDeps = {}): DevicePlugin 
       const a = accountOf(user)
       await loadCookie(a)
       const base = 'YouTube Music (unofficial)'
-      // without a cookie the user listens anonymously: it works, nothing needs linking for all that
+      // without a cookie the user listens with the house account, or anonymously: it works either way
       if (!a.linked) {
+        const lent = (await houseCookie()) !== null
         return poTokenOk
-          ? { status: 'ok', detail: `${base}: anonymous — public catalog only; paste your cookie for likes and playlists`, keys: keys() }
+          ? { status: 'ok', detail: `${base}: ${lent ? 'the house account' : 'anonymous — public catalog only'}; paste your cookie for likes and playlists`, keys: keys() }
           : { status: 'degraded', detail: `${base}: PO Token generator unreachable`, keys: keys() }
       }
       if (a.cookieExpired) return { status: 'needs_pairing', detail: `${base}: your cookie expired — paste a new one in Settings`, keys: keys() }

@@ -7,11 +7,15 @@ import { beforeEach, expect, it } from 'vitest'
 import { hashPassword, LoginGuard, publicHostFilter, usersReader } from '../mcp/auth'
 import { createAppSession } from './session'
 
-// The application under the public name: cookie session, checked origin, account lockout.
-// On a reduced application (a few fake routes) to control the clock.
+// The application under the public name: cookie session, checked origin, account lockout; under a
+// local name: the speakers' streams only; the machine itself: trusted. On a reduced application (a
+// few fake routes) to control the clock. `app.inject` comes from 127.0.0.1: a client on the Internet
+// is one the proxy forwards with a public `X-Forwarded-For`.
 
 const PUBLIC = 'kasbah.example.org'
 const ORIGIN = `https://${PUBLIC}`
+const INTERNET = { 'x-forwarded-for': '203.0.113.9' }
+const HOME = { 'x-forwarded-for': '10.0.0.5' }
 const MINUTE = 60_000
 const DAY = 24 * 60 * MINUTE
 
@@ -34,8 +38,11 @@ async function build(maxFailures = 3) {
     publicUrl: ORIGIN, publicHosts: [PUBLIC], guard, users: usersReader(usersFile), logger: pino({ level: 'silent' }), now,
   })
   app = Fastify()
-  app.addHook('onRequest', publicHostFilter([PUBLIC], session.gate))
+  app.addHook('onRequest', publicHostFilter([PUBLIC], session.gate, [], session.lanGate))
   session.routes(app)
+  app.get('/whoami', async (req) => ({ account: req.account, owner: req.sessionUser }))
+  app.get('/api/music/stream/:sid', async () => 'mp3')
+  app.get('/api/music/raw/:file', async () => 'flac')
   app.get('/api/devices', async () => ({ devices: [] }))
   app.post('/api/devices/x/command', async () => ({ ok: true }))
   app.get('/api/mcp/users', async () => ({ users: [] }))
@@ -112,6 +119,24 @@ it('opens a session through a protected __Host- cookie, and returns to where you
   expect((await req({ method: 'GET', url: '/api/session', cookie: c })).json()).toEqual({ user: 'lou' })
 })
 
+async function setAccount(name: string, fields: Record<string, unknown>) {
+  const file = JSON.parse(readFileSync(usersFile, 'utf8')) as { users: { name: string }[] }
+  Object.assign(file.users.find((u) => u.name === name)!, fields)
+  writeFileSync(usersFile, JSON.stringify(file))
+}
+
+it('tells the app the role of the account, and gives the house account the house data', async () => {
+  const c = await signIn()
+  expect((await req({ method: 'GET', url: '/whoami', cookie: c })).json()).toEqual({ account: 'lou', owner: 'lou' })
+  // an admin's list does not count: an admin may everything
+  await setAccount('lou', { admin: true, rights: ['lights'] })
+  expect((await req({ method: 'GET', url: '/api/session', cookie: c })).json()).toEqual({ user: 'lou', admin: true })
+  await setAccount('lou', { admin: undefined, house: true })
+  expect((await req({ method: 'GET', url: '/api/session', cookie: c })).json()).toEqual({ user: 'lou', rights: ['lights'], house: true })
+  // signed in as the house account, its music accounts and tokens are the house's
+  expect((await req({ method: 'GET', url: '/whoami', cookie: c })).json()).toEqual({ account: 'lou', owner: null })
+})
+
 it("gives the app the session account's rights, when it has a list", async () => {
   const c = String((await login('lou', 'bon-mot-de-passe')).headers['set-cookie']).split(';')[0]!
   const file = JSON.parse(readFileSync(usersFile, 'utf8')) as { users: { rights?: string[] }[] }
@@ -155,39 +180,41 @@ it('requires the site origin to sign in, write and open the WebSocket', async ()
   }
 })
 
-it('leaves account management to the local network, even when signed in', async () => {
+it('leaves account management to clients at home, even when signed in', async () => {
   const c = await signIn()
-  const res = await req({ method: 'GET', url: '/api/mcp/users', cookie: c })
+  const res = await req({ method: 'GET', url: '/api/mcp/users', cookie: c, headers: INTERNET })
   expect(res.statusCode).toBe(403)
   expect(res.json().error.code).toBe('LAN_ONLY')
+  // from home, through the proxy too: the gate lets it through (the admin role is `http/rights.ts`'s)
+  expect((await req({ method: 'GET', url: '/api/mcp/users', cookie: c, headers: HOME })).statusCode).toBe(200)
 })
 
-it('leaves the server update to the local network, even when signed in', async () => {
+it('leaves the server update to clients at home, even when signed in', async () => {
   const c = await signIn()
   for (const [method, url] of [['GET', '/api/system/version'], ['POST', '/api/system/update']] as const) {
-    const res = await req({ method, url, cookie: c, origin: ORIGIN })
+    const res = await req({ method, url, cookie: c, origin: ORIGIN, headers: INTERNET })
     expect(res.statusCode, url).toBe(403)
     expect(res.json().error.code, url).toBe('LAN_ONLY')
   }
 })
 
-it('leaves the Matter bridge and its pairing code to the local network, even when signed in', async () => {
+it('leaves the Matter bridge and its pairing code to clients at home, even when signed in', async () => {
   const c = await signIn()
   for (const [method, url] of [['GET', '/api/matter'], ['PATCH', '/api/matter'], ['DELETE', '/api/matter/fabrics/1'], ['GET', '/api/%6Datter']] as const) {
-    const res = await req({ method, url, cookie: c, origin: ORIGIN, payload: {} })
+    const res = await req({ method, url, cookie: c, origin: ORIGIN, payload: {}, headers: INTERNET })
     expect(res.statusCode, url).toBe(403)
     expect(res.json().error.code, url).toBe('LAN_ONLY')
   }
 })
 
-it('keeps account management and the server update local under an encoded path, too', async () => {
+it('keeps account management and the server update at home under an encoded path, too', async () => {
   const c = await signIn()
   // the router decodes `%75` into `u` before matching, hex in either case (`%6D`, `%6d`)
   for (const [method, url] of [
     ['PUT', '/api/mcp/%75sers/lou'], ['DELETE', '/api/%6Dcp/users/lou'], ['DELETE', '/api/%6dcp/users/lou'],
     ['POST', '/api/%73ystem/update'], ['POST', '/api/syste%6D/update'],
   ] as const) {
-    const res = await req({ method, url, cookie: c, origin: ORIGIN, payload: {} })
+    const res = await req({ method, url, cookie: c, origin: ORIGIN, payload: {}, headers: INTERNET })
     expect(res.statusCode, url).toBe(403)
     expect(res.json().error.code, url).toBe('LAN_ONLY')
   }
@@ -272,8 +299,32 @@ it('caps the failures per client, not for everyone: another address still signs 
   expect((await from('203.0.113.1', 'lou', 'bon-mot-de-passe')).statusCode).toBe(303)
 })
 
-it('changes nothing on the local network', async () => {
-  expect((await req({ method: 'GET', url: '/api/devices', host: 'kasbah:8787' })).statusCode).toBe(200)
-  expect((await req({ method: 'GET', url: '/api/session', host: 'kasbah:8787' })).json()).toEqual({ user: null })
-  expect((await req({ method: 'GET', url: '/login', host: 'kasbah:8787' })).headers.location).toBe('/')
+it('lets nothing through under a local name but the speakers\' streams, and sends a page to the public address', async () => {
+  const lan = (url: string, headers: Record<string, string> = {}) => req({ method: 'GET', url, host: '192.168.1.20:8787', headers })
+  for (const url of ['/api/devices', '/api/session', '/ws', '/api/mcp/users', '/api/music/stream/zz', '/api/music/raw/ab12.flac/x']) {
+    const res = await lan(url)
+    expect(res.statusCode, url).toBe(401)
+    expect(res.json().error.code, url).toBe('AUTH_REQUIRED')
+  }
+  // even with a session cookie: none is ever set over plain HTTP, and the local name is not the site
+  expect((await lan('/api/devices', { cookie: await signIn() })).statusCode).toBe(401)
+  expect((await lan('/api/music/stream/0123abcd')).body).toBe('mp3')
+  expect((await lan('/api/music/raw/0123abcd.flac')).body).toBe('flac')
+  expect((await lan('/manifest.webmanifest')).statusCode).toBe(200)
+  for (const url of ['/settings?tab=1', '/login']) {
+    const page = await lan(url, { accept: 'text/html' })
+    expect(page.statusCode, url).toBe(302)
+    expect(page.headers.location, url).toBe(`${ORIGIN}${url}`)
+  }
+  const write = await req({ method: 'POST', url: '/api/devices/x/command', host: '192.168.1.20:8787', payload: {} })
+  expect(write.statusCode).toBe(401)
+})
+
+it('trusts the machine itself, and only under a loopback name with no proxy in between', async () => {
+  const self = (headers: Record<string, string> = {}) => req({ method: 'GET', url: '/api/session', host: 'localhost:8787', headers })
+  expect((await self()).json()).toEqual({ user: null, admin: true })
+  expect((await req({ method: 'GET', url: '/whoami', host: '127.0.0.1:8787' })).json()).toEqual({ account: null, owner: null })
+  expect((await req({ method: 'GET', url: '/login', host: 'localhost:8787' })).headers.location).toBe('/')
+  // a proxy on the same machine forwards someone else: not the machine
+  expect((await self({ 'x-forwarded-for': '192.168.1.30' })).statusCode).toBe(401)
 })

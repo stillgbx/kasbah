@@ -7,12 +7,12 @@ import type { Bus } from '../core/bus'
 import type { Clock } from '../core/clock'
 import type { DeviceRegistry } from '../core/registry'
 import type { SceneRegistry } from '../core/scene-registry'
-import { filterMessage, registryRight } from '../http/rights'
+import { filterMessage, registryRight, type Access } from '../http/rights'
 
 // WebSocket hub: snapshot on connection, then push of FULL states coalesced per device (a burst of
 // Hue SSE events becomes one frame). Protocol ping to purge dead clients.
 //
-// Each connection keeps its account (`req.sessionUser`, `null` = the local network): an account with
+// Each connection keeps its account (`req.account`, `null` = the machine itself): an account with
 // a list of rights only receives what they let it see. The rights are re-read at each connection and
 // at each ping; when an account's change, its screens get a new snapshot, and a removed account's
 // screens are closed.
@@ -31,14 +31,14 @@ export interface WsHubOptions {
   /** Web build being served: a screen carrying another build offers to reload. */
   appBuild?: () => string | undefined
   /** Rights of each account (`http/rights.ts`, `accountRights`); absent = no filtering. */
-  rights?: () => Promise<ReadonlyMap<string, readonly Right[] | undefined>>
+  rights?: () => Promise<ReadonlyMap<string, Access>>
 }
 
 interface Client { alive: boolean; user: string | null; key: string }
 
 export class WsHub {
   private readonly clients = new Map<WebSocket, Client>()
-  private accounts: ReadonlyMap<string, readonly Right[] | undefined> = new Map()
+  private accounts: ReadonlyMap<string, Access> = new Map()
   private readonly pending = new Map<DeviceId, DeviceState>()
   private flushTimer: unknown = null
   private heartbeat: unknown = null
@@ -90,23 +90,27 @@ export class WsHub {
     await app.register(websocket, { options: { maxPayload: 1 << 20 } })
     // the rights as they are now, before the snapshot
     app.get('/ws', { websocket: true, preHandler: async () => { await this.refreshRights() } },
-      (socket, req) => this.onConnection(socket, req.sessionUser ?? null))
+      (socket, req) => this.onConnection(socket, req.account ?? null))
     this.heartbeat = this.clock.setInterval(() => {
       this.pingAll()
       this.refreshRights().catch((err: unknown) => this.logger.warn({ err }, 'ws rights not re-read'))
     }, this.heartbeatMs)
   }
 
-  /** What `user` may see: `*` everything, `-` nothing (no such account), otherwise its rights. */
+  /**
+   * What `user` may see: `*` everything (`*!` for an admin, so that a change of role sends the screen
+   * a new snapshot, which re-reads the session), `-` nothing (no such account), otherwise its rights.
+   */
   private keyOf(user: string | null): string {
     if (user === null || !this.rights) return '*'
-    if (!this.accounts.has(user)) return '-'
-    return this.accounts.get(user)?.join(',') ?? '*'
+    const access = this.accounts.get(user)
+    if (!access) return '-'
+    return access.admin ? '*!' : access.rights?.join(',') ?? '*'
   }
 
   /** The message as an account with this key receives it; `null` = nothing. */
   private view(key: string, msg: ServerMessage): ServerMessage | null {
-    if (key === '*') return msg
+    if (key === '*' || key === '*!') return msg
     if (key === '-') return null
     const rights = key ? key.split(',') as Right[] : []
     return filterMessage(msg, rights, registryRight(this.registry))

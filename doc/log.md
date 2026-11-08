@@ -7,6 +7,26 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-08] update | Connexion pour tout le monde : fin de la confiance au réseau local
+
+**Déclencheur** : décision de l'utilisateur après constat qu'un invité sur le Wi-Fi avait plus de pouvoir que n'importe quel compte (le réseau local était « la maison », sans compte, avec tous les droits) ; changement de sécurité livré le jour même, non commité.
+
+**Pages modifiées** :
+- `1_architecture/1_13_comptes-et-sessions.md` - bandeau « Dépassé le 2026-11-08 » sur le principe « le nom d'hôte décide » ; nouvelle section datée : rôles `admin` / `house`, barrière pour tous les hôtes (machine, nom public, `lanGate`), `req.account` contre `req.sessionUser`, `settings` fusionné dans admin, `ADMIN_PATHS` + `LAN_ONLY`, écarté, restes ouverts
+- `1_architecture/1_7_serveur-mcp.md` - script `mcp-user` renommé `account`, chemins MCP et `app.inject` face à la barrière
+- `1_architecture/1_3_protocole-rest-ws.md` - `GET /api/session` (`admin`, `house`), route des rôles, 409 `LAST_ADMIN`
+- `1_architecture/1_9_assistant.md`, `1_architecture/1_16_notifications-push.md` - acteur = `req.account`, alertes aux admins, abonnements sans compte
+- `3_plugins/3_16_ytmusic.md` - repli sur le cookie du compte de la maison, `houseFallback`, actions personnelles exclues
+- `4_ui/4_7_reglages.md` - Réglages sur `session.admin`, carte Comptes (rôles)
+- `5_setup/5_0_installation-et-scripts.md`, `5_setup/5_1_configuration-env.md`, `5_setup/5_2_production.md` - script `account`, `MCP_PUBLIC_URL` seule porte, procédure « étape 0 » (HTTPS en local par DNS local + proxy) avec ses pièges, ordre de mise en service
+- `0_overview/0_0_vision-et-principes.md` - principe du réseau local de confiance abandonné
+
+**Contradictions relevées** : les sections datées antérieures de 1_13, 1_7, 5_2, 4_7, 1_9, 1_16 décrivent encore « réseau local de confiance » et `mcp-user` ; conservées, signalées par des mentions « dépassé » ou « d'avant », non réécrites.
+
+**Trous** : `X-Forwarded-For` du vrai proxy non vérifié (critique) ; vraie connexion par l'adresse publique non jouée ; appli Android (1_15) à adapter, non touchée.
+
+**Index** : catalogues 0_overview, 1_architecture (résumé de 1_13 retouché : périmètre changé), 3_plugins, 4_ui, 5_setup mis à jour, index.md régénéré.
+
 ## [2026-11-08] update | Android Auto 0.7 : bouton de l'alerte, « Rien entendu », écran de transcription
 
 **Déclencheur** : retours de l'utilisateur en voiture — le bouton « Ouvrir le portail » de l'alerte échoue parfois (hôte injoignable), « Rien entendu » fréquent, « Je vous écoute… » affiché pendant la transcription.

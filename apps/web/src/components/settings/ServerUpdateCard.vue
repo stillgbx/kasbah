@@ -10,8 +10,8 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // button that asks the supervisor (`scripts/supervisor.mjs`) to apply them. During the update,
 // the state is re-read every second and a half; on restart the server goes quiet for a few
 // seconds, read failures are then expected and silently ignored. The page reload follows through
-// the "A new version of the app is available" banner (`AppUpdateBanner.vue`). Under the public
-// address, refused (`LAN_ONLY`): the card says so, without requesting anything.
+// the "A new version of the app is available" banner (`AppUpdateBanner.vue`). An admin's, from home
+// only: away from home the server refuses (`LAN_ONLY`) and the card says so.
 
 const POLL_MS = 1500
 const MAX_LOG = 60
@@ -90,13 +90,8 @@ async function start() {
   } catch (err) { fail(err) }
 }
 
-onMounted(async () => {
-  try {
-    // a session means the public address: refused there, no point asking
-    if ((await getTransport().session()).user) { lanOnly.value = true; return }
-  } catch { /* no answer, what follows will say */ }
-  await load()
-})
+// shown to an admin only (`SettingsView`); away from home, the server answers `LAN_ONLY`
+onMounted(() => load())
 onUnmounted(stop)
 
 const failure = computed(() => {

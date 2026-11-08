@@ -1,6 +1,6 @@
 # Vision et principes
 
-> Dernière mise à jour : 2026-11-01
+> Dernière mise à jour : 2026-11-08
 > Sources : `README.md`, `CLAUDE.md`, commit 0615484
 
 ## Objectif
@@ -51,3 +51,5 @@ l'origine GPS, carte des véhicules, mode éclaté des niveaux, éditeur de mais
 *(Mise à jour du 2026-10-07 : première chose que ces comptes servent — les **comptes musicaux par utilisateur** (YouTube Music, Mixcloud) : chacun retrouve ses playlists et recommandations sans abîmer l'historique d'un autre ni celui de la maison ; connecté sans réglage = accès anonyme ; sur le réseau local, toujours « la maison ». Les **droits** par compte restent à faire. Voir `../1_architecture/1_6_lecteur-musique.md`.)*
 
 *(Mise à jour du 2026-11-01 : les **droits par compte** sont faits pour les écritures et les lectures (un interrupteur par domaine : lumières, volets, chauffage, voitures, réglages…), tenus côté serveur ; ils ne concernent qu'un compte identifié, jamais le réseau local. Le masquage dans l'app reste à faire. Voir `../1_architecture/1_13_comptes-et-sessions.md`.)*
+
+*(Mise à jour du 2026-11-08 : le principe « le réseau local est la maison, sans compte, avec tous les droits » est **abandonné**. Connexion pour tout le monde, partout ; des super-utilisateurs (`admin`) ; un compte de la maison désigné ; seule la machine elle-même est de confiance. Raison : un invité sur le Wi-Fi avait plus de pouvoir que n'importe quel compte. Les droits par compte (ci-dessus) valent donc aussi à la maison, et `settings` est fusionné dans admin. Voir `../1_architecture/1_13_comptes-et-sessions.md`, section du 2026-11-08.)*

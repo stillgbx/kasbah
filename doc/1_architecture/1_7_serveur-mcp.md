@@ -1,6 +1,6 @@
 # Serveur MCP (`/mcp`)
 
-> Dernière mise à jour : 2026-11-01
+> Dernière mise à jour : 2026-11-08
 > Sources : `apps/server/src/mcp/server.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/http/session.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/web/src/components/settings/McpUsersCard.vue`, `apps/server/src/mcp/auth.test.ts`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{ytmusic,mixcloud,radio}/index.ts`, `apps/server/src/mcp/server.test.ts`, `apps/server/src/app.ts` (`registerMcp`), `apps/server/package.json`, `README.md` (section « Serveur MCP »), arbre de travail du 2026-09-23 (après c9abf58), `apps/server/src/assistant/assistant.ts` ; arbre de travail NON COMMITÉ du 2026-10-09 (après 00397bc) : `apps/server/src/mcp/{server,server.test}.ts`, `README.md`, `packages/shared/src/shopping/shopping.ts` (2026-10-11)
 
 ## Ce que c'est
@@ -793,3 +793,16 @@ droit (le droit `settings` voit tout, le réseau local aussi). Règles et raison
 [1_13](1_13_comptes-et-sessions.md), section « le plan de la maison est filtré par compte ».
 Au passage, correction : `GET /api/session` (section 2026-10-04, plus haut) ne rend pas seulement `{ user }`
 mais aussi `rights` quand le compte a une liste.
+
+### Mise à jour 2026-11-08 — comptes : rôles, script `account`, plus de confiance au réseau local
+
+Les comptes du MCP sont ceux de l'app, et l'app n'a plus de réseau local sans compte : modèle, rôles
+(`admin`, `house`), barrière `lanGate` et raisons dans [1_13](1_13_comptes-et-sessions.md), section du
+2026-11-08. Ce qui touche le MCP :
+- le script `mcp-user` est renommé **`npm run account -w @kasbah/server`** (`add <nom> [--admin]`, `remove`,
+  `admin <nom> on|off`, `house <nom> on|off`, `list`) : les mentions de `mcp-user` plus haut sont d'avant ;
+- les chemins MCP (`/mcp`, `/oauth/*`, `/.well-known/oauth-*`) passent la barrière locale : ils ont leurs jetons ;
+- les outils MCP rejoués par `app.inject` arrivent de la machine (pair et nom loopback, sans
+  `X-Forwarded-For`) : de confiance, `actAsHook(users)` (devenu une fabrique) leur pose le compte du jeton,
+  `req.account` (droits, `mayUse`) et `req.sessionUser` (propriétaire des données personnelles) ;
+- les retours OAuth de plugins en `http://localhost:8787` (Nest, Tesla) passent aussi comme « la machine ».

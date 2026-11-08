@@ -9,11 +9,11 @@ pour choisir une page.
 ## 0 — Overview
 
 <!-- section:0_overview:begin (généré par scripts/wiki-index.mjs depuis 0_overview/README.md - ne pas éditer ici) -->
-Vision du projet, principes structurants et vocabulaire commun. Résumés : [0_overview/README.md](0_overview/README.md) (2 pages, dernière mise à jour 2026-11-01).
+Vision du projet, principes structurants et vocabulaire commun. Résumés : [0_overview/README.md](0_overview/README.md) (2 pages, dernière mise à jour 2026-11-08).
 
 | Pages | Dernière mise à jour |
 |---|---|
-| [0_0 Vision et principes](0_overview/0_0_vision-et-principes.md) | 2026-11-01 |
+| [0_0 Vision et principes](0_overview/0_0_vision-et-principes.md) | 2026-11-08 |
 | [0_1 Glossaire](0_overview/0_1_glossaire.md) | 2026-10-06 |
 <!-- section:0_overview:end -->
 
@@ -27,20 +27,20 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_0 Monorepo et flux de données](1_architecture/1_0_monorepo-et-flux.md) | 2026-10-20 |
 | [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-11-05 |
 | [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-11-04 |
-| [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-11-01 |
+| [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-11-08 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-11-01 |
 | [1_5 Scène 3D (Three.js)](1_architecture/1_5_scene-3d.md) | 2026-10-29 |
 | [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-11-07 |
-| [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-11-01 |
+| [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-11-08 |
 | [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-28 |
-| [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-11-05 |
+| [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-11-08 |
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-10-11 |
 | [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-11-08 |
 | [1_12 Scène 3D : objets dessinés](1_architecture/1_12_scene-3d-objets.md) | 2026-10-26 |
-| [1_13 Comptes et sessions](1_architecture/1_13_comptes-et-sessions.md) | 2026-11-01 |
+| [1_13 Comptes et sessions](1_architecture/1_13_comptes-et-sessions.md) | 2026-11-08 |
 | [1_14 Énergie](1_architecture/1_14_energie.md) | 2026-10-31 |
 | [1_15 Appli Android Auto](1_architecture/1_15_appli-android-auto.md) | 2026-11-08 |
-| [1_16 Notifications push](1_architecture/1_16_notifications-push.md) | 2026-11-01 |
+| [1_16 Notifications push](1_architecture/1_16_notifications-push.md) | 2026-11-08 |
 | [1_17 Pont Matter](1_architecture/1_17_pont-matter.md) | 2026-10-31 |
 <!-- section:1_architecture:end -->
 
@@ -59,7 +59,7 @@ La maison décrite en JSON : format et validation, géométrie dérivée (murs, 
 ## 3 — Plugins
 
 <!-- section:3_plugins:begin (généré par scripts/wiki-index.mjs depuis 3_plugins/README.md - ne pas éditer ici) -->
-Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (30 pages, dernière mise à jour 2026-11-07).
+Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (30 pages, dernière mise à jour 2026-11-08).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -82,7 +82,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_13 Mitsubishi MELCloud](3_plugins/3_13_mitsubishi-melcloud.md) | 2026-11-04 |
 | [3_14 iRobot (Roomba)](3_plugins/3_14_irobot-roomba.md) | 2026-10-27 |
 | [3_15 Sonos](3_plugins/3_15_sonos.md) | 2026-10-24 |
-| [3_16 YouTube Music (non officiel)](3_plugins/3_16_ytmusic.md) | 2026-10-30 |
+| [3_16 YouTube Music (non officiel)](3_plugins/3_16_ytmusic.md) | 2026-11-08 |
 | [3_17 PetKit](3_plugins/3_17_petkit.md) | 2026-10-06 |
 | [3_18 Tuya (ventilateur CREATE)](3_plugins/3_18_tuya.md) | 2026-10-25 |
 | [3_19 Radios (radio-browser.info)](3_plugins/3_19_radio.md) | 2026-10-07 |
@@ -122,13 +122,13 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 ## 5 — Setup
 
 <!-- section:5_setup:begin (généré par scripts/wiki-index.mjs depuis 5_setup/README.md - ne pas éditer ici) -->
-Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5_setup/README.md) (3 pages, dernière mise à jour 2026-11-06).
+Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5_setup/README.md) (3 pages, dernière mise à jour 2026-11-08).
 
 | Pages | Dernière mise à jour |
 |---|---|
-| [5_0 Installation et scripts](5_setup/5_0_installation-et-scripts.md) | 2026-10-31 |
-| [5_1 Configuration (.env)](5_setup/5_1_configuration-env.md) | 2026-11-06 |
-| [5_2 Production](5_setup/5_2_production.md) | 2026-11-06 |
+| [5_0 Installation et scripts](5_setup/5_0_installation-et-scripts.md) | 2026-11-08 |
+| [5_1 Configuration (.env)](5_setup/5_1_configuration-env.md) | 2026-11-08 |
+| [5_2 Production](5_setup/5_2_production.md) | 2026-11-08 |
 <!-- section:5_setup:end -->
 
 ## 6 — FAQ

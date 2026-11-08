@@ -4,15 +4,21 @@ import type { DeviceDescriptor } from '../devices/descriptor'
 import type { DeviceKind } from '../devices/kinds'
 import type { NotifyCategory } from '../push/push'
 
-// Rights of an account: what a signed-in person (public address, MCP token, the app's assistant) may
-// use. One switch per DOMAIN, the way the house is used, not per device. The local network has no
-// account: it is the house, and keeps every right. An account without a list keeps every right too.
+// Rights of an account: what a signed-in person (app, MCP token, the app's assistant) may use. One
+// switch per DOMAIN, the way the house is used, not per device. An account without a list keeps every
+// right. Settings (plugins, house plan, accounts, server update) are not a right: they belong to the
+// ADMIN accounts (`admin` in `mcp-users.json`).
 
 export const RIGHTS = [
   'lights', 'covers', 'access', 'heating', 'vehicles', 'media', 'cameras', 'robots', 'pets',
-  'energy', 'water', 'weather', 'agenda', 'school', 'shopping', 'automations', 'settings',
+  'energy', 'water', 'weather', 'agenda', 'school', 'shopping', 'automations',
 ] as const
 export type Right = (typeof RIGHTS)[number]
+
+/** What an action needs: a right, an admin account, or nothing (`null`). */
+export type Need = Right | 'admin' | null
+
+export const isRight = (s: string): s is Right => (RIGHTS as readonly string[]).includes(s)
 
 /** The rights granted; absent = all of them. */
 export const rightsSchema = z.array(z.enum(RIGHTS))
@@ -37,9 +43,9 @@ export function deviceRight(descriptor: DeviceDescriptor): Right | null {
 /** The right of a kind alone, for a house device not linked to a plugin (no descriptor, no class). */
 export const kindRight = (kind: DeviceKind): Right | null => RIGHT_OF_KIND[kind]
 
-/** The right a push notification category needs: an account without it is not notified. */
-export const RIGHT_OF_NOTIFY_CATEGORY: Record<NotifyCategory, Right> = {
-  vehicles: 'vehicles', robots: 'robots', pets: 'pets', weather: 'weather', plugins: 'settings', automations: 'automations',
+/** What a push notification category needs: an account without it is not notified. */
+export const RIGHT_OF_NOTIFY_CATEGORY: Record<NotifyCategory, Exclude<Need, null>> = {
+  vehicles: 'vehicles', robots: 'robots', pets: 'pets', weather: 'weather', plugins: 'admin', automations: 'automations',
 }
 
 /** Does this list of rights (absent = all) grant `right` (`null` = nothing to grant)? */

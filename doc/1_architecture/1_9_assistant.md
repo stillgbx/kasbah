@@ -1,6 +1,6 @@
 # Assistant (« Demander à Kasbah »)
 
-> Dernière mise à jour : 2026-11-05
+> Dernière mise à jour : 2026-11-08
 > Sources : `apps/web/src/api/demoAssistant.ts`, `apps/server/src/assistant/{assistant,engines}.ts`, tests `apps/server/src/assistant/assistant.test.ts`, `apps/server/src/mcp/auth.ts` (`runToken`), `apps/server/src/app.ts`, `apps/web/src/composables/useAssistant.ts`, `apps/web/src/components/layout/{AssistantReply,SearchPalette,PageHeader}.vue`, `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/settings/AssistantCard.vue`, `apps/web/src/views/AskView.vue`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.ts`, `apps/android/app/src/main/kotlin/org/kasbah/auto/VoiceScreen.kt`, session du 2026-10-22
 
 ## Ce que c'est
@@ -326,3 +326,12 @@ les exceptions (`assistant engine failed`, `assistant run failed`).
 
 Tests : `assistant.test.ts` (+1 : un échec est écrit, ni une réussite ni un `ABORTED`), contrôle
 négatif fait (sans l'exclusion d'`ABORTED`, le test échoue).
+
+### Mise à jour 2026-11-08 — l'assistant agit au nom du compte connecté
+
+L'assistant agit au nom de `req.account` (le compte connecté : droits, `mayUse`, `runToken`), et ses données
+personnelles (`.state/claude.json`, comptes chez le fournisseur) restent celles du propriétaire
+`req.sessionUser`, `null` pour le compte de la maison ([1_13](1_13_comptes-et-sessions.md), section du
+2026-11-08). `GET /api/assistant/log` n'a plus sa **propre garde** « réseau local seulement » : c'est la règle
+commune (`ADMIN_PATHS` : admin, plus client à la maison). Les phrases plus haut sur « `null` = la maison,
+réseau local » sont d'avant. Code : `assistant/assistant.ts`, `http/rights.ts`.

@@ -5,20 +5,27 @@ import type { Logger } from 'pino'
 import { z } from 'zod'
 import { writeFileAtomic } from '../core/atomic-file'
 import { stateFile } from '../core/paths'
-import { checkLogin, clientOf, esc, htmlPage, isPublicRequest, lockedMessage, pwTag, sha256, token, type LoginGuard, type UsersFile } from '../mcp/auth'
+import { checkLogin, clientOf, esc, htmlPage, isPrivateAddress, isPublicRequest, lockedMessage, ownerOf, pwTag, sha256, token, type LoginGuard, type UsersFile } from '../mcp/auth'
 import { sendError } from './errors'
 
-// The application under the PUBLIC name (`MCP_PUBLIC_URL`, the NAS reverse proxy): a cookie session,
-// opened with the MCP accounts. The local network stays without authentication.
+// Every person signs in, at home as from outside: the application goes through the PUBLIC name
+// (`MCP_PUBLIC_URL`, the NAS reverse proxy, HTTPS; at home the local DNS points it at the NAS), with a
+// cookie session opened with the accounts of `mcp-users.json`.
 //
+// - Under a local name (`http://<ip>:8787`), nothing signs in (the cookie needs HTTPS): only the
+//   speakers' stream URLs (`lanGate`), a page goes to the public address. The machine itself
+//   (`isLoopbackRequest`) is trusted, like the `account` script it already runs.
+// - Two notions per request: `req.account`, who is signed in (rights, admin), and `req.sessionUser`,
+//   whose personal data it uses (`ownerOf`: the house account's are the house's, `null`).
 // - `__Host-` cookie (Secure, Path=/, no Domain), HttpOnly, SameSite=Lax: sent when the app opens
 //   from a link, never by a request from another site.
 // - Origin required on every write and every WebSocket: the NAS's other services share the same
 //   site (`*.synology.me` is a public suffix), SameSite does not separate them.
 // - Session kept hashed in `.state/sessions.json`, 90 sliding days. It falls with the account, AND
 //   when its password changes (fingerprint of the hash): enough to cut off a lost phone.
-// - Account management (`/api/mcp/users`) and server update (`/api/system`) from the local network
-//   only, even when signed in.
+// - Account management (`/api/mcp/users`), server update (`/api/system`), Matter and the assistant
+//   log: admin accounts only (`http/rights.ts`), and from a client at home (`isPrivateAddress`): a
+//   stolen admin session is of no use from the Internet.
 // - MCP tools go through `app.inject` in the name of their token's account (`actAsHeaders`).
 
 export const sessionConfigSchema = z.object({
@@ -41,17 +48,22 @@ type SessionsFile = z.infer<typeof fileSchema>
 const OPEN_PATHS = new Set(['/login', '/logout', '/manifest.webmanifest'])
 const OPEN_PREFIXES = ['/icons/']
 // the Matter bridge: its pairing code lets any assistant take over what it publishes (a garage, a lock)
-const LAN_ONLY = ['/api/mcp/users', '/api/system', '/api/matter']
+const LAN_ONLY = ['/api/mcp/users', '/api/system', '/api/matter', '/api/assistant/log']
 const lanOnly = (path: string | undefined) => path !== undefined && LAN_ONLY.some((p) => path === p || path.startsWith(`${p}/`))
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+// What a speaker fetches by itself, without a cookie: a music session's stream, under a random
+// 96-bit id that lives as long as the session (`music/proxy.ts`). The id is the key.
+const SPEAKER_PATH = /^\/api\/music\/(stream\/[0-9a-f]+|raw\/[0-9a-f]+\.[a-z0-9]+)$/
 
 declare module 'fastify' {
   interface FastifyRequest {
     /**
-     * Account of the session, under the public name, or that of an MCP tool's token; `null` on the
-     * local network. It is the one that picks the music accounts (`music/sources.ts`).
+     * Whose personal data the request uses (music accounts, Claude token, voice): the signed-in
+     * account, `null` for the house account and for the machine itself (`ownerOf`).
      */
     sessionUser: string | null
+    /** The signed-in account (session, MCP token): its rights and its role. `null` = the machine itself. */
+    account: string | null
   }
 }
 
@@ -69,6 +81,8 @@ export interface AppSessionDeps {
 export interface AppSession {
   /** Gate for `publicHostFilter`: everything under the public name that is not the MCP. */
   gate(req: FastifyRequest, reply: FastifyReply): Promise<void>
+  /** Gate for `publicHostFilter` under a local name: the speakers' streams, nothing else. */
+  lanGate(req: FastifyRequest, reply: FastifyReply): Promise<void>
   routes(app: FastifyInstance): void
 }
 
@@ -78,14 +92,17 @@ export interface AppSession {
  * claim it.
  */
 const INTERNAL_SECRET = randomBytes(32).toString('base64url')
-/** `user` null: the house (per-run token of the app's assistant) — the request stays marked MCP. */
+/** `user` null: the machine itself (the assistant started from it) — the request stays marked MCP. */
 export const actAsHeaders = (user: string | null): Record<string, string> =>
   ({ 'x-kasbah-internal': INTERNAL_SECRET, ...(user ? { 'x-kasbah-user': user } : {}) })
 /** The request comes from an MCP tool (the only holder of the secret). */
 export const fromMcp = (req: FastifyRequest): boolean => req.headers['x-kasbah-internal'] === INTERNAL_SECRET
-export async function actAsHook(req: FastifyRequest): Promise<void> {
+/** `onRequest` hook: an MCP tool's replay takes the account of its token, and that account's data. */
+export const actAsHook = (users: () => Promise<UsersFile>) => async (req: FastifyRequest): Promise<void> => {
   const user = req.headers['x-kasbah-user']
-  if (req.headers['x-kasbah-internal'] === INTERNAL_SECRET && typeof user === 'string') req.sessionUser = user
+  if (req.headers['x-kasbah-internal'] !== INTERNAL_SECRET || typeof user !== 'string') return
+  req.account = user
+  req.sessionUser = ownerOf(await users(), user)
 }
 
 const cookieOf = (req: FastifyRequest): string | null => {
@@ -181,8 +198,8 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
       }
       // The route the router matched decides too, not the raw URL alone: it decodes `%75` into `u`,
       // stops at `#` and drops an absolute `http://host` before matching.
-      if (lanOnly(path) || lanOnly(req.routeOptions.url)) {
-        await sendError(reply, 403, 'LAN_ONLY', 'managed from the local network only')
+      if ((lanOnly(path) || lanOnly(req.routeOptions.url)) && !isPrivateAddress(clientOf(req))) {
+        await sendError(reply, 403, 'LAN_ONLY', 'managed from home only')
         return
       }
       // Any WebSocket: `/ws`, and the camera streams under `/api/plugins/<id>/cameras/…`.
@@ -190,16 +207,34 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
         await sendError(reply, 403, 'BAD_ORIGIN', 'cross-site request refused')
         return
       }
-      req.sessionUser = user
+      req.account = user
+      req.sessionUser = ownerOf(await users(), user)
+    },
+
+    async lanGate(req, reply) {
+      const path = req.url.split('?')[0]!
+      if (SAFE_METHODS.has(req.method) && (SPEAKER_PATH.test(path) || path === '/manifest.webmanifest' || OPEN_PREFIXES.some((p) => path.startsWith(p)))) return
+      // nothing signs in over plain HTTP: a page goes to the public address, the rest is refused
+      if (origin && req.method === 'GET' && String(req.headers.accept ?? '').includes('text/html')) {
+        await reply.code(302).header('cache-control', 'no-store').redirect(`${origin}${req.url}`)
+        return
+      }
+      await sendError(reply, 401, 'AUTH_REQUIRED', 'sign in through the public address')
     },
 
     routes(app) {
       app.decorateRequest('sessionUser', null)
-      // `rights` only when the account has a list: the app hides what it may not use (the server
-      // refuses it anyway, `http/rights.ts`)
+      app.decorateRequest('account', null)
+      // `rights` only when the account has a list and is not admin: the app hides what it may not use
+      // (the server refuses it anyway, `http/rights.ts`). The machine itself is admin.
       app.get('/api/session', async (req) => {
-        const rights = req.sessionUser ? (await users()).users.find((u) => u.name === req.sessionUser)?.rights : undefined
-        return { user: req.sessionUser, ...(rights ? { rights } : {}) }
+        if (req.account === null) return { user: null, admin: true }
+        const account = (await users()).users.find((u) => u.name === req.account)
+        return {
+          user: req.account,
+          ...(account?.admin ? { admin: true } : account?.rights ? { rights: account.rights } : {}),
+          ...(account?.house ? { house: true } : {}),
+        }
       })
 
       void app.register(async (sub) => {
@@ -207,7 +242,7 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
           done(null, Object.fromEntries(new URLSearchParams(body as string)))
         })
 
-        // On the local network there is nothing to open: back to the app.
+        // The machine itself has nothing to open: back to the app (a local name never gets here, `lanGate`).
         sub.get('/login', async (req, reply) => {
           if (!isPublicRequest(req, publicHosts)) return reply.redirect('/')
           return form(reply, 200, safeNext((req.query as { next?: unknown }).next))

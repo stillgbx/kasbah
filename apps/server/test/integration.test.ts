@@ -389,6 +389,9 @@ describe('rights of an account (http/rights.ts)', () => {
     await writeFile(usersFile, JSON.stringify({ users: [
       { name: 'kid', password: 'x', rights: ['lights'] },
       { name: 'adult', password: 'x' },
+      { name: 'root', password: 'x', admin: true, rights: ['lights'] },
+      // written before `settings` merged into admin
+      { name: 'old', password: 'x', rights: ['lights', 'settings'] },
     ] }))
     ;({ kasbah } = await makeApp('default', { MCP_USERS_FILE: usersFile }))
   })
@@ -399,6 +402,19 @@ describe('rights of an account (http/rights.ts)', () => {
 
   it('knows every route the server serves', () => {
     expect(kasbah.unmappedRoutes).toEqual([])
+  })
+
+  it('leaves the settings and the accounts to an admin, and reads an old "settings" right as nothing', async () => {
+    expect((await as('adult', 'PATCH', '/api/plugins/mock', { enabled: true })).statusCode).toBe(403)
+    const accounts = await as('adult', 'GET', '/api/mcp/users')
+    expect(accounts.statusCode).toBe(403)
+    expect(accounts.json().error.code).toBe('NO_RIGHT')
+    expect((await as('root', 'GET', '/api/mcp/users')).statusCode).toBe(200)
+    // an admin's list does not count
+    expect((await as('root', 'POST', '/api/devices/mock:cover-living/command', { type: 'cover.stop' })).statusCode).toBe(200)
+    // the file stays readable: the account signs in with its lights, and without the settings
+    expect((await as('old', 'POST', '/api/devices/mock:light-living/command', { type: 'light.set', on: true })).statusCode).toBe(200)
+    expect((await as('old', 'PATCH', '/api/plugins/mock', { enabled: true })).statusCode).toBe(403)
   })
 
   it('lets an account drive only the domains it was granted', async () => {

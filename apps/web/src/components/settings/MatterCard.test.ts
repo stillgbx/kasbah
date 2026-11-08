@@ -72,12 +72,12 @@ describe('MatterCard', () => {
     w.unmount()
   })
 
-  it('says the bridge is managed from the local network when opened through the public address', async () => {
+  it('says the bridge is managed from home when opened away from it', async () => {
     setTransport({ matterStatus: async () => { throw new ApiRequestError(403, 'LAN_ONLY', 'local network only') } } as unknown as Transport)
     const w = mount(MatterCard)
     await flushPromises()
     expect(w.find('.mc').exists()).toBe(false)
-    expect(w.text()).toContain('réseau local seulement')
+    expect(w.text()).toContain('depuis la maison seulement')
     w.unmount()
   })
 

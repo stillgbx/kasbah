@@ -7,8 +7,8 @@ import { useNotificationsStore } from '../../stores/notifications'
 import AssistantReply from '../layout/AssistantReply.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
-// The assistant's instruction log, of ALL accounts: on the local network only (the server
-// refuses it under the public address, and it is not requested there). The engine and its account
+// The assistant's instruction log, of ALL accounts: an admin's, from home only (the server refuses
+// it otherwise, and it is requested by an admin only). The engine and its account
 // are set in its plugin's section (Claude), further down.
 //
 // Cost of each instruction and their total, when the engine reports it: at the API's list price.
@@ -45,7 +45,7 @@ const total = computed(() => {
 })
 
 onMounted(async () => {
-  try { if ((await getTransport().session()).user === null) await load() } catch (err) { fail(err) }
+  try { if ((await getTransport().session()).admin) await load() } catch (err) { fail(err) }
 })
 </script>
 

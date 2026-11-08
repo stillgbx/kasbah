@@ -5,8 +5,7 @@ import { setTransport } from '../../api'
 import type { AssistantLogEntry, Transport } from '../../api/transport'
 import AssistantCard from './AssistantCard.vue'
 
-// The instruction log is only shown on the local network (no session):
-// connected through the public address, it is not even requested.
+// The instruction log is an admin's: for any other account, it is not even requested.
 
 const entry: AssistantLogEntry = {
   at: Date.UTC(2026, 9, 7, 9, 0), user: 'lou', text: 'Allume le salon', ms: 6800,
@@ -15,9 +14,9 @@ const entry: AssistantLogEntry = {
   usage: { costUsd: 0.0031, inputTokens: 12, outputTokens: 40, cacheReadTokens: 9000, cacheWriteTokens: 1500 },
 }
 
-function fake(user: string | null) {
+function fake(user: string | null, admin = false) {
   const assistantLog = vi.fn(async () => ({ entries: [entry, { ...entry, at: entry.at - 1, usage: { ...entry.usage!, costUsd: 0.0124 } }, { ...entry, at: entry.at - 2, user: null, text: 'Éteins tout', tools: [], answer: '', error: { code: 'TIMEOUT', message: 'x' }, usage: undefined }] }))
-  setTransport({ session: async () => ({ user }), assistantLog } as unknown as Transport)
+  setTransport({ session: async () => ({ user, ...(admin ? { admin } : {}) }), assistantLog } as unknown as Transport)
   return assistantLog
 }
 
@@ -25,8 +24,8 @@ describe('AssistantCard — journal', () => {
   beforeEach(() => { setActivePinia(createPinia()) })
   afterEach(() => { setTransport(null) })
 
-  it('shows the instructions of all accounts on the local network, once the log is unfolded', async () => {
-    fake(null)
+  it('shows an admin the instructions of all accounts, once the log is unfolded', async () => {
+    fake('root', true)
     const w = mount(AssistantCard)
     await flushPromises()
     expect(w.find('.ac__entries').exists()).toBe(false)
@@ -40,7 +39,7 @@ describe('AssistantCard — journal', () => {
   })
 
   it('states the cost of each instruction (tokens on hover) and the total of the priced instructions', async () => {
-    fake(null)
+    fake(null, true)
     const w = mount(AssistantCard)
     await flushPromises()
     // the total is read with the log folded
@@ -56,13 +55,13 @@ describe('AssistantCard — journal', () => {
   })
 
   it('with no priced instruction, no total', async () => {
-    setTransport({ session: async () => ({ user: null }), assistantLog: async () => ({ entries: [{ ...entry, usage: undefined }] }) } as unknown as Transport)
+    setTransport({ session: async () => ({ user: null, admin: true }), assistantLog: async () => ({ entries: [{ ...entry, usage: undefined }] }) } as unknown as Transport)
     const w = mount(AssistantCard)
     await flushPromises()
     expect(w.find('.ac__total').exists()).toBe(false)
   })
 
-  it('does not request it for an account connected through the public address', async () => {
+  it('does not request it for an account that is not admin', async () => {
     const assistantLog = fake('lou')
     const w = mount(AssistantCard)
     await flushPromises()

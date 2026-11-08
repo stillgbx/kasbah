@@ -445,7 +445,7 @@ export function createHttpTransport(base = ''): Transport {
     musicQueueClear: (deviceId) => request(
       `${base}/api/music/queue?deviceId=${encodeURIComponent(deviceId)}`, { method: 'DELETE' }, (j) => j as MusicQueue,
     ),
-    session: () => request(`${base}/api/session`, undefined, (j) => j as { user: string | null; rights?: Right[] }),
+    session: () => request(`${base}/api/session`, undefined, (j) => j as { user: string | null; admin?: boolean; house?: boolean; rights?: Right[] }),
     claudeAccount: () => request(`${base}/api/plugins/claude/account`, undefined, (j) => j as ClaudeAccount),
     claudeSetToken: (token) => request(`${base}/api/plugins/claude/account`, json('PUT', { token }), (j) => j as ClaudeAccount),
     claudeClearToken: () => request(`${base}/api/plugins/claude/account`, { method: 'DELETE' }, (j) => j as ClaudeAccount),
@@ -465,6 +465,7 @@ export function createHttpTransport(base = ''): Transport {
     mcpSetUser: (name, password) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}`, json('PUT', { password }), (j) => j as { users: McpUser[] }),
     mcpRemoveUser: (name) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}`, { method: 'DELETE' }, (j) => j as { users: McpUser[] }),
     mcpSetRights: (name, rights) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}/rights`, json('PUT', { rights }), (j) => j as { users: McpUser[] }),
+    mcpSetRole: (name, role) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}/role`, json('PUT', role), (j) => j as { users: McpUser[] }),
     systemVersion: (refresh) => request(`${base}/api/system/version${refresh ? '?refresh=1' : ''}`, undefined, (j) => j as SystemVersion),
     systemUpdateStatus: () => request(`${base}/api/system/update`, undefined, (j) => j as { status: UpdateStatus | null }),
     systemUpdate: () => request(`${base}/api/system/update`, { method: 'POST' }, (j) => j as { status: UpdateStatus }),

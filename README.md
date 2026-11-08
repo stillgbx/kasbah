@@ -139,47 +139,49 @@ VITE_INPROCESS_MOCK=1 npm run dev -w @kasbah/web
 
 ### Production
 
-On the local network, the interface and the API require neither an account nor HTTPS: **the local network is trusted**. From the Internet, everything goes through a public HTTPS address that requires signing in (see [Remote access](#remote-access)).
+Everyone signs in, at home as from outside: the app goes through a public HTTPS address (see [Remote access](#remote-access)), which a local DNS record keeps inside the house for the screens at home. Only the server computer itself (`http://localhost:8787`) opens Kasbah without signing in: it is trusted like the `account` script that runs there.
 
 ```bash
 npm run build      # web → apps/web/dist, server → apps/server/dist/main.js (esbuild bundle)
 npm start          # serves the web app and the API on KASBAH_PORT (8787)
 ```
 
-From another device on the network: `http://<server-ip>:8787`.
+From another device on the network: the public address, through the reverse proxy. `http://<server-ip>:8787` only serves the speakers' streams; a page opened there goes to the public address.
 
 To update the server without going to the machine, start it through its supervisor rather than
 `npm start`: `node scripts/supervisor.mjs` builds the app if needed, restarts the server if it
 crashes, and applies the latest version of `main` on request from **Settings → Server update**
-(from the local network). An update runs pull, `npm ci` if dependencies changed, build and
+(an admin, from home). An update runs pull, `npm ci` if dependencies changed, build and
 restart, and rolls back to the previous version if anything fails. Starting with the machine (Windows
 scheduled task, systemd service): [doc/5_setup/5_2_production.md](doc/5_setup/5_2_production.md) (in French).
 
 ### Remote access
 
-From a phone away from home, without a VPN: an **HTTPS reverse proxy** (the Synology NAS one, or a tunnel) publishes Kasbah under a public address, declared in `MCP_PUBLIC_URL`. Kasbah recognizes that name (`Host`, or `X-Forwarded-Host`) and requires **signing in** there:
+From a phone away from home, without a VPN, and from every screen at home: an **HTTPS reverse proxy** (the Synology NAS one, or a tunnel) publishes Kasbah under a public address, declared in `MCP_PUBLIC_URL`. Kasbah recognizes that name (`Host`, or `X-Forwarded-Host`) and requires **signing in** there:
 
 - **Under the public address**: a sign-in page, then the whole app (interface, API, cameras, WebSocket). The MCP server answers there too, with its own tokens (see [MCP server](#mcp-server)).
-- **On the local network** (`http://<ip>:8787`, `kasbah.home.internal`): nothing changes, no account required. The **name** decides, not the place: the public address requires signing in even from home (through the proxy, every request comes from the NAS).
+- **At home**: a local DNS record (Pi-hole, the router's DNS…) points the public name to the reverse proxy, which holds the certificate: the same HTTPS address works without leaving the house.
+- **Under a local name** (`http://<ip>:8787`, `kasbah.home.internal`): nothing can sign in (the session cookie needs HTTPS). Only the speakers' streams are served (a random address that lives as long as the stream), a page goes to the public address, everything else answers 401. The server computer itself (`localhost`, no proxy in between) needs no account.
 - **Local names**: an IP address, `localhost`, a short name (`kasbah`) or a name ending in `.internal`, `.local`, `.lan` or `.home.arpa`; add any other in `KASBAH_LAN_HOSTS`. Any other name is refused (protection against DNS rebinding), and so is a write or a WebSocket that a page from another site sends from a browser at home.
-- **Accounts**: the same as the AI assistants' accounts, in **Settings → Accounts**, managed from the local network only (even when signed in, the public address doesn't show them).
-- **Rights**: under each account, a folded list of domains (lights, shutters, gate and garage, heating, vehicles, music, cameras, settings…) to grant or take away. A signed-in account, and the AI assistants acting for it, can neither see nor drive the devices of a domain it lacks, nor get its notifications. Every domain is granted by default; the local network keeps them all. Views not granted leave the menu, and without the **Settings** right the Settings page keeps only the screen’s own choices.
+- **Accounts**: the same as the AI assistants' accounts, in **Settings → Accounts**. An **admin** manages the plugins, the house plan, the accounts, the server update and the Matter bridge; the last three only from home (a client the proxy forwards from a private address). The **house account** is for the wall screens: its music accounts and Claude token are the house's, and someone who has not linked their own YouTube Music listens with it (likes and library still need their own). The first admin is created on the server computer: `npm run account -w @kasbah/server -- add <name> --admin`.
+- **Rights**: under each account, a folded list of domains (lights, shutters, gate and garage, heating, vehicles, music, cameras…) to grant or take away. A signed-in account, and the AI assistants acting for it, can neither see nor drive the devices of a domain it lacks, nor get its notifications. Every domain is granted by default; an admin has them all. Views not granted leave the menu, and for an account that is not admin the Settings page keeps only the screen’s own choices.
 - **Session**: a 90-day cookie, extended on every use; you sign in once per device. Changing an account's password closes all its sessions (lost phone); so does removing it. “Sign out” is in Settings → Accounts.
 - **Lockout**: after 5 failed sign-ins in a row, the account is locked for 15 minutes, even with the right password (app and AI assistants; `KASBAH_LOGIN_MAX_FAILURES`, `KASBAH_LOGIN_LOCK_MINUTES`). Open sessions are not affected.
 - **Installable app**: over HTTPS, the browser offers to install Kasbah, starting from the sign-in page. On iPhone, the app added to the home screen has its own cookies: sign in to it once. On Android, a long press on the installed app's icon offers an “Ask Kasbah” shortcut (labelled “Demander”, in French), which opens a page of its own, without the 3D scene, already listening (the microphone waits for a touch when it cannot start on its own, and a field takes typed requests); it can be dragged to the home screen as an icon of its own.
 
 **Setting it up on a Synology NAS** (DSM 6: Control Panel → Application Portal → Reverse Proxy; DSM 7: Login Portal → Advanced → Reverse Proxy):
 
-1. **First** set `MCP_PUBLIC_URL=https://<address>` in `apps/server/.env`, and restart Kasbah. In the other order, the rule would publish the app **without** sign-in as soon as it is saved.
+1. **First** set `MCP_PUBLIC_URL=https://<address>` in `apps/server/.env`, create an admin account (`npm run account -w @kasbah/server -- add <name> --admin`), and restart Kasbah.
 2. Reverse proxy rule:
    - source: HTTPS, hostname `<address>`, port 443, HTTP/2 enabled, no access control;
    - destination: HTTP, IP of the Kasbah computer, port 8787;
    - **custom headers**: Create → WebSocket, which adds `Upgrade: $http_upgrade` and `Connection: $connection_upgrade`. Without them, live state doesn't get through (the app stays “offline”).
 3. A Let's Encrypt certificate for `<address>` (Security → Certificate), assigned to the rule.
 4. On the router: port 443 forwarded to the NAS.
-5. Playing on speakers (Cast, Sonos) from outside: `MUSIC_PUBLISH_BASE=http://<computer-ip>:8787`, otherwise the server refuses (a speaker can't play from the public address).
+5. Playing on speakers (Cast, Sonos): `MUSIC_PUBLISH_BASE=http://<computer-ip>:8787`, otherwise the server refuses (a speaker fetches its stream by itself, over the local network, and can't sign in).
+6. At home: a local DNS record `<address>` → IP of the NAS (Pi-hole: Local DNS Records). A device that still gets the public IP (its own DNS) is brought back to the NAS by the router's NAT loopback, still over HTTPS.
 
-**Check**, from the phone on mobile data: `https://<address>/` opens the sign-in page, `https://<address>/.well-known/oauth-protected-resource` advertises the address **as https** (otherwise the proxy isn't forwarding the original name, and nothing is protected: fix that before anything else). Once signed in, a light you turn on changes state on screen without reloading.
+**Check**, from the phone on mobile data and from a computer at home: `https://<address>/` opens the sign-in page, `https://<address>/.well-known/oauth-protected-resource` advertises the address **as https** (otherwise the proxy isn't forwarding the original name, and nothing is protected: fix that before anything else). Once signed in, a light you turn on changes state on screen without reloading.
 
 ### Quality
 
@@ -271,7 +273,7 @@ The server can act as a **Matter bridge** on the local network: the devices you 
 - Published today: lights (on/off, brightness), covers (shutters, gates, garage doors, shown as blinds, or as doors with Matter 1.5 as a trial), fans (on/off, speed, direction), and vehicle locks and cabin climate.
 - Only publish what the assistants don't already know: a Hue light or a Somfy shutter already linked there would show up twice.
 - To withdraw: a device's switch, **Withdraw all** for a plugin, the bridge's switch, or **Unpair** next to an assistant, which then loses every device (the pairing code comes back once none is left).
-- The bridge is managed from the local network only: its pairing code gives control over what it publishes, so the card and its API refuse the public address.
+- The bridge is managed by an admin, from home only: its pairing code gives control over what it publishes.
 - The bridge is not certified: Google Home asks for it to be declared (free) in the Google Home Developer Console first, Apple Home shows a warning. The server needs UDP port 5540 and mDNS (5353) open on the local network.
 
 ## Plugins
@@ -356,11 +358,11 @@ Resource: `kasbah://house` (the validated `house.json`).
 
 **OAuth authentication, everywhere** (local network included): Kasbah is its own authorization server. On first connection, the client opens a Kasbah page (user + password), then keeps a token (1 h access, 90-day sliding refresh). Clients register themselves (dynamic registration, or a metadata document for claude.ai).
 
-- **Accounts**: `apps/server/mcp-users.json`, next to `.env`, outside the repo, hashed passwords (scrypt); the same accounts open the app through the public address. Manage them in **Settings → Accounts** (add, change password, rights, remove; from the local network only), or as a fallback:
+- **Accounts**: `apps/server/mcp-users.json`, next to `.env`, outside the repo, hashed passwords (scrypt); the same accounts open the app through the public address. Manage them in **Settings → Accounts** (add, change password, roles, rights, remove; an admin, from home), or on the server computer:
   ```bash
-  npm run mcp-user -w @kasbah/server -- add <name>
+  npm run account -w @kasbah/server -- add <name> --admin
   ```
-  (`remove <name>` also revokes its tokens, `list` lists them). The file is re-read on every sign-in: no restart needed.
+  (`remove <name>` also revokes its tokens, `admin <name> on|off` and `house <name> on|off` set the roles, `list` lists them). The file is re-read on every sign-in: no restart needed.
 - **Tokens and registered clients**: `apps/server/.state/mcp-auth.json` (hashed). Deleting it disconnects every client.
 - **From the Internet** (Claude on the phone, claude.ai connector): the public address from [Remote access](#remote-access). Under that name, `/mcp`, `/oauth/*` and `/.well-known/oauth-*` answer with the MCP tokens; everything else requires signing in to the app. Then on claude.ai: Settings → Connectors → Add custom connector → `https://<address>/mcp`.
 - **Local network**: clients built on the MCP SDK refuse to send their credentials to an authorization server over `http://` off the machine: use `http://localhost:8787/mcp` on the server computer, and the public https address elsewhere.

@@ -40,8 +40,8 @@ Android Auto parts around the app (map, app bar) are cut out.
   two with a button in the approach alert (none picked: the first two). These choices belong to the
   phone, not to the car.
 
-The app needs the server's **public address** (see [Remote access](../README.md#remote-access)) when the
-phone is away from home. On the local network, it works without an account.
+The app needs the server's **public address** (see [Remote access](../README.md#remote-access)) and an
+account, at home as away: a local address no longer opens Kasbah.
 
 ## Building and installing
 
@@ -131,7 +131,8 @@ microphone.
 
 **In the simulator, Open and Close move the real gate and garage doors.** To try without them, point the
 debug build at the demo server on the computer: `adb reverse tcp:9789 tcp:9789`, then the address
-`http://localhost:9789` (any user name; the local network needs no account).
+`http://localhost:9789` (any user name: through `adb reverse` the server sees its own computer, which
+needs no account).
 
 The approach alert can be tried without driving, with the debug build only:
 

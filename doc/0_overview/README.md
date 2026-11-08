@@ -13,6 +13,6 @@ Vision du projet, principes structurants et vocabulaire commun.
 
 | Page | Résumé | Dernière mise à jour |
 |---|---|---|
-| [0_0 Vision et principes](0_0_vision-et-principes.md) | Objectif du projet, décisions structurantes prises avec l'utilisateur, principes de conception, périmètre de la v1 livrée et suites envisagées (droits par compte notamment). | 2026-11-01 |
+| [0_0 Vision et principes](0_0_vision-et-principes.md) | Objectif du projet, décisions structurantes prises avec l'utilisateur, principes de conception, périmètre de la v1 livrée et suites envisagées (droits par compte notamment). | 2026-11-08 |
 | [0_1 Glossaire](0_1_glossaire.md) | Vocabulaire du projet : kind, capacité, descripteur, état, commande, appareil maison et appareil plugin, les trois sens de « scène » (maison, 3D, plugin), rappel, effet, niveau, zone. | 2026-10-06 |
 <!-- catalogue:end -->

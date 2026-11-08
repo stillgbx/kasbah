@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { isIP } from 'node:net'
 import { readFile, rm, stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { rightsSchema, type Right } from '@kasbah/shared'
+import { isRight, type Right } from '@kasbah/shared'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { Logger } from 'pino'
 import { z } from 'zod'
@@ -17,7 +17,7 @@ import { REPO_ROOT, SERVER_ROOT, stateFile, userStateDir } from '../core/paths'
 // on a `Host` that a client can forge.
 //
 // - Accounts: `mcp-users.json` next to the server `.env` (outside the repo), passwords in scrypt,
-//   written by `npm run mcp-user`. Re-read on each sign-in: removing an account also cuts its tokens.
+//   written by `npm run account`. Re-read on each sign-in: removing an account also cuts its tokens.
 //   The same accounts open the application under the public name (`http/session.ts`).
 // - Clients: dynamic registration (`/oauth/register`, RFC 7591) or metadata document
 //   (client_id = https URL, spec 2026-07-28). Public clients: PKCE S256 mandatory, no secret.
@@ -107,7 +107,7 @@ function remember<V>(map: Map<string, V>, key: string, value: V): void {
  */
 export function clientOf(req: FastifyRequest): string {
   const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',').map((s) => s.trim()).filter(Boolean)
-  return forwarded.at(-1) ?? req.socket.remoteAddress ?? ''
+  return forwarded.at(-1) ?? req.socket?.remoteAddress ?? ''
 }
 
 /** Refusal message for an attempt blocked until `until`. */
@@ -137,16 +137,33 @@ export async function verifyPassword(password: string, stored: string): Promise<
 // --- files ------------------------------------------------------------------------------------
 
 export const usersFileSchema = z.object({
-  // `rights` absent = every right (accounts written before rights existed)
-  users: z.array(z.object({ name: z.string().min(1), password: z.string().min(1), rights: rightsSchema.optional() })).default([]),
+  // `rights` absent = every right (accounts written before rights existed). `admin`: manages the
+  // accounts, the server update and Matter. `house`: the house account (one at most), used by the
+  // wall screens and as the fallback for what is shared. Both are written only when true.
+  // A right that no longer exists (`settings`, merged into admin) is dropped, never fatal: an
+  // unreadable file would leave NO account at all (`readUsers`).
+  users: z.array(z.object({
+    name: z.string().min(1),
+    password: z.string().min(1),
+    rights: z.array(z.string()).transform((list) => list.filter(isRight)).optional(),
+    admin: z.literal(true).optional(),
+    house: z.literal(true).optional(),
+  })).default([]),
 })
 export type UsersFile = z.infer<typeof usersFileSchema>
+
+/**
+ * Whose personal data an account's requests use (music accounts, Claude token, voice): the house
+ * account's are the house's (`null`), the shared ones the wall screens and the fallbacks read.
+ */
+export const ownerOf = (file: UsersFile, account: string | null): string | null =>
+  account !== null && file.users.some((u) => u.house && u.name === account) ? null : account
 
 export async function readUsers(path: string): Promise<UsersFile> {
   try { return usersFileSchema.parse(JSON.parse(await readFile(path, 'utf8'))) } catch { return { users: [] } }
 }
 
-// Writes to the accounts file (`mcp-user` script and Settings). A missing file is empty; an
+// Writes to the accounts file (`account` script and Settings). A missing file is empty; an
 // unreadable file makes the write FAIL rather than being overwritten by an empty list.
 export const userNameSchema = z.string().trim().regex(/^[\w.@-]{1,64}$/, 'letters, digits, . _ @ - (64 max)')
 export const passwordSchema = z.string().min(8, '8 characters at least').max(200)
@@ -163,13 +180,40 @@ async function readUsersForEdit(path: string): Promise<UsersFile> {
 }
 const writeUsers = (path: string, file: UsersFile) => writeFileAtomic(path, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
 
-/** Creates the account, or changes its password (its rights stay). Returns the names. */
+/** Creates the account, or changes its password (its rights and roles stay). Returns the names. */
 export async function saveUser(path: string, name: string, password: string): Promise<string[]> {
   const file = await readUsersForEdit(path)
-  const rights = file.users.find((u) => u.name === name)?.rights
-  const users = [...file.users.filter((u) => u.name !== name), { name, password: await hashPassword(password), ...(rights ? { rights } : {}) }]
-  await writeUsers(path, { users })
-  return users.map((u) => u.name)
+  const hash = await hashPassword(password)
+  const account = file.users.find((u) => u.name === name)
+  if (account) account.password = hash
+  else file.users.push({ name, password: hash })
+  await writeUsers(path, file)
+  return file.users.map((u) => u.name)
+}
+
+/** The change would leave no admin, while there is one today. */
+const losesLastAdmin = (file: UsersFile, name: string) =>
+  file.users.some((u) => u.admin && u.name === name) && !file.users.some((u) => u.admin && u.name !== name)
+
+/**
+ * Sets the account's roles (a role left out stays as it is). Marking the house account takes the
+ * mark from the others. Refused when it would remove the last admin.
+ */
+export async function setUserRole(path: string, name: string, role: { admin?: boolean; house?: boolean }): Promise<'ok' | 'not_found' | 'last_admin'> {
+  const file = await readUsersForEdit(path)
+  const account = file.users.find((u) => u.name === name)
+  if (!account) return 'not_found'
+  if (role.admin === false && losesLastAdmin(file, name)) return 'last_admin'
+  if (role.admin !== undefined) {
+    if (role.admin) account.admin = true
+    else delete account.admin
+  }
+  if (role.house !== undefined) {
+    for (const u of file.users) delete u.house
+    if (role.house) account.house = true
+  }
+  await writeUsers(path, file)
+  return 'ok'
 }
 
 /** Sets the account's rights (`null` = all of them again); `false` if it does not exist. */
@@ -183,11 +227,15 @@ export async function setUserRights(path: string, name: string, rights: Right[] 
   return true
 }
 
-/** Removes the account (its tokens no longer pass) and its music accounts; `null` if it did not exist. */
-export async function deleteUser(path: string, name: string): Promise<string[] | null> {
+/**
+ * Removes the account (its tokens no longer pass) and its music accounts; `null` if it did not exist,
+ * `'last_admin'` (nothing removed) if it is the last admin.
+ */
+export async function deleteUser(path: string, name: string): Promise<string[] | null | 'last_admin'> {
   const file = await readUsersForEdit(path)
   const users = file.users.filter((u) => u.name !== name)
   if (users.length === file.users.length) return null
+  if (losesLastAdmin(file, name)) return 'last_admin'
   await writeUsers(path, { users })
   await rm(userStateDir(name), { recursive: true, force: true })
   return users.map((u) => u.name)
@@ -361,28 +409,59 @@ function sameOrigin(req: FastifyRequest): boolean {
   }
 }
 
+const unmapIPv4 = (ip: string) => (ip.toLowerCase().startsWith('::ffff:') ? ip.slice(7) : ip)
+
+/** A loopback, private (RFC 1918, ULA) or link-local address: a client at home, not on the Internet. */
+export function isPrivateAddress(ip: string): boolean {
+  const v4 = unmapIPv4(ip)
+  if (isIP(v4) === 4) {
+    const [a, b] = v4.split('.').map(Number) as [number, number]
+    return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254)
+  }
+  const v6 = ip.toLowerCase()
+  return isIP(v6) === 6 && (v6 === '::1' || /^f[cd]/.test(v6) || /^fe[89ab]/.test(v6))
+}
+
+/**
+ * The machine Kasbah runs on, talking to itself: a loopback peer, a loopback name, no proxy in between.
+ * It is trusted like the `account` script that already runs there: development (Vite keeps the
+ * browser's `Host`), the `localhost` OAuth callbacks, and the MCP tools replaying a route (`app.inject`).
+ */
+export function isLoopbackRequest(req: FastifyRequest): boolean {
+  // no socket at all (a WebSocket injected by the tests): not the machine
+  const peer = unmapIPv4(req.socket?.remoteAddress ?? '')
+  const host = hostKey(req.hostname)
+  return (peer.startsWith('127.') || peer === '::1')
+    && req.headers['x-forwarded-for'] === undefined
+    && (host === 'localhost' || host.endsWith('.localhost') || host.startsWith('127.') || host === '[::1]')
+}
+
 type Hook = (req: FastifyRequest, reply: FastifyReply) => Promise<void>
 const notFound: Hook = async (_req, reply) => { await reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'not found' } }) }
 const refuse = (reply: FastifyReply, code: string, message: string) => reply.code(403).send({ error: { code, message } })
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 
 /**
- * GLOBAL `onRequest` hook: under a public name, the MCP paths go through, everything else goes to
- * `gate` (404 by default). To be set before any route. On the local network, no account, but the
+ * GLOBAL `onRequest` hook, to be set before any route. Under a public name, the MCP paths go through
+ * (they have their tokens), everything else goes to `gate` (404 by default). Under a local name, the
  * name must be a local one (`isLanHost`), and a browser's write or WebSocket must come from the page
- * Kasbah served: another site's page in a browser at home is not the local network.
+ * Kasbah served; then the machine itself (`isLoopbackRequest`) and the MCP paths go through, and
+ * every other request goes to `lanGate` (none by default).
  */
-export function publicHostFilter(publicHosts: string[], gate: Hook = notFound, lanHosts: string[] = []): Hook {
+export function publicHostFilter(publicHosts: string[], gate: Hook = notFound, lanHosts: string[] = [], lanGate?: Hook): Hook {
   return async (req, reply) => {
+    const mcp = MCP_PATHS.has(req.url.split('?')[0]!)
     if (!isPublicRequest(req, publicHosts)) {
       if (!isLanHost(req.hostname, lanHosts)) {
         await refuse(reply, 'UNKNOWN_HOST', 'unknown host name: add it to KASBAH_LAN_HOSTS')
       } else if ((!SAFE_METHODS.has(req.method) || req.headers.upgrade !== undefined) && !sameOrigin(req)) {
         await refuse(reply, 'BAD_ORIGIN', 'cross-site request refused')
+      } else if (lanGate && !mcp && !isLoopbackRequest(req)) {
+        await lanGate(req, reply)
       }
       return
     }
-    if (MCP_PATHS.has(req.url.split('?')[0]!)) return
+    if (mcp) return
     await gate(req, reply)
   }
 }
@@ -390,7 +469,7 @@ export function publicHostFilter(publicHosts: string[], gate: Hook = notFound, l
 export interface McpAuth {
   /** OAuth and metadata routes, to mount in the `/mcp` sub-application (same `Host` check). */
   routes(sub: FastifyInstance): void
-  /** `onRequest` hook of `/mcp`: 401 and the metadata address without a valid token; otherwise `req.sessionUser` = the token's account. */
+  /** `onRequest` hook of `/mcp`: 401 and the metadata address without a valid token; otherwise `req.account` = the token's account. */
   requireToken(req: FastifyRequest, reply: FastifyReply): Promise<void>
   /** Host names on top of the local network ones (that of `MCP_PUBLIC_URL`). */
   publicHosts: string[]
@@ -400,7 +479,7 @@ export interface McpAuth {
   users: () => Promise<UsersFile>
   /**
    * Access token for a client started by the server itself (the assistant, `claude -p`): in memory
-   * only, in the name of `user` (`null` = the house), until `revoke()` or `ttlMs`.
+   * only, in the name of `user` (`null` = the machine itself), until `revoke()` or `ttlMs`.
    */
   runToken(user: string | null, ttlMs: number): { token: string; revoke(): void }
 }
@@ -525,13 +604,15 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
       const m = /^Bearer (\S+)$/i.exec(req.headers.authorization ?? '')
       const run = m ? runs.get(sha256(m[1]!)) : undefined
       if (run && run.expiresAt > now() && (run.user === null || await accountExists(run.user))) {
-        req.sessionUser = run.user
+        req.account = run.user
+        req.sessionUser = ownerOf(await currentUsers(), run.user)
         return
       }
       const grant = m ? (await load()).access[sha256(m[1]!)] : undefined
       if (grant && grant.expiresAt > now() && await grantHolds(grant)) {
-        // the tools act in the name of this account (its music accounts)
-        req.sessionUser = grant.user
+        // the tools act in the name of this account (its rights, its music accounts)
+        req.account = grant.user
+        req.sessionUser = ownerOf(await currentUsers(), grant.user)
         return
       }
       await reply.code(401)

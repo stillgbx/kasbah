@@ -1,6 +1,6 @@
 # Plugin YouTube Music (non officiel)
 
-> Dernière mise à jour : 2026-10-30
+> Dernière mise à jour : 2026-11-08
 > Sources : `apps/server/src/plugins/ytmusic/{index,catalog,cookie,browserCookies,resolve,mapping,types}.ts` (`stream.ts` et `queue.ts` devenus `apps/server/src/music/{proxy,queue}.ts` le 2026-09-23), `apps/server/src/music/{player,sources,ytdlp}.ts`, `apps/server/src/core/playbackBridge.ts` (ex-`ytmusic/bridge.ts`), tests `apps/server/src/plugins/ytmusic/{plugin,resolve}.test.ts` et `apps/server/src/music/{proxy,queue}.test.ts` (ex-`ytmusic/{stream,queue}.test.ts`), `apps/server/src/app.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue` (ex-`YtmusicView.vue`), `apps/web/src/components/music/{MusicPlayerBar,ListeningSessions,MusicItemRow,MusicTile,ChipRow}.vue`, `apps/web/src/composables/useMediaPosition.ts`, `apps/web/src/components/ui/{ArtThumb,artThumbLoader}.vue|ts`, `apps/web/src/components/music/ArtPlay.vue` (ex-`ui/PlayButton.vue`), `apps/web/src/components/YtmusicLinkCard.vue`, `apps/server/.env.example`, Music Assistant `providers/ytmusic` (référence)
 
 ## Avertissement
@@ -1342,3 +1342,19 @@ acceptés, pas de sonde sous un Mo. Les deux premiers étaient rouges avant le c
 56 tests verts.
 
 Sources : `apps/server/src/plugins/ytmusic/{resolve,index}.ts`, `resolve.test.ts`.
+
+### Mise à jour 2026-11-08 — un compte sans cookie écoute avec celui de la maison
+
+Avant : un compte connecté sans cookie relié écoutait **en anonyme** (`''`, catalogue public). Depuis le
+2026-11-08, il emprunte le cookie du **compte de la maison** (`houseCookie()`, `plugins/ytmusic/index.ts`) quand
+il est relié et vivant : c'est l'abonnement familial, et la qualité et le catalogue sont ceux de l'abonné.
+L'anonyme ne reste que si la maison n'a rien à prêter.
+- Les actions **personnelles** (j'aime, bibliothèque) exigent toujours son propre cookie
+  (`requireCookie(a, { personal: true })`) : avec celui de la maison, elles atterriraient dans la bibliothèque
+  de la maison. Repli sur ces actions : écarté.
+- Statut : nouveau champ `houseFallback` ; `anonymous` n'est vrai que sans maison à emprunter. La santé dit
+  « the house account » ou « anonymous — public catalog only ».
+- Pourquoi aucun changement ailleurs : le compte de la maison est le propriétaire `null`
+  ([1_13](../1_architecture/1_13_comptes-et-sessions.md), `ownerOf`). Mixcloud inchangé : catalogue public sans
+  compte, le compte n'y sert qu'au personnel.
+- Tests : `plugins/ytmusic/plugin.test.ts`.

@@ -1,6 +1,6 @@
 # Installation et scripts
 
-> Dernière mise à jour : 2026-10-31
+> Dernière mise à jour : 2026-11-08
 > Sources : `package.json` (racine et workspaces), `.claude/launch.json`, `apps/web/vite.config.ts`, `apps/server/src/config/env.ts`, `apps/server/src/main.ts`, `README.md`, `scripts/fetch-textures.mjs`, `.claude/launch.json`, `scripts/dev-server.mjs`, `scripts/supervisor.mjs`
 
 ## Prérequis
@@ -485,3 +485,12 @@ probablement `home.internal` lui-même, ou passe par le DNS IPv6 du routeur. Mé
 `kasbah.home.internal` reste le nom sûr.
 
 Sources : réglages du Pi-hole et du routeur, `Resolve-DnsName` et `Get-NetNeighbor` sur le poste.
+
+### Mise à jour 2026-11-08 — `npm run mcp-user` devient `npm run account`
+
+Le script des comptes est renommé **`npm run account -w @kasbah/server`** (`apps/server/package.json`,
+`src/mcp/users-cli.ts`) : `add <nom> [--admin]`, `remove <nom>`, `admin <nom> on|off`, `house <nom> on|off`,
+`list` (affiche les rôles). Le **premier admin se crée par le script** : Kasbah ne s'ouvre plus sans compte
+([1_13](../1_architecture/1_13_comptes-et-sessions.md), section du 2026-11-08). Les mentions de `mcp-user`
+plus haut sont d'avant ; la sauvegarde de `mcp-users.json` (comptes, rôles compris) reste à recopier à la
+main, hors dépôt.

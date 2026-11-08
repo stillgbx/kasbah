@@ -1,11 +1,16 @@
 # Comptes et sessions
 
-> Dernière mise à jour : 2026-11-01
+> Dernière mise à jour : 2026-11-08
 > Sources : `apps/server/src/http/rights.ts`, `packages/shared/src/rights/rights.ts`, `apps/server/src/http/session.ts`, `apps/web/src/stores/session.ts`, `apps/web/src/lib/navItems.ts`, `apps/web/src/views/NoRightView.vue`, `apps/server/src/http/static.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/music/sources.ts`, `apps/server/src/plugins/claude/index.ts`, `apps/server/src/assistant/assistant.ts` ; pages citées plus bas
 
 Page de synthèse, écrite au lint du 2026-10-13 : le sujet était dispersé entre le serveur MCP, la
 configuration, les Réglages et le lecteur musique. Elle décrit l'état du code à cette date et renvoie aux
 sections datées qui racontent chaque étape ; le détail (routes OAuth, tests, essais) reste là-bas.
+
+> **Dépassé le 2026-11-08** : le réseau local n'est plus « la maison » sans compte. Connexion pour tout le monde,
+> partout ; seule la machine elle-même est de confiance. Voir la dernière section de la page (« Mise à
+> jour 2026-11-08 »). Ce qui suit, et les sections datées d'avant, décrit l'état du 2026-11-01 et reste pour
+> l'historique.
 
 ## Le principe : c'est le nom d'hôte qui décide
 
@@ -29,7 +34,7 @@ Access : [1_7 Serveur MCP](1_7_serveur-mcp.md), sections du 2026-10-04 (soir) et
   est relu quand son `mtime` change : retirer un compte coupe ses jetons et ses sessions sans redémarrage.
 - **Gestion** : carte « Comptes » de Réglages ([4_7 Vue Réglages](../4_ui/4_7_reglages.md)), routes
   `GET` / `PUT` / `DELETE /api/mcp/users[/:name]`, ou le script `npm run mcp-user -w @kasbah/server`
-  en secours. Nom `^[\w.@-]{1,64}$`, mot de passe de 8 caractères au moins (`userNameSchema`,
+  en secours *(renommé le 2026-11-08 : `npm run account`, voir la section datée en bas)*. Nom `^[\w.@-]{1,64}$`, mot de passe de 8 caractères au moins (`userNameSchema`,
   `passwordSchema`, communs au script et aux routes).
 - **Réseau local seulement, même connecté** : sous l'adresse publique, `/api/mcp/users` rend 401 sans
   session et 403 `LAN_ONLY` avec une session. Une session volée ne doit pas pouvoir créer de compte.
@@ -419,3 +424,89 @@ Tests : `http/rights.test.ts` (filtre, `kind` de repli, `settings` et liste abse
 capteurs gardés ; compte sans liste : plan entier), `mcp/server.test.ts` (ressource filtrée). Suite complète
 (2 614 tests), typecheck et lint globaux verts. **Non joué** : la preview (le mode simulé n'a ni serveur ni
 comptes) et un vrai compte limité sous l'adresse publique.
+
+### Mise à jour 2026-11-08 - connexion pour tout le monde, super-utilisateurs, compte de la maison
+
+**Pourquoi.** Le réseau local était « la maison » (`req.sessionUser === null`) : sans compte, avec tous les
+droits, et seul à atteindre les routes `LAN_ONLY` (comptes, mise à jour, Matter, journal de l'assistant).
+Un invité sur le Wi-Fi avait donc plus de pouvoir que n'importe quel compte, y compris un compte en lecture
+seule créé avec soin. Décision de l'utilisateur : connexion pour tout le monde, partout, **sans migration
+ni mode de transition** ; des super-utilisateurs ; un compte de la maison désigné. Les sections datées
+d'avant décrivent le modèle remplacé (« le réseau local est de confiance ») : elles ne sont pas réécrites.
+
+**Les rôles.** Champs facultatifs `admin: true` et `house: true` de chaque compte de `mcp-users.json`
+(écrits seulement à vrai, `mcp/auth.ts`). Un seul compte de la maison : en marquer un démarque les autres.
+Refus 409 `LAST_ADMIN` de retirer le rôle au dernier admin ou de le supprimer (seulement s'il existe au
+moins un admin : un fichier sans admin reste utilisable pour l'amorcer). Route `PUT /api/mcp/users/:name/role`
+`{ admin?, house? }` ; `GET /api/mcp/users` rend les rôles ; `saveUser` garde tous les champs et la place du
+compte dans la liste. Le premier admin se crée par le script : `npm run account -w @kasbah/server`
+(ancien `mcp-user`), sous-commandes `add <nom> [--admin]`, `remove <nom>`, `admin <nom> on|off`,
+`house <nom> on|off`, `list` (affiche les rôles).
+
+**La barrière, pour tous les hôtes** (`publicHostFilter`, `isLoopbackRequest` et `isPrivateAddress`
+dans `mcp/auth.ts`, `lanGate` dans `http/session.ts`). `UNKNOWN_HOST` et `BAD_ORIGIN`, inchangés, sont
+contrôlés avant.
+
+| Appelé par | Ce qui se passe |
+|---|---|
+| le nom public (`MCP_PUBLIC_URL`, proxy du NAS, à la maison comme dehors) | session obligatoire, comme avant |
+| **la machine elle-même** : pair loopback **et** nom loopback (`localhost`, `127.x`, `[::1]`, `*.localhost`) **et** pas de `X-Forwarded-For` | de confiance, admin implicite (`req.account = null`) |
+| tout autre nom local (`http://<ip>:8787`) | `lanGate` : seuls passent les flux des enceintes, le manifest et `/icons/` ; une page HTML part en 302 vers la même adresse sous `MCP_PUBLIC_URL` ; le reste 401 `AUTH_REQUIRED` |
+| les chemins MCP | passent (ils ont leurs jetons) |
+
+- **La machine** couvre le dev (Vite garde le `Host` du navigateur, ni `changeOrigin` ni `xfwd`), les retours
+  OAuth en `http://localhost:8787` (Nest, Tesla) et les outils MCP rejoués par `app.inject`. Les trois
+  conditions se cumulent : un proxy posé sur la même machine ajoute `X-Forwarded-For` et n'est donc pas
+  pris pour elle.
+- **Flux d'enceintes** : `/api/music/stream/:sid` et `/api/music/raw/:sid.ext`, GET / HEAD seulement. Une
+  enceinte n'a ni cookie ni compte ; le `sid` fait 96 bits aléatoires et vit peu : c'est une **URL de
+  capacité**, aucune signature n'est écrite.
+- **Aucune connexion possible en HTTP** (cookie `__Host-` Secure) : l'adresse locale en clair ne sert plus
+  que ces URL de capacité.
+- Sans `MCP_PUBLIC_URL` : avertissement au démarrage ; seule la machine ouvre Kasbah.
+- **Piège** : une requête sans socket (un WebSocket injecté par les tests, `injectWS`) faisait planter la
+  détection (500). `req.socket?.remoteAddress`, et sans socket ce n'est pas la machine.
+
+**Deux notions par requête.** `req.account` (nouveau) est le compte **connecté** : droits, rôle, WebSocket,
+push, filtres du plan, `mayUse` MCP, `runToken`. `req.sessionUser` (inchangé) est le **propriétaire des
+données personnelles**. `ownerOf(file, account)` : le compte de la maison donne `null`, donc ses données
+sont celles de la maison (`.state/claude.json`, cookie YouTube Music de la maison…) ; aucun plugin n'a été
+modifié pour cela. `actAsHook` devient une fabrique `actAsHook(users)` ; `requireToken` pose les deux.
+
+**Droits : `settings` fusionné dans admin** (`packages/shared/src/rights/rights.ts`, `http/rights.ts`).
+16 domaines au lieu de 17 ; type `Need = Right | 'admin' | null`, garde `isRight`. Tout ce qui demandait
+`settings` demande admin (PATCH plugin, écritures `house` / `properties`, login / pair / token / raw / auth
+des plugins…) ; une route inconnue demande admin (test `unmappedRoutes` gardé). `Access {admin, house,
+rights}`, `allows()` ; `accountRights` rend des `Access` ; un admin a `rights` absent ; **un nom sans compte
+n'a droit à rien** (avant : tout). `filterHouse` : rights absents = plan entier (admin, ou compte sans
+liste). `grants` (classé CRITICAL par GitNexus) n'a pas été modifié. Un `"settings"` resté dans
+`mcp-users.json` est ignoré à la lecture (sinon `readUsers` rendait une liste vide et bloquait **tous** les
+comptes) : testé.
+
+**`ADMIN_PATHS`** = `/api/mcp/users`, `/api/system`, `/api/matter`, `/api/assistant/log` (toute méthode).
+Ces quatre exigent **en plus** un client à la maison : `clientOf` (dernière entrée de `X-Forwarded-For`,
+posée par le proxy) dans une plage privée, sinon 403 `LAN_ONLY` « managed from home only ». La raison
+d'être de `LAN_ONLY` change : ce n'est plus « le réseau local est de confiance », c'est « une session admin
+volée, dehors, ne doit pas gérer les comptes ».
+
+**Côté app.** `GET /api/session` rend `{ user, admin?, house?, rights? }` ; la machine : `{ user: null,
+admin: true }` ; `rights` seulement pour un non-admin avec liste. WebSocket (`ws/hub.ts`) : clé `*!` pour un
+admin, pour qu'un changement de rôle renvoie un snapshot (l'app relit alors la session). Push : abonnement
+retenu par `req.account` ([1_16](1_16_notifications-push.md)). Assistant : agit au nom de `req.account`
+([1_9](1_9_assistant.md)). Repli musical sur le cookie de la maison : [3_16](../3_plugins/3_16_ytmusic.md).
+Carte Comptes et Réglages : [4_7](../4_ui/4_7_reglages.md).
+
+**Écarté.** Garder la confiance au réseau local (invité Wi-Fi > comptes) ; URL signées pour les enceintes
+(le `sid` aléatoire suffit) ; pare-feu obligatoire sur 8787 (le HTTP local ne sert plus que des URL de
+capacité, il reste facultatif) ; `settings` distinct d'admin (l'utilisateur a voulu la fusion) ; migration
+ou mode de transition (refusé).
+
+**Reste ouvert.** (1) Vérifier sur le vrai proxy qu'il ajoute bien `X-Forwarded-For` : ouvert depuis le
+2026-10-24, devenu **critique**, car c'est lui qui dit « client à la maison » (sans l'en-tête, `clientOf`
+verrait le proxy, donc une adresse privée, et `LAN_ONLY` ne protégerait plus rien : déduction du code, non
+essayée). (2) Appli Android : retirer le cas « réseau local : `/login` renvoie à l'accueil sans cookie »
+([1_15](1_15_appli-android-auto.md)). (3) **Non joué** : une vraie connexion par l'adresse publique avec le
+proxy du NAS.
+
+Vérifié : suite complète (2 805 tests), typecheck global, lint du code suivi ; serveur de démonstration en
+dev : `{ user: null, admin: true }` par Vite, 401 par l'IP locale, flux d'enceinte qui passe la barrière.

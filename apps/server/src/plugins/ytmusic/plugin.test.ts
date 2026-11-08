@@ -1208,6 +1208,28 @@ describe('ytmusic accounts', () => {
     await plugin.stop()
   })
 
+  it("lends the house account's cookie to a user who linked nothing, never for what is personal", async () => {
+    const searchedWith: string[] = []
+    const { plugin, app } = await boot({
+      createSession: async (c) => {
+        const m = fakeMusic()
+        const search = m.music.search.bind(m.music)
+        m.music.search = (async (...args: Parameters<typeof search>) => { searchedWith.push(c); return search(...args) }) as typeof search
+        return m
+      },
+    })
+    await app.inject({ method: 'PUT', url: '/api/plugins/ytmusic/cookie', payload: { cookie: COOKIE } })
+    // the family's subscription rather than the public catalog
+    await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/search?q=jade', headers: alice })
+    expect(new Set(searchedWith)).toEqual(new Set([COOKIE]))
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/status', headers: alice })).json())
+      .toMatchObject({ user: 'alice', linked: false, anonymous: false, houseFallback: true })
+    expect(await plugin.healthFor!('alice')).toMatchObject({ status: 'ok', detail: expect.stringContaining('house account') })
+    // likes and library would land in the house's account: those still need her own
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/ytmusic/library/liked', headers: alice })).statusCode).toBeGreaterThanOrEqual(400)
+    await plugin.stop()
+  })
+
   it('keeps the house account for the house, whatever a user links', async () => {
     // each search tells which cookie it goes out with
     const searchedWith: string[] = []

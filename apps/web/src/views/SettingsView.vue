@@ -58,14 +58,14 @@ const house = useHouseStore()
 const { t } = useI18n()
 onMounted(() => { void devices.refreshHealth(); void plugins.load() })
 const router = useRouter()
-// An account without the "settings" right (Settings → Accounts) keeps only this screen's choices and
-// its own (push, assistant, sign-out): what writes the house or its plugins would be refused.
+// An account that is not admin (Settings → Accounts) keeps only this screen's choices and its own
+// (push, assistant, sign-out): what writes the house or its plugins would be refused.
 const session = useSessionStore()
-const houseSettings = computed(() => session.may('settings'))
+const houseSettings = computed(() => session.admin)
 
 type Tab = 'display' | 'scene' | 'house' | 'plugins' | 'system'
 const route = useRoute()
-/** Without the "settings" right the House tab has nothing left in it: it goes, like the rail's forbidden views. */
+/** Without the admin role the House tab has nothing left in it: it goes, like the rail's forbidden views. */
 const tabs = computed<Tab[]>(() => (houseSettings.value ? ['display', 'scene', 'house', 'plugins', 'system'] : ['display', 'scene', 'plugins', 'system']))
 const tab = computed<Tab>(() => {
   const q = route.query.tab
@@ -330,7 +330,7 @@ const houseStats = computed(() => {
           </section>
         </div>
       </div>
-      <!-- House: what writes the house file (the tab only exists with the "settings" right) -->
+      <!-- House: what writes the house file (the tab only exists for an admin) -->
       <div v-else-if="tab === 'house'" class="duo">
         <div class="stack">
           <!-- approximate survey: openings are adjusted from the House view once armed here,
