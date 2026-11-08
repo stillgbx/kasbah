@@ -402,6 +402,8 @@ export class HouseScene {
   private readonly gpu: GpuBackend | null
   /** `WebGPURenderer.init()` has resolved: no frame before it. */
   private gpuReady = false
+  /** `WebGPURenderer.init()`, that the preparation waits for before its first frame. */
+  private gpuInit: Promise<void> | null = null
   readonly labelRenderer: CSS2DRenderer | null
   readonly controls: OrbitControls | null
   readonly loop: RenderLoop
@@ -684,7 +686,7 @@ export class HouseScene {
     if (this.renderer) { this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = VSMShadowMap }
     if (this.renderer) { this.caustics = new WaterCaustics(this.water); this.water.caustics.value = this.caustics.texture }
     if (this.renderer && this.gpu) {
-      void (this.renderer as unknown as { init(): Promise<unknown> }).init().then(() => { this.gpuReady = true; this.loop.invalidate() })
+      this.gpuInit = (this.renderer as unknown as { init(): Promise<unknown> }).init().then(() => { this.gpuReady = true; this.loop.invalidate() })
     }
     this.applySky()
     this.applyQuality()
@@ -843,19 +845,27 @@ export class HouseScene {
       // let the veil PAINT the stage before starting the compilations, which occupy the main thread
       await nextPaint()
       if (gen !== this.prepareGen) return
-      this.scene.updateMatrixWorld()
-      // the variant the scene really uses: that of the effect chain's target (without
-      // tone mapping, linear), or the screen when there is no chain (low quality)
-      const previous = r.getRenderTarget()
-      r.setRenderTarget(this.post?.sceneTarget ?? null)
-      // `compile` starts the compilations without waiting for them (in parallel, when the driver has
-      // KHR_parallel_shader_compile); it is `shadersReady` that waits. NOT `compileAsync`: its loop
-      // reads each material's program without a guard, and a material destroyed during the wait (the
-      // markers are rebuilt when the descriptors arrive) makes it crash silently — the
-      // promise never resolved and the veil stayed (observed on 2026-09-25).
-      if (!this.gpu) r.compile(this.scene, this.camera)
-      r.setRenderTarget(previous)
-      await this.shadersReady(r, () => gen === this.prepareGen)
+      if (this.gpu) {
+        // WebGPU builds its pipelines while drawing, so the first frame below does it under the veil.
+        // It has no programs to wait for (`shadersReady` reads `properties`, which `WebGPURenderer`
+        // lacks: the throw dropped the veil on a house still to build), but needs `init()`, or that
+        // frame draws nothing.
+        await this.gpuInit
+      } else {
+        this.scene.updateMatrixWorld()
+        // the variant the scene really uses: that of the effect chain's target (without
+        // tone mapping, linear), or the screen when there is no chain (low quality)
+        const previous = r.getRenderTarget()
+        r.setRenderTarget(this.post?.sceneTarget ?? null)
+        // `compile` starts the compilations without waiting for them (in parallel, when the driver has
+        // KHR_parallel_shader_compile); it is `shadersReady` that waits. NOT `compileAsync`: its loop
+        // reads each material's program without a guard, and a material destroyed during the wait (the
+        // markers are rebuilt when the descriptors arrive) makes it crash silently — the
+        // promise never resolved and the veil stayed (observed on 2026-09-25).
+        r.compile(this.scene, this.camera)
+        r.setRenderTarget(previous)
+        await this.shadersReady(r, () => gen === this.prepareGen)
+      }
       if (gen !== this.prepareGen) return
       step('frame')
       // let the veil paint the stage, then render the frame that compiles the rest

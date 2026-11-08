@@ -1,6 +1,6 @@
 # Scène 3D : rendu
 
-> Dernière mise à jour : 2026-11-05
+> Dernière mise à jour : 2026-11-08
 > Sources : sections reprises telles quelles de `1_5_scene-3d.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre le rendu de la scène : styles et thèmes, lumière du jour et de la nuit, ombres, météo (nuages, pluie, neige, brume), eau de la piscine, matières photo, chaîne d'image et étalonnage, tilt-shift, banc de réglage, performance GPU (passes, MSAA, shaders précompilés, voile de mesure). Elle est née du découpage de
@@ -2291,7 +2291,8 @@ pas le reste. Leur gain en images par seconde vient de scènes limitées par le 
 et 700-900 ms de CPU par image, le temps que les pipelines (reflet de la piscine sur six faces,
 caustiques, cibles de la chaîne) soient créés. Pas de précompilation sous le voile en WebGPU :
 `compileAsync` compile pour le format du canevas, la scène est dessinée dans la cible de la chaîne
-(MSAA, MRT, demi-flottant).
+(MSAA, MRT, demi-flottant). *(Depuis le 2026-11-08, la première image, qui crée les pipelines, est
+rendue sous le voile : voir « Mise à jour 2026-11-08 » en fin de section.)*
 
 **Organisation** : tout ce qui est WebGPU vit dans `apps/web/src/three/gpu/`, chargé à la demande
 (`loadGpuBackend`) : le moteur par défaut ne le télécharge pas. Le contrat entre les deux,
@@ -2476,3 +2477,34 @@ est de 3 à 5 ms.
   identique dans les deux moteurs, écart 0,32/255.
 
 Sources : `apps/web/src/three/gpu/levelLight.ts`, `node_modules/three/src/nodes/lighting/{AnalyticLightNode,LightsNode}.js`.
+
+### Mise à jour 2026-11-08 — en WebGPU, la maison se construit de nouveau sous le voile
+
+**Symptôme** : depuis l'arrivée du second moteur, en WebGPU, le plan du voile revenait à chaque
+chargement, la vue se figeait, et la 3D apparaissait parfois avant la fin du chargement.
+
+**Cause** : `HouseScene.prepare` appelait `shadersReady` dans les deux moteurs. Cette fonction lit
+`renderer.properties` pour savoir si les programmes WebGL sont prêts. `WebGPURenderer` n'a pas ce
+membre (three 0.187, `renderers/common/Renderer.js`) : l'appel levait une erreur, et le `catch` de
+`prepare` l'avalait sans rien dire, puisqu'il est là pour ne jamais laisser la maison sous le voile.
+Le voile partait donc juste après « Compilation des shaders », sans passer par l'étape « Première
+image ». Les images suivantes construisaient les pipelines WebGPU sous les yeux de l'utilisateur.
+`render()` ne dessine rien tant que `init()` n'a pas répondu, donc même sans l'erreur, la première
+image pouvait être perdue.
+
+**Correctif** : en WebGPU, `prepare` saute la compilation et l'attente des programmes, attend
+`WebGPURenderer.init()` (promesse gardée dans `gpuInit`), puis rend la première image sous le voile.
+Le chemin WebGL ne change pas. Test : `three.test.ts › with WebGPU, waits for init then draws the
+first frame under the veil`, avec un faux moteur sans `properties` ; il échoue sans le correctif.
+
+**Vérifié** dans la preview (`kasbah-mock`, `?renderer=webgpu`) : le voile passe par « Première
+image », la tâche longue de cette image (310 ms) tombe sous le voile, et aucune tâche longue de plus
+de 100 ms ne suit son départ. En WebGL, les étapes sont les mêmes qu'avant. **Pas mesuré** : la
+fluidité image par image après le chargement, le volet de la preview étant masqué (il ne rend une
+image qu'à chaque capture).
+
+**Ce qui reste** : en WebGPU, three reconstruit en JavaScript ses matières en nœuds à chaque
+chargement, et rien ne garde ce travail d'une page à l'autre (en WebGL, Chrome garde les shaders
+compilés sur disque). Le voile y reste donc plus long qu'en WebGL au cache chaud.
+
+Sources : `apps/web/src/three/HouseScene.ts` (`prepare`, `gpuInit`), `apps/web/src/three/three.test.ts`.

@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-08] update | Scène 3D : en WebGPU, la maison se construit de nouveau sous le voile
+
+**Déclencheur** : constat de l'utilisateur — depuis les deux moteurs, le voile de chargement revient à chaque fois, se fige, et la 3D l'interrompt parfois.
+
+**Pages modifiées** :
+- `1_architecture/1_11_scene-3d-rendu.md` - mise à jour 2026-11-08 : `shadersReady` lisait `renderer.properties`, absent de `WebGPURenderer`, et l'erreur avalée faisait partir le voile avant la première image ; `prepare` attend désormais `init()` et rend la première image sous le voile. Renvoi ajouté au paragraphe « À-coup au premier usage ».
+
+**Index** : catalogue 1_architecture mis à jour (1 ligne), index.md régénéré.
+
+**Non mesuré** : la fluidité image par image après le chargement (volet de la preview masqué).
+
 ## [2026-11-07] update | Hue : l'état d'avant rendu en passant par « éteint », trame noire avant la fermeture
 
 **Déclencheur** : constat de l'utilisateur — au changement de pièce, l'ancienne zone ne reprend pas son état d'avant.

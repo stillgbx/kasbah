@@ -1704,6 +1704,35 @@ describe('preparing the house before showing it', () => {
   })
 
   /**
+   * WebGPU builds its pipelines at the first frame: that frame must be drawn under the veil, once
+   * `init()` has resolved. `WebGPURenderer` has no `properties`: reading the WebGL programs there
+   * threw, the veil left after the shaders stage and the house was built in view.
+   */
+  it('with WebGPU, waits for init then draws the first frame under the veil', async () => {
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true, requestFrame: () => 0, cancelFrame: () => {} })
+    let initDone!: () => void
+    const internals = scene as unknown as { renderer: object | null; gpu: object; gpuInit: Promise<void>; gpuReady: boolean; holdFrames: boolean; render(interactive?: boolean): void }
+    internals.renderer = { isWebGPURenderer: true, getRenderTarget: () => null, setRenderTarget: () => {} }
+    internals.gpu = { prepareFrame: () => {} }
+    ;(scene as unknown as { applySky(): void }).applySky = () => {}   // the sky wants a real renderer (PMREM)
+    internals.gpuInit = new Promise<void>((resolve) => { initDone = () => { internals.gpuReady = true; resolve() } })
+    const frames: boolean[] = []
+    internals.render = () => { frames.push(internals.holdFrames) }
+    const seen: (string | null)[] = []
+    scene.on('prepare', (stage) => seen.push(stage))
+    scene.load(parseHouse(demo))
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(scene.preparingHouse).toBe(true)          // still under the veil while init runs
+    expect(frames).toEqual([])
+    initDone()
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(seen).toEqual(['materials', 'shaders', 'frame', null])
+    expect(frames).toEqual([false])                    // one frame, frames released, before the veil leaves
+    internals.renderer = null
+    scene.dispose()
+  })
+
+  /**
    * A style never seen (or left: three discards the programs nothing uses anymore) requires
    * new shaders. Compiled by the first frame, they froze the WHOLE main thread — 2.5 to
    * 5.5 s on the iGPU for "realistic", style selection included, which only painted afterward.
