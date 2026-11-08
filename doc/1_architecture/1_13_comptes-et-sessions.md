@@ -192,7 +192,7 @@ Deux constats d'un audit de sécurité sur `LoginGuard` (`mcp/auth.ts`) :
   qui l'a contacté (un client ne peut pas la choisir), sinon l'adresse du socket. Si le proxy n'ajoutait
   pas cet en-tête, toutes les requêtes auraient l'adresse du NAS : on retomberait sur le plafond global
   d'avant. **À vérifier sur le vrai proxy** : qu'il ajoute bien `X-Forwarded-For` (sinon un client
-  pourrait aussi en écrire un et changer d'adresse à volonté pour essayer plus de noms).
+  pourrait aussi en écrire un et changer d'adresse à volonté pour essayer plus de noms). *(Vérifié le 2026-11-08 sur le vrai proxy du NAS : l'en-tête est bien ajouté.)*
 - **F17 : des tentatives envoyées en même temps passaient toutes.** Le contrôle avait lieu avant le
   calcul scrypt (asynchrone), l'échec n'était noté qu'après : douze essais simultanés étaient tous
   évalués. Désormais `attempt()` compte l'essai comme un échec **avant** la vérification, et `succeed()`
@@ -504,7 +504,7 @@ ou mode de transition (refusé).
 **Reste ouvert.** (1) Vérifier sur le vrai proxy qu'il ajoute bien `X-Forwarded-For` : ouvert depuis le
 2026-10-24, devenu **critique**, car c'est lui qui dit « client à la maison » (sans l'en-tête, `clientOf`
 verrait le proxy, donc une adresse privée, et `LAN_ONLY` ne protégerait plus rien : déduction du code, non
-essayée). (2) Appli Android : retirer le cas « réseau local : `/login` renvoie à l'accueil sans cookie »
+essayée). *(Vérifié le 2026-11-08 sur le vrai proxy du NAS : l'en-tête est bien ajouté.)* (2) Appli Android : retirer le cas « réseau local : `/login` renvoie à l'accueil sans cookie »
 ([1_15](1_15_appli-android-auto.md)). (3) **Non joué** : une vraie connexion par l'adresse publique avec le
 proxy du NAS.
 

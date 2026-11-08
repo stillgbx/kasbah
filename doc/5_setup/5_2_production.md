@@ -836,7 +836,7 @@ Pièges vus :
   en HTTPS valide.
 
 **À vérifier sur le vrai proxy** : qu'il ajoute bien `X-Forwarded-For`. C'est lui qui dit « client à la
-maison » (`LAN_ONLY`) et qui empêche de prendre une requête proxifiée pour la machine elle-même.
+maison » (`LAN_ONLY`) et qui empêche de prendre une requête proxifiée pour la machine elle-même. *(Vérifié le 2026-11-08 sur le vrai proxy du NAS : l'en-tête est bien ajouté.)*
 
 **Ordre de mise en service** : (1) créer l'admin par le script (`npm run account -w @kasbah/server -- add
 <nom> --admin`) ; (2) marquer le compte de la maison (`… house <nom> on`) ; (3) mettre les écrans fixes (tablette)
