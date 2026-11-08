@@ -537,3 +537,47 @@ i18n : `settings.tabs.*`, `settings.tabsShort.*`.
 
 Sources : `apps/web/src/views/SettingsView.vue`, `apps/web/src/views/{Agenda,School,Shopping,Tens}View.vue`,
 `apps/web/src/i18n/locales/{fr,en}.json`.
+
+### Mise à jour 2026-11-08 (bis) — retouches des onglets : Scène 3D en petites cartes, plugins en cartes
+
+Retour de l'utilisateur sur la première version des onglets (captures à 2000 px) ; ce qui suit
+**remplace** sur ces points la section précédente.
+
+- **Affichage** : Thème passe dans la pile de gauche (Apparence, Langue, Thème), Plein écran dans celle
+  de droite (Plein écran, Barre de navigation).
+- **Système** : « Mise à jour du serveur » passe en tête, avant Notifications, Comptes et Assistant.
+- **Scène 3D** : le bloc unique « Rendu 3D » étirait ses cinq segmentés sur toute la largeur (plus de
+  1900 px à 2000). Il devient une carte **Style** (tuiles et « Matières en images ») et une petite carte
+  par réglage : Heure de la maison, Saison du jardin, Projection, Qualité, Moteur de rendu, Régler la
+  lumière, Débogage (la météo forcée s'ouvre dans cette dernière). Aucune clé i18n nouvelle : les
+  titres sont les libellés `render.*` existants. Disposition (`.scene`, requêtes du conteneur
+  `settings`) : une colonne, puis moitié / moitié dès 760 px de contenu, puis un tiers / deux tiers dès
+  1400 px. Les petites cartes sont des **colonnes CSS** (`columns: 2 360px`, `break-inside: avoid`) et
+  non une grille : leurs hauteurs diffèrent (aide de Projection longue, météo forcée), une rangée de
+  grille se serait alignée sur la plus haute. Deux colonnes au plus, 360 px au moins chacune : à cinq
+  libellés, un segmenté en réclame environ 370. Mesuré : petite carte de 568 px à 1280, environ 600 à
+  1920 — un segmenté ne dépasse plus ça.
+- **Plugins de la maison en cartes**, comme la liste du site vitrine, au lieu de rangées pleine largeur
+  presque vides. Grille `repeat(auto-fill, minmax(min(100%, 240px), 1fr))` : 4 cartes par rangée à
+  1280 px, 5 à 1600, une au téléphone. Une carte (`components/settings/PluginSection.vue`) : chevron et
+  nom, état et nombre d'appareils dessous (coupé par une ellipse sur une carte étroite, texte entier en
+  infobulle), interrupteur à droite.
+- **Le panneau s'ouvre sous la rangée de sa carte.** `PluginSection` a **deux racines**, la carte puis
+  son panneau ; le panneau prend une rangée entière (`grid-column: 1 / -1`) et la grille coule en
+  `grid-auto-flow: row dense`. Le placement dense met le panneau sur la première rangée entièrement
+  libre, donc sous la carte, et les cartes suivantes remplissent le reste de la rangée de la carte :
+  la carte garde sa place, sans JavaScript ni calcul du nombre de colonnes. La carte ouverte se marque
+  comme une tuile choisie (bordure et fond d'accent), le panneau porte une bordure d'accent et rappelle
+  le nom du plugin. Le reste ne change pas : `v-show` sur le panneau, ouverture seule sur
+  `needs_pairing` et `error`, dernier mot à l'utilisateur.
+
+Vérifié dans la preview `kasbah-mock`, avec 16 plugins factices injectés dans le store (le transport de
+démonstration n'en rend aucun) : à 1280 px, ouvrir « claude » laisse sa rangée complète (agenda,
+automower, claude, comap) et pose le panneau dessous ; le refermer rend à chaque carte sa position
+exacte (`getBoundingClientRect` avant / après). 375 px en clair, 1280 et 1600 en sombre : aucun
+débordement ni segmenté coupé, aucune erreur console. Tests de `components/settings` et `views` verts
+sans retouche (`PluginSection.test.ts` lit toujours `.plugin__body` et `.plugin__toggle`). **Non
+joués** : la liste réelle des plugins, et les cartes de mise en route (Hue, Nest…) dans le panneau
+pleine largeur sur la vraie maison.
+
+Sources : `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/settings/PluginSection.vue`.

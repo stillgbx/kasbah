@@ -39,8 +39,8 @@ import type { SceneProjection } from '../three/core/cameraFit'
 import { styleById, type GradeLook, type RenderStyle } from '../three/styles'
 
 // Settings, in five tabs: Display (this screen's choices), 3D scene, House (edit mode, properties, GPS
-// origin), Plugins (local, Matter, the house's vendors) and System (notifications, accounts, assistant,
-// server update). The tab lives in the address (`?tab=`), so a reload or a link from another view
+// origin), Plugins (local, Matter, the house's vendors) and System (server update, notifications,
+// accounts, assistant). The tab lives in the address (`?tab=`), so a reload or a link from another view
 // ("Open settings") lands on it. The active plugins and their sub-items live in house.json: they are
 // choices of THE HOUSE, not of the screen, and they take effect without restarting the server.
 const settings = useSettingsStore()
@@ -199,12 +199,6 @@ const houseStats = computed(() => {
             <div class="block__title">{{ $t('settings.language') }}</div>
             <Segmented :model-value="settings.locale" :options="localeOptions" class="w-100" @update:model-value="(v: string) => settings.setLocale(v)" />
           </section>
-          <section v-if="settings.fullscreen.isSupported" class="card block block--row">
-            <div class="block__title">{{ $t('settings.fullscreen') }}</div>
-            <v-switch :model-value="settings.fullscreen.isFullscreen" @update:model-value="settings.fullscreen.toggle()" />
-          </section>
-        </div>
-        <div class="stack">
           <section class="card block">
             <div class="block__title">{{ $t('settings.theme') }}</div>
             <div class="themes">
@@ -222,6 +216,12 @@ const houseStats = computed(() => {
               </button>
             </div>
           </section>
+        </div>
+        <div class="stack">
+          <section v-if="settings.fullscreen.isSupported" class="card block block--row">
+            <div class="block__title">{{ $t('settings.fullscreen') }}</div>
+            <v-switch :model-value="settings.fullscreen.isFullscreen" @update:model-value="settings.fullscreen.toggle()" />
+          </section>
           <!-- the rail's order: a choice of THIS device, like the appearance -->
           <section class="card block">
             <div class="block__title">{{ $t('settings.navOrder') }}</div>
@@ -230,10 +230,11 @@ const houseStats = computed(() => {
           </section>
         </div>
       </div>
-      <!-- 3D scene: one dense block, its content itself on two columns -->
-      <section v-else-if="tab === 'scene'" class="card block block--wide">
-        <div class="block__title">{{ $t('render.title') }}</div>
-        <div class="render">
+      <!-- 3D scene: the style tiles on one side, one small card per setting on the other, so that no
+           control stretches across a wide screen -->
+      <div v-else-if="tab === 'scene'" class="scene">
+        <section class="card block">
+          <div class="block__title">{{ $t('render.style') }}</div>
           <div class="themes">
             <button v-for="st in settings.styles" :key="st.id" type="button" class="theme" :data-on="settings.sceneStyle === st.id ? '1' : '0'"
                     :aria-pressed="settings.sceneStyle === st.id" @click="settings.setSceneStyle(st.id)">
@@ -245,54 +246,64 @@ const houseStats = computed(() => {
               <span class="theme__name">{{ $t(st.labelKey) }}</span>
             </button>
           </div>
-          <!-- second column: the two toggles, which make do with the space they are left -->
-          <div class="render__side">
-            <div class="auto-row auto-row--default">
-              <div class="min0">
-                <div class="auto-row__name">{{ $t('render.assets') }}</div>
-                <!-- the two texts in the same cell: the height is that of the longer one, nothing moves -->
-                <div class="muted small swap">
-                  <span :data-on="styleHasAssets ? '1' : '0'" :aria-hidden="!styleHasAssets">{{ $t('render.assetsHint') }}</span>
-                  <span :data-on="styleHasAssets ? '0' : '1'" :aria-hidden="styleHasAssets">{{ $t('render.assetsNone') }}</span>
-                </div>
+          <div class="auto-row">
+            <div class="min0">
+              <div class="auto-row__name">{{ $t('render.assets') }}</div>
+              <!-- the two texts in the same cell: the height is that of the longer one, nothing moves -->
+              <div class="muted small swap">
+                <span :data-on="styleHasAssets ? '1' : '0'" :aria-hidden="!styleHasAssets">{{ $t('render.assetsHint') }}</span>
+                <span :data-on="styleHasAssets ? '0' : '1'" :aria-hidden="styleHasAssets">{{ $t('render.assetsNone') }}</span>
               </div>
-              <v-switch :model-value="settings.sceneAssets && styleHasAssets" :disabled="!styleHasAssets" hide-details density="compact"
-                        @update:model-value="(v: boolean | null) => settings.setSceneAssets(v === true)" />
             </div>
-            <div class="auto-row auto-row--default">
+            <v-switch :model-value="settings.sceneAssets && styleHasAssets" :disabled="!styleHasAssets" hide-details density="compact"
+                      @update:model-value="(v: boolean | null) => settings.setSceneAssets(v === true)" />
+          </div>
+        </section>
+        <!-- the small cards flow on at most two columns, each as wide as a card needs and no more -->
+        <div class="scene__cards">
+          <section class="card block">
+            <div class="block__title">{{ $t('render.ambience') }}</div>
+            <Segmented dense :model-value="settings.sceneAmbience" :options="ambienceOptions" class="w-100" @update:model-value="(v: AmbienceMode) => settings.setSceneAmbience(v)" />
+            <div class="muted small">{{ $t('render.ambienceHint') }}</div>
+          </section>
+          <section class="card block">
+            <div class="block__title">{{ $t('render.season') }}</div>
+            <Segmented dense :model-value="settings.sceneSeason" :options="seasonOptions" class="w-100" @update:model-value="(v: SeasonMode) => settings.setSceneSeason(v)" />
+            <div class="muted small">{{ $t('render.seasonHint') }}</div>
+          </section>
+          <section class="card block">
+            <div class="block__title">{{ $t('render.projection') }}</div>
+            <Segmented dense :model-value="settings.sceneProjection" :options="projectionOptions" class="w-100" @update:model-value="(v: SceneProjection) => settings.setSceneProjection(v)" />
+            <div class="muted small">{{ $t('render.projectionHint') }}</div>
+          </section>
+          <section class="card block">
+            <div class="block__title">{{ $t('render.quality') }}</div>
+            <Segmented dense :model-value="settings.sceneQuality" :options="qualityOptions" class="w-100" @update:model-value="(v: RenderQuality) => settings.setSceneQuality(v)" />
+            <div class="muted small">{{ $t('render.qualityHint') }}</div>
+          </section>
+          <section class="card block">
+            <div class="block__title">{{ $t('render.renderer') }}</div>
+            <Segmented dense :model-value="settings.sceneRenderer" :options="rendererOptions" class="w-100" @update:model-value="(v: RendererChoice) => chooseRenderer(v)" />
+            <div class="muted small">{{ $t(rendererNote) }}</div>
+          </section>
+          <section v-if="houseSettings" class="card block">
+            <div class="auto-row">
               <div class="min0">
-                <div class="auto-row__name">{{ $t('render.debug') }}</div>
+                <div class="block__title">{{ $t('render.tuning.title') }}</div>
+                <div class="muted small">{{ $t('render.tuning.hint') }}</div>
+              </div>
+              <button type="button" class="pill pill--sm" @click="openTuning()">{{ $t('render.tuning.open') }}</button>
+            </div>
+          </section>
+          <section class="card block">
+            <div class="auto-row">
+              <div class="min0">
+                <div class="block__title">{{ $t('render.debug') }}</div>
                 <div class="muted small">{{ $t('render.debugHint') }}</div>
               </div>
               <v-switch :model-value="settings.sceneDebug" hide-details density="compact"
                         @update:model-value="(v: boolean | null) => settings.setSceneDebug(v === true)" />
             </div>
-            <div v-if="houseSettings" class="auto-row auto-row--default">
-              <div class="min0">
-                <div class="auto-row__name">{{ $t('render.tuning.title') }}</div>
-                <div class="muted small">{{ $t('render.tuning.hint') }}</div>
-              </div>
-              <button type="button" class="pill pill--sm" @click="openTuning()">{{ $t('render.tuning.open') }}</button>
-            </div>
-          </div>
-          <!-- the two segmented controls take the block's FULL width: their four labels
-               do not get cut and do not get abbreviated, they ask for more than half a column -->
-          <div class="render__full">
-            <div class="block__sub">{{ $t('render.ambience') }}</div>
-            <Segmented dense :model-value="settings.sceneAmbience" :options="ambienceOptions" class="w-100" @update:model-value="(v: AmbienceMode) => settings.setSceneAmbience(v)" />
-            <div class="muted small">{{ $t('render.ambienceHint') }}</div>
-            <div class="block__sub">{{ $t('render.season') }}</div>
-            <Segmented dense :model-value="settings.sceneSeason" :options="seasonOptions" class="w-100" @update:model-value="(v: SeasonMode) => settings.setSceneSeason(v)" />
-            <div class="muted small">{{ $t('render.seasonHint') }}</div>
-            <div class="block__sub">{{ $t('render.projection') }}</div>
-            <Segmented dense :model-value="settings.sceneProjection" :options="projectionOptions" class="w-100" @update:model-value="(v: SceneProjection) => settings.setSceneProjection(v)" />
-            <div class="muted small">{{ $t('render.projectionHint') }}</div>
-            <div class="block__sub">{{ $t('render.quality') }}</div>
-            <Segmented dense :model-value="settings.sceneQuality" :options="qualityOptions" class="w-100" @update:model-value="(v: RenderQuality) => settings.setSceneQuality(v)" />
-            <div class="muted small">{{ $t('render.qualityHint') }}</div>
-            <div class="block__sub">{{ $t('render.renderer') }}</div>
-            <Segmented dense :model-value="settings.sceneRenderer" :options="rendererOptions" class="w-100" @update:model-value="(v: RendererChoice) => chooseRenderer(v)" />
-            <div class="muted small">{{ $t(rendererNote) }}</div>
             <!-- forced weather: debugging only, and scene only (the widget always says the real weather) -->
             <template v-if="settings.sceneDebug">
               <div class="block__sub">{{ $t('render.weather') }}</div>
@@ -316,9 +327,9 @@ const houseStats = computed(() => {
               </div>
               <div class="muted small">{{ $t('render.weatherHint') }}</div>
             </template>
-          </div>
+          </section>
         </div>
-      </section>
+      </div>
       <!-- House: what writes the house file (the tab only exists with the "settings" right) -->
       <div v-else-if="tab === 'house'" class="duo">
         <div class="stack">
@@ -392,8 +403,7 @@ const houseStats = computed(() => {
           <p class="muted small plugins__hint">{{ $t('matter.hint') }}</p>
           <MatterCard />
         </section>
-        <!-- the vendors close the tab, being the longest list: each row has room to say name, status and
-             switch without squeezing -->
+        <!-- the vendors close the tab, being the longest list -->
         <section v-if="houseSettings" class="card block">
           <div class="plugins__head">
             <div class="block__title">{{ $t('settings.plugins') }}</div>
@@ -402,12 +412,18 @@ const houseStats = computed(() => {
           <p class="muted small plugins__hint">{{ $t('settings.pluginsHint') }}</p>
           <div class="plugins">
             <PluginSection v-for="p in pluginsByName" :key="p.id" :plugin="p" />
-            <div v-if="!plugins.loaded" class="muted small">{{ $t('common.loading') }}</div>
+            <div v-if="!plugins.loaded" class="muted small plugins__loading">{{ $t('common.loading') }}</div>
           </div>
         </section>
       </div>
-      <!-- System: this device's notifications, the accounts, the assistant, the server -->
+      <!-- System: the server first, then this device's notifications, the accounts, the assistant -->
       <div v-else class="stack">
+        <!-- the server version, and its update by the supervisor (local network only) -->
+        <section v-if="houseSettings" class="card block">
+          <div class="block__title">{{ $t('serverUpdate.title') }}</div>
+          <p class="muted small plugins__hint">{{ $t('serverUpdate.hint') }}</p>
+          <ServerUpdateCard />
+        </section>
         <!-- THIS device's push notifications: the house's alerts and the automations' messages -->
         <section class="card block">
           <div class="block__title">{{ $t('push.title') }}</div>
@@ -426,12 +442,6 @@ const houseStats = computed(() => {
           <p class="muted small plugins__hint">{{ $t('assistant.hint') }}</p>
           <AssistantCard />
         </section>
-        <!-- the server version, and its update by the supervisor (local network only) -->
-        <section v-if="houseSettings" class="card block">
-          <div class="block__title">{{ $t('serverUpdate.title') }}</div>
-          <p class="muted small plugins__hint">{{ $t('serverUpdate.hint') }}</p>
-          <ServerUpdateCard />
-        </section>
         <p class="muted small about">{{ $t('settings.about', { version: '0.2.0', house: house.house?.name ?? '—' }) }}</p>
       </div>
     </div>
@@ -440,7 +450,6 @@ const houseStats = computed(() => {
 
 <style scoped>
 .auto-row { display: flex; align-items: center; gap: 12px; padding: 4px 0; }
-.auto-row--default { margin-bottom: 4px; }
 .auto-row__name { font-size: 14px; font-weight: 500; }
 .min0 { flex: 1 1 0; min-width: 0; }
 .swap { display: grid; }
@@ -471,18 +480,21 @@ const houseStats = computed(() => {
 }
 /* Theme selector: each tile shows the palette it would apply (background, card, text,
    accent). Fixed footprint — the variant row is always there, even empty. */
-/* The 3D rendering content on two columns: the tiles on one side, the toggles on the other.
-   The two segmented controls, for their part, keep the block's FULL width — measured: their
-   four labels ask for ~370 px, half a column only offers ~280 and cut them.
-   CONTAINER query and not screen: what decides is the block's width, whether it is on
-   two units on a large width or full page on a narrow screen. */
-.block--wide { container-type: inline-size; }
-.render { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-.render__side { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; }
-.render__full { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-@container (min-width: 520px) {
-  .render { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 18px; align-items: start; }
-  .render__full { grid-column: 1 / -1; }
+/* 3D scene: the style tiles beside the small cards, half and half, then a third and two thirds on a
+   wide screen, where the small cards go on two columns. A segmented control thus never spans more
+   than about 600 px. The small cards are CSS columns, not a grid: they differ in height (the
+   projection hint is long, the forced weather opens under Debugging) and a grid row would align on
+   the tallest. At most two columns, 360 px each at least: their segmented controls ask for ~370 px
+   with five labels, below that they cut. */
+.scene { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+.scene__cards { columns: 2 360px; column-gap: 14px; }
+.scene__cards > .card { break-inside: avoid; margin-bottom: 14px; }
+.scene__cards > .card:last-child { margin-bottom: 0; }
+@container settings (min-width: 760px) {
+  .scene { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+@container settings (min-width: 1400px) {
+  .scene { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
 }
 /* As many tiles per row as the column holds, instead of two tiles that grow: on a wide screen
    the Theme and 3D rendering blocks get shorter instead of sprawling. Never more
@@ -513,7 +525,11 @@ const houseStats = computed(() => {
 .slider-row[data-off='1'] { opacity: .5; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 .small { font-size: 12px; }
-.plugins { display: grid; gap: 4px; }
+/* The vendors as cards, like the showcase site, rather than full-width rows mostly empty. `dense`: an
+   open card's panel spans a whole row and lands under its card, the next cards fill the card's row
+   (see `PluginSection.vue`). */
+.plugins { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); grid-auto-flow: row dense; gap: 10px; }
+.plugins__loading { grid-column: 1 / -1; }
 .plugins__hint { margin: -4px 0 0; }
 .about { margin: 4px 4px 0; }
 </style>

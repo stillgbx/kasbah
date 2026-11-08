@@ -20,7 +20,7 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 import { usePluginsStore } from '../../stores/plugins'
 import { useScenesStore } from '../../stores/scenes'
 
-// A plugin in Settings: an always-readable row (name, health, switch) and, under it, EVERYTHING
+// A plugin in Settings: an always-readable card (name, health, switch) and, under it, EVERYTHING
 // that concerns it — what the server says about it, its setup card (link, unlink, pair), its
 // light scenes, its sub-items, its .env keys. Before, the cards lived above the list and decided
 // on their own whether to show: Renault's stayed there, announcing a linked account that nobody
@@ -89,96 +89,104 @@ const expandable = computed(() => !!setupCard.value || props.plugin.parts.length
 </script>
 
 <template>
-  <div class="plugin">
-    <div class="plugin__row">
-      <!-- the chevron keeps its place even when there is nothing to expand: the names stay aligned -->
-      <button type="button" class="plugin__toggle min0" :disabled="!expandable" :aria-expanded="open"
-              :title="$t('settings.pluginDetails')" @click="manual = !open">
-        <StrokeIcon :name="open ? 'chevronUp' : 'chevronDown'" :size="16" class="plugin__chev" :data-on="expandable ? '1' : '0'" />
-        <span class="plugin__name">{{ plugin.id.replace('_', ' ') }}</span>
-      </button>
-      <div class="plugin__status muted">
+  <!-- Two roots on purpose: the card, then its panel. The parent grid flows `dense` and the panel
+       spans a whole row: it lands on the row UNDER the card, and the following cards fill the rest of
+       the card's row. The card keeps its place, its settings open below it. -->
+  <div class="plugin" :data-open="open && expandable ? '1' : '0'">
+    <!-- the chevron keeps its place even when there is nothing to expand: the names stay aligned -->
+    <button type="button" class="plugin__toggle min0" :disabled="!expandable" :aria-expanded="open"
+            :title="$t('settings.pluginDetails')" @click="manual = !open">
+      <StrokeIcon :name="open ? 'chevronUp' : 'chevronDown'" :size="16" class="plugin__chev" :data-on="expandable ? '1' : '0'" />
+      <span class="plugin__name">{{ plugin.id.replace('_', ' ') }}</span>
+      <span class="plugin__status muted" :title="$t(`settings.pluginStatus.${plugin.health.status}`)">
         <span class="dot" :style="{ background: DOT[plugin.health.status] }" />{{ $t(`settings.pluginStatus.${plugin.health.status}`) }}<span v-if="plugin.health.deviceCount"> · {{ $t('settings.devicesCount', { n: plugin.health.deviceCount }, plugin.health.deviceCount) }}</span>
+      </span>
+    </button>
+    <!-- a skeleton has nothing to start: switch greyed out, not hidden -->
+    <v-switch :model-value="plugin.enabled" :disabled="!plugin.implemented || plugins.isBusy(plugin.id)" hide-details density="compact" class="plugin__switch"
+              :title="plugin.implemented ? $t('settings.pluginEnable') : $t('settings.pluginStatus.not_implemented')"
+              :aria-label="$t('settings.pluginEnable')"
+              @update:model-value="(v: boolean | null) => plugins.setEnabled(plugin.id, v === true)" />
+  </div>
+
+  <!-- `v-show` and not `v-if`: the cards query their vendor on mount and keep where the
+       setup stands; collapsing the section must not re-ask everything -->
+  <div v-show="open" class="plugin__body">
+    <div class="plugin__bodyTitle">{{ plugin.id.replace('_', ' ') }}</div>
+    <p v-if="plugin.health.detail" class="muted small plugin__detail">{{ plugin.health.detail }}</p>
+
+    <component :is="setupCard" v-if="setupCard && plugin.enabled" />
+
+    <!-- the vendor's light scenes: the MANAGEMENT screen (the usual gesture remains the pill of the
+         room panel). Like the sub-items, only when the plugin is on. -->
+    <div v-if="plugin.enabled && pluginScenes.length" class="scenes">
+      <div class="scenes__title muted small">{{ $t('settings.scenes') }}</div>
+      <div class="auto-row auto-row--default">
+        <div class="min0">
+          <div class="auto-row__name">{{ $t('settings.sceneAutoDynamicNew') }}</div>
+          <div class="muted small">{{ $t('settings.sceneAutoDynamicNewHint') }}</div>
+        </div>
+        <v-switch :model-value="plugin.autoDynamicForNewScenes === true" hide-details density="compact"
+                  @update:model-value="(v: boolean | null) => plugins.setAutoDynamicForNewScenes(plugin.id, v === true)" />
       </div>
-      <!-- a skeleton has nothing to start: switch greyed out, not hidden -->
-      <v-switch :model-value="plugin.enabled" :disabled="!plugin.implemented || plugins.isBusy(plugin.id)" hide-details density="compact" class="plugin__switch"
-                :title="plugin.implemented ? $t('settings.pluginEnable') : $t('settings.pluginStatus.not_implemented')"
-                :aria-label="$t('settings.pluginEnable')"
-                @update:model-value="(v: boolean | null) => plugins.setEnabled(plugin.id, v === true)" />
+      <div class="muted small">{{ $t('settings.sceneAutoDynamicHint') }}</div>
+      <div class="auto-rows">
+        <div v-for="e in pluginScenes" :key="e.scene.id" class="auto-row">
+          <div class="min0">
+            <div class="auto-row__name">{{ e.scene.name }}</div>
+            <div class="muted small">{{ e.scene.group?.name ?? '—' }}</div>
+          </div>
+          <v-switch :model-value="e.scene.autoDynamic" :disabled="!e.scene.dynamic" hide-details density="compact"
+                    :title="e.scene.dynamic ? $t('settings.sceneAutoDynamic') : $t('settings.sceneNoPalette')"
+                    @update:model-value="(v: boolean | null) => scenes.setAutoDynamic(e.scene.id, v === true)" />
+          <!-- destructive and visible from the vendor's app: two steps, never a single press -->
+          <v-btn v-if="armed === e.scene.id" color="error" variant="flat" size="small" class="del-confirm"
+                 @click="confirmDelete(e.scene.id)">
+            {{ $t('scenes.deleteConfirm') }}
+          </v-btn>
+          <v-btn v-else icon variant="text" size="small" color="error" class="del"
+                 :title="$t('scenes.delete')" :aria-label="$t('scenes.delete')" @click="arm(e.scene.id)">
+            <StrokeIcon name="trash" :size="16" />
+          </v-btn>
+        </div>
+      </div>
     </div>
 
-    <!-- `v-show` and not `v-if`: the cards query their vendor on mount and keep where the
-         setup stands; collapsing the section must not re-ask everything -->
-    <div v-show="open" class="plugin__body">
-      <p v-if="plugin.health.detail" class="muted small plugin__detail">{{ plugin.health.detail }}</p>
+    <!-- sub-items: visible only when the plugin is on, otherwise they mean nothing -->
+    <div v-if="plugin.enabled && plugin.parts.length" class="parts">
+      <div class="parts__title muted small">{{ $t('settings.pluginParts') }}</div>
+      <!-- toggle pill rather than a checkbox: the house icon set has no
+           $checkboxOn alias, and a pill keeps the same footprint lit or not -->
+      <button v-for="part in plugin.parts" :key="part.id" type="button" class="part" :data-on="part.enabled ? '1' : '0'"
+              :disabled="plugins.isBusy(plugin.id)" :aria-pressed="part.enabled"
+              @click="plugins.setPart(plugin.id, part.id, !part.enabled)">
+        {{ $t(part.labelKey) }}
+      </button>
+    </div>
 
-      <component :is="setupCard" v-if="setupCard && plugin.enabled" />
-
-      <!-- the vendor's light scenes: the MANAGEMENT screen (the usual gesture remains the pill of the
-           room panel). Like the sub-items, only when the plugin is on. -->
-      <div v-if="plugin.enabled && pluginScenes.length" class="scenes">
-        <div class="scenes__title muted small">{{ $t('settings.scenes') }}</div>
-        <div class="auto-row auto-row--default">
-          <div class="min0">
-            <div class="auto-row__name">{{ $t('settings.sceneAutoDynamicNew') }}</div>
-            <div class="muted small">{{ $t('settings.sceneAutoDynamicNewHint') }}</div>
-          </div>
-          <v-switch :model-value="plugin.autoDynamicForNewScenes === true" hide-details density="compact"
-                    @update:model-value="(v: boolean | null) => plugins.setAutoDynamicForNewScenes(plugin.id, v === true)" />
-        </div>
-        <div class="muted small">{{ $t('settings.sceneAutoDynamicHint') }}</div>
-        <div class="auto-rows">
-          <div v-for="e in pluginScenes" :key="e.scene.id" class="auto-row">
-            <div class="min0">
-              <div class="auto-row__name">{{ e.scene.name }}</div>
-              <div class="muted small">{{ e.scene.group?.name ?? '—' }}</div>
-            </div>
-            <v-switch :model-value="e.scene.autoDynamic" :disabled="!e.scene.dynamic" hide-details density="compact"
-                      :title="e.scene.dynamic ? $t('settings.sceneAutoDynamic') : $t('settings.sceneNoPalette')"
-                      @update:model-value="(v: boolean | null) => scenes.setAutoDynamic(e.scene.id, v === true)" />
-            <!-- destructive and visible from the vendor's app: two steps, never a single press -->
-            <v-btn v-if="armed === e.scene.id" color="error" variant="flat" size="small" class="del-confirm"
-                   @click="confirmDelete(e.scene.id)">
-              {{ $t('scenes.deleteConfirm') }}
-            </v-btn>
-            <v-btn v-else icon variant="text" size="small" color="error" class="del"
-                   :title="$t('scenes.delete')" :aria-label="$t('scenes.delete')" @click="arm(e.scene.id)">
-              <StrokeIcon name="trash" :size="16" />
-            </v-btn>
-          </div>
-        </div>
-      </div>
-
-      <!-- sub-items: visible only when the plugin is on, otherwise they mean nothing -->
-      <div v-if="plugin.enabled && plugin.parts.length" class="parts">
-        <div class="parts__title muted small">{{ $t('settings.pluginParts') }}</div>
-        <!-- toggle pill rather than a checkbox: the house icon set has no
-             $checkboxOn alias, and a pill keeps the same footprint lit or not -->
-        <button v-for="part in plugin.parts" :key="part.id" type="button" class="part" :data-on="part.enabled ? '1' : '0'"
-                :disabled="plugins.isBusy(plugin.id)" :aria-pressed="part.enabled"
-                @click="plugins.setPart(plugin.id, part.id, !part.enabled)">
-          {{ $t(part.labelKey) }}
-        </button>
-      </div>
-
-      <div v-if="envKeys.length" class="plugin__env">
-        <div class="muted small">{{ $t('settings.keys') }}</div>
-        <div class="plugin__keys mono muted">{{ envKeys.join('  ') }}</div>
-      </div>
+    <div v-if="envKeys.length" class="plugin__env">
+      <div class="muted small">{{ $t('settings.keys') }}</div>
+      <div class="plugin__keys mono muted">{{ envKeys.join('  ') }}</div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.plugin { padding: 10px 0; border-bottom: 1px solid var(--line); }
-.plugin:last-child { border-bottom: 0; }
-.plugin__row { display: flex; align-items: center; gap: 12px; }
-.plugin__toggle { display: flex; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+/* A card: chevron and name on the first line, status on the second, the switch on the right. The open
+   card is marked like a selected tile (accent border and background), and so is its panel. */
+.plugin { display: flex; align-items: center; gap: 8px; padding: 10px 8px 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+          transition: border-color .15s, background .15s; }
+.plugin[data-open='1'] { border-color: var(--accent); background: var(--accent-soft); }
+.plugin__toggle { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 2px;
+                  padding: 0; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .plugin__toggle:disabled { cursor: default; }
-.plugin__chev { flex: 0 0 auto; color: var(--muted); }
+.plugin__chev { color: var(--muted); }
 .plugin__chev[data-on='0'] { visibility: hidden; }
 .plugin__switch { flex: 0 0 auto; }
-.plugin__body { display: grid; gap: 10px; justify-items: start; padding: 8px 0 4px 24px; }
+/* the panel takes a whole row of the parent grid, under its card */
+.plugin__body { grid-column: 1 / -1; display: grid; gap: 10px; justify-items: start; padding: 14px 16px;
+                border: 1px solid var(--accent); border-radius: var(--radius-sm); }
+.plugin__bodyTitle { font-weight: 600; font-size: 14px; text-transform: capitalize; }
 .plugin__detail { margin: 0; }
 .plugin__body > :deep(.card) { width: 100%; }
 /* the list of light scenes takes the full width of the panel (which aligns its children to the left) */
@@ -201,7 +209,9 @@ const expandable = computed(() => !!setupCard.value || props.plugin.parts.length
 .plugin__keys { font-size: 11px; white-space: pre-wrap; }
 .min0 { min-width: 0; flex: 1 1 0; }
 .plugin__name { font-weight: 500; font-size: 14px; text-transform: capitalize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.plugin__status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+/* under the name, in the name's column: long statuses are cut rather than widening the card */
+.plugin__status { grid-column: 2; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plugin__status .dot { margin-right: 6px; vertical-align: 1px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .small { font-size: 12px; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }

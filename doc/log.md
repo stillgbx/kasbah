@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-08] update | Réglages : Scène 3D en petites cartes, plugins en cartes
+
+**Déclencheur** : retour de l'utilisateur sur les onglets — Thème et Plein écran à échanger, Scène 3D aux segmentés trop larges, plugins en cartes dépliables, mise à jour du serveur en tête de Système.
+
+**Pages modifiées** :
+- `4_ui/4_7_reglages.md` - section « (bis) » : nouvelles piles d'Affichage, ordre de Système, Scène 3D en petites cartes (colonnes CSS), plugins en cartes avec panneau sous la rangée (deux racines + grille `dense`).
+
+**Index** : catalogue déjà à la date du jour, index.md inchangé.
+
 ## [2026-11-08] update | Réglages en cinq onglets
 
 **Déclencheur** : demande de l'utilisateur — la page des Réglages « commence à être chargée », la réorganiser en sections, avec des onglets.
