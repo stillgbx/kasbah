@@ -30,3 +30,4 @@ house/properties/
 
 # liste locale des donnees personnelles interdites (scripts/check-private.mjs)
 .private-denylist
+/.claude/skills/kasbah-video/
