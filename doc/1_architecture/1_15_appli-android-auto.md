@@ -70,7 +70,8 @@ mêmes couleurs claires et sombres (`res/values{,-night}/colors.xml`), une carte
   refuse toute écriture sans elle, [1_13](1_13_comptes-et-sessions.md)). Le cookie
   `__Host-kasbah_session` est lu dans la réponse 303 et renvoyé à la main ; **le mot de passe n'est
   jamais gardé**. Sur le réseau local, `/login` renvoie à l'accueil sans cookie : pas de session, et
-  ça marche quand même.
+  ça marche quand même. *(Dépassé le 2026-11-08 : une adresse locale n'ouvre plus Kasbah ; seule la machine
+  du serveur garde ce cas, voir la dernière section.)*
 - **Preuve** : la connexion n'est dite réussie qu'après un `GET /api/devices` accepté.
 - **Changer de compte** : `POST /logout` si le serveur répond, oubli local dans tous les cas.
 - **Permission micro** demandée ici, téléphone en main, plutôt que sur la route.
@@ -514,3 +515,22 @@ mesure par tranche du micro de la voiture, environ 16 ms, quand le site mesure t
 
 Version 0.7, `versionCode` 7. À vérifier en voiture : le bouton de l'alerte appli fermée, et la fréquence
 des « pas entendu » (`adb logcat -s KasbahApproach KasbahVoice`).
+
+### Mise à jour 2026-11-08 - la connexion par l'adresse publique seulement
+
+Depuis la connexion partout ([1_13](1_13_comptes-et-sessions.md), section du 2026-11-08), une adresse
+locale en `http://` n'ouvre plus Kasbah : `lanGate` répond 401 à `POST /login`. L'appli affichait alors
+« Utilisateur ou mot de passe incorrect », **après avoir envoyé le mot de passe en clair** sur le réseau.
+
+`login()` (`KasbahClient.kt`) vérifie désormais l'adresse avant tout envoi, par la fonction pure
+`signsInThere(url)` : HTTPS (l'adresse publique, à la maison comme dehors), ou la machine du serveur en
+HTTP (`localhost`, `127.x`, `[::1]`). Sinon, le message `err_public_address` (fr, en) dit de passer par
+l'adresse publique, sans rien envoyer.
+
+**Gardé** : le cas « `/login` renvoie à l'accueil sans cookie ». C'est celui du simulateur, branché par
+`adb reverse tcp:9789 tcp:9789` sur `http://localhost:9789` : le serveur y voit sa propre machine, de
+confiance sans compte (`isLoopbackRequest`). Le retirer aurait cassé l'essai sur le serveur de démonstration.
+
+Test : `ParsingTest` (« a password only goes over HTTPS, or to the server's own computer »). Tests unitaires,
+lint et `assembleDebug` verts. Version 0.8, `versionCode` 8. **Non joué** : la connexion sur un vrai
+téléphone par l'adresse publique.

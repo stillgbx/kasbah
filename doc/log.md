@@ -20,6 +20,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 - `4_ui/4_7_reglages.md` - Réglages sur `session.admin`, carte Comptes (rôles)
 - `5_setup/5_0_installation-et-scripts.md`, `5_setup/5_1_configuration-env.md`, `5_setup/5_2_production.md` - script `account`, `MCP_PUBLIC_URL` seule porte, procédure « étape 0 » (HTTPS en local par DNS local + proxy) avec ses pièges, ordre de mise en service
 - `0_overview/0_0_vision-et-principes.md` - principe du réseau local de confiance abandonné
+- `1_architecture/1_15_appli-android-auto.md` - connexion par l'adresse publique seulement (`signsInThere`), cas sans cookie gardé pour `localhost` (`adb reverse`), version 0.8
 
 **Contradictions relevées** : les sections datées antérieures de 1_13, 1_7, 5_2, 4_7, 1_9, 1_16 décrivent encore « réseau local de confiance » et `mcp-user` ; conservées, signalées par des mentions « dépassé » ou « d'avant », non réécrites.
 

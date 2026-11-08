@@ -71,6 +71,8 @@ class KasbahClient(private val context: Context) {
 
     /** The password is sent once and never kept: only the session cookie is. */
     fun login(user: String, password: String) {
+        // a local address no longer opens Kasbah, and the password would cross the network in clear
+        if (!signsInThere(baseUrl)) throw KasbahError(context.getString(R.string.err_public_address))
         val c = open("/login", "POST")
         c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
         c.doOutput = true
@@ -82,7 +84,7 @@ class KasbahClient(private val context: Context) {
             code == 401 -> throw KasbahError(context.getString(R.string.err_credentials))
             code == 429 -> throw KasbahError(context.getString(R.string.err_locked))
             code == 403 -> throw KasbahError(context.getString(R.string.err_origin))
-            // On the local network there is no session: `/login` just sends back to the app.
+            // The server's own computer (`adb reverse`) needs no account: `/login` just sends back to the app.
             else -> session = cookie
         }
     }
@@ -192,6 +194,19 @@ class KasbahClient(private val context: Context) {
         const val COOKIE = "__Host-kasbah_session"
         val ACCESS_CLASSES = listOf("gate", "garage")
     }
+}
+
+/**
+ * Does Kasbah sign in at this address? Over HTTPS (the public address, at home as away), or the server's
+ * own computer over HTTP (`adb reverse` to `localhost`, trusted without an account). A local address in
+ * plain HTTP serves only the speakers' streams, and would send the password in clear.
+ */
+internal fun signsInThere(url: String): Boolean {
+    val u = url.trim().lowercase()
+    if (u.startsWith("https://")) return true
+    if (!u.startsWith("http://")) return false
+    val host = u.removePrefix("http://").substringBefore('/').let { if (it.startsWith("[")) it.substringBefore(']') + "]" else it.substringBefore(':') }
+    return host == "localhost" || host.startsWith("127.") || host == "[::1]"
 }
 
 /** The session cookie among a response's headers (`Set-Cookie`, whatever its case), null if none. */

@@ -16,6 +16,7 @@
     <string name="err_credentials">Utilisateur ou mot de passe incorrect.</string>
     <string name="err_locked">Trop d\'essais : compte bloqué quelques minutes.</string>
     <string name="err_origin">Adresse refusée par le serveur : saisir l\'adresse publique exacte.</string>
+    <string name="err_public_address">Kasbah ne se connecte que par son adresse publique (https://…), à la maison comme dehors.</string>
     <string name="err_no_address">Adresse du serveur à saisir sur le téléphone.</string>
     <string name="err_session">Session expirée : se reconnecter sur le téléphone.</string>
     <string name="err_server">Erreur du serveur (%1$d).</string>

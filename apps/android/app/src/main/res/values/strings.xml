@@ -17,6 +17,7 @@
     <string name="err_credentials">Wrong user or password.</string>
     <string name="err_locked">Too many attempts: account locked for a few minutes.</string>
     <string name="err_origin">Address refused by the server: enter the exact public address.</string>
+    <string name="err_public_address">Kasbah signs in through its public address only (https://…), at home as away.</string>
     <string name="err_no_address">Enter the server address on the phone.</string>
     <string name="err_session">Session expired: sign in again on the phone.</string>
     <string name="err_server">Server error (%1$d).</string>

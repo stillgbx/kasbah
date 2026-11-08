@@ -1,8 +1,10 @@
 package org.kasbah.auto
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** What the app reads from the server: the session cookie, the gates and garage doors, the answer. */
@@ -15,8 +17,18 @@ class ParsingTest {
         assertEquals("abc.123", sessionCookie(headers))
     }
 
-    @Test fun `no session cookie on the local network`() {
+    @Test fun `no session cookie from the server's own computer`() {
+        // through `adb reverse`, `localhost` is the server's computer: it needs no account
         assertNull(sessionCookie(mapOf(null to listOf("HTTP/1.1 302 Found"), "Location" to listOf("/"))))
+    }
+
+    @Test fun `a password only goes over HTTPS, or to the server's own computer`() {
+        for (url in listOf("https://kasbah.example.org", "HTTPS://kasbah.example.org/", "http://localhost:9789", "http://127.0.0.1:8787", "http://[::1]:8787")) {
+            assertTrue(url, signsInThere(url))
+        }
+        for (url in listOf("http://192.168.1.20:8787", "http://kasbah.home.internal:8787", "http://kasbah.example.org", "http://localhost.example.org", "kasbah.example.org", "")) {
+            assertFalse(url, signsInThere(url))
+        }
     }
 
     private val devices = """
