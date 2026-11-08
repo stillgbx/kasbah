@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-08] update | Réponse parlée refusée sur iOS
+
+**Déclencheur** : bandeau « Réponse parlée impossible » (NotAllowedError) sur iPhone et iPad après une dictée ; correctif dans `useVoiceInput.ts`.
+
+**Pages modifiées** :
+- `3_plugins/3_25_transcription.md` - section datée : un seul `<audio>` réutilisé, amorcé par un WAV vide dans le toucher, fin du son vide ignorée, non joué sur iOS
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-11-08] update | Connexion pour tout le monde : fin de la confiance au réseau local
 
 **Déclencheur** : décision de l'utilisateur après constat qu'un invité sur le Wi-Fi avait plus de pouvoir que n'importe quel compte (le réseau local était « la maison », sans compte, avec tous les droits) ; changement de sécurité livré le jour même, non commité.

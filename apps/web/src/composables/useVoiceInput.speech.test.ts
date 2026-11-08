@@ -30,7 +30,8 @@ class FakeAudio {
   onended: (() => void) | null = null
   onerror: (() => void) | null = null
   playing = false
-  constructor(readonly src: string) { FakeAudio.last = this }
+  src = ''
+  constructor() { FakeAudio.last = this }
   async play() { this.playing = true }
   pause() { this.playing = false }
 }
@@ -70,6 +71,21 @@ it('says the reply aloud on this device, and a touch of the microphone stops it'
   api().toggle()
   expect(FakeAudio.last!.playing).toBe(false)
   expect(api().phase.value).toBe('idle')
+})
+
+it('unlocks the player inside the touch, before any await (iOS), and says the reply with the same element', async () => {
+  const api = harness('Fait.')
+  await flushPromises()
+  api().toggle()
+  const player = FakeAudio.last!
+  expect(player).toMatchObject({ playing: true })
+  expect(player.src.startsWith('data:audio/wav')).toBe(true)
+  player.onended!() // the silent sound ends: not the reply
+  await flushPromises()
+  expect(api().phase.value).toBe('recording')
+  api().toggle(); await flushPromises()
+  expect(FakeAudio.last).toBe(player)
+  expect(player).toMatchObject({ src: 'blob:reponse', playing: true })
 })
 
 it('returns to rest at the end of playback', async () => {

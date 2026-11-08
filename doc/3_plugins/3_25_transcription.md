@@ -1,7 +1,7 @@
 # Plugin Transcription (la voix de l'assistant)
 
-> Dernière mise à jour : 2026-10-12
-> Sources : `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/plugins/transcription/voicestudio.ts` (+ test), tests `apps/server/src/plugins/transcription/plugin.test.ts`, `apps/web/src/composables/useVoiceInput.ts` (+ test), `apps/web/src/lib/wav.ts` (+ test), `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/server/.env.example`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.speech.test.ts`, `apps/web/src/components/TranscriptionLinkCard.vue` (+ test), `docs/plugins/transcription.md`, session du 2026-10-08, `apps/web/src/lib/vad.ts` (+ test), `apps/web/src/composables/useVoiceInput.autosend.test.ts`, session du 2026-10-11, `apps/server/src/plugins/transcription/spoken.ts` et `spoken-rules.ts` (+ test), session du 2026-10-12
+> Dernière mise à jour : 2026-11-08
+> Sources : `apps/server/src/plugins/transcription/index.ts`, `apps/server/src/plugins/transcription/voicestudio.ts` (+ test), tests `apps/server/src/plugins/transcription/plugin.test.ts`, `apps/web/src/composables/useVoiceInput.ts` (+ test), `apps/web/src/lib/wav.ts` (+ test), `apps/web/src/components/home/SearchBar.vue`, `apps/web/src/components/layout/SearchPalette.vue`, `apps/server/.env.example`, session du 2026-10-07, `apps/web/src/composables/useVoiceInput.speech.test.ts`, `apps/web/src/components/TranscriptionLinkCard.vue` (+ test), `docs/plugins/transcription.md`, session du 2026-10-08, `apps/web/src/lib/vad.ts` (+ test), `apps/web/src/composables/useVoiceInput.autosend.test.ts`, session du 2026-10-11, `apps/server/src/plugins/transcription/spoken.ts` et `spoken-rules.ts` (+ test), session du 2026-10-12, `apps/web/src/stores/localPlayer.ts` (`prime()`), session du 2026-11-08
 
 ## Ce que c'est
 
@@ -382,3 +382,31 @@ table** : une ligne ajoutée est testée d'office), `plugin.test.ts` (+2 : `inpu
 abréviations reçues de l'app et refus d'une clé trop longue), `useVoiceInput.speech.test.ts` (+1 :
 l'abréviation du niveau de la maison démo part avec la réponse). **Non joué** : l'écoute du rendu sur
 VoiceStudio (en mode simulé, la synthèse n'existe pas).
+
+### Mise à jour 2026-11-08 — la réponse parlée refusée sur iOS
+
+**Symptôme** : sur iPhone et iPad (Safari ou app installée depuis l'écran d'accueil), la dictée
+marche, la réponse s'affiche, puis un bandeau « Réponse parlée impossible : The request is not
+allowed by the user agent… » (`NotAllowedError` de `play()`, clé `voice.errors.speakFailed`).
+
+**Cause** : WebKit ne laisse un `<audio>` jouer sans toucher que s'il a **déjà joué pendant un
+toucher**. `say()` créait un `new Audio()` à chaque réponse, après la transcription, l'assistant et
+la synthèse : plusieurs secondes après le toucher, donc refusé. Chrome (ordinateur, Android) est plus
+souple, d'où un défaut invisible ailleurs.
+
+**Correctif** (`useVoiceInput.ts`) : même recette que le lecteur local de la musique (`prime()`,
+`stores/localPlayer.ts`, voir `1_architecture/1_6_lecteur-musique.md`) :
+
+- **un seul élément** `<audio>` par instance du composable (`el()`), réutilisé pour toutes les
+  réponses : `say()` change son `src` au lieu d'en créer un ;
+- `prime()` lui fait jouer un **WAV vide** (`data:audio/wav…`) **dans le toucher, avant tout
+  `await`** : au toucher du micro, au toucher qui arrête l'écoute (au cas où l'ouverture du micro
+  aurait interrompu le premier essai) et à « Réécouter ». Rien si les réponses parlées sont éteintes ;
+- `primed` ne passe à vrai que si ce `play()` réussit : démarrée **sans toucher** (le raccourci de
+  l'app), l'amorce échoue en silence et le toucher suivant réessaie ;
+- `ended` / `error` du son vide sont **ignorés** (`src` en `data:`) : sinon la fin du son vide,
+  arrivée pendant la synthèse, couperait la réponse avant qu'elle commence.
+
+Tests : `useVoiceInput.speech.test.ts` (+1 : le son vide part dans le toucher, sa fin ne change pas la
+phase, la réponse passe par le même élément). **Non joué** : l'essai sur un appareil iOS (le panneau
+navigateur n'applique pas la règle de WebKit).

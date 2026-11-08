@@ -91,7 +91,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_22 Agenda (adresse iCal secrète)](3_plugins/3_22_agenda.md) | 2026-10-25 |
 | [3_23 TouteMonAnnée](3_plugins/3_23_toutemonannee.md) | 2026-10-19 |
 | [3_24 Claude (moteur de l'assistant)](3_plugins/3_24_claude.md) | 2026-11-05 |
-| [3_25 Transcription (la voix de l'assistant)](3_plugins/3_25_transcription.md) | 2026-10-12 |
+| [3_25 Transcription (la voix de l'assistant)](3_plugins/3_25_transcription.md) | 2026-11-08 |
 | [3_26 Hörmann (portes de garage)](3_plugins/3_26_hormann.md) | 2026-10-21 |
 | [3_27 Home Assistant](3_plugins/3_27_home-assistant.md) | 2026-10-30 |
 | [3_28 Podcasts](3_plugins/3_28_podcasts.md) | 2026-11-06 |

@@ -34,6 +34,8 @@ export type VoicePhase = 'idle' | 'recording' | 'transcribing' | 'speaking'
 export const MAX_RECORDING_MS = 15_000
 /** Below that, it is a touch without speech: nothing to transcribe. */
 const MIN_SECONDS = 0.3
+/** An empty WAV, played inside the touch to unlock the reply's player (iOS). */
+const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA='
 /** How long "heard nothing" stays in the field. */
 export const HEARD_NOTHING_MS = 4000
 /** A microphone level measurement every 50 ms (`setInterval`: a hidden tab does not render `requestAnimationFrame`). */
@@ -89,15 +91,37 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
   let silent = false
   /** Listening to the sound level, for the duration of a recording. */
   let listener: { audio: AudioContext; poll: ReturnType<typeof setInterval> } | null = null
-  /** The reply being said (only one at a time). */
+  /**
+   * The replies' player, one element reused: iOS only lets an element play without a touch if it has
+   * already played during one, and the reply comes long after the touch (transcription, assistant).
+   */
   let player: HTMLAudioElement | null = null
   let playerUrl: string | null = null
+  let primed = false
   /** The last synthesized reply, and its audio. */
   let spoken: { text: string; audio: Blob } | null = null
 
+  function el(): HTMLAudioElement {
+    if (player) return player
+    const a = new Audio()
+    // the silent unlock sound says nothing about the reply
+    const reply = () => !a.src.startsWith('data:')
+    a.onended = () => { if (reply()) stopSpeaking() }
+    a.onerror = () => { if (reply()) stopSpeaking() }
+    player = a
+    return a
+  }
+
+  /** To be called INSIDE the touch, before any `await`. */
+  function prime() {
+    if (primed || !speech.value) return
+    const a = el()
+    a.src = SILENT_WAV
+    a.play().then(() => { primed = true }, () => { /* no touch (the app's shortcut): the next one will try again */ })
+  }
+
   function stopSpeaking() {
     player?.pause()
-    player = null
     if (playerUrl) { URL.revokeObjectURL(playerUrl); playerUrl = null }
     if (phase.value === 'speaking') phase.value = 'idle'
   }
@@ -109,10 +133,9 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
       spoken = { text: answer, audio }
       if (phase.value !== 'speaking') return              // stopped during the synthesis
       playerUrl = URL.createObjectURL(audio)
-      player = new Audio(playerUrl)
-      player.onended = stopSpeaking
-      player.onerror = stopSpeaking
-      await player.play()
+      const a = el()
+      a.src = playerUrl
+      await a.play()
     } catch (err) {
       stopSpeaking()
       const message = err instanceof ApiRequestError ? err.message : (err as Error).message
@@ -222,15 +245,15 @@ export function useVoiceInput(onText: (text: string) => void | Promise<string | 
   }
 
   function toggle() {
-    if (phase.value === 'idle') void start()
-    else if (phase.value === 'recording') stop()
+    if (phase.value === 'idle') { prime(); void start() }
+    else if (phase.value === 'recording') { prime(); stop() }
     else if (phase.value === 'speaking') stopSpeaking()
   }
 
   /** Replay a reply (spoken replies on), or stop the one being said. */
   function replay(answer: string) {
     if (phase.value === 'speaking') stopSpeaking()
-    else if (phase.value === 'idle' && speech.value && answer) void say(answer)
+    else if (phase.value === 'idle' && speech.value && answer) { prime(); void say(answer) }
   }
 
   function forgetSpoken() {
