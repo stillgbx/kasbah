@@ -131,7 +131,7 @@ function openPhoto(title: string | null, files: SchoolFile[], i: number) {
       <div class="card card--soft school__empty">
         <StrokeIcon name="school" :size="28" class="muted" />
         <p class="muted">{{ school.unavailable ? $t('school.disabled') : $t('school.notLinked') }}</p>
-        <router-link :to="{ name: 'settings' }" class="pill">{{ $t('school.openSettings') }}</router-link>
+        <router-link :to="{ name: 'settings', query: { tab: 'plugins' } }" class="pill">{{ $t('school.openSettings') }}</router-link>
       </div>
     </div>
 
@@ -165,7 +165,7 @@ function openPhoto(title: string | null, files: SchoolFile[], i: number) {
 
       <div v-if="data?.sessionLost" class="card card--soft school__notice">
         <span>{{ $t('school.sessionLost') }}</span>
-        <router-link :to="{ name: 'settings' }" class="pill">{{ $t('school.openSettings') }}</router-link>
+        <router-link :to="{ name: 'settings', query: { tab: 'plugins' } }" class="pill">{{ $t('school.openSettings') }}</router-link>
       </div>
 
       <div class="school__scroll">

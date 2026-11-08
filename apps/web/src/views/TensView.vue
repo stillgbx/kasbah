@@ -111,7 +111,7 @@ const showPairing = ref(!tens.knownDeviceId)
     <div class="page__scroll">
       <div v-if="!enabled" class="card card--soft empty muted">
         {{ $t('tens.notEnabled') }}
-        <router-link :to="{ name: 'settings' }" class="pill pill--sm empty__btn">{{ $t('tens.openSettings') }}</router-link>
+        <router-link :to="{ name: 'settings', query: { tab: 'plugins' } }" class="pill pill--sm empty__btn">{{ $t('tens.openSettings') }}</router-link>
       </div>
       <div v-else-if="!tens.supported" class="card card--soft empty muted">{{ $t('tens.unsupported') }}</div>
 

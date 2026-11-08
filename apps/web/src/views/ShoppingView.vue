@@ -68,7 +68,7 @@ const toBuy = computed(() => store.items.length - store.checkedCount)
       <div class="card card--soft off">
         <StrokeIcon name="cart" :size="28" class="muted" />
         <p class="muted">{{ $t('shopping.disabled') }}</p>
-        <router-link :to="{ name: 'settings' }" class="pill">{{ $t('shopping.openSettings') }}</router-link>
+        <router-link :to="{ name: 'settings', query: { tab: 'plugins' } }" class="pill">{{ $t('shopping.openSettings') }}</router-link>
       </div>
     </div>
     <template v-else>

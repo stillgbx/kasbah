@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-08] update | Réglages en cinq onglets
+
+**Déclencheur** : demande de l'utilisateur — la page des Réglages « commence à être chargée », la réorganiser en sections, avec des onglets.
+
+**Pages modifiées** :
+- `4_ui/4_7_reglages.md` - section « la vue Réglages en cinq onglets » : répartition des cartes, onglet dans `?tab=`, liens « Ouvrir les réglages » vers Plugins, onglet Maison absent sans le droit `settings`, `v-if` par onglet, piles en requête de conteneur à 760 px, libellés courts au téléphone.
+
+**Index** : catalogue 4_ui mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-11-08] update | Scène 3D : WebGPU absent d'une page HTTP, Réglages le dit
 
 **Déclencheur** : capture de l'utilisateur — Réglages affirme que le navigateur n'a pas WebGPU, alors que `chrome://gpu` le donne accéléré.

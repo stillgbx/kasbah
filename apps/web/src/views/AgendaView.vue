@@ -104,7 +104,7 @@ const selectedCalendar = computed(() => agenda.calendars.find((c) => c.id === se
       <div class="card card--soft agenda__empty">
         <StrokeIcon name="calendar" :size="28" class="muted" />
         <p class="muted">{{ enabled ? $t('agenda.noCalendar') : $t('agenda.disabled') }}</p>
-        <router-link :to="{ name: 'settings' }" class="pill">{{ $t('agenda.openSettings') }}</router-link>
+        <router-link :to="{ name: 'settings', query: { tab: 'plugins' } }" class="pill">{{ $t('agenda.openSettings') }}</router-link>
       </div>
     </div>
     <div v-else class="page__body agenda">

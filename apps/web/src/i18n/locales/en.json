@@ -563,6 +563,7 @@
   "houseEditing": "Adjust the house and garden", "houseEditingDone": "Done", "houseEditingHint": "The Home view then lets you adjust and drag windows and doors on the walls, lay out parking spots on the ground, and landscape the garden: trees, shrubs and stones to plant, move or remove. The wall survey is approximate: this is where it gets corrected. Nothing is written until something is actually adjusted."
   },
   "settings": {
+    "tabs": { "display": "Display", "scene": "3D scene", "house": "House", "plugins": "Plugins", "system": "System" }, "tabsShort": { "display": "Screen", "scene": "3D", "house": "House", "plugins": "Plugins", "system": "System" },
     "title": "Settings", "appearance": "Appearance", "system": "System", "light": "Light", "dark": "Dark",
     "appearanceAuto": "Auto", "appearanceHint": "Auto goes dark half an hour before sunset; System follows the device's light/dark setting.",
     "theme": "Theme", "themeDarkOnly": "Dark only",

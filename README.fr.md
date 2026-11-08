@@ -231,7 +231,7 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 | **Animaux** | Mangeoires et fontaines PetKit : repas, distribution, eau, consommables. |
 | **TENS** | Électrostimulateur actiTENS en Bluetooth, depuis le navigateur ; n'apparaît que sur les postes où il est activé. |
 | **Automatisations** | Règles « Quand / Sauf si / Alors » (voir plus bas). |
-| **Réglages** | Thème, ordre de la barre de navigation sur cet appareil, notifications, rendu 3D, plugins, cartes de mise en route, comptes des assistants IA (MCP), pont Matter des assistants vocaux, mode édition, calage de la maison sur la photo aérienne. |
+| **Réglages** | Cinq onglets (Affichage, Scène 3D, Maison, Plugins, Système) : thème, ordre de la barre de navigation sur cet appareil, notifications, rendu 3D, plugins, cartes de mise en route, comptes des assistants IA (MCP), pont Matter des assistants vocaux, mode édition, calage de la maison sur la photo aérienne. |
 
 ### Scène 3D
 

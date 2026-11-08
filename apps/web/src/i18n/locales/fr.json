@@ -563,6 +563,7 @@
   "houseEditing": "Régler la maison et le jardin", "houseEditingDone": "Terminer", "houseEditingHint": "La vue Maison permet alors de régler et de glisser les fenêtres et les portes sur les murs, de poser les places de stationnement au sol, et d'aménager le jardin : arbres, buissons et pierres, à planter, déplacer ou retirer. Le relevé des murs est approximatif : c'est ici qu'on l'ajuste. Rien n'est écrit tant qu'on n'a pas réglé quelque chose."
   },
   "settings": {
+    "tabs": { "display": "Affichage", "scene": "Scène 3D", "house": "Maison", "plugins": "Plugins", "system": "Système" }, "tabsShort": { "display": "Écran", "scene": "3D", "house": "Maison", "plugins": "Plugins", "system": "Système" },
     "title": "Réglages", "appearance": "Apparence", "system": "Système", "light": "Clair", "dark": "Sombre",
     "appearanceAuto": "Auto", "appearanceHint": "Auto passe en sombre une demi-heure avant le coucher du soleil ; Système suit le réglage clair/sombre de l'appareil.",
     "theme": "Thème", "themeDarkOnly": "Sombre uniquement",

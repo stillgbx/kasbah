@@ -1,6 +1,6 @@
 # Vue Réglages
 
-> Dernière mise à jour : 2026-11-01
+> Dernière mise à jour : 2026-11-08
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Réglages : ses zones, la carte Plugins, les thèmes, le rendu 3D, les entrées locales au poste, les comptes, le calage sur la photo. Elle est née du découpage de
@@ -480,3 +480,60 @@ plus que l'entrée de menu reste affichée, et précise que sans « Réglages »
 l'écran. Une vue interdite ouverte par son adresse affiche `NoRightView` (page centrée, bouton « Retour à la
 maison »). Vérifié en preview mock, droits forcés dans le store : Réglages réduits, fr et en, 375 px sans
 débordement. **Non joué** : un vrai compte limité.
+
+### Mise à jour 2026-11-08 — la vue Réglages en cinq onglets
+
+*(Remplace la disposition « trois zones 1-2-1 puis Plugins en pleine largeur » du 2026-09-16 et les
+emplacements « pleine largeur, après … » des cartes ajoutées depuis. Le contenu de chaque carte ne
+change pas.)*
+
+Demande de l'utilisateur : la page « commence à être chargée », la réorganiser en sections, avec des
+onglets. Seize cartes se lisaient d'un trait ; elles se répartissent désormais en cinq onglets, un
+`Segmented` posé dans l'en-tête de page (`PageHeader`, comme les étages de la vue Maison) :
+
+| Onglet | Cartes |
+|---|---|
+| Affichage | Apparence, Langue, Plein écran · Thème, Barre de navigation |
+| Scène 3D | Rendu 3D (bloc entier, débogage météo compris) |
+| Maison | Mode édition et relief, Propriété · Origine GPS |
+| Plugins | Sur cet appareil, Assistants vocaux (Matter), puis Plugins de la maison |
+| Système | Notifications, Comptes, Assistant, Mise à jour du serveur, ligne de version |
+
+- **Découpage choisi par l'utilisateur** parmi trois proposés (3 onglets « Apparence / Technique /
+  Plugins », 4 onglets avec le Rendu 3D dans Affichage, 5 onglets). Le Rendu 3D a son onglet : c'est
+  à lui seul le plus gros bloc de la page.
+- **La liste des plugins de la maison ferme l'onglet Plugins**, après Matter : c'est la plus longue
+  (demande de l'utilisateur après un premier essai qui la plaçait au milieu).
+- **L'onglet vit dans l'adresse** (`?tab=display|scene|house|plugins|system`, valeur inconnue →
+  Affichage) : un rechargement retombe dessus. Changer d'onglet fait un `router.replace` et non un
+  `push` : « Retour » quitte les Réglages au lieu de remonter les onglets. Un changement d'onglet
+  remet le défilement en haut.
+- **Liens entrants** : les boutons « Ouvrir les réglages » d'Agenda, École (deux), Courses et TENS
+  mènent à `?tab=plugins`, où se trouve ce qu'ils invitent à régler.
+- **Sans le droit `settings`**, l'onglet Maison disparaît (tous ses blocs étaient déjà retirés, voir
+  la section du 2026-11-01 (soir)) ; Plugins reste pour « Sur cet appareil », Système pour les
+  notifications, la session et l'Assistant.
+- **`v-if` par onglet**, pas `v-show` : les cartes qui relisent leur serveur à intervalle (Matter toutes
+  les 5 s, Mise à jour du serveur toutes les 1,5 s pendant une mise à jour) ne tournent plus quand
+  leur onglet est caché. Contrepartie assumée : revenir sur Plugins remonte chaque `PluginSection`,
+  qui réinterroge son fabricant.
+- **Disposition** : Affichage et Maison posent deux piles (`.duo`, même raison que les piles du
+  2026-09-16 : une rangée de grille s'aligne sur son plus grand) côte à côte quand la zone de contenu
+  dépasse **760 px** — requête de conteneur nommée (`container: settings / inline-size` sur la zone qui
+  défile), et non plus le seuil d'écran de 1500 px. 760 = deux fois les 344 px de min-content du
+  segmenté de langue, plus l'écart. Les piles sont équilibrées sans dépendre de Propriété (absente hors
+  multi-propriétés) : Mode édition et Propriété d'un côté, Origine GPS de l'autre.
+- **Libellés courts au téléphone** (`settings.tabsShort`, sous 600 px : Écran · 3D · Maison · Plugins
+  · Système, en anglais Screen · 3D · House · Plugins · System) : à 375 px, en `fill`, « Affichage » et
+  « Scène 3D » étaient coupés, et un écran tactile n'a pas d'infobulle pour les lire.
+
+Vérifié dans la preview `kasbah-mock` : la barre d'onglets ne bouge pas d'un onglet à l'autre
+(`getBoundingClientRect` identique à 1280, 853 et 375 px) ; aucun débordement horizontal ni libellé
+d'onglet coupé, fr et en, clair et sombre ; aucune erreur console. **Non joués** : la liste des plugins
+elle-même (le transport de démonstration n'en rend aucun, « 0 / 0 actifs »), les vrais zooms 1,25 et
+1,5 (approchés par les largeurs 1024 et 853 px).
+
+i18n : `settings.tabs.*`, `settings.tabsShort.*`.
+
+Sources : `apps/web/src/views/SettingsView.vue`, `apps/web/src/views/{Agenda,School,Shopping,Tens}View.vue`,
+`apps/web/src/i18n/locales/{fr,en}.json`.

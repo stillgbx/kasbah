@@ -115,7 +115,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-31 |
 | [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-11-06 |
 | [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-11-04 |
-| [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-11-01 |
+| [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-11-08 |
 | [4_8 Mode édition et propriétés](4_ui/4_8_mode-edition-et-proprietes.md) | 2026-10-21 |
 <!-- section:4_ui:end -->
 
