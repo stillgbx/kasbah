@@ -119,11 +119,14 @@ const seasonOptions = computed(() => settings.seasons.map((s) => ({ value: s, la
 const ambienceOptions = computed(() => settings.ambiences.map((a) => ({ value: a, label: t(`render.ambiences.${a}`) })))
 const qualityOptions = computed(() => settings.qualities.map((q) => ({ value: q, label: t(`render.qualities.${q}`) })))
 const rendererOptions = computed(() => settings.renderers.map((r) => ({ value: r, label: t(`render.renderers.${r}`) })))
-/** A canvas that opened a WebGL context cannot open a WebGPU one: the kept-alive House view only changes with a reload. */
+/**
+ * A canvas that opened a WebGL context cannot open a WebGPU one: the kept-alive House view only changes with a reload.
+ * The page is reloaded on the House view, the one the choice is for.
+ */
 function chooseRenderer(v: RendererChoice) {
   if (v === settings.sceneRenderer) return
   settings.setSceneRenderer(v)
-  location.reload()
+  location.assign(router.resolve({ name: 'home' }).href)
 }
 const projectionOptions = computed(() => settings.projections.map((p) => ({ value: p, label: t(`render.projections.${p}`) })))
 // Forced weather (debugging): "Real" then the nine conditions of the contract, with the widget's icon.

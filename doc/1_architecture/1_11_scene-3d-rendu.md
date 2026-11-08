@@ -2300,7 +2300,9 @@ rendue sous le voile : voir « Mise à jour 2026-11-08 » en fin de section.)*
 préparer chaque image), n'importe rien de `three/webgpu`. `HouseScene` reçoit le backend dans ses
 dépendances (`deps.gpu`), attend `init()` avant la première image, et ne teste `isWebGPU` que là où les
 API diffèrent. Un canevas qui a ouvert un contexte WebGL ne peut pas ouvrir un contexte WebGPU, et la
-vue Maison est gardée en vie (`<keep-alive>`) : changer de moteur recharge la page.
+vue Maison est gardée en vie (`<keep-alive>`) : changer de moteur recharge la page. Depuis le
+2026-11-08, c'est la vue Maison qui se charge, et non plus la page des Réglages (`chooseRenderer`,
+`apps/web/src/views/SettingsView.vue`).
 `?renderer=webgl|webgpu` impose le moteur pour un chargement, sans l'enregistrer (bancs, essai sur
 tablette). Un navigateur sans WebGPU reçoit WebGL.
 

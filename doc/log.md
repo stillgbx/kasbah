@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-08] update | Réglages : changer de moteur de rendu recharge sur la vue Maison
+
+**Déclencheur** : demande de l'utilisateur — au changement de moteur, aller directement sur la vue 3D plutôt que recharger la page des Réglages.
+
+**Pages modifiées** :
+- `1_architecture/1_11_scene-3d-rendu.md` - phrase complétée dans « Deux moteurs de rendu » : le rechargement se fait sur la vue Maison.
+- `4_ui/4_2_theme-et-langues.md` - ligne `kasbah.sceneRenderer` complétée de même.
+
+**Index** : catalogue 4_ui mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-11-08] update | Scène 3D : en WebGPU, la maison se construit de nouveau sous le voile
 
 **Déclencheur** : constat de l'utilisateur — depuis les deux moteurs, le voile de chargement revient à chaque fois, se fige, et la 3D l'interrompt parfois.
