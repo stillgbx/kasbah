@@ -27,7 +27,9 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // has nothing loaded, the slot stays), "see in the house" (the 3D scene, player selected) and the
 // star; in transfer mode, "Here" takes the place of the first two. A row that is playing
 // carries its cover art as a background, faded toward the right, like the rows of the Media view;
-// a title that is too long scrolls with a fade (MarqueeText) instead of being cut.
+// a title that is too long scrolls with a fade (MarqueeText) instead of being cut. The subtitle (room ·
+// status) is one scrolling line, so a long room name never squeezes the status out of sight. An
+// unavailable player is greyed out and cannot be chosen; its pin and star still work.
 const props = defineProps<{
   players: DeviceEntry[]
   selectedId: string | null
@@ -183,7 +185,7 @@ function tap(r: Row) {
         <div v-if="g.title" class="section-label group-title">{{ g.title }}</div>
         <div v-for="r in g.rows" :key="r.id" class="row"
              :data-selected="r.id === selectedId ? '1' : '0'"
-             :data-dim="transferMode && (r.id === selectedId || !r.target) ? '1' : '0'">
+             :data-dim="(transferMode ? r.id === selectedId || !r.target : !r.entry.state.available) ? '1' : '0'">
           <Transition name="rowart">
             <span v-if="r.art" :key="r.art" class="row-art" :style="{ backgroundImage: `url(${JSON.stringify(r.art)})` }" aria-hidden="true" />
           </Transition>
@@ -197,10 +199,8 @@ function tap(r: Row) {
                 <PulseDot :on="r.active" class="dot" />
               </span>
               <span class="line2 muted">
-                <span v-if="r.room" class="room">{{ r.room }}</span>
-                <span v-if="r.room" class="sep">·</span>
                 <ExplicitBadge v-if="r.explicit" class="row-explicit" />
-                <MarqueeText class="status" :text="r.status" />
+                <MarqueeText class="status" :text="[r.room, r.status].filter(Boolean).join(' · ')" />
               </span>
             </span>
           </button>
@@ -295,8 +295,6 @@ function tap(r: Row) {
 .dot { color: var(--accent); flex: 0 0 auto; }
 .row-explicit { transform: scale(0.85); }
 .line2 { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 12px; }
-.room { flex: 0 0 auto; white-space: nowrap; }
-.sep { flex: 0 0 auto; }
 .status { min-width: 0; flex: 1 1 auto; }
 /* in transfer mode, "Here" takes the width of the two buttons it replaces: nothing moves */
 .trail { flex: 0 0 auto; width: 36px; display: grid; place-items: center; }
