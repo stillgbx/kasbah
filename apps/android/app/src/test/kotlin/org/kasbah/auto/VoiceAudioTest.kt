@@ -20,6 +20,29 @@ class VoiceAudioTest {
         assertEquals(0.5, rms(pcm(16384, -16384, 0, 0), 4), 1e-9)
     }
 
+    /** `ms` of sound at RMS `level` (a square wave), 16 kHz. */
+    private fun sound(level: Double, ms: Int): ShortArray = ShortArray(ms * 16) { i -> ((if (i % 2 == 0) level else -level) * 32767).toInt().toShort() }
+
+    /**
+     * A sentence as the car's microphone gives it: syllables of 120 ms split by 40 ms dips (the "p" and
+     * "t" of "ouvre le portail"), after and before a quiet car. Fed in 512-byte frames (16 ms), the
+     * car's buffer size; returns the listening's first event.
+     */
+    private fun listen(listening: Listening): String? {
+        val syllables = (1..8).flatMap { sound(0.1, 120).toList() + sound(0.002, 40).toList() }
+        val samples = sound(0.002, 300).toList() + syllables + sound(0.002, 5000).toList()
+        return samples.chunked(256).firstNotNullOfOrNull { chunk -> pcm(*chunk.toShortArray()).let { listening.add(it, it.size) } }
+    }
+
+    @Test fun `a sentence with short dips between syllables is heard, its end found`() {
+        assertEquals("end", listen(Listening()))
+    }
+
+    @Test fun `measured frame by frame, the same sentence was taken for silence`() {
+        // The car app's behaviour before: one measure per 16 ms frame, every dip resets "speaking".
+        assertEquals("nothing", listen(Listening(windowMs = 16)))
+    }
+
     @Test fun `WAV header for 16 kHz mono 16-bit PCM`() {
         val data = pcm(1, 2, 3)
         val file = wav(data)

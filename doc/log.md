@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-08] update | Android Auto 0.7 : bouton de l'alerte, « Rien entendu », écran de transcription
+
+**Déclencheur** : retours de l'utilisateur en voiture — le bouton « Ouvrir le portail » de l'alerte échoue parfois (hôte injoignable), « Rien entendu » fréquent, « Je vous écoute… » affiché pendant la transcription.
+
+**Pages modifiées** :
+- `1_architecture/1_15_appli-android-auto.md` - section « Mise à jour 2026-11-08 » : réseau coupé à l'appli en arrière-plan et tâche prioritaire `OpenJob`, mesure du niveau par 50 ms (`Listening`), deux messages dits à voix haute, écran « je transcris ». Tests et lint verts, pas encore essayé en voiture.
+
+**Index** : catalogue 1_architecture (résumé et date de 1_15), index.md régénéré.
+
 ## [2026-11-08] update | Réglages : Scène 3D en petites cartes, plugins en cartes
 
 **Déclencheur** : retour de l'utilisateur sur les onglets — Thème et Plein écran à échanger, Scène 3D aux segmentés trop larges, plugins en cartes dépliables, mise à jour du serveur en tête de Système.

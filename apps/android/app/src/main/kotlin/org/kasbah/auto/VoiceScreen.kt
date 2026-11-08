@@ -3,6 +3,7 @@ package org.kasbah.auto
 import android.Manifest
 import android.content.pm.PackageManager
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.annotation.VisibleForTesting
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
@@ -52,14 +53,30 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
         show(carContext.getString(R.string.voice_listening), busy = true)
         Background.run({
             val sentence = recordSentence(carContext) { stopped } ?: return@run null
+            // The microphone is closed: no longer "Listening…" while the server transcribes.
+            carContext.mainExecutor.execute { show(carContext.getString(R.string.voice_transcribing), busy = true) }
             val vocabulary = client.vocabulary()
             val heard = client.transcribe(sentence, vocabulary.hints)
             Heard(heard, vocabulary)
         }) { result ->
             result.onSuccess { h ->
-                if (h == null || h.text.isEmpty()) show(carContext.getString(R.string.voice_nothing)) else think(h)
+                when {
+                    h == null -> retry(R.string.voice_nothing)
+                    h.text.isEmpty() -> {
+                        Log.i(TAG, "transcription empty")
+                        retry(R.string.voice_unclear)
+                    }
+                    else -> think(h)
+                }
             }.onFailure { fail(it) }
         }
+    }
+
+    /** Nothing to ask: said aloud as well, the driver watches the road, not the screen. */
+    private fun retry(@StringRes message: Int) {
+        val text = carContext.getString(message)
+        show(text)
+        if (!stopped) speaker.say(text)
     }
 
     private fun think(h: Heard) {

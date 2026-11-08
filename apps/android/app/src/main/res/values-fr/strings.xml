@@ -42,6 +42,8 @@
     <string name="approach_title">Bientôt à la maison</string>
     <string name="approach_channel">Arrivée à la maison</string>
     <string name="approach_sent">%1$s : ouverture demandée</string>
+    <string name="approach_unreachable">%1$s : Kasbah injoignable, rien n\'est parti. Ouvrez l\'appli pour réessayer.</string>
+    <string name="approach_late">%1$s : demande trop ancienne, rien n\'est parti.</string>
     <string name="background_title">Position en arrière-plan</string>
     <string name="background_text">Kasbah Auto utilise votre position en arrière-plan, même quand l\'appli est fermée ou inutilisée, pour savoir quand la voiture approche de la maison et vous proposer d\'ouvrir le portail ou un garage sur l\'écran de la voiture. Votre position reste sur ce téléphone : elle n\'est envoyée ni à votre serveur Kasbah ni à personne d\'autre.\n\nPour l\'activer, choisissez « Toujours autoriser » sur l\'écran suivant.</string>
     <string name="background_continue">Continuer</string>
@@ -78,7 +80,9 @@
     <string name="voice_listening">Je vous écoute…</string>
     <string name="voice_allow_mic">Autoriser le micro sur le téléphone…</string>
     <string name="voice_mic_refused">Micro refusé : l\'autoriser dans les réglages du téléphone.</string>
-    <string name="voice_nothing">Rien entendu.</string>
+    <string name="voice_transcribing">C\'est noté, je transcris…</string>
+    <string name="voice_nothing">Je n\'ai pas entendu de question. Touchez « Reparler » quand vous voulez.</string>
+    <string name="voice_unclear">Je n\'ai pas bien compris. Touchez « Reparler » pour répéter.</string>
     <string name="voice_thinking">« %1$s », je réfléchis…</string>
     <string name="voice_done">C\'est fait.</string>
     <string name="failed">Échec.</string>

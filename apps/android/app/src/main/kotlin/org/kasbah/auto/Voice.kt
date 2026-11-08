@@ -12,6 +12,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.util.Log
 import androidx.car.app.CarContext
 import androidx.car.app.media.CarAudioRecord
 import java.io.ByteArrayOutputStream
@@ -82,6 +83,45 @@ class Endpointer {
 }
 
 /**
+ * The microphone's frames turned into the endpointer's measures: one level per 50 ms of sound, as
+ * often as the web app measures (`useVoiceInput.ts`), over the whole window. Fed each 16 ms frame of
+ * the car, the endpointer took every short dip between syllables for silence and could miss a whole
+ * sentence ("Nothing heard"). Time is the sound's, counted from the first frame.
+ */
+internal class Listening(windowMs: Int = 50) {
+    private val endpointer = Endpointer()
+    private val window = ByteArray(CarAudioRecord.AUDIO_CONTENT_SAMPLING_RATE / 1000 * 2 * windowMs)
+    private val step = windowMs.toLong()
+    private var filled = 0
+    private var at = 0L
+
+    /** Lowest and highest window levels so far: logged, to tune the endpointer from a real drive. */
+    var quietest = Double.MAX_VALUE
+        private set
+    var loudest = 0.0
+        private set
+
+    /** Adds a frame of 16-bit little-endian PCM: "end", "nothing", or null to go on. */
+    fun add(frame: ByteArray, length: Int): String? {
+        var i = 0
+        while (i < length) {
+            val n = min(length - i, window.size - filled)
+            System.arraycopy(frame, i, window, filled, n)
+            filled += n
+            i += n
+            if (filled < window.size) break
+            filled = 0
+            at += step
+            val level = rms(window, window.size)
+            quietest = min(quietest, level)
+            loudest = max(loudest, level)
+            endpointer.push(level, at)?.let { return it }
+        }
+        return null
+    }
+}
+
+/**
  * Records one sentence from the car's microphone (16 kHz, mono, 16 bits) and returns it as a WAV
  * file, or null when nobody spoke. Blocks: to be called off the main thread. `cancelled` is polled
  * between frames.
@@ -96,30 +136,30 @@ fun recordSentence(carContext: CarContext, cancelled: () -> Boolean): ByteArray?
     val record = CarAudioRecord.create(carContext)
     val pcm = ByteArrayOutputStream()
     val frame = ByteArray(CarAudioRecord.AUDIO_CONTENT_BUFFER_SIZE)
-    val endpointer = Endpointer()
+    val listening = Listening()
     val start = SystemClock.elapsedRealtime()
+    var event: String? = null
     record.startRecording()
     try {
         while (!cancelled()) {
             val n = record.read(frame, 0, frame.size)
             if (n <= 0) break
             pcm.write(frame, 0, n)
-            val at = SystemClock.elapsedRealtime() - start
-            when (endpointer.push(rms(frame, n), at)) {
-                "end" -> break
-                "nothing" -> return null
-            }
-            if (at >= MAX_RECORD_MS) break
+            event = listening.add(frame, n)
+            if (event != null || SystemClock.elapsedRealtime() - start >= MAX_RECORD_MS) break
         }
     } finally {
         record.stopRecording()
         audio.abandonAudioFocusRequest(focus)
+        Log.i(TAG, "listening: ${event ?: "stopped"} after ${SystemClock.elapsedRealtime() - start} ms, levels ${"%.4f".format(Locale.ROOT, listening.quietest)} to ${"%.4f".format(Locale.ROOT, listening.loudest)}")
     }
+    if (event == "nothing") return null
     return if (cancelled()) null else wav(pcm.toByteArray())
 }
 
 /** Same cap as the web app's microphone. */
 private const val MAX_RECORD_MS = 15_000L
+private const val TAG = "KasbahVoice"
 
 internal fun rms(frame: ByteArray, length: Int): Double {
     val samples = ByteBuffer.wrap(frame, 0, length).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()

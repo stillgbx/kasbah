@@ -1,6 +1,6 @@
 # Appli Android Auto
 
-> Dernière mise à jour : 2026-10-28
+> Dernière mise à jour : 2026-11-08
 > Sources : `apps/android/app/src/test/kotlin/org/kasbah/auto/*Test.kt`, `apps/android/app/src/main/kotlin/org/kasbah/auto/{KasbahClient,MainActivity,KasbahCarAppService,AccessScreen,VoiceScreen,Voice,ProbeScreen,Approach}.kt`, `apps/android/app/src/debug/`, `apps/android/app/src/main/AndroidManifest.xml`, `apps/android/app/src/main/res/xml/{backup_rules,data_extraction_rules}.xml`, bibliothèque `androidx.car.app:app` 1.7.0 (`HostValidator`, `hosts_allowlist_sample`), scan Claude Security du 2026-10-25, `apps/android/app/build.gradle.kts`, `apps/android/dhu.cmd`, `apps/android/.gitattributes`, `apps/server/src/http/session.ts`, `apps/server/src/plugins/transcription/index.ts`, portail `developer.renaultgroup.com`, session du 2026-10-22 (essais sur un téléphone Android et dans le simulateur DHU), `apps/android/keystore.properties.example`, `apps/android/app/build.gradle.kts` (signature), console Google Play (2026-10-23)
 
 Une appli Android, à côté de l'app web, qui met Kasbah sur l'écran de la voiture par **Android
@@ -467,3 +467,50 @@ empaqueté porte bien la liste des hôtes, les règles de sauvegarde et la permi
 vérifié** sur un téléphone ni dans la voiture : que la version release apparaît toujours dans Android
 Auto, et que les commandes `adb` atteignent toujours le récepteur. Aucun test du projet ne couvre ces
 trois points.
+
+### Mise à jour 2026-11-08 — version 0.7 : le bouton de l'alerte, « Rien entendu », l'écran pendant la transcription
+
+Trois retours de l'utilisateur, en voiture. **Vérifié** : `./gradlew testDebugUnitTest lint` vert (33 tests,
+aucune remarque de lint sur les fichiers touchés). **Pas encore essayé en voiture** : causes déduites du
+code, pas d'un journal pris en roulant.
+
+**Le bouton « Portail : Ouvrir » de l'alerte échouait parfois sur « Unable to resolve host … »**, alors que
+la même commande passait depuis l'écran de Kasbah dans la voiture. Le bouton fait partir un broadcast
+qu'Android Auto déclenche alors que l'appli est en arrière-plan (souvent arrêtée) : Doze, mise en veille
+des applis ou économie de batterie peuvent alors lui couper le réseau, et la recherche DNS échoue la
+première. Depuis l'écran de la voiture, l'appli est liée à Android Auto, donc au premier plan. L'alerte
+elle-même lit bien les états : le géorepérage de Play services réveille l'appli avec une courte permission
+d'utiliser le réseau, que l'appui sur le bouton n'a pas.
+
+- `ApproachReceiver.open` confie la commande à **`OpenJob`**, une **tâche prioritaire** (`JobScheduler`,
+  `setExpedited`, Android 12 et plus) qui garde l'accès au réseau en Doze. Contrainte « un réseau » (d'où la
+  permission `ACCESS_NETWORK_STATE`, exigée par JobScheduler) ; une tâche par ouvrant (`id.hashCode()`).
+  Avant Android 12, ou si la planification est refusée, le récepteur envoie lui-même comme avant
+  (`Approach.send`).
+- **Un portail ne s'ouvre pas en retard** : une tâche retenue plus d'une minute (quota, pas de réseau) n'envoie
+  rien et le dit (« demande trop ancienne, rien n'est parti »).
+- Une erreur réseau (`IOException`) devient « Kasbah injoignable, rien n'est parti. Ouvrez l'appli pour
+  réessayer. » au lieu du message technique ; l'exception reste dans le journal (`KasbahApproach`).
+- Option écartée sur le moment : faire ouvrir l'appli Kasbah par le bouton (`CarPendingIntent.getCarApp`),
+  plus sûr mais qui retire la carte de l'écran. Choix de l'utilisateur : rester sur la carte, à juger en roulant.
+
+**« Rien entendu » fréquent.** La détection de fin de phrase (`Endpointer`, copie de `vad.ts`) recevait une
+mesure par tranche du micro de la voiture, environ 16 ms, quand le site mesure toutes les 50 ms. La règle
+« 250 ms de son fort sans coupure » était donc remise à zéro par chaque petite coupure entre syllabes (les
+« p » et « t » de « ouvre le portail ») : une phrase pouvait ne jamais compter comme parole. **`Listening`**
+(`Voice.kt`) mesure désormais une fois par 50 ms de son, sur toute la fenêtre. Test
+`VoiceAudioTest` : des syllabes de 120 ms coupées de 40 ms sont entendues ; mesurées tranche par tranche
+(`Listening(windowMs = 16)`), elles donnent « nothing » — la contre-épreuve. Scénario rejoué hors Gradle
+(portage Node) avec les deux résultats attendus.
+
+- Le journal `KasbahVoice` dit l'issue de chaque écoute, sa durée, et les niveaux le plus bas et le plus haut :
+  de quoi régler le seuil après un trajet.
+- Deux messages au lieu de « Rien entendu. », **dits aussi à voix haute** (voix d'Android, sans réseau) :
+  « Je n'ai pas entendu de question. Touchez « Reparler » quand vous voulez. » quand rien n'a dépassé le
+  seuil, « Je n'ai pas bien compris. Touchez « Reparler » pour répéter. » quand la transcription revient vide.
+
+**L'écran restait sur « Je vous écoute… » pendant la transcription.** Dès que le micro se ferme, il passe à
+« C'est noté, je transcris… » (`voice_transcribing`), puis à la question pendant la réflexion, comme avant.
+
+Version 0.7, `versionCode` 7. À vérifier en voiture : le bouton de l'alerte appli fermée, et la fréquence
+des « pas entendu » (`adb logcat -s KasbahApproach KasbahVoice`).

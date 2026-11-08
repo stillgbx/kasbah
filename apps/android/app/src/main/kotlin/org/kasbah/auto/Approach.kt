@@ -3,12 +3,19 @@ package org.kasbah.auto
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.PendingIntent
+import android.app.job.JobInfo
+import android.app.job.JobParameters
+import android.app.job.JobScheduler
+import android.app.job.JobService
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
+import android.os.PersistableBundle
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.car.app.connection.CarConnection
 import androidx.car.app.notification.CarAppExtender
 import androidx.car.app.notification.CarNotificationManager
@@ -21,6 +28,7 @@ import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingEvent
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
+import java.io.IOException
 
 /**
  * "Open the gate" on the car screen as the car nears the house, without opening the app: a geofence
@@ -142,6 +150,22 @@ object Approach {
         )
     }
 
+    /** Sends an alert button's `cover.open` and shows the outcome; `finish` once done (main thread). */
+    internal fun send(context: Context, id: String, name: String, finish: () -> Unit) {
+        Background.run({ KasbahClient(context).command(id, "cover.open") }) { result ->
+            result.onFailure { Log.w(TAG, "open $id failed", it) }
+            notifyResult(
+                context,
+                result.fold(
+                    { context.getString(R.string.approach_sent, name) },
+                    // A network error carries a technical message ("Unable to resolve host …"): said plainly.
+                    { if (it is IOException) context.getString(R.string.approach_unreachable, name) else it.message ?: context.getString(R.string.command_failed) },
+                ),
+            )
+            finish()
+        }
+    }
+
     internal fun cancel(context: Context) = CarNotificationManager.from(context).cancel(NOTIFICATION)
 
     private fun notification(context: Context, title: String, text: String) =
@@ -196,17 +220,54 @@ class ApproachReceiver : BroadcastReceiver() {
         Approach.arrive(context, done::finish)
     }
 
+    /** From Android 12 through [OpenJob], which keeps network access; before, or if refused, from here. */
     private fun open(context: Context, id: String, name: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && OpenJob.schedule(context, id, name)) return
         val done = goAsync()
-        Background.run({ KasbahClient(context).command(id, "cover.open") }) { result ->
-            Approach.notifyResult(
-                context,
-                result.fold(
-                    { context.getString(R.string.approach_sent, name) },
-                    { it.message ?: context.getString(R.string.command_failed) },
-                ),
-            )
-            done.finish()
+        Approach.send(context, id, name, done::finish)
+    }
+}
+
+/**
+ * The alert's "Open" as an expedited job. Android Auto fires the button's broadcast while the app sits
+ * in the background, where Doze or the app's standby bucket can cut its network: the DNS lookup failed
+ * ("Unable to resolve host"), when the same command from the car screen went through. An expedited job
+ * keeps network access in Doze. A gate does not open late: a job held back over a minute is dropped.
+ */
+class OpenJob : JobService() {
+    override fun onStartJob(params: JobParameters): Boolean {
+        val id = params.extras.getString(Approach.EXTRA_ID) ?: return false
+        val name = params.extras.getString(Approach.EXTRA_NAME).orEmpty()
+        if (System.currentTimeMillis() - params.extras.getLong(EXTRA_AT) > MAX_DELAY_MS) {
+            Log.w(Approach.TAG, "open $id held back too long: not sent")
+            Approach.notifyResult(this, getString(R.string.approach_late, name))
+            return false
+        }
+        Approach.send(this, id, name) { jobFinished(params, false) }
+        return true
+    }
+
+    // Stopped while the command is on its way: nothing to start again, the outcome comes anyway.
+    override fun onStopJob(params: JobParameters) = false
+
+    companion object {
+        private const val EXTRA_AT = "at"
+        private const val MAX_DELAY_MS = 60_000L
+
+        @RequiresApi(Build.VERSION_CODES.S)
+        fun schedule(context: Context, id: String, name: String): Boolean {
+            val extras = PersistableBundle().apply {
+                putString(Approach.EXTRA_ID, id)
+                putString(Approach.EXTRA_NAME, name)
+                putLong(EXTRA_AT, System.currentTimeMillis())
+            }
+            // One job per access: "Gate" then "Garage 2" tapped in a row both go.
+            val job = JobInfo.Builder(id.hashCode(), ComponentName(context, OpenJob::class.java))
+                .setExpedited(true)
+                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                .setExtras(extras)
+                .build()
+            return context.getSystemService(JobScheduler::class.java).schedule(job) == JobScheduler.RESULT_SUCCESS
         }
     }
 }

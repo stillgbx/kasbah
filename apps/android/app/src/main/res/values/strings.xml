@@ -43,6 +43,8 @@
     <string name="approach_title">Almost home</string>
     <string name="approach_channel">Arriving home</string>
     <string name="approach_sent">%1$s: opening requested</string>
+    <string name="approach_unreachable">%1$s: Kasbah unreachable, nothing sent. Open the app to try again.</string>
+    <string name="approach_late">%1$s: request too old, nothing sent.</string>
     <string name="background_title">Location in the background</string>
     <string name="background_text">Kasbah Auto uses your location in the background, even when the app is closed or not in use, to notice when the car comes near your house and offer to open the gate or a garage door on the car\'s screen. Your location stays on this phone: it is not sent to your Kasbah server nor to anyone else.\n\nTo turn it on, choose \"Allow all the time\" on the next screen.</string>
     <string name="background_continue">Continue</string>
@@ -79,7 +81,9 @@
     <string name="voice_listening">Listening…</string>
     <string name="voice_allow_mic">Allow the microphone on the phone…</string>
     <string name="voice_mic_refused">Microphone refused: allow it in the phone\'s settings.</string>
-    <string name="voice_nothing">Nothing heard.</string>
+    <string name="voice_transcribing">Got it, transcribing…</string>
+    <string name="voice_nothing">I didn\'t hear a question. Tap Talk again whenever you\'re ready.</string>
+    <string name="voice_unclear">I didn\'t quite catch that. Tap Talk again to repeat.</string>
     <string name="voice_thinking">“%1$s”, thinking…</string>
     <string name="voice_done">Done.</string>
     <string name="failed">Failed.</string>
