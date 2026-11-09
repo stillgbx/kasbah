@@ -462,7 +462,7 @@ export function createHttpTransport(base = ''): Transport {
     transcribe: (audio, hints) => request(`${base}/api/plugins/transcription/transcribe`, json('POST', { audio, hints }), (j) => j as { text: string; ms: number }),
     assistantLog: () => request(`${base}/api/assistant/log`, undefined, (j) => j as { entries: AssistantLogEntry[] }),
     mcpUsers: () => request(`${base}/api/mcp/users`, undefined, (j) => j as { users: McpUser[] }),
-    mcpSetUser: (name, password) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}`, json('PUT', { password }), (j) => j as { users: McpUser[] }),
+    mcpSetUser: (name, password, init) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}`, json('PUT', { password, ...init }), (j) => j as { users: McpUser[] }),
     mcpRemoveUser: (name) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}`, { method: 'DELETE' }, (j) => j as { users: McpUser[] }),
     mcpSetRights: (name, rights) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}/rights`, json('PUT', { rights }), (j) => j as { users: McpUser[] }),
     mcpSetRole: (name, role) => request(`${base}/api/mcp/users/${encodeURIComponent(name)}/role`, json('PUT', role), (j) => j as { users: McpUser[] }),

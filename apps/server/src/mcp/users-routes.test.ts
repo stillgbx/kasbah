@@ -82,6 +82,24 @@ it('sets the rights of an account, keeps them across a password change, and give
   expect((await app.inject({ method: 'PUT', url: '/api/mcp/users/zoe/rights', payload: { rights: [] } })).statusCode).toBe(404)
 })
 
+it('creates an account with its rights in the same write, and leaves an existing account its own', async () => {
+  const create = (name: string, rights: string[] | null) =>
+    app.inject({ method: 'PUT', url: `/api/mcp/users/${name}`, payload: { password: 'premier-mdp', rights } })
+  expect((await create('lou', ['lights', 'pets'])).json()).toEqual({ users: [{ name: 'lou', rights: ['lights', 'pets'] }] })
+  expect((await create('lou', ['weather'])).json()).toEqual({ users: [{ name: 'lou', rights: ['lights', 'pets'] }] })
+  expect((await create('zoe', null)).json().users[1]).toEqual({ name: 'zoe' })
+  expect((await create('max', ['nope'])).statusCode).toBe(400)
+})
+
+it('creates an account with its roles, the house mark moving to it, and leaves an existing account its own', async () => {
+  const create = (name: string, body: { admin?: boolean; house?: boolean }) =>
+    app.inject({ method: 'PUT', url: `/api/mcp/users/${name}`, payload: { password: 'premier-mdp', ...body } })
+  await create('lou', { house: true })
+  expect((await create('zoe', { admin: true, house: true })).json()).toEqual({ users: [{ name: 'lou' }, { name: 'zoe', admin: true, house: true }] })
+  expect((await create('lou', { admin: true, house: true })).json()).toEqual({ users: [{ name: 'lou' }, { name: 'zoe', admin: true, house: true }] })
+  expect(readFileSync(usersFile, 'utf8')).not.toContain('false')
+})
+
 const role = (name: string, body: { admin?: boolean; house?: boolean }) =>
   app.inject({ method: 'PUT', url: `/api/mcp/users/${encodeURIComponent(name)}/role`, payload: body })
 

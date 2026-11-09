@@ -180,13 +180,26 @@ async function readUsersForEdit(path: string): Promise<UsersFile> {
 }
 const writeUsers = (path: string, file: UsersFile) => writeFileAtomic(path, `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
 
-/** Creates the account, or changes its password (its rights and roles stay). Returns the names. */
-export async function saveUser(path: string, name: string, password: string): Promise<string[]> {
+/**
+ * Creates the account, or changes its password (its rights and roles stay). `init` only applies to
+ * a new account: its rights (absent or `null` = every right) and roles; marking it the house account
+ * takes the mark from the others. Returns the names.
+ */
+export async function saveUser(path: string, name: string, password: string,
+  init: { rights?: Right[] | null; admin?: boolean; house?: boolean } = {}): Promise<string[]> {
   const file = await readUsersForEdit(path)
   const hash = await hashPassword(password)
   const account = file.users.find((u) => u.name === name)
   if (account) account.password = hash
-  else file.users.push({ name, password: hash })
+  else {
+    if (init.house) for (const u of file.users) delete u.house
+    file.users.push({
+      name, password: hash,
+      ...(init.rights ? { rights: [...new Set(init.rights)] } : {}),
+      ...(init.admin ? { admin: true } : {}),
+      ...(init.house ? { house: true } : {}),
+    })
+  }
   await writeUsers(path, file)
   return file.users.map((u) => u.name)
 }

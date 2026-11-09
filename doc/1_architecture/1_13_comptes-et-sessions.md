@@ -1,6 +1,6 @@
 # Comptes et sessions
 
-> Dernière mise à jour : 2026-11-08
+> Dernière mise à jour : 2026-11-09
 > Sources : `apps/server/src/http/rights.ts`, `packages/shared/src/rights/rights.ts`, `apps/server/src/http/session.ts`, `apps/web/src/stores/session.ts`, `apps/web/src/lib/navItems.ts`, `apps/web/src/views/NoRightView.vue`, `apps/server/src/http/static.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/music/sources.ts`, `apps/server/src/plugins/claude/index.ts`, `apps/server/src/assistant/assistant.ts` ; pages citées plus bas
 
 Page de synthèse, écrite au lint du 2026-10-13 : le sujet était dispersé entre le serveur MCP, la
@@ -510,3 +510,16 @@ proxy du NAS.
 
 Vérifié : suite complète (2 805 tests), typecheck global, lint du code suivi ; serveur de démonstration en
 dev : `{ user: null, admin: true }` par Vite, 401 par l'IP locale, flux d'enceinte qui passe la barrière.
+
+### Mise à jour 2026-11-09 - un compte naît avec ses rôles et ses droits
+
+`PUT /api/mcp/users/:name` accepte, en plus de `password`, `rights?` (`Right[] | null`), `admin?` et `house?`
+(`users-routes.ts`). Ils ne s'appliquent **qu'à un compte neuf**, dans la même écriture que lui
+(`saveUser(path, name, password, init)`, `mcp/auth.ts`) : pas de fenêtre où le compte aurait tous les droits
+entre deux requêtes. Un compte neuf marqué `house` prend la marque aux autres, comme `setUserRole`. Un compte
+existant garde ses rôles et ses droits (la route ne change que son mot de passe). Sans ces champs, rien ne
+change : le script `account` crée toujours un compte avec tous les droits. Le choix des six droits par défaut
+est celui de l'app ([4_7](../4_ui/4_7_reglages.md), section du 2026-11-09), pas du serveur.
+
+Tests : `users-routes.test.ts` (droits et rôles à la création, marque de la maison qui passe au nouveau compte,
+compte existant inchangé, droit inconnu en 400).

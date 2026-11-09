@@ -14,7 +14,7 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // password. The `account` script remains as a fallback. Managed by an admin from home: an account
 // that is not admin only sees its session and a way to close it, an admin away from home is told
 // (`LAN_ONLY`). Under each account, folded: its two roles (admin, house account), then its rights,
-// one pill per domain, saved at each press.
+// one pill per domain, saved at each press. The form gives a new account its roles and rights at creation.
 
 const NAME = /^[\w.@-]{1,64}$/
 const MIN_PASSWORD = 8
@@ -75,7 +75,22 @@ async function run(action: () => Promise<{ users: McpUser[] }>, done?: string): 
   finally { busy.value = false }
 }
 
-function reset() { name.value = ''; password.value = ''; confirm.value = '' }
+// A new account starts with the everyday rights only; the form shows them before it is created.
+const NEW_ACCOUNT_RIGHTS: readonly Right[] = ['lights', 'covers', 'access', 'media', 'pets', 'weather']
+const newRights = ref<Right[]>([...NEW_ACCOUNT_RIGHTS])
+const newRole = reactive({ admin: false, house: false })
+/** Change mode: the account's roles and rights, read only (they are set on its row). Same footprint either way. */
+const formAccount = computed(() => users.value.find((u) => u.name === name.value.trim()))
+const formRole = (role: 'admin' | 'house') => formAccount.value ? !!formAccount.value[role] : newRole[role]
+const formGranted = (r: Right) => formAccount.value ? granted(formAccount.value, r) : newRole.admin || newRights.value.includes(r)
+function toggleNewRight(r: Right) {
+  newRights.value = newRights.value.includes(r) ? newRights.value.filter((x) => x !== r) : RIGHTS.filter((x) => x === r || newRights.value.includes(x))
+}
+
+function reset() {
+  name.value = ''; password.value = ''; confirm.value = ''
+  newRights.value = [...NEW_ACCOUNT_RIGHTS]; newRole.admin = false; newRole.house = false
+}
 
 // Rights: folded by default. Every pill lit = no list (every right, those to come included).
 const unfolded = reactive(new Set<string>())
@@ -102,7 +117,10 @@ async function save() {
   if (!ready.value) return
   const n = name.value.trim()
   const done = existing.value ? t('mcpUsers.changed', { name: n }) : t('mcpUsers.added', { name: n })
-  if (await run(() => getTransport().mcpSetUser(n, password.value), done)) reset()
+  const init = existing.value ? undefined : {
+    rights: newRights.value.length < RIGHTS.length ? [...newRights.value] : null, admin: newRole.admin, house: newRole.house,
+  }
+  if (await run(() => getTransport().mcpSetUser(n, password.value, init), done)) reset()
 }
 
 /** "Password" on a row: the form switches to change mode for that account. */
@@ -192,6 +210,21 @@ function remove(n: string) {
           <input v-model="confirm" type="password" autocomplete="new-password" maxlength="200" :disabled="busy" class="mu__input" />
         </label>
       </div>
+      <!-- the new account's roles and rights, as on a row; in change mode, those of the account, still (same footprint) -->
+      <div class="mu__rights mu__rights--form">
+        <div class="muted small mu__hint">{{ $t('mcpUsers.rolesHint') }}</div>
+        <button v-for="role in (['admin', 'house'] as const)" :key="role" type="button" class="mu__right" :data-on="formRole(role) ? '1' : '0'"
+                :aria-pressed="formRole(role)" :disabled="busy || existing" @click="newRole[role] = !newRole[role]">{{ $t(`mcpUsers.${role}`) }}</button>
+        <div class="muted small mu__hint mu__hint--rights">{{ $t('mcpUsers.rightsHint') }}</div>
+        <button v-for="r in RIGHTS" :key="r" type="button" class="mu__right" :data-on="formGranted(r) ? '1' : '0'"
+                :aria-pressed="formGranted(r)" :disabled="busy || existing || newRole.admin" @click="toggleNewRight(r)">
+          {{ $t(`rights.${r}`) }}
+        </button>
+        <div class="mu__rightsall">
+          <button type="button" class="pill mu__btn" :disabled="busy || existing || newRole.admin || newRights.length === RIGHTS.length" @click="newRights = [...RIGHTS]">{{ $t('common.all') }}</button>
+          <button type="button" class="pill mu__btn" :disabled="busy || existing || newRole.admin || !newRights.length" @click="newRights = []">{{ $t('common.none') }}</button>
+        </div>
+      </div>
       <!-- reserved space: the warning that appears does not push the buttons -->
       <div class="small mu__problem">{{ problem ?? ' ' }}</div>
       <div class="mu__actions">
@@ -213,6 +246,7 @@ function remove(n: string) {
 .mu__who { display: grid; }
 .mu__who > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mu__rights { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 10px 26px; }
+.mu__rights--form { padding: 0; }
 .mu__hint { flex: 0 0 100%; margin-bottom: 2px; }
 .mu__hint--rights { margin-top: 8px; }
 .mu__right { font-size: 12px; line-height: 1; padding: 6px 10px; border-radius: 999px; cursor: pointer;

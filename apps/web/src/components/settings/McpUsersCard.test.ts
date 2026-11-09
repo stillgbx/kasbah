@@ -15,8 +15,9 @@ function fake(session: { user: string | null; admin?: boolean }, users: McpUser[
     if (role.admin === false && name === 'root') throw new ApiRequestError(409, 'LAST_ADMIN', 'last admin')
     return { users: users.map((u) => (u.name === name ? { ...u, ...(role.house ? { house: true as const } : {}) } : u)) }
   })
-  setTransport({ session: async () => session, mcpUsers, mcpSetRole } as unknown as Transport)
-  return { mcpUsers, mcpSetRole }
+  const mcpSetUser = vi.fn(async (name: string) => ({ users: [...users, { name }] }))
+  setTransport({ session: async () => session, mcpUsers, mcpSetRole, mcpSetUser } as unknown as Transport)
+  return { mcpUsers, mcpSetRole, mcpSetUser }
 }
 
 describe('McpUsersCard', () => {
@@ -52,12 +53,40 @@ describe('McpUsersCard', () => {
     const w = mount(McpUsersCard)
     await flushPromises()
     await w.findAll('.mu__toggle')[0]!.trigger('click')
-    const pills = w.findAll('.mu__right')
+    const pills = w.findAll('.mu__user .mu__right')
     const rights = pills.filter((b) => !['Super-utilisateur', 'Compte de la maison'].includes(b.text()))
     expect(rights.every((b) => b.attributes('data-on') === '1' && b.attributes('disabled') !== undefined)).toBe(true)
     await pills.find((b) => b.text() === 'Super-utilisateur')!.trigger('click')
     await flushPromises()
     expect(useNotificationsStore().queue.map((n) => n.text)).toEqual(['Il faut garder au moins un super-utilisateur.'])
     expect(w.findAll('.mu__summary')[0]!.text()).toBe('Super-utilisateur')
+  })
+
+  it('creates an account with its roles and the everyday rights, and shows an existing one its own, still', async () => {
+    const { mcpSetUser } = fake({ user: 'root', admin: true })
+    const w = mount(McpUsersCard)
+    await flushPromises()
+    const pill = (text: string) => w.findAll('.mu__form .mu__right').find((b) => b.text() === text)!
+    const lit = () => w.findAll('.mu__form .mu__right[data-on="1"]').map((b) => b.text())
+    expect(lit()).toEqual(['Lumières', 'Volets et stores', 'Portail, garage, fenêtres', 'Musique et médias', 'Animaux', 'Météo'])
+    const [name, password, confirm] = w.findAll('.mu__form input')
+    // an existing account: its roles and rights, read only
+    await name!.setValue('root')
+    expect(pill('Super-utilisateur').attributes('data-on')).toBe('1')
+    expect(pill('Lumières').attributes('disabled')).toBeDefined()
+    await name!.setValue('cuisine')
+    await pill('Compte de la maison').trigger('click')
+    await pill('Météo').trigger('click')
+    await pill('Caméras').trigger('click')
+    await password!.setValue('assez-long')
+    await confirm!.setValue('assez-long')
+    await w.find('.mu__form').trigger('submit')
+    await flushPromises()
+    expect(mcpSetUser).toHaveBeenCalledWith('cuisine', 'assez-long', {
+      rights: ['lights', 'covers', 'access', 'media', 'cameras', 'pets'], admin: false, house: true,
+    })
+    // back to the defaults for the next account
+    expect(pill('Compte de la maison').attributes('data-on')).toBe('0')
+    expect(lit()).toContain('Météo')
   })
 })

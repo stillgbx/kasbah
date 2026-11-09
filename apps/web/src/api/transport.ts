@@ -877,8 +877,8 @@ export interface Transport {
   assistantLog(): Promise<{ entries: AssistantLogEntry[] }>
   /** Accounts of the app and of the MCP server (AI assistants); an admin's, from home only. */
   mcpUsers(): Promise<{ users: McpUser[] }>
-  /** Creates the account, or changes its password (8 characters at least). */
-  mcpSetUser(name: string, password: string): Promise<{ users: McpUser[] }>
+  /** Creates the account, or changes its password (8 characters at least); `init` only for a new account. */
+  mcpSetUser(name: string, password: string, init?: { rights?: Right[] | null; admin?: boolean; house?: boolean }): Promise<{ users: McpUser[] }>
   /** Removes the account: its tokens no longer get through. */
   mcpRemoveUser(name: string): Promise<{ users: McpUser[] }>
   /** What the account may use; `null` = every right. */

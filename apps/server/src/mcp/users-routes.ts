@@ -26,8 +26,11 @@ export function registerMcpUserRoutes(app: FastifyInstance, deps: McpUserRoutesD
 
   app.put<{ Params: { name: string } }>('/api/mcp/users/:name', async (req) => {
     const name = userNameSchema.parse(req.params.name)
-    const { password } = z.object({ password: passwordSchema }).parse(req.body)
-    await saveUser(deps.usersFile, name, password)
+    // rights and roles of a new account, set in the same write (an existing account keeps its own)
+    const { password, ...init } = z.object({
+      password: passwordSchema, rights: rightsSchema.nullable().optional(), admin: z.boolean().optional(), house: z.boolean().optional(),
+    }).parse(req.body)
+    await saveUser(deps.usersFile, name, password, init)
     return list()
   })
 

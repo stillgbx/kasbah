@@ -542,8 +542,13 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     },
     // MCP accounts: in memory, a demonstration account
     async mcpUsers() { return { users: mcpUserList() } },
-    async mcpSetUser(name) {
-      if (!mcpUsers.includes(name)) mcpUsers.push(name)
+    async mcpSetUser(name, _password, init) {
+      if (!mcpUsers.includes(name)) {
+        mcpUsers.push(name)
+        if (init?.rights) mcpRights.set(name, init.rights)
+        if (init?.admin) mcpAdmins.add(name)
+        if (init?.house) mcpHouse = name
+      }
       return { users: mcpUserList() }
     },
     async mcpRemoveUser(name) {

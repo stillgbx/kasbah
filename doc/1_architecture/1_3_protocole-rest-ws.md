@@ -1,6 +1,6 @@
 # Protocole REST et WebSocket
 
-> Dernière mise à jour : 2026-11-08
+> Dernière mise à jour : 2026-11-09
 > Sources : `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/http/{routes,errors}.ts`, `apps/server/src/ws/hub.ts`, `apps/web/src/api/httpTransport.ts`, `apps/server/src/plugins/tesla/index.ts`, `apps/server/src/config/house.ts`, `packages/shared/src/house/place.ts`, `apps/server/src/core/scene-registry.ts`, `packages/shared/src/protocol/http.ts` (`deviceConsumptionSchema`), `apps/server/src/http/routes.ts` (automatisations), `apps/server/src/http/relief.test.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/core/shopping.ts` (2026-10-11), `apps/server/src/http/static.ts` (`appBuild`, 2026-10-13), `apps/server/src/http/system.ts` (2026-10-13), `apps/server/src/http/diag.ts` et `apps/web/public/diag.html`, `apps/web/src/lib/sceneProbe.ts` (2026-10-22)
 
 ## REST
@@ -906,3 +906,9 @@ un non-admin avec liste. La machine elle-même (pair et nom loopback, sans `X-Fo
 n'est plus sans compte). `PUT /api/mcp/users/:name/role` `{ admin?, house? }` ; 409 `LAST_ADMIN`. Les routes
 `/api/mcp/users`, `/api/system`, `/api/matter`, `/api/assistant/log` demandent admin **et** un client à la
 maison (403 `LAN_ONLY`). Détail : [1_13](1_13_comptes-et-sessions.md), section du 2026-11-08.
+
+### Mise à jour 2026-11-09 — `PUT /api/mcp/users/:name` crée un compte avec ses rôles et ses droits
+
+Corps `{ password, rights?, admin?, house? }` : les trois derniers ne valent que pour un compte neuf, écrits en
+même temps que lui ; un compte existant ne change que de mot de passe. `rights` inconnu : 400. Détail :
+[1_13](1_13_comptes-et-sessions.md), section du 2026-11-09.

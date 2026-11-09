@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-09] update | Comptes : rôles et droits dès la création
+
+**Déclencheur** : demande de l'utilisateur, un compte créé depuis l'app avait tous les droits et ne se réglait qu'en deuxième étape ; le formulaire propose rôles et droits, six droits par défaut.
+
+**Pages modifiées** :
+- `4_ui/4_7_reglages.md` - section datée : bloc rôles + droits dans « Ajouter un compte », six droits par défaut, mode « changer » figé à même emprise
+- `1_architecture/1_13_comptes-et-sessions.md` - section datée : `saveUser` et `PUT /api/mcp/users/:name` prennent `rights`, `admin`, `house` pour un compte neuf, en une écriture
+- `1_architecture/1_3_protocole-rest-ws.md` - section datée : nouveau corps de `PUT /api/mcp/users/:name`
+
+**Index** : catalogues mis à jour (3 lignes), index.md régénéré.
+
 ## [2026-11-09] update | Cast : la lecture attend la sortie de veille
 
 **Déclencheur** : la musique ne part pas sur un Cast en veille (barre de son), le `LAUNCH` expirait à 5 s ; délai propre au `LAUNCH` et méthode `commandTimeoutMs` du contrat.

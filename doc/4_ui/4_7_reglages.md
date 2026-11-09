@@ -1,6 +1,6 @@
 # Vue Réglages
 
-> Dernière mise à jour : 2026-11-08
+> Dernière mise à jour : 2026-11-09
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Réglages : ses zones, la carte Plugins, les thèmes, le rendu 3D, les entrées locales au poste, les comptes, le calage sur la photo. Elle est née du découpage de
@@ -598,3 +598,25 @@ du « droit `settings` » (sections du 2026-11-01) est donc d'avant : plus de `s
   ne parlent plus de « réseau local de confiance ». Mock : le compte `parent` est admin.
 - Vérifié dans `kasbah-mock` : rien ne bouge (mesure géométrique), pas de débordement en bureau ni à 375 px, en
   fr et en. Tests : `McpUsersCard.test.ts` (nouveau), `AssistantCard.test.ts`, `MatterCard.test.ts`.
+
+### Mise à jour 2026-11-09 — Comptes : rôles et droits dès la création
+
+Demande de l'utilisateur : un compte créé depuis l'app avait tous les droits, et on ne pouvait les réduire
+qu'après coup, en dépliant sa ligne. Le formulaire « Ajouter un compte » (`McpUsersCard.vue`) montre
+désormais, sous les trois champs, **le même bloc que la ligne d'un compte** : la phrase des rôles, les
+pastilles « Super-utilisateur » et « Compte de la maison » (éteintes), la phrase des droits, les 16 pastilles
+et « Tout » / « Aucun ».
+- **Par défaut, six droits du quotidien** sont allumés (`NEW_ACCOUNT_RIGHTS` : `lights`, `covers`, `access`,
+  `media`, `pets`, `weather`) ; on corrige avant de créer. « Super-utilisateur » allumé fige tous les droits
+  allumés, comme sur une ligne ; l'éteindre rend la sélection. Après l'ajout, ou sur « Annuler », retour aux
+  valeurs par défaut.
+- **Mode « changer le mot de passe »** (nom déjà pris) : le bloc reste, avec les rôles et les droits du compte,
+  figés (ils se règlent sur sa ligne). Même emprise dans les deux modes : rien ne bouge.
+- Envoi en une seule requête (`mcpSetUser(name, password, { rights, admin, house })`) : le compte n'a jamais,
+  même un instant, tous les droits. Côté serveur : [1_13](../1_architecture/1_13_comptes-et-sessions.md),
+  section du 2026-11-09.
+
+Vérifié dans `kasbah-mock` : position et hauteur du formulaire identiques en mode création et en mode
+changement (mesure géométrique), compte créé avec ses droits et le rôle de la maison, pas d'erreur console.
+Tests : `McpUsersCard.test.ts` (création avec rôles et droits, compte existant figé). **Non joués** : zooms,
+thème clair, anglais (aucun nouveau libellé, les textes repris existent dans les deux langues).
