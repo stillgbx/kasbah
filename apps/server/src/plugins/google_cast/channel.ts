@@ -35,12 +35,19 @@ export interface CastConnectionOptions {
   onClose(reason: string): void
   heartbeatMs?: number
   requestTimeoutMs?: number
+  /** `LAUNCH` of the media receiver, longer: the device may be waking from standby. */
+  launchTimeoutMs?: number
   /** Rate for re-reading the position during playback (the receiver does not push it on its own). */
   mediaPollMs?: number
 }
 
 const DEFAULT_HEARTBEAT_MS = 5000
-const DEFAULT_REQUEST_TIMEOUT_MS = 5000
+export const DEFAULT_REQUEST_TIMEOUT_MS = 5000
+/**
+ * `LAUNCH` of the media receiver: a speaker or TV in standby must wake up first, which takes well over
+ * 5 s (seen on a soundbar and on a TV).
+ */
+export const LAUNCH_TIMEOUT_MS = 30_000
 const DEFAULT_MEDIA_POLL_MS = 10_000
 /** "Previous" past this point in the track goes back to its start, as on a remote control. */
 const RESTART_AFTER_S = 3
@@ -134,7 +141,7 @@ export class CastConnection {
    */
   async playUrl(url: string, meta?: PlayUrlMeta): Promise<void> {
     if (this.app?.appId !== DEFAULT_MEDIA_RECEIVER) {
-      await this.request(RECEIVER_ID, NS_RECEIVER, { type: 'LAUNCH', appId: DEFAULT_MEDIA_RECEIVER })
+      await this.request(RECEIVER_ID, NS_RECEIVER, { type: 'LAUNCH', appId: DEFAULT_MEDIA_RECEIVER }, this.opts.launchTimeoutMs ?? LAUNCH_TIMEOUT_MS)
     }
     const transportId = this.app?.transportId
     if (!transportId) throw new PluginError('UNSUPPORTED_COMMAND', 'default media receiver did not start')
@@ -200,12 +207,12 @@ export class CastConnection {
   }
 
   /** Sends a numbered request and waits for the response carrying the same number. */
-  private request(destination: string, namespace: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private request(destination: string, namespace: string, body: Record<string, unknown>, timeoutMs = this.timeoutMs): Promise<Record<string, unknown>> {
     if (!this.isOpen) return Promise.reject(new PluginError('DEVICE_UNAVAILABLE', 'not connected'))
     const requestId = this.nextId()
     const p = new Promise<Record<string, unknown>>((resolve, reject) => { this.pending.set(requestId, { resolve, reject }) })
     this.send(jsonMessage(SENDER_ID, destination, namespace, { ...body, requestId }))
-    return withTimeout(p, this.timeoutMs, this.opts.clock, `${body.type} on ${this.opts.host}`)
+    return withTimeout(p, timeoutMs, this.opts.clock, `${body.type} on ${this.opts.host}`)
       .finally(() => this.pending.delete(requestId))
   }
 

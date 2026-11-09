@@ -6,7 +6,7 @@ import { sleep } from '../../core/clock'
 import { PluginError, type DevicePlugin, type PluginContext } from '../../core/plugin'
 import { stateFile } from '../../core/paths'
 import { isBravia, probeBravia, sameAudioOutput, type AudioOutput, type BraviaFetch } from './bravia'
-import { CastConnection, tlsSocketFactory, type SocketFactory } from './channel'
+import { CastConnection, DEFAULT_REQUEST_TIMEOUT_MS, LAUNCH_TIMEOUT_MS, tlsSocketFactory, type SocketFactory } from './channel'
 import { createMdnsDiscovery, type CastDiscovery } from './discovery'
 import { createKnownDevicesFile, type KnownDevices } from './known'
 import { publicFetch } from '../../core/outbound'
@@ -580,6 +580,8 @@ export function createGoogleCastPlugin(deps: GoogleCastPluginDeps = {}): DeviceP
     },
 
     execute: run,
+    // `play_url` may wake the device (LAUNCH) before the LOAD: both must fit
+    commandTimeoutMs: (command) => command.type === 'media_player.play_url' ? LAUNCH_TIMEOUT_MS + DEFAULT_REQUEST_TIMEOUT_MS : undefined,
 
     async stop() {
       stopping = true

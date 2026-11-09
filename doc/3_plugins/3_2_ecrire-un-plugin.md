@@ -1,6 +1,6 @@
 # Écrire un plugin
 
-> Dernière mise à jour : 2026-10-20
+> Dernière mise à jour : 2026-11-09
 > Sources : `apps/server/src/core/plugin.ts`, `apps/server/src/core/plugin-host.ts`, `apps/server/src/plugins/{mock,hue,tahoma,_stub}/index.ts`, `apps/server/src/plugins/comap/{socket,socket.test}.ts`, `apps/server/src/plugins/melcloud/{types,mapping}.ts`, `apps/server/src/plugins/irobot/{index,mapping,discovery}.ts`, `apps/server/src/plugins/sonos/{index,discovery,mapping}.ts`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/assistant/engines.ts`
 
 ## Interface (`core/plugin.ts`)
@@ -394,3 +394,20 @@ le modèle (`docs/plugins/hue.md`) et l'ajouter au tableau « Plugins » du `REA
 `README.fr.md`.
 
 Sources : `docs/plugins/*.md`, `.claude/skills/publish/SKILL.md` (§4).
+
+### Mise à jour 2026-11-09 — une commande plus longue que `KASBAH_COMMAND_TIMEOUT_MS`
+
+Le contrat gagne une méthode facultative :
+
+```ts
+commandTimeoutMs?(command: Command): number | undefined
+```
+
+L'hôte (`PluginHost.dispatch`) applique le **plus grand** de son plafond (`KASBAH_COMMAND_TIMEOUT_MS`,
+10 s par défaut) et de ce que le plugin demande pour cette commande ; `undefined` ou méthode absente =
+le plafond de l'hôte. À réserver à une commande qui attend un appareil réellement lent (un Cast qui
+sort de veille : 35 s pour `media_player.play_url`, `3_6_google-cast.md`), jamais pour toutes : la
+règle du point 3 plus haut (tenir sous le plafond) reste celle par défaut, et un délai long rend une
+panne longue à constater.
+
+Sources : `apps/server/src/core/{plugin,plugin-host,plugin-host.test}.ts`.

@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-09] update | Cast : la lecture attend la sortie de veille
+
+**Déclencheur** : la musique ne part pas sur un Cast en veille (barre de son), le `LAUNCH` expirait à 5 s ; délai propre au `LAUNCH` et méthode `commandTimeoutMs` du contrat.
+
+**Pages modifiées** :
+- `3_plugins/3_6_google-cast.md` - section datée : `LAUNCH_TIMEOUT_MS` à 30 s, 35 s demandées à l'hôte pour `play_url` seul, test du récepteur endormi, pas encore essayé sur la vraie barre
+- `3_plugins/3_2_ecrire-un-plugin.md` - section datée : `commandTimeoutMs?(command)`, le plus grand des deux délais, à réserver aux appareils réellement lents
+
+**Index** : catalogue mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-11-08] update | Réponse parlée refusée sur iOS
 
 **Déclencheur** : bandeau « Réponse parlée impossible » (NotAllowedError) sur iPhone et iPad après une dictée ; correctif dans `useVoiceInput.ts`.

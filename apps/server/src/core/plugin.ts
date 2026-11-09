@@ -100,6 +100,12 @@ export interface DevicePlugin {
   start(): Promise<void>
   /** Resolves on the vendor's acknowledgment; throws PluginError otherwise. */
   execute(externalId: string, command: Command): Promise<void>
+  /**
+   * Time this command may take (ms), when it needs more than the host's cap
+   * (`KASBAH_COMMAND_TIMEOUT_MS`): a Cast speaker waking from standby, for instance. The larger of
+   * the two applies; absent or `undefined` = the host's cap.
+   */
+  commandTimeoutMs?(command: Command): number | undefined
   /** Recalls a vendor scene (scenes are published through `ctx.emitScenes`). */
   recallScene?(externalId: string, recall: SceneRecall): Promise<void>
   /** Writes a scene preference at the vendor (the new value comes back through its events). */

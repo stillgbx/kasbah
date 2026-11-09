@@ -1,6 +1,6 @@
 # Plugin Google Cast (enceintes, réveils, Chromecast, barres de son)
 
-> Dernière mise à jour : 2026-10-24
+> Dernière mise à jour : 2026-11-09
 > Sources : `apps/server/src/plugins/google_cast/{index,channel,discovery,mapping,protocol,types}.ts`, `apps/server/src/plugins/google_cast/__fixtures__/network.ts`, tests `protocol.test.ts`, `mapping.test.ts` et `plugin.test.ts`, `apps/server/.env.example`, `apps/web/src/views/MediaView.vue`, demande de l'utilisateur du 2026-09-09, `apps/server/src/plugins/google_cast/known.ts`, `apps/server/src/plugins/google_cast/enrich/cover.ts`, `tools/cast-probe.mts`, `apps/server/src/plugins/google_cast/bravia.ts`, `apps/server/src/plugins/google_cast/__fixtures__/bravia.ts`
 
 ## Ce que l'utilisateur veut, et ce que le protocole permet
@@ -691,3 +691,24 @@ annoncée par un émetteur Cast), réseau local et machine elle-même compris : 
 l'extérieur lisait ainsi une page de la box ou les routes réservées au réseau local. Les pochettes passent
 désormais par `publicFetch` (`apps/server/src/core/outbound.ts`) : adresse publique seule, redirections
 comprises. Les pochettes Cast sont toujours sur Internet : rien ne change à l'usage.
+
+### Mise à jour 2026-11-09 — `play_url` attend la sortie de veille (30 s)
+
+Le `LAUNCH` du récepteur média par défaut avait le délai commun des requêtes (5 s), déjà vu trop court
+sur une TV le 2026-09-20 (plus haut). Il l'était aussi pour une barre de son en veille : constaté sur
+la vraie maison, l'appareil n'a pas fini de se réveiller quand la requête expire, et la musique ne
+part pas. Le `LAUNCH` de `playUrl` a désormais son propre délai, **`LAUNCH_TIMEOUT_MS` = 30 s**
+(choisi, pas mesuré, et pas encore essayé sur la vraie barre : à ajuster si un appareil met plus
+longtemps) ; les autres requêtes (volume,
+pause, `LOAD`…) gardent 5 s.
+
+Le serveur coupait aussi toute commande à 10 s (`KASBAH_COMMAND_TIMEOUT_MS`) : le plugin déclare donc
+`commandTimeoutMs`, qui demande **35 s pour `media_player.play_url` seulement** (`LAUNCH` + `LOAD`),
+voir `3_2_ecrire-un-plugin.md`. Le reste des commandes Cast reste sous le plafond de l'hôte.
+
+**Test** (`plugin.test.ts`) : un récepteur « endormi » retient la réponse au `LAUNCH`, l'horloge avance
+de 12 s, la lecture n'a pas échoué, puis le réveil la fait aboutir ; vu rouge avec le délai remis à
+5 s.
+
+Sources : `apps/server/src/plugins/google_cast/{channel,index,plugin.test}.ts`,
+`apps/server/src/core/{plugin,plugin-host}.ts`.

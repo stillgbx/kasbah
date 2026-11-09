@@ -33,7 +33,11 @@ function fakeReceiver(receiver: Record<string, unknown>, media?: Record<string, 
   const sent: Sent[] = []
   const toReceiver = new PassThrough(), fromReceiver = new PassThrough()
   const decoder = new FrameDecoder()
-  const state = { receiver: structuredClone(receiver), media: media ? structuredClone(media) : undefined, sent, closed: false }
+  const state = {
+    receiver: structuredClone(receiver), media: media ? structuredClone(media) : undefined, sent, closed: false,
+    /** Device in standby: the LAUNCH answer waits for `wake()`. */
+    asleep: false, pendingLaunch: null as (() => void) | null,
+  }
   const reply = (to: string, namespace: string, body: Record<string, unknown>) => { if (!state.closed) fromReceiver.write(encodeFrame(jsonMessage(to === 'sender-0' ? 'receiver-0' : to, 'sender-0', namespace, body))) }
   const mediaStatus = (requestId: number | undefined) => ({ type: 'MEDIA_STATUS', requestId, status: state.media ? [state.media] : [] })
   /** Like the real receiver: a transport command is acknowledged by a state WITHOUT the `media` block (unchanged). */
@@ -65,6 +69,11 @@ function fakeReceiver(receiver: Record<string, unknown>, media?: Record<string, 
             }],
           }
           state.media = undefined
+          if (state.asleep) {
+            const to = m.destinationId
+            state.pendingLaunch = () => reply(to, NS_RECEIVER, { type: 'RECEIVER_STATUS', requestId, status: state.receiver })
+            continue
+          }
         }
         reply(m.destinationId, NS_RECEIVER, { type: 'RECEIVER_STATUS', requestId, status: state.receiver })
       }
@@ -100,6 +109,8 @@ function fakeReceiver(receiver: Record<string, unknown>, media?: Record<string, 
     state, sent, socket,
     push(receiver: Record<string, unknown>) { state.receiver = structuredClone(receiver); reply('sender-0', NS_RECEIVER, { type: 'RECEIVER_STATUS', status: state.receiver }) },
     pushMedia(media: Record<string, unknown> | undefined, transportId: string) { state.media = media ? structuredClone(media) : undefined; if (!state.closed) fromReceiver.write(encodeFrame(jsonMessage(transportId, 'sender-0', NS_MEDIA, mediaStatus(undefined)))) },
+    /** Out of standby: answers the LAUNCH it was holding. */
+    wake() { state.asleep = false; state.pendingLaunch?.(); state.pendingLaunch = null },
     /** The device drops (restart, Wi-Fi lost). */
     drop() { state.closed = true; fromReceiver.end() },
     of(type: string): Sent[] { return sent.filter((s) => s.body.type === type) },
@@ -310,6 +321,26 @@ describe('google_cast plugin', () => {
     })
     await flush()
     expect(patches(ctx, TXT_NEST_MINI.id).at(-1)).toMatchObject({ playback: 'playing', nowPlaying: { title: 'icecast.radiofrance.fr' } })
+    await plugin.stop()
+  })
+
+  it('waits for a device in standby to wake up before giving up on the LAUNCH', async () => {
+    const speaker = fakeReceiver(RECEIVER_STATUS_NEST_HUB_IDLE)
+    speaker.state.asleep = true
+    const { plugin, clock } = await started(fakeDiscovery([SERVICE_NEST_MINI]), network({ [SERVICE_NEST_MINI.host]: speaker }))
+    const played = plugin.execute(TXT_NEST_MINI.id, { type: 'media_player.play_url', url: 'https://example.org/a.mp3' })
+    let settled = false
+    void played.finally(() => { settled = true }).catch(() => {})
+    await flush()
+    clock.advance(12_000)                                                 // well past the 5 s of an ordinary request
+    await flush()
+    expect(settled).toBe(false)
+    speaker.wake()
+    await expect(played).resolves.toBeUndefined()
+    expect(speaker.of('LOAD')).toHaveLength(1)
+    // the host's 10 s cap must let it through too: the plugin asks for more on `play_url` only
+    expect(plugin.commandTimeoutMs?.({ type: 'media_player.play_url', url: 'https://example.org/a.mp3' })).toBeGreaterThanOrEqual(30_000)
+    expect(plugin.commandTimeoutMs?.({ type: 'media_player.pause' })).toBeUndefined()
     await plugin.stop()
   })
 

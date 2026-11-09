@@ -166,3 +166,38 @@ describe('plugin host health per account', () => {
     await h.stopAll()
   })
 })
+
+describe('plugin host command timeout', () => {
+  /** Plugin whose `execute` waits for `release()`, and asks for 30 s on `play_url` only. */
+  function slow() {
+    let release!: () => void
+    const plugin: DevicePlugin = {
+      ...flaky(0, () => new Error('unused')).plugin,
+      execute: () => new Promise<void>((r) => { release = r }),
+      commandTimeoutMs: (command) => command.type === 'media_player.play_url' ? 30_000 : undefined,
+    }
+    return { plugin, release: () => release() }
+  }
+
+  it('lets a command run past the 10 s cap when its plugin asks for more', async () => {
+    const clock = new ManualClock(0)
+    const { plugin, release } = slow()
+    const h = host(plugin, clock)
+    await h.startAll()
+    const p = h.execute('flaky:speaker', { type: 'media_player.play_url', url: 'https://example.org/a.mp3' })
+    await flush(); clock.advance(20_000); await flush()
+    release()
+    await expect(p).resolves.toBeUndefined()
+    await h.stopAll()
+  })
+
+  it('keeps the 10 s cap for the plugin’s other commands', async () => {
+    const clock = new ManualClock(0)
+    const h = host(slow().plugin, clock)
+    await h.startAll()
+    const p = h.execute('flaky:speaker', { type: 'media_player.pause' })
+    await flush(); clock.advance(10_000)
+    await expect(p).rejects.toMatchObject({ code: 'TIMEOUT' })
+    await h.stopAll()
+  })
+})

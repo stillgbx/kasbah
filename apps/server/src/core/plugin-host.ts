@@ -305,7 +305,8 @@ export class PluginHost {
     const { pluginId, externalId } = parseDeviceId(deviceId)
     const slot = this.slots.get(pluginId)
     if (!slot || !slot.ctx) throw new PluginError('DEVICE_UNAVAILABLE', `plugin "${pluginId}" is not running`)
-    await withTimeout(slot.plugin.execute(externalId, command), this.opts.commandTimeoutMs ?? 10_000, this.opts.clock, `command ${command.type}`)
+    const timeoutMs = Math.max(this.opts.commandTimeoutMs ?? 10_000, slot.plugin.commandTimeoutMs?.(command) ?? 0)
+    await withTimeout(slot.plugin.execute(externalId, command), timeoutMs, this.opts.clock, `command ${command.type}`)
   }
 
   /** Forecasts of a `weather` device; `NOT_IMPLEMENTED` if its plugin serves none. */
