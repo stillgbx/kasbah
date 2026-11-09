@@ -1,0 +1,16 @@
+{
+  "id": "./ask",
+  "name": "Demander à Kasbah",
+  "short_name": "Demander",
+  "description": "Poser une question à la maison, à la voix ou au clavier.",
+  "lang": "fr",
+  "start_url": "./ask",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d1420",
+  "theme_color": "#0d1420",
+  "icons": [
+    { "src": "icons/shortcut-ask-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/shortcut-ask-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -109,6 +109,9 @@ reste plus stricte (pas d'IP). Tests : `mcp/public-host.test.ts`.
   2026-10-25 : le chemin normalisé lui-même ne doit pas commencer par `//`, voir plus bas.)*
 - **Ouverts sans session** : `/login`, `/logout`, `/manifest.webmanifest`, `/icons/*`, pour que l'app
   s'installe dès la page de connexion (le navigateur demande le manifest sans cookie).
+  *(Complété le 2026-11-09 : `/manifest.ask.webmanifest` aussi, le manifest de l'app « Demander » pour
+  iOS, liste `MANIFESTS` de `session.ts` ; il passe aussi `lanGate`. Voir
+  [5_2](../5_setup/5_2_production.md), mise à jour du 2026-11-09.)*
 - **Origine exigée** (celle de `MCP_PUBLIC_URL`) sur toute écriture et toute demande de WebSocket, `/ws`
   comme les flux des caméras : les autres services publiés sous le même domaine sont du même *site*,
   SameSite ne les sépare pas. Sinon 403 `BAD_ORIGIN`.

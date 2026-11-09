@@ -16,14 +16,15 @@ const FRAME_HEADERS = { 'x-frame-options': 'SAMEORIGIN', 'content-security-polic
  * Install manifest in the browser's language, the app's own rule without a saved choice
  * (`detectLocale`, apps/web/src/i18n): the first of fr / en in `Accept-Language`, otherwise English.
  * The browser fetches it without a cookie, so a language chosen in the settings cannot be known here.
+ * `name`: `manifest.ask` for the "Ask Kasbah" app of its own (see `/ask` below).
  */
-export function manifestFile(acceptLanguage: string | undefined): string {
+export function manifestFile(acceptLanguage: string | undefined, name = 'manifest'): string {
   for (const part of (acceptLanguage ?? '').split(',')) {
     const base = part.trim().toLowerCase().split(/[-;]/)[0]
-    if (base === 'fr') return 'manifest.webmanifest'
+    if (base === 'fr') return `${name}.webmanifest`
     if (base === 'en') break
   }
-  return 'manifest.en.webmanifest'
+  return `${name}.en.webmanifest`
 }
 
 /**
@@ -41,6 +42,20 @@ export async function registerStatic(app: FastifyInstance, dir: string): Promise
   })
   app.get('/manifest.webmanifest', (req, reply) =>
     reply.header('vary', 'Accept-Language').sendFile(manifestFile(req.headers['accept-language'])))
+  app.get('/manifest.ask.webmanifest', (req, reply) =>
+    reply.header('vary', 'Accept-Language').sendFile(manifestFile(req.headers['accept-language'], 'manifest.ask')))
+  // iOS shows no app shortcut (the manifest's `shortcuts`): "Add to Home Screen" from `/ask` installs
+  // "Ask Kasbah" as an app of its own instead. The page links that app's manifest and icon, and names it
+  // (Safari's suggested name). Read on each request, like the build identifier: a new build needs no restart.
+  app.get('/ask', (req, reply) => {
+    const manifest = manifestFile(req.headers['accept-language'], 'manifest.ask')
+    const { short_name: title } = JSON.parse(readFileSync(join(dir, manifest), 'utf8')) as { short_name: string }
+    const html = readFileSync(join(dir, 'index.html'), 'utf8')
+      .replace('href="/manifest.webmanifest"', 'href="/manifest.ask.webmanifest"')
+      .replace('href="/icons/apple-touch-icon.png"', 'href="/icons/shortcut-ask-maskable-192.png"')
+      .replace('</head>', `  <meta name="apple-mobile-web-app-title" content="${title}" />\n  </head>`)
+    return reply.headers(FRAME_HEADERS).header('vary', 'Accept-Language').type('text/html').send(html)
+  })
   app.setNotFoundHandler((req, reply) => {
     if (req.method === 'GET' && !req.url.startsWith('/api') && !req.url.startsWith('/ws') && !req.url.startsWith('/assets/')) {
       return reply.type('text/html').sendFile('index.html')

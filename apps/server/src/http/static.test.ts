@@ -66,6 +66,32 @@ describe('registerStatic', () => {
       expect(res.headers.vary, accept).toMatch(/Accept-Language/)
     }
   })
+
+  it('serves /ask as the "Ask Kasbah" app of its own, so iOS can add it to the home screen', async () => {
+    const head = '<head>\n    <link rel="manifest" href="/manifest.webmanifest" />\n    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />\n  </head>'
+    await webBuild({
+      'index.html': `<!doctype html>${head}`,
+      'manifest.ask.webmanifest': '{"lang":"fr","short_name":"Demander"}', 'manifest.ask.en.webmanifest': '{"lang":"en","short_name":"Ask"}',
+    })
+    app = Fastify()
+    await registerStatic(app, dir)
+
+    const page = await app.inject({ method: 'GET', url: '/ask', headers: { 'accept-language': 'fr-FR' } })
+    expect(page.statusCode).toBe(200)
+    expect(page.headers['content-type']).toMatch(/text\/html/)
+    expect(page.headers['x-frame-options']).toBe('SAMEORIGIN')
+    expect(page.body).toContain('<link rel="manifest" href="/manifest.ask.webmanifest" />')
+    expect(page.body).toContain('<link rel="apple-touch-icon" href="/icons/shortcut-ask-maskable-192.png" />')
+    expect(page.body).toContain('<meta name="apple-mobile-web-app-title" content="Demander" />')
+    expect((await app.inject({ method: 'GET', url: '/ask', headers: { 'accept-language': 'en' } })).body).toContain('content="Ask"')
+
+    const manifest = await app.inject({ method: 'GET', url: '/manifest.ask.webmanifest', headers: { 'accept-language': 'en-GB' } })
+    expect(manifest.json().lang).toBe('en')
+    expect(manifest.headers.vary).toMatch(/Accept-Language/)
+
+    // the other pages keep the app's own manifest
+    expect((await app.inject({ method: 'GET', url: '/lights' })).body).toContain('href="/manifest.webmanifest"')
+  })
 })
 
 describe('readAppBuild', () => {

@@ -1,6 +1,6 @@
 # Production
 
-> Dernière mise à jour : 2026-11-08
+> Dernière mise à jour : 2026-11-09
 > Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts`, `site/`, `.github/workflows/pages.yml`, `apps/web/src/stores/push.ts` (2026-10-29)
 
 ## Build
@@ -841,3 +841,40 @@ maison » (`LAN_ONLY`) et qui empêche de prendre une requête proxifiée pour l
 **Ordre de mise en service** : (1) créer l'admin par le script (`npm run account -w @kasbah/server -- add
 <nom> --admin`) ; (2) marquer le compte de la maison (`… house <nom> on`) ; (3) mettre les écrans fixes (tablette)
 sur l'adresse publique ; (4) seulement alors déployer, sans quoi l'écran fixe tombe sur 302 / 401.
+
+## Mise à jour 2026-11-09 — iOS : « Demander » s'installe comme une app à part
+
+Safari et iOS ignorent le membre `shortcuts` du manifest : l'appui long sur une app web installée ne
+propose que Modifier, Partager et Supprimer, sans réglage pour changer ça. L'équivalent retenu est une
+**seconde icône d'écran d'accueil** qui ouvre directement `/ask` : dans Safari, ouvrir `/ask`, puis
+Partager → « Sur l'écran d'accueil ».
+
+- **Un manifest à part** : `apps/web/public/manifest.ask.webmanifest` (français) et
+  `manifest.ask.en.webmanifest` (anglais), avec `id` et `start_url` à `./ask`, `scope` à `./` (les
+  autres vues restent dans l'app), nom « Demander à Kasbah » / « Demander » (« Ask Kasbah » / « Ask »)
+  et les icônes du raccourci. `start_url` compte : quand la page a un manifest, Safari prend souvent son
+  `start_url` plutôt que l'adresse en cours, et l'icône aurait alors ouvert l'accueil.
+- **Le serveur sert `/ask` autrement** (`registerStatic`, `apps/server/src/http/static.ts`) : il relit
+  `index.html` à chaque requête et y remplace le lien du manifest (`/manifest.ask.webmanifest`), l'icône
+  iOS (`/icons/shortcut-ask-maskable-192.png`, la version sur fond nuit : iOS met du noir sous la
+  transparence) et ajoute `apple-mobile-web-app-title`, le `short_name` du manifest choisi (le nom que
+  Safari propose). La langue se choisit comme pour le manifest principal (`manifestFile(…, 'manifest.ask')`),
+  avec `Vary: Accept-Language`. Les autres pages gardent le manifest de Kasbah.
+- **Ouvert sans session** comme l'autre manifest (`MANIFESTS` de `session.ts`, voir
+  [1_13](../1_architecture/1_13_comptes-et-sessions.md)). Sans session, `/ask` passe par la connexion
+  puis y revient.
+- **Production seulement** : en dev, Vite sert `/ask` avec le manifest principal. **Démo** : `demoPage()`
+  retire aussi les deux nouveaux fichiers.
+- Écarté : changer le lien du manifest dans le navigateur (dans le routeur) : on ne sait pas si Safari lit
+  le manifest au chargement de la page ou au moment de l'ajout ; servi par le serveur, il est juste dès
+  le chargement.
+- **Non vérifié** : l'essai sur un iPhone ; la reprise de la session de Safari par l'app ajoutée (iOS
+  copierait les cookies au moment de l'ajout, sinon une connexion suffit) ; sur Android, Chrome pourrait
+  proposer d'installer « Demander » à part quand on ouvre `/ask` dans un onglet (le raccourci par appui
+  long ne change pas, et l'`id` distinct n'empêche pas la mise à jour de l'app Kasbah).
+
+Vérifié par `apps/server/src/http/static.test.ts` (page `/ask` en fr et en, manifest en anglais, autre page
+inchangée) et `session.test.ts` (manifest ouvert, aussi sous un nom local) ; les deux balises remplacées
+sont bien présentes, à l'identique, dans un vrai build (`vite build --outDir` jetable).
+
+Sources : `apps/server/src/http/static.ts`, `apps/server/src/http/session.ts`, `apps/web/public/manifest.ask{,.en}.webmanifest`, `apps/web/vite.config.ts`.

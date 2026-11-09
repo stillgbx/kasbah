@@ -56,6 +56,7 @@ async function build(maxFailures = 3) {
   app.get('/api/plugins/nest/cameras/c1/stream', async () => ({ ws: true }))
   app.get('/settings', async () => 'app')
   app.get('/manifest.webmanifest', async () => ({ name: 'Kasbah' }))
+  app.get('/manifest.ask.webmanifest', async () => ({ name: 'Demander à Kasbah' }))
   await app.ready()
 }
 
@@ -103,6 +104,7 @@ it('serves the sign-in page and the installable app’s manifest without a sessi
   expect(page.body).toContain('<link rel="manifest" href="/manifest.webmanifest">')
   expect(page.headers['content-security-policy']).toContain("manifest-src 'self'")
   expect((await req({ method: 'GET', url: '/manifest.webmanifest' })).statusCode).toBe(200)
+  expect((await req({ method: 'GET', url: '/manifest.ask.webmanifest' })).statusCode).toBe(200)
 })
 
 it('opens a session through a protected __Host- cookie, and returns to where you were going', async () => {
@@ -311,6 +313,7 @@ it('lets nothing through under a local name but the speakers\' streams, and send
   expect((await lan('/api/music/stream/0123abcd')).body).toBe('mp3')
   expect((await lan('/api/music/raw/0123abcd.flac')).body).toBe('flac')
   expect((await lan('/manifest.webmanifest')).statusCode).toBe(200)
+  expect((await lan('/manifest.ask.webmanifest')).statusCode).toBe(200)
   for (const url of ['/settings?tab=1', '/login']) {
     const page = await lan(url, { accept: 'text/html' })
     expect(page.statusCode, url).toBe(302)

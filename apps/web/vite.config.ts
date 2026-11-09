@@ -94,7 +94,7 @@ function demoPage(): Plugin {
       .replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${DEMO_CSP}" />${DEMO_PREVIEW}`)
       .replace(/\n\s*<link rel="manifest"[^>]*>/, ''),
     closeBundle() {
-      for (const file of ['sw.js', 'diag.html', 'manifest.webmanifest', 'manifest.en.webmanifest']) rmSync(join(outDir, file), { force: true })
+      for (const file of ['sw.js', 'diag.html', 'manifest.webmanifest', 'manifest.en.webmanifest', 'manifest.ask.webmanifest', 'manifest.ask.en.webmanifest']) rmSync(join(outDir, file), { force: true })
       // the demo assistant's spoken answers (src/api/demoAssistant.ts), for this build only
       const voice = fileURLToPath(new URL('./demo/voice', import.meta.url))
       if (existsSync(voice)) cpSync(voice, join(outDir, 'voice'), { recursive: true, filter: (f) => !f.endsWith('.md') })

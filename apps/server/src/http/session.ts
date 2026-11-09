@@ -45,7 +45,8 @@ type SessionsFile = z.infer<typeof fileSchema>
 
 // Open without a session: sign-in, and what the browser loads WITHOUT a cookie (the manifest of an
 // installable app is requested without credentials, its icons along with it).
-const OPEN_PATHS = new Set(['/login', '/logout', '/manifest.webmanifest'])
+const MANIFESTS = ['/manifest.webmanifest', '/manifest.ask.webmanifest']
+const OPEN_PATHS = new Set(['/login', '/logout', ...MANIFESTS])
 const OPEN_PREFIXES = ['/icons/']
 // the Matter bridge: its pairing code lets any assistant take over what it publishes (a garage, a lock)
 const LAN_ONLY = ['/api/mcp/users', '/api/system', '/api/matter', '/api/assistant/log']
@@ -213,7 +214,7 @@ ${error ? `<p class="err">${esc(error)}</p>` : ''}
 
     async lanGate(req, reply) {
       const path = req.url.split('?')[0]!
-      if (SAFE_METHODS.has(req.method) && (SPEAKER_PATH.test(path) || path === '/manifest.webmanifest' || OPEN_PREFIXES.some((p) => path.startsWith(p)))) return
+      if (SAFE_METHODS.has(req.method) && (SPEAKER_PATH.test(path) || MANIFESTS.includes(path) || OPEN_PREFIXES.some((p) => path.startsWith(p)))) return
       // nothing signs in over plain HTTP: a page goes to the public address, the rest is refused
       if (origin && req.method === 'GET' && String(req.headers.accept ?? '').includes('text/html')) {
         await reply.code(302).header('cache-control', 'no-store').redirect(`${origin}${req.url}`)

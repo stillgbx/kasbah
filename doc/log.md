@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-09] update | iOS : « Demander » s'installe comme une app à part
+
+**Déclencheur** : question de l'utilisateur, iOS n'offre pas le raccourci « Demander » de l'app installée (appui long sur Android) ; le serveur sert `/ask` avec son propre manifest pour qu'on l'ajoute à l'écran d'accueil.
+
+**Pages modifiées** :
+- `5_setup/5_2_production.md` - section datée : `manifest.ask{,.en}.webmanifest` (`id`/`start_url` `./ask`), `/ask` servie avec ce manifest, l'icône iOS et `apple-mobile-web-app-title`, ouvert sans session, prod seulement, piste du routeur écartée, ce qui n'est pas vérifié
+- `1_architecture/1_13_comptes-et-sessions.md` - complément : `/manifest.ask.webmanifest` ouvert sans session (`MANIFESTS`)
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-11-09] update | Comptes : rôles et droits dès la création
 
 **Déclencheur** : demande de l'utilisateur, un compte créé depuis l'app avait tous les droits et ne se réglait qu'en deuxième étape ; le formulaire propose rôles et droits, six droits par défaut.
