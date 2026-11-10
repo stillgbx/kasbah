@@ -13,6 +13,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 
 **Pages modifiées** :
 - `1_architecture/1_8_automatisations.md` - section datée : schéma `event`, moteur (`onEvent`, `cooldownMin` en mémoire, pas de délai après un run `skipped`), santé, MCP, éditeur (segment « Sonnette », libellé serré à 1024 px), liste, démo navigateur, tests ; renvois posés sur « Graines de l'itération 2 » et « Limites connues »
+- `1_architecture/1_8_automatisations.md` - seconde section datée : action `flash` (le serveur fait clignoter les lumières puis les remet ; choix de l'utilisateur : par le serveur, en action d'automatisation)
 - `1_architecture/1_16_notifications-push.md` - section datée : `AlertNotifier` écoute `deviceEvent`, catégorie `cameras`, tag par sonnette, droit `cameras`, écrans déjà abonnés à cocher
 
 **Index** : catalogue 1_architecture mis à jour (2 lignes, résumés élargis à la sonnette), index.md régénéré.

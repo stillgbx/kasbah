@@ -530,3 +530,38 @@ désormais.
 - **Tests** : `engine.test.ts` (bon appareil, autre appareil, règle coupée, `unless` sans délai,
   `cooldownMin`, `forMin`, sonnette manquante), `automations.test.ts` (shared : forme, événement
   inconnu, bornes), `apps/web/src/lib/automations.test.ts` (phrase, recherche).
+
+### Mise à jour 2026-11-10 (2) — l'action « Faire clignoter des lumières » (`flash`)
+
+Pour être prévenu de loin ou sans entendre la sonnette : les lumières clignotent, puis reviennent
+comme avant. Choix de l'utilisateur : le **serveur** fait clignoter (toutes marques, vitesse
+réglable), pas l'effet natif d'un fabricant (le *signaling* Hue a un rythme fixe et ne sert qu'à Hue) ;
+une **action d'automatisation**, pas de bouton sur la carte d'une lampe (« Exécuter » sert d'essai).
+
+- **Schéma** (`automation.ts`) : `{ type: 'flash', target, color?, durationS, speed }`. `color` dans
+  une palette courte (`FLASH_COLORS` : rouge, orange, jaune, vert, bleu, violet, blanc), absente = la
+  couleur de la lampe ; `durationS` de 2 à 300, **10 par défaut** ; `speed` lent | normal | rapide,
+  **normal par défaut** (défauts zod : le MCP peut les omettre).
+- **Le clignotement** (`apps/server/src/core/automations/flash.ts`, `Flasher`, tenu par le moteur) :
+  phase allumée = `light.set` à 100 % de luminosité, dans la couleur demandée si la lampe a `color`
+  (blanc = `colorTempMirek` 250 si elle a `color_temp`), `transitionMs: 0` ; phase éteinte = `on:
+  false`. Cycle complet (`FLASH_PERIOD_MS`) : 2 s lent, 1,2 s normal, 0,8 s rapide (en dessous, la
+  latence Zigbee brouille le clignotement). À la fin, la lampe reçoit son état d'avant (allumée avec
+  sa luminosité et sa couleur ou sa température, ou éteinte).
+- **Garde-fous** : un seul ordre en vol par lampe (une phase dont l'ordre précédent n'est pas acquitté
+  est sautée : un pont Hue prend une dizaine d'ordres par seconde, beaucoup de lampes en « rapide »
+  sautent donc des phases plutôt que d'empiler) ; une lampe **déjà en train de clignoter** n'est pas
+  relue (elle serait « éteinte » une fois sur deux) : elle garde l'état noté au début, et sa fin
+  recule à la nouvelle échéance ; ce qui n'est pas une lumière est refusé (`KIND_MISMATCH` dans le
+  rapport, le reste clignote). En mémoire seulement : un redémarrage au milieu laisse la lampe dans sa
+  dernière phase. Une lampe jamais relue depuis le démarrage est remise **éteinte** (son état par défaut).
+- **Exécution** (`runner.ts`) : l'action rend la main dès le premier « allumé » acquitté ; le
+  clignotement continue seul, les actions suivantes (une notification) n'attendent pas sa fin.
+- **Éditeur** (`ActionEditor.vue`) : la carte reprend le choix des cibles des commandes (appareils
+  choisis ou sélection, toujours des lumières), puis Couleur, Vitesse, Durée (ramenée dans ses bornes)
+  et une ligne d'aide. Phrase : « Faire clignoter · <cible> · bleu · 15 s · rapide ».
+- **Démo navigateur** : pas de clignotement en mode simulé (`NOT_IMPLEMENTED` dans le rapport, comme
+  `notify`).
+- **Tests** : `engine.test.ts` (suite allumé / éteint puis retour à l'état d'avant, couleur et
+  luminosité selon les capacités, refus d'un volet, état gardé et fin reculée quand ça resonne),
+  `automations.test.ts` (défauts, couleur inconnue, bornes de durée), `apps/web/src/lib/automations.test.ts`.
