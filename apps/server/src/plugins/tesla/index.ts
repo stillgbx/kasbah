@@ -1085,7 +1085,7 @@ export function createTeslaPlugin(deps: TeslaPluginDeps = {}): DevicePlugin {
        * — the DATE isn't realigned: the cycle starts on the 1st of the month, the console says so too.
        */
       app.post('/usage', async (req, reply) => {
-        if (!ctx) return sendError(reply, 409, 'NEEDS_PAIRING', 'plugin not started')
+        if (!ctx) return sendError(reply, 503, 'DEVICE_UNAVAILABLE', 'tesla plugin is not started')
         const body = z.object({
           data: z.number().int().min(0), wakes: z.number().int().min(0), commands: z.number().int().min(0),
         }).safeParse(req.body)

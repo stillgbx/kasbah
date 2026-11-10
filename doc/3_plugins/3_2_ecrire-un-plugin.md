@@ -1,6 +1,6 @@
 # Écrire un plugin
 
-> Dernière mise à jour : 2026-11-09
+> Dernière mise à jour : 2026-11-10
 > Sources : `apps/server/src/core/plugin.ts`, `apps/server/src/core/plugin-host.ts`, `apps/server/src/plugins/{mock,hue,tahoma,_stub}/index.ts`, `apps/server/src/plugins/comap/{socket,socket.test}.ts`, `apps/server/src/plugins/melcloud/{types,mapping}.ts`, `apps/server/src/plugins/irobot/{index,mapping,discovery}.ts`, `apps/server/src/plugins/sonos/{index,discovery,mapping}.ts`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/assistant/engines.ts`
 
 ## Interface (`core/plugin.ts`)
@@ -96,6 +96,10 @@ readonly parts?: readonly PluginPart[]  // { id, labelKey, enabledByDefault }
 - Un plugin **sans** `parts` n'a rien à faire : la majorité n'a pas de sous-item.
 - À la liste de contrôle : ne pas supposer qu'on démarre. Un plugin est instancié même décoché, et
   ses routes sont montées (c'est par là qu'on l'appaire) ; seul `init`/`start` attend l'activation.
+  *Depuis le 2026-11-10, l'hôte refuse ces routes (503 `DEVICE_UNAVAILABLE`, « `<id>` plugin is not
+  started ») tant que le plugin n'a pas de contexte : jamais démarré, ou après `stop()`. Un plugin
+  dont le démarrage a échoué garde le sien, c'est là qu'on l'appaire. Une route n'a donc pas à
+  recopier sa propre garde « not started ». Voir `../1_architecture/1_2_serveur-et-plugins.md`.*
 
 
 ### Mise à jour 2026-09-14 — `PluginHealth.quota` : dire ce qu'on consomme

@@ -7,6 +7,18 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-10] update | Routes d'un plugin qui ne tourne pas : 503 dans l'hôte
+
+**Déclencheur** : brief de session « refuser proprement les routes d'un plugin non démarré » (un 500 sur `ctx!` nul, des gardes recopiées plugin par plugin, et la limite Open-Meteo « après `stop()` »). Trois décisions de l'utilisateur : « démarré » = `slot.ctx` non nul, aucune exemption par route, 503 partout.
+
+**Pages modifiées** :
+- `1_architecture/1_2_serveur-et-plugins.md` - section datée : crochet `onRequest` de `registerRoutes`, sens de « tourne », audit des routes (aucune ne servait plugin jamais démarré, cartes d'appairage affichées plugin coché seulement), gardes locales alignées, tests ; renvoi posé sur l'ancienne affirmation « on appaire avant d'allumer »
+- `3_plugins/3_2_ecrire-un-plugin.md` - liste de contrôle : renvoi sur la garde de l'hôte
+- `3_plugins/3_10_open-meteo.md` - section datée : limite « après `stop()` » levée, 409 → 503
+- `1_architecture/1_7_serveur-mcp.md` - note : message rendu à l'agent par les outils appuyés sur une route de plugin
+
+**Index** : catalogues mis à jour (4 lignes), index.md régénéré.
+
 ## [2026-11-10] update | Android Auto 0.9 : alerte d'approche qui dit ses échecs, journal des approches
 
 **Déclencheur** : retour de l'utilisateur, plus d'alerte à l'approche de la maison depuis la dernière version ; cause non établie (téléphone lu par `adb` : géorepérage, permissions, canal et session en ordre, aucune trace du trajet).

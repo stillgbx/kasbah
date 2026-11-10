@@ -1,5 +1,6 @@
 import { ManualClock } from '@kasbah/mock-sim'
 import { DEFAULT_PLUGIN_SETTINGS } from '@kasbah/shared'
+import Fastify from 'fastify'
 import pino from 'pino'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
@@ -109,6 +110,51 @@ describe('plugin host startup', () => {
     await all
     expect((await h.health()).slow).toMatchObject({ status: 'ok' })
     await h.stopAll()
+  })
+})
+
+describe('plugin host: routes of a plugin that is not running', () => {
+  /** A plugin with one route, mounted through the host as `app.ts` does. */
+  async function mounted(failures: number, enabled: { value: boolean }) {
+    const clock = new ManualClock(0)
+    const { plugin } = flaky(failures, () => new PluginError('NEEDS_PAIRING', 'bridge not paired'))
+    plugin.registerRoutes = (app) => { app.get('/data', async () => ({ ok: true })) }
+    const h = host(plugin, clock, enabled)
+    const app = Fastify()
+    h.registerRoutes(app)
+    await app.ready()
+    return { h, app }
+  }
+  const NOT_STARTED = { error: { code: 'DEVICE_UNAVAILABLE', message: 'flaky plugin is not started' } }
+
+  it('refuses them cleanly while the plugin has never started', async () => {
+    const { app } = await mounted(0, { value: false })
+    const res = await app.inject({ method: 'GET', url: '/api/plugins/flaky/data' })
+    expect(res.statusCode).toBe(503)
+    expect(res.json()).toEqual(NOT_STARTED)
+    await app.close()
+  })
+
+  it('serves them once started, and refuses them again after it is switched off', async () => {
+    const enabled = { value: true }
+    const { h, app } = await mounted(0, enabled)
+    await h.startAll()
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/flaky/data' })).json()).toEqual({ ok: true })
+    enabled.value = false
+    await h.apply('flaky')
+    const res = await app.inject({ method: 'GET', url: '/api/plugins/flaky/data' })
+    expect(res.statusCode).toBe(503)
+    expect(res.json()).toEqual(NOT_STARTED)
+    await app.close()
+  })
+
+  it('still serves them when the start failed: that is where the plugin gets paired', async () => {
+    const { h, app } = await mounted(5, { value: true })
+    await h.startAll()
+    expect((await h.health()).flaky).toMatchObject({ status: 'error' })
+    expect((await app.inject({ method: 'GET', url: '/api/plugins/flaky/data' })).statusCode).toBe(200)
+    await h.stopAll()
+    await app.close()
   })
 })
 

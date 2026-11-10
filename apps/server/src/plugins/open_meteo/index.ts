@@ -144,7 +144,7 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
       app.get('/places', async (req, reply) => {
         const query = placesQuerySchema.safeParse(req.query)
         if (!query.success) return sendError(reply, 400, 'INVALID_QUERY', 'q (2 to 100 characters) and lang (two letters) expected')
-        if (!client || !ctx) return sendError(reply, 409, 'DEVICE_UNAVAILABLE', NOT_STARTED)
+        if (!client || !ctx) return sendError(reply, 503, 'DEVICE_UNAVAILABLE', NOT_STARTED)
         const { q, lang } = query.data
         return { places: toPlaces(await client.places(q, lang, ctx.signal)) }
       })
@@ -152,7 +152,7 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
       app.get('/at', async (req, reply) => {
         const query = atQuerySchema.safeParse(req.query)
         if (!query.success) return sendError(reply, 400, 'INVALID_QUERY', 'lat (-90 to 90) and lon (-180 to 180) expected')
-        if (!ctx) return sendError(reply, 409, 'DEVICE_UNAVAILABLE', NOT_STARTED)
+        if (!ctx) return sendError(reply, 503, 'DEVICE_UNAVAILABLE', NOT_STARTED)
         const { lat, lon } = query.data
         const r = await readElsewhere(lat, lon)
         const now = ctx.clock.now()
@@ -167,7 +167,7 @@ export function createOpenMeteoPlugin(deps: OpenMeteoDeps = {}): DevicePlugin {
       app.get('/alerts', async (req, reply) => {
         const query = atQuerySchema.safeParse(req.query)
         if (!query.success) return sendError(reply, 400, 'INVALID_QUERY', 'lat (-90 to 90) and lon (-180 to 180) expected')
-        if (!vigilance || !ctx) return sendError(reply, 409, 'DEVICE_UNAVAILABLE', NOT_STARTED)
+        if (!vigilance || !ctx) return sendError(reply, 503, 'DEVICE_UNAVAILABLE', NOT_STARTED)
         const r = await vigilance.at(query.data.lat, query.data.lon, ctx.signal)
         return { ...r, attribution: VIGILANCE_ATTRIBUTION, web: VIGILANCE_WEB }
       })

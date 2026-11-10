@@ -128,9 +128,24 @@ describe('REST API', () => {
     expect(body.plugins.sonos.status).toBe('disabled')
   })
   it("a plugin's own route sees no account on the local network (null, not undefined)", async () => {
-    const r = await kasbah.app.inject({ method: 'GET', url: '/api/plugins/claude/account' })
-    expect(r.statusCode).toBe(200)
-    expect(r.json()).toHaveProperty('user', null)
+    const dir = await mkdtemp(join(tmpdir(), 'kasbah-plugins-'))
+    const file = join(dir, 'house.json')
+    await copyFile(HOUSE, file)
+    // `node --version` answers the version probe that `claude` runs when it starts
+    const { kasbah: app } = await makeApp('default', { CLAUDE_BIN: process.execPath }, file)
+    try {
+      // off: refused cleanly, not a 500 from a handler whose state `init` never built
+      const off = await app.app.inject({ method: 'GET', url: '/api/plugins/claude/account' })
+      expect(off.statusCode).toBe(503)
+      expect(off.json()).toEqual({ error: { code: 'DEVICE_UNAVAILABLE', message: 'claude plugin is not started' } })
+      expect((await app.app.inject({ method: 'PATCH', url: '/api/plugins/claude', payload: { enabled: true } })).statusCode).toBe(200)
+      const r = await app.app.inject({ method: 'GET', url: '/api/plugins/claude/account' })
+      expect(r.statusCode).toBe(200)
+      expect(r.json()).toHaveProperty('user', null)
+    } finally {
+      await app.close()
+      await rm(dir, { recursive: true, force: true })
+    }
   })
   it('serves the validated house', async () => {
     const r = await kasbah.app.inject({ method: 'GET', url: '/api/house' })

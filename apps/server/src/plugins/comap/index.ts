@@ -179,7 +179,7 @@ export function createComapPlugin(deps: ComapPluginDeps = {}): DevicePlugin {
     registerRoutes(app: FastifyInstance) {
       /** Raw reading, to capture a fixture from a real response rather than the manual. */
       app.get('/raw', async (_req, reply) => {
-        if (!ctx) return sendError(reply, 409, 'DEVICE_UNAVAILABLE', 'plugin not started')
+        if (!ctx) return sendError(reply, 503, 'DEVICE_UNAVAILABLE', 'comap plugin is not started')
         if (!config?.COMAP_HOST) return sendError(reply, 409, 'DEVICE_UNAVAILABLE', 'COMAP_HOST is not set')
         try { return await read() }
         catch (err) { return sendError(reply, 502, 'UPSTREAM_ERROR', (err as Error).message) }

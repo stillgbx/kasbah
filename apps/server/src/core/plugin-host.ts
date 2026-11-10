@@ -1,6 +1,7 @@
 import { DEFAULT_PLUGIN_SETTINGS, parseDeviceId, parseSceneId, type Command, type DeviceState, type PluginHealth, type StatePatch, type PluginInfo, type PluginSettings, type SceneRecall, type SceneUpdate, type DeviceConsumption, type DeviceEnergyDays, type DeviceJournal, type DeviceReleaseNotes, type SiteMap, type WeatherForecast } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import type { Logger } from 'pino'
+import { describeError, sendError } from '../http/errors'
 import { chargeLimitReached, chargerToForce, chargerToStop, chargingRefuted } from './chargeCoordination'
 import { createBackoff, type Backoff } from './backoff'
 import type { Bus } from './bus'
@@ -126,14 +127,23 @@ export class PluginHost {
   }
 
   /**
-   * Registers each plugin's own routes under /api/plugins/<id>/ (before app.ready()).
-   * Including for a plugin that is off: Fastify no longer accepts routes after `ready()`, and that
-   * is often how a vendor is paired BEFORE turning it on.
+   * Registers each plugin's own routes under /api/plugins/<id>/ (before app.ready()), including for
+   * a plugin that is off: Fastify no longer accepts routes after `ready()`.
+   * Until the plugin runs (never started, or after `stop()`), they answer `DEVICE_UNAVAILABLE`
+   * instead of reaching a handler whose state is only built by `init()`. "Runs" = it has a context:
+   * a plugin whose start failed keeps it, and that is where it gets paired (Hue without a key…).
    */
   registerRoutes(app: FastifyInstance): void {
     for (const [id, slot] of this.slots) {
       if (!slot.plugin.registerRoutes || !slot.config) continue
-      app.register(async (sub) => { slot.plugin.registerRoutes!(sub) }, { prefix: `/api/plugins/${id}` })
+      app.register(async (sub) => {
+        sub.addHook('onRequest', async (_req, reply) => {
+          if (slot.ctx) return
+          const d = describeError(new PluginError('DEVICE_UNAVAILABLE', `${id} plugin is not started`))
+          return sendError(reply, d.status, d.code, d.message)
+        })
+        slot.plugin.registerRoutes!(sub)
+      }, { prefix: `/api/plugins/${id}` })
     }
   }
 

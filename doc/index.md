@@ -26,12 +26,12 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 |---|---|
 | [1_0 Monorepo et flux de données](1_architecture/1_0_monorepo-et-flux.md) | 2026-10-20 |
 | [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-11-05 |
-| [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-11-04 |
+| [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-11-10 |
 | [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-11-09 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-11-01 |
 | [1_5 Scène 3D (Three.js)](1_architecture/1_5_scene-3d.md) | 2026-10-29 |
 | [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-11-07 |
-| [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-11-08 |
+| [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-11-10 |
 | [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-28 |
 | [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-11-08 |
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-10-11 |
@@ -59,12 +59,12 @@ La maison décrite en JSON : format et validation, géométrie dérivée (murs, 
 ## 3 — Plugins
 
 <!-- section:3_plugins:begin (généré par scripts/wiki-index.mjs depuis 3_plugins/README.md - ne pas éditer ici) -->
-Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (30 pages, dernière mise à jour 2026-11-09).
+Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (30 pages, dernière mise à jour 2026-11-10).
 
 | Socle | Dernière mise à jour |
 |---|---|
 | [3_0 Simulation (mock-sim et plugin mock)](3_plugins/3_0_simulation-mock.md) | 2026-10-31 |
-| [3_2 Écrire un plugin](3_plugins/3_2_ecrire-un-plugin.md) | 2026-11-09 |
+| [3_2 Écrire un plugin](3_plugins/3_2_ecrire-un-plugin.md) | 2026-11-10 |
 | [3_3 Fabricants à venir](3_plugins/3_3_fabricants-a-venir.md) | 2026-10-06 |
 
 | Intégrations | Dernière mise à jour |
@@ -76,7 +76,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_7 Enphase](3_plugins/3_7_enphase.md) | 2026-10-31 |
 | [3_8 Tesla (Fleet API)](3_plugins/3_8_tesla.md) | 2026-10-31 |
 | [3_9 Renault (Gigya + Kamereon)](3_plugins/3_9_renault.md) | 2026-10-31 |
-| [3_10 Open-Meteo](3_plugins/3_10_open-meteo.md) | 2026-10-09 |
+| [3_10 Open-Meteo](3_plugins/3_10_open-meteo.md) | 2026-11-10 |
 | [3_11 Husqvarna Automower](3_plugins/3_11_husqvarna-automower.md) | 2026-10-14 |
 | [3_12 COMAP Proteo 2](3_plugins/3_12_comap-proteo.md) | 2026-10-06 |
 | [3_13 Mitsubishi MELCloud](3_plugins/3_13_mitsubishi-melcloud.md) | 2026-11-04 |

@@ -201,12 +201,12 @@ describe('away from the house (Weather view)', () => {
     await plugin.stop()
   })
 
-  it('plugin mounted but never started: a plain 409 DEVICE_UNAVAILABLE, not a 500', async () => {
+  it('plugin mounted but never started: a plain 503 DEVICE_UNAVAILABLE, not a 500', async () => {
     const a = Fastify()
     createOpenMeteoPlugin({ fetchImpl: fakeService().fetchImpl }).registerRoutes?.(a)
     for (const url of ['/places?q=Pornic', '/at?lat=47.11&lon=-2.1', '/alerts?lat=47.11&lon=-2.1']) {
       const res = await a.inject({ method: 'GET', url })
-      expect(res.statusCode, url).toBe(409)
+      expect(res.statusCode, url).toBe(503)
       expect(res.json().error, url).toMatchObject({ code: 'DEVICE_UNAVAILABLE', message: 'open_meteo plugin is not started' })
     }
   })

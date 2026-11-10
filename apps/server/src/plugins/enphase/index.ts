@@ -947,7 +947,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
        *    The password is FORGOTTEN — never logged, written or sent back.
        */
       app.post('/token', async (req, reply) => {
-        if (!client || !ctx) return sendError(reply, 409, 'NEEDS_PAIRING', 'plugin not started')
+        if (!client || !ctx) return sendError(reply, 503, 'DEVICE_UNAVAILABLE', 'enphase plugin is not started')
         const parsed = pairingSchema.safeParse(req.body)
         if (!parsed.success) {
           return sendError(reply, 400, 'INVALID_BODY', 'send either { token } or { user, password }')
@@ -1025,7 +1025,7 @@ export function createEnphasePlugin(deps: EnphasePluginDeps = {}): DevicePlugin 
        * measured here.
        */
       app.post('/history/sync', async (req, reply) => {
-        if (!days || !ctx) return sendError(reply, 409, 'NEEDS_PAIRING', 'plugin not started')
+        if (!days || !ctx) return sendError(reply, 503, 'DEVICE_UNAVAILABLE', 'enphase plugin is not started')
         // `force`: every day again ("Take everything again"); otherwise only the incomplete days
         const force = z.object({ force: z.boolean().default(false) }).catch({ force: false }).parse(req.body ?? {}).force
         try { await syncHistory(force) }

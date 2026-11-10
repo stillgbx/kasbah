@@ -1,6 +1,6 @@
 # Serveur MCP (`/mcp`)
 
-> Dernière mise à jour : 2026-11-08
+> Dernière mise à jour : 2026-11-10
 > Sources : `apps/server/src/mcp/server.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/http/session.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/web/src/components/settings/McpUsersCard.vue`, `apps/server/src/mcp/auth.test.ts`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{ytmusic,mixcloud,radio}/index.ts`, `apps/server/src/mcp/server.test.ts`, `apps/server/src/app.ts` (`registerMcp`), `apps/server/package.json`, `README.md` (section « Serveur MCP »), arbre de travail du 2026-09-23 (après c9abf58), `apps/server/src/assistant/assistant.ts` ; arbre de travail NON COMMITÉ du 2026-10-09 (après 00397bc) : `apps/server/src/mcp/{server,server.test}.ts`, `README.md`, `packages/shared/src/shopping/shopping.ts` (2026-10-11)
 
 ## Ce que c'est
@@ -620,7 +620,11 @@ d'environ 4,2 Ko. Typecheck serveur et lint des fichiers touchés verts.
 `consumption` : l'outil rend alors une erreur) ; journal.
 
 **Défaut relevé, non corrigé** — *corrigé le 2026-10-09 : 409 `DEVICE_UNAVAILABLE` « open_meteo plugin is not started », message que `get_weather` rend à l'agent.* Les routes `/places`, `/at`, `/alerts` d'`open_meteo` répondent 500 quand le
-plugin est monté mais pas démarré : voir `../3_plugins/3_10_open-meteo.md`.
+plugin est monté mais pas démarré : voir `../3_plugins/3_10_open-meteo.md`. *Depuis le
+2026-11-10, l'hôte refuse toute route de plugin qui ne tourne pas : 503 `DEVICE_UNAVAILABLE`,
+« `<id>` plugin is not started », que chaque outil MCP appuyé sur une route de plugin rend à l'agent
+(`ytmusic`, `mixcloud`, `radio`, `toutemonannee`, `open_meteo`, `agenda`). Voir
+`1_2_serveur-et-plugins.md`.*
 
 Sources : `apps/server/src/mcp/{server,server.test}.ts`, `README.md` (table « Serveur MCP »).
 

@@ -6,6 +6,7 @@ import { PluginError, type DevicePlugin, type PluginContext, type PluginJournal,
 import { stateFile } from '../../core/paths'
 import { createPoller } from '../../core/poll'
 import type { FetchLike } from '../../core/sse'
+import { sendError } from '../../http/errors'
 import { AutomowerAuth } from './auth'
 import { AutomowerClient } from './client'
 import { actionBody, applyEvent, connectedOf, isTimeZone, parseMowers, toDescriptor, toJournal, toJournalEntry, toSiteMap, toStatePatch } from './mapping'
@@ -421,7 +422,7 @@ export function createAutomowerPlugin(deps: AutomowerPluginDeps = {}): DevicePlu
        * zero); the portal remains the only truth — like Tesla's console.
        */
       app.post('/usage', async (req, reply) => {
-        if (!ctx) return reply.code(409).send({ error: 'plugin not started' })
+        if (!ctx) return sendError(reply, 503, 'DEVICE_UNAVAILABLE', 'automower plugin is not started')
         const body = z.object({
           requests: z.number().int().min(0),
           resetAt: z.union([z.string().refine((v) => Number.isFinite(Date.parse(v)), 'ISO 8601'), z.number().int()]).optional(),

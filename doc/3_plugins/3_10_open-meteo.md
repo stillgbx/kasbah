@@ -1,6 +1,6 @@
 # Plugin Open-Meteo (météo au-dessus de la maison)
 
-> Dernière mise à jour : 2026-10-09
+> Dernière mise à jour : 2026-11-10
 > Sources : `apps/server/src/plugins/open_meteo/{index,client,mapping,types,vigilance}.ts`, `apps/server/src/plugins/open_meteo/__fixtures__/open-meteo.ts`, tests `mapping.test.ts` et `plugin.test.ts`, `apps/web/src/components/weather/WeatherPlaces.vue`, `apps/web/src/composables/useWeather.ts`, `apps/server/.env.example`, `_generated-ai-doc/plan-meteo.md` (plan de la session du 2026-09-16)
 
 ## Pourquoi Open-Meteo
@@ -207,3 +207,14 @@ que `get_weather` rendait tel quel à l'agent.
 Non couvert : après `stop()`, `ctx` reste posé : ce contrôle ne refuse pas les routes d'un plugin arrêté (pas le cas observé).
 
 Sources : `apps/server/src/plugins/open_meteo/{index,plugin.test}.ts`, `apps/server/src/plugins/comap/index.ts`.
+
+### Mise à jour 2026-11-10 — la garde passe dans l'hôte, 409 → 503
+
+La limite « après `stop()` » est levée : l'hôte refuse désormais les routes de tout plugin sans
+contexte, arrêté compris, avant même qu'elles atteignent le plugin (voir
+`../1_architecture/1_2_serveur-et-plugins.md`, « Mise à jour 2026-11-10 »). Le code passe de 409 à
+**503 `DEVICE_UNAVAILABLE`**, celui que `http/errors.ts` donne déjà à ce code d'erreur ; le message
+« open_meteo plugin is not started » ne change pas. La garde locale de `/places`, `/at` et
+`/alerts` reste, alignée sur 503, pour le test qui monte le plugin sans l'hôte.
+
+Sources : `apps/server/src/core/plugin-host.ts`, `apps/server/src/plugins/open_meteo/{index,plugin.test}.ts`.

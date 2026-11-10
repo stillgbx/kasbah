@@ -1,6 +1,6 @@
 # Serveur et hôte de plugins
 
-> Dernière mise à jour : 2026-11-04
+> Dernière mise à jour : 2026-11-10
 > Sources : `apps/server/src/{app,main}.ts`, `apps/server/src/core/*.ts`, `apps/server/src/plugins/index.ts`, `apps/server/src/core/scene-registry.ts`, `apps/server/src/core/{plugin,plugin-host,scene-seeder}.ts`, `packages/shared/src/house/schema.ts`, `apps/server/src/plugins/comap/{history,state}.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/core/playbackBridge.ts`, `apps/server/src/music/{player,sources}.ts`, `apps/server/src/core/automations/engine.ts`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/config/properties.ts`, `apps/server/src/main.ts`, `apps/server/src/config/catalog.ts`, `apps/server/src/plugins/shopping/index.ts` (2026-10-11)
 
 ## Assemblage (`app.ts`)
@@ -139,7 +139,8 @@ l'utilisateur : **tous les plugins sont disponibles**, on coche ceux qu'on veut 
   résolues et son `health`. `health()` ne demande plus son avis à un plugin qui ne tourne pas.
 - Les **routes propres aux plugins** (`/api/plugins/<id>/…`) sont enregistrées même pour un plugin
   éteint : Fastify n'accepte plus de route après `ready()`, et c'est justement par là qu'on appaire
-  un fabricant **avant** de l'allumer. `restart(id)` en revanche respecte l'activation : appairer un
+  un fabricant **avant** de l'allumer. *Plus vrai au 2026-11-10 : elles sont refusées tant que le
+  plugin ne tourne pas, voir « Mise à jour 2026-11-10 » plus bas.* `restart(id)` en revanche respecte l'activation : appairer un
   plugin décoché ne le démarre pas.
 - Les gardes de `execute` / `recallScene` / `updateScene` / `createScene` / `deleteScene` testent
   désormais `slot.ctx` (« is not running ») et non `slot.config` : une config valide ne veut plus
@@ -152,6 +153,39 @@ l'utilisateur : **tous les plugins sont disponibles**, on coche ceux qu'on veut 
   **disparaissent** : le seul réglage qu'il portait, `autoDynamicForNewScenes`, vit maintenant dans
   la maison, et `SceneSeeder` prend un `settingsOf` au lieu du store. La persistance hors
   `house.json` est donc à nouveau à zéro côté serveur.
+
+### Mise à jour 2026-11-10 — routes d'un plugin qui ne tourne pas : 503 dans l'hôte
+
+`registerRoutes` monte toujours les routes de tous les plugins, mais pose dans le sous-app de chacun
+un crochet `onRequest` : tant que `slot.ctx` est nul (jamais démarré, ou après `stop()`), toute
+route répond **503 `DEVICE_UNAVAILABLE`**, message « `<id>` plugin is not started », au format
+`ApiError` (`describeError` + `sendError`, donc une seule table de codes). Ce refus ne passe pas par
+le gestionnaire d'erreurs global, qui le consignerait comme « unhandled route error ». Il vient
+après les crochets de session de l'application (`onRequest` racine) : un visiteur sans droit reçoit
+toujours son refus d'accès d'abord.
+
+- **« Tourne » = a un contexte.** `startOne` pose `slot.ctx` avant `init()` et ne l'efface pas si
+  le démarrage échoue : un plugin coché en erreur (Hue sans clé, Tesla non lié) garde ses routes, et
+  c'est là qu'on l'appaire. Seul un `stopOne` (décocher, ou l'intervalle d'un `retryStart`) les ferme.
+- **Aucune exemption.** L'audit des 118 routes l'a montré : aucune ne servait à quelque chose plugin
+  jamais démarré, puisque `config`, `client` et `auth` naissent dans `init()`. `hue POST /pair` y
+  répondait 502 « host unknown », `tesla /auth/url` un 409 « set TESLA_CLIENT_ID first » trompeur. Et
+  les cartes d'appairage de Réglages ne s'affichent que plugin coché (`PluginSection.vue`,
+  `v-if="setupCard && plugin.enabled"`). L'appairage « avant d'allumer » décrit plus haut ne
+  correspondait donc plus au code.
+- Les appels du web qui peuvent partir plugin éteint (radio `/playing`, transcription `/status`,
+  melcloud `/system` et `/history`, school, météo) traitent déjà l'erreur. Le MCP rend le message
+  tel quel à l'agent.
+- Les gardes locales de `comap`, `open_meteo`, `automower`, `enphase` et `tesla` (409, parfois
+  `NEEDS_PAIRING` ou hors `ApiError`) sont alignées sur 503 `DEVICE_UNAVAILABLE` : elles ne servent plus
+  que dans les tests qui montent un plugin sans l'hôte. Les `ctx!` / `client!` des plugins restent :
+  les retirer est un chantier à part.
+- Tests : `core/plugin-host.test.ts` (jamais démarré → 503, démarré → servi, `apply()` qui l'éteint
+  → 503 de nouveau, démarrage raté → servi ; rouges sans le crochet) et `test/integration.test.ts`
+  (`claude /account` éteint → 503, puis allumé → `user: null`).
+
+Sources : `apps/server/src/core/plugin-host.ts`, `apps/server/src/core/plugin-host.test.ts`,
+`apps/server/test/integration.test.ts`, `apps/server/src/http/errors.ts`.
 
 ### Mise à jour 2026-09-15 — compression des réponses
 
