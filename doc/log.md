@@ -17,6 +17,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 
 **Index** : catalogues 6_faq (résumé élargi) et 5_setup (date) mis à jour, index.md régénéré.
 
+## [2026-11-10] update | Automatisations : le dernier passage survit au redémarrage
+
+**Déclencheur** : issue #1 (idée du jour), `lastRun` perdu à chaque redémarrage du serveur.
+
+**Pages modifiées** :
+- `1_architecture/1_8_automatisations.md` - section datée (3) : `.state/automation-runs.json`, relu au démarrage pour les règles présentes, réécrit à chaque passage et suppression ; renvois posés sur « Statut » et sur la limite « ne survivent pas à un redémarrage »
+
+**Index** : catalogue inchangé (date déjà au 2026-11-10).
+
 ## [2026-11-10] update | Déclencheur « Sonnette » et notification native de la sonnette
 
 **Déclencheur** : brief de session « déclencheur d'automatisation événement (sonnette) », plus la remarque de l'utilisateur qu'aucune notification n'arrive aujourd'hui quand on sonne ; il a choisi une notification native côté serveur (pas dans le plugin Nest), dans le même lot.

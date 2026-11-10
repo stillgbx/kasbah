@@ -1,7 +1,7 @@
 # Automatisations (règles « Quand / Sauf si / Alors »)
 
 > Dernière mise à jour : 2026-11-10
-> Sources : `packages/shared/src/automations/{predicate,automation,fields}.ts`, `packages/shared/src/house/{sun,geo}.ts`, `packages/shared/src/devices/activity.ts`, `apps/server/src/core/automations/{engine,schedule,evaluate,context,status,runner,store}.ts`, `apps/server/src/app.ts`, `apps/server/src/http/routes.ts`, `apps/server/src/ws/hub.ts`, `packages/mock-sim/src/behaviours/weather.ts`, `.gitignore`, tests listés en fin de page, arbre de travail NON COMMITÉ du 2026-09-23 (après 0f943a0)
+> Sources : `packages/shared/src/automations/{predicate,automation,fields}.ts`, `packages/shared/src/house/{sun,geo}.ts`, `packages/shared/src/devices/activity.ts`, `apps/server/src/core/automations/{engine,schedule,evaluate,context,status,runner,store,runs}.ts`, `apps/server/src/app.ts`, `apps/server/src/http/routes.ts`, `apps/server/src/ws/hub.ts`, `packages/mock-sim/src/behaviours/weather.ts`, `.gitignore`, tests listés en fin de page, arbre de travail NON COMMITÉ du 2026-09-23 (après 0f943a0)
 
 ## Ce que c'est, et pourquoi c'est le serveur qui s'en charge
 
@@ -115,7 +115,8 @@ appareil référencé ne répond pas), `missing[{ kind: device|field|scene|room|
 `unavailableDeviceIds`, `lastRun { at, by: time|state|manual, outcome, errors[{ action, deviceId?, code,
 message }] }`, `nextRunAt` (déclencheur horaire), `pendingSince` (attente `forMin` en cours). Le
 calcul structurel est dans `status.ts` ; `lastRun`, `nextRunAt` et `pendingSince` sont gardés en
-mémoire par le moteur (perdus au redémarrage).
+mémoire par le moteur (perdus au redémarrage). *(2026-11-10 : `lastRun` survit désormais au
+redémarrage, voir « Mise à jour 2026-11-10 (3) ».)*
 
 ### Graines de l'itération 2 (commentaires seulement, rien d'implémenté)
 
@@ -235,7 +236,7 @@ un serveur en UTC fermerait les volets une ou deux heures trop tôt ou trop tard
 - **`house.scenes[]` n'a toujours aucun exécuteur** : une automatisation rappelle des ambiances de
   fabricant (`recallScene`), pas les scènes de la maison. *(Clos le 2026-10-06 : le champ est retiré
   du format, voir `../2_maison/2_0_format-house-json.md`.)*
-- `lastRun`, `nextRunAt` et `pendingSince` ne survivent pas à un redémarrage.
+- `nextRunAt` et `pendingSince` ne survivent pas à un redémarrage (`lastRun` si, depuis le 2026-11-10).
 
 ## API et interface
 
@@ -572,3 +573,24 @@ une **action d'automatisation**, pas de bouton sur la carte d'une lampe (« Exé
 - **Tests** : `engine.test.ts` (suite allumé / éteint puis retour à l'état d'avant, couleur et
   luminosité selon les capacités, refus d'un volet, état gardé et fin reculée quand ça resonne),
   `automations.test.ts` (défauts, couleur inconnue, bornes de durée), `apps/web/src/lib/automations.test.ts`.
+
+### Mise à jour 2026-11-10 (3) — le dernier passage survit au redémarrage
+
+Une règle en échec `partial` la veille au soir ne doit pas perdre son échec parce que le serveur a été
+mis à jour, a planté ou a perdu le courant : c'est l'information qu'on vient chercher dans la vue.
+
+- **Fichier** : `.state/automation-runs.json`, `{ runs: { [automationId]: AutomationRun } }`, un seul
+  passage par règle comme en mémoire (`runs.ts`, `createRunsFile`, `writeFileAtomic`), même patron que
+  `automation-reverts.json`. État serveur : un fichier illisible est ignoré avec un avertissement
+  (`automation runs unreadable, ignored`), il ne bloque pas le démarrage.
+- **Moteur** (`engine.ts`) : `start()` relit le fichier après les automatisations et ne garde que les ids
+  encore présents ; `record()` (tout passage, `skipped` compris) et `remove()` réécrivent le fichier
+  (`saveRuns()`, sans attendre, échec journalisé `automation runs not saved`). Dépendance `runs?`
+  facultative : absente = mémoire seule.
+- **Restent en mémoire** : `nextRunAt` (recalculé au démarrage par `arm()`), `pendingSince` (une attente
+  `forMin` repart volontairement de zéro, l'évaluation passant par « inconnu ») et le délai
+  `cooldownMin` des déclencheurs `event`.
+- Aucun changement de protocole ni d'interface.
+- **Tests** : `engine.test.ts` (« last run on disk » : passage manuel écrit, passage relu affiché sans
+  rien exécuter, id inconnu écarté, `remove` réécrit, fichier illisible toléré), `runs.test.ts`
+  (fichier absent, aller-retour, fichier invalide refusé).
