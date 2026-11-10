@@ -560,6 +560,13 @@ une **action d'automatisation**, pas de bouton sur la carte d'une lampe (« Exé
 - **Éditeur** (`ActionEditor.vue`) : la carte reprend le choix des cibles des commandes (appareils
   choisis ou sélection, toujours des lumières), puis Couleur, Vitesse, Durée (ramenée dans ses bornes)
   et une ligne d'aide. Phrase : « Faire clignoter · <cible> · bleu · 15 s · rapide ».
+- **« Essayer »** (demande de l'utilisateur, pour juger la vitesse sur les vraies lampes plutôt que
+  sur un indicateur dessiné, qui ne montrerait pas la latence Zigbee) : sous la vitesse, un bouton fait
+  clignoter tout de suite les lumières de la carte, avec sa couleur et sa vitesse, **5 s au plus**
+  (`FLASH_TEST_MAX_S`), sans enregistrer : `POST /api/automations/flash-test` (corps = l'action,
+  `flashActionSchema` ; droit `automations` par le préfixe), `AutomationEngine.testFlash` passe par
+  le même `runActions` et ne note aucun run. Le bouton n'est pas dans l'en-tête de la carte : à
+  1024 px il y coupait le titre.
 - **Démo navigateur** : pas de clignotement en mode simulé (`NOT_IMPLEMENTED` dans le rapport, comme
   `notify`).
 - **Tests** : `engine.test.ts` (suite allumé / éteint puis retour à l'état d'avant, couleur et
