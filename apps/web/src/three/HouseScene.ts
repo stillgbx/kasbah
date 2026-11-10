@@ -2945,9 +2945,10 @@ export class HouseScene {
         if (fanId) marker.setCompanionFan(fanNext)
         touched = true
         // Only these three MOVE something that casts a shadow (a curtain, a car) or
-        // light one (a garden lamp). A sensor that publishes its measurement every second
-        // must not restart a shadow capture.
-        if (next && (next.kind === 'cover' || next.kind === 'vehicle' || next.kind === 'light')) this.invalidateShadows()
+        // light one (a GARDEN lamp: an indoor one casts none). A sensor that publishes its
+        // measurement every second, a living room lamp being dimmed, must not restart a shadow capture.
+        const shadowing = next && (next.kind === 'cover' || next.kind === 'vehicle' || (next.kind === 'light' && marker.object.parent === this.nodes?.outdoorMarkers))
+        if (shadowing) this.invalidateShadows()
       }
     }
     if (touched) this.syncWindowGlow()

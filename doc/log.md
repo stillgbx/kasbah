@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-10] update | Scène 3D : lampes sautées avant calcul, lampes de jardin tenues dehors
+
+**Déclencheur** : audit de la partie 3D demandé par l'utilisateur (optimisations, corrections, changement d'approche éventuel) ; trois correctifs retenus et appliqués.
+
+**Pages modifiées** :
+- `1_architecture/1_11_scene-3d-rendu.md` - section datée : coût d'une lampe même éteinte (0,15 ms GPU, mesures avant/après), ombres de `PointLight` absentes en VSM sous three r187 et confinement par `userData.indoor`, capture d'ombres réservée aux lampes de jardin, pistes non prises (PCF, `antialias`, AO demi-résolution), piège de banc ; renvoi « dépassé » posé sur la section « nonies » du 2026-09-15
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-11-09] update | iOS : « Demander » s'installe comme une app à part
 
 **Déclencheur** : question de l'utilisateur, iOS n'offre pas le raccourci « Demander » de l'app installée (appui long sur Android) ; le serveur sert `/ask` avec son propre manifest pour qu'on l'ajoute à l'écran d'accueil.

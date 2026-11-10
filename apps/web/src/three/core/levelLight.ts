@@ -16,10 +16,17 @@ import { applyRoomFocus } from './roomFocus'
 // program of EVERY material at every pass: 14 ms of CPU per frame on the real house, measured
 // on 2026-09-24 (see `doc/1_architecture/1_5_scene-3d.md`).
 //
-// GARDEN lamps are not tested: they cast a shadow (`castShadow`), and it is the shadow
-// that stops them at the wall. Three sorts shadow-casting lights AT THE HEAD of the list
-// (`shadowCastingAndTexturingLightsFirst`), hence the test `UNROLLED_LOOP_INDEX >= NUM_POINT_LIGHT_SHADOWS`.
-// A garden lamp that is off casts no shadow: it falls into the test, but it lights nothing.
+// The test comes BEFORE the lamp's computation, and the pixel's slice is found once, not per lamp:
+// a lamp that is off or on another level costs one comparison. Tested after, each lamp cost
+// 0.15 ms of GPU per frame even switched off — 40 lamps, +6 ms (integrated Radeon, 2026-11-10).
+//
+// GARDEN lamps are not tested by height: they are marked by `castShadow`, which three sorts AT THE
+// HEAD of the list (`shadowCastingAndTexturingLightsFirst`), hence `UNROLLED_LOOP_INDEX >=
+// NUM_POINT_LIGHT_SHADOWS`. Their shadow was meant to stop them at the wall, but three does not
+// draw a `PointLight` shadow under `VSMShadowMap` (r187): they are kept out of the INDOOR
+// materials (`userData.indoor`: floors, partitions, room finishes) instead. What remains: the
+// inner face of a facade without finish shares the facade's material, and takes them if it faces them.
+// A garden lamp that is off casts no shadow: it falls into the height test, but it lights nothing.
 //
 // A material marked `userData.noLamps` (the terrain, the zones, the roof, the water) receives no
 // indoor lamp: the garden ground is at the height of the ground floor, a living room lamp would
@@ -54,28 +61,36 @@ int kasbahBand( float y ) {
 float kasbahWorldY( vec3 p ) { return dot( viewMatrix[ 1 ].xyz, p - viewMatrix[ 3 ].xyz ); }
 // The top of a slab sits EXACTLY on the bound: the pixel is raised by 5 mm to fall
 // into the level the slab carries, its underside staying in the level below (it is its ceiling).
-bool kasbahLampReaches( vec3 lightPos, vec3 fragPos ) {
-  if ( kasbahLamps < 0.5 ) return false;
-  return kasbahBand( kasbahWorldY( lightPos ) ) == kasbahBand( kasbahWorldY( fragPos ) + 0.005 );
+int kasbahPixelBand( vec3 fragPos ) { return kasbahBand( kasbahWorldY( fragPos ) + 0.005 ); }
+// lampColor already carries the intensity: black, the lamp is off (or stands in for a hidden one).
+bool kasbahLampReaches( vec3 lampColor, vec3 lampPos, int pixelBand ) {
+  if ( kasbahLamps < 0.5 || lampColor.r + lampColor.g + lampColor.b <= 0.0 ) return false;
+  return kasbahBand( kasbahWorldY( lampPos ) ) == pixelBand;
 }
 `
 
+const POINT_DECL = 'PointLight pointLight;'
 const POINT_INFO = 'getPointLightInfo( pointLight, geometryPosition, directLight );'
 const POINT_DIRECT = 'RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );'
 
-/** The point-light loop, tested: a masked or switched-off lamp computes nothing. */
+/** The point-light loop, tested FIRST: a masked or switched-off lamp computes nothing. */
 const LIGHTS_BEGIN = (() => {
   const src = ShaderChunk.lights_fragment_begin
   const start = src.indexOf('#if ( NUM_POINT_LIGHTS > 0 )')
   const end = src.indexOf('#pragma unroll_loop_end', start)
   const block = src.slice(start, end)
-  if (start < 0 || !block.includes(POINT_INFO) || !block.includes(POINT_DIRECT)) throw new Error('levelLight: lights_fragment_begin changed')
+  if (start < 0 || !block.includes(POINT_DECL) || !block.includes(POINT_INFO) || !block.includes(POINT_DIRECT)) throw new Error('levelLight: lights_fragment_begin changed')
   const patched = block
-    .replace(POINT_INFO, `${POINT_INFO}
-		#if ( UNROLLED_LOOP_INDEX >= NUM_POINT_LIGHT_SHADOWS )
-		directLight.visible = directLight.visible && kasbahLampReaches( pointLight.position, geometryPosition );
-		#endif`)
-    .replace(POINT_DIRECT, `if ( directLight.visible ) ${POINT_DIRECT}`)
+    .replace(POINT_DECL, `${POINT_DECL}
+	int kasbahPixel = kasbahPixelBand( geometryPosition );`)
+    .replace(POINT_INFO, `#if ( UNROLLED_LOOP_INDEX >= NUM_POINT_LIGHT_SHADOWS )
+		if ( kasbahLampReaches( pointLight.color, pointLight.position, kasbahPixel ) ) {
+		#else
+		if ( kasbahLamps < 1.5 ) {
+		#endif
+		${POINT_INFO}`)
+    .replace(POINT_DIRECT, `if ( directLight.visible ) ${POINT_DIRECT}
+		}`)
   return src.slice(0, start) + patched + src.slice(end)
 })()
 
@@ -84,7 +99,8 @@ export function applyLevelLight(shader: WebGLProgramParametersWithUniforms, mate
   if (!shader.fragmentShader.includes('#include <lights_fragment_begin>')) return
   shader.uniforms.kasbahLevelY = levelLightUniforms.kasbahLevelY
   shader.uniforms.kasbahLevelCount = levelLightUniforms.kasbahLevelCount
-  shader.uniforms.kasbahLamps = { value: material.userData.noLamps ? 0 : 1 }
+  // 0 = outdoors (no indoor lamp), 2 = indoors (no garden lamp), 1 = both
+  shader.uniforms.kasbahLamps = { value: material.userData.noLamps ? 0 : material.userData.indoor ? 2 : 1 }
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <lights_pars_begin>', `#include <lights_pars_begin>\n${PARS}`)
     .replace('#include <lights_fragment_begin>', LIGHTS_BEGIN)

@@ -1,6 +1,6 @@
 # Scène 3D : rendu
 
-> Dernière mise à jour : 2026-11-08
+> Dernière mise à jour : 2026-11-10
 > Sources : sections reprises telles quelles de `1_5_scene-3d.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre le rendu de la scène : styles et thèmes, lumière du jour et de la nuit, ombres, météo (nuages, pluie, neige, brume), eau de la piscine, matières photo, chaîne d'image et étalonnage, tilt-shift, banc de réglage, performance GPU (passes, MSAA, shaders précompilés, voile de mesure). Elle est née du découpage de
@@ -428,6 +428,10 @@ Sources : `apps/web/src/three/core/layers.ts`, `apps/web/src/three/HouseScene.ts
 `apps/web/src/three/markers/{DeviceMarker,markers}.ts`.
 
 ### Mise à jour 2026-09-15 (nonies) — une lampe de jardin éclaire la façade, et s'arrête au mur
+
+> **Dépassé le 2026-11-10** : three r187 ne dessine plus l'ombre d'une `PointLight` en `VSMShadowMap`,
+> donc plus rien n'arrêtait la lampe au mur. Elle est tenue hors des matières d'intérieur par le shader —
+> voir « Mise à jour 2026-11-10 — les lampes : sautées avant calcul, et le jardin tenu dehors » en fin de page.
 
 **Lève le compromis** posé une heure plus tôt (« octies » ci-dessus : le jardin avait sa passe, donc
 ses lampes n'éclairaient plus que le jardin). Arbitrage de l'utilisateur : « les lampes extérieures
@@ -2514,3 +2518,89 @@ chargement, et rien ne garde ce travail d'une page à l'autre (en WebGL, Chrome 
 compilés sur disque). Le voile y reste donc plus long qu'en WebGL au cache chaud.
 
 Sources : `apps/web/src/three/HouseScene.ts` (`prepare`, `gpuInit`), `apps/web/src/three/three.test.ts`.
+
+### Mise à jour 2026-11-10 — les lampes : sautées avant calcul, et le jardin tenu dehors
+
+Audit de la scène demandé par l'utilisateur (« voir s'il y a des optimisations ou des corrections à
+appliquer »). Trois défauts corrigés, tous dans le moteur WebGL ; le moteur WebGPU n'est pas modifié.
+
+#### Une lampe éteinte coûtait autant qu'une lampe masquée
+
+Le masque par niveau (`core/levelLight.ts`, section du 2026-09-25) testait la lampe **après**
+`getPointLightInfo` : distance, direction et atténuation étaient calculées pour chaque lampe et chaque
+pixel, même éteinte, même remplaçante (`padLamps`), et la tranche du pixel était recherchée une fois
+par lampe (deux boucles de huit comparaisons). Le moteur WebGPU avait déjà reçu ce correctif le
+2026-11-04 (« les lampes masquées ou éteintes sautées ») ; WebGL, non.
+
+Mesuré sur la Radeon intégrée, maison de démo, qualité medium, 1904 × 905, image entière, en A/B/A/B,
+en ajoutant des `PointLight` éteintes à la scène :
+
+| Lampes dans la scène | Avant | Après |
+|---|---|---|
+| 10 | 9,6 à 10,9 ms | 7,3 ms |
+| 50 | 15,6 à 17,2 ms | 8,6 ms |
+
+Soit environ **0,15 ms de GPU par lampe et par image** avant, quel que soit son état. Les deux colonnes
+viennent de deux séances de banc : c'est l'écart entre 10 et 50 lampes qui se compare (≈ 6 ms → 1,3 ms).
+
+Le test ouvre maintenant le bloc de la lampe, et la tranche du pixel (`kasbahPixelBand`) est calculée
+une fois, avant la boucle. Une lampe est « éteinte » quand sa couleur est noire : three y a déjà
+multiplié l'intensité. Image inchangée : un prototype de la même logique, injecté dans la page, différait
+du shader d'avant de 0,11/255 en moyenne, contre 0,09 entre deux rendus du même shader.
+
+#### Les lampes de jardin n'avaient plus d'ombre
+
+La section « nonies » du 2026-09-15 fait porter à une lampe de jardin une ombre cubique qui l'arrête
+au mur. **three r187 ne la dessine pas en `VSMShadowMap`** : `WebGLShadowMap` écrit « VSM shadow maps
+are not supported for PointLights » et passe, et `lights_fragment_begin` ne lit l'ombre d'une lampe
+ponctuelle qu'en PCF ou en Basic. La lampe reste triée en tête (`castShadow`), donc exemptée du masque
+par niveau : elle éclairait sols et cloisons à travers la façade, sur tous les niveaux. Rien ne le
+signalait hors la console.
+
+Retenu : les matières d'**intérieur** portent `userData.indoor` (`builders/materials.ts` : cloisons,
+sols, et les revêtements de sol et de mur d'une pièce) et le shader leur refuse les lampes à ombre.
+L'uniforme `kasbahLamps` prend trois valeurs : 0 dehors (aucune lampe d'intérieur), 2 dedans (aucune
+lampe de jardin), 1 les deux (façade, appareils). Contrôle positif, une lampe de jardin posée au milieu
+d'une pièce, de nuit : 85 000 pixels éclairés avec le confinement, 330 000 de plus en le levant.
+
+Ce qui reste, à savoir :
+
+- la **face intérieure d'une façade sans revêtement** partage la matière de la façade (`mats.wall`) :
+  elle reçoit encore une lampe de jardin qui lui fait face, comme les petits objets de la pièce ;
+- l'avertissement de three reste dans la console quand une lampe de jardin est allumée : `castShadow`
+  n'a pas été touché, le moteur WebGPU le lit ;
+- le moteur WebGPU ne lit pas `userData.indoor`.
+
+**Piste non prise** : passer le soleil en `PCFShadowMap`. Les ombres ponctuelles reviendraient, et la
+capture n'aurait plus son double flou VSM ; mais le bord des ombres du soleil change, c'est une
+décision d'image à prendre sur captures.
+
+#### Une lampe d'intérieur ne relance plus la capture d'ombres
+
+`updateStates` ouvrait la fenêtre de capture (`invalidateShadows`) à tout changement d'état d'une
+lampe. Seule une lampe de jardin éclaire quelque chose qui porte une ombre : un curseur de luminosité
+du salon redessinait tout le bâti depuis le soleil pendant 700 ms à chaque pas (image ≈ 10 → 13 à
+15 ms, triangles doublés, même banc). Le test regarde maintenant si le marqueur est dans le jardin.
+
+#### Pistes relevées, non mesurées
+
+- `antialias: true` sur le canevas ne sert qu'en qualité basse : en medium et high, la scène est
+  lissée dans la cible de `ScenePass` et seul un carré plein écran va au canevas.
+- L'occlusion ambiante de la qualité haute, en demi-résolution.
+
+#### Piège de banc
+
+Pour comparer deux captures, **geler ce qui nourrit la scène** : la simulation repousse des états,
+réimpose la météo, et reconstruit les marqueurs dès qu'un véhicule bouge — les marqueurs tenus par la
+sonde sont alors morts, et deux rendus du même état diffèrent de dizaines de milliers de pixels.
+Neutraliser `updateStates`, `setDescriptors`, `updateDevices`, `load` et `setAppearance` sur l'instance
+(en gardant l'original pour la sonde) ramène ce bruit à zéro.
+
+Tests (`three.test.ts`) : la lampe est sautée avant tout calcul, les matières d'intérieur valent 2 et la
+façade 1, une lampe d'intérieur ne demande pas de capture d'ombres. Parité des deux moteurs rejouée
+(`scripts/bench-3d/parity.mjs`) : 0,5 à 3 sur toutes les vues, hors les deux premières prises sous le
+voile de chargement.
+
+Sources : `apps/web/src/three/core/levelLight.ts`, `apps/web/src/three/builders/materials.ts`,
+`apps/web/src/three/HouseScene.ts` (`updateStates`), `apps/web/src/three/three.test.ts`,
+`node_modules/three/src/renderers/webgl/WebGLShadowMap.js`.

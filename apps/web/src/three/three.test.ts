@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import './textures/prebake' // bakes the materials at import, outside the first test's timeout
 import { BackSide, Box3, BoxGeometry, type OrthographicCamera, type PerspectiveCamera, type BufferGeometry, CylinderGeometry, type Material, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshStandardMaterial, type Object3D, type ShaderMaterial, ShaderLib, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
-import { computeHouseGeometry, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type OpeningRect, type PlacedHouseDevice } from '@kasbah/shared'
+import { computeHouseGeometry, FINISHES, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type Finish, type OpeningRect, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import tilleuls from '../../../../house/demos/tilleuls.json'
 import { buildHouse, buildLevel, buildRoofMesh, countTriangles } from './builders/buildHouse'
 import { buildDetails, buildRoofDetails, isGlazed } from './builders/details'
 import { alignedToLongestEdge, extrudePolygon } from './builders/shapes'
 import { createSurfaceTextures, type SurfaceTexture } from './textures/procedural'
-import { createMaterials } from './builders/materials'
+import { createMaterials, finishMaterial } from './builders/materials'
 import { fitBox, fitDistance, ISO_FOV_DEG, ISO_POLAR, ORTHO_BASE_M, snapIsoAzimuth, sphericalOf, visibleHeight } from './core/cameraFit'
 import { boundsToWorldBox, houseToWorld } from './core/coords'
 import { createRenderLoop } from './core/renderLoop'
@@ -1546,19 +1546,54 @@ describe('a lamp only lights its level (a single pass)', () => {
    */
   it('every lit material receives the height mask, not an unlit material', () => {
     const lit = compile(new MeshStandardMaterial())
-    expect(lit.fragmentShader).toContain('kasbahLampReaches( pointLight.position, geometryPosition )')
-    expect(lit.fragmentShader).toContain('UNROLLED_LOOP_INDEX >= NUM_POINT_LIGHT_SHADOWS')   // the garden passes
-    expect(lit.fragmentShader).toContain('if ( directLight.visible ) RE_Direct')              // masked: nothing to compute
+    const f = lit.fragmentShader
+    expect(f).toContain('if ( kasbahLampReaches( pointLight.color, pointLight.position, kasbahPixel ) ) {')
+    expect(f).toContain('UNROLLED_LOOP_INDEX >= NUM_POINT_LIGHT_SHADOWS')                     // the garden passes
     expect(lit.uniforms.kasbahLevelY).toBe(levelLightUniforms.kasbahLevelY)                   // shared, not copied
     expect(lit.uniforms.kasbahLamps!.value).toBe(1)
     const basic = compile(new MeshBasicMaterial())
     expect(basic.fragmentShader).not.toContain('kasbah')
   })
 
+  /**
+   * Tested AFTER `getPointLightInfo`, a lamp cost its distance and its attenuation even switched off,
+   * and the pixel's slice was searched once per lamp: 0.15 ms of GPU per lamp and per frame on the
+   * iGPU (2026-11-10). The test opens the block, the pixel's slice is found before the loop.
+   */
+  it('a lamp that is off or on another level is skipped before any computation', () => {
+    const f = compile(new MeshStandardMaterial()).fragmentShader
+    const pixel = f.indexOf('int kasbahPixel = kasbahPixelBand( geometryPosition );')
+    const loop = f.indexOf('#pragma unroll_loop_start', pixel)
+    const test = f.indexOf('if ( kasbahLampReaches(', loop)
+    const info = f.indexOf('getPointLightInfo( pointLight, geometryPosition, directLight );', loop)
+    const direct = f.indexOf('if ( directLight.visible ) RE_Direct', loop)
+    expect(pixel).toBeGreaterThan(-1)
+    expect(loop).toBeGreaterThan(pixel)                       // once per pixel, not once per lamp
+    expect(test).toBeGreaterThan(loop)
+    expect(info).toBeGreaterThan(test)                        // the lamp's computation is INSIDE the test
+    expect(direct).toBeGreaterThan(info)
+    expect(f.slice(direct, f.indexOf('#pragma unroll_loop_end', direct))).toMatch(/;\s*}\s*}\s*$/)   // the test's block, then the loop's
+    expect(f).toContain('lampColor.r + lampColor.g + lampColor.b <= 0.0')                            // off: black
+  })
+
   it('the terrain, the zones, the roof and the water receive no indoor lamp; the walls do', () => {
     const mats = createMaterials(defaultSceneTheme(), defaultLook())
     for (const m of [mats.terrain, mats.roof, mats.roofFlat, ...Object.values(mats.zones)]) expect(compile(m).uniforms.kasbahLamps!.value).toBe(0)
-    for (const m of [mats.wall, mats.wallInterior, mats.floor, mats.device]) expect(compile(m).uniforms.kasbahLamps!.value).toBe(1)
+    for (const m of [mats.wall, mats.device]) expect(compile(m).uniforms.kasbahLamps!.value).toBe(1)
+  })
+
+  /**
+   * Three draws no `PointLight` shadow under `VSMShadowMap` (r187): nothing stopped a garden lamp
+   * at the wall anymore. The indoor materials refuse it in the shader instead.
+   */
+  it('floors, partitions and room finishes receive no garden lamp; the facade does', () => {
+    const mats = createMaterials(defaultSceneTheme(), defaultLook())
+    const finish = { id: Object.keys(FINISHES)[0] } as Finish
+    const indoor = [mats.wallInterior, mats.floor, ...Object.values(mats.floors), mats.floor.clone(), finishMaterial(mats, 'floor', finish), finishMaterial(mats, 'wall', finish)]
+    for (const m of indoor) expect(compile(m).uniforms.kasbahLamps!.value).toBe(2)
+    for (const m of [mats.wall, finishMaterial(mats, 'facade', finish)]) expect(compile(m).uniforms.kasbahLamps!.value).toBe(1)
+    const f = compile(mats.floor).fragmentShader
+    expect(f).toMatch(/#else\s*if \( kasbahLamps < 1\.5 \) {\s*#endif/)                              // the shadow slots: the garden lamps
   })
 
   it('the slices are the levels\' elevations, without the lowest', () => {
@@ -1588,6 +1623,33 @@ describe('a lamp only lights its level (a single pass)', () => {
     t += 60_000
     expect(dirty()).toBeLessThan(t)
     expect((scene as unknown as { shadowFramesPending: number }).shadowFramesPending).toBeGreaterThan(0)
+    scene.dispose()
+  })
+
+  /**
+   * A lamp state requested a recapture whatever the lamp: dimming a living room lamp redrew the whole
+   * structure from the sun for 700 ms at each step (frame 10 → 13-15 ms on the iGPU, 2026-11-10).
+   * Only a GARDEN lamp lights something that casts a shadow.
+   */
+  it('an indoor lamp that changes requests no shadow recapture; a garden lamp and a cover do', () => {
+    let t = 1000
+    const scene = new HouseScene(document.createElement('canvas'), { headless: true, now: () => t })
+    scene.load(parseHouse(demo))
+    const s = scene as unknown as { shadowsDirtyUntil: number; nodes: { outdoorMarkers: object } }
+    const wired = [...scene.markers.values()].filter((m) => m.device.deviceId)
+    const indoor = wired.find((m) => m.object.parent !== s.nodes.outdoorMarkers)!.device.deviceId!
+    const outdoor = wired.find((m) => m.object.parent === s.nodes.outdoorMarkers)!.device.deviceId!
+    const lamp = (brightness: number) => ({ kind: 'light', updatedAt: 0, available: true, on: true, brightness } as DeviceState)
+    const settle = () => { t += 1_000_000; return t }
+    scene.updateStates({ [indoor]: lamp(80) })
+    expect(s.shadowsDirtyUntil).toBeLessThan(settle())
+    scene.updateStates({ [indoor]: lamp(40) })
+    expect(s.shadowsDirtyUntil).toBeLessThan(t)
+    scene.updateStates({ [indoor]: lamp(40), [outdoor]: lamp(80) })
+    expect(s.shadowsDirtyUntil).toBeGreaterThan(t)
+    settle()
+    scene.updateStates({ [indoor]: { kind: 'cover', updatedAt: 0, available: true, motion: 'stopped', position: 40 } as DeviceState, [outdoor]: lamp(80) })
+    expect(s.shadowsDirtyUntil).toBeGreaterThan(t)
     scene.dispose()
   })
 
