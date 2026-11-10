@@ -1067,6 +1067,7 @@
       "wholeHouse": "whole house",
       "exceptRooms": "(except rooms with {what} on)",
       "notify": "notify “{message}”",
+      "flash": "Flash",
       "scene": "scene {name}"
     },
     "predicate": {
@@ -1139,7 +1140,8 @@
       "speed": "Speed"
     },
     "op": { "eq": "=", "ne": "≠", "gt": ">", "gte": "≥", "lt": "<", "lte": "≤" },
-    "action": { "command": "Control devices", "recallScene": "Recall a scene", "notify": "Send a notification" },
+    "flash": { "colors": { "red": "Red", "orange": "Orange", "yellow": "Yellow", "green": "Green", "blue": "Blue", "purple": "Purple", "white": "White" }, "speeds": { "slow": "Slow", "normal": "Normal", "fast": "Fast" } },
+    "action": { "command": "Control devices", "recallScene": "Recall a scene", "notify": "Send a notification", "flash": "Flash lights" },
     "target": { "devices": "Chosen devices", "selector": "Selection", "except": "Except rooms with…" },
     "command": {
       "light": { "on": "Turn on", "off": "Turn off", "brightness": "Turn on at {n} %" },
@@ -1224,6 +1226,8 @@
       "scene": "Scene",
       "noScene": "No scene",
       "message": "Message", "messagePlaceholder": "The gate is still open", "notifyHint": "Titled with the automation's name, sent to the devices subscribed to “Automations” (Settings → Notifications).",
+      "flashColor": "Color", "flashColorNone": "The light's own", "flashDuration": "Duration", "flashDurationRange": "s ({min} to {max})", "flashSpeed": "Speed",
+      "flashHint": "Full brightness then off, at the chosen pace, then put back as they were. A light without colors flashes in its own.",
       "recallMode": "Mode",
       "missing": {
         "name": "A name is missing.",

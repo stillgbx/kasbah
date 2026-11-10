@@ -676,7 +676,8 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       const errors: AutomationRun['errors'] = []
       for (const [i, action] of a.actions.entries()) {
         if (action.type !== 'command') {
-          errors.push({ action: i, code: 'NOT_IMPLEMENTED', message: action.type === 'notify' ? 'no push notifications in mock mode' : 'no vendor scenes in mock mode' })
+          const what = action.type === 'notify' ? 'no push notifications' : action.type === 'flash' ? 'no light flashing' : 'no vendor scenes'
+          errors.push({ action: i, code: 'NOT_IMPLEMENTED', message: `${what} in mock mode` })
           continue
         }
         const t = action.target

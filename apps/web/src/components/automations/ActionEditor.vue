@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { commandKind, COVER_CLASSES, inverseCommand, MEDIA_PLAYER_CLASSES, type DeviceKind, type SceneRecallMode, type Target } from '@kasbah/shared'
+import { commandKind, COVER_CLASSES, FLASH_COLORS, FLASH_DURATION_S, FLASH_SPEEDS, inverseCommand, MEDIA_PLAYER_CLASSES, type DeviceKind, type FlashSpeed, type SceneRecallMode, type Target } from '@kasbah/shared'
 import { useAutomationNames } from '../../composables/useAutomationNames'
 import { choiceOf, choicesFor, COMMANDABLE_KINDS, FADE_MAX_MS, kindLabel, paramOf, type ActionDraft, type CommandChoice } from '../../lib/automations'
 import { useDevicesStore } from '../../stores/devices'
@@ -12,7 +12,7 @@ import StrokeIcon from '../ui/StrokeIcon.vue'
 // of acting ("all the shutters on the ground floor") — a light added tomorrow joins it without
 // rewriting anything. The commands offered are those the targeted devices declare.
 // "For N min": at the end, the server sends the inverse command — offered only when it has one
-// (open ↔ close, turn on ↔ turn off…).
+// (open ↔ close, turn on ↔ turn off…). "Flash" targets lights the same way, without a command.
 const props = defineProps<{ modelValue: ActionDraft }>()
 const emit = defineEmits<{ 'update:modelValue': [value: ActionDraft]; remove: [] }>()
 const devices = useDevicesStore()
@@ -42,7 +42,7 @@ const kind = computed<DeviceKind>(() => {
   if (x.target.type === 'selector') return x.target.kind
   return choiceOf(x.command)?.kind ?? commandKind(x.command as never) as DeviceKind
 })
-const target = computed<Target | null>(() => (a.value.type === 'command' ? a.value.target : null))
+const target = computed<Target | null>(() => (a.value.type === 'command' || a.value.type === 'flash' ? a.value.target : null))
 const selected = computed(() => (target.value?.type === 'devices' ? target.value.deviceIds : []))
 
 /** Commands that ALL the named devices declare (a selection settles for the kind). */
@@ -51,6 +51,7 @@ const choices = computed<CommandChoice[]>(() => choicesFor(kind.value).filter((c
 const choice = computed(() => (a.value.type === 'command' ? choiceOf(a.value.command) : undefined))
 
 function setCommand(x: Partial<Extract<ActionDraft, { type: 'command' }>>) {
+  if (a.value.type === 'flash' && x.target) return emit('update:modelValue', { ...a.value, target: x.target })
   if (a.value.type !== 'command') return
   const next = { ...a.value, ...x }
   // switching from "turn on" to "brightness" keeps the chosen fade
@@ -155,6 +156,22 @@ function setExcept(v: string | null) {
 }
 const climateItems = computed(() => (choice.value?.param?.type === 'enum' ? choice.value.param.values.map((v) => ({ value: v, title: t(`climate.modes.${v}`) })) : []))
 
+// ── flash ────────────────────────────────────────────────────────────────────────────────────
+const flash = computed(() => (a.value.type === 'flash' ? a.value : null))
+function setFlash(patch: Record<string, unknown>) {
+  if (a.value.type !== 'flash') return
+  const next = { ...a.value, ...patch } as Record<string, unknown>
+  for (const [k, v] of Object.entries(patch)) if (v === undefined) delete next[k]
+  emit('update:modelValue', next as ActionDraft)
+}
+const flashColorItems = computed(() => [{ value: '', title: t('automations.editor.flashColorNone') }, ...FLASH_COLORS.map((c) => ({ value: c, title: t(`automations.flash.colors.${c}`) }))])
+const flashSpeedOptions = computed(() => FLASH_SPEEDS.map((s) => ({ value: s, label: t(`automations.flash.speeds.${s}`) })))
+const flashDuration = computed(() => flash.value?.durationS ?? FLASH_DURATION_S.default)
+function setFlashDuration(raw: string) {
+  const n = Number(raw.replace(',', '.'))
+  if (Number.isFinite(n)) setFlash({ durationS: Math.min(FLASH_DURATION_S.max, Math.max(FLASH_DURATION_S.min, Math.round(n))) })
+}
+
 // ── ambiance ─────────────────────────────────────────────────────────────────────────────────
 const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((m) => ({ value: m, label: t(`automations.recall.${m}`) })))
 </script>
@@ -168,8 +185,8 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
       </button>
     </div>
 
-    <template v-if="a.type === 'command' && target">
-      <v-select :model-value="kind" :items="kindItems" :label="$t('automations.editor.kind')" density="compact" variant="outlined" hide-details @update:model-value="setKind" />
+    <template v-if="(a.type === 'command' || a.type === 'flash') && target">
+      <v-select v-if="a.type === 'command'" :model-value="kind" :items="kindItems" :label="$t('automations.editor.kind')" density="compact" variant="outlined" hide-details @update:model-value="setKind" />
       <Segmented dense fill :model-value="target.type" :label="$t('automations.editor.target')"
                  :options="[{ value: 'devices', label: $t('automations.target.devices') }, { value: 'selector', label: $t('automations.target.selector') }]"
                  @update:model-value="setMode" />
@@ -205,6 +222,21 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
         </div>
       </template>
 
+      <template v-if="flash">
+        <v-select :model-value="flash.color ?? ''" :items="flashColorItems" :label="$t('automations.editor.flashColor')"
+                  density="compact" variant="outlined" hide-details @update:model-value="(v: string) => setFlash({ color: v || undefined })" />
+        <Segmented dense fill :model-value="flash.speed ?? 'normal'" :options="flashSpeedOptions" :label="$t('automations.editor.flashSpeed')"
+                   @update:model-value="(s: FlashSpeed) => setFlash({ speed: s })" />
+        <div class="act__for">
+          <span class="muted">{{ $t('automations.editor.flashDuration') }}</span>
+          <input class="act__input act__input--num" type="text" inputmode="numeric" enterkeyhint="done" :value="shown('flashDuration', flashDuration)"
+                 :aria-label="$t('automations.editor.flashDuration')" @input="onType('flashDuration', $event)" @change="commit($event, setFlashDuration, () => flashDuration)">
+          <span class="muted act__range">{{ $t('automations.editor.flashDurationRange', { min: FLASH_DURATION_S.min, max: FLASH_DURATION_S.max }) }}</span>
+        </div>
+        <div class="muted act__hint">{{ $t('automations.editor.flashHint') }}</div>
+      </template>
+
+      <template v-else-if="a.type === 'command'">
       <v-select :model-value="choice?.key ?? null" :items="choiceItems" :label="$t('automations.editor.command')" density="compact" variant="outlined" hide-details @update:model-value="pickChoice" />
       <!-- parameter: space always there, empty for a command that has none -->
       <div class="act__param">
@@ -237,6 +269,7 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
                :value="shown('forMin', forMin)" :aria-label="$t('automations.editor.forMin')" @input="onType('forMin', $event)" @change="commit($event, setForMinText, () => forMin)">
         <span class="muted act__range" :style="{ visibility: forMin ? 'visible' : 'hidden' }">{{ $t('automations.editor.forMinRange', { min: FOR_MIN, max: FOR_MAX }) }}</span>
       </div>
+      </template>
     </template>
 
     <template v-else-if="a.type === 'recallScene'">

@@ -1077,6 +1077,7 @@
       "wholeHouse": "toute la maison",
       "exceptRooms": "(sauf pièces avec {what} en marche)",
       "notify": "notifier « {message} »",
+      "flash": "Faire clignoter",
       "scene": "ambiance {name}"
     },
     "predicate": {
@@ -1149,7 +1150,8 @@
       "speed": "Vitesse"
     },
     "op": { "eq": "=", "ne": "≠", "gt": ">", "gte": "≥", "lt": "<", "lte": "≤" },
-    "action": { "command": "Commander des appareils", "recallScene": "Rappeler une ambiance", "notify": "Envoyer une notification" },
+    "flash": { "colors": { "red": "Rouge", "orange": "Orange", "yellow": "Jaune", "green": "Vert", "blue": "Bleu", "purple": "Violet", "white": "Blanc" }, "speeds": { "slow": "Lent", "normal": "Normal", "fast": "Rapide" } },
+    "action": { "command": "Commander des appareils", "recallScene": "Rappeler une ambiance", "notify": "Envoyer une notification", "flash": "Faire clignoter des lumières" },
     "target": { "devices": "Appareils choisis", "selector": "Sélection", "except": "Sauf pièces avec…" },
     "command": {
       "light": { "on": "Allumer", "off": "Éteindre", "brightness": "Allumer à {n} %" },
@@ -1234,6 +1236,8 @@
       "scene": "Ambiance",
       "noScene": "Aucune ambiance",
       "message": "Message", "messagePlaceholder": "Le portail est encore ouvert", "notifyHint": "Titrée du nom de l'automatisation, envoyée aux appareils abonnés à « Automatisations » (Réglages → Notifications).",
+      "flashColor": "Couleur", "flashColorNone": "Celle de la lampe", "flashDuration": "Durée", "flashDurationRange": "s ({min} à {max})", "flashSpeed": "Vitesse",
+      "flashHint": "Allumées à fond puis éteintes au rythme choisi, puis remises comme avant. Une lampe sans couleurs clignote dans la sienne.",
       "recallMode": "Mode",
       "missing": {
         "name": "Il manque un nom.",

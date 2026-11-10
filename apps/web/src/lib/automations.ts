@@ -1,5 +1,5 @@
 import {
-  automationBodySchema, CLIMATE_MODES, DEVICE_EVENT_KINDS, inverseCommand,
+  automationBodySchema, CLIMATE_MODES, DEVICE_EVENT_KINDS, FLASH_DURATION_S, inverseCommand,
   type AutomationBody, type AutomationHealth, type Capability, type CommandInput, type DeviceEventKind, type DeviceKind,
   type LeafPredicate, type Predicate, type SunEvent, type Target, type Trigger,
 } from '@kasbah/shared'
@@ -249,6 +249,12 @@ export function describeTarget(target: Target, names: NameContext, t: Translate)
 export function describeAction(a: ActionDraft, names: NameContext, t: Translate): string {
   if (a.type === 'recallScene') return t('automations.summary.scene', { name: names.sceneName(a.sceneId) })
   if (a.type === 'notify') return t('automations.summary.notify', { message: a.message.trim() })
+  if (a.type === 'flash') {
+    const parts = [t('automations.summary.flash'), describeTarget(a.target, names, t)]
+    if (a.color) parts.push(t(`automations.flash.colors.${a.color}`).toLowerCase())
+    parts.push(`${a.durationS ?? FLASH_DURATION_S.default} s`, t(`automations.flash.speeds.${a.speed ?? 'normal'}`).toLowerCase())
+    return parts.join(' · ')
+  }
   const key = choiceOf(a.command)?.key
   const verb = key ? t(`automations.command.${key}`, { n: paramOf(a.command) ?? '' }) : a.command.type
   const fade = a.command.type === 'light.set' && a.command.transitionMs ? ` · ${t('automations.summary.fade', { d: fadeLabel(a.command.transitionMs) })}` : ''
@@ -299,7 +305,7 @@ export function involvedDeviceIds(a: Pick<AutomationBody, 'trigger' | 'unless' |
   if (a.trigger.type === 'state') walk(a.trigger.when)
   else if (a.trigger.type === 'event') ids.add(a.trigger.deviceId)
   a.unless.forEach(walk)
-  for (const x of a.actions) if (x.type === 'command' && x.target.type === 'devices') x.target.deviceIds.forEach((id) => ids.add(id))
+  for (const x of a.actions) if ((x.type === 'command' || x.type === 'flash') && x.target.type === 'devices') x.target.deviceIds.forEach((id) => ids.add(id))
   return [...ids]
 }
 
@@ -312,7 +318,7 @@ export function involvedRoomIds(a: Pick<AutomationBody, 'trigger' | 'unless' | '
   }
   if (a.trigger.type === 'state') walk(a.trigger.when)
   a.unless.forEach(walk)
-  for (const x of a.actions) if (x.type === 'command' && x.target.type === 'selector') x.target.roomIds?.forEach((id) => ids.add(id))
+  for (const x of a.actions) if ((x.type === 'command' || x.type === 'flash') && x.target.type === 'selector') x.target.roomIds?.forEach((id) => ids.add(id))
   return [...ids]
 }
 
@@ -357,11 +363,12 @@ export function blankPredicate(type: Predicate['type'], today = new Date()): Pre
   }
 }
 
-/** A new action: turn on lights to choose, recall a light scene to choose, or a message to write. */
+/** A new action: turn on lights to choose, recall a light scene to choose, a message to write, or lights to flash. */
 export function blankAction(type: ActionDraft['type']): ActionDraft {
   switch (type) {
     case 'recallScene': return { type, sceneId: '', recall: { mode: 'static' } }
     case 'notify': return { type, message: '' }
     case 'command': return { type, target: { type: 'devices', deviceIds: [] }, command: { type: 'light.set', on: true } }
+    case 'flash': return { type, target: { type: 'devices', deviceIds: [] }, durationS: FLASH_DURATION_S.default, speed: 'normal' }
   }
 }

@@ -64,6 +64,13 @@ describe('describeAutomation', () => {
     expect(involvedDeviceIds(a)).toEqual(['mock:doorbell', 'mock:light-living'])
   })
 
+  it('reads a flash with its color, duration and speed, and finds its lights for the search', () => {
+    const a: AutomationBody = { ...dusk, unless: [], actions: [{ type: 'flash', target: { type: 'devices', deviceIds: ['mock:light-living'] }, color: 'red', durationS: 20, speed: 'fast' }] }
+    expect(describeAutomation(a, names, t, 'fr')).toBe('Lun–ven · 15 min avant la fin du crépuscule · pas après 22:00 → Faire clignoter · Plafonnier salon · rouge · 20 s · rapide')
+    expect(involvedDeviceIds(a)).toEqual(['mock:light-living'])
+    expect(missingPart({ ...a, actions: [blankAction('flash')] })).toBe('actions')   // no light chosen
+  })
+
   it('speaks English too', () => {
     i18n.global.locale.value = 'en'
     const a: AutomationBody = { ...dusk, unless: [], trigger: { type: 'time', at: { kind: 'clock', time: '12:00' }, days: [1, 5] } }
