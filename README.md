@@ -1,5 +1,6 @@
 <a href="https://youtu.be/o9AGEPgTgdQ"><img src="docs/screenshots/banner.webp" alt="Kasbah — Your whole home. One app."></a>
 
+[![CI](https://github.com/stillgbx/kasbah/actions/workflows/ci.yml/badge.svg)](https://github.com/stillgbx/kasbah/actions/workflows/ci.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/stillgbx)
 

@@ -5,19 +5,17 @@
 # The build runs third-party code (npm packages): it gets a read-only token and no install scripts.
 # Only the deploy job, which runs no code from the repository or from npm, may write to Pages.
 # Actions are pinned to a commit: a moved tag cannot change what runs here.
+#
+# It waits for CI: it starts when the CI workflow finishes on main, and builds only if that run was a
+# green push (a pull request from a fork whose branch is named main must not deploy). It publishes
+# the commit CI checked. A manual run builds the current main without waiting.
 name: Pages
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-    paths:
-      - 'site/**'
-      - 'apps/web/**'
-      - 'packages/shared/**'
-      - 'packages/mock-sim/**'
-      - 'house/demos/**'
-      - 'package-lock.json'
-      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -29,10 +27,14 @@ concurrency:
 
 jobs:
   build:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

@@ -15,6 +15,7 @@ export default tseslint.config(
       '_external/**',
       '.gitnexus/**',
       '.claude/worktrees/**',
+      '.claude/skills/kasbah-video/**',
     ],
   },
   js.configs.recommended,
