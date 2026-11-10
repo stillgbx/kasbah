@@ -31,6 +31,11 @@ class ParsingTest {
         }
     }
 
+    @Test fun `the journal keeps the newest lines first, and drops the oldest`() {
+        assertEquals(listOf("c", "b", "a"), journalWith(listOf("b", "a"), "c"))
+        assertEquals(listOf("c", "b"), journalWith(listOf("b", "a"), "c", max = 2))
+    }
+
     private val devices = """
         {"devices": [
           {"descriptor": {"id": "demo:shutter", "kind": "cover", "name": "Volet", "meta": {"cover": {"deviceClass": "shutter"}}},

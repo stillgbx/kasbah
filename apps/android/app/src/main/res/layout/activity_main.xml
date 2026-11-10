@@ -182,6 +182,28 @@
                         android:textSize="13sp" />
                 </LinearLayout>
 
+                <!-- The approach alert's journal: geofence placed, crossings, alerts, failures. -->
+                <LinearLayout
+                    android:id="@+id/journal_section"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        style="@style/Kasbah.Label"
+                        android:text="@string/journal_label" />
+
+                    <TextView
+                        android:id="@+id/journal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/muted"
+                        android:textIsSelectable="true"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
                 <Button
                     android:id="@+id/switch_account"
                     style="@style/Kasbah.Button.Outline"

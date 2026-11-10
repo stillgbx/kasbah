@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-10] update | Android Auto 0.9 : alerte d'approche qui dit ses échecs, journal des approches
+
+**Déclencheur** : retour de l'utilisateur, plus d'alerte à l'approche de la maison depuis la dernière version ; cause non établie (téléphone lu par `adb` : géorepérage, permissions, canal et session en ordre, aucune trace du trajet).
+
+**Pages modifiées** :
+- `1_architecture/1_15_appli-android-auto.md` - section datée : ce qui a été lu sur le téléphone, les trois issues muettes de `arrive`, l'échec de lecture dit sur l'écran de la voiture, le journal des approches (`journal`, `note`, « Dernières approches »), l'ouverture de l'appli qui repose le géorepérage, l'hypothèse de l'entrée détectée tard, `MSYS_NO_PATHCONV`
+
+**Index** : catalogue mis à jour (1 ligne), index.md régénéré.
+
 ## [2026-11-10] update | Scène 3D : lampes sautées avant calcul, lampes de jardin tenues dehors
 
 **Déclencheur** : audit de la partie 3D demandé par l'utilisateur (optimisations, corrections, changement d'approche éventuel) ; trois correctifs retenus et appliqués.

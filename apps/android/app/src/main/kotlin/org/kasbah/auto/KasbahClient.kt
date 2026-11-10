@@ -102,6 +102,15 @@ class KasbahClient(private val context: Context) {
         get() = prefs.getStringSet("alert", emptySet())!!
         set(value) = prefs.edit().putStringSet("alert", value).apply()
 
+    /**
+     * The last approach events (geofence placed, crossings, alerts, failures), newest first, kept on this
+     * phone only: what happened on the road, read once parked.
+     */
+    val journal: List<String>
+        get() = prefs.getString("journal", "")!!.lines().filter { it.isNotEmpty() }
+
+    fun note(line: String) = prefs.edit().putString("journal", journalWith(journal, line).joinToString("\n")).apply()
+
     fun accesses(): List<Access> = arrange(parseAccesses(request("GET", "/api/devices")))
 
     /** [arrangeAccesses] with this phone's order and the kinds' names in its language. */
@@ -208,6 +217,9 @@ internal fun signsInThere(url: String): Boolean {
     val host = u.removePrefix("http://").substringBefore('/').let { if (it.startsWith("[")) it.substringBefore(']') + "]" else it.substringBefore(':') }
     return host == "localhost" || host.startsWith("127.") || host == "[::1]"
 }
+
+/** The journal with `line` on top, the oldest lines dropped beyond `max`. */
+internal fun journalWith(journal: List<String>, line: String, max: Int = 30): List<String> = (listOf(line) + journal).take(max)
 
 /** The session cookie among a response's headers (`Set-Cookie`, whatever its case), null if none. */
 internal fun sessionCookie(headers: Map<String?, List<String>>): String? = headers.entries

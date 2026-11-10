@@ -25,7 +25,8 @@ Android Auto parts around the app (map, app bar) are cut out.
 - **Approach alert**: when the car comes within 400 m of the house, without opening the app, a
   notification shows over the map with the doors' states and an **Open** button for two of them (Android
   Auto's limit). Tapping the notification itself opens the app's tiles for the others. It only shows when
-  the phone is projected by Android Auto, and is removed once the car leaves the circle. The house's
+  the phone is projected by Android Auto, and is removed once the car leaves the circle. If the doors
+  cannot be read (session expired, server unreachable), the notification says so instead. The house's
   position is its `origin`, read from the server and kept on the phone.
 - **Talk**: the microphone button listens to one sentence through the car's microphone, sends it to the
   transcription, then to the assistant ("Ask Kasbah"), and says the answer aloud with the Kasbah voice
@@ -38,7 +39,8 @@ Android Auto parts around the app (map, app bar) are cut out.
   password is sent once and never stored; only the session cookie is. Once signed in, **Doors in the
   car** lists the gates and garage doors: ▲ ▼ set their order, which also numbers them, and ★ picks the
   two with a button in the approach alert (none picked: the first two). These choices belong to the
-  phone, not to the car.
+  phone, not to the car. Below, **Recent approaches** is the alert's journal: geofence placed, circle
+  entered or left, alert shown, or why it was not (not in the car, doors not read).
 
 The app needs the server's **public address** (see [Remote access](../README.md#remote-access)) and an
 account, at home as away: a local address no longer opens Kasbah.

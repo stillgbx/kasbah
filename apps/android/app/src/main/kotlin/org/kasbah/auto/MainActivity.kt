@@ -65,6 +65,18 @@ class MainActivity : Activity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        showJournal()
+    }
+
+    /** What the approach alert did lately, newest first: the only trace of a drive once parked. */
+    private fun showJournal() {
+        val lines = client.journal
+        findViewById<View>(R.id.journal_section).visibility = if (lines.isEmpty()) View.GONE else View.VISIBLE
+        findViewById<TextView>(R.id.journal).text = lines.joinToString("\n")
+    }
+
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         if (requestCode == 0) askBackgroundLocation() else placeGeofence()
     }

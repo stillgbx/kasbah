@@ -29,6 +29,9 @@ import com.google.android.gms.location.GeofencingEvent
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * "Open the gate" on the car screen as the car nears the house, without opening the app: a geofence
@@ -56,6 +59,7 @@ object Approach {
         val home = KasbahClient(context).home ?: return
         if (!allowed(context)) {
             Log.i(TAG, "location at all times not allowed: no geofence")
+            note(context, context.getString(R.string.journal_no_location))
             return
         }
         val fence = Geofence.Builder()
@@ -67,8 +71,14 @@ object Approach {
         // No initial trigger: the phone is usually at home when the fence is placed.
         val request = GeofencingRequest.Builder().setInitialTrigger(0).addGeofence(fence).build()
         LocationServices.getGeofencingClient(context).addGeofences(request, fenceIntent(context))
-            .addOnSuccessListener { Log.i(TAG, "geofence placed, ${RADIUS.toInt()} m") }
-            .addOnFailureListener { Log.w(TAG, "geofence refused", it) }
+            .addOnSuccessListener {
+                Log.i(TAG, "geofence placed, ${RADIUS.toInt()} m")
+                note(context, context.getString(R.string.journal_placed))
+            }
+            .addOnFailureListener {
+                Log.w(TAG, "geofence refused", it)
+                note(context, context.getString(R.string.journal_refused, it.message ?: it.javaClass.simpleName))
+            }
     }
 
     fun unregister(context: Context) {
@@ -80,6 +90,10 @@ object Approach {
     private fun fenceIntent(context: Context) = PendingIntent.getBroadcast(
         context, 0, Intent(context, ApproachReceiver::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE,
     )
+
+    /** One dated line in the phone's journal of approaches ([KasbahClient.journal]). */
+    internal fun note(context: Context, text: String) =
+        KasbahClient(context).note("${SimpleDateFormat("dd/MM HH:mm:ss", Locale.ROOT).format(Date())}  $text")
 
     private fun openIntent(context: Context, a: Access) = PendingIntent.getBroadcast(
         context, a.id.hashCode(),
@@ -95,13 +109,23 @@ object Approach {
         inCar(context) { car ->
             if (!car) {
                 Log.i(TAG, "not in the car: no alert")
+                note(context, context.getString(R.string.journal_not_in_car))
                 finish()
                 return@inCar
             }
             val client = KasbahClient(context)
             Background.run({ client.accesses().filter { it.available } }) { result ->
-                result.onSuccess { if (it.isNotEmpty()) notifyArrival(context, it, client.alert) }
-                    .onFailure { Log.w(TAG, "accesses not read", it) }
+                result.onSuccess {
+                    if (it.isEmpty()) return@onSuccess note(context, context.getString(R.string.journal_none))
+                    notifyArrival(context, it, client.alert)
+                    note(context, context.getString(R.string.journal_alert))
+                }
+                    .onFailure {
+                        Log.w(TAG, "accesses not read", it)
+                        note(context, context.getString(R.string.journal_failed, it.message ?: it.javaClass.simpleName))
+                        // Said on the car screen: a silent failure (expired session, no network) looked like no alert at all.
+                        notifyResult(context, if (it is IOException) context.getString(R.string.approach_no_answer) else it.message ?: context.getString(R.string.approach_no_answer))
+                    }
                 finish()
             }
         }
@@ -154,14 +178,13 @@ object Approach {
     internal fun send(context: Context, id: String, name: String, finish: () -> Unit) {
         Background.run({ KasbahClient(context).command(id, "cover.open") }) { result ->
             result.onFailure { Log.w(TAG, "open $id failed", it) }
-            notifyResult(
-                context,
-                result.fold(
-                    { context.getString(R.string.approach_sent, name) },
-                    // A network error carries a technical message ("Unable to resolve host …"): said plainly.
-                    { if (it is IOException) context.getString(R.string.approach_unreachable, name) else it.message ?: context.getString(R.string.command_failed) },
-                ),
+            val text = result.fold(
+                { context.getString(R.string.approach_sent, name) },
+                // A network error carries a technical message ("Unable to resolve host …"): said plainly.
+                { if (it is IOException) context.getString(R.string.approach_unreachable, name) else it.message ?: context.getString(R.string.command_failed) },
             )
+            notifyResult(context, text)
+            note(context, text)
             finish()
         }
     }
@@ -188,6 +211,7 @@ object Approach {
             manager.notify(NOTIFICATION, builder)
         } else {
             Log.i(TAG, "notifications not allowed")
+            note(context, context.getString(R.string.journal_muted))
         }
     }
 
@@ -211,11 +235,16 @@ class ApproachReceiver : BroadcastReceiver() {
     private fun crossed(context: Context, event: GeofencingEvent) {
         if (event.hasError()) {
             Log.w(Approach.TAG, "geofence error ${event.errorCode}")
+            Approach.note(context, context.getString(R.string.journal_error, event.errorCode))
             return
         }
         Log.i(Approach.TAG, "geofence transition ${event.geofenceTransition}")
-        if (event.geofenceTransition == Geofence.GEOFENCE_TRANSITION_EXIT) return Approach.cancel(context)
+        if (event.geofenceTransition == Geofence.GEOFENCE_TRANSITION_EXIT) {
+            Approach.note(context, context.getString(R.string.journal_exit))
+            return Approach.cancel(context)
+        }
         if (event.geofenceTransition != Geofence.GEOFENCE_TRANSITION_ENTER) return
+        Approach.note(context, context.getString(R.string.journal_enter))
         val done = goAsync()
         Approach.arrive(context, done::finish)
     }

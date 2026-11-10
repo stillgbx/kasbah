@@ -1,6 +1,6 @@
 # Appli Android Auto
 
-> Dernière mise à jour : 2026-11-08
+> Dernière mise à jour : 2026-11-10
 > Sources : `apps/android/app/src/test/kotlin/org/kasbah/auto/*Test.kt`, `apps/android/app/src/main/kotlin/org/kasbah/auto/{KasbahClient,MainActivity,KasbahCarAppService,AccessScreen,VoiceScreen,Voice,ProbeScreen,Approach}.kt`, `apps/android/app/src/debug/`, `apps/android/app/src/main/AndroidManifest.xml`, `apps/android/app/src/main/res/xml/{backup_rules,data_extraction_rules}.xml`, bibliothèque `androidx.car.app:app` 1.7.0 (`HostValidator`, `hosts_allowlist_sample`), scan Claude Security du 2026-10-25, `apps/android/app/build.gradle.kts`, `apps/android/dhu.cmd`, `apps/android/.gitattributes`, `apps/server/src/http/session.ts`, `apps/server/src/plugins/transcription/index.ts`, portail `developer.renaultgroup.com`, session du 2026-10-22 (essais sur un téléphone Android et dans le simulateur DHU), `apps/android/keystore.properties.example`, `apps/android/app/build.gradle.kts` (signature), console Google Play (2026-10-23)
 
 Une appli Android, à côté de l'app web, qui met Kasbah sur l'écran de la voiture par **Android
@@ -534,3 +534,51 @@ confiance sans compte (`isLoopbackRequest`). Le retirer aurait cassé l'essai su
 Test : `ParsingTest` (« a password only goes over HTTPS, or to the server's own computer »). Tests unitaires,
 lint et `assembleDebug` verts. Version 0.8, `versionCode` 8. **Non joué** : la connexion sur un vrai
 téléphone par l'adresse publique.
+
+### Mise à jour 2026-11-10 - version 0.9 : l'alerte qui ne se tait plus, et un journal des approches
+
+Retour de l'utilisateur : plus d'alerte à l'approche de la maison depuis la dernière version. **Cause
+non établie** à ce jour. Ce qui a été lu sur le téléphone branché (`adb`), version 0.8 :
+
+- le géorepérage est posé et Play services voit le téléphone « à l'intérieur »
+  (`dumpsys activity service com.google.android.gms/com.google.android.location.internal.GoogleLocationManagerService`,
+  section *Geofencing*) ; la position « toujours » et les notifications sont accordées, le canal
+  `approach` est en importance haute, l'appli est dans le compartiment actif ;
+- la session est valide (la liste des ouvrants s'affiche sur le téléphone) ;
+- le chemin de l'alerte (`Approach.arrive`) n'a pas changé entre 0.6 et 0.8 ;
+- **le téléphone ne garde pas de trace exploitable** : le tampon principal de `logcat` ne remonte qu'à
+  quelques minutes, et l'historique des diffusions (`dumpsys activity broadcasts history`) à une
+  dizaine. Une seule traversée y figurait, traitée en 139 ms, trop court pour une lecture réussie des
+  ouvrants : une sortie, un « pas en voiture », ou une lecture en échec immédiat. Impossible de trancher.
+
+Trois issues de `arrive` étaient **muettes** : pas en voiture, lecture des ouvrants en échec (session
+expirée, réseau coupé en arrière-plan), aucun ouvrant joignable. Une session expirée ne se voyait pas
+non plus sur le téléphone, qui dit toujours « Vous êtes connecté » avec une liste vide.
+
+Ce que change la 0.9 :
+
+- **La lecture en échec se dit sur l'écran de la voiture** (`notifyResult`) : le message de l'erreur
+  (« Session expirée : se reconnecter sur le téléphone. ») ou, pour une erreur réseau,
+  `approach_no_answer` (« Kasbah injoignable : ouvrez Kasbah sur l'écran de la voiture. »).
+- **Un journal des approches** (`KasbahClient.journal`, `note`, fonction pure `journalWith`) : 30 lignes
+  datées, la plus récente en haut, dans les préférences du téléphone (donc hors sauvegarde). Écrites par
+  `Approach.note` : géorepérage posé, refusé ou impossible faute de position « toujours » ; entrée et
+  sortie du cercle ; pas en voiture ; aucun ouvrant joignable ; ouvrants non lus et la raison ; alerte
+  affichée ; notifications non autorisées ; résultat d'un appui sur « Ouvrir ». Textes `journal_*`
+  (fr, en), écrits dans la langue du téléphone au moment de l'événement.
+- Il s'affiche sur le téléphone sous la liste des ouvrants, « Dernières approches »
+  (`MainActivity.showJournal`, à chaque retour sur l'écran). La ligne « Géorepérage posé » d'une
+  ouverture n'apparaît qu'à la suivante : la pose est confirmée après la lecture du journal.
+
+À savoir pour lire un trajet : **chaque ouverture de l'appli sur le téléphone repose le géorepérage**
+(`placeGeofence`), ce qui remet son état à zéro, sans déclenchement initial. Après une arrivée sans
+alerte, la ligne qui suit « Entrée dans le cercle » dit pourquoi ; sans ligne « Entrée », c'est le
+géorepérage qui n'a pas déclenché. Vu aussi dans `dumpsys location` : Play services ne demande la
+position pour le géorepérage que toutes les 5 min en précision « équilibrée », et profite des positions
+des autres applis (Maps en navigation) ; une entrée détectée tard, téléphone déjà débranché de la
+voiture, donnerait « pas en voiture ». Hypothèse, pas un constat.
+
+Test : `ParsingTest` (« the journal keeps the newest lines first, and drops the oldest »). Tests
+unitaires (35), lint et `assembleDebug` verts ; bundle 0.9 (`versionCode` 9) construit. **Non joué** :
+le journal à l'écran du téléphone, et l'alerte en voiture. Piège d'outillage : sous Git Bash, un chemin
+`/sdcard/…` passé à `adb shell` est réécrit en chemin Windows ; `MSYS_NO_PATHCONV=1`.
