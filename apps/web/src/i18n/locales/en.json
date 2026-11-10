@@ -1226,7 +1226,7 @@
       "scene": "Scene",
       "noScene": "No scene",
       "message": "Message", "messagePlaceholder": "The gate is still open", "notifyHint": "Titled with the automation's name, sent to the devices subscribed to “Automations” (Settings → Notifications).",
-      "flashColor": "Color", "flashColorNone": "The light's own", "flashDuration": "Duration", "flashDurationRange": "s ({min} to {max})", "flashSpeed": "Speed",
+      "flashColor": "Color", "flashColorNone": "The light's own", "flashDuration": "Duration", "flashDurationRange": "s ({min} to {max})", "flashSpeed": "Speed", "flashTry": "Try", "flashTryShort": "for {n} s", "flashTryHint": "Flash these lights now, {n} s at most, before saving", "flashTried": "The lights flash for {n} s.", "flashTryFailed": "Try incomplete: {errors}",
       "flashHint": "Full brightness then off, at the chosen pace, then put back as they were. A light without colors flashes in its own.",
       "recallMode": "Mode",
       "missing": {

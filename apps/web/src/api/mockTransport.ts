@@ -693,6 +693,9 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       pushAutomations()
       return run
     },
+    async testFlash() {
+      return { at: Date.now(), by: 'manual', outcome: 'failed', errors: [{ action: 0, code: 'NOT_IMPLEMENTED', message: 'no light flashing in mock mode' }] }
+    },
     // in-process mock: the simulation runs in the page, there is no server to configure
     async getPlugins() { return [] },
     async setPluginSettings() { return [] },

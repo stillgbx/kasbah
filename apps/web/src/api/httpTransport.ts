@@ -142,6 +142,11 @@ export function createHttpTransport(base = ''): Transport {
       { method: 'POST' },
       (j) => automationRunResponseSchema.parse(j).run as AutomationRun,
     ),
+    testFlash: (action) => request(
+      `${base}/api/automations/flash-test`,
+      json('POST', action),
+      (j) => automationRunResponseSchema.parse(j).run as AutomationRun,
+    ),
     getShopping: () => request(`${base}/api/shopping`, undefined, shoppingOf),
     addShoppingItems: (items) => request(`${base}/api/shopping/items`, json('POST', { items }), shoppingOf),
     updateShoppingItem: (id, patch) => request(`${base}/api/shopping/items/${encodeURIComponent(id)}`, json('PATCH', patch), shoppingOf),

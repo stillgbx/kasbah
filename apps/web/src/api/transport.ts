@@ -1,4 +1,4 @@
-import type { ClimateLinkBody, GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEnergyDays, DeviceEntry, DeviceKind, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, MatterSettingsPatch, MatterStatus, PropertiesResponse, PropertyMode, NewPropertyBody, PushSubscribeBody, Right, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor, LightSyncSettings, LightSyncSettingsPatch } from '@kasbah/shared'
+import type { ClimateLinkBody, GeoOrigin, ShoppingAddBody, ShoppingItemPatch, ShoppingList, HouseEditPatch, AutomationBody, GardenItemPatch, NewGardenItem, AutomationEntry, AutomationRun, FlashActionInput, Relief, SceneTuning, Vec2, CommandInput, DeviceConsumption, DeviceEnergyDays, DeviceEntry, DeviceKind, DevicePlacement, EnergyHistory, HealthResponse, House, NewOpening, NewParking, OpeningPatch, PanelArrayPatch, ParkingPatch, PluginInfo, PluginSceneEntry, PluginSettingsPatch, MatterSettingsPatch, MatterStatus, PropertiesResponse, PropertyMode, NewPropertyBody, PushSubscribeBody, Right, SceneRecallInput, SceneUpdate, ServerMessage, WeatherForecast, DeviceJournal, DeviceReleaseNotes, SiteMap, StateFor, LightSyncSettings, LightSyncSettingsPatch } from '@kasbah/shared'
 
 // Abstraction of the server channel. Two implementations: HTTP + WebSocket (real) and in-process
 // simulation (tests, static demo without a server). Commands ALWAYS go through a request
@@ -667,6 +667,8 @@ export interface Transport {
   setAutomationOrder(ids: string[]): Promise<AutomationEntry[]>
   /** Runs the actions right away (neither trigger nor "Unless"); returns the report. */
   runAutomation(id: string): Promise<AutomationRun>
+  /** "Try" of a flash card, not saved: its lights flash 5 s at most; returns the report. */
+  testFlash(action: FlashActionInput): Promise<AutomationRun>
   /** The house's shopping list. Every write returns the whole list (and the WebSocket pushes it). */
   getShopping(): Promise<ShoppingList>
   addShoppingItems(items: ShoppingAddBody['items']): Promise<ShoppingList>

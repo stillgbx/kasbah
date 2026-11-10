@@ -1236,7 +1236,7 @@
       "scene": "Ambiance",
       "noScene": "Aucune ambiance",
       "message": "Message", "messagePlaceholder": "Le portail est encore ouvert", "notifyHint": "Titrée du nom de l'automatisation, envoyée aux appareils abonnés à « Automatisations » (Réglages → Notifications).",
-      "flashColor": "Couleur", "flashColorNone": "Celle de la lampe", "flashDuration": "Durée", "flashDurationRange": "s ({min} à {max})", "flashSpeed": "Vitesse",
+      "flashColor": "Couleur", "flashColorNone": "Celle de la lampe", "flashDuration": "Durée", "flashDurationRange": "s ({min} à {max})", "flashSpeed": "Vitesse", "flashTry": "Essayer", "flashTryShort": "pendant {n} s", "flashTryHint": "Faire clignoter ces lumières maintenant, {n} s au plus, avant d'enregistrer", "flashTried": "Les lumières clignotent {n} s.", "flashTryFailed": "Essai incomplet : {errors}",
       "flashHint": "Allumées à fond puis éteintes au rythme choisi, puis remises comme avant. Une lampe sans couleurs clignote dans la sienne.",
       "recallMode": "Mode",
       "missing": {

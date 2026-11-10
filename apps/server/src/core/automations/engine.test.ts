@@ -342,6 +342,21 @@ describe('AutomationEngine — flash', () => {
   })
 })
 
+describe('AutomationEngine — flash try', () => {
+  it('flashes the lights of an unsaved card for 5 s at most, without recording a run', async () => {
+    const h = harness()
+    await h.engine.start()
+    const run = await h.engine.testFlash({ type: 'flash', target: { type: 'devices', deviceIds: ['mock:light-living', 'mock:ghost'] }, durationS: 60, speed: 'slow' })
+    expect(run).toMatchObject({ by: 'manual', outcome: 'partial', errors: [{ deviceId: 'mock:ghost', code: 'DEVICE_UNKNOWN' }] })
+    for (let k = 0; k < 6; k++) { h.clock.advance(1000); await h.flush() }   // slow: 1 s phases, 5 s in all
+    expect(h.executed.at(-1)?.cmd).toEqual({ type: 'light.set', on: false, transitionMs: 0 })
+    const count = h.executed.length
+    h.clock.advance(5000); await h.flush()
+    expect(h.executed).toHaveLength(count)
+    expect(h.engine.list()).toEqual([])
+  })
+})
+
 describe('AutomationEngine — status and actions', () => {
   it('marks a rule incomplete while a device is missing, and ok when it comes back', async () => {
     const h = harness()

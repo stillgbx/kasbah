@@ -107,6 +107,23 @@ export const automationRecallSchema = z.object({
   transitionMs: z.number().int().min(0).optional(),
 })
 
+/**
+ * Makes lights FLASH, run by the server whatever the brand (on and off at full brightness, in
+ * `color` if given and the light has colors), then puts each one back as it was. To be seen from
+ * afar or by someone who does not hear the doorbell. Devices that are not lights are refused.
+ */
+export const flashActionSchema = z.object({
+  type: z.literal('flash'),
+  target: targetSchema,
+  color: z.enum(FLASH_COLORS).optional(),
+  durationS: z.number().int().min(FLASH_DURATION_S.min).max(FLASH_DURATION_S.max).default(FLASH_DURATION_S.default),
+  speed: z.enum(FLASH_SPEEDS).default('normal'),
+})
+export type FlashAction = z.infer<typeof flashActionSchema>
+export type FlashActionInput = z.input<typeof flashActionSchema>
+/** "Try" of a flash from the editor (`POST /api/automations/flash-test`): this long at most. */
+export const FLASH_TEST_MAX_S = 5
+
 export const actionSchema = z.discriminatedUnion('type', [
   /**
    * A command of the contract, verified device by device as from the interface. `forMin`:
@@ -120,18 +137,7 @@ export const actionSchema = z.discriminatedUnion('type', [
    * automation's name.
    */
   z.object({ type: z.literal('notify'), message: z.string().trim().min(1).max(200) }),
-  /**
-   * Makes lights FLASH, run by the server whatever the brand (on and off at full brightness, in
-   * `color` if given and the light has colors), then puts each one back as it was. To be seen from
-   * afar or by someone who does not hear the doorbell. Devices that are not lights are refused.
-   */
-  z.object({
-    type: z.literal('flash'),
-    target: targetSchema,
-    color: z.enum(FLASH_COLORS).optional(),
-    durationS: z.number().int().min(FLASH_DURATION_S.min).max(FLASH_DURATION_S.max).default(FLASH_DURATION_S.default),
-    speed: z.enum(FLASH_SPEEDS).default('normal'),
-  }),
+  flashActionSchema,
   // Iteration 2: { type: 'system.run', name } (allowlist from the .env); { type: 'webhook', url }
 ])
 export type AutomationAction = z.infer<typeof actionSchema>

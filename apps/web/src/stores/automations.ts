@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
-import type { AutomationBody, AutomationEntry, AutomationRun, ServerMessage } from '@kasbah/shared'
+import type { AutomationBody, AutomationEntry, AutomationRun, FlashActionInput, ServerMessage } from '@kasbah/shared'
 import { ApiRequestError, getTransport } from '../api'
 import { t } from '../i18n'
 import { useNotificationsStore } from './notifications'
@@ -150,5 +150,11 @@ export const useAutomationsStore = defineStore('automations', () => {
     }
   }
 
-  return { entries, list, busy, saving, apply, load, save, setEnabled, remove, reorder, runNow, isBusy }
+  /** "Try" of a flash card from the editor; the report, or `null` if the call failed. */
+  async function testFlash(action: FlashActionInput, name: string): Promise<AutomationRun | null> {
+    try { return await getTransport().testFlash(action) }
+    catch (err) { fail(err, name); return null }
+  }
+
+  return { entries, list, busy, saving, apply, load, save, setEnabled, remove, reorder, runNow, testFlash, isBusy }
 })

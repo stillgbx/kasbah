@@ -1,5 +1,5 @@
-import type { Automation, AutomationBody, AutomationEntry, AutomationRun, AutomationStatus, DeviceEventKind, DeviceId } from '@kasbah/shared'
-import { assertCommandAllowed, automationBodySchema } from '@kasbah/shared'
+import type { Automation, AutomationBody, AutomationEntry, AutomationRun, AutomationStatus, DeviceEventKind, DeviceId, FlashAction } from '@kasbah/shared'
+import { assertCommandAllowed, automationBodySchema, FLASH_TEST_MAX_S } from '@kasbah/shared'
 import type { Logger } from 'pino'
 import type { LoadedHouse } from '../../config/house'
 import type { Bus } from '../bus'
@@ -210,6 +210,17 @@ export class AutomationEngine {
     const result = await runActions(a, 'manual', this.context(), this.runnerDeps)
     this.done(a, result)
     return result.run
+  }
+
+  /**
+   * "Try" of a flash from the editor, before saving: the lights of the card, its color and speed,
+   * `FLASH_TEST_MAX_S` at most. Nothing is recorded.
+   */
+  async testFlash(action: FlashAction): Promise<AutomationRun> {
+    const trial = { ...action, durationS: Math.min(action.durationS, FLASH_TEST_MAX_S) }
+    const a: Automation = { id: 'flash-test', name: 'flash-test', enabled: true, trigger: { type: 'time', at: { kind: 'clock', time: '00:00' } }, unless: [], actions: [trial] }
+    const { run } = await runActions(a, 'manual', this.context(), this.runnerDeps)
+    return run
   }
 
   // ── internal ─────────────────────────────────────────────────────────────────────────────

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { commandKind, COVER_CLASSES, FLASH_COLORS, FLASH_DURATION_S, FLASH_SPEEDS, inverseCommand, MEDIA_PLAYER_CLASSES, type DeviceKind, type FlashSpeed, type SceneRecallMode, type Target } from '@kasbah/shared'
+import { commandKind, COVER_CLASSES, FLASH_COLORS, FLASH_DURATION_S, FLASH_SPEEDS, FLASH_TEST_MAX_S, inverseCommand, MEDIA_PLAYER_CLASSES, type DeviceKind, type FlashSpeed, type SceneRecallMode, type Target } from '@kasbah/shared'
 import { useAutomationNames } from '../../composables/useAutomationNames'
 import { choiceOf, choicesFor, COMMANDABLE_KINDS, FADE_MAX_MS, kindLabel, paramOf, type ActionDraft, type CommandChoice } from '../../lib/automations'
+import { useAutomationsStore } from '../../stores/automations'
 import { useDevicesStore } from '../../stores/devices'
+import { useNotificationsStore } from '../../stores/notifications'
 import Segmented from '../ui/Segmented.vue'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 
@@ -172,6 +174,20 @@ function setFlashDuration(raw: string) {
   if (Number.isFinite(n)) setFlash({ durationS: Math.min(FLASH_DURATION_S.max, Math.max(FLASH_DURATION_S.min, Math.round(n))) })
 }
 
+// "Try": the card's lights flash right away (5 s at most), before saving — to see the speed.
+const automations = useAutomationsStore()
+const notifications = useNotificationsStore()
+const trying = ref(false)
+const canTry = computed(() => !!flash.value && (flash.value.target.type === 'selector' || flash.value.target.deviceIds.length > 0))
+async function tryFlash() {
+  if (!flash.value || trying.value) return
+  trying.value = true
+  const run = await automations.testFlash(flash.value, t('automations.action.flash')).finally(() => { trying.value = false })
+  if (!run) return
+  if (!run.errors.length) notifications.success(t('automations.editor.flashTried', { n: FLASH_TEST_MAX_S }))
+  else notifications.error(t('automations.editor.flashTryFailed', { errors: run.errors.map((e) => `${e.deviceId ? `${names.deviceName(e.deviceId)} : ` : ''}${e.message}`).join(' · ') }))
+}
+
 // ── ambiance ─────────────────────────────────────────────────────────────────────────────────
 const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((m) => ({ value: m, label: t(`automations.recall.${m}`) })))
 </script>
@@ -227,6 +243,13 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
                   density="compact" variant="outlined" hide-details @update:model-value="(v: string) => setFlash({ color: v || undefined })" />
         <Segmented dense fill :model-value="flash.speed ?? 'normal'" :options="flashSpeedOptions" :label="$t('automations.editor.flashSpeed')"
                    @update:model-value="(s: FlashSpeed) => setFlash({ speed: s })" />
+        <!-- try: the card's lights flash now, to see the speed before saving -->
+        <div class="act__for">
+          <button type="button" class="pill act__try" :disabled="!canTry || trying" :title="$t('automations.editor.flashTryHint', { n: FLASH_TEST_MAX_S })" @click="tryFlash">
+            <StrokeIcon name="play" :size="13" /> {{ $t('automations.editor.flashTry') }}
+          </button>
+          <span class="muted act__range">{{ $t('automations.editor.flashTryShort', { n: FLASH_TEST_MAX_S }) }}</span>
+        </div>
         <div class="act__for">
           <span class="muted">{{ $t('automations.editor.flashDuration') }}</span>
           <input class="act__input act__input--num" type="text" inputmode="numeric" enterkeyhint="done" :value="shown('flashDuration', flashDuration)"
@@ -294,6 +317,7 @@ const recallModes = computed(() => (['static', 'dynamic', 'off'] as const).map((
 .act { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
 .act__head { display: flex; align-items: center; gap: 8px; min-height: 30px; }
 .act__type { flex: 1 1 0; min-width: 0; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.act__try { flex: 0 0 auto; height: 30px; padding: 0 10px; gap: 4px; font-size: 12px; }
 .act__chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .act__chip {
   display: inline-flex; align-items: center; gap: 4px; max-width: 100%; height: 28px; padding: 0 4px 0 10px;
