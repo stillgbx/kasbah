@@ -1056,6 +1056,8 @@
       "dateRange": "from {from} to {to}",
       "when": "When {predicate}",
       "whenFor": "When {predicate} for {n} min",
+      "event": { "chime": "When someone rings at {device}", "motion": "When {device} detects motion", "person": "When {device} detects a person", "sound": "When {device} detects a sound" },
+      "cooldown": "at most once every {n} min",
       "fade": "over {d}",
       "forMin": "for {n} min",
       "or": " or ",
@@ -1171,7 +1173,12 @@
       "clearPeriod": "Clear the date range",
       "clearBounds": "Clear the time limits",
       "for": "For at least",
-      "stateHint": "Fires when the condition BECOMES true. A time constraint goes in \"Unless\"."
+      "stateHint": "Fires when the condition BECOMES true. A time constraint goes in \"Unless\".",
+      "event": "Doorbell",
+      "eventKind": "Event",
+      "events": { "chime": "Ring", "motion": "Motion", "person": "Person", "sound": "Sound" },
+      "cooldown": "Cooldown",
+      "eventHint": "Fires on every ring; the cooldown ignores the next ones for N min. A time range goes in \"Unless\"."
     },
     "editor": {
       "name": "Name",

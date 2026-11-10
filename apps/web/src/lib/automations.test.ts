@@ -52,6 +52,18 @@ describe('describeAutomation', () => {
     expect(describeAutomation(a, names, t, 'fr')).toBe('Lun–ven · 15 min avant la fin du crépuscule · pas après 22:00 → Éteindre · Plafonnier salon · en 90 s')
   })
 
+  it('reads a doorbell rule with its cooldown, and names its doorbell for the search', () => {
+    const a: AutomationBody = {
+      ...dusk, unless: [{ type: 'timeWindow', from: '08:00', to: '22:00' }],
+      trigger: { type: 'event', deviceId: 'mock:doorbell', event: 'chime', cooldownMin: 2 },
+      actions: [{ type: 'command', target: { type: 'devices', deviceIds: ['mock:light-living'] }, command: { type: 'light.set', on: true }, forMin: 5 }],
+    }
+    expect(describeAutomation(a, { ...names, deviceName: (id) => (id === 'mock:doorbell' ? 'Porte d’entrée' : names.deviceName(id)) }, t, 'fr')).toBe(
+      'Quand on sonne à Porte d’entrée · au plus une fois toutes les 2 min → Allumer · Plafonnier salon · pendant 5 min · sauf si entre 08:00 et 22:00',
+    )
+    expect(involvedDeviceIds(a)).toEqual(['mock:doorbell', 'mock:light-living'])
+  })
+
   it('speaks English too', () => {
     i18n.global.locale.value = 'en'
     const a: AutomationBody = { ...dusk, unless: [], trigger: { type: 'time', at: { kind: 'clock', time: '12:00' }, days: [1, 5] } }

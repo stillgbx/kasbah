@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SUN_EVENTS, type AutomationBody, type Predicate, type StateTrigger, type SunEvent, type TimeTrigger } from '@kasbah/shared'
+import { SUN_EVENTS, type AutomationBody, type DeviceEventKind, type EventTrigger, type Predicate, type StateTrigger, type SunEvent, type TimeTrigger } from '@kasbah/shared'
 import { useAutomationNames } from '../../composables/useAutomationNames'
 import {
-  blankAction, blankAutomation, blankPredicate, describeAutomation, duplicateBody, missingPart, newAutomationId, PREDICATE_TYPES, triggerIcon, type ActionDraft,
+  blankAction, blankAutomation, blankPredicate, describeAutomation, duplicateBody, eventsOf, missingPart, newAutomationId, PREDICATE_TYPES, triggerIcon, type ActionDraft,
 } from '../../lib/automations'
 import { useAutomationsStore } from '../../stores/automations'
+import { useDevicesStore } from '../../stores/devices'
 import { useNotificationsStore } from '../../stores/notifications'
 import { useScenesStore } from '../../stores/scenes'
 import MarqueeText from '../ui/MarqueeText.vue'
@@ -25,7 +26,8 @@ const emit = defineEmits<{ close: []; saved: [id: string]; open: [id: string] }>
 const store = useAutomationsStore()
 const scenes = useScenesStore()
 const notifications = useNotificationsStore()
-const { names } = useAutomationNames()
+const devices = useDevicesStore()
+const { names, deviceOptions } = useAutomationNames()
 const { t, locale } = useI18n()
 
 function bodyOf(id: string): AutomationBody {
@@ -52,16 +54,24 @@ const assistantNote = computed(() => {
 
 // ── trigger ──────────────────────────────────────────────────────────────────────────────────
 const trigger = computed(() => draft.value.trigger)
-const triggerKind = computed<'clock' | 'sun' | 'state'>(() => (trigger.value.type === 'state' ? 'state' : trigger.value.at.kind))
+type TriggerKind = 'clock' | 'sun' | 'state' | 'event'
+const triggerKind = computed<TriggerKind>(() => (trigger.value.type === 'time' ? trigger.value.at.kind : trigger.value.type))
 
 // Each mode keeps what was typed into it for the duration of the edit (time → sun → time gives the
 // time back), and going from time to sun only changes the instant: days and period stay.
-let stash: { clock?: TimeTrigger['at']; sun?: TimeTrigger['at']; time?: TimeTrigger; state?: StateTrigger } = {}
-function setTriggerKind(k: 'clock' | 'sun' | 'state') {
+let stash: { clock?: TimeTrigger['at']; sun?: TimeTrigger['at']; time?: TimeTrigger; state?: StateTrigger; event?: EventTrigger } = {}
+function setTriggerKind(k: TriggerKind) {
   const prev = trigger.value
-  if (prev.type === 'time') { stash[prev.at.kind] = prev.at; stash.time = prev } else stash.state = prev
+  if (prev.type === 'time') { stash[prev.at.kind] = prev.at; stash.time = prev } else if (prev.type === 'state') stash.state = prev
+  else stash.event = prev
   if (k === 'state') {
     draft.value.trigger = stash.state ?? { type: 'state', when: blankPredicate('deviceOn') }
+    return
+  }
+  if (k === 'event') {
+    // a single doorbell in the house: chosen already
+    const only = eventDeviceItems.value.length === 1 ? eventDeviceItems.value[0]!.value : ''
+    draft.value.trigger = stash.event ?? { type: 'event', deviceId: only, event: eventsOf(devices.descriptors[only]?.capabilities ?? [])[0] ?? 'chime' }
     return
   }
   const at = stash[k] ?? (k === 'sun' ? { kind: 'sun', event: 'dusk' } : { kind: 'clock', time: '07:30' })
@@ -72,6 +82,7 @@ const triggerOptions = computed(() => [
   { value: 'clock' as const, label: t('automations.trigger.clock') },
   { value: 'sun' as const, label: t('automations.trigger.sun') },
   { value: 'state' as const, label: t('automations.trigger.state') },
+  { value: 'event' as const, label: t('automations.trigger.event') },
 ])
 // Dawn and dusk are CIVIL (sun at −6°): the menu says so under their name, otherwise "after dusk"
 // reads as "after its start", which is sunset.
@@ -130,6 +141,41 @@ function commitForMin(e: Event) {
   const input = e.target as HTMLInputElement
   setForMin(input.value)
   void nextTick(() => { input.value = trigger.value.type === 'state' && trigger.value.forMin ? String(trigger.value.forMin) : '' })
+}
+
+// Event: the devices that declare one (a doorbell's `chime`), then its events — the menu only
+// shows when there is a choice.
+const eventDeviceItems = computed(() => {
+  const current = trigger.value.type === 'event' ? trigger.value.deviceId : undefined
+  return deviceOptions(null, current || undefined).filter((o) => o.value === current || eventsOf(devices.descriptors[o.value]?.capabilities ?? []).length)
+})
+const eventItems = computed(() => {
+  const tr = trigger.value
+  if (tr.type !== 'event') return []
+  const kinds = eventsOf(devices.descriptors[tr.deviceId]?.capabilities ?? [])
+  return (kinds.includes(tr.event) ? kinds : [tr.event, ...kinds]).map((e) => ({ value: e, title: t(`automations.trigger.events.${e}`) }))
+})
+function pickEventDevice(deviceId: string) {
+  const tr = trigger.value
+  if (tr.type !== 'event') return
+  const kinds = eventsOf(devices.descriptors[deviceId]?.capabilities ?? [])
+  draft.value.trigger = { ...tr, deviceId, event: kinds.includes(tr.event) ? tr.event : kinds[0] ?? tr.event }
+}
+function setEvent(event: DeviceEventKind) {
+  if (trigger.value.type === 'event') draft.value.trigger = { ...trigger.value, event }
+}
+/** Same bounds as the schema; 0 or empty = every event acts. */
+const COOLDOWN_MAX = 1440
+const cooldownText = ref<string | null>(null)
+function commitCooldown(e: Event) {
+  cooldownText.value = null
+  const input = e.target as HTMLInputElement
+  const tr = trigger.value
+  if (tr.type !== 'event') return
+  const n = Math.round(Number(input.value))
+  const { cooldownMin: _c, ...rest } = tr
+  draft.value.trigger = Number.isFinite(n) && n > 0 ? { ...rest, cooldownMin: Math.min(COOLDOWN_MAX, n) } : rest
+  void nextTick(() => { input.value = trigger.value.type === 'event' && trigger.value.cooldownMin ? String(trigger.value.cooldownMin) : '' })
 }
 
 // ── unless, then ─────────────────────────────────────────────────────────────────────────────
@@ -290,6 +336,21 @@ onBeforeUnmount(() => { if (disarm) clearTimeout(disarm) })
               <StrokeIcon name="close" :size="14" />
             </button>
           </div>
+        </template>
+
+        <template v-else-if="trigger.type === 'event'">
+          <v-autocomplete :model-value="trigger.deviceId || null" :items="eventDeviceItems" :label="$t('automations.editor.device')"
+                          density="compact" variant="outlined" hide-details @update:model-value="pickEventDevice" />
+          <v-select v-if="eventItems.length > 1" :model-value="trigger.event" :items="eventItems" :label="$t('automations.trigger.eventKind')"
+                    density="compact" variant="outlined" hide-details @update:model-value="setEvent" />
+          <div class="line">
+            <span class="muted line__label">{{ $t('automations.trigger.cooldown') }}</span>
+            <input class="field field--num" type="text" inputmode="numeric" enterkeyhint="done" :value="cooldownText ?? (trigger.cooldownMin ? String(trigger.cooldownMin) : '')"
+                   placeholder="0" :aria-label="$t('automations.trigger.cooldown')"
+                   @input="cooldownText = ($event.target as HTMLInputElement).value" @change="commitCooldown">
+            <span class="muted range">{{ $t('automations.editor.forMinRange', { min: 0, max: COOLDOWN_MAX }) }}</span>
+          </div>
+          <p class="muted hint">{{ $t('automations.trigger.eventHint') }}</p>
         </template>
 
         <template v-else>

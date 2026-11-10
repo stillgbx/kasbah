@@ -1066,6 +1066,8 @@
       "dateRange": "du {from} au {to}",
       "when": "Quand {predicate}",
       "whenFor": "Quand {predicate} depuis {n} min",
+      "event": { "chime": "Quand on sonne à {device}", "motion": "Quand {device} détecte un mouvement", "person": "Quand {device} détecte une personne", "sound": "Quand {device} détecte un son" },
+      "cooldown": "au plus une fois toutes les {n} min",
       "fade": "en {d}",
       "forMin": "pendant {n} min",
       "or": " ou ",
@@ -1181,7 +1183,12 @@
       "clearPeriod": "Effacer la période",
       "clearBounds": "Effacer les bornes",
       "for": "Depuis au moins",
-      "stateHint": "Part quand la condition DEVIENT vraie. Une contrainte d'heure se met dans « Sauf si »."
+      "stateHint": "Part quand la condition DEVIENT vraie. Une contrainte d'heure se met dans « Sauf si ».",
+      "event": "Sonnette",
+      "eventKind": "Événement",
+      "events": { "chime": "Sonnerie", "motion": "Mouvement", "person": "Personne", "sound": "Son" },
+      "cooldown": "Délai minimal",
+      "eventHint": "Part à chaque sonnerie ; le délai minimal ignore les suivantes pendant N min. Une plage horaire se met dans « Sauf si »."
     },
     "editor": {
       "name": "Nom",

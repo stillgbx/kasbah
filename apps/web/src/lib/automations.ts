@@ -1,6 +1,6 @@
 import {
-  automationBodySchema, CLIMATE_MODES, inverseCommand,
-  type AutomationBody, type AutomationHealth, type Capability, type CommandInput, type DeviceKind,
+  automationBodySchema, CLIMATE_MODES, DEVICE_EVENT_KINDS, inverseCommand,
+  type AutomationBody, type AutomationHealth, type Capability, type CommandInput, type DeviceEventKind, type DeviceKind,
   type LeafPredicate, type Predicate, type SunEvent, type Target, type Trigger,
 } from '@kasbah/shared'
 import type { IconName } from './strokeIcons'
@@ -28,6 +28,7 @@ export interface NameContext {
 
 export function triggerIcon(trigger: Trigger): IconName {
   if (trigger.type === 'state') return 'sensor'
+  if (trigger.type === 'event') return 'doorbell'
   return trigger.at.kind === 'sun' ? 'sunHorizon' : 'clock'
 }
 
@@ -36,6 +37,11 @@ export const HEALTH_DOT: Record<AutomationHealth, string> = {
   ok: 'var(--accent)',
   incomplete: '#d38b22',
   unavailable: '#d24a43',
+}
+
+/** Events a device can trigger: those it declares as a capability (a doorbell's `chime`). */
+export function eventsOf(capabilities: readonly string[]): DeviceEventKind[] {
+  return DEVICE_EVENT_KINDS.filter((e) => capabilities.includes(e))
 }
 
 // ── offered commands ────────────────────────────────────────────────────────────────────────────
@@ -166,6 +172,10 @@ export function describeTrigger(trigger: Trigger, names: NameContext, t: Transla
       ? t('automations.summary.whenFor', { predicate: when, n: trigger.forMin })
       : t('automations.summary.when', { predicate: when })
   }
+  if (trigger.type === 'event') {
+    const when = t(`automations.summary.event.${trigger.event}`, { device: names.deviceName(trigger.deviceId) })
+    return trigger.cooldownMin ? `${when} · ${t('automations.summary.cooldown', { n: trigger.cooldownMin })}` : when
+  }
   const parts = [daysLabel(trigger.days, t, locale)]
   const at = trigger.at
   if (at.kind === 'clock') parts.push(t('automations.summary.at', { time: at.time }))
@@ -287,6 +297,7 @@ export function involvedDeviceIds(a: Pick<AutomationBody, 'trigger' | 'unless' |
     else if ('deviceId' in p) ids.add(p.deviceId)
   }
   if (a.trigger.type === 'state') walk(a.trigger.when)
+  else if (a.trigger.type === 'event') ids.add(a.trigger.deviceId)
   a.unless.forEach(walk)
   for (const x of a.actions) if (x.type === 'command' && x.target.type === 'devices') x.target.deviceIds.forEach((id) => ids.add(id))
   return [...ids]

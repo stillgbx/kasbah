@@ -713,7 +713,16 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
       sim.start(
         apply,
         (externalId, available) => apply(externalId, { available }),
-        (externalId, event) => handlers?.onMessage({ type: 'deviceEvent', deviceId: `mock:${externalId}`, event, at: Date.now() }),
+        (externalId, event) => {
+          const deviceId = `mock:${externalId}`
+          handlers?.onMessage({ type: 'deviceEvent', deviceId, event, at: Date.now() })
+          for (const a of automations.values()) {
+            // a ring of the simulated doorbell runs its automations, without "Unless" nor cooldown
+            // (approximate, like the status): the run of "Run now", marked as by the event
+            if (!a.enabled || a.trigger.type !== 'event' || a.trigger.deviceId !== deviceId || a.trigger.event !== event) continue
+            void this.runAutomation(a.id).then((run) => { lastRuns.set(a.id, { ...run, by: 'event' }); pushAutomations() })
+          }
+        },
         onScene,
       )
       h.onMessage({ type: 'snapshot', serverTime: Date.now(), devices: entries(), scenes: sceneEntries(), automations: automationList(), shopping, propertyId: house.id })
