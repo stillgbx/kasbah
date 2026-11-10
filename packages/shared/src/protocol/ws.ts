@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { deviceDescriptorSchema, deviceIdSchema } from '../devices/descriptor'
+import { DEVICE_EVENT_KINDS } from '../devices/events'
 import { deviceStateSchema } from '../devices/state'
 import { houseSchema } from '../house/schema'
 import { pluginSceneEntrySchema, pluginSceneStateSchema, sceneIdSchema } from '../scenes/scene'
@@ -12,12 +13,7 @@ import { shoppingListSchema } from '../shopping/shopping'
 export const deviceEntrySchema = z.object({ descriptor: deviceDescriptorSchema, state: deviceStateSchema })
 export type DeviceEntry = z.infer<typeof deviceEntrySchema>
 
-/**
- * TRANSIENT event of a device (not a state): doorbell ring, motion… Arrives through Pub/Sub
- * at Nest. The client reacts on the spot (frame the room, open the live view); nothing is kept.
- */
-export const DEVICE_EVENT_KINDS = ['chime', 'motion', 'person', 'sound'] as const
-export type DeviceEventKind = (typeof DEVICE_EVENT_KINDS)[number]
+export { DEVICE_EVENT_KINDS, type DeviceEventKind } from '../devices/events'
 
 export const serverMessageSchema = z.discriminatedUnion('type', [
   z.object({

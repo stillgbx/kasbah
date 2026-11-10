@@ -1,4 +1,4 @@
-import type { Automation, AutomationBody, AutomationEntry, AutomationRun, AutomationStatus, DeviceId } from '@kasbah/shared'
+import type { Automation, AutomationBody, AutomationEntry, AutomationRun, AutomationStatus, DeviceEventKind, DeviceId } from '@kasbah/shared'
 import { assertCommandAllowed, automationBodySchema } from '@kasbah/shared'
 import type { Logger } from 'pino'
 import type { LoadedHouse } from '../../config/house'
@@ -31,6 +31,10 @@ import type { AutomationsStore } from './store'
 // of a device not read yet. A new trigger replaces the pending revert of the same device (the wait
 // starts over). Neither deleting nor disabling the rule cancels it: the gate closes anyway.
 //
+// EVENT: a transient event of the bus (`deviceEvent`, a doorbell ring) fires the rules that wait for
+// it on that device. `cooldownMin` ignores the next ones for a while — in memory, a restart clears
+// it — and only a run that went out starts it: a ring blocked by "Unless" leaves the next one free.
+//
 // Each bus handler is guarded: `Bus.emit` catches nothing, and an exception here would bubble up
 // into the plugin that published the state.
 
@@ -57,6 +61,8 @@ export class AutomationEngine {
   /** Last value of a state trigger's predicate; absent = never evaluated. */
   private readonly last = new Map<string, Tri>()
   private readonly holds = new Map<string, unknown>()
+  /** Last run of an event trigger, for its `cooldownMin`; in memory only. */
+  private readonly lastEventFire = new Map<string, number>()
   private readonly running = new Set<string>()
   /** Pending reverts, by `automation#action#device`. */
   private readonly reverts = new Map<string, PendingRevert>()
@@ -92,6 +98,7 @@ export class AutomationEngine {
         this.notify()
       })),
       bus.on('scenes', guard('scenes', () => this.notify())),
+      bus.on('deviceEvent', guard('deviceEvent', (deviceId: DeviceId, event: DeviceEventKind, at: number) => this.onEvent(deviceId, event, at))),
     )
     for (const a of this.automations.values()) this.baseline(a)
     this.arm()
@@ -230,6 +237,7 @@ export class AutomationEngine {
     this.last.delete(id)
     this.clearHold(id)
     this.nextRun.delete(id)
+    this.lastEventFire.delete(id)
   }
 
   /** Reference snapshot of a state trigger: its current value, which fires nothing. */
@@ -330,18 +338,31 @@ export class AutomationEngine {
     return true
   }
 
+  // event
+
+  private onEvent(deviceId: DeviceId, event: DeviceEventKind, at: number): void {
+    for (const a of this.automations.values()) {
+      const tr = a.trigger
+      if (!a.enabled || tr.type !== 'event' || tr.deviceId !== deviceId || tr.event !== event) continue
+      const last = this.lastEventFire.get(a.id)
+      if (tr.cooldownMin && last !== undefined && at - last < tr.cooldownMin * 60_000) continue
+      if (this.fire(a, 'event')) this.lastEventFire.set(a.id, at)
+    }
+  }
+
   // execution
 
-  private fire(a: Automation, by: 'time' | 'state'): void {
+  /** Runs the actions unless an exception holds; true if they started. */
+  private fire(a: Automation, by: 'time' | 'state' | 'event'): boolean {
     if (this.running.has(a.id)) {
       this.deps.logger.warn({ automation: a.id }, 'automation still running, trigger ignored')
-      return
+      return false
     }
     const ctx = this.context()
     const blocked = a.unless.some((p) => evaluatePredicate(p, ctx) === true)
     if (blocked) {
       this.record(a, { at: ctx.now, by, outcome: 'skipped', errors: [] })
-      return
+      return false
     }
     this.running.add(a.id)
     // Never awaited here: we are inside a bus or timer handler.
@@ -349,6 +370,7 @@ export class AutomationEngine {
       .then((result) => this.done(a, result))
       .catch((err) => this.deps.logger.error({ err, automation: a.id }, 'automation run failed'))
       .finally(() => this.running.delete(a.id))
+    return true
   }
 
   private done(a: Automation, { run, reverts }: RunResult): void {

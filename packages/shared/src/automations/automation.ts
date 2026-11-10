@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { commandSchema } from '../devices/command'
 import { deviceIdSchema } from '../devices/descriptor'
+import { DEVICE_EVENT_KINDS } from '../devices/events'
 import { DEVICE_KINDS } from '../devices/kinds'
 import { SCENE_RECALL_MODES, sceneIdSchema } from '../scenes/scene'
 import { daysSchema, deviceClassSchema, hhmmSchema, isoDateSchema, predicateSchema } from './predicate'
@@ -53,10 +54,22 @@ export const stateTriggerSchema = z.object({
 })
 export type StateTrigger = z.infer<typeof stateTriggerSchema>
 
-// Iteration 2, described here so that the shape makes room for them (NOT implemented):
+/**
+ * EVENT trigger: a transient event of a device (a doorbell ring). `cooldownMin` ignores the next
+ * events of this automation for that many minutes after a run (a burst of rings acts once); kept in
+ * memory only, a restart clears it. A run skipped by "Unless" does not start it.
+ */
+export const eventTriggerSchema = z.object({
+  type: z.literal('event'),
+  deviceId: deviceIdSchema,
+  event: z.enum(DEVICE_EVENT_KINDS),
+  cooldownMin: z.number().int().min(1).max(1440).optional(),
+})
+export type EventTrigger = z.infer<typeof eventTriggerSchema>
+
+// Iteration 2, described here so that the shape makes room for it (NOT implemented):
 //   { type: 'forecast', deviceId, field: 'precipProbability' | 'windKmh', op, value, horizonH }
-//   { type: 'event', deviceId, event: DEVICE_EVENT_KINDS }   — doorbell, motion, person
-export const triggerSchema = z.discriminatedUnion('type', [timeTriggerSchema, stateTriggerSchema])
+export const triggerSchema = z.discriminatedUnion('type', [timeTriggerSchema, stateTriggerSchema, eventTriggerSchema])
 export type Trigger = z.infer<typeof triggerSchema>
 
 /**
@@ -149,7 +162,7 @@ export type RunOutcome = (typeof RUN_OUTCOMES)[number]
 
 export const automationRunSchema = z.object({
   at: z.number().int(),
-  by: z.enum(['time', 'state', 'manual']),
+  by: z.enum(['time', 'state', 'event', 'manual']),
   outcome: z.enum(RUN_OUTCOMES),
   errors: z.array(z.object({
     /** Rank of the action in the list. */

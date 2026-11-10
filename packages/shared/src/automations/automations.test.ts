@@ -40,6 +40,15 @@ describe('automation schema', () => {
     expect(a.actions).toHaveLength(3)
   })
 
+  it('accepts a doorbell event trigger, refuses an unknown event and an out-of-range cooldown', () => {
+    const base = { name: 'Sonnette', enabled: true, unless: [], actions: [{ type: 'notify', message: 'On sonne' }] }
+    const trigger = { type: 'event', deviceId: 'mock:doorbell', event: 'chime', cooldownMin: 5 }
+    expect(automationBodySchema.parse({ ...base, trigger }).trigger).toEqual(trigger)
+    expect(automationBodySchema.safeParse({ ...base, trigger: { ...trigger, event: 'knock' } }).success).toBe(false)
+    expect(automationBodySchema.safeParse({ ...base, trigger: { ...trigger, cooldownMin: 0 } }).success).toBe(false)
+    expect(automationBodySchema.safeParse({ ...base, trigger: { ...trigger, cooldownMin: 1441 } }).success).toBe(false)
+  })
+
   it('refuses an any group nested in an any group (one level of OR)', () => {
     const nested = { type: 'any', of: [{ type: 'any', of: [{ type: 'days', days: [1] }] }] }
     expect(predicateSchema.safeParse(nested).success).toBe(false)

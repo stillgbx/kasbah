@@ -44,6 +44,7 @@ export function computeStatus(a: Automation, ctx: EvalContext, scenes: Pick<Scen
   }
 
   if (a.trigger.type === 'state') predicate(a.trigger.when)
+  else if (a.trigger.type === 'event') device(a.trigger.deviceId)
   a.unless.forEach(predicate)
   for (const action of a.actions) {
     if (action.type === 'notify') continue

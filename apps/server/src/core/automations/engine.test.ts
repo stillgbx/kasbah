@@ -35,6 +35,8 @@ const DEVICES = [
   d('cover-living', 'cover', ['open_close'], { cover: { deviceClass: 'shutter' } }),
   d('cover-terrace', 'cover', ['open_close'], { cover: { deviceClass: 'awning' } }),
   d('vehicle-tesla', 'vehicle', ['location', 'soc']),
+  d('doorbell', 'camera', ['live_stream', 'chime']),
+  d('doorbell-back', 'camera', ['live_stream', 'chime']),
 ]
 
 class MemoryStore implements AutomationsStore {
@@ -208,6 +210,88 @@ describe('AutomationEngine — state', () => {
     h.clock.advance(10 * 60_000)
     await h.flush()
     expect(h.executed).toHaveLength(1)
+  })
+})
+
+describe('AutomationEngine — event', () => {
+  const onRing = (over: Partial<AutomationBody> = {}) => body({ trigger: { type: 'event', deviceId: 'mock:doorbell', event: 'chime' }, ...over })
+  const ring = (h: ReturnType<typeof harness>, id = 'mock:doorbell') => h.bus.emit('deviceEvent', id, 'chime', h.clock.now())
+
+  it('fires on a chime of its device, by event', async () => {
+    const h = harness()
+    await h.engine.start()
+    await h.engine.upsert('bell', onRing())
+    ring(h)
+    await h.flush()
+    expect(h.executed).toEqual([{ id: 'mock:light-living', cmd: { type: 'light.set', on: true } }])
+    expect(h.engine.get('bell')!.status.lastRun).toMatchObject({ by: 'event', outcome: 'ok' })
+  })
+
+  it('ignores another device, and a disabled rule', async () => {
+    const h = harness()
+    await h.engine.start()
+    await h.engine.upsert('bell', onRing())
+    await h.engine.upsert('off', onRing({ enabled: false }))
+    ring(h, 'mock:doorbell-back')
+    await h.flush()
+    expect(h.executed).toEqual([])
+    ring(h)
+    await h.flush()
+    expect(h.executed).toHaveLength(1)
+    expect(h.engine.get('off')!.status.lastRun).toBeUndefined()
+  })
+
+  it('skips while an exception holds, without starting the cooldown', async () => {
+    const h = harness()
+    await h.engine.start()
+    await h.engine.upsert('bell', onRing({ trigger: { type: 'event', deviceId: 'mock:doorbell', event: 'chime', cooldownMin: 30 }, unless: [{ type: 'deviceOn', deviceId: 'mock:light-kitchen' }] }))
+    h.patch('light-kitchen', { on: true })
+    ring(h)
+    await h.flush()
+    expect(h.engine.get('bell')!.status.lastRun?.outcome).toBe('skipped')
+    h.patch('light-kitchen', { on: false })
+    h.clock.advance(60_000)
+    ring(h)
+    await h.flush()
+    expect(h.executed).toHaveLength(1)
+    expect(h.engine.get('bell')!.status.lastRun).toMatchObject({ by: 'event', outcome: 'ok' })
+  })
+
+  it('ignores the rings within cooldownMin after a run', async () => {
+    const h = harness()
+    await h.engine.start()
+    await h.engine.upsert('bell', onRing({ trigger: { type: 'event', deviceId: 'mock:doorbell', event: 'chime', cooldownMin: 5 } }))
+    ring(h)
+    await h.flush()
+    h.clock.advance(60_000)
+    ring(h)
+    await h.flush()
+    expect(h.executed).toHaveLength(1)
+    h.clock.advance(5 * 60_000)
+    ring(h)
+    await h.flush()
+    expect(h.executed).toHaveLength(2)
+  })
+
+  it('plans the revert of a forMin command, like the other triggers', async () => {
+    const h = harness()
+    await h.engine.start()
+    h.patch('light-living', { on: false })
+    await h.engine.upsert('bell', onRing({ actions: [{ type: 'command', target: { type: 'devices', deviceIds: ['mock:light-living'] }, command: { type: 'light.set', on: true }, forMin: 5 }] }))
+    ring(h)
+    await h.flush()
+    expect(h.reverts.saved).toMatchObject([{ automationId: 'bell', deviceId: 'mock:light-living', command: { type: 'light.set', on: false } }])
+    h.clock.advance(5 * 60_000)
+    await h.flush()
+    expect(h.executed.at(-1)).toEqual({ id: 'mock:light-living', cmd: { type: 'light.set', on: false } })
+  })
+
+  it('is incomplete while its doorbell is missing', async () => {
+    const h = harness()
+    await h.engine.start()
+    await h.engine.upsert('bell', onRing())
+    h.registry.register('mock', DEVICES.filter((x) => x.externalId !== 'doorbell'))
+    expect(h.engine.get('bell')!.status).toMatchObject({ health: 'incomplete', missing: [{ kind: 'device', id: 'mock:doorbell' }] })
   })
 })
 
