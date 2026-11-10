@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ManualClock } from '@kasbah/mock-sim'
-import type { Automation, AutomationBody, Command, DeviceDescriptor, StatePatch } from '@kasbah/shared'
+import type { Automation, AutomationBody, AutomationRun, Command, DeviceDescriptor, StatePatch } from '@kasbah/shared'
 import pino from 'pino'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadHouse, type LoadedHouse } from '../../config/house'
@@ -15,6 +15,7 @@ import { AutomationEngine } from './engine'
 import { evaluatePredicate, resolveTarget } from './evaluate'
 import type { RevertsStore } from './reverts'
 import type { PendingRevert } from './runner'
+import type { RunsStore } from './runs'
 import { automationsPathFor, createAutomationsFile, type AutomationsStore } from './store'
 
 const HOUSE = resolve(import.meta.dirname, '../../../../../house/demo-house.json')
@@ -54,13 +55,21 @@ class MemoryReverts implements RevertsStore {
   async save(list: readonly PendingRevert[]) { this.saved = [...list] }
 }
 
+class MemoryRuns implements RunsStore {
+  saved: Record<string, AutomationRun> | null = null
+  constructor(private initial: Record<string, AutomationRun> | (() => never) = {}) {}
+  async load() { return typeof this.initial === 'function' ? this.initial() : this.initial }
+  async save(runs: Readonly<Record<string, AutomationRun>>) { this.saved = { ...runs } }
+}
+
 let house: LoadedHouse
 beforeEach(async () => { house = await loadHouse(HOUSE) })
 
-function harness(initial: Automation[] = [], reverts = new MemoryReverts()) {
+function harness(initial: Automation[] = [], reverts = new MemoryReverts(), runs = new MemoryRuns()) {
   const clock = new ManualClock(Date.UTC(2026, 8, 22, 10))
   const bus = new Bus()
   const logger = pino({ level: 'silent' })
+  const warn = vi.spyOn(logger, 'warn')
   const registry = new DeviceRegistry(bus, clock)
   const scenes = new SceneRegistry(bus, clock)
   const executed: { id: string; cmd: Command }[] = []
@@ -69,11 +78,11 @@ function harness(initial: Automation[] = [], reverts = new MemoryReverts()) {
     recallScene: vi.fn(async () => undefined),
   }
   const store = new MemoryStore(initial)
-  const engine = new AutomationEngine({ store, reverts, registry, scenes, host, house, bus, clock, logger })
+  const engine = new AutomationEngine({ store, reverts, runs, registry, scenes, host, house, bus, clock, logger })
   registry.register('mock', DEVICES)
   const patch = (externalId: string, p: Record<string, unknown>) => registry.applyPatch(`mock:${externalId}`, { available: true, ...p } as StatePatch)
   const flush = () => new Promise((r) => setTimeout(r, 0))
-  return { clock, bus, registry, scenes, host, executed, store, reverts, engine, patch, flush }
+  return { clock, bus, registry, scenes, host, executed, store, reverts, runs, warn, engine, patch, flush }
 }
 
 const body = (over: Partial<AutomationBody> = {}): AutomationBody => ({
@@ -456,6 +465,48 @@ describe('AutomationEngine — for N minutes', () => {
     await h.engine.upsert('p', body({ actions: [{ type: 'command', target: { type: 'devices', deviceIds: ['mock:cover-living'] }, command: { type: 'cover.set_position', position: 40 }, forMin: 5 }] }))
     await h.engine.runNow('p')
     expect(h.reverts.saved).toBeNull()
+  })
+})
+
+describe('AutomationEngine — last run on disk', () => {
+  const failed: AutomationRun = { at: Date.UTC(2026, 8, 21, 19), by: 'time', outcome: 'partial', errors: [{ action: 0, deviceId: 'mock:cover-living', code: 'timeout', message: 'no answer' }] }
+  const saved = (id: string): Automation => ({ id, ...body() } as Automation)
+
+  it('writes a manual run to the store', async () => {
+    const h = harness()
+    await h.engine.start()
+    await h.engine.upsert('r', body())
+    const run = await h.engine.runNow('r')
+    expect(h.runs.saved).toEqual({ r: run })
+  })
+
+  it('shows the last run read at startup, without running anything', async () => {
+    const h = harness([saved('r')], undefined, new MemoryRuns({ r: failed }))
+    await h.engine.start()
+    expect(h.engine.get('r')?.status.lastRun).toEqual(failed)
+    expect(h.engine.get('r')?.status.nextRunAt).toBeTypeOf('number')
+    expect(h.executed).toEqual([])
+  })
+
+  it('ignores the run of an automation that no longer exists', async () => {
+    const h = harness([saved('r')], undefined, new MemoryRuns({ r: failed, gone: failed }))
+    await h.engine.start()
+    await h.engine.runNow('r')
+    expect(Object.keys(h.runs.saved ?? {})).toEqual(['r'])
+  })
+
+  it('rewrites the file without a removed automation', async () => {
+    const h = harness([saved('r'), saved('s')], undefined, new MemoryRuns({ r: failed, s: failed }))
+    await h.engine.start()
+    await h.engine.remove('r')
+    expect(h.runs.saved).toEqual({ s: failed })
+  })
+
+  it('starts anyway on an unreadable file, with a warning', async () => {
+    const h = harness([saved('r')], undefined, new MemoryRuns(() => { throw new Error('bad json') }))
+    await h.engine.start()
+    expect(h.engine.get('r')?.status.lastRun).toBeUndefined()
+    expect(h.warn).toHaveBeenCalledWith(expect.anything(), 'automation runs unreadable, ignored')
   })
 })
 

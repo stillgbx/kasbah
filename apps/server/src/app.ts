@@ -9,6 +9,7 @@ import type { PropertyHost } from './config/properties'
 import { HouseView } from './core/automations/context'
 import { AutomationEngine } from './core/automations/engine'
 import { createRevertsFile } from './core/automations/reverts'
+import { createRunsFile } from './core/automations/runs'
 import { automationsPathFor, createAutomationsFile } from './core/automations/store'
 import { Bus } from './core/bus'
 import { ClimateLinks } from './core/climateLinks'
@@ -157,6 +158,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<KasbahApp> {
   const automations = new AutomationEngine({
     store: createAutomationsFile(automationsPathFor(house.path), { readOnly: !!opts.readOnly }),
     reverts: createRevertsFile(stateFile('automation-reverts.json')),
+    runs: createRunsFile(stateFile('automation-runs.json')),
     registry, scenes, host, house, bus, clock, push, logger: opts.logger.child({ component: 'automations' }),
   })
   const alerts = new AlertNotifier({

@@ -10,6 +10,7 @@ import { HouseView, type EvalContext } from './context'
 import { evaluatePredicate, touches, type Tri } from './evaluate'
 import { Flasher } from './flash'
 import type { RevertsStore } from './reverts'
+import type { RunsStore } from './runs'
 import { runActions, type PendingRevert, type RunnerDeps, type RunResult } from './runner'
 import { nextOccurrence } from './schedule'
 import { computeStatus } from './status'
@@ -46,6 +47,8 @@ export interface AutomationEngineDeps extends RunnerDeps {
   store: AutomationsStore
   /** Pending "for N minutes" reverts; absent = kept in memory only. */
   reverts?: RevertsStore
+  /** Last run of each automation; absent = kept in memory only. */
+  runs?: RunsStore
   registry: DeviceRegistry
   scenes: SceneRegistry
   house: LoadedHouse
@@ -90,6 +93,9 @@ export class AutomationEngine {
     for (const a of await this.deps.store.load()) this.automations.set(a.id, a)
     try { for (const r of (await this.deps.reverts?.load()) ?? []) this.reverts.set(revertKey(r), r) }
     catch (err) { this.deps.logger.warn({ err }, 'pending automation reverts unreadable, ignored') }
+    try {
+      for (const [id, run] of Object.entries((await this.deps.runs?.load()) ?? {})) if (this.automations.has(id)) this.lastRun.set(id, run)
+    } catch (err) { this.deps.logger.warn({ err }, 'automation runs unreadable, ignored') }
     const guard = <A extends unknown[]>(name: string, fn: (...args: A) => void) => (...args: A) => {
       try { fn(...args) } catch (err) { this.deps.logger.error({ err, event: name }, 'automation handler failed') }
     }
@@ -166,6 +172,7 @@ export class AutomationEngine {
     catch (err) { this.automations.set(id, before); throw err }
     this.forget(id)
     this.lastRun.delete(id)
+    this.saveRuns()
     this.arm()
     this.notify()
     return true
@@ -444,8 +451,14 @@ export class AutomationEngine {
       .catch((err) => this.deps.logger.warn({ err }, 'pending automation reverts not saved'))
   }
 
+  private saveRuns(): void {
+    void this.deps.runs?.save(Object.fromEntries(this.lastRun))
+      .catch((err) => this.deps.logger.warn({ err }, 'automation runs not saved'))
+  }
+
   private record(a: Automation, run: AutomationRun): void {
     this.lastRun.set(a.id, run)
+    this.saveRuns()
     const log = run.outcome === 'ok' || run.outcome === 'skipped' ? 'info' : 'warn'
     this.deps.logger[log]({ automation: a.id, by: run.by, outcome: run.outcome, errors: run.errors }, 'automation run')
     this.notify()
