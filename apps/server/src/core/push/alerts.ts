@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { deviceAlerts, NOTIFY_CATEGORY_OF_KIND, type DeviceAlert, type DeviceId, type NotifyCategory, type PluginHealth } from '@kasbah/shared'
+import { deviceAlerts, NOTIFY_CATEGORY_OF_KIND, type DeviceAlert, type DeviceEventKind, type DeviceId, type NotifyCategory, type PluginHealth } from '@kasbah/shared'
 import type { Logger } from 'pino'
 import { z } from 'zod'
 import { writeFileAtomic } from '../atomic-file'
@@ -17,6 +17,10 @@ import type { PushService } from './service'
 // gone for `FORGET_AFTER_MS`: a state that drops the alert for a moment (a first partial reading
 // after a restart, a vendor message that flickers) does not make it notified twice. The notified
 // ids are written in `.state/`: a restart does not send again what was already sent.
+//
+// A doorbell ring (`deviceEvent` `chime`, whatever the plugin) goes out each time, in `cameras`: the
+// same tag per doorbell, a burst of rings replaces the notification instead of piling up. Motion,
+// person and sound will follow the same path once a plugin publishes them.
 //
 // Plugins are read every minute (`host.health()`, the house's health, not an account's): `error`
 // and `needs_pairing` right away, `degraded` once it has lasted 5 min — the app's rule.
@@ -61,9 +65,14 @@ export class AlertNotifier {
     try { this.seen = fileSchema.parse(JSON.parse(await readFile(this.deps.path, 'utf8'))).seen }
     catch (err) { if ((err as NodeJS.ErrnoException).code !== 'ENOENT') this.deps.logger.warn({ err }, 'notified alerts unreadable, ignored') }
     // guarded: `Bus.emit` catches nothing, an exception would bubble up into the publishing plugin
-    this.unsubscribe.push(this.deps.bus.on('state', (id) => {
-      try { this.onDevice(id) } catch (err) { this.deps.logger.error({ err }, 'alert notification failed') }
-    }))
+    this.unsubscribe.push(
+      this.deps.bus.on('state', (id) => {
+        try { this.onDevice(id) } catch (err) { this.deps.logger.error({ err }, 'alert notification failed') }
+      }),
+      this.deps.bus.on('deviceEvent', (id, event) => {
+        try { this.onEvent(id, event) } catch (err) { this.deps.logger.error({ err }, 'doorbell notification failed') }
+      }),
+    )
     this.timer = this.deps.clock.setInterval(() => void this.tick(), HEALTH_EVERY_MS)
   }
 
@@ -88,6 +97,13 @@ export class AlertNotifier {
       this.seen[a.id] = now
     }
     if (changed) void this.save()
+  }
+
+  /** A device reported an event: a doorbell ring is pushed. */
+  onEvent(id: DeviceId, event: DeviceEventKind): void {
+    if (event !== 'chime') return
+    const name = this.deps.registry.get(id)?.descriptor.name ?? id
+    this.send('cameras', (lang) => ({ title: name, body: textsFor(lang).chime, tag: `${id}|chime`, url: '/cameras' }))
   }
 
   /** Every minute: the plugins, and the forgetting of the alerts that are over. */

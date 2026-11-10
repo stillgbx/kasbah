@@ -45,7 +45,7 @@ export const kindRight = (kind: DeviceKind): Right | null => RIGHT_OF_KIND[kind]
 
 /** What a push notification category needs: an account without it is not notified. */
 export const RIGHT_OF_NOTIFY_CATEGORY: Record<NotifyCategory, Exclude<Need, null>> = {
-  vehicles: 'vehicles', robots: 'robots', pets: 'pets', weather: 'weather', plugins: 'admin', automations: 'automations',
+  vehicles: 'vehicles', robots: 'robots', pets: 'pets', weather: 'weather', plugins: 'admin', automations: 'automations', cameras: 'cameras',
 }
 
 /** Does this list of rights (absent = all) grant `right` (`null` = nothing to grant)? */

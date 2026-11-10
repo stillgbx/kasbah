@@ -5,7 +5,7 @@ import type { DeviceKind } from '../devices/kinds'
 // of the automations to the phones and browsers that subscribed. Each subscription picks its
 // CATEGORIES; the server decides which category a message belongs to.
 
-export const NOTIFY_CATEGORIES = ['vehicles', 'robots', 'pets', 'weather', 'plugins', 'automations'] as const
+export const NOTIFY_CATEGORIES = ['vehicles', 'robots', 'pets', 'weather', 'plugins', 'automations', 'cameras'] as const
 export type NotifyCategory = (typeof NOTIFY_CATEGORIES)[number]
 
 /** The category of a device's alerts (`deviceAlerts`); absent = its alerts are never pushed. */

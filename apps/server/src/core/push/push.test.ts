@@ -145,8 +145,23 @@ describe('AlertNotifier', () => {
     const sent: { category: string; message: PushMessage }[] = []
     const push = { send: async (category: Parameters<PushService['send']>[0], render: (lang: 'fr') => PushMessage) => { sent.push({ category, message: render('fr') }); return { sent: 1, failed: 0 } } }
     const notifier = () => new AlertNotifier({ bus, registry, health: async () => health(), push, clock, path: join(dir, 'alerts.json'), logger })
-    return { clock, registry, sent, notifier }
+    return { clock, bus, registry, sent, notifier }
   }
+
+  it('pushes each doorbell ring to cameras, under one tag per doorbell, and nothing for the other events', async () => {
+    const h = harness()
+    h.registry.register('mock', [mower, { id: 'mock:doorbell', pluginId: 'mock', externalId: 'doorbell', kind: 'camera', name: 'Entrée', capabilities: ['chime'], meta: {} }])
+    const n = h.notifier()
+    await n.start()
+    h.bus.emit('deviceEvent', 'mock:doorbell', 'chime', h.clock.now())
+    h.bus.emit('deviceEvent', 'mock:doorbell', 'motion', h.clock.now())
+    h.bus.emit('deviceEvent', 'mock:doorbell', 'chime', h.clock.now())
+    const ring = { category: 'cameras', message: { title: 'Entrée', body: 'On sonne à la porte', tag: 'mock:doorbell|chime', url: '/cameras' } }
+    expect(h.sent).toEqual([ring, ring])
+    await n.close()
+    h.bus.emit('deviceEvent', 'mock:doorbell', 'chime', h.clock.now())
+    expect(h.sent).toHaveLength(2)
+  })
 
   it('notifies an alert once, in the words of the house panel, and not again after a restart', async () => {
     const h = harness()

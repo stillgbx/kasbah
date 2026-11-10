@@ -27,6 +27,7 @@ const TEXTS = {
     pluginStatus: { degraded: 'Dégradé', needs_pairing: 'Appairage requis', error: 'Erreur' } as Record<string, string>,
     testTitle: 'Kasbah',
     testBody: 'Les notifications arrivent sur cet appareil.',
+    chime: 'On sonne à la porte',
   },
   en: {
     update: 'Update available',
@@ -49,6 +50,7 @@ const TEXTS = {
     pluginStatus: { degraded: 'Degraded', needs_pairing: 'Pairing required', error: 'Error' } as Record<string, string>,
     testTitle: 'Kasbah',
     testBody: 'Notifications reach this device.',
+    chime: 'Someone is at the door',
   },
 } satisfies Record<PushLang, unknown>
 
