@@ -20,12 +20,11 @@ import { applyRoomFocus } from './roomFocus'
 // a lamp that is off or on another level costs one comparison. Tested after, each lamp cost
 // 0.15 ms of GPU per frame even switched off — 40 lamps, +6 ms (integrated Radeon, 2026-11-10).
 //
-// GARDEN lamps are not tested by height: they are marked by `castShadow`, which three sorts AT THE
+// GARDEN lamps are not tested: they cast a shadow (`castShadow`), and it is the shadow that stops
+// them at the wall — and lets them in through a window. Three sorts shadow-casting lights AT THE
 // HEAD of the list (`shadowCastingAndTexturingLightsFirst`), hence `UNROLLED_LOOP_INDEX >=
-// NUM_POINT_LIGHT_SHADOWS`. Their shadow was meant to stop them at the wall, but three does not
-// draw a `PointLight` shadow under `VSMShadowMap` (r187): they are kept out of the INDOOR
-// materials (`userData.indoor`: floors, partitions, room finishes) instead. What remains: the
-// inner face of a facade without finish shares the facade's material, and takes them if it faces them.
+// NUM_POINT_LIGHT_SHADOWS`. That shadow only exists under `PCFShadowMap` (or Basic): three draws
+// none for a `PointLight` under VSM, which is why the renderer left VSM on 2026-11-10.
 // A garden lamp that is off casts no shadow: it falls into the height test, but it lights nothing.
 //
 // A material marked `userData.noLamps` (the terrain, the zones, the roof, the water) receives no
@@ -86,7 +85,7 @@ const LIGHTS_BEGIN = (() => {
     .replace(POINT_INFO, `#if ( UNROLLED_LOOP_INDEX >= NUM_POINT_LIGHT_SHADOWS )
 		if ( kasbahLampReaches( pointLight.color, pointLight.position, kasbahPixel ) ) {
 		#else
-		if ( kasbahLamps < 1.5 ) {
+		{
 		#endif
 		${POINT_INFO}`)
     .replace(POINT_DIRECT, `if ( directLight.visible ) ${POINT_DIRECT}
@@ -99,8 +98,7 @@ export function applyLevelLight(shader: WebGLProgramParametersWithUniforms, mate
   if (!shader.fragmentShader.includes('#include <lights_fragment_begin>')) return
   shader.uniforms.kasbahLevelY = levelLightUniforms.kasbahLevelY
   shader.uniforms.kasbahLevelCount = levelLightUniforms.kasbahLevelCount
-  // 0 = outdoors (no indoor lamp), 2 = indoors (no garden lamp), 1 = both
-  shader.uniforms.kasbahLamps = { value: material.userData.noLamps ? 0 : material.userData.indoor ? 2 : 1 }
+  shader.uniforms.kasbahLamps = { value: material.userData.noLamps ? 0 : 1 }
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <lights_pars_begin>', `#include <lights_pars_begin>\n${PARS}`)
     .replace('#include <lights_fragment_begin>', LIGHTS_BEGIN)

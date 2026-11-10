@@ -1,5 +1,5 @@
 import {
-  AmbientLight, Color, DirectionalLight, DoubleSide, HemisphereLight, MOUSE, OrthographicCamera, PerspectiveCamera, Plane, Raycaster, Scene, Shape, ShapeGeometry, Spherical, type Intersection, type Texture, TOUCH, Vector2, Vector3, VSMShadowMap,
+  AmbientLight, Color, DirectionalLight, DoubleSide, HemisphereLight, MOUSE, OrthographicCamera, PerspectiveCamera, Plane, Raycaster, Scene, Shape, ShapeGeometry, Spherical, type Intersection, type Texture, TOUCH, Vector2, Vector3, PCFShadowMap,
   WebGLRenderer, Box3, BoxGeometry, Fog, Mesh, MeshBasicMaterial, type Material, type MeshPhysicalMaterial, type MeshStandardMaterial, type Object3D,
   Group, SphereGeometry, CylinderGeometry, RingGeometry, Frustum, Matrix4, Sphere, PointLight,
 } from 'three'
@@ -680,10 +680,10 @@ export class HouseScene {
     const create = deps.createRenderer ?? (gpu ? (c: HTMLCanvasElement) => gpu.createRenderer(c) : defaultCreateRenderer)
     this.renderer = deps.headless ? null : create(canvas)
     this.supported = deps.headless ? true : this.renderer !== null
-    // VSM (Variance Shadow Maps) and not PCFSoftShadowMap: since three 0.184 the latter is
-    // deprecated and falls back to HARD PCF (jagged edges) with a console warning.
-    // VSM blurs natively, driven by `shadow.radius` / `shadow.blurSamples`.
-    if (this.renderer) { this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = VSMShadowMap }
+    // PCF, softened by `shadow.radius` (five samples rotated per pixel since three r182). VSM, kept
+    // from 2026-09-12 to 2026-11-10, blurred more evenly, but three draws NO point-light shadow under
+    // it (r187): a garden lamp, which only its shadow stops at the wall, lit the rooms through the facade.
+    if (this.renderer) { this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = PCFShadowMap }
     if (this.renderer) { this.caustics = new WaterCaustics(this.water); this.water.caustics.value = this.caustics.texture }
     if (this.renderer && this.gpu) {
       this.gpuInit = (this.renderer as unknown as { init(): Promise<unknown> }).init().then(() => { this.gpuReady = true; this.loop.invalidate() })
@@ -704,7 +704,6 @@ export class HouseScene {
     // grazing walls, where `bias` alone detached the shadow from its object (peter-panning).
     this.sun.shadow.normalBias = 0.02
     this.sun.shadow.radius = 3
-    this.sun.shadow.blurSamples = 16
     this.scene.add(this.sun)
 
     if (!deps.headless && this.renderer) {

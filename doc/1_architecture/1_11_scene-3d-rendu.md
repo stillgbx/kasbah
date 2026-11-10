@@ -43,6 +43,9 @@ matériaux partagés, aucun maillage n'est reconstruit.
 
 ### Mise à jour 2026-09-12 (ter) — les ombres portées redeviennent douces
 
+> **Dépassé le 2026-11-10** pour le MODE d'ombre : `PCFShadowMap` a remplacé `VSMShadowMap`
+> (« Mise à jour 2026-11-10 (bis) » en fin de page). Le cadrage et le biais décrits ici restent.
+
 Constat de l'utilisateur : « les ombres portées ne sont pas terribles ». Deux causes, l'une dans le
 mode d'ombre, l'autre dans le cadrage.
 
@@ -429,9 +432,9 @@ Sources : `apps/web/src/three/core/layers.ts`, `apps/web/src/three/HouseScene.ts
 
 ### Mise à jour 2026-09-15 (nonies) — une lampe de jardin éclaire la façade, et s'arrête au mur
 
-> **Dépassé le 2026-11-10** : three r187 ne dessine plus l'ombre d'une `PointLight` en `VSMShadowMap`,
-> donc plus rien n'arrêtait la lampe au mur. Elle est tenue hors des matières d'intérieur par le shader —
-> voir « Mise à jour 2026-11-10 — les lampes : sautées avant calcul, et le jardin tenu dehors » en fin de page.
+> **Précision du 2026-11-10** : cette ombre n'existe qu'en `PCFShadowMap`. three r187 n'en dessine aucune
+> pour une `PointLight` en `VSMShadowMap`, et plus rien n'arrêtait la lampe au mur : le rendu est repassé en
+> PCF — voir « Mise à jour 2026-11-10 (bis) » en fin de page.
 
 **Lève le compromis** posé une heure plus tôt (« octies » ci-dessus : le jardin avait sa passe, donc
 ses lampes n'éclairaient plus que le jardin). Arbitrage de l'utilisateur : « les lampes extérieures
@@ -2550,6 +2553,10 @@ du shader d'avant de 0,11/255 en moyenne, contre 0,09 entre deux rendus du même
 
 #### Les lampes de jardin n'avaient plus d'ombre
 
+> **Remplacé le jour même** : le confinement par `userData.indoor` décrit ci-dessous a été livré
+> (commit `4cc5604`) puis retiré. Il arrêtait la lampe au mur, mais aussi à la vitre : plus de lumière
+> de terrasse au sol derrière une baie, ce que la règle de septembre voulait. Voir la section (bis).
+
 La section « nonies » du 2026-09-15 fait porter à une lampe de jardin une ombre cubique qui l'arrête
 au mur. **three r187 ne la dessine pas en `VSMShadowMap`** : `WebGLShadowMap` écrit « VSM shadow maps
 are not supported for PointLights » et passe, et `lights_fragment_begin` ne lit l'ombre d'une lampe
@@ -2604,3 +2611,45 @@ voile de chargement.
 Sources : `apps/web/src/three/core/levelLight.ts`, `apps/web/src/three/builders/materials.ts`,
 `apps/web/src/three/HouseScene.ts` (`updateStates`), `apps/web/src/three/three.test.ts`,
 `node_modules/three/src/renderers/webgl/WebGLShadowMap.js`.
+
+### Mise à jour 2026-11-10 (bis) — ombres en PCF : la lampe de jardin retrouve son ombre
+
+Retour de l'utilisateur sur le confinement livré le matin : « je pense qu'il faut corriger ça » — une
+lampe de terrasse doit entrer par la fenêtre (section « nonies » du 2026-09-15), et seule une vraie
+ombre fait ce tri. Le type d'ombre est global au renderer de three : rendre son ombre à la lampe,
+c'est passer le soleil en PCF aussi.
+
+**Ce qui change** : `renderer.shadowMap.type = PCFShadowMap` (`HouseScene`, les deux moteurs lisent
+cette ligne), `sun.shadow.blurSamples` retiré (il ne servait qu'au VSM), `shadow.radius = 3` gardé.
+Le PCF de three r187 n'est plus le PCF dur de la section du 2026-09-12 : cinq échantillons sur un
+disque, tournés par pixel, chacun filtré par le matériel. Le confinement `userData.indoor` et la
+troisième valeur de `kasbahLamps` sont retirés ; le saut des lampes éteintes et la capture d'ombres
+réservée aux lampes de jardin restent.
+
+**Mesuré**, Radeon intégrée, maison de démo, chaque mode depuis un chargement neuf :
+
+| Vue | Écart PCF / VSM (luminance moyenne sur 255) | Pixels au-delà de 8 |
+|---|---|---|
+| jour, ensemble | 0,32 | 1,0 % |
+| jour, rez-de-chaussée vu de dessus | 0,45 | 1,1 % |
+| nuit, lampe de jardin devant une baie | 0,30 | 0,35 % |
+
+De jour les deux modes rendent la même image, bord d'ombre un peu plus doux en PCF. De nuit, la lampe
+porte de nouveau une ombre (`shadow.map` présent, plus d'avertissement de three) : les écarts avec le
+VSM sont sur ce qui fait écran (dessous du store, embrasures), et la lumière passe par la baie.
+Coût : image entière 7,9 à 8,1 ms en PCF contre 7,7 à 7,95 en VSM (medium, A/B/A/B), dans le bruit.
+
+**Piège de mesure** : basculer `shadowMap.type` à chaud dans une page donne des captures FAUSSES (une
+ombre plus pâle ou plus sombre selon l'ordre des bascules). Comparer deux modes se fait depuis deux
+chargements, en changeant la ligne dans le code.
+
+**Ce qui reste** : allumer ou éteindre une lampe de jardin change le nombre de lampes à ombre, donc
+recompile les matières éclairées (à-coup au premier passage) — comportement d'origine de septembre.
+Le fondu d'ombre de l'étage qui s'envole (`core/levelFade.ts`) comptait sur le flou du VSM pour lisser
+sa trame : non relu à l'œil en PCF. Non vérifié non plus : la lampe devant un mur PLEIN.
+
+Tests (`three.test.ts`) : la lampe de jardin n'est pas masquée, et le fragment de three ne lit son ombre
+qu'en PCF ou en Basic.
+
+Sources : `apps/web/src/three/HouseScene.ts`, `apps/web/src/three/core/levelLight.ts`,
+`apps/web/src/three/three.test.ts`, `node_modules/three/src/renderers/shaders/ShaderChunk/shadowmap_pars_fragment.glsl.js`.

@@ -12,7 +12,7 @@ Entrées les plus récentes en haut. Une session = une entrée.
 **Déclencheur** : audit de la partie 3D demandé par l'utilisateur (optimisations, corrections, changement d'approche éventuel) ; trois correctifs retenus et appliqués.
 
 **Pages modifiées** :
-- `1_architecture/1_11_scene-3d-rendu.md` - section datée : coût d'une lampe même éteinte (0,15 ms GPU, mesures avant/après), ombres de `PointLight` absentes en VSM sous three r187 et confinement par `userData.indoor`, capture d'ombres réservée aux lampes de jardin, pistes non prises (PCF, `antialias`, AO demi-résolution), piège de banc ; renvoi « dépassé » posé sur la section « nonies » du 2026-09-15
+- `1_architecture/1_11_scene-3d-rendu.md` - section datée : coût d'une lampe même éteinte (0,15 ms GPU, mesures avant/après), ombres de `PointLight` absentes en VSM sous three r187 et confinement par `userData.indoor`, capture d'ombres réservée aux lampes de jardin, pistes non prises (PCF, `antialias`, AO demi-résolution), piège de banc ; renvoi posé sur la section « nonies » du 2026-09-15 ; puis section (bis), sur retour de l'utilisateur : ombres en `PCFShadowMap` pour rendre son ombre à la lampe de jardin (elle entre de nouveau par les vitres), confinement `userData.indoor` retiré, comparaison PCF / VSM mesurée, piège de la bascule à chaud ; section VSM du 2026-09-12 marquée dépassée pour le mode
 
 **Index** : catalogue mis à jour (1 ligne), index.md régénéré.
 

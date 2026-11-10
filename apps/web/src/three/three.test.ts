@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import './textures/prebake' // bakes the materials at import, outside the first test's timeout
 import { BackSide, Box3, BoxGeometry, type OrthographicCamera, type PerspectiveCamera, type BufferGeometry, CylinderGeometry, type Material, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshStandardMaterial, type Object3D, type ShaderMaterial, ShaderLib, ShapeGeometry, Vector3, type BufferAttribute, type Texture } from 'three'
-import { computeHouseGeometry, FINISHES, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type Finish, type OpeningRect, type PlacedHouseDevice } from '@kasbah/shared'
+import { computeHouseGeometry, localToGeo, openingGaps, parseHouse, type DeviceDescriptor, type DeviceState, type OpeningRect, type PlacedHouseDevice } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
 import tilleuls from '../../../../house/demos/tilleuls.json'
 import { buildHouse, buildLevel, buildRoofMesh, countTriangles } from './builders/buildHouse'
 import { buildDetails, buildRoofDetails, isGlazed } from './builders/details'
 import { alignedToLongestEdge, extrudePolygon } from './builders/shapes'
 import { createSurfaceTextures, type SurfaceTexture } from './textures/procedural'
-import { createMaterials, finishMaterial } from './builders/materials'
+import { createMaterials } from './builders/materials'
 import { fitBox, fitDistance, ISO_FOV_DEG, ISO_POLAR, ORTHO_BASE_M, snapIsoAzimuth, sphericalOf, visibleHeight } from './core/cameraFit'
 import { boundsToWorldBox, houseToWorld } from './core/coords'
 import { createRenderLoop } from './core/renderLoop'
@@ -1579,21 +1579,19 @@ describe('a lamp only lights its level (a single pass)', () => {
   it('the terrain, the zones, the roof and the water receive no indoor lamp; the walls do', () => {
     const mats = createMaterials(defaultSceneTheme(), defaultLook())
     for (const m of [mats.terrain, mats.roof, mats.roofFlat, ...Object.values(mats.zones)]) expect(compile(m).uniforms.kasbahLamps!.value).toBe(0)
-    for (const m of [mats.wall, mats.device]) expect(compile(m).uniforms.kasbahLamps!.value).toBe(1)
+    for (const m of [mats.wall, mats.wallInterior, mats.floor, mats.device]) expect(compile(m).uniforms.kasbahLamps!.value).toBe(1)
   })
 
   /**
-   * Three draws no `PointLight` shadow under `VSMShadowMap` (r187): nothing stopped a garden lamp
-   * at the wall anymore. The indoor materials refuse it in the shader instead.
+   * A garden lamp is stopped by its SHADOW, not by the mask: that is what lets it in through a
+   * window. Three only reads a point-light shadow under PCF or Basic (r187) — under VSM the lamp
+   * lit the rooms through the facade, which is why the renderer uses `PCFShadowMap`.
    */
-  it('floors, partitions and room finishes receive no garden lamp; the facade does', () => {
+  it('a garden lamp is not masked: its shadow decides, and three reads it under PCF', () => {
     const mats = createMaterials(defaultSceneTheme(), defaultLook())
-    const finish = { id: Object.keys(FINISHES)[0] } as Finish
-    const indoor = [mats.wallInterior, mats.floor, ...Object.values(mats.floors), mats.floor.clone(), finishMaterial(mats, 'floor', finish), finishMaterial(mats, 'wall', finish)]
-    for (const m of indoor) expect(compile(m).uniforms.kasbahLamps!.value).toBe(2)
-    for (const m of [mats.wall, finishMaterial(mats, 'facade', finish)]) expect(compile(m).uniforms.kasbahLamps!.value).toBe(1)
     const f = compile(mats.floor).fragmentShader
-    expect(f).toMatch(/#else\s*if \( kasbahLamps < 1\.5 \) {\s*#endif/)                              // the shadow slots: the garden lamps
+    expect(f).toMatch(/#else\s*{\s*#endif/)                                                          // the shadow slots: no test
+    expect(f).toMatch(/UNROLLED_LOOP_INDEX < NUM_POINT_LIGHT_SHADOWS \) && \( defined\( SHADOWMAP_TYPE_PCF \) \|\| defined\( SHADOWMAP_TYPE_BASIC \) \)/)
   })
 
   it('the slices are the levels\' elevations, without the lowest', () => {
