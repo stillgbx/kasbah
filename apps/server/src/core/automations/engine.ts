@@ -8,6 +8,7 @@ import type { DeviceRegistry } from '../registry'
 import type { SceneRegistry } from '../scene-registry'
 import { HouseView, type EvalContext } from './context'
 import { evaluatePredicate, touches, type Tri } from './evaluate'
+import { Flasher } from './flash'
 import type { RevertsStore } from './reverts'
 import { runActions, type PendingRevert, type RunnerDeps, type RunResult } from './runner'
 import { nextOccurrence } from './schedule'
@@ -72,12 +73,17 @@ export class AutomationEngine {
   private readonly listeners = new Set<() => void>()
   private readonly unsubscribe: (() => void)[] = []
   private readonly view: HouseView
+  /** Lights flashing for a "Flash" action, and the deps the runner receives with them. */
+  private readonly flasher: Flasher
+  private readonly runnerDeps: RunnerDeps
   private timer: unknown = null
   private lastSent = ''
   private closed = false
 
   constructor(private readonly deps: AutomationEngineDeps) {
     this.view = new HouseView(deps.house, deps.registry)
+    this.flasher = new Flasher({ host: deps.host, clock: deps.clock, logger: deps.logger })
+    this.runnerDeps = { ...deps, flasher: this.flasher }
   }
 
   async start(): Promise<void> {
@@ -112,6 +118,7 @@ export class AutomationEngine {
     this.unsubscribe.length = 0
     if (this.timer) this.deps.clock.clearTimeout(this.timer)
     if (this.revertTimer) this.deps.clock.clearTimeout(this.revertTimer)
+    this.flasher.close()
     for (const h of this.holds.values()) this.deps.clock.clearTimeout(h)
     this.holds.clear()
     this.listeners.clear()
@@ -200,7 +207,7 @@ export class AutomationEngine {
   async runNow(id: string): Promise<AutomationRun | undefined> {
     const a = this.automations.get(id)
     if (!a) return undefined
-    const result = await runActions(a, 'manual', this.context(), this.deps)
+    const result = await runActions(a, 'manual', this.context(), this.runnerDeps)
     this.done(a, result)
     return result.run
   }
@@ -366,7 +373,7 @@ export class AutomationEngine {
     }
     this.running.add(a.id)
     // Never awaited here: we are inside a bus or timer handler.
-    void runActions(a, by, ctx, this.deps)
+    void runActions(a, by, ctx, this.runnerDeps)
       .then((result) => this.done(a, result))
       .catch((err) => this.deps.logger.error({ err, automation: a.id }, 'automation run failed'))
       .finally(() => this.running.delete(a.id))

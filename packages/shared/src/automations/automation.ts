@@ -92,6 +92,14 @@ export const targetSchema = z.discriminatedUnion('type', [
 ])
 export type Target = z.infer<typeof targetSchema>
 
+/** Colors of the "flash" action: a short palette, the server turns it into the light's color. */
+export const FLASH_COLORS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'white'] as const
+export type FlashColor = (typeof FLASH_COLORS)[number]
+/** Speeds of the "flash" action; the server sets the rhythm (`FLASH_PERIOD_MS`, server side). */
+export const FLASH_SPEEDS = ['slow', 'normal', 'fast'] as const
+export type FlashSpeed = (typeof FLASH_SPEEDS)[number]
+export const FLASH_DURATION_S = { min: 2, max: 300, default: 10 } as const
+
 /** Recall of a vendor light scene, WRITTEN mode (not the default of `sceneRecallSchema`). */
 export const automationRecallSchema = z.object({
   mode: z.enum(SCENE_RECALL_MODES),
@@ -112,6 +120,18 @@ export const actionSchema = z.discriminatedUnion('type', [
    * automation's name.
    */
   z.object({ type: z.literal('notify'), message: z.string().trim().min(1).max(200) }),
+  /**
+   * Makes lights FLASH, run by the server whatever the brand (on and off at full brightness, in
+   * `color` if given and the light has colors), then puts each one back as it was. To be seen from
+   * afar or by someone who does not hear the doorbell. Devices that are not lights are refused.
+   */
+  z.object({
+    type: z.literal('flash'),
+    target: targetSchema,
+    color: z.enum(FLASH_COLORS).optional(),
+    durationS: z.number().int().min(FLASH_DURATION_S.min).max(FLASH_DURATION_S.max).default(FLASH_DURATION_S.default),
+    speed: z.enum(FLASH_SPEEDS).default('normal'),
+  }),
   // Iteration 2: { type: 'system.run', name } (allowlist from the .env); { type: 'webhook', url }
 ])
 export type AutomationAction = z.infer<typeof actionSchema>

@@ -35,6 +35,7 @@ const DEVICES = [
   d('cover-living', 'cover', ['open_close'], { cover: { deviceClass: 'shutter' } }),
   d('cover-terrace', 'cover', ['open_close'], { cover: { deviceClass: 'awning' } }),
   d('vehicle-tesla', 'vehicle', ['location', 'soc']),
+  d('light-color', 'light', ['on_off', 'brightness', 'color']),
   d('doorbell', 'camera', ['live_stream', 'chime']),
   d('doorbell-back', 'camera', ['live_stream', 'chime']),
 ]
@@ -292,6 +293,52 @@ describe('AutomationEngine — event', () => {
     await h.engine.upsert('bell', onRing())
     h.registry.register('mock', DEVICES.filter((x) => x.externalId !== 'doorbell'))
     expect(h.engine.get('bell')!.status).toMatchObject({ health: 'incomplete', missing: [{ kind: 'device', id: 'mock:doorbell' }] })
+  })
+})
+
+describe('AutomationEngine — flash', () => {
+  const flash = (over: Record<string, unknown> = {}) => body({ actions: [{ type: 'flash', target: { type: 'devices', deviceIds: ['mock:light-living'] }, durationS: 2, speed: 'normal', ...over }] })
+  const OFF = { type: 'light.set', on: false, transitionMs: 0 }
+  /** Half a "normal" cycle (1.2 s), one step at a time: the mock host acknowledges between them. */
+  const half = async (h: ReturnType<typeof harness>, n = 1) => { for (let k = 0; k < n; k++) { h.clock.advance(600); await h.flush() } }
+
+  it('blinks the light for its duration, then puts it back as it was', async () => {
+    const h = harness()
+    await h.engine.start()
+    h.patch('light-living', { on: true, brightness: 40 })
+    await h.engine.upsert('f', flash())
+    const run = await h.engine.runNow('f')
+    expect(run?.outcome).toBe('ok')
+    await half(h, 4)
+    expect(h.executed.map((x) => x.cmd)).toEqual([{ type: 'light.set', on: true, transitionMs: 0 }, OFF, { type: 'light.set', on: true, transitionMs: 0 }, OFF, { type: 'light.set', on: true, brightness: 40, transitionMs: 0 }])
+    await half(h, 3)
+    expect(h.executed).toHaveLength(5)
+  })
+
+  it('flashes in color at full brightness when the light can, and refuses what is not a light', async () => {
+    const h = harness()
+    await h.engine.start()
+    await h.engine.upsert('f', flash({ target: { type: 'devices', deviceIds: ['mock:light-color', 'mock:cover-living'] }, color: 'red' }))
+    const run = await h.engine.runNow('f')
+    expect(run).toMatchObject({ outcome: 'partial', errors: [{ deviceId: 'mock:cover-living', code: 'KIND_MISMATCH' }] })
+    expect(h.executed[0]).toMatchObject({ id: 'mock:light-color', cmd: { on: true, brightness: 100, color: { x: expect.closeTo(0.7, 1), y: expect.closeTo(0.3, 1) } } })
+    await half(h, 4)
+    expect(h.executed.at(-1)).toEqual({ id: 'mock:light-color', cmd: OFF })      // it was off (never read)
+  })
+
+  it('keeps the state noted at the start when a ring comes while it flashes, and goes on longer', async () => {
+    const h = harness()
+    await h.engine.start()
+    h.patch('light-living', { on: true, brightness: 40 })
+    await h.engine.upsert('f', flash())
+    await h.engine.runNow('f')
+    await half(h)
+    h.patch('light-living', { on: false })                  // the light reports its "off" phase
+    await h.engine.runNow('f')
+    await half(h, 3)                                         // past the first end (2 s), not the second
+    expect(h.executed.at(-1)?.cmd).not.toMatchObject({ brightness: 40 })
+    await half(h, 2)
+    expect(h.executed.at(-1)?.cmd).toEqual({ type: 'light.set', on: true, brightness: 40, transitionMs: 0 })
   })
 })
 

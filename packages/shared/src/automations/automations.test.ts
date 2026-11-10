@@ -49,6 +49,15 @@ describe('automation schema', () => {
     expect(automationBodySchema.safeParse({ ...base, trigger: { ...trigger, cooldownMin: 1441 } }).success).toBe(false)
   })
 
+  it('accepts a flash with its defaults, refuses an unknown color and an out-of-range duration', () => {
+    const base = { name: 'Sonnette', enabled: true, unless: [], trigger: { type: 'event', deviceId: 'mock:doorbell', event: 'chime' } }
+    const flash = { type: 'flash', target: { type: 'selector', kind: 'light', roomIds: ['salon'] } }
+    expect(automationBodySchema.parse({ ...base, actions: [flash] }).actions[0]).toEqual({ ...flash, durationS: 10, speed: 'normal' })
+    expect(automationBodySchema.safeParse({ ...base, actions: [{ ...flash, color: 'pink' }] }).success).toBe(false)
+    expect(automationBodySchema.safeParse({ ...base, actions: [{ ...flash, durationS: 1 }] }).success).toBe(false)
+    expect(automationBodySchema.safeParse({ ...base, actions: [{ ...flash, durationS: 301 }] }).success).toBe(false)
+  })
+
   it('refuses an any group nested in an any group (one level of OR)', () => {
     const nested = { type: 'any', of: [{ type: 'any', of: [{ type: 'days', days: [1] }] }] }
     expect(predicateSchema.safeParse(nested).success).toBe(false)

@@ -5,6 +5,7 @@ import type { PushService } from '../push/service'
 import type { SceneRegistry } from '../scene-registry'
 import type { EvalContext } from './context'
 import { resolveTarget } from './evaluate'
+import type { Flasher } from './flash'
 
 // Running an automation's actions. The same path as a command sent from the interface
 // (`POST /api/devices/:id/command`): the command is checked against what the device declares
@@ -20,6 +21,8 @@ export interface RunnerDeps {
   scenes: Pick<SceneRegistry, 'get'>
   /** Push notifications (the "Notify" action); absent = refused. */
   push?: Pick<PushService, 'send'>
+  /** Flashing lights (the "Flash" action); absent = refused. */
+  flasher?: Pick<Flasher, 'start'>
 }
 
 type RunError = AutomationRun['errors'][number]
@@ -80,6 +83,16 @@ export async function runActions(a: Automation, by: AutomationRun['by'], ctx: Ev
       errors.push({ action: i, deviceId: id, code: 'DEVICE_UNKNOWN', message: `unknown device "${id}"` })
     }
     attempted += entries.length
+    if (action.type === 'flash') {
+      const { flasher } = deps
+      if (!flasher) { errors.push({ action: i, code: 'NOT_IMPLEMENTED', message: 'no light flashing on this server' }); continue }
+      // the flashing goes on by itself: the next actions do not wait for its end
+      const flashed = await Promise.allSettled(entries.map((e) => flasher.start(e, action)))
+      flashed.forEach((r, k) => {
+        if (r.status === 'rejected') errors.push({ action: i, deviceId: entries[k]!.descriptor.id, code: codeOf(r.reason), message: (r.reason as Error).message })
+      })
+      continue
+    }
     const results = await Promise.allSettled(entries.map(async (e) => {
       assertCommandAllowed(e.descriptor, action.command)
       await deps.host.execute(e.descriptor.id, action.command)
