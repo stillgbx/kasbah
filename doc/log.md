@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-10] update | Déclencheur « Sonnette » et notification native de la sonnette
+
+**Déclencheur** : brief de session « déclencheur d'automatisation événement (sonnette) », plus la remarque de l'utilisateur qu'aucune notification n'arrive aujourd'hui quand on sonne ; il a choisi une notification native côté serveur (pas dans le plugin Nest), dans le même lot.
+
+**Pages modifiées** :
+- `1_architecture/1_8_automatisations.md` - section datée : schéma `event`, moteur (`onEvent`, `cooldownMin` en mémoire, pas de délai après un run `skipped`), santé, MCP, éditeur (segment « Sonnette », libellé serré à 1024 px), liste, démo navigateur, tests ; renvois posés sur « Graines de l'itération 2 » et « Limites connues »
+- `1_architecture/1_16_notifications-push.md` - section datée : `AlertNotifier` écoute `deviceEvent`, catégorie `cameras`, tag par sonnette, droit `cameras`, écrans déjà abonnés à cocher
+
+**Index** : catalogue 1_architecture mis à jour (2 lignes, résumés élargis à la sonnette), index.md régénéré.
+
 ## [2026-11-10] update | Routes d'un plugin qui ne tourne pas : 503 dans l'hôte
 
 **Déclencheur** : brief de session « refuser proprement les routes d'un plugin non démarré » (un 500 sur `ctx!` nul, des gardes recopiées plugin par plugin, et la limite Open-Meteo « après `stop()` »). Trois décisions de l'utilisateur : « démarré » = `slot.ctx` non nul, aucune exemption par route, 503 partout.

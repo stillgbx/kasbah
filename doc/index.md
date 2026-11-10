@@ -32,7 +32,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_5 Scène 3D (Three.js)](1_architecture/1_5_scene-3d.md) | 2026-10-29 |
 | [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-11-07 |
 | [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-11-10 |
-| [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-10-28 |
+| [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-11-10 |
 | [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-11-08 |
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-10-11 |
 | [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-11-10 |
@@ -40,7 +40,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_13 Comptes et sessions](1_architecture/1_13_comptes-et-sessions.md) | 2026-11-09 |
 | [1_14 Énergie](1_architecture/1_14_energie.md) | 2026-10-31 |
 | [1_15 Appli Android Auto](1_architecture/1_15_appli-android-auto.md) | 2026-11-10 |
-| [1_16 Notifications push](1_architecture/1_16_notifications-push.md) | 2026-11-08 |
+| [1_16 Notifications push](1_architecture/1_16_notifications-push.md) | 2026-11-10 |
 | [1_17 Pont Matter](1_architecture/1_17_pont-matter.md) | 2026-10-31 |
 <!-- section:1_architecture:end -->
 

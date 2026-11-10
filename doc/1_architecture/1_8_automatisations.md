@@ -1,6 +1,6 @@
 # Automatisations (règles « Quand / Sauf si / Alors »)
 
-> Dernière mise à jour : 2026-10-28
+> Dernière mise à jour : 2026-11-10
 > Sources : `packages/shared/src/automations/{predicate,automation,fields}.ts`, `packages/shared/src/house/{sun,geo}.ts`, `packages/shared/src/devices/activity.ts`, `apps/server/src/core/automations/{engine,schedule,evaluate,context,status,runner,store}.ts`, `apps/server/src/app.ts`, `apps/server/src/http/routes.ts`, `apps/server/src/ws/hub.ts`, `packages/mock-sim/src/behaviours/weather.ts`, `.gitignore`, tests listés en fin de page, arbre de travail NON COMMITÉ du 2026-09-23 (après 0f943a0)
 
 ## Ce que c'est, et pourquoi c'est le serveur qui s'en charge
@@ -122,7 +122,8 @@ mémoire par le moteur (perdus au redémarrage).
 Dans `automation.ts` : déclencheur `forecast` (`deviceId`, `precipProbability` | `windKmh`, `op`,
 `value`, `horizonH`), déclencheur `event` (sonnette, mouvement, personne — `DEVICE_EVENT_KINDS`),
 actions `system.run` (nom pris dans une liste blanche du `.env`) et `webhook` (`url`). La forme leur
-fait de la place ; aucun schéma ne les accepte aujourd'hui.
+fait de la place ; aucun schéma ne les accepte aujourd'hui. Le déclencheur `event` est fait depuis le
+2026-11-10 (voir la mise à jour de ce jour) ; il reste `forecast` et les deux actions.
 
 ## Le moteur (`apps/server/src/core/automations/`)
 
@@ -226,7 +227,8 @@ un serveur en UTC fermerait les volets une ou deux heures trop tôt ou trop tard
 - **Pas de détection de présence ni d'alarme** : le contrat connaît `motion` / `person` / `sound`
   (`DEVICE_EVENT_KINDS`), mais le plugin Nest ne pousse encore que `chime`
   (`apps/server/src/plugins/nest/index.ts`), et les événements ne sont de toute façon pas des
-  déclencheurs dans cette itération.
+  déclencheurs dans cette itération. Depuis le 2026-11-10, `event` est un déclencheur, mais seul
+  `chime` est émis : la détection de présence attend toujours l'ouverture du filtre Nest.
 - **Pas de grêle** dans la prévision : `weatherForecastSchema` n'a aucun champ pour elle.
 - **`play_url` lancé par le serveur** a besoin d'une URL joignable sur le LAN ; la voie envisagée est
   le lecteur musique commun (`/api/music`, `1_6_lecteur-musique.md`).
@@ -490,3 +492,41 @@ Push, abonnements, catégories) est dans [1_16 Notifications push](1_16_notifica
 
 Sources : `apps/server/src/core/automations/{runner,status}.ts`, `apps/server/src/core/automations/runner.test.ts`,
 `apps/web/src/components/automations/{ActionEditor,AutomationEditor}.vue`, `apps/web/src/lib/automations.ts`, `apps/web/src/api/mockTransport.ts`.
+
+### Mise à jour 2026-11-10 — le déclencheur « Sonnette » (`event`)
+
+« Quand on sonne à la porte, sauf entre 8 h et 22 h → allumer l'entrée 5 min et me notifier » s'écrit
+désormais.
+
+- **Schéma** (`packages/shared/src/automations/automation.ts`) : `eventTriggerSchema` =
+  `{ type: 'event', deviceId, event, cooldownMin? }`, `event` ∈ `DEVICE_EVENT_KINDS`, `cooldownMin`
+  de 1 à 1440. `AutomationRun.by` gagne `'event'`. `DEVICE_EVENT_KINDS` quitte `protocol/ws.ts` pour
+  `packages/shared/src/devices/events.ts` (réexporté par `ws.ts`) : `ws.ts` importe déjà les
+  automatisations, l'import inverse laissait la liste indéfinie au chargement.
+- **Moteur** (`apps/server/src/core/automations/engine.ts`) : écoute `deviceEvent` sur le bus (même
+  garde que les autres handlers) ; `onEvent` fait partir les règles actives qui attendent cet
+  événement sur cet appareil. `cooldownMin` ignore les événements suivants de la règle pendant N min,
+  **en mémoire** (`lastEventFire`, vidé par `forget`) : un redémarrage le remet à zéro. Seul un run
+  **parti** pose le délai (`fire` rend `true`) : une sonnerie bloquée par « Sauf si » à 21 h 59 ne
+  bloque pas celle de 22 h 01. `forMin` des actions marche comme pour les autres déclencheurs.
+- **Santé** (`status.ts`) : la sonnette absente → `missing`, indisponible → `unavailableDeviceIds`.
+- **MCP** : `AUTOMATION_HELP` décrit la forme ; le schéma vient de `automationBodySchema`.
+- **Éditeur** (`AutomationEditor.vue`) : 4ᵉ segment « Sonnette » de « Quand ». Appareils proposés =
+  ceux qui déclarent une capacité d'événement (`eventsOf` dans `apps/web/src/lib/automations.ts` :
+  capacité `chime` → événement `chime`) ; s'il n'y en a qu'un, il est déjà choisi. Le menu d'événement
+  ne s'affiche que s'il y a un choix (jamais aujourd'hui). Champ « Délai minimal » (0 = aucun). Le
+  `stash` garde ce qui a été tapé en passant d'un mode à l'autre. Libellé du segment : à 1024 px, le
+  segment (`Segmented dense fill`) a 48 px de zone de texte : « Sonnette » (~54 px) déborde dans la
+  marge intérieure sans être rogné (3 px de marge restante de chaque côté, mesuré le 2026-11-10) ;
+  aucun mot français plus court ne dit « sonnette ».
+- **Liste** : icône `doorbell`, phrase « Quand on sonne à <appareil> · au plus une fois toutes les
+  N min » ; la sonnette compte parmi les appareils de la recherche (`involvedDeviceIds`).
+- **Démo navigateur** (`apps/web/src/api/mockTransport.ts`) : une sonnerie simulée lance les règles
+  qui l'attendent, comme « Exécuter » (sans « Sauf si » ni délai, statut approximatif) ; le run est
+  marqué `event`. Vérifié dans `kasbah-mock` : la sonnette `em-cam-sonnette` déclenche la règle.
+- **La notification « on sonne » n'a pas besoin d'automatisation** : elle est native, voir
+  `1_16_notifications-push.md` (mise à jour 2026-11-10). Le déclencheur sert aux actions, ou à une
+  notification conditionnelle (la nuit seulement).
+- **Tests** : `engine.test.ts` (bon appareil, autre appareil, règle coupée, `unless` sans délai,
+  `cooldownMin`, `forMin`, sonnette manquante), `automations.test.ts` (shared : forme, événement
+  inconnu, bornes), `apps/web/src/lib/automations.test.ts` (phrase, recherche).

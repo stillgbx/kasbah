@@ -1,6 +1,6 @@
 # Notifications push (Web Push)
 
-> Dernière mise à jour : 2026-11-08
+> Dernière mise à jour : 2026-11-10
 > Sources : `packages/shared/src/push/push.ts`, `apps/server/src/core/push/{webpush,service,alerts,texts}.ts`, `apps/server/src/http/push.ts`, `apps/server/src/core/outbound.ts`, `apps/server/src/core/automations/runner.ts`, `apps/server/src/app.ts`, `apps/web/public/sw.js`, `apps/web/src/stores/push.ts`, `apps/web/src/components/settings/PushCard.vue`, tests `apps/server/src/core/push/push.test.ts` et `core/automations/runner.test.ts`, arbre de travail NON COMMITÉ du 2026-10-28 (après 610eff3)
 
 ## Ce que c'est, et pourquoi ce choix
@@ -140,3 +140,24 @@ plugins vont aux **admins seulement** (elles demandaient `settings`, fusionné d
 abonnement sans compte (`user: null`) reçoit ce que le compte de la maison peut recevoir, tout s'il n'y en a
 pas. Les mentions plus haut de « `null` sur le réseau local » et de « liste de droits absente » sont d'avant.
 Code : `core/push/service.ts`, `http/push.ts` ; test : `core/push/push.test.ts`.
+
+### Mise à jour 2026-11-10 — la sonnette, notifiée sans automatisation
+
+Avant, une sonnerie n'arrivait sur le téléphone que par une automatisation `notify`, donc dans la
+catégorie `automations`. Désormais elle part d'elle-même.
+
+- **Où** : dans le cœur, pas dans un plugin. `AlertNotifier` (`apps/server/src/core/push/alerts.ts`)
+  écoute `deviceEvent` sur le bus ; un plugin ne fait que publier l'événement (`emitEvent`). La même
+  règle sert donc à la sonnette Nest, à la sonnette simulée et à toute sonnette future. L'idée de
+  l'envoyer depuis le plugin Nest (qui a les droits du compte Google) a été écartée pour cette raison :
+  ces droits servent à **recevoir** l'événement, l'envoi est le service Web Push de Kasbah.
+- **Quoi** : chaque `chime` part dans la nouvelle catégorie **`cameras`** (« Caméras » dans la carte
+  Notifications), titre = nom de l'appareil, texte « On sonne à la porte » / « Someone is at the
+  door » (`texts.ts`), `tag` = `<deviceId>|chime` (une rafale remplace la notification au lieu de
+  s'empiler), `url` = `/cameras`. Pas de mémoire des envoyés : un événement n'est pas un état.
+  `motion` / `person` / `sound` suivront ce chemin quand un plugin les publiera.
+- **Droits** : `RIGHT_OF_NOTIFY_CATEGORY.cameras = 'cameras'` (`packages/shared/src/rights/rights.ts`).
+- **À savoir** : les catégories d'un écran déjà abonné sont gardées (`localStorage` côté app, fichier
+  côté serveur) ; un écran abonné avant ce jour doit **cocher « Caméras »** une fois pour recevoir la
+  sonnette. Un nouvel abonnement les prend toutes par défaut.
+- **Test** : `push.test.ts` (« pushes each doorbell ring to cameras… »).
