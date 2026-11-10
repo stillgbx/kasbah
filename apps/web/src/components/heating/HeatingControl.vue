@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { CommandInput, DeviceEntry, StateFor } from '@kasbah/shared'
 import StrokeIcon from '../ui/StrokeIcon.vue'
 import { formatPercent } from '../../lib/format'
@@ -50,7 +51,9 @@ const stepC = computed(() => props.entry.descriptor.meta.climate?.stepC)
 const step = (dir: 1 | -1) => setpoint.set(stepSetpoint(setpoint.value.value, dir, bounds.value, stepC.value))
 const setMode = (mode: string) => emit('command', props.entry.descriptor.id, { type: 'climate.set_mode', mode: mode as StateFor<'climate'>['mode'] })
 
-const target = computed(() => `${setpoint.value.value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} °C`)
+// in the application's language, not the machine's: the decimal mark follows the rest of the screen
+const { locale } = useI18n()
+const target = computed(() => `${setpoint.value.value.toLocaleString(locale.value, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} °C`)
 /** Indoor humidity, when the device measures it (Nest): on the setpoint's row, at its right end. */
 const humidity = computed(() => state.value.humidity)
 const showTarget = computed(() => canSetTemp.value && !off.value)
