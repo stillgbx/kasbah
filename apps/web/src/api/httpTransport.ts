@@ -153,6 +153,7 @@ export function createHttpTransport(base = ''): Transport {
     removeShoppingItem: (id) => request(`${base}/api/shopping/items/${encodeURIComponent(id)}`, { method: 'DELETE' }, shoppingOf),
     finishShopping: () => request(`${base}/api/shopping/finish`, { method: 'POST' }, shoppingOf),
     setShoppingFavorite: (name, favorite) => request(`${base}/api/shopping/favorites`, json('PUT', { name, favorite }), shoppingOf),
+    forgetShoppingProduct: (id) => request(`${base}/api/shopping/products/${encodeURIComponent(id)}`, { method: 'DELETE' }, shoppingOf),
     getPlugins: () => request(`${base}/api/plugins`, undefined, (j) => pluginsResponseSchema.parse(j).plugins as PluginInfo[]),
     setPluginSettings: (pluginId, patch: PluginSettingsPatch) => request(
       `${base}/api/plugins/${encodeURIComponent(pluginId)}`,

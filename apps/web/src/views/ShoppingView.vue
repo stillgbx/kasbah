@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { shoppingKey, SHOPPING_NAME_MAX, SHOPPING_QUANTITY_MAX, type ShoppingItem } from '@kasbah/shared'
+import { isShoppingProductInList, shoppingKey, SHOPPING_NAME_MAX, SHOPPING_QUANTITY_MAX, type ShoppingItem } from '@kasbah/shared'
 import PageHeader from '../components/layout/PageHeader.vue'
 import MarqueeText from '../components/ui/MarqueeText.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
@@ -99,6 +99,12 @@ const toBuy = computed(() => store.items.length - store.checkedCount)
                       :title="p.favorite ? $t('shopping.unstar', { name: p.name }) : $t('shopping.star', { name: p.name })"
                       @mousedown.prevent @click="star(p.name)">
                 <StrokeIcon name="star" :size="16" />
+              </button>
+              <!-- put away (not removed) while the product has a line in the list: the line goes first -->
+              <button type="button" class="forget" :class="{ 'is-hidden': isShoppingProductInList(store.list, p.id) }"
+                      :aria-label="$t('shopping.forget', { name: p.name })" :title="$t('shopping.forget', { name: p.name })"
+                      @mousedown.prevent @click="store.forget(p.id)">
+                <StrokeIcon name="trash" :size="16" />
               </button>
             </div>
           </div>
@@ -213,6 +219,8 @@ const toBuy = computed(() => store.items.length - store.checkedCount)
 .star:hover { color: var(--text); background: var(--surface2); }
 .star[data-on='1'] { color: var(--accent); }
 .star[data-on='1'] svg { fill: currentColor; }
+.forget { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 auto; border: 0; border-radius: 999px; background: transparent; color: color-mix(in srgb, var(--muted) 55%, transparent); }
+.forget:hover { color: var(--text); background: var(--surface2); }
 
 .step { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; padding: 2px; border-radius: 999px; background: var(--surface2); }
 .step__btn { display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 999px; background: transparent; color: var(--text); }

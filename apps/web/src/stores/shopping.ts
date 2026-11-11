@@ -1,7 +1,7 @@
 import { computed, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
 import {
-  addShoppingItems, clearCheckedShoppingItems, EMPTY_SHOPPING_LIST, pluginSettingsOf, removeShoppingItem, setShoppingFavorite, shoppingKey,
+  addShoppingItems, clearCheckedShoppingItems, EMPTY_SHOPPING_LIST, forgetShoppingProduct, pluginSettingsOf, removeShoppingItem, setShoppingFavorite, shoppingKey,
   updateShoppingItem, type ServerMessage, type ShoppingItemPatch, type ShoppingList, type ShoppingProduct,
 } from '@kasbah/shared'
 import { getTransport } from '../api'
@@ -76,6 +76,7 @@ export const useShoppingStore = defineStore('shopping', () => {
   const finish = () => run(clearCheckedShoppingItems(list.value), () => getTransport().finishShopping())
   const setFavorite = (name: string, favorite: boolean) =>
     run(setShoppingFavorite(list.value, name, favorite, now()), () => getTransport().setShoppingFavorite(name, favorite))
+  const forget = (id: string) => run(forgetShoppingProduct(list.value, id), () => getTransport().forgetShoppingProduct(id))
 
   /** Rereads the list (first opening of the view, before any message). */
   async function load(): Promise<void> {
@@ -83,5 +84,5 @@ export const useShoppingStore = defineStore('shopping', () => {
     catch (err) { useNotificationsStore().error(t('shopping.toast.error', { message: (err as Error).message })) }
   }
 
-  return { list, enabled, items, checkedCount, favorites, isFavorite, isToBuy, suggest, apply, load, add, update, remove, finish, setFavorite }
+  return { list, enabled, items, checkedCount, favorites, isFavorite, isToBuy, suggest, apply, load, add, update, remove, finish, setFavorite, forget }
 })

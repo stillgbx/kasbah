@@ -1007,6 +1007,7 @@
     "favorites": "Usuals",
     "noFavorites": "Tap a product's star to find it here.",
     "star": "Add {name} to the usuals",
+    "forget": "Forget {name}",
     "unstar": "Remove {name} from the usuals",
     "less": "Decrease the quantity of {name}",
     "more": "Increase the quantity of {name}",

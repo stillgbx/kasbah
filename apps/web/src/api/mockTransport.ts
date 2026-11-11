@@ -1,4 +1,4 @@
-import { addShoppingItems, clearCheckedShoppingItems, EMPTY_SHOPPING_LIST, removeShoppingItem, setShoppingFavorite, shoppingAddBodySchema, shoppingItemPatchSchema, updateShoppingItem, type ShoppingList, applyHouseEditToJson, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, patchGardenItemInJson, removeGardenItemFromJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setReliefInJson, setRenderTuningInJson, setClimateLinkInJson, setOriginInJson, setTerrainInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type PluginSceneEntry, type PropertiesResponse, type Right, type SceneActivation, type StateFor, type StatePatch } from '@kasbah/shared'
+import { addShoppingItems, clearCheckedShoppingItems, EMPTY_SHOPPING_LIST, forgetShoppingProduct, isShoppingProductInList, removeShoppingItem, setShoppingFavorite, shoppingAddBodySchema, shoppingItemPatchSchema, updateShoppingItem, type ShoppingList, applyHouseEditToJson, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, patchGardenItemInJson, removeGardenItemFromJson, automationBodySchema, commandSchema, deviceClassOf, defaultState, mergeState, parseHouse, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, putArrayInJson, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, setReliefInJson, setRenderTuningInJson, setClimateLinkInJson, setOriginInJson, setTerrainInJson, setRoomOrderInJson, type Automation, type AutomationEntry, type AutomationRun, type AutomationStatus, type CommandInput, type DeviceConsumption, type DeviceEntry, type DeviceState, type House, type PluginSceneEntry, type PropertiesResponse, type Right, type SceneActivation, type StateFor, type StatePatch } from '@kasbah/shared'
 import { SimError, Simulation, solarGeometry, type ScenarioName } from '@kasbah/mock-sim'
 import demoHouse from '@kasbah/shared/demo-house.json'
 import { createMockSchool } from './mockSchool'
@@ -643,6 +643,10 @@ export function createMockTransport(opts: MockTransportOptions = {}): Transport 
     async removeShoppingItem(id) { return writeShopping(removeShoppingItem(shopping, id), id) },
     async finishShopping() { return writeShopping(clearCheckedShoppingItems(shopping)) },
     async setShoppingFavorite(name, favorite) { return writeShopping(setShoppingFavorite(shopping, name, favorite, Date.now())) },
+    async forgetShoppingProduct(id) {
+      if (isShoppingProductInList(shopping, id)) throw new ApiRequestError(409, 'IN_LIST', `shopping product "${id}" still has a line in the list`)
+      return writeShopping(forgetShoppingProduct(shopping, id), id)
+    },
     async getAutomations() { return automationList() },
     async putAutomation(id, body) {
       const a: Automation = { id, ...automationBodySchema.parse(body), updatedAt: Date.now() }

@@ -677,6 +677,8 @@ export interface Transport {
   /** "Finish shopping": the ticked lines leave the list. */
   finishShopping(): Promise<ShoppingList>
   setShoppingFavorite(name: string, favorite: boolean): Promise<ShoppingList>
+  /** Forgets a product of the memory; 409 `IN_LIST` while it still has a line in the list. */
+  forgetShoppingProduct(id: string): Promise<ShoppingList>
   /** Inventory of plugins: all those the server knows, active or not. */
   getPlugins(): Promise<PluginInfo[]>
   /** Writes a choice (activation, sub-item, light scenes) into the house; returns the up-to-date inventory. */

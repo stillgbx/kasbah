@@ -1007,6 +1007,7 @@
     "favorites": "Habituels",
     "noFavorites": "Touchez l'étoile d'un produit pour le retrouver ici.",
     "star": "Ajouter {name} aux habituels",
+    "forget": "Oublier {name}",
     "unstar": "Retirer {name} des habituels",
     "less": "Diminuer la quantité de {name}",
     "more": "Augmenter la quantité de {name}",

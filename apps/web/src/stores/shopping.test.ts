@@ -54,11 +54,29 @@ describe('shopping store', () => {
     expect(store.isFavorite('LAIT')).toBe(true)
   })
 
+  it('forgets a product optimistically, and puts it back when the server refuses', async () => {
+    let refuse!: () => void
+    withTransport({ forgetShoppingProduct: () => new Promise((_, reject) => { refuse = () => reject(new ApiRequestError(500, 'INTERNAL', 'disk full')) }) })
+    const store = useShoppingStore()
+    let l = addShoppingItems(EMPTY_SHOPPING_LIST, [{ name: 'Laiit' }, { name: 'Lait' }], 0)
+    l = { ...l, items: l.items.filter((i) => i.id !== 'laiit') }
+    store.apply({ type: 'shopping', shopping: l })
+    const done = store.forget('laiit')
+    expect(store.suggest('lai').map((p) => p.name)).toEqual(['Lait'])
+    refuse()
+    expect(await done).toBe(false)
+    expect(store.suggest('lai').map((p) => p.name)).toContain('Laiit')
+  })
+
   it('works end to end on the mock transport', async () => {
     withTransport()
     const store = useShoppingStore()
     await store.load()
     await store.add('Riz')
     expect(store.items.at(-1)).toMatchObject({ name: 'Riz', quantity: 1, checked: false })
+    expect(await store.forget('riz')).toBe(false)
+    await store.remove('riz')
+    expect(await store.forget('riz')).toBe(true)
+    expect(store.suggest('riz')).toEqual([])
   })
 })
