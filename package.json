@@ -18,6 +18,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
     "check:private": "node scripts/check-private.mjs --all",
+    "check:house": "npm run check:house -w @kasbah/server --",
     "hooks": "git config core.hooksPath .githooks"
   },
   "devDependencies": {

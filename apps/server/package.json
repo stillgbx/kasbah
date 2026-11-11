@@ -10,7 +10,8 @@
     "start": "node --env-file-if-exists=.env dist/main.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "account": "node --import tsx --env-file-if-exists=.env src/mcp/users-cli.ts"
+    "account": "node --import tsx --env-file-if-exists=.env src/mcp/users-cli.ts",
+    "check:house": "node --import tsx --env-file-if-exists=.env src/config/house-cli.ts"
   },
   "dependencies": {
     "@fastify/compress": "^9.2.0",
