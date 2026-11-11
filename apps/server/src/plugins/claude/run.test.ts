@@ -17,7 +17,8 @@ let dir: string
 beforeEach(() => {
   script = happy
   fake = fakeClaude(() => script)
-  dir = mkdtempSync(join(tmpdir(), 'kasbah-claude-run-'))
+  // No "run-" in the prefix: a random suffix starting with "1" would spell the token "run-1".
+  dir = mkdtempSync(join(tmpdir(), 'kasbah-claude-'))
 })
 
 async function go(over: Partial<ClaudeRunOptions> = {}, signal = new AbortController().signal) {
