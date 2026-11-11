@@ -70,11 +70,55 @@ describe('/api/shopping', () => {
     await inject('DELETE', '/api/shopping/items/riz')
   })
 
+  it('forgets a product of the memory, refusing one still in the list or unknown', async () => {
+    await inject('POST', '/api/shopping/items', { items: [{ name: 'Laiit' }, { name: 'Sel' }] })
+    await inject('PUT', '/api/shopping/favorites', { name: 'Laiit', favorite: true })
+    await inject('PATCH', '/api/shopping/items/sel', { checked: true })
+    const inList = await inject('DELETE', '/api/shopping/products/laiit')
+    expect([inList.statusCode, inList.json().error.code]).toEqual([409, 'IN_LIST'])
+    const checked = await inject('DELETE', '/api/shopping/products/sel')
+    expect([checked.statusCode, checked.json().error.code]).toEqual([409, 'IN_LIST'])
+    await inject('DELETE', '/api/shopping/items/laiit')
+    await inject('DELETE', '/api/shopping/items/sel')
+    const res = await inject('DELETE', '/api/shopping/products/laiit')
+    expect(res.statusCode).toBe(200)
+    expect(res.json().shopping.products.some((p: { id: string }) => p.id === 'laiit')).toBe(false)
+    expect((await written()).products.some((p) => p.id === 'laiit')).toBe(false)
+    expect(broadcast.at(-1)).toEqual({ type: 'shopping', shopping: res.json().shopping })
+    const unknown = await inject('DELETE', '/api/shopping/products/laiit')
+    expect([unknown.statusCode, unknown.json().error.code]).toEqual([404, 'NOT_FOUND'])
+    await inject('PATCH', '/api/plugins/shopping', { enabled: false })
+    const off = await inject('DELETE', '/api/shopping/products/sel')
+    expect([off.statusCode, off.json().error.code]).toEqual([409, 'DISABLED'])
+    await inject('PATCH', '/api/plugins/shopping', { enabled: true })
+  })
+
   it('answers 404 for an unknown line and 400 for a bad body', async () => {
     expect((await inject('PATCH', '/api/shopping/items/riz', { checked: true })).statusCode).toBe(404)
     expect((await inject('DELETE', '/api/shopping/items/riz')).statusCode).toBe(404)
     expect((await inject('PATCH', '/api/shopping/items/riz', {})).statusCode).toBe(400)
     expect((await inject('POST', '/api/shopping/items', { items: [{ name: '  ' }] })).statusCode).toBe(400)
+  })
+})
+
+describe('/api/shopping on a demo', () => {
+  it('refuses to forget a product', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kasbah-shopping-'))
+    await copyFile(DEMO_HOUSE, join(dir, 'house.json'))
+    await writeFile(join(dir, 'house.shopping.json'), JSON.stringify({ schemaVersion: 1, items: [], products: [{ id: 'sel', name: 'Sel', favorite: false, uses: 1, lastUsedAt: 0 }] }))
+    const demo = await buildApp({
+      env: loadEnv({ KASBAH_LOG_LEVEL: 'silent' }),
+      logger: pino({ level: 'silent' }),
+      house: await loadHouse(join(dir, 'house.json')),
+      envSource: {},
+      serveStatic: false,
+      readOnly: true,
+    })
+    try {
+      await demo.app.ready()
+      const res = await demo.app.inject({ method: 'DELETE', url: '/api/shopping/products/sel' })
+      expect(res.json().error.code).toBe('DEMO_READONLY')
+    } finally { await demo.close() }
   })
 })
 

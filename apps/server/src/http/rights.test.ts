@@ -29,6 +29,7 @@ describe('routeRight', () => {
     expect(routeRight('POST', '/api/automations/:id/run')).toBe('automations')
     expect(routeRight('PUT', '/api/automation-order')).toBe('automations')
     expect(routeRight('POST', '/api/shopping/items')).toBe('shopping')
+    expect(routeRight('DELETE', '/api/shopping/products/:id')).toBe('shopping')
     expect(routeRight('PUT', '/api/push/subscription')).toBeNull()
     expect(routeRight('POST', '/api/assistant/ask')).toBeNull()
   })

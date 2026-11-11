@@ -1,4 +1,4 @@
-import { pluginSettingsOf, geoOriginSchema, setOriginInJson, addShoppingItems, clearCheckedShoppingItems, removeShoppingItem, setShoppingFavorite, shoppingAddBodySchema, shoppingFavoriteBodySchema, shoppingItemPatchSchema, updateShoppingItem, propertyModeBodySchema, newPropertyBodySchema, duplicatePropertyBodySchema, applyHouseEditToJson, houseEditPatchSchema, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationOrderSchema, automationPatchSchema, commandSchema, flashActionSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, climateLinkBodySchema, setClimateLinkInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type DeviceDescriptor, type House, type HealthResponse } from '@kasbah/shared'
+import { pluginSettingsOf, geoOriginSchema, setOriginInJson, addShoppingItems, clearCheckedShoppingItems, forgetShoppingProduct, isShoppingProductInList, removeShoppingItem, setShoppingFavorite, shoppingAddBodySchema, shoppingFavoriteBodySchema, shoppingItemPatchSchema, updateShoppingItem, propertyModeBodySchema, newPropertyBodySchema, duplicatePropertyBodySchema, applyHouseEditToJson, houseEditPatchSchema, SurveyError, addGardenItemToJson, addOpeningToJson, addParkingToJson, gardenItemPatchSchema, newGardenItemSchema, patchGardenItemInJson, removeGardenItemFromJson, assertCommandAllowed, automationBodySchema, automationIdSchema, automationOrderSchema, automationPatchSchema, commandSchema, flashActionSchema, devicePlacementSchema, newOpeningSchema, newParkingSchema, openingPatchSchema, panelArrayPatchSchema, parkingPatchSchema, patchOpeningInJson, patchParkingInJson, placeDeviceInJson, pluginSettingsPatchSchema, putArrayInJson, releaseNotesLang, removeArrayFromJson, removeDeviceFromJson, removeOpeningFromJson, removeParkingFromJson, roomOrderSchema, polygonSchema, reliefSchema, sceneTuningSchema, setReliefInJson, setTerrainInJson, setRenderTuningInJson, climateLinkBodySchema, setClimateLinkInJson, sceneCreateSchema, sceneRecallSchema, sceneUpdateSchema, setPluginInJson, setRoomOrderInJson, type DeviceDescriptor, type House, type HealthResponse } from '@kasbah/shared'
 import type { FastifyInstance } from 'fastify'
 import { updateHouseFile, type LoadedHouse } from '../config/house'
 import { singleProperty, type PropertyHost } from '../config/properties'
@@ -419,6 +419,21 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
 
   // "Finish shopping": the checked lines leave the basket.
   app.post('/api/shopping/finish', async () => ({ shopping: await deps.shopping.update(clearCheckedShoppingItems) }))
+
+  // Forgets a product of the memory. 404 or 409 is decided INSIDE the queued operation, on the list
+  // it finds: two screens racing cannot slip a line in between.
+  app.delete<{ Params: { id: string } }>('/api/shopping/products/:id', async (req, reply) => {
+    const { id } = req.params
+    let inList = false
+    const shopping = await deps.shopping.update((l) => {
+      inList = isShoppingProductInList(l, id)
+      return forgetShoppingProduct(l, id)
+    })
+    if (shopping) return { shopping }
+    return inList
+      ? sendError(reply, 409, 'IN_LIST', `shopping product "${id}" still has a line in the list`)
+      : sendError(reply, 404, 'NOT_FOUND', `unknown shopping product "${id}"`)
+  })
 
   app.put('/api/shopping/favorites', async (req) => {
     const { name, favorite } = shoppingFavoriteBodySchema.parse(req.body)
