@@ -497,12 +497,16 @@ main, hors dépôt.
 
 ### Mise à jour 2026-11-11 — `npm run check:house` valide un fichier maison sans le serveur
 
-**`npm run check:house -- [fichier]`** (racine, alias de `npm run check:house -w @kasbah/server --`) lit un
-fichier maison, le valide (`safeParseHouse`) puis, s'il est valide, liste les avertissements de
+**`npm run check:house -- [fichier]`** (racine ; existe aussi en `npm run check:house -w @kasbah/server --`)
+lit un fichier maison, le valide (`safeParseHouse`) puis, s'il est valide, liste les avertissements de
 `lintHouse` (sans les identifiants d'appareils des plugins, qui ne sont pas démarrés). Sans argument :
-`KASBAH_HOUSE_FILE` lu dans `apps/server/.env`, sinon `house/demo-house.json`. Un chemin en argument est
-résolu depuis le dossier où la commande est tapée (`INIT_CWD`, puisque `npm -w` lance le script depuis
-`apps/server/`). Sortie `0` si la maison est valide, même avec avertissements ; `1` sur un fichier
-introuvable, un JSON illisible ou une maison invalide. Code : `apps/server/src/config/house-cli.ts`
+`KASBAH_HOUSE_FILE` lu dans `apps/server/.env` (relatif à `apps/server/`, comme pour le serveur), sinon
+**toutes** les maisons de `house/properties/` (ce que le catalogue du serveur fait tourner, sans les
+fichiers `.automations.json` et `.shopping.json`), sinon `house/demo-house.json`. Un chemin en argument
+est résolu depuis le dossier où la commande est tapée (`INIT_CWD`). L'alias racine lance le script
+directement avec `node` : un `npm run … -w` imbriqué remettrait `INIT_CWD` à la racine du dépôt, et un
+chemin relatif tapé depuis `house/` ne serait plus trouvé. Sortie `0` si toutes les maisons sont
+valides, même avec avertissements ; `1` sur un fichier introuvable, un JSON illisible ou une maison
+invalide. Code : `apps/server/src/config/house-cli.ts`
 (point d'entrée) et `house-check.ts` (fonction pure `checkHouseText`, testée). Ne réécrit rien (c'est le
 rôle de `house/fit-survey.mjs`) et ne regarde pas le fichier d'automatisations.
