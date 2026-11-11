@@ -122,22 +122,22 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 ## 5 — Setup
 
 <!-- section:5_setup:begin (généré par scripts/wiki-index.mjs depuis 5_setup/README.md - ne pas éditer ici) -->
-Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5_setup/README.md) (3 pages, dernière mise à jour 2026-11-09).
+Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5_setup/README.md) (3 pages, dernière mise à jour 2026-11-11).
 
 | Pages | Dernière mise à jour |
 |---|---|
 | [5_0 Installation et scripts](5_setup/5_0_installation-et-scripts.md) | 2026-11-08 |
 | [5_1 Configuration (.env)](5_setup/5_1_configuration-env.md) | 2026-11-08 |
-| [5_2 Production](5_setup/5_2_production.md) | 2026-11-09 |
+| [5_2 Production](5_setup/5_2_production.md) | 2026-11-11 |
 <!-- section:5_setup:end -->
 
 ## 6 — FAQ
 
 <!-- section:6_faq:begin (généré par scripts/wiki-index.mjs depuis 6_faq/README.md - ne pas éditer ici) -->
-Pièges rencontrés et recettes : une entrée datée par incident (Date / Symptôme / Diagnostic / Solution). Résumés : [6_faq/README.md](6_faq/README.md) (2 pages, dernière mise à jour 2026-11-04).
+Pièges rencontrés et recettes : une entrée datée par incident (Date / Symptôme / Diagnostic / Solution). Résumés : [6_faq/README.md](6_faq/README.md) (2 pages, dernière mise à jour 2026-11-11).
 
 | Pages | Dernière mise à jour |
 |---|---|
 | [6_0 Pièges d'outillage](6_faq/6_0_pieges-outillage.md) | 2026-11-04 |
-| [6_1 Pièges à l'exécution](6_faq/6_1_pieges-runtime.md) | 2026-10-30 |
+| [6_1 Pièges à l'exécution](6_faq/6_1_pieges-runtime.md) | 2026-11-11 |
 <!-- section:6_faq:end -->

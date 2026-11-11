@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-11] update | Un téléphone Android sans accès au réseau local depuis Chrome
+
+**Déclencheur** : signalé par l'utilisateur (sur un seul téléphone de la maison, en Wi-Fi, « too many retries » ou « Serveur injoignable », rien dans les logs du serveur ; marche partout ailleurs et en 5G) ; diagnostic depuis le téléphone, aucun code touché.
+
+**Pages modifiées** :
+- `6_faq/6_1_pieges-runtime.md` - entrée du 2026-11-11 : DNS correct (adresse locale du NAS), aucune page du réseau local joignable dans Chrome, Firefox passe après la demande d'Android ; cause = autorisation d'accès au réseau local refusée à Chrome ; ordre de diagnostic
+- `5_setup/5_2_production.md` - « Pièges vus » de l'étape 0 : renvoi vers cette entrée
+
+**Index** : catalogues 6_faq (résumé élargi) et 5_setup (date) mis à jour, index.md régénéré.
+
 ## [2026-11-10] update | Déclencheur « Sonnette » et notification native de la sonnette
 
 **Déclencheur** : brief de session « déclencheur d'automatisation événement (sonnette) », plus la remarque de l'utilisateur qu'aucune notification n'arrive aujourd'hui quand on sonne ; il a choisi une notification native côté serveur (pas dans le plugin Nest), dans le même lot.

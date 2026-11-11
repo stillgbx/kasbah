@@ -1,6 +1,6 @@
 # FAQ — pièges à l'exécution
 
-> Dernière mise à jour : 2026-10-30
+> Dernière mise à jour : 2026-11-11
 > Sources : `apps/web/src/components/home/SceneLoader.vue`, `apps/web/src/three/HouseScene.ts` (`padLamps`), `apps/web/src/three/core/post.ts`, session du 2026-09-19 (`_generated-ai-doc/sessions/2026-09-19-irobot/journal.md`), sessions du 2026-09-04, du 2026-09-07, du 2026-09-08 et du 2026-09-09, `apps/server/src/plugins/tahoma/{client,index,mapping}.ts`, `apps/web/src/stores/devices.ts`, `apps/web/src/stores/scenes.ts`, `apps/server/src/plugins/hue/index.ts`, `apps/server/test/integration.test.ts`, `apps/web/src/styles/app.css`, `apps/server/src/core/registry.ts`, `packages/shared/src/devices/{state,rules}.ts`, `apps/web/src/lib/deviceState.ts`, `packages/mock-sim/src/simulation.ts`, `packages/shared/src/house/geometry/walls.ts`, `house/fit-survey.mjs`, `apps/web/src/composables/useHouseScene.ts`, `apps/server/src/plugins/google_cast/{index,known,discovery,channel,mapping}.ts`, session du 2026-09-17 (`_generated-ai-doc/sessions/2026-09-16-comap-proteo-2/journal.md`), `apps/web/src/components/automations/AutomationEditor.vue`, `apps/server/src/core/atomic-file.ts`, `apps/server/src/plugins/tesla/{state,index}.ts`, `apps/web/src/views/AutomationEditView.vue`, `apps/server/src/plugins/claude/run.ts`, `house/demos/tilleuls.json`
 
 ## ytmusic : « Best of » reste en Album alors que « Best Of » est en Compil
@@ -1628,3 +1628,34 @@ cause : chaque position qu'il publiait tombait à moins de 0,3 s de ce que la ba
 Sources : `apps/web/src/composables/useMediaPosition.ts` + `useMediaPosition.test.ts`,
 `apps/web/src/components/{music/MusicPlayerBar,controls/MediaPlayerControl}.vue`, Vuetify
 `components/VSlider/slider.js` (`roundValue`).
+
+## 2026-11-11 — un seul téléphone Android : « too many retries » ou « Serveur injoignable » en Wi-Fi, rien dans les logs
+
+- **Date** : 2026-11-11
+- **Symptôme** : sur un téléphone Android du réseau de la maison, l'app ouverte par le nom public ne
+  s'affiche pas (`ERR_TOO_MANY_RETRIES` de Chrome) ou s'affiche avec le bandeau « Serveur injoignable »
+  (`app.offline`). Rien dans les logs du serveur. Les autres appareils marchent, et ce téléphone aussi
+  en 5G.
+- **Diagnostic** : ni Kasbah ni le proxy ne sont en cause ; la requête ne quitte pas le téléphone.
+  1. « too many retries » n'est pas un texte de Kasbah : c'est Chrome qui abandonne une connexion
+     refusée à répétition. Logs vides ⇒ panne avant le serveur.
+  2. DNS : `chrome://net-internals/#dns` sur le téléphone rendait bien l'adresse **locale** du NAS,
+     comme `Resolve-DnsName` sur un PC du réseau (étape 0 de
+     [5_2](../5_setup/5_2_production.md) en place). Ce n'est pas le Pi-hole contourné.
+  3. Le téléphone n'ouvrait **aucune** page du réseau local dans Chrome, pas même l'interface du
+     routeur ni DSM : le blocage automatique de DSM n'expliquait pas le routeur.
+  4. Firefox, sur le même téléphone, a ouvert la page **seulement après** avoir accepté la demande
+     d'Android d'accéder aux appareils du réseau local.
+  Cause : l'autorisation Android d'accès au réseau local n'est pas accordée à Chrome. Sans elle, l'app
+  atteint Internet (d'où la 5G et le DNS qui marchent : la résolution passe par le système) mais aucune
+  adresse privée. L'app installée sur l'écran d'accueil passe par Chrome et hérite de son refus.
+- **Solution** : Paramètres → Applis → Chrome → Autorisations → **Appareils à proximité** (ou **Réseau
+  local**, selon la version d'Android) → Autoriser, puis fermer et rouvrir Chrome et l'app installée.
+  Si le réglage n'apparaît pas, chercher dans les autorisations refusées ou non utilisées.
+  Vérifié sur le téléphone concerné : l'app s'ouvre en Wi-Fi une fois l'autorisation accordée à Chrome.
+- **Ordre de diagnostic retenu** : logs du serveur → essai en 5G → `chrome://net-internals/#dns` →
+  ouvrir l'adresse du routeur depuis le téléphone → autre navigateur. Le quatrième pas sépare « le NAS
+  rejette ce téléphone » de « ce téléphone ne joint pas le réseau local ».
+
+Sources : `apps/web/src/i18n/locales/fr.json` (`app.offline`), `apps/web/public/sw.js` (aucun cache :
+la page affichée vient bien du réseau), diagnostic sur le téléphone.

@@ -1,6 +1,6 @@
 # Production
 
-> Dernière mise à jour : 2026-11-09
+> Dernière mise à jour : 2026-11-11
 > Sources : `apps/server/build.mjs`, `apps/server/src/http/static.ts`, `apps/web/vite.config.ts`, `apps/server/src/core/paths.ts`, `apps/server/src/config/env.ts`, `apps/web/index.html`, `apps/web/public/manifest.webmanifest`, `apps/web/public/icons/`, `apps/web/src/stores/appUpdate.ts`, `apps/web/src/components/AppUpdateBanner.vue`, `scripts/supervisor.mjs`, `apps/server/src/http/system.ts`, `site/`, `.github/workflows/pages.yml`, `apps/web/src/stores/push.ts` (2026-10-29)
 
 ## Build
@@ -834,6 +834,9 @@ Pièges vus :
 - **Ne pas** faire relayer le routeur vers le Pi-hole quand le Pi-hole a une redirection conditionnelle vers le
   routeur : boucle. Inutile de toute façon : par l'adresse publique, le NAT loopback ramène au NAS, toujours
   en HTTPS valide.
+- *(Ajout 2026-11-11)* Un téléphone Android qui échoue seul en Wi-Fi (« too many retries », « Serveur
+  injoignable », rien dans les logs) alors que le nom résout bien vers le NAS : l'autorisation Android
+  d'accès au réseau local manque à Chrome. Voir [6_1](../6_faq/6_1_pieges-runtime.md), entrée du 2026-11-11.
 
 **À vérifier sur le vrai proxy** : qu'il ajoute bien `X-Forwarded-For`. C'est lui qui dit « client à la
 maison » (`LAN_ONLY`) et qui empêche de prendre une requête proxifiée pour la machine elle-même. *(Vérifié le 2026-11-08 sur le vrai proxy du NAS : l'en-tête est bien ajouté.)*

@@ -14,5 +14,5 @@ Pièges rencontrés et recettes : une entrée datée par incident (Date / Sympt�
 | Page | Résumé | Dernière mise à jour |
 |---|---|---|
 | [6_0 Pièges d'outillage](6_0_pieges-outillage.md) | Vuetify 4, Vite 8, zod 4, TypeScript 7, Vitest 5, Bash de Claude Code sous Windows, grilles CSS qui débordent ou bougent, three.js (ombres, géométries), mesure de cadence et choix du GPU, worker MapLibre, simulateur Android Auto (DHU), scripts `.cmd`, `node_modules` recopié d'un autre clone ou absent d'un worktree, sondes navigateur. | 2026-11-04 |
-| [6_1 Pièges à l'exécution](6_1_pieges-runtime.md) | ytmusic (catalogue, flux, cookie), configuration re-validée, course WebSocket, clés d'état étrangères, murs mal classés, ambiances, glisser-déposer, flux en deltas, sondage gelé, horloges mélangées, état optimiste pris pour confirmé, scène 3D. | 2026-10-30 |
+| [6_1 Pièges à l'exécution](6_1_pieges-runtime.md) | ytmusic (catalogue, flux, cookie), configuration re-validée, course WebSocket, clés d'état étrangères, murs mal classés, ambiances, glisser-déposer, flux en deltas, sondage gelé, horloges mélangées, état optimiste pris pour confirmé, scène 3D, accès au réseau local refusé à Chrome sous Android. | 2026-11-11 |
 <!-- catalogue:end -->
