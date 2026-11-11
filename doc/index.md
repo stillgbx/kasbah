@@ -20,21 +20,21 @@ Vision du projet, principes structurants et vocabulaire commun. Résumés : [0_o
 ## 1 — Architecture
 
 <!-- section:1_architecture:begin (généré par scripts/wiki-index.mjs depuis 1_architecture/README.md - ne pas éditer ici) -->
-Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses, notifications push, pont Matter. Résumés : [1_architecture/README.md](1_architecture/README.md) (18 pages, dernière mise à jour 2026-11-10).
+Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/WebSocket, application web, scène 3D, et les briques transverses : lecteur musique, MCP, automatisations, assistant, liste de courses, notifications push, pont Matter. Résumés : [1_architecture/README.md](1_architecture/README.md) (18 pages, dernière mise à jour 2026-11-11).
 
 | Pages | Dernière mise à jour |
 |---|---|
 | [1_0 Monorepo et flux de données](1_architecture/1_0_monorepo-et-flux.md) | 2026-10-20 |
 | [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-11-05 |
 | [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-11-10 |
-| [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-11-09 |
+| [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-11-11 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-11-01 |
 | [1_5 Scène 3D (Three.js)](1_architecture/1_5_scene-3d.md) | 2026-10-29 |
 | [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-11-07 |
 | [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-11-10 |
 | [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-11-10 |
 | [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-11-08 |
-| [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-10-11 |
+| [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-11-11 |
 | [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-11-10 |
 | [1_12 Scène 3D : objets dessinés](1_architecture/1_12_scene-3d-objets.md) | 2026-10-26 |
 | [1_13 Comptes et sessions](1_architecture/1_13_comptes-et-sessions.md) | 2026-11-09 |

@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-11] update | Liste de courses : oublier un produit de la mémoire
+
+**Déclencheur** : issue « idée du jour » #2 (un nom mal tapé restait proposé par la recherche pour toujours).
+
+**Pages modifiées** :
+- `1_architecture/1_10_liste-de-courses.md` - section datée : bouton « Oublier » sur les propositions, règle « pas tant qu'il a une ligne », opération pure, route, store optimiste ; renvoi posé sur l'« Écarté en v1 » et ligne au tableau des routes
+- `1_architecture/1_3_protocole-rest-ws.md` - section datée : `DELETE /api/shopping/products/:id` (404 / 409 `IN_LIST`)
+
+**Index** : catalogue 1_architecture mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-11-11] update | Un téléphone Android sans accès au réseau local depuis Chrome
 
 **Déclencheur** : signalé par l'utilisateur (sur un seul téléphone de la maison, en Wi-Fi, « too many retries » ou « Serveur injoignable », rien dans les logs du serveur ; marche partout ailleurs et en 5G) ; diagnostic depuis le téléphone, aucun code touché.

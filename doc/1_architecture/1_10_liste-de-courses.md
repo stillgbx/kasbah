@@ -1,6 +1,6 @@
 # Liste de courses
 
-> Dernière mise à jour : 2026-10-11
+> Dernière mise à jour : 2026-11-11
 > Sources : `packages/shared/src/shopping/{shopping,shopping.test}.ts`, `packages/shared/src/protocol/{ws,http}.ts`, `apps/server/src/core/shopping.ts`, `apps/server/src/http/{routes,shopping.test}.ts`, `apps/server/src/ws/hub.ts`, `apps/server/src/app.ts`, `apps/server/src/mcp/{server,server.test}.ts`, `apps/web/src/stores/{shopping,shopping.test,devices}.ts`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/views/ShoppingView.vue`, `apps/web/src/lib/{navItems,strokeIcons}.ts`, `apps/web/src/router/index.ts`, `.gitignore`, `apps/server/src/plugins/shopping/index.ts`, `packages/shared/src/house/schema.ts` (`pluginSettingsOf`), `apps/web/src/components/layout/NavRail.vue`, `apps/web/src/composables/useSearch.ts`
 
 ## Ce que c'est
@@ -35,7 +35,8 @@ Choix de détail faits en séance, annoncés sans objection :
 
 Écarté en v1 : « ajouté par » (sur le réseau local, tout le monde est « la maison » : le champ serait vide
 la plupart du temps, voir `../0_overview/0_0_vision-et-principes.md` sur les comptes) ; photos et prix ;
-oublier un produit de la mémoire (un nom mal tapé reste proposé par la recherche).
+oublier un produit de la mémoire (un nom mal tapé reste proposé par la recherche) — ajouté le
+2026-11-11, voir « Mise à jour 2026-11-11 » plus bas.
 
 ## Le modèle (`packages/shared/src/shopping/shopping.ts`)
 
@@ -94,6 +95,7 @@ petite, pas de patch — et le service la rediffuse à tous les écrans par le m
 | `DELETE /api/shopping/items/:id` | retire la ligne (le produit reste connu) ; 404 sinon |
 | `POST /api/shopping/finish` | « Terminer les courses » : retire les lignes cochées |
 | `PUT /api/shopping/favorites` | `{ name, favorite }` : pose ou retire l'étoile |
+| `DELETE /api/shopping/products/:id` | oublie un produit de la mémoire ; 404 `NOT_FOUND` inconnu, 409 `IN_LIST` s'il a une ligne (2026-11-11) |
 
 Le snapshot porte `shopping` en champ **facultatif** (`.optional()`, pas `.default()`) : un `.default()`
 l'aurait rendu obligatoire dans le type de SORTIE de `ServerMessage`, et chaque snapshot littéral des
@@ -195,3 +197,27 @@ quand coupée, dans les deux versions du protocole), `shopping.test.ts` partagé
 `navItems.test.ts`. Preview `kasbah-mock` : entrée retirée du rail et page « coupée » à la bascule,
 retour à l'identique, console sans erreur — le mock n'a pas la carte dans ses Réglages (son inventaire
 ne liste que la simulation), la bascule y a été faite sur le store. Suite complète, typecheck et lint verts.
+
+### Mise à jour 2026-11-11 — oublier un produit de la mémoire
+
+Un nom mal tapé (« Laiit »), un produit qu'on n'achète plus ou une marque essayée une fois restaient
+proposés par la recherche pour toujours. Un bouton **« Oublier »** (corbeille, après l'étoile) sur chaque
+ligne de proposition retire le produit de `products` ; son étoile part avec lui, il quitte aussi les
+habituels. Le reste de la liste ne bouge pas.
+
+- **Règle** : un produit qui a une ligne dans la liste (cochée ou non) ne s'oublie pas. L'`id` d'une ligne
+  EST la clé de son produit et l'étoile de la ligne lit le produit : on retire d'abord la ligne. Sur la
+  proposition d'un tel produit, le bouton est **rangé** (`is-hidden`, `visibility: hidden`), pas retiré :
+  rien ne bouge.
+- **Opération pure** `forgetShoppingProduct(list, id)` (`null` si inconnu ou dans la liste) et prédicat
+  `isShoppingProductInList(list, id)`, dans `packages/shared/src/shopping/shopping.ts`.
+- **Route** `DELETE /api/shopping/products/:id`, par la file d'écriture du service : 404 / 409 se décident
+  DANS l'opération mise à la file, sur la liste qu'elle trouve (deux écrans concurrents ne se croisent pas).
+  Droit `shopping` (préfixe), 409 `DISABLED` liste coupée, 409 `DEMO_READONLY` sur une démo.
+- **Web** : `forgetShoppingProduct(id)` dans le transport (HTTP, et mock qui imite le 409 `IN_LIST`),
+  action `forget(id)` du store, **optimiste** comme les autres gestes. Libellé `shopping.forget`.
+- Pas d'outil MCP (un septième outil, à proposer à part si le besoin se confirme), pas d'« Annuler », pas
+  de fusion de doublons.
+
+Tests : `packages/shared/src/shopping/shopping.test.ts`, `apps/server/src/http/{shopping,rights}.test.ts`,
+`apps/web/src/stores/shopping.test.ts`.
