@@ -121,7 +121,7 @@ describe('forgetShoppingProduct', () => {
 
   it('does not mutate the input list', () => {
     const l = base()
-    const snapshot = structuredClone(l)
+    const snapshot = JSON.parse(JSON.stringify(l)) as typeof l
     forgetShoppingProduct(l, 'laiit')
     expect(l).toEqual(snapshot)
   })
