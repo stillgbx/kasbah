@@ -190,6 +190,7 @@ From a phone away from home, without a VPN, and from every screen at home: an **
 npm test           # vitest, all workspaces (shared, mock-sim, server, web)
 npm run typecheck  # tsc / vue-tsc per workspace
 npm run lint       # eslint (flat config, TypeScript + Vue)
+npm run check:house -- house/demo-house.json  # validate a house file without starting the server
 ```
 
 ## Architecture

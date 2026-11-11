@@ -1,7 +1,7 @@
 # Installation et scripts
 
-> Dernière mise à jour : 2026-11-08
-> Sources : `package.json` (racine et workspaces), `.claude/launch.json`, `apps/web/vite.config.ts`, `apps/server/src/config/env.ts`, `apps/server/src/main.ts`, `README.md`, `scripts/fetch-textures.mjs`, `.claude/launch.json`, `scripts/dev-server.mjs`, `scripts/supervisor.mjs`
+> Dernière mise à jour : 2026-11-11
+> Sources : `package.json` (racine et workspaces), `.claude/launch.json`, `apps/web/vite.config.ts`, `apps/server/src/config/env.ts`, `apps/server/src/main.ts`, `README.md`, `scripts/fetch-textures.mjs`, `.claude/launch.json`, `scripts/dev-server.mjs`, `scripts/supervisor.mjs`, `apps/server/src/config/house-cli.ts`
 
 ## Prérequis
 
@@ -494,3 +494,15 @@ Le script des comptes est renommé **`npm run account -w @kasbah/server`** (`app
 ([1_13](../1_architecture/1_13_comptes-et-sessions.md), section du 2026-11-08). Les mentions de `mcp-user`
 plus haut sont d'avant ; la sauvegarde de `mcp-users.json` (comptes, rôles compris) reste à recopier à la
 main, hors dépôt.
+
+### Mise à jour 2026-11-11 — `npm run check:house` valide un fichier maison sans le serveur
+
+**`npm run check:house -- [fichier]`** (racine, alias de `npm run check:house -w @kasbah/server --`) lit un
+fichier maison, le valide (`safeParseHouse`) puis, s'il est valide, liste les avertissements de
+`lintHouse` (sans les identifiants d'appareils des plugins, qui ne sont pas démarrés). Sans argument :
+`KASBAH_HOUSE_FILE` lu dans `apps/server/.env`, sinon `house/demo-house.json`. Un chemin en argument est
+résolu depuis le dossier où la commande est tapée (`INIT_CWD`, puisque `npm -w` lance le script depuis
+`apps/server/`). Sortie `0` si la maison est valide, même avec avertissements ; `1` sur un fichier
+introuvable, un JSON illisible ou une maison invalide. Code : `apps/server/src/config/house-cli.ts`
+(point d'entrée) et `house-check.ts` (fonction pure `checkHouseText`, testée). Ne réécrit rien (c'est le
+rôle de `house/fit-survey.mjs`) et ne regarde pas le fichier d'automatisations.

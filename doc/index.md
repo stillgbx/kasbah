@@ -126,7 +126,7 @@ Installer, configurer et mettre en production. Résumés : [5_setup/README.md](5
 
 | Pages | Dernière mise à jour |
 |---|---|
-| [5_0 Installation et scripts](5_setup/5_0_installation-et-scripts.md) | 2026-11-08 |
+| [5_0 Installation et scripts](5_setup/5_0_installation-et-scripts.md) | 2026-11-11 |
 | [5_1 Configuration (.env)](5_setup/5_1_configuration-env.md) | 2026-11-08 |
 | [5_2 Production](5_setup/5_2_production.md) | 2026-11-11 |
 <!-- section:5_setup:end -->

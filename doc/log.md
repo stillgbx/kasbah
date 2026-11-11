@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-11] update | Maison : `npm run check:house` sans démarrer le serveur
+
+**Déclencheur** : issue « idée du jour » #6 (une maison invalide n'était signalée qu'en empêchant le serveur de démarrer).
+
+**Pages modifiées** :
+- `5_setup/5_0_installation-et-scripts.md` - section datée : commande, chemin par défaut et `INIT_CWD`, codes de sortie, ce qu'elle ne fait pas
+
+**Index** : catalogue 5_setup mis à jour (résumé et date), index.md régénéré.
+
 ## [2026-11-11] update | Liste de courses : oublier un produit de la mémoire
 
 **Déclencheur** : issue « idée du jour » #2 (un nom mal tapé restait proposé par la recherche pour toujours).

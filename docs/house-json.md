@@ -210,4 +210,4 @@ Three demo properties, each linked device by device to its simulated device set:
 KASBAH_HOUSE_FILE=path/to/my-house.json npm run dev -w @kasbah/server
 ```
 
-The server refuses to start on an invalid file and prints each problem with its path; `GET /api/house/warnings` lists the warnings.
+The server refuses to start on an invalid file and prints each problem with its path; `GET /api/house/warnings` lists the warnings. To check a file without starting the server, run `npm run check:house -- <file>` (default: `KASBAH_HOUSE_FILE`, else the demo house): it prints the errors or the warnings and exits with `1` on an invalid file.
