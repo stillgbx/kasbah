@@ -6,8 +6,8 @@ import { z } from 'zod'
 // Two lists in the same file:
 // - `items`, the current cart, in ADDITION ORDER. Checking moves nothing: the line is struck through
 //   in place, under the finger, and "Finish shopping" then removes the checked ones all at once.
-// - `products`, the memory: any product added once stays there, for the search; the star
-//   makes it a "usual", put back in the cart with a touch.
+// - `products`, the memory: any product added once stays there, for the search, until it is
+//   explicitly forgotten; the star makes it a "usual", put back in the cart with a touch.
 //
 // A product and its cart line share the same key, drawn from the name (case, accents and spaces
 // ignored): "Lait" and "lait" are a single product, and the cart carries only one line of it.
@@ -137,6 +137,21 @@ export function setShoppingFavorite(list: ShoppingList, name: string, favorite: 
   if (p >= 0) products[p] = { ...products[p]!, favorite }
   else products.push({ id, name: clean, favorite, uses: 0, lastUsedAt: now })
   return { ...list, products }
+}
+
+/** The product has a line in the cart, checked or not. */
+export function isShoppingProductInList(list: ShoppingList, id: string): boolean {
+  return list.items.some((x) => x.id === id)
+}
+
+/**
+ * Forgets a product of the memory (a mistyped name, a product no longer bought): it leaves the search
+ * and the usuals. `null` if it is unknown or still has a line in the cart: a line's id IS its product's key,
+ * so the line goes first.
+ */
+export function forgetShoppingProduct(list: ShoppingList, id: string): ShoppingList | null {
+  if (!list.products.some((x) => x.id === id) || isShoppingProductInList(list, id)) return null
+  return { ...list, products: list.products.filter((x) => x.id !== id) }
 }
 
 /** The cart line designated by its id OR by its name (what an agent says). */

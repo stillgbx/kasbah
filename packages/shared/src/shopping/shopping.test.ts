@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addShoppingItems, clearCheckedShoppingItems, EMPTY_SHOPPING_LIST, findShoppingItem, removeShoppingItem,
+  addShoppingItems, clearCheckedShoppingItems, EMPTY_SHOPPING_LIST, findShoppingItem, forgetShoppingProduct, isShoppingProductInList, removeShoppingItem,
   setShoppingFavorite, shoppingFileSchema, shoppingItemPatchSchema, shoppingKey, updateShoppingItem,
 } from './shopping'
 import { pluginSettingsOf } from '../house/schema'
@@ -87,6 +87,43 @@ describe('setShoppingFavorite', () => {
     l = setShoppingFavorite(l, 'Beurre', true, 20)
     expect(l.products.map((p) => [p.name, p.favorite, p.uses])).toEqual([['Lait', true, 1], ['Beurre', true, 0]])
     expect(l.items.map((i) => i.id)).toEqual(['lait'])
+  })
+})
+
+describe('forgetShoppingProduct', () => {
+  const base = () => {
+    let l = addShoppingItems(EMPTY_SHOPPING_LIST, [{ name: 'Laiit' }, { name: 'Pain' }, { name: 'Beurre' }], 10)
+    l = setShoppingFavorite(l, 'Laiit', true, 10)
+    l = removeShoppingItem(l, 'laiit')!
+    return updateShoppingItem(l, 'beurre', { checked: true })!
+  }
+
+  it('removes a known product from the memory and the usuals', () => {
+    const l = base()
+    const next = forgetShoppingProduct(l, 'laiit')!
+    expect(next.products.map((p) => p.id)).toEqual(['pain', 'beurre'])
+    expect(next.products.some((p) => p.favorite)).toBe(false)
+    expect(next.items).toBe(l.items)
+  })
+
+  it('refuses an unknown product', () => {
+    expect(forgetShoppingProduct(base(), 'lait')).toBeNull()
+  })
+
+  it('refuses a product still in the cart, to buy or checked', () => {
+    const l = base()
+    expect(isShoppingProductInList(l, 'pain')).toBe(true)
+    expect(forgetShoppingProduct(l, 'pain')).toBeNull()
+    expect(isShoppingProductInList(l, 'beurre')).toBe(true)
+    expect(forgetShoppingProduct(l, 'beurre')).toBeNull()
+    expect(isShoppingProductInList(l, 'laiit')).toBe(false)
+  })
+
+  it('does not mutate the input list', () => {
+    const l = base()
+    const snapshot = structuredClone(l)
+    forgetShoppingProduct(l, 'laiit')
+    expect(l).toEqual(snapshot)
   })
 })
 
