@@ -88,3 +88,45 @@ describe('local player state for the lights in rhythm', () => {
     }
   })
 })
+
+describe('local player when the file stops playing', () => {
+  it('asks for the track again at the same position after each cut, and gives up on a cut that repeats in place', async () => {
+    const session = { deviceId: 'local:x', source: 'mixcloud', id: '/a/mix-1/', sid: 's', durationS: 3600, title: 'Mix 1', artist: 'A', artUrl: null }
+    const musicLocalPlay = vi.fn(async () => ({ streamUrl: 'https://kasbah.example.org/s2.m4a', session }))
+    setTransport({ musicLocalPlay, musicProgress: async () => {}, musicLocalState: async () => {} } as unknown as Transport)
+    let audio: HTMLAudioElement | null = null
+    let at = 0
+    const RealAudio = globalThis.Audio
+    vi.stubGlobal('Audio', function Audio() {
+      audio = new RealAudio()
+      Object.defineProperty(audio, 'currentTime', { get: () => at, set: (v: number) => { at = v } })
+      audio.play = async () => {}
+      return audio
+    })
+    try {
+      const local = useLocalPlayerStore()
+      await local.adopt({ streamUrl: 'https://kasbah.example.org/s.m4a', session, positionS: 0, queue })
+      /** The file fails at `pos`; the reload waits for the metadata before seeking: given right away. */
+      const cutAt = async (pos: number) => {
+        at = pos
+        audio!.dispatchEvent(new Event('error'))
+        await nextTick()
+        audio!.dispatchEvent(new Event('loadedmetadata'))
+        await vi.waitFor(() => expect(local.busy).toBe(false))
+      }
+      await cutAt(1200)
+      expect(musicLocalPlay).toHaveBeenCalledTimes(1)
+      expect(at).toBe(1200)
+      // the same file failing again without having played on: it really no longer plays
+      await cutAt(1205)
+      expect(musicLocalPlay).toHaveBeenCalledTimes(1)
+      expect(local.entry.state).toMatchObject({ playback: 'idle' })
+      // a later cut, the mix having played on since the first: asked again
+      await cutAt(2400)
+      expect(musicLocalPlay).toHaveBeenCalledTimes(2)
+      expect(at).toBe(2400)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})

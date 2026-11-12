@@ -1,4 +1,4 @@
-import { Readable } from 'node:stream'
+import { once } from 'node:events'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { Logger } from 'pino'
 import { z } from 'zod'
@@ -63,6 +63,12 @@ const trackSchema = z.object({
 })
 /** A playlist several hours long fits easily; beyond that, it is a caller error. */
 const QUEUE_MAX = 1000
+/**
+ * Relay: the source cut mid-file is reopened from the byte reached, this many times in a row at most
+ * (a reopening that brings bytes resets the count), `RAW_RETRY_MS` × attempt apart.
+ */
+const RAW_RETRIES = 3
+const RAW_RETRY_MS = 300
 
 export interface MusicPlayerDeps {
   config?: Partial<MusicConfig>
@@ -1129,15 +1135,66 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       })
       // The player cuts whenever it wants (pause, track change, end of probe): we then stop pulling on
       // the source. TRAP: aborting makes the stream emit an AbortError; without an error listener,
-      // Node raises it as an unhandled exception and the SERVER goes down.
-      const body = Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0])
-      const stop = () => { if (!reply.raw.writableEnded) reply.raw.end() }
-      body.on('error', (err) => {
-        log.debug({ err, sid: session.sid }, 'music raw GET: source stream cut')
-        stop()
-      })
-      reply.raw.on('close', () => { abort.abort(); body.destroy() })
-      body.pipe(reply.raw)
+      // Node raises it as an unhandled exception and the SERVER goes down (caught by the loop below).
+      reply.raw.on('close', () => abort.abort())
+      // Bytes promised to the player: the source's range, or its whole length.
+      const span = /^bytes (\d+)-(\d+)\//.exec(contentRange ?? '')
+      const from = span ? Number(span[1]) : 0
+      const to = span ? Number(span[2]) : len ? Number(len) - 1 : null
+      let sent = 0
+      // Reopenings in a row without a byte coming through: past `RAW_RETRIES`, or a refusal, we give up.
+      let attempts = 0
+      const reopen = async (to: number): Promise<ReadableStream<Uint8Array> | null> => {
+        while (attempts < RAW_RETRIES) {
+          attempts++
+          log.warn({ sid: session.sid, at: from + sent, to, attempt: attempts }, 'music raw GET: source cut, reopening it')
+          await new Promise((r) => setTimeout(r, RAW_RETRY_MS * attempts))
+          if (abort.signal.aborted) return null
+          try {
+            const again = await (deps.fetchImpl ?? fetch)(session.sourceUrl, {
+              signal: abort.signal,
+              headers: { range: `bytes=${from + sent}-${to}` },
+            })
+            // only the very bytes that are missing will do: anything else would corrupt the file
+            if (again.status === 206 && again.body && again.headers.get('content-range')?.startsWith(`bytes ${from + sent}-`)) {
+              return again.body
+            }
+            log.warn({ sid: session.sid, status: again.status }, 'music raw GET: source refused the reopening')
+            void again.body?.cancel()
+            return null
+          } catch (err) {
+            if (abort.signal.aborted) return null
+            log.debug({ err, sid: session.sid }, 'music raw GET: reopening failed')
+          }
+        }
+        return null
+      }
+      void (async () => {
+        let body: ReadableStream<Uint8Array> | null = upstream.body
+        while (body) {
+          try {
+            for await (const chunk of body as unknown as AsyncIterable<Uint8Array>) {
+              sent += chunk.length
+              attempts = 0
+              if (!reply.raw.write(chunk)) await once(reply.raw, 'drain', { signal: abort.signal })
+            }
+          } catch (err) {
+            if (abort.signal.aborted) return
+            log.debug({ err, sid: session.sid }, 'music raw GET: source stream cut')
+          }
+          if (abort.signal.aborted) return
+          // Whole: done. Unknown length: nothing to reopen.
+          if (to === null || from + sent > to) { reply.raw.end(); return }
+          // A long mix is ONE request held for hours: the source sometimes drops it. Ending the response
+          // here would leave the player waiting for the missing bytes on a live connection (it neither
+          // ends nor fails: the sound just stops). Reopen the source from the byte reached instead.
+          body = await reopen(to)
+        }
+        if (abort.signal.aborted) return
+        log.warn({ sid: session.sid, sent, from, to }, 'music raw GET: source cut, giving up')
+        // the player must see a failure, not wait: a closed connection, then it asks again or stops
+        reply.raw.destroy()
+      })()
     })
 
     app.get<{ Params: { sid: string } }>('/stream/:sid', async (req, reply) => {

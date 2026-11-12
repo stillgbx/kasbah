@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-12] update | Musique : une source coupée en cours de fichier est rouverte
+
+**Déclencheur** : demande de l'utilisateur (« assez souvent des arrêts de lecture », mix Mixcloud sur une barre de son ou sur le PC, à relancer à la main).
+
+**Pages modifiées** :
+- `1_architecture/1_6_lecteur-musique.md` - section datée : cause (réponse terminée en deçà du `content-length`, lecteur bloqué), reprise de la source par plage, abandon par `destroy`, piège `Readable.fromWeb`, relance du navigateur à chaque coupure, tests et contrôle négatif, ce qui n'est pas couvert
+- `3_plugins/3_20_mixcloud.md` - section datée : renvoi vers 1_6
+
+**Index** : catalogues 1_architecture et 3_plugins mis à jour (dates), index.md régénéré.
+
 ## [2026-11-11] update | Maison : `npm run check:house` sans démarrer le serveur
 
 **Déclencheur** : issue « idée du jour » #6 (une maison invalide n'était signalée qu'en empêchant le serveur de démarrer).

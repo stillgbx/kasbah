@@ -581,7 +581,7 @@ describe('ytmusic plugin', () => {
       if (String(url).includes('4416')) return new Response('ok', { status: 200 })
       return range
         ? new Response('partiel', { status: 206, headers: { 'content-length': '7', 'content-range': `bytes 1000-1006/${SIZE}` } })
-        : new Response('tout', { status: 200, headers: { 'content-length': String(SIZE) } })
+        : new Response(new Uint8Array(SIZE), { status: 200, headers: { 'content-length': String(SIZE) } })
     }) as unknown as typeof fetch
     const { plugin, app } = await boot({
       spawnImpl: ff.spawnImpl,

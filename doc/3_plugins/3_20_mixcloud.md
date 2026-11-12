@@ -1,6 +1,6 @@
 # Plugin Mixcloud (mix et émissions)
 
-> Dernière mise à jour : 2026-10-08
+> Dernière mise à jour : 2026-11-12
 > Sources : `apps/server/src/plugins/mixcloud/{index,api,resolve,store}.ts`, tests `apps/server/src/plugins/mixcloud/plugin.test.ts`, `apps/server/src/music/{player,sources,ytdlp}.ts`, `apps/server/src/plugins/index.ts`, `apps/server/.env.example`, `apps/web/src/components/music/MixcloudBrowser.vue`, `apps/web/src/components/MixcloudLinkCard.vue`, `apps/web/src/views/MusicView.vue`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, arbre de travail non commité du 2026-09-23 (après 5c43833), `apps/server/src/plugins/mixcloud/home.ts` et arbre non commité après 1839a21 (accueil), arbre non commité après 604939c (créateurs suivis), `apps/web/src/components/music/{GenrePills,MusicTile,MusicItemRow}.vue` et arbre non commité du 2026-09-28 (après c6fe7c1, genres côté web)
 
 ## Ce que c'est
@@ -326,3 +326,13 @@ Vérifié dans le navigateur : Alice relie un nom public depuis la carte, le dé
 `needs_pairing`. Tests : assertions `healthFor` dans `describe('mixcloud accounts')`.
 
 Sources : `apps/server/src/plugins/mixcloud/index.ts`, `apps/web/src/components/MixcloudLinkCard.vue`.
+
+### Mise à jour 2026-11-12 — mix coupé en cours de lecture
+
+Les arrêts de lecture en plein mix (enceinte Cast comme navigateur) venaient très probablement du
+relais : la connexion vers le CDN de Mixcloud, tenue des heures, tombait, et le lecteur attendait en
+silence les octets manquants. Le lecteur commun rouvre désormais la source à l'octet atteint, et le
+navigateur relance après chaque coupure : détail dans
+[1_6 Lecteur musique commun](../1_architecture/1_6_lecteur-musique.md), mise à jour du 2026-11-12.
+
+Sources : `apps/server/src/music/player.ts`, `apps/web/src/stores/localPlayer.ts`.

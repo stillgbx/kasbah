@@ -131,3 +131,73 @@ it('a browser playing the music itself: its room is chosen, its own reports plac
   player.stop()
   await app.close()
 })
+
+// A mix of several hours is ONE request held open on the source, which sometimes drops it. The relay
+// used to end its response there, short of the announced length: the player then waited for the
+// missing bytes on a live connection and the sound stopped. Real sockets here: `inject` would not
+// show that wait.
+async function relaying(fetchImpl: typeof fetch) {
+  const player = createMusicPlayer({
+    logger: pino({ level: process.env.RELAY_DEBUG ? 'debug' : 'silent' }),
+    fetchImpl,
+    source: (id) => (id === 'mixcloud'
+      ? { id, label: 'Mixcloud', resolve: async () => ({ url: 'https://cdn.example.org/mix.m4a', formatId: 'http', ext: 'm4a', abrKbps: 64, sizeBytes: FILE.length, durationS: 60 }) }
+      : undefined),
+  })
+  const app = Fastify()
+  await app.register(async (sub) => player.registerRoutes(sub), { prefix: '/api/music' })
+  await app.listen({ port: 0, host: '127.0.0.1' })
+  const base = `http://127.0.0.1:${(app.server.address() as { port: number }).port}`
+  const opened = await fetch(`${base}/api/music/local`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ source: 'mixcloud', id: '/someone/a-mix/', clientId: 'browser-1' }),
+  })
+  const { streamUrl } = await opened.json() as { streamUrl: string }
+  return { url: `${base}${streamUrl}`, close: async () => { player.stop(); await app.close() } }
+}
+
+const FILE = Uint8Array.from({ length: 1000 }, (_, i) => i % 251)
+/** The source sends `bytes` then drops the connection. */
+const cutAfter = (bytes: Uint8Array) => new ReadableStream<Uint8Array>({
+  start(c) { c.enqueue(bytes) },
+  // once those are read: erroring in `start` would drop the queued bytes
+  pull(c) { c.error(new Error('ECONNRESET')) },
+})
+
+it('relay: a source cut mid-file is reopened from the byte reached, the player gets the whole file', async () => {
+  const asked: Array<string | undefined> = []
+  // the source drops the connection at bytes 400 and 700
+  const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+    const range = (init?.headers as Record<string, string> | undefined)?.range
+    asked.push(range)
+    const at = range ? Number(/^bytes=(\d+)-/.exec(range)![1]) : 0
+    const cut = [400, 700].find((c) => c > at)
+    const headers = { 'content-length': String(1000 - at), ...(range ? { 'content-range': `bytes ${at}-999/1000` } : {}) }
+    const body = cut ? cutAfter(FILE.subarray(at, cut)) : FILE.subarray(at)
+    return new Response(body, { status: range ? 206 : 200, headers })
+  }) as unknown as typeof fetch
+  const { url, close } = await relaying(fetchImpl)
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    expect(res.status).toBe(200)
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(FILE)
+    expect(asked).toEqual([undefined, 'bytes=400-999', 'bytes=700-999'])
+  } finally { await close() }
+})
+
+it('relay: a source that refuses the reopening closes the connection, the player does not wait', async () => {
+  const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+    const range = (init?.headers as Record<string, string> | undefined)?.range
+    return range
+      ? new Response('expired', { status: 403 })
+      : new Response(cutAfter(FILE.subarray(0, 400)), { status: 200, headers: { 'content-length': '1000' } })
+  }) as unknown as typeof fetch
+  const { url, close } = await relaying(fetchImpl)
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    // a failure (connection closed short), not the 5 s timeout of a wait
+    const err = await res.arrayBuffer().then(() => null, (e: Error) => e)
+    expect(err?.name).not.toBe('TimeoutError')
+    expect(err).toBeInstanceOf(Error)
+  } finally { await close() }
+})

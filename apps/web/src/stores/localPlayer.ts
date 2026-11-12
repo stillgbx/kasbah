@@ -57,8 +57,13 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
 
   let audio: HTMLAudioElement | null = null
   let unlocked = false
-  /** A single new attempt per track when the file no longer plays (session expired on the server side). */
-  let retried = false
+  /**
+   * Where the last automatic new attempt started (s), null = none on this track. A new attempt when the
+   * file no longer plays (session expired on the server side, source cut); another one only once the
+   * track has played on since — a mix of several hours can be cut more than once.
+   */
+  let retriedAt: number | null = null
+  const RETRY_AGAIN_AFTER_S = 30
 
   // ---- last listening, kept in this browser ---------------------------------------------------------
   // Two keys: the queue (up to 1,000 tracks) is only written when it changes, the position on each reading.
@@ -150,7 +155,7 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
     restored.value = false
     queue.value = { ...q, index, repeat }
     busy.value = true
-    retried = false
+    retriedAt = null
     const a = el()
     a.pause()
     try {
@@ -204,17 +209,20 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
     catch { playback.value = 'idle' }
   }
 
-  /** The file no longer plays (server restarted, session expired): we ask for the track again, once, at the same position. */
+  /**
+   * The file no longer plays (server restarted, session expired, connection cut): we ask for the track
+   * again at the same position — once per cut: failing again without having played on, it stops.
+   */
   async function onError() {
     if (!audio || !queue.value || busy.value) return
-    if (retried) {
+    const at = audio.currentTime
+    if (retriedAt !== null && at - retriedAt < RETRY_AGAIN_AFTER_S) {
       playback.value = 'idle'
       return
     }
-    const at = audio.currentTime
     const q = queue.value
     await go(q.index, q.repeat, at).catch(() => { playback.value = 'idle' })
-    retried = true
+    retriedAt = at
   }
 
   // ---- what the page calls ----------------------------------------------------------------------------
@@ -338,7 +346,7 @@ export const useLocalPlayerStore = defineStore('localPlayer', () => {
       items: [{ source: s.source, id: s.id, ...(s.title ? { title: s.title } : {}), ...(s.artist ? { artist: s.artist } : {}), ...(s.artUrl ? { artUrl: s.artUrl } : {}), ...(s.durationS ? { durationS: s.durationS } : {}) }],
       index: 0, repeat: 'off',
     }
-    retried = false
+    retriedAt = null
     await load(r.streamUrl, s, r.positionS)
   }
 

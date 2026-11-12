@@ -1,6 +1,6 @@
 # Lecteur musique commun (`/api/music`)
 
-> Dernière mise à jour : 2026-11-07
+> Dernière mise à jour : 2026-11-12
 > Sources : `apps/server/src/music/{player,proxy,queue,sources,ytdlp}.ts`, tests `apps/server/src/music/{proxy,queue}.test.ts`, `apps/server/src/plugins/ytmusic/plugin.test.ts`, `apps/server/src/app.ts`, `apps/server/src/plugins/{ytmusic,mixcloud}/{index,resolve}.ts`, `apps/server/.env.example`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue`, arbre de travail non commité du 2026-09-23 (après 5c43833) ; `apps/server/src/music/lastPlayed.ts` et son test, `apps/web/src/stores/localPlayer.test.ts`, arbre de travail non commité du 2026-09-28 (après c6fe7c1) ; `apps/server/src/music/lightsync/{analyze,decode,effects/*,palette,settingsFile,sync}.ts`, `packages/shared/src/music/lightsync.ts` et leurs tests, `apps/server/src/core/lightStreamBridge.ts`, `apps/web/src/components/music/ListeningSessions.vue` (2026-11-05)
 
 ## Pourquoi un noyau, et pourquoi maintenant
@@ -565,3 +565,60 @@ au noir en 3 s, fermeture du flux à 5 s puis `switchOff`, `settling` avant tout
 à l'état d'avant. La section « le flux reste ouvert tant que l'interrupteur est allumé » est **datée**.
 Vérifié : `sync.test.ts` et `player.test.ts` de nouveau dans leur version du commit 88a975c, verts.
 **Pas encore vérifié sur la vraie maison** avec la synchro complète.
+
+### Mise à jour 2026-11-12 — une source coupée en cours de fichier est rouverte
+
+**Symptôme** (rapporté par l'utilisateur) : la lecture s'arrête d'elle-même assez souvent, en
+particulier sur un mix Mixcloud, aussi bien sur une barre de son Cast que dans le navigateur du PC ;
+il faut relancer à la main.
+
+**Cause trouvée dans le code** : un mix de plusieurs heures est **une seule requête** du relais brut
+vers la source, tenue ouverte des heures au rythme de lecture de l'enceinte. Quand la source la
+coupait, la route `GET /raw/:file` terminait sa réponse par `end()`, **en deçà du `content-length`
+annoncé**. Le lecteur ne recevait ni fin ni erreur : il attendait les octets manquants sur une
+connexion toujours vivante, et le son s'arrêtait quand son tampon était vide. Reproduit hors de Kasbah
+(serveur Node qui annonce 1 000 octets, en envoie 300 puis `end()` : le client reste bloqué jusqu'à son
+propre délai).
+
+**Le relais rouvre la source** (`apps/server/src/music/player.ts`, route `/raw/:file`) : il compte les
+octets réellement écrits au lecteur et connaît la plage promise (`content-range` de la source, sinon
+toute sa longueur). Coupure avant la fin → nouvelle requête `range: bytes=<octet atteint>-<fin>`,
+écrite **dans la même réponse** : le lecteur ne voit rien. Règles :
+
+- `RAW_RETRIES` = 3 essais d'affilée, espacés de `RAW_RETRY_MS` × essai (300, 600, 900 ms) ; le compte
+  repart à zéro dès qu'un octet passe (chaque coupure a ses trois essais) ;
+- seule une réponse **206 dont la plage commence à l'octet attendu** est acceptée : une autre plage
+  corromprait le fichier. Un refus (403 d'une URL expirée, par exemple) arrête tout de suite ;
+- abandon → `reply.raw.destroy()` et non plus `end()` : le lecteur voit une connexion fermée, il
+  redemande ou s'arrête, mais n'attend plus en silence ;
+- taille inconnue : rien à rouvrir, fin normale comme avant ;
+- le corps de la source est parcouru directement (`for await` sur le flux web), avec la contre-pression
+  `drain`. `Readable.fromWeb` est abandonné : il lit en avance et **jette ce qu'il a en tampon** quand
+  la source tombe en erreur (vu en test : 0 octet compté sur 400 reçus). Le relais restait juste — il
+  ne compte que ce qu'il a écrit — mais refaisait des octets pour rien.
+- Journal : `music raw GET: source cut, reopening it` et `… giving up` passent en **warn** (la coupure
+  était en `debug`, invisible en production) ; c'est ce qui dira si la cause était bien celle-là.
+
+Profite aussi à YouTube Music et aux podcasts, qui passent par le même relais. Le repli MP3
+(`/stream/:sid`, ffmpeg) n'est pas touché.
+
+**Le navigateur relance après chaque coupure** (`apps/web/src/stores/localPlayer.ts`, `onError`) :
+avant, une seule relance automatique par piste (`retried`, remis à zéro au lancement suivant) ; la
+deuxième coupure d'un mix de trois heures arrêtait la lecture. Désormais `retriedAt` retient la
+position de la dernière relance : une nouvelle erreur est relancée à sa position si la lecture a
+avancé d'au moins `RETRY_AGAIN_AFTER_S` = 30 s depuis ; sinon (le même fichier échoue au même endroit)
+elle s'arrête, comme avant.
+
+**Tests** : `apps/server/src/music/player.test.ts`, deux tests sur de **vrais sockets** (un `inject` ne
+montre pas l'attente) — source coupée à 400 puis 700 octets, le lecteur reçoit le fichier entier et
+les plages demandées sont `0`, `400-999`, `700-999` ; source qui refuse la reprise, le lecteur reçoit
+une erreur et non le délai de 5 s. `apps/web/src/stores/localPlayer.test.ts` : coupure à 1 200 s
+relancée, nouvelle coupure à 1 205 s abandonnée, coupure à 2 400 s relancée. Contrôle négatif fait :
+avec l'ancien code, les deux tests du relais finissent sur le délai de 5 s et celui du navigateur ne
+voit qu'une relance. Le test de relais de `plugins/ytmusic/plugin.test.ts` avait une fausse source
+qui annonçait 4,3 Mo pour 4 octets : elle envoie désormais la taille annoncée.
+
+**Pas vérifié sur la vraie maison** ; cause non confirmée par les journaux (au prochain arrêt :
+`grep -i "source cut" logs/kasbah.log`). **Non couvert** : une coupure entre l'enceinte et le serveur
+(Wi-Fi), que seule l'enceinte peut reprendre ; une URL de source expirée en cours de mix, qui
+demanderait de résoudre la piste à nouveau (jamais observé sur Mixcloud).
