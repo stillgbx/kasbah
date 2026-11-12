@@ -100,4 +100,44 @@
     <string name="voice_thinking">« %1$s », je réfléchis…</string>
     <string name="voice_done">C\'est fait.</string>
     <string name="failed">Échec.</string>
+
+    <!-- Voiture : onglets de l'accueil -->
+    
+    <string name="tab_home">Accueil</string>
+    <string name="tab_lights">Lumières</string>
+    <string name="tab_covers">Ouvrants</string>
+    <string name="house">Maison</string>
+    <string name="no_covers">Aucun volet dans la maison.</string>
+    <string name="cameras">Caméras</string>
+    <string name="no_cameras">Aucune caméra dans la maison.</string>
+    <string name="camera_still">Dernière photo</string>
+    <string name="camera_still_at">Photo prise à %1$s</string>
+    <string name="camera_still_yesterday">Photo prise hier à %1$s</string>
+    <string name="camera_still_on">Photo prise le %1$s à %2$s</string>
+    <string name="camera_no_still">Pas encore de photo</string>
+    
+    <string name="tab_talk">Parler</string>
+    <string name="talk">Parler</string>
+    <string name="talk_prompt">Posez une question à Kasbah.</string>
+    <string name="no_lights">Aucune lumière dans la maison.</string>
+    <string name="lights_elsewhere">Ailleurs</string>
+    <string name="scene_active">En cours</string>
+    <string name="scene_recalled">%1$s : lancée</string>
+    <string name="house_inside">Intérieur</string>
+    <string name="house_solar">Solaire</string>
+    <string name="house_charger">Borne</string>
+    <string name="house_lights">Lumières</string>
+    <string name="house_lights_none">Toutes éteintes</string>
+    <plurals name="house_lights_on">
+        <item quantity="one">%d allumée</item>
+        <item quantity="many">%d allumées</item>
+        <item quantity="other">%d allumées</item>
+    </plurals>
+    <string name="charger_charging">En charge, %1$s</string>
+    <string name="charger_connected">Voiture branchée</string>
+    <string name="charger_finished">Charge terminée</string>
+    <string name="charger_error">En défaut</string>
+    <string name="charger_free">Libre</string>
+    <string name="voice_read_all">Tout lire</string>
+    <string name="voice_answer_title">Réponse de Kasbah</string>
 </resources>

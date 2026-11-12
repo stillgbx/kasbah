@@ -8,6 +8,7 @@ import androidx.annotation.VisibleForTesting
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
+import androidx.car.app.model.LongMessageTemplate
 import androidx.car.app.model.MessageTemplate
 import androidx.car.app.model.Template
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -115,12 +116,16 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
     }
 
     // Same title and same actions at every step: the host takes each change as a refresh of the
-    // screen, not as a new screen (those are counted).
+    // screen, not as a new screen (those are counted). "Read all" opens the whole text, which the car
+    // only shows parked; the message here keeps its start.
     override fun onGetTemplate(): Template =
         MessageTemplate.Builder(message)
             .setTitle(carContext.getString(R.string.voice_title))
             .setHeaderAction(Action.BACK)
             .addAction(Action.Builder().setTitle(carContext.getString(R.string.voice_again)).setOnClickListener(::listen).build())
+            .addAction(Action.Builder().setTitle(carContext.getString(R.string.voice_read_all)).setOnClickListener {
+                screenManager.push(LongAnswerScreen(carContext, message))
+            }.build())
             .build()
 
     private data class Heard(val text: String, val vocabulary: Vocabulary)
@@ -128,4 +133,13 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
     private companion object {
         const val TAG = "KasbahVoice"
     }
+}
+
+/** The whole answer, scrolling: Android Auto shows this template parked only, and says so while driving. */
+class LongAnswerScreen(carContext: CarContext, private val text: String) : Screen(carContext) {
+    override fun onGetTemplate(): Template =
+        LongMessageTemplate.Builder(text)
+            .setTitle(carContext.getString(R.string.voice_answer_title))
+            .setHeaderAction(Action.BACK)
+            .build()
 }

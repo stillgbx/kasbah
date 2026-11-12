@@ -9,6 +9,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.text.Collator
 import java.util.concurrent.Executors
 
 /** A gate or a garage door, as `GET /api/devices` describes it. */
@@ -24,7 +25,34 @@ data class Access(
     val label: String = name,
     /** Its number among the accesses of its kind, null when it is the only one. */
     val number: Int? = null,
+    /** The house room it is placed in, for the covers listed by room. */
+    val room: String? = null,
 )
+
+/** A lamp, with the name of the house room it is placed in (null: placed outside any room, or not at all). */
+data class Light(val id: String, val name: String, val on: Boolean, val available: Boolean, val room: String?)
+
+/** A plugin scene (`GET /api/scenes`): a preset of the vendor, recalled as a whole. */
+data class Scene(val id: String, val name: String, val group: String?, val active: Boolean, val swatches: List<Int>)
+
+/**
+ * What the house tab shows, each null when the house has no such device or it is offline: the room
+ * temperature, the solar production, the charger, how many lamps are on, and a camera to show.
+ */
+data class HouseStatus(
+    val insideC: Double? = null,
+    val solarW: Double? = null,
+    val charger: String? = null,
+    val chargerW: Double? = null,
+    val lightsOn: Int = 0,
+    val camera: String? = null,
+)
+
+/** A camera or doorbell, as `GET /api/devices` describes it. */
+data class Camera(val id: String, val name: String, val available: Boolean)
+
+/** A camera's last still: the JPEG, and when it was taken (epoch ms) when the server says. */
+class Still(val jpeg: ByteArray, val at: Long?)
 
 class KasbahError(message: String) : Exception(message)
 
@@ -120,9 +148,45 @@ class KasbahClient(private val context: Context) {
 
     fun readHome(): Home? = parseHome(request("GET", "/api/house"))
 
-    fun command(id: String, type: String) {
-        request("POST", "/api/devices/$id/command", JSONObject().put("type", type).toString())
+    fun command(id: String, type: String, params: JSONObject = JSONObject()) {
+        request("POST", "/api/devices/$id/command", params.put("type", type).toString())
     }
+
+    fun lights(): List<Light> = parseLights(request("GET", "/api/devices"), request("GET", "/api/house"))
+
+    fun covers(): List<Access> = parseCovers(request("GET", "/api/devices"), request("GET", "/api/house"))
+
+    fun scenes(): List<Scene> = parseScenes(request("GET", "/api/scenes"))
+
+    fun recall(id: String) {
+        request("POST", "/api/scenes/$id/recall", JSONObject().put("mode", "static").toString())
+    }
+
+    fun status(): HouseStatus = parseStatus(request("GET", "/api/devices"))
+
+    /** The camera's last still, a JPEG (the route the web app's camera tiles read). */
+    fun snapshot(cameraId: String): ByteArray = still(cameraId).jpeg
+
+    /**
+     * The camera's last still and when it was taken. Read only: asking for a fresh one would open the
+     * camera's stream, which the vendor counts against a budget.
+     */
+    fun still(cameraId: String): Still {
+        if (baseUrl.isEmpty()) throw KasbahError(context.getString(R.string.err_no_address))
+        val (plugin, external) = cameraId.split(':', limit = 2)
+        val c = open("/api/plugins/$plugin/cameras/${enc(external)}/snapshot.jpg", "GET")
+        c.readTimeout = 20_000
+        try {
+            val code = c.responseCode
+            if (code == 401) throw KasbahError(context.getString(R.string.err_session))
+            if (code !in 200..299) throw KasbahError(context.getString(R.string.err_server, code))
+            return Still(c.inputStream.readBytes(), c.getHeaderField("x-kasbah-snapshot-at")?.toLongOrNull())
+        } finally {
+            c.disconnect()
+        }
+    }
+
+    fun cameras(): List<Camera> = parseCameras(request("GET", "/api/devices"))
 
     /**
      * The house's words, as the web app sends them: names for the transcription to recognise (rooms,
@@ -260,6 +324,130 @@ internal fun arrangeAccesses(list: List<Access>, order: List<String>, kindName: 
         seen[a.deviceClass] = n
         a.copy(label = "${kindName(a.deviceClass)} $n", number = n)
     }
+}
+
+private fun objectsOf(a: JSONArray?) = if (a == null) emptyList() else (0 until a.length()).map { a.getJSONObject(it) }
+
+/** Each placed device's room name, from a `GET /api/house` body. */
+private fun roomsOf(houseBody: String): Map<String, String?> {
+    val house = JSONObject(houseBody)
+    val roomNames = objectsOf(house.optJSONArray("rooms")).associate { it.getString("id") to it.optString("name") }
+    return objectsOf(house.optJSONArray("devices"))
+        .filter { it.has("roomId") }
+        .associate { it.getString("deviceId") to roomNames[it.getString("roomId")] }
+}
+
+/**
+ * The house's room names in the web app's display order (`buildHouseIndex` in packages/shared): levels
+ * from the highest down, and in each the rooms of `level.roomOrder` (set in the Lights view) first, then
+ * the others by name. The same for every account: the order belongs to the house.
+ */
+internal fun roomOrder(houseBody: String): List<String> {
+    val house = JSONObject(houseBody)
+    val rooms = objectsOf(house.optJSONArray("rooms"))
+    val collator = Collator.getInstance()
+    return objectsOf(house.optJSONArray("levels")).sortedByDescending { it.optDouble("elevation", 0.0) }.flatMap { level ->
+        val chosen = level.optJSONArray("roomOrder")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+        rooms.filter { it.optString("levelId") == level.getString("id") }
+            .sortedWith(compareBy<JSONObject> { chosen.indexOf(it.getString("id")).let { i -> if (i < 0) Int.MAX_VALUE else i } }
+                .thenComparator { a, b -> collator.compare(a.optString("name"), b.optString("name")) })
+            .map { it.optString("name") }
+    }
+}
+
+/** Devices in the web app's order: their room's rank in [roomOrder], then by name; those of no room last. */
+private fun <T> inHouseOrder(items: List<T>, houseBody: String, room: (T) -> String?, name: (T) -> String): List<T> {
+    val rank = roomOrder(houseBody).withIndex().associate { (i, n) -> n to i }
+    val collator = Collator.getInstance()
+    // A room the order does not know (on no level) still comes before the devices of no room.
+    return items.sortedWith(compareBy<T> { room(it)?.let { r -> rank[r] ?: (Int.MAX_VALUE - 1) } ?: Int.MAX_VALUE }.thenComparator { a, b -> collator.compare(name(a), name(b)) })
+}
+
+/**
+ * The covers of a `GET /api/devices` body that are not gates or garage doors (shutters, blinds,
+ * awnings, curtains, windows), each with its room's name from the `GET /api/house` body, in the web
+ * app's order.
+ */
+internal fun parseCovers(devicesBody: String, houseBody: String): List<Access> {
+    val roomOf = roomsOf(houseBody)
+    return inHouseOrder(parseAllCovers(devicesBody, roomOf), houseBody, { it.room }, { it.name })
+}
+
+private fun parseAllCovers(devicesBody: String, roomOf: Map<String, String?>): List<Access> =
+    objectsOf(JSONObject(devicesBody).getJSONArray("devices")).mapNotNull { entry ->
+        val d = entry.getJSONObject("descriptor")
+        val deviceClass = d.optJSONObject("meta")?.optJSONObject("cover")?.optString("deviceClass").orEmpty()
+        if (d.getString("kind") != "cover" || deviceClass in KasbahClient.ACCESS_CLASSES) return@mapNotNull null
+        val s = entry.optJSONObject("state")
+        Access(
+            id = d.getString("id"),
+            name = d.getString("name"),
+            deviceClass = deviceClass,
+            position = s?.optDouble("position")?.takeUnless { it.isNaN() }?.toInt(),
+            motion = s?.optString("motion")?.takeIf { it.isNotEmpty() },
+            available = s?.optBoolean("available", false) ?: false,
+            room = roomOf[d.getString("id")],
+        )
+    }
+
+/** The cameras and doorbells of a `GET /api/devices` body, in the server's order. */
+internal fun parseCameras(body: String): List<Camera> = objectsOf(JSONObject(body).getJSONArray("devices")).mapNotNull { entry ->
+    val d = entry.getJSONObject("descriptor")
+    if (d.getString("kind") != "camera") return@mapNotNull null
+    Camera(d.getString("id"), d.getString("name"), entry.optJSONObject("state")?.optBoolean("available") ?: false)
+}
+
+/**
+ * The lamps of a `GET /api/devices` body, each with its room's name from the `GET /api/house` body, in
+ * the web app's order.
+ */
+internal fun parseLights(devicesBody: String, houseBody: String): List<Light> {
+    val roomOf = roomsOf(houseBody)
+    val lights = objectsOf(JSONObject(devicesBody).getJSONArray("devices")).mapNotNull { entry ->
+        val d = entry.getJSONObject("descriptor")
+        if (d.getString("kind") != "light") return@mapNotNull null
+        val s = entry.optJSONObject("state")
+        Light(d.getString("id"), d.getString("name"), s?.optBoolean("on") ?: false, s?.optBoolean("available") ?: false, roomOf[d.getString("id")])
+    }
+    return inHouseOrder(lights, houseBody, { it.room }, { it.name })
+}
+
+/** The scenes of a `GET /api/scenes` body, their `#rrggbb` swatches as ARGB colors. */
+internal fun parseScenes(body: String): List<Scene> = objectsOf(JSONObject(body).getJSONArray("scenes")).map { entry ->
+    val s = entry.getJSONObject("scene")
+    val swatches = s.optJSONArray("swatches")?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+        .mapNotNull { hex -> hex.removePrefix("#").takeIf { it.length == 6 }?.toIntOrNull(16)?.let { 0xFF000000.toInt() or it } }
+    Scene(
+        id = s.getString("id"),
+        name = s.getString("name"),
+        group = s.optJSONObject("group")?.optString("name")?.takeIf { it.isNotEmpty() },
+        active = entry.optJSONObject("state")?.optString("active", "inactive") != "inactive",
+        swatches = swatches,
+    )
+}
+
+/**
+ * The house's state in a `GET /api/devices` body: the first room thermostat (a zone regulated on its
+ * flow water says 45 °C, not a room's air), the first solar site, the first charger, the lamps on, the
+ * first camera. Offline devices say nothing.
+ */
+internal fun parseStatus(body: String): HouseStatus {
+    var status = HouseStatus()
+    for (entry in objectsOf(JSONObject(body).getJSONArray("devices"))) {
+        val d = entry.getJSONObject("descriptor")
+        val s = entry.optJSONObject("state") ?: continue
+        val online = s.optBoolean("available")
+        when (d.getString("kind")) {
+            "climate" -> if (online && status.insideC == null &&
+                d.optJSONObject("meta")?.optJSONObject("climate")?.optString("control") != "flow" && s.has("currentTempC")
+            ) status = status.copy(insideC = s.getDouble("currentTempC"))
+            "energy" -> if (online && status.solarW == null && s.has("productionW")) status = status.copy(solarW = s.getDouble("productionW"))
+            "ev_charger" -> if (online && status.charger == null) status = status.copy(charger = s.optString("status"), chargerW = s.optDouble("powerW", 0.0))
+            "light" -> if (online && s.optBoolean("on")) status = status.copy(lightsOn = status.lightsOn + 1)
+            "camera" -> if (status.camera == null) status = status.copy(camera = d.getString("id"))
+        }
+    }
+    return status
 }
 
 /** The house's `origin` in a `GET /api/house` body, null when it has none. */

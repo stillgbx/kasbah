@@ -56,44 +56,50 @@ class AccessScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycl
         }
     }
 
-    // Titles, header actions and action strips use the deprecated builders: the `Header` that replaces
-    // them needs a recent Android Auto host, these work on every one.
-    override fun onGetTemplate(): Template {
-        val retry = Action.Builder().setTitle(carContext.getString(R.string.refresh)).setOnClickListener(::refresh).build()
-        error?.let {
-            return MessageTemplate.Builder(it).setTitle("Kasbah").setHeaderAction(Action.APP_ICON).addAction(retry).build()
-        }
-        val list = accesses
-        if (list != null && list.isEmpty()) {
-            return MessageTemplate.Builder(carContext.getString(R.string.no_access))
-                .setTitle("Kasbah").setHeaderAction(Action.APP_ICON).addAction(retry).build()
-        }
-        // A strip takes a single action with a text title, the microphone is an icon: the grid reloads on
-        // its own (on return, while a door moves), so there is no refresh.
-        val mic = CarIcon.Builder(IconCompat.createWithResource(carContext, R.drawable.ic_mic)).build()
-        val builder = GridTemplate.Builder()
-            .setTitle("Kasbah")
-            .setHeaderAction(Action.APP_ICON)
-            .setActionStrip(
-                ActionStrip.Builder()
-                    .addAction(Action.Builder().setIcon(mic).setOnClickListener { screenManager.push(VoiceScreen(carContext)) }.build())
-                    .addAction(Action.Builder().setTitle(carContext.getString(R.string.car)).setOnClickListener { screenManager.push(ProbeScreen(carContext)) }.build())
-                    .build(),
-            )
-        if (list == null) return builder.setLoading(true).build()
-        val items = ItemList.Builder()
-        for (a in list) {
-            items.addItem(
-                GridItem.Builder()
-                    .setTitle(a.label)
-                    .setText(stateLabel(carContext, a))
-                    .setImage(CarIcon.Builder(accessIcon(carContext, a)).setTint(tint(a)).build())
-                    .setOnClickListener { screenManager.push(AccessActionScreen(carContext, a)) }
-                    .build(),
-            )
-        }
-        return builder.setSingleList(items.build()).build()
+    override fun onGetTemplate(): Template = accessTemplate(this, accesses, error, ::refresh)
+}
+
+/**
+ * The accesses' grid, the app's home on an old host and its first tab on a recent one, `extra` tiles
+ * after them. Titles, header actions and action strips use the deprecated builders: the `Header` that
+ * replaces them needs a recent Android Auto host, these work on every one.
+ */
+internal fun accessTemplate(screen: Screen, accesses: List<Access>?, error: String?, refresh: () -> Unit, extra: List<GridItem> = emptyList()): Template {
+    val carContext = screen.carContext
+    val retry = Action.Builder().setTitle(carContext.getString(R.string.refresh)).setOnClickListener(refresh).build()
+    error?.let {
+        return MessageTemplate.Builder(it).setTitle("Kasbah").setHeaderAction(Action.APP_ICON).addAction(retry).build()
     }
+    if (accesses != null && accesses.isEmpty() && extra.isEmpty()) {
+        return MessageTemplate.Builder(carContext.getString(R.string.no_access))
+            .setTitle("Kasbah").setHeaderAction(Action.APP_ICON).addAction(retry).build()
+    }
+    // A strip takes a single action with a text title, the microphone is an icon: the grid reloads on
+    // its own (on return, while a door moves), so there is no refresh.
+    val mic = CarIcon.Builder(IconCompat.createWithResource(carContext, R.drawable.ic_mic)).build()
+    val builder = GridTemplate.Builder()
+        .setTitle("Kasbah")
+        .setHeaderAction(Action.APP_ICON)
+        .setActionStrip(
+            ActionStrip.Builder()
+                .addAction(Action.Builder().setIcon(mic).setOnClickListener { screen.screenManager.push(VoiceScreen(carContext)) }.build())
+                .addAction(Action.Builder().setTitle(carContext.getString(R.string.car)).setOnClickListener { screen.screenManager.push(ProbeScreen(carContext)) }.build())
+                .build(),
+        )
+    if (accesses == null) return builder.setLoading(true).build()
+    val items = ItemList.Builder()
+    for (a in accesses) {
+        items.addItem(
+            GridItem.Builder()
+                .setTitle(a.label)
+                .setText(stateLabel(carContext, a))
+                .setImage(CarIcon.Builder(accessIcon(carContext, a)).setTint(tint(a)).build())
+                .setOnClickListener { screen.screenManager.push(AccessActionScreen(carContext, a)) }
+                .build(),
+        )
+    }
+    extra.forEach(items::addItem)
+    return builder.setSingleList(items.build()).build()
 }
 
 /**
@@ -135,7 +141,7 @@ internal fun accessIcon(context: Context, a: Access): IconCompat {
  * The state read before the text: open in Kasbah's accent, moving in the logo's copper, offline in the
  * web app's muted grey (day, night), closed or unknown in the car's own color.
  */
-private fun tint(a: Access): CarColor = when {
+internal fun tint(a: Access): CarColor = when {
     !a.available -> MUTED
     a.motion == "opening" || a.motion == "closing" -> COPPER
     (a.position ?: 0) > 0 -> ACCENT
@@ -146,9 +152,9 @@ private fun tint(a: Access): CarColor = when {
 // mode too. With the day teal (#1f6f78), icons were hard to read and the primary button fell back to
 // Android Auto's own blue (a color without enough contrast is replaced); the light teal is honored by
 // both (seen in the DHU, 2026-10-22).
-private val ACCENT = CarColor.createCustom(0xFF4FB3BD.toInt(), 0xFF4FB3BD.toInt())
-private val COPPER = CarColor.createCustom(0xFFE0AA70.toInt(), 0xFFE0AA70.toInt())
-private val MUTED = CarColor.createCustom(0xFF8D9AB0.toInt(), 0xFF8D9AB0.toInt())
+internal val ACCENT = CarColor.createCustom(0xFF4FB3BD.toInt(), 0xFF4FB3BD.toInt())
+internal val COPPER = CarColor.createCustom(0xFFE0AA70.toInt(), 0xFFE0AA70.toInt())
+internal val MUTED = CarColor.createCustom(0xFF8D9AB0.toInt(), 0xFF8D9AB0.toInt())
 
 /**
  * Open, close or stop one access. Choosing the tile then the action is the confirmation: a single tap on

@@ -101,4 +101,43 @@
     <string name="voice_thinking">“%1$s”, thinking…</string>
     <string name="voice_done">Done.</string>
     <string name="failed">Failed.</string>
+
+    <!-- Car: home tabs -->
+    
+    <string name="tab_home">Home</string>
+    <string name="tab_lights">Lights</string>
+    <string name="tab_covers">Covers</string>
+    <string name="house">House</string>
+    <string name="no_covers">No shutters in the house.</string>
+    <string name="cameras">Cameras</string>
+    <string name="no_cameras">No cameras in the house.</string>
+    <string name="camera_still">Latest picture</string>
+    <string name="camera_still_at">Picture taken at %1$s</string>
+    <string name="camera_still_yesterday">Picture taken yesterday at %1$s</string>
+    <string name="camera_still_on">Picture taken on %1$s at %2$s</string>
+    <string name="camera_no_still">No picture yet</string>
+    
+    <string name="tab_talk">Talk</string>
+    <string name="talk">Talk</string>
+    <string name="talk_prompt">Ask Kasbah a question.</string>
+    <string name="no_lights">No lights in the house.</string>
+    <string name="lights_elsewhere">Elsewhere</string>
+    <string name="scene_active">On</string>
+    <string name="scene_recalled">%1$s: on</string>
+    <string name="house_inside">Inside</string>
+    <string name="house_solar">Solar</string>
+    <string name="house_charger">Charger</string>
+    <string name="house_lights">Lights</string>
+    <string name="house_lights_none">All off</string>
+    <plurals name="house_lights_on">
+        <item quantity="one">%d on</item>
+        <item quantity="other">%d on</item>
+    </plurals>
+    <string name="charger_charging">Charging, %1$s</string>
+    <string name="charger_connected">Car plugged in</string>
+    <string name="charger_finished">Charge finished</string>
+    <string name="charger_error">Fault</string>
+    <string name="charger_free">Free</string>
+    <string name="voice_read_all">Read all</string>
+    <string name="voice_answer_title">Kasbah\'s answer</string>
 </resources>

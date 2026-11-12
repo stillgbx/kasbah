@@ -117,4 +117,114 @@ class ParsingTest {
         assertEquals(listOf("g", "l"), alertAccesses(list, emptySet()).map { it.id })
         assertEquals(listOf("g", "l"), alertAccesses(list, setOf("gone")).map { it.id })
     }
+
+    private val houseDevices = """{"devices":[
+        {"descriptor":{"id":"m:l1","kind":"light","name":"Ceiling"},"state":{"on":true,"available":true}},
+        {"descriptor":{"id":"m:l2","kind":"light","name":"Garden"},"state":{"on":false,"available":true}},
+        {"descriptor":{"id":"m:l3","kind":"light","name":"Lamp"},"state":{"on":true,"available":false}},
+        {"descriptor":{"id":"m:pac","kind":"climate","name":"Zone 2","meta":{"climate":{"control":"flow"}}},"state":{"currentTempC":45,"available":true}},
+        {"descriptor":{"id":"m:th","kind":"climate","name":"Thermostat"},"state":{"currentTempC":21.5,"available":true}},
+        {"descriptor":{"id":"m:sun","kind":"energy","name":"Solar"},"state":{"productionW":3000,"available":true}},
+        {"descriptor":{"id":"m:ev","kind":"ev_charger","name":"Charger"},"state":{"status":"charging","powerW":7000,"available":true}},
+        {"descriptor":{"id":"m:cam","kind":"camera","name":"Gate"},"state":{"available":true}}
+    ]}"""
+
+    @Test fun `lamps carry their house room, none when placed outside one`() {
+        val house = """{"rooms":[{"id":"living","name":"Salon"}],"devices":[{"deviceId":"m:l1","roomId":"living"},{"deviceId":"m:l2"}]}"""
+        val lights = parseLights(houseDevices, house)
+        assertEquals(listOf("m:l1", "m:l2", "m:l3"), lights.map { it.id })
+        assertEquals(listOf("Salon", null, null), lights.map { it.room })
+        assertEquals(listOf(true, false, true), lights.map { it.on })
+        assertFalse(lights[2].available)
+    }
+
+    @Test fun `each room gets its scenes then its lamps, a vendor zone its own section, the rest last`() {
+        val l = listOf(Light("a", "A", false, true, null), Light("b", "B", false, true, "Home cinéma"), Light("c", "C", false, true, "Cuisine"), Light("d", "D", false, true, "Home cinéma"))
+        val s = listOf(
+            Scene("film", "Film", "home cinema", false, emptyList()),
+            Scene("summer", "Soirée d'été", "Extérieur", false, emptyList()),
+            Scene("night", "Nuit", null, false, emptyList()),
+        )
+        assertEquals(
+            listOf(
+                Triple("Home cinéma", listOf("film"), listOf("b", "d")),
+                Triple("Cuisine", emptyList(), listOf("c")),
+                Triple("Extérieur", listOf("summer"), emptyList()),
+                Triple("Ailleurs", listOf("night"), listOf("a")),
+            ),
+            roomSections(l, s, "Ailleurs").map { Triple(it.name, it.scenes.map { x -> x.id }, it.lights.map { x -> x.id }) },
+        )
+        assertEquals(listOf("Cuisine"), roomSections(l.filter { it.room == "Cuisine" }, emptyList(), "Ailleurs").map { it.name })
+    }
+
+    @Test fun `scenes with their room, state and colors`() {
+        val body = """{"scenes":[
+            {"scene":{"id":"m:read","name":"Lecture","group":{"name":"Salon","kind":"room"},"swatches":["#fff1d6","bad"]},"state":{"active":"static"}},
+            {"scene":{"id":"m:night","name":"Nuit","swatches":[]},"state":{"active":"inactive"}}
+        ]}"""
+        val scenes = parseScenes(body)
+        assertEquals(listOf("Salon", null), scenes.map { it.group })
+        assertEquals(listOf(true, false), scenes.map { it.active })
+        assertEquals(listOf(0xFFFFF1D6.toInt()), scenes[0].swatches)
+    }
+
+    @Test fun `covers are the shutters and the like, with their room, never the gate or garage doors`() {
+        val body = """{"devices":[
+            {"descriptor":{"id":"m:s","kind":"cover","name":"Volet salon","meta":{"cover":{"deviceClass":"shutter"}}},"state":{"position":100,"motion":"stopped","available":true}},
+            {"descriptor":{"id":"m:g","kind":"cover","name":"Portail","meta":{"cover":{"deviceClass":"gate"}}},"state":{"available":true}},
+            {"descriptor":{"id":"m:w","kind":"cover","name":"Velux","meta":{"cover":{"deviceClass":"window"}}},"state":{"motion":"stopped","available":false}},
+            {"descriptor":{"id":"m:l","kind":"light","name":"Lamp"},"state":{"on":true,"available":true}}
+        ]}"""
+        val house = """{"rooms":[{"id":"living","name":"Salon"}],"devices":[{"deviceId":"m:s","roomId":"living"}]}"""
+        val covers = parseCovers(body, house)
+        assertEquals(listOf("m:s", "m:w"), covers.map { it.id })
+        assertEquals(listOf("Salon", null), covers.map { it.room })
+        assertEquals(listOf(100, null), covers.map { it.position })
+        assertFalse(covers[1].available)
+    }
+
+    @Test fun `rooms come in the web app's order, levels from the top, the chosen order then by name`() {
+        val house = """{
+            "levels":[{"id":"rdc","elevation":0,"roomOrder":["salon"]},{"id":"etage","elevation":2.7}],
+            "rooms":[{"id":"cuisine","levelId":"rdc","name":"Cuisine"},{"id":"bureau","levelId":"rdc","name":"Bureau"},
+                     {"id":"salon","levelId":"rdc","name":"Salon"},{"id":"chambre","levelId":"etage","name":"Chambre"}],
+            "devices":[{"deviceId":"m:1","roomId":"cuisine"},{"deviceId":"m:2","roomId":"chambre"},{"deviceId":"m:3","roomId":"salon"},
+                       {"deviceId":"m:4","roomId":"salon"},{"deviceId":"m:5","roomId":"bureau"}]
+        }"""
+        assertEquals(listOf("Chambre", "Salon", "Bureau", "Cuisine"), roomOrder(house))
+        val devices = """{"devices":[
+            {"descriptor":{"id":"m:1","kind":"light","name":"Spots"},"state":{"available":true}},
+            {"descriptor":{"id":"m:6","kind":"light","name":"Jardin"},"state":{"available":true}},
+            {"descriptor":{"id":"m:4","kind":"light","name":"Suspension"},"state":{"available":true}},
+            {"descriptor":{"id":"m:2","kind":"light","name":"Plafonnier"},"state":{"available":true}},
+            {"descriptor":{"id":"m:3","kind":"light","name":"Lampadaire"},"state":{"available":true}},
+            {"descriptor":{"id":"m:5","kind":"light","name":"Lampe"},"state":{"available":true}}
+        ]}"""
+        // by room in that order, by name within a room, the lamp of no room last
+        assertEquals(listOf("m:2", "m:3", "m:4", "m:5", "m:1", "m:6"), parseLights(devices, house).map { it.id })
+    }
+
+    @Test fun `a still's age counts calendar days, not 24-hour spans`() {
+        val zone = java.time.ZoneId.of("Europe/Paris")
+        fun at(day: Int, h: Int, m: Int) = java.time.ZonedDateTime.of(2026, 11, day, h, m, 0, 0, zone).toInstant().toEpochMilli()
+        // 19:07 read at 18:01 the next day: less than 24 hours, but yesterday
+        assertEquals(1L, daysAgo(at(11, 19, 7), at(12, 18, 1), zone))
+        assertEquals(0L, daysAgo(at(12, 0, 5), at(12, 23, 59), zone))
+        assertEquals(3L, daysAgo(at(9, 12, 0), at(12, 8, 0), zone))
+    }
+
+    @Test fun `cameras are the devices of kind camera, in the server's order`() {
+        val cameras = parseCameras(houseDevices)
+        assertEquals(listOf(Camera("m:cam", "Gate", true)), cameras)
+    }
+
+    @Test fun `the house's state skips a zone regulated on its flow water, and offline lamps`() {
+        val s = parseStatus(houseDevices)
+        assertEquals(21.5, s.insideC!!, 0.0)
+        assertEquals(3000.0, s.solarW!!, 0.0)
+        assertEquals("charging", s.charger)
+        assertEquals(7000.0, s.chargerW!!, 0.0)
+        assertEquals(1, s.lightsOn)
+        assertEquals("m:cam", s.camera)
+    }
 }

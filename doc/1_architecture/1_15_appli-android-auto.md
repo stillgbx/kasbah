@@ -1,7 +1,7 @@
 # Appli Android Auto
 
-> Dernière mise à jour : 2026-11-10
-> Sources : `apps/android/app/src/test/kotlin/org/kasbah/auto/*Test.kt`, `apps/android/app/src/main/kotlin/org/kasbah/auto/{KasbahClient,MainActivity,KasbahCarAppService,AccessScreen,VoiceScreen,Voice,ProbeScreen,Approach}.kt`, `apps/android/app/src/debug/`, `apps/android/app/src/main/AndroidManifest.xml`, `apps/android/app/src/main/res/xml/{backup_rules,data_extraction_rules}.xml`, bibliothèque `androidx.car.app:app` 1.7.0 (`HostValidator`, `hosts_allowlist_sample`), scan Claude Security du 2026-10-25, `apps/android/app/build.gradle.kts`, `apps/android/dhu.cmd`, `apps/android/.gitattributes`, `apps/server/src/http/session.ts`, `apps/server/src/plugins/transcription/index.ts`, portail `developer.renaultgroup.com`, session du 2026-10-22 (essais sur un téléphone Android et dans le simulateur DHU), `apps/android/keystore.properties.example`, `apps/android/app/build.gradle.kts` (signature), console Google Play (2026-10-23)
+> Dernière mise à jour : 2026-11-12
+> Sources : `apps/android/app/src/test/kotlin/org/kasbah/auto/*Test.kt`, `apps/android/app/src/main/kotlin/org/kasbah/auto/{KasbahClient,MainActivity,KasbahCarAppService,AccessScreen,HomeScreen,HouseScreen,CamerasScreen,VoiceScreen,Voice,ProbeScreen,Approach}.kt`, bibliothèque `androidx.car.app` 1.7.0 (`TabsConstraints`, `TabContentsConstraints`), `apps/android/app/src/debug/`, `apps/android/app/src/main/AndroidManifest.xml`, `apps/android/app/src/main/res/xml/{backup_rules,data_extraction_rules}.xml`, bibliothèque `androidx.car.app:app` 1.7.0 (`HostValidator`, `hosts_allowlist_sample`), scan Claude Security du 2026-10-25, `apps/android/app/build.gradle.kts`, `apps/android/dhu.cmd`, `apps/android/.gitattributes`, `apps/server/src/http/session.ts`, `apps/server/src/plugins/transcription/index.ts`, portail `developer.renaultgroup.com`, session du 2026-10-22 (essais sur un téléphone Android et dans le simulateur DHU), `apps/android/keystore.properties.example`, `apps/android/app/build.gradle.kts` (signature), console Google Play (2026-10-23)
 
 Une appli Android, à côté de l'app web, qui met Kasbah sur l'écran de la voiture par **Android
 Auto** : le portail et les portes de garage, un relevé de ce que la voiture transmet, et la voix de
@@ -582,3 +582,69 @@ Test : `ParsingTest` (« the journal keeps the newest lines first, and drops the
 unitaires (35), lint et `assembleDebug` verts ; bundle 0.9 (`versionCode` 9) construit. **Non joué** :
 le journal à l'écran du téléphone, et l'alerte en voiture. Piège d'outillage : sous Git Bash, un chemin
 `/sdcard/…` passé à `adb shell` est réécrit en chemin Windows ; `MSYS_NO_PATHCONV=1`.
+
+### Mise à jour 2026-11-12 - l'accueil à onglets : Accueil, Lumières, Ouvrants, Parler
+
+Demande de l'utilisateur : profiter des autres modèles d'Android Auto plutôt que d'un écran unique.
+Le plein écran libre reste hors de portée (seules les applis de navigation ont une surface à dessiner,
+et la catégorie navigation exige un vrai guidage) : l'appli reste en catégorie `IOT` et change de modèles.
+
+**L'accueil** (`HomeScreen.kt`) est un `TabTemplate` dès que l'hôte a l'API 6 (`carAppApiLevel`, lu dans
+`KasbahCarAppService.onCreateScreen`) ; un hôte plus ancien garde la grille seule (`AccessScreen`). Quatre
+onglets, chacun lu quand il s'affiche :
+
+- **Accueil** (icône étoile) : la grille des accès, inchangée (`accessTemplate`, sortie de `AccessScreen`
+  pour servir aux deux écrans), puis trois tuiles **à lire seulement** : **Voiture** (`ProbeScreen`),
+  **Maison** (`HouseScreen` : température intérieure, production solaire, borne, lumières allumées, photo
+  de la première caméra ; aucun bouton) et **Caméras** (`CamerasScreen`).
+- **Lumières** : une section par pièce, ses **scènes** d'abord (ligne avec la pastille de leurs deux
+  couleurs, un appui la lance, « En cours » si active), puis ses lampes avec un **interrupteur** (un appui
+  allume ou éteint, `light.set`). Une scène se range dans la pièce de même nom, comparé sans casse, accents
+  ni ponctuation (`roomSections`) ; une zone du fabricant sans lampe dans la maison (« Extérieur ») a sa
+  section après les pièces ; le reste finit sous « Ailleurs ».
+- **Ouvrants** : volets, stores, rideaux et fenêtres par pièce (`parseCovers`, tout `cover` sauf portail et
+  garage), avec leur état ; un appui ouvre l'écran Ouvrir / Fermer / Stop des accès. Un appui dans une liste
+  ne fait donc jamais bouger un ouvrant.
+- **Parler** : choisir l'onglet **ouvre l'écoute** (`VoiceScreen`) ; au retour, l'onglet n'a qu'un bouton.
+
+**L'ordre des pièces** est celui du site (`buildHouseIndex`, `packages/shared/src/house/lookup.ts`) :
+niveaux du plus haut au plus bas, puis `level.roomOrder` (réglé par glisser-déposer dans la vue Lumières),
+puis l'alphabet ; les appareils d'une pièce par nom (`roomOrder`, `inHouseOrder` dans `KasbahClient.kt`).
+Cet ordre appartient à **la maison**, pas au compte : il n'existe pas d'ordre par utilisateur. Un essai a
+d'abord semblé faux parce que la copie locale du fichier de la maison n'avait pas l'ordre du serveur : c'est
+`GET /api/house` du serveur qui fait foi.
+
+**Les caméras** : une tuile par caméra (huit au plus : toutes les images passent vers la voiture dans une
+seule transaction, de taille bornée), sa dernière photo recadrée en carré, ou l'icône. Un appui l'ouvre dans
+un `PaneTemplate` avec « Actualiser ». La voiture **ne demande jamais de photo neuve** : chez Nest, une photo
+ne se prend que tant qu'un écran du site regarde, et chaque session est comptée. La fiche dit donc l'âge de
+la photo, avec le jour dès qu'elle n'est pas du jour (« Photo prise hier à … », « le … à … » ; jours du
+calendrier, pas tranches de 24 h : `daysAgo`), lu dans l'en-tête `x-kasbah-snapshot-at` (`KasbahClient.still`).
+L'image d'un `PaneTemplate` reste petite (un carré sur le côté) : aucun modèle permis à une appli `IOT`
+n'en montre une plus grande.
+
+**« Tout lire »** sur l'écran Parler ouvre la réponse entière dans un `LongMessageTemplate`
+(`LongAnswerScreen`), qu'Android Auto n'affiche qu'à l'arrêt : la réponse longue n'est plus seulement
+coupée.
+
+Pièges :
+
+- **Quatre onglets au plus, contrôlé par la bibliothèque** (`TabsConstraints.MAXIMUM_ALLOWED_TABS = 4`,
+  minimum 2), dans le constructeur de `TabTemplate` et pas dans son `Builder` : six onglets font planter
+  l'appli à l'affichage (« There cannot be more than 4 tabs added », « Kasbah Auto a rencontré une erreur
+  inattendue »). Vu dans le DHU ; cinq échouerait de même, quelle que soit la voiture.
+- **Dans un onglet, l'hôte masque la barre d'actions du modèle** (micro et « Voiture » de la grille) :
+  d'où l'onglet Parler et la tuile Voiture.
+- Une ligne de liste porte un interrupteur **ou** un appui, jamais les deux (`Row.Builder`).
+- Le DHU dessine avec l'Android Auto du téléphone : ce qu'il accepte ou refuse vaut pour la voiture ; seule
+  la largeur d'écran change (nombre de tuiles par rangée).
+- Le lanceur du DHU montre côte à côte la version Play Store et la version debug, même nom et même icône :
+  la debug est en fin de liste. Vérifier laquelle est liée avant tout appui
+  (`adb shell dumpsys activity services | grep kasbah`), la version Play Store pilotant la vraie maison.
+
+**Vérifié** : tests unitaires (53, dont les onglets, le rangement des scènes, l'ordre des pièces, les
+caméras et l'âge d'une photo), lint et `assembleDebug` verts ; dans le DHU sur la maison de démonstration
+(les quatre onglets, un interrupteur, la grille des caméras), puis sur la vraie maison avec la version
+debug connectée par l'adresse publique (caméras avec photos, ordre des pièces). **Non joué** : la vraie
+voiture (il faut une version de la piste de test interne), et la réponse longue (aucune réponse obtenue
+au micro du DHU). Version 0.10, `versionCode` 10.

@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-12] update | Android Auto : accueil à onglets, lumières, ouvrants, caméras
+
+**Déclencheur** : question de l'utilisateur (plein écran dans Android Auto, autres modèles possibles), puis maquettes, essais dans le DHU sur la démonstration et sur la vraie maison, et ses choix d'onglets, d'icônes et d'ordre.
+
+**Pages modifiées** :
+- `1_architecture/1_15_appli-android-auto.md` - section datée : `TabTemplate` (Accueil avec tuiles Voiture, Maison, Caméras ; Lumières avec scènes par pièce et interrupteurs ; Ouvrants ; Parler qui écoute à l'ouverture), ordre des pièces de la maison, photos de caméra en lecture seule datées, « Tout lire », pièges (quatre onglets au plus, barre d'actions masquée dans un onglet, DHU = hôte du téléphone), version 0.10
+
+**Index** : catalogue 1_architecture mis à jour (date), index.md régénéré.
+
 ## [2026-11-12] update | Scène 3D : pluie et neige sur l'objectif
 
 **Déclencheur** : demande de l'utilisateur (gouttes et flocons sur l'écran de la vue 3D, comme si elle était filmée dehors, discret), puis quatre retours sur le rendu.

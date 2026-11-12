@@ -24,6 +24,8 @@ class KasbahCarAppService : CarAppService() {
         }
 
     override fun onCreateSession(): Session = object : Session() {
-        override fun onCreateScreen(intent: Intent): Screen = AccessScreen(carContext)
+        // Tabs need Car App API 6; an older host keeps the accesses' grid alone.
+        override fun onCreateScreen(intent: Intent): Screen =
+            if (carContext.carAppApiLevel >= 6) HomeScreen(carContext) else AccessScreen(carContext)
     }
 }
