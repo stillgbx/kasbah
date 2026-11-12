@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-12] update | Android Auto 0.11 : retours du premier essai en voiture
+
+**Déclencheur** : retours de l'utilisateur après l'essai de la 0.10 dans sa voiture (boutons de Parler qui bougent, page Maison, saut de l'accueil, triangles du téléphone), puis « Oui, livre ».
+
+**Pages modifiées** :
+- `1_architecture/1_15_appli-android-auto.md` - section datée « version 0.11 » : message de Parler tenu à deux lignes, page Maison en grille avec les comptes (ouvrants ouverts, lecteurs, robots dehors) et pourquoi pas une liste, accueil redessiné seulement si les données changent, ▼ dessiné en ▲ retourné dans le texte d'aide, piège du DHU (debug retirée du lanceur à la réinstallation)
+
+**Index** : catalogue inchangé (date déjà du jour), index.md régénéré.
+
 ## [2026-11-12] update | Android Auto : accueil à onglets, lumières, ouvrants, caméras
 
 **Déclencheur** : question de l'utilisateur (plein écran dans Android Auto, autres modèles possibles), puis maquettes, essais dans le DHU sur la démonstration et sur la vraie maison, et ses choix d'onglets, d'icônes et d'ordre.

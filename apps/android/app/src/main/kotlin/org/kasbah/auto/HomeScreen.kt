@@ -83,13 +83,18 @@ class HomeScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycleO
         }
     }
 
-    /** Reads off the main thread; a result that comes back once the driver has changed tab is dropped. */
+    /**
+     * Reads off the main thread; a result that comes back once the driver has changed tab is dropped. The
+     * screen is drawn again only when what it shows has changed: the host lays a template out anew each
+     * time, and the home grid jumped when the same tiles came back (seen in a car, 2026-11-12).
+     */
     private fun <T> load(work: () -> T, done: (T) -> Unit) {
         val shown = tab
         Background.run(work) { result ->
             if (tab != shown) return@run
+            val before = listOf(accesses, lights, scenes, covers, error)
             result.onSuccess { error = null; done(it) }.onFailure { error = it.message }
-            invalidate()
+            if (listOf(accesses, lights, scenes, covers, error) != before) invalidate()
         }
     }
 

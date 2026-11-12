@@ -133,7 +133,27 @@
         <item quantity="many">%d allumées</item>
         <item quantity="other">%d allumées</item>
     </plurals>
-    <string name="charger_charging">En charge, %1$s</string>
+    <string name="house_covers">Ouvrants</string>
+    <string name="house_covers_none">Tous fermés</string>
+    <plurals name="house_covers_open">
+        <item quantity="one">%d ouvert</item>
+        <item quantity="many">%d ouverts</item>
+        <item quantity="other">%d ouverts</item>
+    </plurals>
+    <string name="house_music">Musique</string>
+    <string name="house_music_none">À l\'arrêt</string>
+    <plurals name="house_players_on">
+        <item quantity="one">%d en lecture</item>
+        <item quantity="many">%d en lecture</item>
+        <item quantity="other">%d en lecture</item>
+    </plurals>
+    <string name="house_robots">Robots</string>
+    <plurals name="house_robots_out">
+        <item quantity="one">%d au travail</item>
+        <item quantity="many">%d au travail</item>
+        <item quantity="other">%d au travail</item>
+    </plurals>
+    <string name="charger_charging">Charge %1$s</string>
     <string name="charger_connected">Voiture branchée</string>
     <string name="charger_finished">Charge terminée</string>
     <string name="charger_error">En défaut</string>

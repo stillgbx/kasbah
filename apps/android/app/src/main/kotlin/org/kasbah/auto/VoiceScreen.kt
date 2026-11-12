@@ -119,7 +119,7 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
     // screen, not as a new screen (those are counted). "Read all" opens the whole text, which the car
     // only shows parked; the message here keeps its start.
     override fun onGetTemplate(): Template =
-        MessageTemplate.Builder(message)
+        MessageTemplate.Builder(twoLines(message))
             .setTitle(carContext.getString(R.string.voice_title))
             .setHeaderAction(Action.BACK)
             .addAction(Action.Builder().setTitle(carContext.getString(R.string.voice_again)).setOnClickListener(::listen).build())
@@ -134,6 +134,14 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext), DefaultLifecycle
         const val TAG = "KasbahVoice"
     }
 }
+
+/**
+ * The host centres the message and its buttons together, and cuts the message after two lines (seen in
+ * a car, 2026-11-12): a line of one blank more keeps every message at two lines, so the buttons stay
+ * put from "Listening…" to the answer. A message of exactly two lines then ends with an ellipsis, which
+ * "Read all" makes up for.
+ */
+@VisibleForTesting internal fun twoLines(text: String) = text + "\n" + Char(0xA0)
 
 /** The whole answer, scrolling: Android Auto shows this template parked only, and says so while driving. */
 class LongAnswerScreen(carContext: CarContext, private val text: String) : Screen(carContext) {

@@ -648,3 +648,40 @@ caméras et l'âge d'une photo), lint et `assembleDebug` verts ; dans le DHU sur
 debug connectée par l'adresse publique (caméras avec photos, ordre des pièces). **Non joué** : la vraie
 voiture (il faut une version de la piste de test interne), et la réponse longue (aucune réponse obtenue
 au micro du DHU). Version 0.10, `versionCode` 10.
+
+### Mise à jour 2026-11-12 - version 0.11 : retours du premier essai dans la voiture
+
+Premier essai de la 0.10 dans une vraie voiture, par Android Auto. Quatre retours :
+
+- **Parler : les boutons bougeaient** avec la longueur du message. L'hôte centre ensemble le message et
+  ses boutons, et **coupe le message après deux lignes** (vu dans la voiture, puis dans le DHU). Chaque
+  message reçoit donc une ligne de plus, une espace insécable (`twoLines`, `VoiceScreen.kt`) : il fait
+  toujours deux lignes, les boutons ne bougent plus de « Je vous écoute… » à la réponse. Revers accepté :
+  un message de deux lignes pile finit par « … » ; « Tout lire » garde le texte entier (sans la ligne
+  ajoutée). Mesuré dans le DHU : boutons à la même hauteur pour un message d'une et de deux lignes.
+- **Maison : la photo ne servait à rien, il manquait des chiffres.** `HouseScreen` devient une **grille**
+  (`GridTemplate`) d'une tuile par chiffre, comme l'accueil : nom, valeur, icône turquoise quand quelque
+  chose tourne. Nouveaux comptes dans `parseStatus` : **ouvrants ouverts** (tout `cover` hors portail et
+  garage, position > 0), **lecteurs en lecture** (`media_player`, `playback` = `playing`), **robots
+  dehors** (aspirateur ou tondeuse en `cleaning`, `mowing` ou `returning`). Écartés : la liste
+  (`ListTemplate`), essayée d'abord, cachait sa fin derrière les flèches du bord gauche de l'écran, pénible
+  en voiture ; le `PaneTemplate` n'a que quatre lignes. La grille montre **deux rangées de trois** sans
+  défiler : six tuiles au plus, d'où la tuile Robots **seulement quand un robot est dehors**. Les valeurs
+  sont courtes pour tenir sous une tuile (« Charge 7,4 kW », « 1 en lecture »). La photo de caméra et
+  `KasbahClient.snapshot` sont retirées (les caméras gardent leur tuile).
+- **Accueil : la grille sautait au retour sur l'onglet.** Choisir un onglet redessinait l'écran deux fois :
+  tout de suite, puis à l'arrivée des données, même identiques. `load` (`HomeScreen.kt`) ne redessine plus
+  que si ce qu'il montre a changé (accès, lumières, scènes, ouvrants, erreur). Le saut n'a jamais été
+  reproduit dans le DHU (24 images en 1,3 s, grille immobile) : seul l'essai en voiture dira s'il a disparu.
+- **Téléphone : ▲ et ▼ de tailles différentes** dans le texte d'aide sous les ouvrants. Les boutons
+  contournaient déjà la police (un ▲ retourné, `access_row.xml`) ; le texte d'aide garde son libellé et
+  dessine chaque ▼ en ▲ retourné (`flippedDown`, un `ReplacementSpan`, `MainActivity.kt`).
+
+Piège du DHU : **réinstaller la version debug la retire du lanceur** d'Android Auto ; elle revient en
+relançant le simulateur (`quit`, puis le relancer), parfois après l'avoir recochée dans « Personnaliser le
+lanceur » sur le téléphone. Vérifier la liaison avant tout appui (voir plus haut). Dans un modèle sans liste,
+`keycode back` du DHU déplace le focus au lieu de revenir : toucher la flèche de l'en-tête.
+
+**Vérifié** : tests unitaires (56), lint et `assembleDebug` verts ; dans le DHU sur la maison de
+démonstration (les trois écrans) et sur le téléphone (le texte d'aide). Captures de `docs/android-auto.md`
+refaites. **Non joué** : la voiture. Version 0.11, `versionCode` 11.

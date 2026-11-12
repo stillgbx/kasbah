@@ -225,6 +225,25 @@ class ParsingTest {
         assertEquals("charging", s.charger)
         assertEquals(7000.0, s.chargerW!!, 0.0)
         assertEquals(1, s.lightsOn)
-        assertEquals("m:cam", s.camera)
+        assertEquals(null, s.coversOpen)
+        assertEquals(null, s.playersOn)
+        assertEquals(null, s.robotsOut)
+    }
+
+    @Test fun `the house counts open covers without the gate, players playing, robots away from their base`() {
+        val body = """{"devices":[
+            {"descriptor":{"id":"m:s1","kind":"cover","name":"Shutter 1","meta":{"cover":{"deviceClass":"shutter"}}},"state":{"position":40,"available":true}},
+            {"descriptor":{"id":"m:s2","kind":"cover","name":"Shutter 2","meta":{"cover":{"deviceClass":"shutter"}}},"state":{"position":0,"available":true}},
+            {"descriptor":{"id":"m:s3","kind":"cover","name":"Shutter 3","meta":{"cover":{"deviceClass":"shutter"}}},"state":{"position":100,"available":false}},
+            {"descriptor":{"id":"m:gate","kind":"cover","name":"Gate","meta":{"cover":{"deviceClass":"gate"}}},"state":{"position":100,"available":true}},
+            {"descriptor":{"id":"m:p1","kind":"media_player","name":"Kitchen"},"state":{"playback":"playing","available":true}},
+            {"descriptor":{"id":"m:p2","kind":"media_player","name":"TV"},"state":{"playback":"paused","available":true}},
+            {"descriptor":{"id":"m:v","kind":"vacuum","name":"Vacuum"},"state":{"activity":"docked","available":true}},
+            {"descriptor":{"id":"m:m","kind":"mower","name":"Mower"},"state":{"activity":"returning","available":true}}
+        ]}"""
+        val s = parseStatus(body)
+        assertEquals(1, s.coversOpen)
+        assertEquals(1, s.playersOn)
+        assertEquals(1, s.robotsOut)
     }
 }

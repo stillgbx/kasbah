@@ -6,7 +6,9 @@ change on the server.
 
 | On the car's screen | |
 |---|---|
-| ![Gates and garage doors, one of them open](screenshots/android-auto-car.webp) | ![A garage door's action screen](screenshots/android-auto-car-action.webp) |
+| ![Home tab: the gate, the garage doors, then the Car, House and Cameras tiles](screenshots/android-auto-car.webp) | ![The house's state, one tile per figure](screenshots/android-auto-car-house.webp) |
+| ![Lights tab: the lamps by room, each with a switch](screenshots/android-auto-car-lights.webp) | ![Covers tab: the shutters and windows by room, with their state](screenshots/android-auto-car-covers.webp) |
+| ![A garage door's action screen](screenshots/android-auto-car-action.webp) | |
 
 | On the phone | |
 |---|---|
@@ -17,22 +19,35 @@ Android Auto parts around the app (map, app bar) are cut out.
 
 ## What it does
 
-- **Gates and garage doors**: one tile per cover whose class is `gate` or `garage`, with its state
+The car's screen has four tabs: **Home**, **Lights**, **Covers** and **Talk**. Android Auto allows four
+at most; an older car without tabs shows the gates and garage doors alone.
+
+- **Gates and garage doors**, on the Home tab: one tile per cover whose class is `gate` or `garage`, with its state
   (closed, open, opening…, offline, or unknown for a one-way radio motor). Tapping a tile never moves
   anything: it opens a screen with **Open**, **Close** and **Stop**. Tiles carry short names that fit the
   car's screen: the kind, numbered when the house has several (*Gate*, *Garage 1*, *Garage 2*), with the
   number drawn on the icon too.
+- **House**, a Home tile that only reads: the inside temperature, the solar production, the charger,
+  how many lamps are on, covers open and players playing, and the robots out when one is. Six tiles,
+  all on one screen; an icon turns turquoise while something runs.
+- **Cameras**, a Home tile: each camera's last still, with the time it was taken (and its day when it is
+  not today's). The car never asks for a fresh one: a camera's stream can be counted against a budget.
+- **Lights**: a section per room, in the web app's order, with the room's scenes first (a tap recalls
+  one) then a switch per lamp.
+- **Covers**: the shutters, blinds and windows by room, with their state; a tap opens the same Open /
+  Close / Stop screen as for a gate.
 - **Approach alert**: when the car comes within 400 m of the house, without opening the app, a
   notification shows over the map with the doors' states and an **Open** button for two of them (Android
   Auto's limit). Tapping the notification itself opens the app's tiles for the others. It only shows when
   the phone is projected by Android Auto, and is removed once the car leaves the circle. If the doors
   cannot be read (session expired, server unreachable), the notification says so instead. The house's
   position is its `origin`, read from the server and kept on the phone.
-- **Talk**: the microphone button listens to one sentence through the car's microphone, sends it to the
+- **Talk**: choosing the tab listens to one sentence through the car's microphone, sends it to the
   transcription, then to the assistant ("Ask Kasbah"), and says the answer aloud with the Kasbah voice
   (the account's voice, when *spoken answers* is on in the transcription plugin), or with Android's own
-  voice otherwise. The end of the sentence is detected as in the web app (one second of silence).
-- **Car**: a probe of what Android Auto reports about the car (model, energy and connector types,
+  voice otherwise. The end of the sentence is detected as in the web app (one second of silence). The
+  car shows the start of the answer; **Read all** opens the whole of it, parked only.
+- **Car**, a Home tile: a probe of what Android Auto reports about the car (model, energy and connector types,
   battery and range, speed, odometer). Raw values, also written to the phone's log
   (`adb logcat -s KasbahProbe`). Android Auto does not report tire pressure.
 - **Phone screen**: the server address and the sign-in, styled like the server's sign-in page. The

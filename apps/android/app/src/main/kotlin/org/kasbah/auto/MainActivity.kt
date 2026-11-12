@@ -4,15 +4,22 @@ import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.pm.PackageManager
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ReplacementSpan
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import kotlin.math.roundToInt
 
 /** The phone side: the server address and the sign-in. Everything else happens on the car screen. */
 class MainActivity : Activity() {
@@ -31,6 +38,7 @@ class MainActivity : Activity() {
         // A password field switches to a monospace font by itself.
         password.typeface = Typeface.DEFAULT
 
+        findViewById<TextView>(R.id.accesses_hint).text = flippedDown(getString(R.string.accesses_hint))
         url.setText(client.baseUrl)
         user.setText(client.account)
         render()
@@ -174,5 +182,35 @@ class MainActivity : Activity() {
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION,
         )
+    }
+}
+
+/**
+ * The text with each ▼ drawn as a ▲ turned over, as on the rows' buttons: the font draws its ▼ smaller
+ * than its ▲, and the hint showed the two side by side.
+ */
+internal fun flippedDown(text: String): CharSequence {
+    val spanned = SpannableString(text.replace(DOWN, UP))
+    text.forEachIndexed { i, c -> if (c == DOWN) spanned.setSpan(TurnedOver(), i, i + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+    return spanned
+}
+
+private val UP = Char(0x25B2)
+private val DOWN = Char(0x25BC)
+
+/** Draws its text upside down, turned around its own middle, at the width and height it takes upright. */
+private class TurnedOver : ReplacementSpan() {
+    override fun getSize(paint: Paint, text: CharSequence, start: Int, end: Int, fm: Paint.FontMetricsInt?): Int {
+        fm?.let { paint.getFontMetricsInt(it) }
+        return paint.measureText(text, start, end).roundToInt()
+    }
+
+    override fun draw(canvas: Canvas, text: CharSequence, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, paint: Paint) {
+        val bounds = Rect()
+        paint.getTextBounds(text.toString(), start, end, bounds)
+        canvas.save()
+        canvas.rotate(180f, x + bounds.exactCenterX(), y + bounds.exactCenterY())
+        canvas.drawText(text, start, end, x, y.toFloat(), paint)
+        canvas.restore()
     }
 }

@@ -84,14 +84,24 @@ class CarScreensTest {
 
     @Test fun `talk screen shows the answer alone, the car cutting what follows the start`() {
         val screen = VoiceScreen(car)
-        assertEquals("Listening…", (screen.onGetTemplate() as MessageTemplate).message.toString())
+        assertEquals(twoLines("Listening…"), (screen.onGetTemplate() as MessageTemplate).message.toString())
         screen.answered("The living room is lit.")
         val answered = screen.onGetTemplate() as MessageTemplate
-        assertEquals("The living room is lit.", answered.message.toString())
+        assertEquals(twoLines("The living room is lit."), answered.message.toString())
         assertEquals("Talk to Kasbah", answered.title.toString())
         screen.answered("")
-        assertEquals("Done.", (screen.onGetTemplate() as MessageTemplate).message.toString())
+        assertEquals(twoLines("Done."), (screen.onGetTemplate() as MessageTemplate).message.toString())
         assertEquals(listOf("Talk again", "Read all"), answered.actions.map { it.title.toString() })
+    }
+
+    @Test fun `every talk message takes a second line, so its buttons stay put`() {
+        assertEquals(listOf("Short.", Char(0xA0).toString()), twoLines("Short.").split("\n"))
+    }
+
+    @Test fun `the phone's hint draws its down triangle as the up one turned over`() {
+        val hint = flippedDown("${Char(0x25B2)} ${Char(0x25BC)} the order") as android.text.Spanned
+        assertEquals("${Char(0x25B2)} ${Char(0x25B2)} the order", hint.toString())
+        assertEquals(listOf(2), hint.getSpans(0, hint.length, android.text.style.ReplacementSpan::class.java).map { hint.getSpanStart(it) })
     }
 
     @Test fun `the whole answer opens in a long message`() {
@@ -168,14 +178,17 @@ class CarScreensTest {
         assertEquals(listOf("Talk"), (content(screen) as MessageTemplate).actions.map { it.title.toString() })
     }
 
-    @Test fun `house screen, the figures to read, no button`() {
+    @Test fun `house screen, a tile per figure, the robots only when one is out, no tap`() {
         val screen = HouseScreen(car).apply {
-            status = HouseStatus(insideC = 21.5, solarW = 3000.0, charger = "charging", chargerW = 7000.0, lightsOn = 2)
+            status = HouseStatus(insideC = 21.5, solarW = 3000.0, charger = "charging", chargerW = 7000.0, lightsOn = 2, coversOpen = 0, playersOn = 1, robotsOut = 0)
         }
-        val pane = (screen.onGetTemplate() as PaneTemplate).pane
-        assertEquals(listOf("Inside", "Solar", "Charger", "Lights"), pane.rows.map { it.title.toString() })
-        assertEquals("2 on", pane.rows.last().texts.single().toString())
-        assertTrue(pane.actions.isEmpty())
+        val tiles = (screen.onGetTemplate() as GridTemplate).singleList!!.items.map { it as GridItem }
+        assertEquals(listOf("Inside", "Solar", "Charger", "Lights", "Covers", "Music"), tiles.map { it.title.toString() })
+        assertEquals(listOf("2 on", "All closed", "1 playing"), tiles.takeLast(3).map { it.text.toString() })
+        assertTrue(tiles.none { it.onClickDelegate != null })
+        screen.status = screen.status!!.copy(robotsOut = 1)
+        val robots = (screen.onGetTemplate() as GridTemplate).singleList!!.items.last() as GridItem
+        assertEquals("Robots" to "1 at work", robots.title.toString() to robots.text.toString())
     }
 
     @Test fun `a tab's failure shows its message and a refresh`() {

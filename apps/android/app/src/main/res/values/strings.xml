@@ -133,7 +133,24 @@
         <item quantity="one">%d on</item>
         <item quantity="other">%d on</item>
     </plurals>
-    <string name="charger_charging">Charging, %1$s</string>
+    <string name="house_covers">Covers</string>
+    <string name="house_covers_none">All closed</string>
+    <plurals name="house_covers_open">
+        <item quantity="one">%d open</item>
+        <item quantity="other">%d open</item>
+    </plurals>
+    <string name="house_music">Music</string>
+    <string name="house_music_none">Stopped</string>
+    <plurals name="house_players_on">
+        <item quantity="one">%d playing</item>
+        <item quantity="other">%d playing</item>
+    </plurals>
+    <string name="house_robots">Robots</string>
+    <plurals name="house_robots_out">
+        <item quantity="one">%d at work</item>
+        <item quantity="other">%d at work</item>
+    </plurals>
+    <string name="charger_charging">Charge %1$s</string>
     <string name="charger_connected">Car plugged in</string>
     <string name="charger_finished">Charge finished</string>
     <string name="charger_error">Fault</string>

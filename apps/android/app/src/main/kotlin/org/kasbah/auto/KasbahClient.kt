@@ -36,8 +36,9 @@ data class Light(val id: String, val name: String, val on: Boolean, val availabl
 data class Scene(val id: String, val name: String, val group: String?, val active: Boolean, val swatches: List<Int>)
 
 /**
- * What the house tab shows, each null when the house has no such device or it is offline: the room
- * temperature, the solar production, the charger, how many lamps are on, and a camera to show.
+ * What the house screen shows, each null when the house has no such device online: the room
+ * temperature, the solar production, the charger, how many lamps are on, how many covers are open (not
+ * the gate and garage doors, on the home tab), how many players are playing, how many robots are out.
  */
 data class HouseStatus(
     val insideC: Double? = null,
@@ -45,7 +46,9 @@ data class HouseStatus(
     val charger: String? = null,
     val chargerW: Double? = null,
     val lightsOn: Int = 0,
-    val camera: String? = null,
+    val coversOpen: Int? = null,
+    val playersOn: Int? = null,
+    val robotsOut: Int? = null,
 )
 
 /** A camera or doorbell, as `GET /api/devices` describes it. */
@@ -163,9 +166,6 @@ class KasbahClient(private val context: Context) {
     }
 
     fun status(): HouseStatus = parseStatus(request("GET", "/api/devices"))
-
-    /** The camera's last still, a JPEG (the route the web app's camera tiles read). */
-    fun snapshot(cameraId: String): ByteArray = still(cameraId).jpeg
 
     /**
      * The camera's last still and when it was taken. Read only: asking for a fresh one would open the
@@ -428,8 +428,9 @@ internal fun parseScenes(body: String): List<Scene> = objectsOf(JSONObject(body)
 
 /**
  * The house's state in a `GET /api/devices` body: the first room thermostat (a zone regulated on its
- * flow water says 45 °C, not a room's air), the first solar site, the first charger, the lamps on, the
- * first camera. Offline devices say nothing.
+ * flow water says 45 °C, not a room's air), the first solar site, the first charger, then counts: the
+ * lamps on, the covers open (gate and garage doors aside), the players playing, the robot vacuums and
+ * mowers at work or on their way back. Offline devices say nothing.
  */
 internal fun parseStatus(body: String): HouseStatus {
     var status = HouseStatus()
@@ -444,11 +445,20 @@ internal fun parseStatus(body: String): HouseStatus {
             "energy" -> if (online && status.solarW == null && s.has("productionW")) status = status.copy(solarW = s.getDouble("productionW"))
             "ev_charger" -> if (online && status.charger == null) status = status.copy(charger = s.optString("status"), chargerW = s.optDouble("powerW", 0.0))
             "light" -> if (online && s.optBoolean("on")) status = status.copy(lightsOn = status.lightsOn + 1)
-            "camera" -> if (status.camera == null) status = status.copy(camera = d.getString("id"))
+            "cover" -> if (online && d.optJSONObject("meta")?.optJSONObject("cover")?.optString("deviceClass") !in KasbahClient.ACCESS_CLASSES) {
+                status = status.copy(coversOpen = (status.coversOpen ?: 0) + if (s.optDouble("position", 0.0) > 0) 1 else 0)
+            }
+            "media_player" -> if (online) status = status.copy(playersOn = (status.playersOn ?: 0) + if (s.optString("playback") == "playing") 1 else 0)
+            "vacuum", "mower" -> if (online) {
+                status = status.copy(robotsOut = (status.robotsOut ?: 0) + if (s.optString("activity") in ROBOTS_OUT) 1 else 0)
+            }
         }
     }
     return status
 }
+
+/** A robot's activities away from its base: at work, or on its way back. */
+private val ROBOTS_OUT = setOf("cleaning", "mowing", "returning")
 
 /** The house's `origin` in a `GET /api/house` body, null when it has none. */
 internal fun parseHome(body: String): Home? {
