@@ -63,7 +63,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 
 | Socle | Dernière mise à jour |
 |---|---|
-| [3_0 Simulation (mock-sim et plugin mock)](3_plugins/3_0_simulation-mock.md) | 2026-10-31 |
+| [3_0 Simulation (mock-sim et plugin mock)](3_plugins/3_0_simulation-mock.md) | 2026-11-12 |
 | [3_2 Écrire un plugin](3_plugins/3_2_ecrire-un-plugin.md) | 2026-11-10 |
 | [3_3 Fabricants à venir](3_plugins/3_3_fabricants-a-venir.md) | 2026-10-06 |
 

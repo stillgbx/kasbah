@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-12] update | Simulation : test de contrat des commandes
+
+**Déclencheur** : issue #8 (idée du jour), traitée par l'agent planifié.
+
+**Pages modifiées** :
+- `3_plugins/3_0_simulation-mock.md` - section Tests : `contract.test.ts` (chaque commande ouverte par les capacités, sur chaque appareil de chaque scénario ; table `SAMPLES` exhaustive par typage ; `ev_charger.set_mode` seul type non couvert)
+
+**Index** : date et résumé de la page mis à jour dans `3_plugins/README.md`, index.md régénéré.
+
 ## [2026-11-12] update | Android Auto 0.11 : retours du premier essai en voiture
 
 **Déclencheur** : retours de l'utilisateur après l'essai de la 0.10 dans sa voiture (boutons de Parler qui bougent, page Maison, saut de l'accueil, triangles du téléphone), puis « Oui, livre ».
