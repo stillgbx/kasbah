@@ -1,7 +1,7 @@
 # Simulation (`@kasbah/mock-sim` et plugin `mock`)
 
-> Dernière mise à jour : 2026-10-31
-> Sources : `apps/web/src/api/demoProperties.ts`, `packages/mock-sim/src/{simulation,scenarios,world,clock,rng,types}.ts`, `packages/mock-sim/src/behaviours/*.ts`, `apps/server/src/plugins/mock/index.ts`, `apps/web/src/api/mockTransport.ts`, `packages/mock-sim/src/behaviours/energy.ts`, `packages/mock-sim/src/demos.ts`, `packages/mock-sim/src/behaviours/camera.ts`
+> Dernière mise à jour : 2026-11-12
+> Sources : `apps/web/src/api/demoProperties.ts`, `packages/mock-sim/src/{simulation,scenarios,world,clock,rng,types}.ts`, `packages/mock-sim/src/behaviours/*.ts`, `apps/server/src/plugins/mock/index.ts`, `apps/web/src/api/mockTransport.ts`, `packages/mock-sim/src/behaviours/energy.ts`, `packages/mock-sim/src/demos.ts`, `packages/mock-sim/src/behaviours/camera.ts`, `packages/mock-sim/src/contract.test.ts`
 
 ## Pourquoi un paquet séparé
 
@@ -51,6 +51,16 @@ aléatoire), température extérieure et l'accumulateur `loadsW`.
 `simulation.test.ts` : validité des états, déterminisme, diff minimal, volet 0→100 en 20 ticks et
 `stop` à 35, `light.set`, production nulle à 2 h et positive à 13 h, identité énergétique à chaque
 tick, trajet du véhicule, planning de la tondeuse, chaos, horloge accélérée.
+
+`contract.test.ts` (test de contrat, 2026-11-12) : pour chaque scénario sauf `chaos` et `empty`,
+chaque appareil reçoit **chaque commande que ses capacités ouvrent** (`COMMAND_REQUIRES`), sur une
+simulation neuve par commande ; aucune ne doit lever `UNSUPPORTED_COMMAND`, et l'état doit passer
+`deviceStateSchema` après un tick. Les refus dus à l'état du moment (`DEVICE_UNAVAILABLE`,
+`LOW_BATTERY` : pas d'erreur de tondeuse à acquitter…) sont tolérés ; les véhicules sont réveillés
+d'abord. La table `SAMPLES` est typée `Record<CommandType, …>` : une commande ajoutée au contrat sans
+exemple casse le typecheck. Un second test liste les types qu'aucun appareil simulé n'ouvre — seul
+`ev_charger.set_mode` aujourd'hui (aucune borne simulée ne déclare `charge_mode`) : l'écart est
+une décision visible, pas un oubli.
 
 ### Mise à jour 2026-09-08 — `MOCK_EXCLUDE_KINDS` : compléter un parc réel, pas le doubler
 
