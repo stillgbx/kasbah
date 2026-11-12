@@ -1,6 +1,6 @@
 # Mode édition et propriétés
 
-> Dernière mise à jour : 2026-10-21
+> Dernière mise à jour : 2026-11-12
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre le mode édition de la maison (ouvertures, menuiserie, places, fenêtres de toit, jardin, terrain, relief, cadastre, apparence, dimensions, pièces et niveaux) et la gestion des propriétés (démo, création, renommage). Elle est née du découpage de
@@ -939,3 +939,19 @@ Vérifié dans la preview simulée : porte de garage injectée sans entrée, pro
 choisie → entrée `auto.hormann-garage1_door` avec `roomId: garage`, position au centre de la baie,
 ancien volet libéré, aucune erreur console, select à 150 px inchangé. Test :
 `packages/shared/src/house/place.test.ts` (création sur un ouvrant).
+
+### Mise à jour 2026-11-12 — une ouverture porte un ouvrant ET une fenêtre
+
+Sources : `apps/web/src/stores/house.ts` (`familyOf`, `dressingOn`, `setOpeningDevice`, `coversWithoutOpening`),
+`components/home/OpeningPanel.vue`, `stores/house.test.ts`.
+
+Avant, une ouverture ne portait qu'UN cover : en lier un second libérait le premier. Or une fenêtre de toit
+motorisée et son store habillent la même ouverture. L'habillage vient donc en deux FAMILLES, `cover` (volet,
+store…) et `window` (fenêtre motorisée) : une ouverture porte au plus un élément de chaque, et lier un
+second élément de la MÊME famille détache seulement l'ancien de cette famille. `setOpeningDevice(id, family)`
+et le lien posé depuis l'appareil (`setOpeningPluginDevice`) choisissent la famille d'après le kind.
+
+- **Panneau d'ouverture** : un second sélecteur « Fenêtre motorisée » sous « Ouvrant lié ».
+- **Liste « à affecter »** : une fenêtre sans ouverture y rejoint les volets qui en attendent une.
+- Test : « une fenêtre + un volet par ouverture » dans `house.test.ts`. Vérifié dans la preview simulée, fr et
+  en, sans débordement.

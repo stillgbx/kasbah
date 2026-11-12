@@ -1,6 +1,6 @@
 # Vues Lumières, Ouvrants et Caméras
 
-> Dernière mise à jour : 2026-10-26
+> Dernière mise à jour : 2026-11-12
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre les vues Lumières, Ouvrants et Caméras (bandes par niveau, `RoomBands`), les contrôles d'ouvrant et la position favorite, les interrupteurs maîtres, les cartes et tuiles caméra. Elle est née du découpage de
@@ -1003,3 +1003,26 @@ dernière image clé, jusqu'à 4 s) : l'image saute en avant, c'est voulu. Mesur
 première image en 51 ms sur une caméra dont la vue tient déjà la session, lecture à 0,94 s en moyenne
 derrière la dernière image reçue, deux arrêts au saut initial puis aucun sur 30 s. Mécanique et
 chiffres : `../3_plugins/3_5_google-nest.md`, mise à jour 2026-10-26 (7).
+
+## Mise à jour 2026-11-12 — vue Ouvrants : les fenêtres, et ce que les gestes groupés ne touchent pas
+
+Sources : `apps/web/src/views/CoversView.vue`, `components/controls/WindowControl.vue`,
+`components/covers/WindowPill.vue`, `stores/house.ts` (`dressesWindow`), `lib/deviceIcons.ts`.
+
+**Le principe.** Une fenêtre ouvre la maison : aucun geste GROUPÉ sur les volets ne doit jamais l'ouvrir
+(`../1_architecture/1_1_contrat-appareils.md`, 2026-11-12, kind `window`).
+
+- **Affichage** : la vue liste les fenêtres avec les volets (`RoomBands` sur les kinds `['cover','window']`),
+  chacune avec sa vignette et ses touches. Le résumé les compte à part (« N fenêtre ouverte »), pas dans les
+  volets ouverts.
+- **Vignette** `WindowPill.vue` : même gabarit que `CoverPill` (rien ne bouge d'une vignette à l'autre) ;
+  une vitre accrochée en haut qui s'écarte par le bas quand la fenêtre s'ouvre. Icône `roofWindow`.
+- **Panneau** `WindowControl.vue` : un pourcentage d'OUVERTURE (0 = fermée, 100 = ouverte, à l'inverse du
+  « fermé à x % » qu'un volet pourrait suggérer), et pas de bouton de fermeture partielle ; la touche Arrêter
+  disparaît quand la capacité `stop` n'est pas déclarée (Velux, voir `../3_plugins/3_4_somfy-tahoma.md`).
+- **« Tout ouvrir / Tout fermer »** (`CoversMaster`) ignore la fenêtre ET le store qui habille son
+  ouverture (`house.dressesWindow(id)` : un cover lié à une ouverture qui porte une fenêtre). Raison : le
+  store d'une fenêtre de toit lui appartient ; le baisser en groupe, c'est décider de la fenêtre.
+  `RoomShutterKeys` (touches de pièce) ne touchait déjà que les volets roulants, sans changement.
+- **Vérifié** dans la preview simulée (démo « Les Tilleuls ») : Tout fermer puis Tout ouvrir déplacent tous
+  les volets ; la fenêtre (40 %) et son store (baissé) ne bougent pas. Rendu 3D non vu à l'écran.

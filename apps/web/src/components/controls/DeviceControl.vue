@@ -15,6 +15,7 @@ import CameraCard from './CameraCard.vue'
 import WeatherCard from './WeatherCard.vue'
 import WaterCard from './WaterCard.vue'
 import FanControl from './FanControl.vue'
+import WindowControl from './WindowControl.vue'
 import PetFeederCard from './PetFeederCard.vue'
 import PetFountainCard from './PetFountainCard.vue'
 
@@ -23,6 +24,7 @@ const CONTROLS: Record<DeviceKind, Component> = {
   light: LightControl, cover: CoverControl, media_player: MediaPlayerControl, climate: ClimateControl, vacuum: VacuumControl,
   mower: MowerControl, sensor: SensorCard, energy: EnergyCard, ev_charger: EvChargerControl, vehicle: VehicleCard, camera: CameraCard,
   weather: WeatherCard, water: WaterCard, pet_feeder: PetFeederCard, pet_fountain: PetFountainCard, fan: FanControl,
+  window: WindowControl,
 }
 
 const props = defineProps<{ descriptor: DeviceDescriptor; state: DeviceState; pending?: boolean }>()

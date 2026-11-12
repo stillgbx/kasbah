@@ -1,6 +1,6 @@
 # Serveur MCP (`/mcp`)
 
-> Dernière mise à jour : 2026-11-10
+> Dernière mise à jour : 2026-11-12
 > Sources : `apps/server/src/mcp/server.ts`, `apps/server/src/mcp/auth.ts`, `apps/server/src/http/session.ts`, `apps/server/src/mcp/users-cli.ts`, `apps/server/src/mcp/users-routes.ts`, `apps/web/src/components/settings/McpUsersCard.vue`, `apps/server/src/mcp/auth.test.ts`, `apps/server/src/music/player.ts`, `apps/server/src/plugins/{ytmusic,mixcloud,radio}/index.ts`, `apps/server/src/mcp/server.test.ts`, `apps/server/src/app.ts` (`registerMcp`), `apps/server/package.json`, `README.md` (section « Serveur MCP »), arbre de travail du 2026-09-23 (après c9abf58), `apps/server/src/assistant/assistant.ts` ; arbre de travail NON COMMITÉ du 2026-10-09 (après 00397bc) : `apps/server/src/mcp/{server,server.test}.ts`, `README.md`, `packages/shared/src/shopping/shopping.ts` (2026-10-11)
 
 ## Ce que c'est
@@ -810,3 +810,11 @@ Les comptes du MCP sont ceux de l'app, et l'app n'a plus de réseau local sans c
   `X-Forwarded-For`) : de confiance, `actAsHook(users)` (devenu une fabrique) leur pose le compte du jeton,
   `req.account` (droits, `mayUse`) et `req.sessionUser` (propriétaire des données personnelles) ;
 - les retours OAuth de plugins en `http://localhost:8787` (Nest, Tesla) passent aussi comme « la machine ».
+
+### Mise à jour 2026-11-12 — ouvrir une fenêtre est une action sensible
+
+`sensitiveActions` (`apps/server/src/mcp/server.ts`) range `window.open` et `window.set_position` avec une
+position > 0 parmi les ouvertures de la maison, au même titre qu'un portail : un contenu extérieur lu ne
+peut pas les déclencher (voir 2026-10-24). La classe d'ouvrant `window` n'existe plus dans
+`ACCESS_CLASSES` : le kind `window` (`1_1_contrat-appareils.md`, 2026-11-12) la remplace. Fermer ou arrêter
+n'est pas sensible. Test : `apps/server/src/mcp/server.test.ts`.

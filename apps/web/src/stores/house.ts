@@ -1740,9 +1740,31 @@ export const useHouseStore = defineStore('house', () => {
   /** Plugin descriptor of a house device (a cover's kind depends on it). */
   const descriptorOf = (d: HouseDevice) => (d.deviceId ? devices.descriptors[d.deviceId] : undefined)
 
-  /** The covers placed on a given opening. An opening carries only one; the list serves to release the old one. */
-  const coversOn = (openingId: string) => (effective.value?.devices ?? [])
-    .filter((d) => d.openingId === openingId && (descriptorOf(d)?.kind ?? d.kind) === 'cover')
+  /**
+   * What dresses an opening comes in two FAMILIES: a cover (shutter, blind…) and a motorized window. A
+   * roof window and its blind dress the same opening, so an opening carries at most ONE of each —
+   * linking a second one of the same family releases the first.
+   */
+  type OpeningFamily = 'cover' | 'window'
+  const familyOf = (d: HouseDevice): OpeningFamily | undefined => {
+    const kind = descriptorOf(d)?.kind ?? d.kind
+    return kind === 'cover' || kind === 'window' ? kind : undefined
+  }
+  /** The devices of a family placed on a given opening (one at most; the list serves to release it). */
+  const dressingOn = (openingId: string, family: OpeningFamily) => (effective.value?.devices ?? [])
+    .filter((d) => d.openingId === openingId && familyOf(d) === family)
+
+  /** Openings that carry a motorized window. */
+  const windowOpeningIds = computed(() => new Set((effective.value?.devices ?? [])
+    .filter((d) => d.openingId && familyOf(d) === 'window').map((d) => d.openingId!)))
+  /**
+   * Does this plugin COVER dress the opening of a window (a roof window's blind)? It then belongs to
+   * the window, not to the shutters: the group gestures of the Covers view leave it alone.
+   */
+  function dressesWindow(pluginDeviceId: string): boolean {
+    const hd = (effective.value?.devices ?? []).find((d) => d.deviceId === pluginDeviceId)
+    return !!hd?.openingId && familyOf(hd) === 'cover' && windowOpeningIds.value.has(hd.openingId)
+  }
 
   /** House devices (shutter, sensor) that dress the selected opening. */
   const openingDevices = computed<HouseDevice[]>(() => {
@@ -1763,7 +1785,7 @@ export const useHouseStore = defineStore('house', () => {
    * in the house that is missing.
    */
   const coversWithoutOpening = computed<HouseDevice[]>(() => (effective.value?.devices ?? [])
-    .filter((d) => !d.openingId && (descriptorOf(d)?.kind ?? d.kind) === 'cover' && expectsOpening(descriptorOf(d))))
+    .filter((d) => !d.openingId && ((familyOf(d) === 'cover' && expectsOpening(descriptorOf(d))) || familyOf(d) === 'window')))
 
   /**
    * Assigns an opening to a cover, or removes it (`null`). **The only write of the link**:
@@ -1776,8 +1798,10 @@ export const useHouseStore = defineStore('house', () => {
   async function setCoverOpening(houseDeviceId: string, openingId: string | null): Promise<boolean> {
     savingOpening.value = true
     try {
-      if (openingId) {
-        for (const d of coversOn(openingId)) {
+      const self = (effective.value?.devices ?? []).find((d) => d.id === houseDeviceId)
+      const family = self ? familyOf(self) : undefined
+      if (openingId && family) {
+        for (const d of dressingOn(openingId, family)) {
           if (d.id !== houseDeviceId) house.value = await getTransport().placeDevice(d.id, { openingId: '' })
         }
       }
@@ -1792,16 +1816,16 @@ export const useHouseStore = defineStore('house', () => {
   }
 
   /**
-   * Same link, seen from the selected OPENING: we choose its cover, or "none", which
-   * releases the one that was there.
+   * Same link, seen from the selected OPENING: we choose its cover (or its window, `family`), or
+   * "none", which releases the one of that family that was there.
    */
-  async function setOpeningDevice(houseDeviceId: string | null): Promise<boolean> {
+  async function setOpeningDevice(houseDeviceId: string | null, family: OpeningFamily = 'cover'): Promise<boolean> {
     const openingId = selectedOpeningId.value
     if (!openingId) return false
     if (houseDeviceId) return setCoverOpening(houseDeviceId, openingId)
     savingOpening.value = true
     try {
-      for (const d of coversOn(openingId)) house.value = await getTransport().placeDevice(d.id, { openingId: '' })
+      for (const d of dressingOn(openingId, family)) house.value = await getTransport().placeDevice(d.id, { openingId: '' })
       return true
     } catch (err) {
       useNotificationsStore().error(t('opening.saveError', { message: (err as Error).message }))
@@ -1822,7 +1846,8 @@ export const useHouseStore = defineStore('house', () => {
     if (!openingId) return false
     savingOpening.value = true
     try {
-      for (const d of coversOn(openingId)) house.value = await getTransport().placeDevice(d.id, { openingId: '' })
+      const family: OpeningFamily = devices.descriptors[pluginDeviceId]?.kind === 'window' ? 'window' : 'cover'
+      for (const d of dressingOn(openingId, family)) house.value = await getTransport().placeDevice(d.id, { openingId: '' })
       house.value = await getTransport().placeDevice(houseIdForDevice(pluginDeviceId), { deviceId: pluginDeviceId, openingId, position: [0, 0, 0] })
       return true
     } catch (err) {
@@ -1845,7 +1870,7 @@ export const useHouseStore = defineStore('house', () => {
     placementLevelId, setPlacementLevel,
     selectedOpeningId, selectedOpening, savedOpening, openingDraft, openingBounds, openingCeiling, openingDevices, savingOpening, canRevertOpening,
     placingOpening, startPlacingOpening, cancelPlacingOpening, placeOpeningAt, removeOpening,
-    selectOpening, previewOpeningAt, saveOpening, dropOpening, revertOpening, setOpeningDevice, setOpeningPluginDevice, setCoverOpening, coversWithoutOpening,
+    selectOpening, previewOpeningAt, saveOpening, dropOpening, revertOpening, setOpeningDevice, setOpeningPluginDevice, setCoverOpening, coversWithoutOpening, dressesWindow,
     parkings, parkingsInRoom, selectedParkingId, selectedParking, savedParking, parkingHostOf, parkingGapsOf, savingParking, placingParking,
     dockFor,
     selectParking, previewParkingAt, saveParking, dropParking, setParkingGap,

@@ -165,7 +165,11 @@ function buildWalls(level: LevelGeometry, mats: MaterialSet, facade: Finish | un
   }
   return meshes
 }
-export function buildLevel(level: LevelGeometry, mats: MaterialSet, dressed?: ReadonlySet<string>, facade?: Finish): LevelNodes {
+/**
+ * `ownGlass`: the openings whose GLASS belongs to a device — a motorized window draws its own pane and
+ * opens it, so the structure lays none (otherwise a closed pane stayed in the hole of an open window).
+ */
+export function buildLevel(level: LevelGeometry, mats: MaterialSet, dressed?: ReadonlySet<string>, facade?: Finish, ownGlass?: ReadonlySet<string>): LevelNodes {
   const group = new Group()
   group.name = `level:${level.levelId}`
   group.position.z = level.elevation
@@ -193,7 +197,7 @@ export function buildLevel(level: LevelGeometry, mats: MaterialSet, dressed?: Re
   // one glass per ROOM: its windows light up with its lamps, without lighting those of the neighbors
   const roomGlass = new Map<string, Material>()
   for (const o of level.openings) {
-    if (!isGlazed(o)) continue
+    if (!isGlazed(o) || ownGlass?.has(o.openingId)) continue
     const pane = buildPane(o, mats)
     // a skylight is in a SLAB: lit, it made a white square in the middle of the
     // room. It keeps the shared glass, which never lights up.
@@ -216,7 +220,7 @@ export function buildLevel(level: LevelGeometry, mats: MaterialSet, dressed?: Re
   return { group, walls, floors, panes, markers, labels, elevation: level.elevation, height: level.height }
 }
 
-export function buildHouse(geometry: HouseGeometry, mats: MaterialSet, dressed?: ReadonlySet<string>): HouseNodes {
+export function buildHouse(geometry: HouseGeometry, mats: MaterialSet, dressed?: ReadonlySet<string>, ownGlass?: ReadonlySet<string>): HouseNodes {
   const root = new Group()
   root.name = 'house'
   root.rotation.x = ROOT_ROTATION_X
@@ -278,7 +282,7 @@ export function buildHouse(geometry: HouseGeometry, mats: MaterialSet, dressed?:
 
   const levels = new Map<string, LevelNodes>()
   for (const lg of geometry.levels) {
-    const nodes = buildLevel(lg, mats, dressed, geometry.facade)
+    const nodes = buildLevel(lg, mats, dressed, geometry.facade, ownGlass)
     levels.set(lg.levelId, nodes)
     root.add(nodes.group)
   }

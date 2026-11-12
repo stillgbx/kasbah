@@ -178,7 +178,7 @@ const headline = computed(() => {
   const state = r.state
   // a vehicle: the card below (`VehicleCard`) already says the battery, with its gauge
   if (state.kind === 'vehicle') return ''
-  if (state.kind === 'cover' && r.deviceId) {
+  if ((state.kind === 'cover' || state.kind === 'window') && r.deviceId) {
     const target = devices.targetPosition(r.deviceId)
     if (target !== undefined) return headlineValue(r.descriptor, { ...state, position: target }, t, locale.value)
   }

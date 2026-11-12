@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Id** | `tahoma` |
-| **Devices** | roller shutters, blinds, gates, garage doors, windows (`cover`), and the light sensor of solar shutters |
+| **Devices** | roller shutters, blinds, gates, garage doors (`cover`), Velux roof windows (`window`), and the light sensor of solar shutters |
 | **Connection** | **local**: the box's "developer mode" API (Overkiz platform), on the house network |
 | **Account** | no online account: a token generated in the "TaHoma by Somfy" mobile app |
 | **Views** | Home (3D markers, room panel), Covers, Settings → Plugins |
@@ -21,6 +21,7 @@
 - **Battery** of the solar shutters, and the **light level** picked up by their panel, with a Day / Month / Year chart built by Kasbah (the box keeps none).
 - **State feedback**: the box is polled every 2 seconds (it pushes nothing), so a shutter operated with the remote is seen almost at once.
 - **RTS** motors (one-way radio, no feedback) can be controlled, but their position is only **assumed** from the last command, and flagged as such: with no command sent through Kasbah since startup, the state is "Unknown".
+- **Velux roof windows and their blinds** (io-homecontrol, sold as "compatible with Netatmo"): no Velux gateway needed. Add them in the TaHoma app, which asks to copy the security key from the Velux remote or wall switch. The window is a **Motorized window**, not a cover: **Open all** / **Close all** never move it, nor the blind that dresses the same opening. Open, close, position and quiet mode work; **Stop** is not offered, because the window ignores it when it comes through the box (only its own remote stops it). The blind keeps its stop.
 - **Placement**: the box does not say which room a shutter is in. Covers arrive as "No opening": in the **Covers** view, **Assign to** a window or door of the house places them in the 3D scene.
 
 The rest of the box (sensors, heating, gateways, audio players) is ignored, and the box's scenarios are not imported.
@@ -68,6 +69,7 @@ The plugin's status in Settings tells you where you stand:
 - Gates with a single "cycle" command (no separate open and close) are ignored. Slat tilt exists but has not been verified on hardware.
 - The light level of the solar shutters is only recorded while the server is running: an hour when it was stopped stays empty. Whether the box actually relays luminance locally remains to be confirmed in sunny weather.
 - **Saving** a preset position has not been tried on a real box (simulation only): quiet mode, on the other hand, has been verified on a real shutter.
+- The "Air position" of a Velux window in the TaHoma app (a stored ventilation alias) closes the window on the one tried: it is not offered in Kasbah.
 - **Calibration** has only been tried in simulation so far. It is offered for io roller shutters only: RTS motors cannot aim at a position, and blinds keep the motor's percentage.
 
 ## Further reading

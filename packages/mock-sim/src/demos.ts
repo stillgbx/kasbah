@@ -13,6 +13,7 @@ import { water } from './behaviours/water'
 import { petFeeder, petFountain } from './behaviours/pets'
 import { ceilingFan, ceilingFanLight } from './behaviours/fan'
 import { camera } from './behaviours/camera'
+import { motorWindow } from './behaviours/window'
 
 // The device sets of the three DEMO PROPERTIES (`house/demos/*.json`): each one is linked device
 // by device to its house, and together they show everything the application can do. The
@@ -70,7 +71,9 @@ export function tilleulsDevices(opts: { winter?: boolean } = {}): AnySimDevice[]
     cover('tl-cover-chambre1', { name: 'Volet chambre 1', deviceClass: 'shutter', position: w ? 30 : 100 }),
     cover('tl-cover-chambre2', { name: 'Volet chambre 2', deviceClass: 'shutter', position: 100 }),
     cover('tl-cover-suite', { name: 'Volet suite', deviceClass: 'shutter', position: 100 }),
-    cover('tl-cover-velux', { name: 'Fenêtre de toit palier', deviceClass: 'window', position: 0 }),
+    // a roof window and its blind: two devices on the same opening, the window outside the shutters' group gestures
+    motorWindow('tl-cover-velux', { name: 'Fenêtre de toit palier', position: 0, quiet: true }),
+    cover('tl-cover-velux-blind', { name: 'Store fenêtre de toit palier', deviceClass: 'blind', position: 100 }),
     // in summer the awning is deployed (it is when deployed that it gets noticed), in winter it is retracted
     cover('tl-cover-store', { name: 'Store terrasse', deviceClass: 'awning', position: w ? 100 : 40 }),
     cover('tl-cover-portail', { name: 'Portail', deviceClass: 'gate', position: 0 }),

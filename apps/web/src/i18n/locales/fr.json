@@ -38,7 +38,7 @@
   "kinds": {
     "light": "Lumière", "cover": "Ouvrant", "media_player": "Lecteur", "climate": "Chauffage", "vacuum": "Aspirateur",
     "mower": "Tondeuse", "sensor": "Capteur", "energy": "Énergie", "ev_charger": "Borne de recharge", "vehicle": "Véhicule", "camera": "Caméra", "weather": "Météo", "water": "Traitement de l'eau",
-    "pet_feeder": "Mangeoire", "pet_fountain": "Fontaine", "fan": "Ventilateur", "lightFan": "Lumière - Ventilateur"
+    "pet_feeder": "Mangeoire", "pet_fountain": "Fontaine", "fan": "Ventilateur", "window": "Fenêtre motorisée", "lightFan": "Lumière - Ventilateur"
   },
   "device": {
     "unbound": "Cet appareil n'est lié à aucun plugin ({id}).", "notPlaced": "Non placés", "outdoor": "Extérieur",
@@ -71,6 +71,7 @@
       "opal": "Opale", "glisten": "Éclat", "underwater": "Sous l'eau", "cosmos": "Cosmos", "sunbeam": "Rayon de soleil", "enchant": "Enchantement"
     }
   },
+  "window": { "open": "Ouverte", "closed": "Fermée", "opening": "Ouverture en cours", "closing": "Fermeture en cours", "openAt": "Ouverte à {pct}", "level": "Ouverture", "actionOpen": "Ouvrir", "actionClose": "Fermer", "quietHint": "Les ouvertures et fermetures lancées depuis Kasbah se font en vitesse lente, plus silencieuse. La télécommande garde sa vitesse." },
   "fan": {
     "title": "Ventilateur",
     "speed": "Vitesse",
@@ -236,7 +237,7 @@
     }
   },
   "cover": {
-    "classes": {"shutter": "Volet", "awning": "Store banne", "blind": "Store", "curtain": "Rideau", "gate": "Portail", "garage": "Porte de garage", "window": "Fenêtre"},
+    "classes": {"shutter": "Volet", "awning": "Store banne", "blind": "Store", "curtain": "Rideau", "gate": "Portail", "garage": "Porte de garage"},
     "tilt": "Inclinaison", "assumed": "{state} (supposé)", "assumedHint": "Position supposée, jamais confirmée", "stopped": "À l'arrêt", "preset": "Position perso", "presetAt": "Position perso — {pct}", "presetSave": "Mémoriser cette position", "quiet": "Mode discret", "battery": "Batterie", "quietHint": "Les manœuvres lancées depuis Kasbah roulent en vitesse lente, plus silencieuse. La télécommande murale garde sa vitesse.", "presetSaved": "Position perso mémorisée : {pct}", "coveredGaps": "Couvert, lames ajourées",
     "calibration": { "title": "Étalonnage", "on": "Étalonné", "off": "Non étalonné", "intro": "Amenez le volet à chaque repère avec le curseur du moteur, puis marquez-le. Le haut de la vitre et l'appui suffisent ; les repères intermédiaires corrigent la courbe. Une fois enregistré, dans les commandes du volet, « Fermer » serre les lames et une fermeture à 100 % les laisse ajourées.", "motor": "Moteur", "marks": "Repères", "required": "obligatoire", "mark": "Marquer", "top": "Haut de la vitre", "topHint": "le bas du tablier affleure la vitre", "quarter": "Un quart couvert", "quarterHint": "le tablier cache le haut de la vitre", "half": "Moitié couverte", "halfHint": "le bas du tablier à mi-hauteur", "threeQuarters": "Trois quarts couverts", "threeQuartersHint": "il reste un quart de vitre en bas", "sill": "Sur l'appui", "sillHint": "fenêtre couverte, lames encore ajourées", "missing": "Marquez au moins le haut de la vitre et l'appui.", "invalid": "Chaque repère doit être plus bas que le précédent.", "save": "Enregistrer", "clear": "Effacer", "clearMark": "Effacer ce repère", "markValue": "Fermeture du moteur : {mark}", "nudgeUp": "Remonter de {n} %", "nudgeDown": "Baisser de {n} %" },
     "openClose": { "open": "Ouvert", "closed": "Fermé", "opening": "Ouverture en cours", "closing": "Fermeture en cours", "level": "Fermeture", "actionOpen": "Ouvrir", "actionClose": "Fermer" },
@@ -814,7 +815,7 @@
     "gapRight": "Droite", "gapLeft": "Gauche", "gapFront": "Avant", "gapBack": "Arrière",
     "wall": "Mur {segment}", "whereHint": "Se règle ici, ou en glissant l'ouverture sur les murs de la pièce dans la vue 3D.",
     "whereHintSurface": "Se règle ici, ou en glissant l'ouverture sur le sol ou le toit dans la vue 3D.",
-    "device": "Ouvrant lié", "deviceNone": "Aucun", "deviceTaken": "{name} (déjà posé sur {opening})",
+    "device": "Ouvrant lié", "window": "Fenêtre motorisée", "deviceNone": "Aucun", "deviceTaken": "{name} (déjà posé sur {opening})",
     "revert": "Rétablir", "smaller": "Réduire", "bigger": "Agrandir",
     "saveError": "Ouverture non enregistrée : {message}"
   },
@@ -1161,7 +1162,7 @@
       "cover": { "open": "Ouvrir", "close": "Fermer", "set_position": "Ouvrir à {n} %", "preset": "Position favorite", "stop": "Arrêter" },
       "media_player": { "play": "Lecture", "pause": "Pause", "stop": "Arrêter", "set_volume": "Volume à {n} %", "play_url": "Jouer un son" },
       "climate": { "set_mode": "Changer de mode", "set_target_temp": "Consigne à {n} °C" },
-      "fan": { "on": "Allumer", "off": "Éteindre" },
+      "fan": { "on": "Allumer", "off": "Éteindre" }, "window": { "open": "Ouvrir", "close": "Fermer", "set_position": "Ouvrir à {n} %" },
       "vacuum": { "start": "Lancer le ménage", "dock": "Renvoyer à la base" },
       "mower": { "start": "Lancer la tonte", "park": "Rentrer" },
       "vehicle": { "lock": "Verrouiller", "unlock": "Déverrouiller", "start_charge": "Lancer la charge", "stop_charge": "Arrêter la charge", "climate_start": "Climatiser l'habitacle", "climate_stop": "Arrêter la climatisation" },

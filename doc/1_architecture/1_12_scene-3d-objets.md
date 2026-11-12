@@ -1,6 +1,6 @@
 # Scène 3D : objets dessinés
 
-> Dernière mise à jour : 2026-10-26
+> Dernière mise à jour : 2026-11-12
 > Sources : sections reprises telles quelles de `1_5_scene-3d.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre ce que la scène dessine : marqueurs et formes d'appareils (onde sonore, écrans et pochettes, ventilateur, enceintes), modules photovoltaïques et coffrets de batterie, véhicules et carrosseries, tondeuse et son journal, places de stationnement, menuiseries et Velux, détail architectural, terrain en relief et son contour, calque du jardin. Elle est née du découpage de
@@ -1421,3 +1421,29 @@ par test (`three.test.ts`) seulement : le panneau de preview masqué fige la bou
 été vu à l'écran.
 
 Sources : `apps/web/src/three/markers/markers.ts` (+ `three.test.ts`).
+
+### Mise à jour 2026-11-12 — ouvrants sur une ouverture de toit : toile dans la pente, vitre qui s'écarte
+
+Sources : `apps/web/src/three/markers/{markers,createMarker}.ts`, `three/HouseScene.ts`
+(`windowOpenings`), `three/builders/buildHouse.ts` (`ownGlass`), `three/windowMarker.test.ts`.
+
+**Bug d'origine** (vu par l'utilisateur) : un ouvrant lié à une ouverture était toujours dessiné en rideau
+VERTICAL sur un mur, même sur une fenêtre de toit : le store sortait perpendiculaire au toit. Désormais,
+quand l'ouverture est de surface (`host` ≠ mur : toit ou plancher), le marqueur travaille dans
+`surfaceFrame` : les mêmes rotations que `buildPane` (ordre ZXY, z = cap, x = −pente), donc l'objet tombe
+exactement dans le trou. Repère local : X le long de la largeur, +Y DESCEND la pente, +Z sort du toit.
+
+- **Store (`CoverMarker`)** : une toile unique (`sheet`) dans le plan du verre, juste dehors, qui se déroule
+  depuis le bord haut en suivant la pente ; la fraction fermée règle sa longueur.
+- **Fenêtre (`WindowMarker`, nouveau)** : une vitre (cadre + verre) à charnière en haut ; le bas sort du toit
+  jusqu'à 0,35 rad (`SASH_SWING`, un Velux s'ouvre d'une vingtaine de cm sur 1,2 m), animée par tween. Dans un
+  mur, même vitre dans le plan du mur ; sans ouverture, petite vitre debout à son point.
+- **Vitre fixe retirée** : la structure posait déjà un verre dans l'ouverture ; une fenêtre ouverte laissait
+  donc une vitre fermée dans le trou. `HouseScene.windowOpenings()` liste les ouvertures d'une fenêtre
+  motorisée et `buildLevel`/`buildHouse` reçoivent ce jeu (`ownGlass`) : elles n'y posent aucun verre. Les
+  murs ne sont refaits que si le jeu `dressed` OU `ownGlass` change (jamais pendant un geste).
+- **Piège** : la scène tourne la maison de −90° autour de X (z haut → y haut). Une normale de toit en repère
+  maison (0, −sin, cos) devient (0, cos, sin) dans le monde : raisonner dans le bon repère avant de
+  deviner le signe de l'ouverture. `windowMarker.test.ts` MESURE la géométrie (à plat dans le toit,
+  ouverture vers l'extérieur, vitre fixe absente) plutôt que de la décrire.
+- **Non vu à l'écran** : captures de la preview figées sur la 3D ; le rendu n'est validé que par ces mesures.

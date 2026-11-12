@@ -95,7 +95,7 @@ export const useDevicesStore = defineStore('devices', () => {
   /** Compares the held target with the incoming state: reached, given up, or still on its way. */
   function resolveTarget(id: string, state: DeviceState) {
     const target = targets.value[id]
-    if (!target || state.kind !== 'cover') return
+    if (!target || (state.kind !== 'cover' && state.kind !== 'window')) return
     if (target.frozen) { clearTarget(id); return }      // freeze lifted by the first frame
     // unknown position: nothing confirms the arrival, the target stays held until the TTL
     const arrived = state.position !== undefined && Math.abs(state.position - target.position) <= 1
@@ -180,25 +180,27 @@ export const useDevicesStore = defineStore('devices', () => {
     if (!prev || !descriptor) return false
     // read BEFORE the optimistic patch: the latter sets `motion` to `stopped`, which makes
     // `resolveTarget` abandon the current target — the shown value would already be lost
-    const shownBefore = prev.kind === 'cover' ? targetPosition(deviceId) ?? prev.position : undefined
+    const shownBefore = prev.kind === 'cover' || prev.kind === 'window' ? targetPosition(deviceId) ?? prev.position : undefined
     const patch = optimisticPatch(prev, command)
     if (patch) setState(deviceId, { ...prev, ...patch } as DeviceState)
     // The target is set AFTER the optimistic patch, and the order is not a detail: this patch writes
     // `motion: 'closing'` on its own, and `resolveTarget` would see in it a confirmation of
     // movement by the server. The first real frame (often `stopped`, before the motor
     // starts) would then pass for "stopped elsewhere" and erase the target right away.
-    if (prev.kind === 'cover') {
-      const aimed = command.type === 'cover.open' ? 100
-        : command.type === 'cover.close' ? 0
+    if (prev.kind === 'cover' || prev.kind === 'window') {
+      // a window aims like a cover: same scale, its own commands
+      const aimed = command.type === 'cover.open' || command.type === 'window.open' ? 100
+        : command.type === 'cover.close' || command.type === 'window.close' ? 0
+        : command.type === 'window.set_position' ? command.position
         // a MOTOR target (calibration gesture) is not on the scale of `position`: nothing to hold
         : command.type === 'cover.set_position' ? (command.motor ? null : command.position)
         // Recall of the favorite position: the target is the one the motor publishes. Without it
         // (one-way motor), we do not know where it goes — nothing to aim at.
-        : command.type === 'cover.preset' ? prev.presetPosition ?? null
+        : command.type === 'cover.preset' && prev.kind === 'cover' ? prev.presetPosition ?? null
         : null                                          // set_tilt: no targeted position
       // Target already reached: nothing to hold, otherwise the pill would stay displayed until a
       // next state (the device emits none, since nothing changes).
-      if (command.type === 'cover.stop') {
+      if (command.type === 'cover.stop' || command.type === 'window.stop') {
         // without a shown position (unknown cover never commanded), there is nothing to freeze
         if (shownBefore !== undefined) targets.value = { ...targets.value, [deviceId]: { position: shownBefore, moved: true, at: Date.now(), frozen: true } }
         else clearTarget(deviceId)

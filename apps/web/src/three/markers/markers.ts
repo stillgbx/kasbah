@@ -1,6 +1,6 @@
 import { AdditiveBlending, BoxGeometry, type BufferGeometry, Color, CylinderGeometry, DataTexture, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, PointLight, RingGeometry, ShaderMaterial, SphereGeometry, Sprite, SpriteMaterial } from 'three'
-import type { DeviceState, PlacedHouseDevice, PanelPlacement } from '@kasbah/shared'
-import { mirekToRgb, xyToRgb } from '@kasbah/shared'
+import type { DeviceState, OpeningRect, PlacedHouseDevice, PanelPlacement, Vec3 } from '@kasbah/shared'
+import { mirekToRgb, openingCentre, xyToRgb } from '@kasbah/shared'
 import { isMediaActive } from '../../lib/deviceState'
 import { coverActivity, isFlatCover } from '../../lib/cover'
 import { IDLE_W, isEnergySite } from '../../lib/energy'
@@ -871,9 +871,26 @@ type FreeCover =
  * retracts its projection, a gate opens its leaves.
  */
 
+/**
+ * Frame of an opening laid in a SURFACE (roof window, skylight), centred on it: local X along the width,
+ * +Y DOWN the slope, +Z out of the roof. The same rotations as the structure's glass (`buildPane`), so a
+ * device drawn in it lies exactly in the hole.
+ */
+function surfaceFrame(o: OpeningRect, at: Vec3): Group {
+  const g = new Group()
+  g.rotation.order = 'ZXY'
+  g.rotation.z = ((o.yaw ?? 0) * Math.PI) / 180
+  g.rotation.x = -((o.slope ?? 0) * Math.PI) / 180
+  const c = openingCentre(o)
+  g.position.set(c[0] - at[0], c[1] - at[1], c[2] - at[2])
+  return g
+}
+
 export class CoverMarker extends DeviceMarker {
   /** The leaves of the curtain, from left to right: only one for a roller shutter, two for a hinged one. */
   private slats: Mesh[] = []
+  /** A cover on a roof window: ONE sheet in the plane of the glass, rolled down the slope from the high edge. */
+  private sheet: { mesh: Mesh; height: number } | null = null
   private free: FreeCover | null = null
   /** Everything that carries the cover's tint — curtain, awning slab, gate leaves. */
   private panels: Mesh[] = []
@@ -899,7 +916,22 @@ export class CoverMarker extends DeviceMarker {
     this.mat = coverPanelMaterial(device, ctx, o ? ctx.materials.slat : devMaterial(ctx))
     // a GLASS panel casts no solid shadow, no more than the glazing of an opening
     const shadowing = device.coverMaterial !== 'glass'
-    if (o) {
+    if (o && o.host !== 'wall') {
+      // A blind on a ROOF window: it does not hang down a wall, it unrolls along the slope, just outside
+      // the glass — the plane of the opening, not a vertical curtain across it.
+      const frame = surfaceFrame(o, device.position)
+      const mesh = new Mesh(new BoxGeometry(o.width * SLAT_INSET, 1, COVER_THICKNESS / 2), this.mat)
+      mesh.position.z = o.depth / 2 + COVER_THICKNESS
+      mesh.castShadow = shadowing
+      frame.add(mesh)
+      this.object.add(frame)
+      this.registerPickable(mesh)
+      this.geometries.push(mesh.geometry)
+      this.panels = [mesh]
+      this.sheet = { mesh, height: o.height * SLAT_INSET }
+      this.applyFraction(0)
+      this.setLift(0.35)
+    } else if (o) {
       // The curtain in ONE OR TWO LEAVES (`leaves`): a roller shutter comes down in one piece, a
       // hinged one reads by its mullion. That is the only thing the leaves do here — the travel
       // stays vertical, it is what the state publishes.
@@ -978,6 +1010,15 @@ export class CoverMarker extends DeviceMarker {
   /** `f` = CLOSED share: 1 = shutter down, awning deployed, gate shut; 0 = open. */
   private applyFraction(f: number): void {
     this.closedFraction = f
+    if (this.sheet) {
+      // the sheet comes down from the high edge (local -y) by the closed share
+      const { mesh, height } = this.sheet
+      const len = Math.max(0.001, height * f)
+      mesh.scale.y = len
+      mesh.position.y = -height / 2 + len / 2
+      mesh.visible = f > 0.005
+      return
+    }
     const o = this.ctx.opening
     if (o && this.slats.length) {
       const h = Math.max(0.001, o.height * f)
@@ -1016,7 +1057,7 @@ export class CoverMarker extends DeviceMarker {
     // trompe-l'œil), an awning retracts onto its cassette, a gate stays shut.
     const rest = this.free && !isFlatCover(this.ctx.descriptor) ? 0 : 100
     const target = 1 - (state.position ?? rest) / 100
-    if (!this.slats.length && !this.free) return
+    if (!this.slats.length && !this.free && !this.sheet) return
     this.cancelTween?.()
     const from = this.closedFraction
     const first = !this.posed
@@ -1055,6 +1096,119 @@ export class CoverMarker extends DeviceMarker {
     this.cancelTween?.()
     for (const g of this.geometries) g.dispose()   // the material, for its part, is shared by the scene…
     if (this.ownsMat) this.mat.dispose()           // …except the one the tint preview detached
+    super.dispose()
+  }
+}
+
+/** How far a motorized window's sash swings open (radians): a Velux opens about 20 cm on 1.2 m. */
+const SASH_SWING = 0.35
+
+/**
+ * Motorized window (Velux roof window): a GLASS sash hinged at its top edge, which swings out from the
+ * bottom with the opening. On a roof window it lies in the plane of the roof (`surfaceFrame`); in a wall,
+ * in the plane of the wall. The structure lays no glass in the opening (`ownGlass`): this sash is it.
+ * Not placed on an opening, it is drawn as a small pane standing at its point.
+ */
+export class WindowMarker extends DeviceMarker {
+  private readonly hinge = new Group()
+  private readonly sashMat: MeshStandardMaterial
+  private geometries: BufferGeometry[] = []
+  private openFraction = 0
+  private cancelTween: (() => void) | null = null
+  private posed = false
+  /** Direction of the swing around the hinge: +1 lifts the bottom toward local +Z (out of a roof). */
+  private swingSign = 1
+
+  constructor(device: PlacedHouseDevice, ctx: MarkerContext) {
+    super(device, ctx)
+    const o = ctx.opening
+    // the scene's glass, a little more opaque: it is a moving pane, it must read against the roof
+    this.sashMat = ctx.materials.glass.clone()
+    this.sashMat.opacity = Math.max(0.45, this.sashMat.opacity)
+    const frameMat = ctx.materials.slat
+    const width = o?.width ?? 0.8
+    const height = o?.height ?? 1
+    const thick = 0.04
+    // the sash: four rails around its glass, so that it still reads open against the sky
+    const sash = new Group()
+    const glass = new Mesh(new BoxGeometry(width * 0.94, height * 0.94, thick / 2), this.sashMat)
+    sash.add(glass)
+    this.geometries.push(glass.geometry)
+    this.registerPickable(glass)
+    const rail = (w: number, h: number, x: number, y: number) => {
+      const m = new Mesh(new BoxGeometry(w, h, thick), frameMat)
+      m.position.set(x, y, 0)
+      m.castShadow = true
+      sash.add(m)
+      this.geometries.push(m.geometry)
+      this.registerPickable(m)
+    }
+    const r = 0.05
+    rail(width, r, 0, -height / 2 + r / 2)
+    rail(width, r, 0, height / 2 - r / 2)
+    rail(r, height, -width / 2 + r / 2, 0)
+    rail(r, height, width / 2 - r / 2, 0)
+    // hinge on the TOP edge (local -y): the sash hangs from it, its bottom swings out
+    sash.position.y = height / 2
+    this.hinge.add(sash)
+    if (o && o.host !== 'wall') {
+      const frame = surfaceFrame(o, device.position)
+      this.hinge.position.set(0, -height / 2, o.depth / 2)
+      frame.add(this.hinge)
+      this.object.add(frame)
+      this.setLift(0.75)
+    } else if (o) {
+      // In a wall: local X along the wall; the sash is turned upright so that its local +Y (down the
+      // sash) points down, and its local +Z out of the wall's plane.
+      const frame = new Group()
+      const angle = Math.atan2(o.u[1], o.u[0])
+      frame.rotation.z = angle
+      const c = openingCentre(o)
+      frame.position.set(c[0] - device.position[0], c[1] - device.position[1], c[2] - device.position[2])
+      const upright = new Group()
+      upright.rotation.x = Math.PI / 2
+      frame.add(upright)
+      this.hinge.position.set(0, -height / 2, 0)
+      upright.add(this.hinge)
+      this.object.add(frame)
+      // after the upright turn, the hinge's local +Z is the frame's −Y: swing toward the outside
+      const outsideY = -Math.sin(angle) * o.normal[0] + Math.cos(angle) * o.normal[1]
+      this.swingSign = outsideY >= 0 ? -1 : 1
+      this.setLift(height / 2 + 0.2)
+    } else {
+      this.hinge.position.set(0, -height / 2, height / 2)
+      this.object.add(this.hinge)
+      this.setLift(height + 0.2)
+    }
+    this.applyFraction(0)
+  }
+
+  /** `f` = OPEN share: the sash turns around its top edge, its bottom out of the opening. */
+  private applyFraction(f: number): void {
+    this.openFraction = f
+    this.hinge.rotation.x = this.swingSign * f * SASH_SWING
+  }
+
+  protected isOn(s: DeviceState): boolean { return s.kind === 'window' && (s.position ?? 0) > 0 }
+  protected onState(state: DeviceState | undefined): void {
+    if (!state || state.kind !== 'window') return
+    // unknown position: drawn closed, nothing is asserted
+    const target = (state.position ?? 0) / 100
+    this.cancelTween?.()
+    const from = this.openFraction
+    const first = !this.posed
+    this.posed = true
+    if (first || Math.abs(target - from) < 0.002) this.applyFraction(target)
+    else {
+      const tw = createTween({ durationMs: 400, now: performance.now(), onUpdate: (k) => this.applyFraction(lerp(from, target, k)) })
+      this.cancelTween = () => tw.cancel()
+      this.ctx.addAnimation({ step: (now) => tw.step(now) })
+    }
+  }
+  override dispose(): void {
+    this.cancelTween?.()
+    for (const g of this.geometries) g.dispose()
+    this.sashMat.dispose()
     super.dispose()
   }
 }

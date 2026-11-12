@@ -163,7 +163,7 @@ const optional = <T extends object>(o: T) => Object.fromEntries(Object.entries(o
 /** Creations allowed per sliding hour, for the whole server: an agent stuck in a loop stops there. */
 export const AUTOMATION_CREATE_LIMIT = 10
 const HOUR_MS = 3_600_000
-const ACCESS_CLASSES = new Set(['gate', 'garage', 'window'])
+const ACCESS_CLASSES = new Set(['gate', 'garage'])
 const VEHICLE_SENSITIVE = new Set(['vehicle.unlock', 'vehicle.schedule_update'])
 /**
  * Ranks of the actions that open an access to the house (gate, garage, window), unlock a car or
@@ -175,6 +175,8 @@ export function sensitiveActions(actions: AutomationAction[], classOf: (id: stri
     if (a.type !== 'command') return []
     const c = a.command
     if (VEHICLE_SENSITIVE.has(c.type)) return [i]
+    // a window opens the house, whichever window: its own kind, every opening of it is sensitive
+    if (c.type === 'window.open' || (c.type === 'window.set_position' && c.position > 0)) return [i]
     const opens = c.type === 'cover.open' || c.type === 'cover.preset' || (c.type === 'cover.set_position' && c.position > 0)
     if (!opens) return []
     const t = a.target

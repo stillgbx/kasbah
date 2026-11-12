@@ -5,7 +5,7 @@
 export const DEVICE_KINDS = [
   'light', 'cover', 'media_player', 'climate', 'vacuum', 'mower',
   'sensor', 'energy', 'ev_charger', 'vehicle', 'camera', 'weather', 'water',
-  'pet_feeder', 'pet_fountain', 'fan',
+  'pet_feeder', 'pet_fountain', 'fan', 'window',
 ] as const
 export type DeviceKind = (typeof DEVICE_KINDS)[number]
 
@@ -111,6 +111,9 @@ export const KIND_CAPABILITIES: Record<DeviceKind, readonly Capability[]> = {
   pet_fountain: ['on_off', 'pump_mode', 'consumables', 'battery', 'water_usage'],
   // `mute` = acknowledgment beep, not a player's sound — see the comment on the capability.
   fan: ['on_off', 'fan_speed', 'fan_direction', 'fan_timer', 'mute'],
+  // A motorized window (Velux roof window): it opens the house, so it is not a cover — a group
+  // gesture on the shutters must never open it. Same traits as a cover's, under its own commands.
+  window: ['open_close', 'position', 'stop', 'quiet'],
 }
 
 /**
@@ -154,7 +157,7 @@ export type ClimateMode = (typeof CLIMATE_MODES)[number]
  * command, not the same word in the interface.
  */
 export const COVER_CLASSES = [
-  'shutter', 'awning', 'blind', 'curtain', 'gate', 'garage', 'window',
+  'shutter', 'awning', 'blind', 'curtain', 'gate', 'garage',
 ] as const
 export type CoverClass = (typeof COVER_CLASSES)[number]
 

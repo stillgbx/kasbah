@@ -16,7 +16,7 @@ const MEDIA_ICONS: Record<MediaPlayerClass, IconName> = { speaker: 'speaker', tv
 export const KIND_ICONS: Record<DeviceKind, IconName> = {
   light: 'light', cover: 'shutter', media_player: 'speaker', climate: 'heatpump', vacuum: 'vacuum',
   mower: 'mower', sensor: 'thermostat', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle', camera: 'camera', weather: 'cloud', water: 'droplet',
-  pet_feeder: 'feeder', pet_fountain: 'fountain', fan: 'wind',
+  pet_feeder: 'feeder', pet_fountain: 'fountain', fan: 'wind', window: 'roofWindow',
 }
 
 /**
@@ -26,7 +26,7 @@ export const KIND_ICONS: Record<DeviceKind, IconName> = {
  */
 export type DeviceCategory = 'light' | 'cover' | 'camera' | 'media' | 'other'
 
-const KIND_CATEGORY: Partial<Record<DeviceKind, DeviceCategory>> = { light: 'light', fan: 'light', cover: 'cover', camera: 'camera', media_player: 'media' }
+const KIND_CATEGORY: Partial<Record<DeviceKind, DeviceCategory>> = { light: 'light', fan: 'light', cover: 'cover', window: 'cover', camera: 'camera', media_player: 'media' }
 
 export function deviceCategory(kind: DeviceKind | undefined): DeviceCategory {
   return (kind && KIND_CATEGORY[kind]) ?? 'other'
@@ -41,7 +41,7 @@ export type RoomFilterCat = 'light' | 'cover' | 'climate' | 'media' | 'camera' |
 export const ROOM_FILTER_CATS: readonly RoomFilterCat[] = ['light', 'cover', 'climate', 'media', 'camera', 'other']
 
 const KIND_FILTER: Partial<Record<DeviceKind, RoomFilterCat>> = {
-  light: 'light', fan: 'light', cover: 'cover', climate: 'climate', media_player: 'media', camera: 'camera',
+  light: 'light', fan: 'light', cover: 'cover', window: 'cover', climate: 'climate', media_player: 'media', camera: 'camera',
 }
 
 export function roomFilterCategory(kind: DeviceKind | undefined, descriptor?: DeviceDescriptor): RoomFilterCat {

@@ -7,6 +7,24 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-12] update | Fenêtre motorisée : le kind `window` (fenêtre de toit Velux)
+
+**Déclencheur** : demande de l'utilisateur, une fenêtre de toit motorisée « ne doit pas être considérée comme un volet » (une fenêtre ouvre la maison, un geste groupé sur les volets ne doit jamais l'ouvrir).
+
+**Pages modifiées** :
+- `1_architecture/1_1_contrat-appareils.md` - section datée : kind `window` (capacités, état, commandes, droit `access`, classe `window` retirée des ouvrants), trous connus (Matter, Android Auto)
+- `1_architecture/1_7_serveur-mcp.md` - ouvrir une fenêtre est sensible
+- `1_architecture/1_12_scene-3d-objets.md` - ouvrants sur ouverture de toit (`surfaceFrame`), `WindowMarker`, `ownGlass`, piège du repère tourné de −90°
+- `3_plugins/3_4_somfy-tahoma.md` - Velux : transfert de clé depuis l'interrupteur, `stop` déclaré mais ignoré, store à part, impasse « Position air »
+- `3_plugins/3_27_home-assistant.md` - `cover` de `device_class: window` publié en `window`
+- `3_plugins/3_0_simulation-mock.md` - `motorWindow` et la fenêtre de toit de la démo Les Tilleuls
+- `4_ui/4_3_vues-lumieres-ouvrants-cameras.md` - vue Ouvrants : fenêtres, vignette, panneau, gestes groupés qui les ignorent (avec leur store)
+- `4_ui/4_8_mode-edition-et-proprietes.md` - une ouverture porte un ouvrant ET une fenêtre (deux familles, second sélecteur)
+
+**Non vérifié (dit dans les pages)** : rendu 3D à l'écran ; vrai Velux après redémarrage du serveur ; vraie installation Home Assistant.
+
+**Index** : catalogues 1_architecture (3 lignes), 3_plugins (3), 4_ui (2) mis à jour (dates), index.md régénéré.
+
 ## [2026-11-12] update | Android Auto 0.11 : retours du premier essai en voiture
 
 **Déclencheur** : retours de l'utilisateur après l'essai de la 0.10 dans sa voiture (boutons de Parler qui bougent, page Maison, saut de l'accueil, triangles du téléphone), puis « Oui, livre ».

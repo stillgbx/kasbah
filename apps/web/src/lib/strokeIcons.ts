@@ -6,6 +6,8 @@ import type { DeviceDescriptor, DeviceKind } from '@kasbah/shared'
 export const ICONS = {
   light: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.3 1 2.5h6c0-1.2.4-1.9 1-2.5A6 6 0 0 0 12 3z',
   shutter: 'M4 3h16v18H4zM4 8h16M4 13h16M4 18h16',
+  /** Roof window: a pane seen slanting, with its crossbar — not a shutter's slats. */
+  roofWindow: 'M3 20l4-16h14l-4 16H3zM5 12h14',
   speaker: 'M6 3h12v18H6zM12 8.5m-1.5 0a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M12 15.5m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
   /** Rename: pencil resting on a line. */
   pencil: 'M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3zM14.5 7.5l2 2',
@@ -216,7 +218,7 @@ export type IconName = keyof typeof ICONS
 const KIND_ICON: Record<DeviceKind, IconName> = {
   light: 'light', cover: 'shutter', media_player: 'speaker', climate: 'heatpump', vacuum: 'vacuum', mower: 'mower',
   sensor: 'sensor', energy: 'solar', ev_charger: 'charger', vehicle: 'vehicle', camera: 'camera', weather: 'cloud', water: 'droplet',
-  pet_feeder: 'feeder', pet_fountain: 'fountain', fan: 'wind',
+  pet_feeder: 'feeder', pet_fountain: 'fountain', fan: 'wind', window: 'roofWindow',
 }
 
 export function kindIcon(

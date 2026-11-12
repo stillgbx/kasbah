@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { GATEWAY, IO_AWNING, IO_SHUTTER, IO_VENETIAN, RTS_GATE, RTS_SHUTTER, THERMOSTAT } from './__fixtures__/box'
+import { GATEWAY, IO_AWNING, IO_SHUTTER, IO_VELUX_WINDOW, IO_VENETIAN, RTS_GATE, RTS_SHUTTER, THERMOSTAT } from './__fixtures__/box'
 import {
-  assumedPosition, coverClass, coverCommands, deviceUrlToExternalId, hasPositionFeedback, isCover,
-  readStates, toAction, toAvailability, toCoverPatch, toDescriptor,
+  assumedPosition, coverClass, coverCommands, deviceUrlToExternalId, hasPositionFeedback, isCover, isWindow,
+  readStates, toAction, toAvailability, toCoverPatch, toDescriptor, windowAsCoverCommand,
 } from './mapping'
 import { overkizDeviceSchema } from './types'
 
@@ -31,6 +31,24 @@ describe('tahoma mapping', () => {
     // `my` without `setClosure`: the motor reaches its favorite position without being able to target another
     expect(coverCommands(rtsShutter)).toEqual({ open: 'up', close: 'down', stop: 'stop', preset: 'my' })
     expect(coverCommands(rtsGate)).toEqual({ open: 'open', close: 'close' })
+  })
+
+  it('a Velux roof window is a window, not a cover, and offers no stop', () => {
+    const velux = dev(IO_VELUX_WINDOW)
+    expect(isCover(velux)).toBe(false)
+    expect(isWindow(velux)).toBe(true)
+    expect(isWindow(ioShutter)).toBe(false)
+    const d = toDescriptor(velux)
+    expect(d.kind).toBe('window')
+    expect(d.meta.cover).toBeUndefined()
+    // the box declares `stop`, the window ignores it: no button that does nothing
+    expect(d.capabilities).toEqual(['open_close', 'position', 'quiet'])
+    // a window command goes out as the cover's, which the box understands
+    expect(toAction(velux.deviceURL, windowAsCoverCommand({ type: 'window.set_position', position: 20 }), coverCommands(velux))?.commands)
+      .toEqual([{ name: 'setClosure', parameters: [80] }])
+    expect(toAction(velux.deviceURL, windowAsCoverCommand({ type: 'window.open' }), coverCommands(velux), true)?.commands)
+      .toEqual([{ name: 'setClosureAndLinearSpeed', parameters: [0, 'lowspeed'] }])
+    expect(windowAsCoverCommand({ type: 'window.set_quiet', on: true })).toEqual({ type: 'cover.set_quiet', on: true })
   })
 
   it('tells apart bidirectional io from one-way RTS, from the LIVE states', () => {

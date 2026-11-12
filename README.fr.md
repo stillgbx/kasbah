@@ -208,7 +208,7 @@ kasbah/
 
 Flux : les plugins découvrent des appareils et poussent des **patchs d'état** → le registre fusionne, horodate et publie → le hub WebSocket envoie des **états complets** (coalescés 50 ms) aux navigateurs connectés. Les commandes passent en **REST** (`POST /api/devices/:id/command`) ; l'état résultant revient par le WebSocket.
 
-Le contrat d'appareil est unique : un `kind` (forme de l'état et des commandes) et des `capabilities` (ce que l'UI affiche). Kinds : `light`, `cover`, `media_player`, `climate`, `vacuum`, `mower`, `sensor`, `energy`, `ev_charger`, `vehicle`, `camera`, `weather`, `water`, `pet_feeder`, `pet_fountain`, `fan`.
+Le contrat d'appareil est unique : un `kind` (forme de l'état et des commandes) et des `capabilities` (ce que l'UI affiche). Kinds : `light`, `cover`, `media_player`, `climate`, `vacuum`, `mower`, `sensor`, `energy`, `ev_charger`, `vehicle`, `camera`, `weather`, `water`, `pet_feeder`, `pet_fountain`, `fan`, `window`.
 
 ## Fonctionnalités
 
@@ -224,7 +224,7 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 | **École** | Devoirs, cahier de liaison et publications de la classe (TouteMonAnnée). |
 | **Musique** | Lecteur commun : recherche et file d'attente YouTube Music, Mixcloud, podcasts ou radios, joués sur une enceinte Cast ou Sonos ; les lampes Hue de la pièce peuvent suivre le rythme. |
 | **Lumières** | Bandes par niveau et pièce, interrupteur d'ensemble, curseur de luminosité ; ventilateurs (Tuya) au même endroit. |
-| **Ouvrants** | Volets, stores, portails : position, favori « my », gestes d'ensemble (sécuriser / ouvrir la maison, volets d'une pièce). |
+| **Ouvrants** | Volets, stores, portails, fenêtres motorisées : position, favori « my », gestes d'ensemble (sécuriser / ouvrir la maison, volets d'une pièce) qui ne bougent jamais une fenêtre. |
 | **Médias** | Lecteurs Cast et Sonos : transport, volume, pochette, relais son (barre HDMI ARC). |
 | **Caméras** | Vignettes et direct (MSE / ffmpeg). |
 | **Énergie** | Schéma de flux (solaire, maison, réseau, batterie), champs de panneaux, historique par période (instantané, jour, semaine, mois, année, total ; glissant ou calendaire), réseau phase par phase face à l'abonnement. |
@@ -288,7 +288,7 @@ Chaque plugin a sa **page** : ce qu'il fait, comment il se connecte, sa mise en 
 |---|---|---|---|---|
 | `mock` | Simulation de tous les types | tous | local | [mock](docs/plugins/mock.md) |
 | `hue` | Philips Hue | `light` | local (CLIP v2 + SSE) | [hue](docs/plugins/hue.md) |
-| `tahoma` | Somfy TaHoma | `cover` | local (API développeur Overkiz) | [tahoma](docs/plugins/tahoma.md) |
+| `tahoma` | Somfy TaHoma | `cover`, `window` | local (API développeur Overkiz) | [tahoma](docs/plugins/tahoma.md) |
 | `nest` | Google Nest | `camera`, `climate` | cloud (Smart Device Management) | [nest](docs/plugins/nest.md) |
 | `google_cast` | Google Cast (enceintes, Chromecast, TV) | `media_player` | local (Cast v2 / mDNS) | [google_cast](docs/plugins/google_cast.md) |
 | `sonos` | Sonos | `media_player` | local (UPnP/SOAP) | [sonos](docs/plugins/sonos.md) |
@@ -303,7 +303,7 @@ Chaque plugin a sa **page** : ce qu'il fait, comment il se connecte, sa mise en 
 | `petkit` | PetKit (mangeoires, fontaines) | `pet_feeder`, `pet_fountain` | cloud privé (connexion par code courriel) | [petkit](docs/plugins/petkit.md) |
 | `tuya` | Tuya (ventilateur-lumière) | `fan`, `light` | local (protocole Tuya 3.5) | [tuya](docs/plugins/tuya.md) |
 | `hormann` | Hörmann (portes de garage SupraMatic 4) | `cover`, `light` | local (pont HCPBridgeMqtt sur le bus du moteur, HTTP) | [hormann](docs/plugins/hormann.md) |
-| `home_assistant` | Home Assistant (lampes, volets, chauffages, capteurs, lecteurs) | `light`, `cover`, `climate`, `sensor`, `media_player` | local (API WebSocket, jeton longue durée) | [home_assistant](docs/plugins/home_assistant.md) |
+| `home_assistant` | Home Assistant (lampes, volets, chauffages, capteurs, lecteurs) | `light`, `cover`, `window`, `climate`, `sensor`, `media_player` | local (API WebSocket, jeton longue durée) | [home_assistant](docs/plugins/home_assistant.md) |
 | `dirigera` | Hub IKEA DIRIGERA (lampes, prises, stores, capteurs TRÅDFRI et Matter), pas encore essayé sur un vrai hub | `light`, `cover`, `sensor` | local (API non officielle du hub, appairage au bouton) | [dirigera](docs/plugins/dirigera.md) |
 | `ytmusic` | YouTube Music | — (source musicale) | cloud non officiel (cookie du compte) | [ytmusic](docs/plugins/ytmusic.md) |
 | `mixcloud` | Mixcloud | — (source musicale) | cloud public sans clé | [mixcloud](docs/plugins/mixcloud.md) |

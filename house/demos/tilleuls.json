@@ -1958,6 +1958,18 @@
       "openingId": "velux-palier"
     },
     {
+      "id": "cover.velux-store",
+      "deviceId": "mock:tl-cover-velux-blind",
+      "levelId": "etage",
+      "roomId": "palier",
+      "position": [
+        6.4,
+        2.4,
+        2.3
+      ],
+      "openingId": "velux-palier"
+    },
+    {
       "id": "cover.store",
       "deviceId": "mock:tl-cover-store",
       "levelId": "etage",

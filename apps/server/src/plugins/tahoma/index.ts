@@ -11,8 +11,8 @@ import { TlsPin, createPinFile, type PinFile } from '../../core/tls-pin'
 import { TahomaClient } from './client'
 import { LightHistory, createLightHistoryFile, type LightHistoryStore } from './history'
 import {
-  assumedPosition, coverCommands, deviceUrlToExternalId, hasPositionFeedback, isCover, isLightSensor, luminance,
-  readStates, sameNode, toAction, toAvailability, toCoverPatch, toDescriptor, toLightSensorDescriptor, type CoverCommands,
+  assumedPosition, coverCommands, deviceUrlToExternalId, hasPositionFeedback, isCover, isLightSensor, isWindow, luminance,
+  readStates, sameNode, toAction, toAvailability, toCoverPatch, toDescriptor, toLightSensorDescriptor, windowAsCoverCommand, type CoverCommands,
 } from './mapping'
 import type { OverkizAction, OverkizDevice, OverkizEvent } from './types'
 
@@ -226,7 +226,7 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
         descriptors.push(toLightSensorDescriptor(device, cover ? `tahoma:${deviceUrlToExternalId(cover.deviceURL)}` : undefined))
         continue
       }
-      if (!isCover(device)) { skipped.push(device.definition?.uiClass ?? device.controllableName ?? '?'); continue }
+      if (!isCover(device) && !isWindow(device)) { skipped.push(device.definition?.uiClass ?? device.controllableName ?? '?'); continue }
       const externalId = deviceUrlToExternalId(device.deviceURL)
       next.set(externalId, {
         device, commands: coverCommands(device), feedback: hasPositionFeedback(device),
@@ -449,8 +449,10 @@ export function createTahomaPlugin(deps: TahomaPluginDeps = {}): DevicePlugin {
       })
     },
 
-    async execute(externalId: string, command: Command) {
+    async execute(externalId: string, received: Command) {
       ready()
+      // a window is driven by the same box commands as a cover: from here on, one vocabulary
+      const command = windowAsCoverCommand(received)
       const entry = entries.get(externalId)
       if (!entry) throw new PluginError('DEVICE_UNAVAILABLE', `unknown TaHoma device ${externalId}`)
       if (command.type === 'cover.set_quiet') {

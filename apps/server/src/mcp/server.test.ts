@@ -356,7 +356,11 @@ describe('sensitiveActions', () => {
       cmd(devices('voiture'), { type: 'vehicle.unlock' }),
       cmd(devices('voiture'), { type: 'vehicle.lock' }),
       cmd(devices('lampe'), { type: 'light.set', on: true }),
-    ], classOf)).toEqual([2, 3, 5, 6])
+      // a window opens the house, by its own kind: opening it is sensitive, closing it is not
+      cmd(devices('fenetre'), { type: 'window.open' }),
+      cmd({ type: 'selector', kind: 'window' }, { type: 'window.set_position', position: 20 }),
+      cmd(devices('fenetre'), { type: 'window.close' }),
+    ], classOf)).toEqual([2, 3, 5, 6, 9, 10])
   })
 })
 

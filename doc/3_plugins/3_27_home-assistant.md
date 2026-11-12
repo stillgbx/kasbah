@@ -1,6 +1,6 @@
 # Home Assistant — les appareils d'une installation HA, sans rien y changer
 
-> Dernière mise à jour : 2026-10-30
+> Dernière mise à jour : 2026-11-12
 > Sources : `apps/server/src/plugins/home_assistant/{index,client,mapping}.ts`,
 > `apps/server/src/plugins/home_assistant/{mapping,plugin}.test.ts`, `__fixtures__/states.json`,
 > `apps/server/src/core/{plugin,plugin-host}.ts` (`enabledPlugins`, `onPluginsChanged`),
@@ -113,3 +113,13 @@ parlé au vrai pont).
 
 Caméras, aspirateurs, ventilateurs, serrures, interrupteurs. Boucles possibles entre automatisations HA et
 Kasbah sur un même appareil : documentées, pas détectées.
+
+## Mise à jour 2026-11-12 — les `cover` de `device_class: window` deviennent des fenêtres
+
+`apps/server/src/plugins/home_assistant/mapping.ts` : un `cover` HA dont `device_class` vaut `window` est
+publié en kind `window` (et non `cover`), pour que les gestes groupés sur les volets ne l'ouvrent jamais.
+Les capacités viennent de `supported_features` (1/2 ouvrir-fermer, 4 position, 8 stop), le mode discret de
+l'extra `quiet` ; les commandes `window.*` appellent les services `cover.*` (open_cover, close_cover,
+stop_cover, set_cover_position). État : `current_position`, sinon `open` = 100 et `closed` = 0.
+Contrat : `../1_architecture/1_1_contrat-appareils.md` (2026-11-12). Non joué sur une vraie installation HA ;
+couvert par `mapping.test.ts`.

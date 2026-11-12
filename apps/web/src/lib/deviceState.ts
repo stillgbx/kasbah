@@ -21,6 +21,8 @@ export { isDeviceOn, isMediaActive }
  */
 export function toggleChecked(s: DeviceState, aimed?: number): boolean {
   if (s.kind === 'cover') return s.available && shownClosed(s, aimed)
+  // a window reads like what it is: checked = open (the aimed position as soon as the store holds one)
+  if (s.kind === 'window') return s.available && (aimed ?? s.position ?? 0) > 0
   return isDeviceOn(s)
 }
 
@@ -44,7 +46,7 @@ function shownClosed(s: StateFor<'cover'>, aimed?: number): boolean {
  * holds this target, see `stores/devices.ts`).
  */
 export function isDeviceBusy(s: DeviceState, aiming = false): boolean {
-  if (s.kind === 'cover') return aiming || s.motion !== 'stopped'
+  if (s.kind === 'cover' || s.kind === 'window') return aiming || s.motion !== 'stopped'
   return false
 }
 
@@ -73,6 +75,7 @@ export function toggleCommand(s: DeviceState, aimed?: number): CommandInput | nu
     case 'vacuum': return s.activity === 'cleaning' ? { type: 'vacuum.dock' } : { type: 'vacuum.start' }
     case 'mower': return s.activity === 'mowing' ? { type: 'mower.park', untilNextSchedule: true } : { type: 'mower.start', durationMin: 60 }
     case 'fan': return { type: 'fan.set', on: !s.on }
+    case 'window': return (aimed ?? s.position ?? 0) > 0 ? { type: 'window.close' } : { type: 'window.open' }
     default: return null
   }
 }
@@ -147,6 +150,13 @@ export function statusLabel(descriptor: DeviceDescriptor, s: DeviceState, t: Tra
       if (s.speed !== undefined) parts.push(t('fan.speedN', { n: s.speed }))
       return parts.join(' · ')
     }
+    // a window's percentage is its OPENING, the natural reading ("open at 30 %"), not a cover's closure
+    case 'window':
+      return s.motion !== 'stopped' ? t(`window.${s.motion}`)
+        : s.position === undefined ? t('common.unknown')
+        : s.position <= 0 ? t('window.closed')
+        : s.position >= 100 ? t('window.open')
+        : t('window.openAt', { pct: formatPercent(s.position, locale) })
   }
 }
 
@@ -228,5 +238,7 @@ export function headlineValue(descriptor: DeviceDescriptor, s: DeviceState, t: T
     case 'fan': return s.on
       ? (s.speed !== undefined ? String(s.speed) : t('common.on'))
       : t('common.off')
+    case 'window':
+      return s.position === undefined ? t('common.unknown') : s.position <= 0 ? t('window.closed') : formatPercent(s.position, locale)
   }
 }

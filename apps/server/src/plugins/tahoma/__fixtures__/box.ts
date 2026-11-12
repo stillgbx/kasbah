@@ -61,6 +61,32 @@ export const IO_VENETIAN = {
   ],
 }
 
+/**
+ * io Velux roof window paired by key transfer: uiClass `Window`, the cover's commands, published as
+ * the `window` kind. Captured, trimmed of the pairing commands. Its `stop` is declared but ignored
+ * when it comes through the box.
+ */
+export const IO_VELUX_WINDOW = {
+  deviceURL: `io://${PID}/11110007`,
+  label: 'Velux',
+  controllableName: 'io:WindowOpenerVeluxIOComponent',
+  available: true,
+  enabled: true,
+  definition: {
+    uiClass: 'Window',
+    widgetName: 'PositionableTiltedWindow',
+    commands: [
+      { commandName: 'open' }, { commandName: 'close' }, { commandName: 'stop' },
+      { commandName: 'setClosure' }, { commandName: 'setClosureAndLinearSpeed' }, { commandName: 'wink' },
+    ],
+  },
+  states: [
+    { name: 'core:ClosureState', type: 1, value: 100 },
+    { name: 'core:OpenClosedState', type: 3, value: 'closed' },
+    { name: 'core:StatusState', type: 3, value: 'available' },
+  ],
+}
+
 /** io awning: `deploy`/`undeploy` and closure as `core:DeploymentState`. */
 export const IO_AWNING = {
   deviceURL: `io://${PID}/11110003#1`,

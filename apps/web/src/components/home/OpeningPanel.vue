@@ -288,27 +288,40 @@ function openingLabelById(id: string): string {
  * vendor declares — never the id. A cover already placed on ANOTHER opening is told apart
  * ("already placed on…") without disappearing: taking it over is a deliberate gesture, `setOpeningDevice` releases
  * the old link by itself. */
-const deviceOptions = computed(() => {
+/** Kind of a house device: the plugin's descriptor decides, the raw JSON's `kind` otherwise. */
+const kindOf = (d: { deviceId?: string; kind?: string }) => (d.deviceId ? devices.descriptors[d.deviceId]?.kind : undefined) ?? d.kind
+/**
+ * The candidates of a FAMILY: covers (`canTakeOpening`), or motorized windows. An opening takes one of
+ * each — a roof window and its blind dress the same opening.
+ */
+function optionsOf(family: 'cover' | 'window') {
+  const fits = (kind: string | undefined, descriptor: Parameters<typeof canTakeOpening>[0]) =>
+    kind === family && (family === 'window' || canTakeOpening(descriptor))
   const list = (house.effective?.devices ?? [])
     .map((d) => ({ d, descriptor: d.deviceId ? devices.descriptors[d.deviceId] : undefined }))
-    .filter(({ d, descriptor }) => (descriptor?.kind ?? d.kind) === 'cover' && canTakeOpening(descriptor))
+    .filter(({ d, descriptor }) => fits(kindOf(d), descriptor))
     .map(({ d, descriptor }) => {
       const name = d.name ?? descriptor?.name ?? d.id
       const takenElsewhere = d.openingId && d.openingId !== opening.value?.id
       return { value: d.id, title: takenElsewhere ? t('opening.deviceTaken', { name, opening: openingLabelById(d.openingId!) }) : name }
     })
-  // Plugin covers with no house entry at all (plugin activated after the opening was drawn):
+  // Plugin devices with no house entry at all (plugin activated after the opening was drawn):
   // offered too, under their PLUGIN id — choosing one creates its entry on this opening.
   const bound = new Set((house.effective?.devices ?? []).map((d) => d.deviceId))
   const unplaced = Object.values(devices.descriptors)
-    .filter((desc) => desc.kind === 'cover' && canTakeOpening(desc) && !bound.has(desc.id))
+    .filter((desc) => fits(desc.kind, desc) && !bound.has(desc.id))
     .map((desc) => ({ value: desc.id, title: desc.name }))
   return [{ value: '', title: t('opening.deviceNone') }, ...list, ...unplaced]
-})
-const linkedDeviceId = computed(() => house.openingDevices[0]?.id ?? '')
-function setDevice(id: string) {
+}
+const deviceOptions = computed(() => optionsOf('cover'))
+const windowOptions = computed(() => optionsOf('window'))
+/** The window line exists as soon as the house has a motorized window: otherwise it would only offer "none". */
+const hasWindows = computed(() => windowOptions.value.length > 1)
+const linkedDeviceId = computed(() => house.openingDevices.find((d) => kindOf(d) === 'cover')?.id ?? '')
+const linkedWindowId = computed(() => house.openingDevices.find((d) => kindOf(d) === 'window')?.id ?? '')
+function setDevice(id: string, family: 'cover' | 'window' = 'cover') {
   if (id && devices.descriptors[id]) void house.setOpeningPluginDevice(id)
-  else void house.setOpeningDevice(id || null)
+  else void house.setOpeningDevice(id || null, family)
 }
 
 // --- delete: TWO-STEP gesture (arm, then confirm within 4 s), like "Forget
@@ -325,8 +338,10 @@ function clickRemove() {
 onBeforeUnmount(() => clearTimeout(disarm))
 /** The cover that the deletion would release: we SAY it beforehand, it is the moment when one decides. */
 const freedName = computed(() => {
-  const d = house.openingDevices[0]
-  return d ? d.name ?? (d.deviceId ? devices.descriptors[d.deviceId]?.name : undefined) ?? d.id : null
+  const names = house.openingDevices
+    .filter((d) => kindOf(d) === 'cover' || kindOf(d) === 'window')
+    .map((d) => d.name ?? (d.deviceId ? devices.descriptors[d.deviceId]?.name : undefined) ?? d.id)
+  return names.length ? names.join(', ') : null
 })
 </script>
 
@@ -422,7 +437,14 @@ const freedName = computed(() => {
         <span class="muted">{{ $t('opening.device') }}</span>
         <v-select class="opening__device" :model-value="linkedDeviceId" :items="deviceOptions" item-title="title" item-value="value"
                   density="compact" variant="outlined" hide-details :disabled="house.savingOpening"
-                  :aria-label="$t('opening.device')" @update:model-value="setDevice" />
+                  :aria-label="$t('opening.device')" @update:model-value="(id: string) => setDevice(id)" />
+      </div>
+      <!-- the motorized window, apart from the cover: a roof window and its blind dress the same opening -->
+      <div v-if="hasWindows" class="opening__row">
+        <span class="muted">{{ $t('opening.window') }}</span>
+        <v-select class="opening__device" :model-value="linkedWindowId" :items="windowOptions" item-title="title" item-value="value"
+                  density="compact" variant="outlined" hide-details :disabled="house.savingOpening"
+                  :aria-label="$t('opening.window')" @update:model-value="(id: string) => setDevice(id, 'window')" />
       </div>
 
       <div class="opening__row opening__bottom">

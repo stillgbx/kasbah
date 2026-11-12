@@ -277,7 +277,7 @@ export function createHomeAssistantPlugin(deps: HomeAssistantPluginDeps = {}): D
     async execute(externalId: string, command: Command) {
       const t = tracked.get(externalId)
       if (!t) throw new PluginError('DEVICE_UNAVAILABLE', `unknown Home Assistant entity ${externalId}`)
-      if (command.type === 'cover.set_quiet') {
+      if (command.type === 'cover.set_quiet' || command.type === 'window.set_quiet') {
         if (!t.slowEntityId) throw new PluginError('UNSUPPORTED_COMMAND', `${externalId} has no slow-speed twin`)
         if (command.on) quiet.add(externalId)
         else quiet.delete(externalId)

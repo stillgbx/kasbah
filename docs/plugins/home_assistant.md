@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Id** | `home_assistant` |
-| **Devices** | the lights, covers, heaters, temperature and humidity sensors and media players of a Home Assistant installation (`light`, `cover`, `climate`, `sensor`, `media_player`) |
+| **Devices** | the lights, covers, heaters, temperature and humidity sensors and media players of a Home Assistant installation (`light`, `cover`, `window`, `climate`, `sensor`, `media_player`) |
 | **Connection** | **local**: Home Assistant's WebSocket API (`/api/websocket`), one connection for the states, the events and the commands |
 | **Account** | a Home Assistant long-lived access token, in `.env` |
 | **Views** | every view of the kinds above, Home (device panels), Settings → Plugins |
@@ -17,7 +17,7 @@ For anyone who already runs Home Assistant and wants to try Kasbah without chang
 - Each entity shows up in the **house room of the same name** as its Home Assistant area, through auto-placement.
 - **Home Assistant stays the only one in command.** A Kasbah command becomes a `call_service`, and the new state comes back through the `state_changed` events. The plugin creates no automation and changes nothing in Home Assistant.
 - **Lights**: on / off, brightness, colour temperature and colour, as the light supports them.
-- **Covers**: open, close, stop, position, tilt. A cover group (an entity listing other covers) is marked as a group.
+- **Covers**: open, close, stop, position, tilt. A cover group (an entity listing other covers) is marked as a group. A cover whose `device_class` is `window` becomes a **Motorized window** (`window`), left out of the shutters' house-wide actions.
 - **Heaters**: modes and set point. A heater driven by presets only (pilot wire through Overkiz) offers on / off and no set point; Home Assistant's presets are not shown.
 - **Sensors**: temperature and humidity by default (`HA_SENSOR_CLASSES`).
 - **Players**: play, pause, next, volume, mute, seek, and what is playing. The cover art goes **through the Kasbah server**: Home Assistant's picture address carries an access token and points at the local network.

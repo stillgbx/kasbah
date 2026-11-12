@@ -128,5 +128,7 @@ export function defaultState(kind: DeviceKind, now = 0): DeviceState {
     // `on: false` because the switch must show something; `available: false` grays it out
     case 'pet_fountain': return { kind, ...base, on: false }
     case 'fan': return { kind, ...base, on: false }
+    // like a cover: a window we have received nothing about is unknown, not closed
+    case 'window': return { kind, ...base, motion: 'stopped' }
   }
 }

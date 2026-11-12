@@ -37,6 +37,12 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('cover.set_quiet'), on: z.boolean() }),
   // calibration: a setting held by the plugin, it moves nothing; `null` clears it
   z.object({ type: z.literal('cover.set_calibration'), points: coverCalibrationSchema.nullable() }),
+  // window: a cover's travel commands, under the window's own kind
+  z.object({ type: z.literal('window.open') }),
+  z.object({ type: z.literal('window.close') }),
+  z.object({ type: z.literal('window.stop') }),
+  z.object({ type: z.literal('window.set_position'), position: pct }),
+  z.object({ type: z.literal('window.set_quiet'), on: z.boolean() }),
   // media_player
   z.object({ type: z.literal('media_player.play') }),
   z.object({ type: z.literal('media_player.pause') }),
@@ -195,6 +201,8 @@ export const COMMAND_REQUIRES: Record<CommandType, Capability> = {
   'pet_feeder.feed': 'feed', 'pet_feeder.call_pet': 'call_pet',
   'pet_fountain.set_power': 'on_off', 'pet_fountain.set_mode': 'pump_mode',
   'fan.set': 'on_off',
+  'window.open': 'open_close', 'window.close': 'open_close', 'window.stop': 'stop',
+  'window.set_position': 'position', 'window.set_quiet': 'quiet',
 }
 
 export function commandKind(cmd: Command | CommandType): DeviceKind {

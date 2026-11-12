@@ -15,7 +15,7 @@ export interface CoverOptions {
  */
 const MODELS: Record<CoverClass, string> = {
   shutter: 'Roller shutter', awning: 'Awning', blind: 'Venetian blind', curtain: 'Curtain rail',
-  gate: 'Gate operator', garage: 'Garage door opener', window: 'Window opener',
+  gate: 'Gate operator', garage: 'Garage door opener',
 }
 
 /**

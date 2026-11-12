@@ -25,7 +25,7 @@ const p = computed(() => props.modelValue)
 const set = (patch: Partial<Predicate>) => emit('update:modelValue', { ...p.value, ...patch } as Predicate)
 
 const FIELD_KINDS = Object.keys(TRIGGER_FIELDS) as DeviceKind[]
-const ACTIVE_KINDS: DeviceKind[] = ['light', 'cover', 'media_player', 'climate', 'vacuum', 'mower', 'ev_charger', 'vehicle', 'energy', 'pet_feeder', 'pet_fountain', 'fan']
+const ACTIVE_KINDS: DeviceKind[] = ['light', 'cover', 'window', 'media_player', 'climate', 'vacuum', 'mower', 'ev_charger', 'vehicle', 'energy', 'pet_feeder', 'pet_fountain', 'fan']
 const LOCATED_KINDS: DeviceKind[] = ['vehicle', 'mower']
 const ROOM_KINDS: DeviceKind[] = ['light', 'media_player', 'fan', 'cover', 'climate']
 

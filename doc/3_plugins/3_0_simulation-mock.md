@@ -1,6 +1,6 @@
 # Simulation (`@kasbah/mock-sim` et plugin `mock`)
 
-> Dernière mise à jour : 2026-10-31
+> Dernière mise à jour : 2026-11-12
 > Sources : `apps/web/src/api/demoProperties.ts`, `packages/mock-sim/src/{simulation,scenarios,world,clock,rng,types}.ts`, `packages/mock-sim/src/behaviours/*.ts`, `apps/server/src/plugins/mock/index.ts`, `apps/web/src/api/mockTransport.ts`, `packages/mock-sim/src/behaviours/energy.ts`, `packages/mock-sim/src/demos.ts`, `packages/mock-sim/src/behaviours/camera.ts`
 
 ## Pourquoi un paquet séparé
@@ -531,3 +531,12 @@ somme des phases vaut toujours `gridW`. Facteur de puissance 0,95 pour passer de
 en monophasé (9 kVA) : la démo montre les deux cas. Valeurs inventées. Les pics horaires de la
 maquette dans le navigateur (`getHistory` de `mockTransport.ts`) sont fabriqués, autant que de
 phases, plus forts le soir.
+
+### Mise à jour 2026-11-12 — une fenêtre de toit simulée
+
+`packages/mock-sim/src/behaviours/window.ts` : `motorWindow` (kind `window`) va vers sa cible à 5 %/s, `stop`
+la fige, le mode discret (option `quiet`) divise la vitesse par deux et n'est pas une manoeuvre (la fenêtre
+ne bouge pas) ; elle ajoute 40 W de charge en mouvement. Dans la démo « Les Tilleuls » (`house/demos/tilleuls.json`,
+`demos.ts`), la fenêtre de toit du palier est une `motorWindow` à 40 %, et un store (`tl-cover-velux-blind`,
+classe `blind`) habille la MÊME ouverture : c'est le cas qui sert à vérifier que « Tout fermer » ne touche
+ni l'un ni l'autre. `cover.ts` a aussi été touché (retrait de la classe `window`).

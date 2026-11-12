@@ -185,5 +185,6 @@ export function summarize(descriptor: DeviceDescriptor, state: DeviceState, loca
     }
     case 'pet_fountain': return state.drinksToday !== undefined ? `${state.drinksToday}\u00d7` : (state.on ? '●' : '○')
     case 'fan': return state.on ? (state.speed !== undefined ? String(state.speed) : '●') : '○'
+    case 'window': return state.position === undefined ? '—' : formatPercent(state.position, locale)
   }
 }

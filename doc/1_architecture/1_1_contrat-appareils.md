@@ -1,6 +1,6 @@
 # Contrat des appareils (packages/shared)
 
-> Dernière mise à jour : 2026-11-05
+> Dernière mise à jour : 2026-11-12
 > Sources : `packages/shared/src/devices/{kinds,descriptor,state,command,rules,color,cover-calibration}.ts`, `packages/shared/src/scenes/scene.ts`, `packages/shared/src/devices/activity.ts`, `packages/shared/src/house/geo.ts`
 
 ## Principe
@@ -1178,3 +1178,31 @@ Ajouts au kind `cover`, tous optionnels, sans effet sur un ouvrant non étalonn�
 Premier usage : TaHoma (`../3_plugins/3_4_somfy-tahoma.md`) ; la simulation le porte aussi
 (`calibratable` dans `packages/mock-sim/src/behaviours/cover.ts`). Ce que dessine la scène 3D suit
 `position`, donc la vraie hauteur du tablier une fois le volet étalonné.
+
+## Mise à jour 2026-11-12 — kind `window` : une fenêtre n'est pas un volet
+
+Sources : `packages/shared/src/devices/{kinds,state,command,rules,activity}.ts`, `packages/shared/src/rights/rights.ts`.
+
+**Pourquoi un kind à part.** La classe d'ouvrant `window` (listée plus haut parmi les classes de
+`meta.cover.class`) rangeait une fenêtre parmi les volets : « Tout ouvrir » de la vue Ouvrants, un geste
+de pièce, une automatisation sur les volets pouvaient l'ouvrir. Or une fenêtre ouvre la maison. Demande
+de l'utilisateur : elle « ne doit pas être considérée comme un volet ». La classe `window` est donc
+RETIRÉE de `COVER_CLASSES` (seule la démo l'utilisait) et des classes d'accès (`ACCESS_CLASSES` côté MCP,
+`ACCESS_COVER_CLASSES` côté droits) ; le kind la remplace.
+
+- **Capacités** : `open_close`, `position`, `stop`, `quiet` (`CAPABILITIES_BY_KIND.window`) — les traits
+  d'un volet, sous des commandes propres.
+- **État** `windowStateSchema` : `{ position?, motion, quiet? }`, mêmes échelles que le volet : 0 =
+  fermée, 100 = OUVERTE, `position` absente = inconnue (pas fermée). `motion` ∈ `COVER_MOTIONS`.
+- **Commandes** : `window.open`, `window.close`, `window.stop`, `window.set_position`, `window.set_quiet`,
+  rattachées aux mêmes capacités que leurs jumelles `cover.*`.
+- **Règles** : `isDeviceOn` = `position > 0` (une fenêtre ouverte se remarque comme un volet ouvert) ;
+  droit `access`, comme portail et garage (`rights.ts`).
+- **MCP** : `sensitiveActions` traite toute ouverture (`window.open`, `window.set_position` > 0) comme
+  sensible : voir `1_7_serveur-mcp.md`, même date.
+- **Non traité** : Matter ne publie pas les fenêtres ; l'appli Android Auto ne les montre nulle part (ni
+  Ouvrants, ni accès). Trou connu, pas un oubli de la page.
+
+Producteurs : TaHoma (`../3_plugins/3_4_somfy-tahoma.md`), Home Assistant
+(`../3_plugins/3_27_home-assistant.md`), simulation (`../3_plugins/3_0_simulation-mock.md`). Côté app :
+`4_ui/4_3` (vue Ouvrants), `4_ui/4_8` (deux familles par ouverture), `1_12_scene-3d-objets.md` (rendu).

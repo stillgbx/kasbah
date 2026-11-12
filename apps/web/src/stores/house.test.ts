@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { parseHouse } from '@kasbah/shared'
+import { parseHouse, type DeviceDescriptor } from '@kasbah/shared'
 import demo from '@kasbah/shared/demo-house.json'
+import tilleuls from '../../../../house/demos/tilleuls.json'
 import { setTransport } from '../api'
 import { createMockTransport } from '../api/mockTransport'
 import { useHouseStore } from './house'
+import { useDevicesStore } from './devices'
 
 // House breadcrumb: device → its parent → house. The parent of a device placed outside
 // any room is the LEVEL that carries it (a camera on the roof); that of a room device
@@ -100,5 +102,34 @@ describe('house store', () => {
     store.setFloorTab('etage')
     expect(store.selectedKey).toBeNull()
     expect(store.focusedLevelId).toBe('etage')
+  })
+})
+
+describe('opening dressed by a window and its blind', () => {
+  beforeEach(() => { setActivePinia(createPinia()); setTransport(null) })
+  const desc = (id: string, kind: 'window' | 'cover', deviceClass?: 'blind' | 'shutter') => ({
+    id, pluginId: 'mock', externalId: id.slice(5), kind, name: id, capabilities: ['open_close'],
+    meta: deviceClass ? { cover: { deviceClass } } : {},
+  }) as DeviceDescriptor
+
+  it('carries one window AND one cover; a second cover releases only the first one', async () => {
+    const house = parseHouse(tilleuls)
+    setTransport(createMockTransport({ house }))
+    useDevicesStore().descriptors = {
+      'mock:tl-cover-velux': desc('mock:tl-cover-velux', 'window'),
+      'mock:tl-cover-velux-blind': desc('mock:tl-cover-velux-blind', 'cover', 'blind'),
+      'mock:tl-cover-suite': desc('mock:tl-cover-suite', 'cover', 'shutter'),
+    }
+    const store = useHouseStore()
+    store.house = house
+    // the demo's roof window already carries both: the blind goes with the window, a shutter does not
+    expect(store.dressesWindow('mock:tl-cover-velux-blind')).toBe(true)
+    expect(store.dressesWindow('mock:tl-cover-suite')).toBe(false)
+
+    expect(await store.setCoverOpening('cover.suite', 'velux-palier')).toBe(true)
+    const on = (id: string) => store.house!.devices.find((d) => d.id === id)!.openingId
+    expect(on('cover.suite')).toBe('velux-palier')
+    expect(on('cover.velux-store')).toBeUndefined()     // the other cover, released
+    expect(on('cover.velux')).toBe('velux-palier')      // the window, kept
   })
 })

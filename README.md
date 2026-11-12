@@ -208,7 +208,7 @@ kasbah/
 
 Flow: plugins discover devices and push **state patches** → the registry merges, timestamps and publishes them → the WebSocket hub sends **full states** (coalesced over 50 ms) to connected browsers. Commands go through **REST** (`POST /api/devices/:id/command`); the resulting state comes back over the WebSocket.
 
-There is a single device contract: a `kind` (shape of the state and commands) and `capabilities` (what the UI shows). Kinds: `light`, `cover`, `media_player`, `climate`, `vacuum`, `mower`, `sensor`, `energy`, `ev_charger`, `vehicle`, `camera`, `weather`, `water`, `pet_feeder`, `pet_fountain`, `fan`.
+There is a single device contract: a `kind` (shape of the state and commands) and `capabilities` (what the UI shows). Kinds: `light`, `cover`, `media_player`, `climate`, `vacuum`, `mower`, `sensor`, `energy`, `ev_charger`, `vehicle`, `camera`, `weather`, `water`, `pet_feeder`, `pet_fountain`, `fan`, `window`.
 
 ## Features
 
@@ -224,7 +224,7 @@ On a large (landscape) screen, a three-column layout: the **rail** on the left, 
 | **School** | Homework, the parent-teacher notebook and the class's posts (TouteMonAnnée). |
 | **Music** | Shared player: search and queue from YouTube Music, Mixcloud, podcasts or radio, played on a Cast or Sonos speaker; the room's Hue lights can follow the rhythm. |
 | **Lights** | Strips per level and room, all-on/all-off switch, brightness slider; fans (Tuya) in the same place. |
-| **Covers** | Shutters, blinds, gates: position, “my” favorite, house-wide actions (secure / open the house, a room's shutters). |
+| **Covers** | Shutters, blinds, gates, motorized windows: position, “my” favorite, house-wide actions (secure / open the house, a room's shutters) that never move a window. |
 | **Media** | Cast and Sonos players: transport, volume, artwork, audio relay (HDMI ARC soundbar). |
 | **Cameras** | Thumbnails and live view (MSE / ffmpeg). |
 | **Energy** | Flow diagram (solar, house, grid, battery), panel arrays, history by period (live, day, week, month, year, lifetime; rolling or calendar), grid phase by phase against the subscription. |
@@ -288,7 +288,7 @@ Each plugin has its own **page**: what it does, how it connects, step-by-step se
 |---|---|---|---|---|
 | `mock` | Simulation of every type | all | local | [mock](docs/plugins/mock.md) |
 | `hue` | Philips Hue | `light` | local (CLIP v2 + SSE) | [hue](docs/plugins/hue.md) |
-| `tahoma` | Somfy TaHoma | `cover` | local (Overkiz developer API) | [tahoma](docs/plugins/tahoma.md) |
+| `tahoma` | Somfy TaHoma | `cover`, `window` | local (Overkiz developer API) | [tahoma](docs/plugins/tahoma.md) |
 | `nest` | Google Nest | `camera`, `climate` | cloud (Smart Device Management) | [nest](docs/plugins/nest.md) |
 | `google_cast` | Google Cast (speakers, Chromecast, TV) | `media_player` | local (Cast v2 / mDNS) | [google_cast](docs/plugins/google_cast.md) |
 | `sonos` | Sonos | `media_player` | local (UPnP/SOAP) | [sonos](docs/plugins/sonos.md) |
@@ -303,7 +303,7 @@ Each plugin has its own **page**: what it does, how it connects, step-by-step se
 | `petkit` | PetKit (feeders, fountains) | `pet_feeder`, `pet_fountain` | private cloud (sign-in with an email code) | [petkit](docs/plugins/petkit.md) |
 | `tuya` | Tuya (fan light) | `fan`, `light` | local (Tuya protocol 3.5) | [tuya](docs/plugins/tuya.md) |
 | `hormann` | Hörmann (SupraMatic 4 garage doors) | `cover`, `light` | local (HCPBridgeMqtt bridge on the motor bus, HTTP) | [hormann](docs/plugins/hormann.md) |
-| `home_assistant` | Home Assistant (lights, covers, heaters, sensors, players) | `light`, `cover`, `climate`, `sensor`, `media_player` | local (WebSocket API, long-lived token) | [home_assistant](docs/plugins/home_assistant.md) |
+| `home_assistant` | Home Assistant (lights, covers, heaters, sensors, players) | `light`, `cover`, `window`, `climate`, `sensor`, `media_player` | local (WebSocket API, long-lived token) | [home_assistant](docs/plugins/home_assistant.md) |
 | `dirigera` | IKEA DIRIGERA hub (TRÅDFRI and Matter lights, outlets, blinds, sensors), not yet tried on a real hub | `light`, `cover`, `sensor` | local (unofficial hub API, button pairing) | [dirigera](docs/plugins/dirigera.md) |
 | `ytmusic` | YouTube Music | — (music source) | unofficial cloud (account cookie) | [ytmusic](docs/plugins/ytmusic.md) |
 | `mixcloud` | Mixcloud | — (music source) | public cloud, no key | [mixcloud](docs/plugins/mixcloud.md) |

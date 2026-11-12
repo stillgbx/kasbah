@@ -27,7 +27,6 @@ export const COVER_UI_CLASSES: Record<string, CoverClass> = {
   Curtain: 'curtain',
   Gate: 'gate',
   GarageDoor: 'garage',
-  Window: 'window',
 }
 
 /** First command present among `names`, in order of preference. */
@@ -108,6 +107,28 @@ export function isCover(device: OverkizDevice): boolean {
 }
 
 /**
+ * A motorized window (Velux roof window, uiClass `Window`): same Overkiz commands as a cover, but
+ * published as the `window` kind — it opens the house, so the shutters' group gestures skip it.
+ */
+export function isWindow(device: OverkizDevice): boolean {
+  if (device.definition?.uiClass !== 'Window') return false
+  const cmd = coverCommands(device)
+  return !!cmd.open && !!cmd.close
+}
+
+/** A window's command, said in the cover's words: the box drives both with the same commands. */
+export function windowAsCoverCommand(cmd: Command): Command {
+  switch (cmd.type) {
+    case 'window.open': return { type: 'cover.open' }
+    case 'window.close': return { type: 'cover.close' }
+    case 'window.stop': return { type: 'cover.stop' }
+    case 'window.set_position': return { type: 'cover.set_position', position: cmd.position }
+    case 'window.set_quiet': return { type: 'cover.set_quiet', on: cmd.on }
+    default: return cmd
+  }
+}
+
+/**
  * `deviceURL` → `externalId`. A Kasbah device id is `<pluginId>:<externalId>` and the externalId is
  * used as a URL segment: no `:`, no `/`, no `#`. `io://1234-5678-9012/12345678#2` therefore becomes
  * `io.1234-5678-9012.12345678.2`. Stable (the box does not renumber), hence usable in `house.json`.
@@ -141,6 +162,19 @@ function bool(value: unknown): boolean | undefined {
 export function toDescriptor(device: OverkizDevice): DeviceDescriptor {
   const externalId = deviceUrlToExternalId(device.deviceURL)
   const cmd = coverCommands(device)
+  if (isWindow(device)) {
+    const capabilities: Capability[] = ['open_close']
+    if (cmd.position) capabilities.push('position')
+    // A Velux window DECLARES `stop` but ignores it when it comes through the box (tried from the
+    // TaHoma app and from Kasbah, 2026-11-12); only its own remote stops it. No button that does nothing.
+    if (cmd.stop && !/velux/i.test(device.controllableName ?? '')) capabilities.push('stop')
+    if (cmd.quiet) capabilities.push('quiet')
+    return {
+      id: `tahoma:${externalId}`, pluginId: 'tahoma', externalId, kind: 'window',
+      name: device.label ?? externalId, capabilities,
+      meta: { manufacturer: 'Somfy', ...(device.controllableName ? { model: device.controllableName } : {}) },
+    }
+  }
   const cls = coverClass(device)
   const capabilities: Capability[] = ['open_close']
   // `position` is only declared if the box can TARGET a position: without it, the UI shows no

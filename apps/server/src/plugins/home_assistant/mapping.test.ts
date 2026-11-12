@@ -47,6 +47,21 @@ describe('candidatesOf', () => {
     expect(v.descriptor.meta.cover?.deviceClass).toBe('shutter')
   })
 
+  it('a cover HA calls a window is a window, driven through the cover services', () => {
+    const velux: HaState = {
+      entity_id: 'cover.fenetre_toit', state: 'closed',
+      attributes: { friendly_name: 'Fenêtre de toit', device_class: 'window', supported_features: 15, current_position: 0 },
+    } as HaState
+    const [w] = candidatesOf([velux], [{ entity_id: 'cover.fenetre_toit', platform: 'velux' }], [], [], opts)
+    expect(w!.kind).toBe('window')
+    expect(w!.descriptor.kind).toBe('window')
+    expect(w!.descriptor.meta.cover).toBeUndefined()
+    expect(w!.descriptor.capabilities).toEqual(['open_close', 'position', 'stop'])
+    expect(toPatch('window', velux)).toMatchObject({ position: 0, motion: 'stopped' })
+    expect(toServiceCall(w!, { type: 'window.set_position', position: 30 }, false))
+      .toEqual({ domain: 'cover', service: 'set_cover_position', data: { position: 30 }, entityId: 'cover.fenetre_toit' })
+  })
+
   it('marks a cover group as a group', () => {
     expect(get('cover.volets_groupe')!.descriptor.meta.isGroup).toBe(true)
     expect(get('cover.volets_groupe')!.slowEntityId).toBeUndefined()

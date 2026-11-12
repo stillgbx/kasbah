@@ -43,6 +43,19 @@ export function optimisticPatch(state: DeviceState, cmd: CommandInput): Partial<
         case 'cover.set_quiet': return { quiet: cmd.on } as Partial<DeviceState>
         default: return null
       }
+    // a window: the movement only, like a cover (the aimed position is held by the store)
+    case 'window':
+      switch (cmd.type) {
+        case 'window.open': return { motion: state.position !== undefined && state.position >= 100 ? 'stopped' : 'opening' } as Partial<DeviceState>
+        case 'window.close': return { motion: state.position !== undefined && state.position <= 0 ? 'stopped' : 'closing' } as Partial<DeviceState>
+        case 'window.stop': return { motion: 'stopped' } as Partial<DeviceState>
+        case 'window.set_position': {
+          if (state.position === undefined) return { motion: 'opening' } as Partial<DeviceState>
+          return { motion: cmd.position > state.position ? 'opening' : cmd.position < state.position ? 'closing' : 'stopped' } as Partial<DeviceState>
+        }
+        case 'window.set_quiet': return { quiet: cmd.on } as Partial<DeviceState>
+        default: return null
+      }
     case 'media_player':
       switch (cmd.type) {
         case 'media_player.play': return { playback: 'playing' } as Partial<DeviceState>

@@ -592,11 +592,24 @@ export const fanStateSchema = z.object({
   muted: z.boolean().optional(),
 })
 
+/**
+ * Motorized window (Velux roof window). Its own kind and not a cover's class: it OPENS the house,
+ * and a group gesture on the shutters must never move it. Same scale as a cover: 0 = closed,
+ * 100 = open; absent = unknown.
+ */
+export const windowStateSchema = z.object({
+  kind: z.literal('window'), ...base,
+  position: pct.optional(),
+  motion: z.enum(COVER_MOTIONS),
+  /** Quiet mode (`quiet` capability): the moves made through Kasbah run at low speed, as for a cover. */
+  quiet: z.boolean().optional(),
+})
+
 export const deviceStateSchema = z.discriminatedUnion('kind', [
   lightStateSchema, coverStateSchema, mediaPlayerStateSchema, climateStateSchema, vacuumStateSchema,
   mowerStateSchema, sensorStateSchema, energyStateSchema, evChargerStateSchema, vehicleStateSchema,
   cameraStateSchema, weatherStateSchema, waterStateSchema, petFeederStateSchema, petFountainStateSchema,
-  fanStateSchema,
+  fanStateSchema, windowStateSchema,
 ])
 export type DeviceState = z.infer<typeof deviceStateSchema>
 export type StateFor<K extends DeviceKind> = Extract<DeviceState, { kind: K }>

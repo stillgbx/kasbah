@@ -545,6 +545,8 @@ export class HouseScene {
   private placingYawGuide: Mesh | null = null
   /** Openings whose leaf is carried by a cover (`dressedOpenings`), as the walls were built. */
   private dressed: ReadonlySet<string> = new Set<string>()
+  /** Openings whose glass a motorized window draws (`windowOpenings`), as the panes were built. */
+  private ownGlass: ReadonlySet<string> = new Set<string>()
   private openingHandles = new Map<string, { group: Group; fill: Mesh; ring: Mesh; ringOn: Mesh; rect: OpeningRect }>()
   /** Five materials for all the handles: selection is only a material swap. */
   private openingMats: {
@@ -778,7 +780,8 @@ export class HouseScene {
     this.index = indexHouse(house)
     this.geometry = computeHouseGeometry(house)
     this.dressed = this.dressedOpenings()
-    this.nodes = buildHouse(this.geometry, this.materials, this.dressed)
+    this.ownGlass = this.windowOpenings()
+    this.nodes = buildHouse(this.geometry, this.materials, this.dressed, this.ownGlass)
     this.meshedOutline = JSON.stringify(this.geometry.terrain.polygon)
     if (this.reliefWanted && !this.reliefGrid) this.reliefGrid = parseRelief(house.site.relief) ?? emptyReliefGrid(house.site.terrain, RELIEF_STEP)
     if (this.reliefWanted && !this.outlineDraft) this.outlineDraft = house.site.terrain.map(([x, y]) => [x, y])
@@ -1044,16 +1047,30 @@ export class HouseScene {
     for (const d of this.house?.devices ?? []) {
       if (!d.openingId) continue
       const kind = (d.deviceId ? this.descriptors.get(d.deviceId)?.kind : undefined) ?? d.kind
-      if (kind === 'cover') out.add(d.openingId)
+      // a motorized window draws its own sash too: the structure lays no leaf there
+      if (kind === 'cover' || kind === 'window') out.add(d.openingId)
     }
     return out
   }
 
-  /** Redoes the levels' walls when this set has changed, and nothing otherwise (the case of every gesture). */
+  /** The openings of a motorized window: its marker draws the GLASS and opens it, the structure lays none. */
+  private windowOpenings(): Set<string> {
+    const out = new Set<string>()
+    for (const d of this.house?.devices ?? []) {
+      const kind = (d.deviceId ? this.descriptors.get(d.deviceId)?.kind : undefined) ?? d.kind
+      if (d.openingId && kind === 'window') out.add(d.openingId)
+    }
+    return out
+  }
+
+  /** Redoes the levels' walls when these sets have changed, and nothing otherwise (the case of every gesture). */
   private refreshDressedOpenings(): void {
     const next = this.dressedOpenings()
-    if (next.size === this.dressed.size && [...next].every((id) => this.dressed.has(id))) return
+    const nextGlass = this.windowOpenings()
+    const same = (a: ReadonlySet<string>, b: ReadonlySet<string>) => a.size === b.size && [...a].every((id) => b.has(id))
+    if (same(next, this.dressed) && same(nextGlass, this.ownGlass)) return
     this.dressed = next
+    this.ownGlass = nextGlass
     for (const l of this.geometry?.levels ?? []) this.rebuildLevelNodes(l.levelId)
   }
 
@@ -1351,7 +1368,7 @@ export class HouseScene {
     const old = nodes?.levels.get(levelId)
     const lg = this.geometry?.levels.find((l) => l.levelId === levelId)
     if (!nodes || !old || !lg) return
-    const fresh = buildLevel(lg, this.materials, this.dressed, this.geometry?.facade)
+    const fresh = buildLevel(lg, this.materials, this.dressed, this.geometry?.facade, this.ownGlass)
     fresh.group.remove(fresh.markers, fresh.labels)   // the new ones are empty: it is the old ones we keep
     old.markers.removeFromParent()
     old.labels.removeFromParent()

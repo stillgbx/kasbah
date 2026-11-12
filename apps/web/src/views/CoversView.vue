@@ -7,6 +7,7 @@ import CoversMaster from '../components/devices/CoversMaster.vue'
 import RoomBands from '../components/devices/RoomBands.vue'
 import RoomShutterKeys from '../components/devices/RoomShutterKeys.vue'
 import CoverPill from '../components/covers/CoverPill.vue'
+import WindowPill from '../components/covers/WindowPill.vue'
 import CoverCalibrationDialog from '../components/controls/CoverCalibrationDialog.vue'
 import PulseDot from '../components/ui/PulseDot.vue'
 import StrokeIcon from '../components/ui/StrokeIcon.vue'
@@ -15,8 +16,8 @@ import { formatPercent, formatSensor } from '../lib/format'
 import { useDevicesStore } from '../stores/devices'
 import { useHouseStore } from '../stores/house'
 
-// Covers view: shutters, blinds, gates, windows and garage doors — everything of kind
-// `cover`. The per-room list and its link diagnostic come from `RoomBands` (shared with
+// Covers view: shutters, blinds, gates and garage doors — everything of kind `cover` — and the
+// motorized windows (kind `window`), drawn apart and left out of the group gestures. The per-room list and its link diagnostic come from `RoomBands` (shared with
 // the Lights view); only the control specific to a cover remains here.
 //
 // Open / Stop / Close are conditioned on capabilities, because the device set is heterogeneous: an
@@ -31,6 +32,11 @@ const house = useHouseStore()
 const { t, locale } = useI18n()
 
 const covers = computed(() => devices.list.filter((e) => e.state.kind === 'cover'))
+// Motorized windows (Velux roof window): shown here, with their own drawing, but they are not covers —
+// neither the group gestures nor the shutters' summary touch them.
+const windows = computed(() => devices.list.filter((e) => e.state.kind === 'window'))
+// What the group gestures drive: the covers, minus the blind of a window's opening, which goes with it.
+const groupCovers = computed(() => covers.value.filter((e) => !house.dressesWindow(e.descriptor.id)))
 
 // ---- header summary: one KIND at a time, described by the state that stands out — "16 shutters
 // open · 2 blinds deployed · 1 gate open". A single "open" count mixed things
@@ -51,6 +57,11 @@ const summary = computed(() => {
     const active = e.state.available
       && coverActivity(e.descriptor, devices.targetPosition(e.descriptor.id) ?? (e.state as StateFor<'cover'>).position) > 0
     counts.set(key, (counts.get(key) ?? 0) + (active ? 1 : 0))
+  }
+  // the windows: their own group, counted open (the same order rule: present even at zero)
+  for (const e of windows.value) {
+    const p = devices.targetPosition(e.descriptor.id) ?? (e.state as StateFor<'window'>).position
+    counts.set('window', (counts.get('window') ?? 0) + (e.state.available && (p ?? 0) > 0 ? 1 : 0))
   }
   return [...counts.entries()]
     .sort((a, b) => SUMMARY_ORDER.indexOf(a[0]) - SUMMARY_ORDER.indexOf(b[0]))
@@ -149,6 +160,15 @@ function commit(id: string, v: number) {
   delete next[id]
   draft.value = next
 }
+// A window's thumbnail speaks in OPENING, not closure: the drag, the target, the published position.
+const windowOpening = (e: DeviceEntry) => draft.value[e.descriptor.id]
+  ?? devices.targetPosition(e.descriptor.id) ?? (e.state as StateFor<'window'>).position
+function commitWindow(id: string, v: number) {
+  void devices.sendCommand(id, { type: 'window.set_position', position: Math.round(v) })
+  const next = { ...draft.value }
+  delete next[id]
+  draft.value = next
+}
 </script>
 
 <template>
@@ -163,12 +183,12 @@ function commit(id: string, v: number) {
         <div class="muted count count--waiting" :data-zero="house.coversWithoutOpening.length === 0 ? '1' : '0'">
           {{ $t('covers.waitingCount', { n: house.coversWithoutOpening.length }, house.coversWithoutOpening.length) }}
         </div>
-        <CoversMaster :entries="covers" :label="$t('covers.all')" />
+        <CoversMaster :entries="groupCovers" :label="$t('covers.all')" />
       </div>
     </PageHeader>
     <div class="page__scroll">
-      <div v-if="covers.length === 0" class="card card--soft empty muted">{{ $t('covers.none') }}</div>
-      <RoomBands kind="cover">
+      <div v-if="covers.length === 0 && windows.length === 0" class="card card--soft empty muted">{{ $t('covers.none') }}</div>
+      <RoomBands :kind="['cover', 'window']">
         <!-- open / stop / close all the SHUTTERS of the room with one press -->
         <template #room-action="{ entries }">
           <RoomShutterKeys :entries="entries" />
@@ -177,7 +197,14 @@ function commit(id: string, v: number) {
              and is operated in the direction it moves (see `CoverPill`). Draggable only for a motor
              that can target a position, and once its opening is known. -->
         <template #leading="{ entry }">
-          <CoverPill :closure="pillClosure(entry)" :preset="presetClosure(entry.state as StateFor<'cover'>)"
+          <!-- a window is drawn as a pane hinged at the top, not as a shutter's apron -->
+          <WindowPill v-if="entry.descriptor.kind === 'window'" :opening="windowOpening(entry)"
+                      :interactive="entry.state.available && entry.descriptor.capabilities.includes('position')
+                        && !waiting(house.houseDeviceFor(entry.descriptor.id))"
+                      :label="$t('window.level')" :class="{ 'pill--off': !entry.state.available }"
+                      @drag="(v: number) => drag(entry.descriptor.id, v)"
+                      @commit="(v: number) => commitWindow(entry.descriptor.id, v)" />
+          <CoverPill v-else :closure="pillClosure(entry)" :preset="presetClosure(entry.state as StateFor<'cover'>)"
                      :interactive="entry.state.available && entry.descriptor.capabilities.includes('position')
                        && !waiting(house.houseDeviceFor(entry.descriptor.id))"
                      :device-class="entry.descriptor.meta.cover?.deviceClass"
@@ -229,6 +256,33 @@ function commit(id: string, v: number) {
                       item-title="title" item-value="value" density="compact" variant="outlined" hide-details
                       :disabled="house.savingOpening" :aria-label="$t('covers.assign')"
                       @update:model-value="(id: string) => house.setCoverOpening(house.houseDeviceFor(entry.descriptor.id)!.id, id || null)" />
+          </div>
+          <!-- a window: its own commands, and the same row layout as a cover's -->
+          <div v-else-if="entry.descriptor.kind === 'window'" class="controls">
+            <div class="keys">
+              <button type="button" class="key" :disabled="!entry.state.available"
+                      :title="$t('window.actionOpen')" :aria-label="$t('window.actionOpen')"
+                      @click="devices.sendCommand(entry.descriptor.id, { type: 'window.open' })">
+                <StrokeIcon name="collapseUp" :size="18" />
+              </button>
+              <button v-if="entry.descriptor.capabilities.includes('stop')" type="button" class="key"
+                      :disabled="!entry.state.available" :title="$t('common.stop')" :aria-label="$t('common.stop')"
+                      @click="devices.sendCommand(entry.descriptor.id, { type: 'window.stop' })">
+                <StrokeIcon name="stop" :size="18" />
+              </button>
+              <button type="button" class="key" :disabled="!entry.state.available"
+                      :title="$t('window.actionClose')" :aria-label="$t('window.actionClose')"
+                      @click="devices.sendCommand(entry.descriptor.id, { type: 'window.close' })">
+                <StrokeIcon name="collapseDown" :size="18" />
+              </button>
+              <span class="keys__gap" aria-hidden="true" />
+              <button v-if="entry.descriptor.capabilities.includes('quiet')" type="button" class="key key--toggle"
+                      :disabled="!entry.state.available" :aria-pressed="!!(entry.state as StateFor<'window'>).quiet"
+                      :title="$t('window.quietHint')" :aria-label="$t('cover.quiet')"
+                      @click="devices.sendCommand(entry.descriptor.id, { type: 'window.set_quiet', on: !(entry.state as StateFor<'window'>).quiet })">
+                <StrokeIcon name="moon" :size="18" />
+              </button>
+            </div>
           </div>
           <!-- a separate line: three buttons in the 4th column would crush the cover's name -->
           <div v-else class="controls">

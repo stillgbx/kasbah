@@ -1,6 +1,6 @@
 # Plugin Somfy TaHoma
 
-> Dernière mise à jour : 2026-11-05
+> Dernière mise à jour : 2026-11-12
 > Sources : `apps/server/src/plugins/tahoma/{index,client,mapping,types}.ts`, tests `mapping.test.ts`,, `history.ts`, `solar.test.ts` (volets solaires, 2026-09-24)
 > `plugin.test.ts`, fixtures `__fixtures__/box.ts`, `apps/server/.env.example`,
 > [Somfy-Developer/Somfy-TaHoma-Developer-Mode](https://github.com/Somfy-Developer/Somfy-TaHoma-Developer-Mode)
@@ -470,3 +470,33 @@ affiche, `toMotorCommand` garde donc la valeur MOTEUR courante (mémoriser = « 
 Tilleuls) : 25 / 50 / 75 % demandés relus exactement, 100 % = « Couvert, lames ajourées », Fermer =
 « Fermé ». **Pas encore essayé sur un vrai volet io** : à faire, en surveillant qu'un moteur arrêté sur
 la valeur envoyée la republie bien à l'identique (sinon le repli `requested` ne joue pas).
+
+## Mise à jour 2026-11-12 — la fenêtre de toit Velux est un `window`, pas un volet
+
+Sources : `apps/server/src/plugins/tahoma/{mapping,index}.ts`, `mapping.test.ts`, `__fixtures__/box.ts`.
+
+**Appairage.** Une fenêtre de toit Velux INTEGRA (io-homecontrol) entre dans la box par un transfert de clé
+depuis son interrupteur mural KLI, comme un volet io ; elle remonte ensuite dans l'API Overkiz.
+
+**Mapping.** uiClass `Window` → kind `window` (`isWindow`, `toDescriptor`) ; il faut `open` et `close`
+dans les commandes, comme pour un volet. Avant, `Window` était rangée dans les classes de volets. La box
+pilote fenêtre et volet avec les MÊMES commandes : `windowAsCoverCommand` traduit `window.*` en `cover.*`
+et le reste du chemin (position, mode discret `setClosureAndLinearSpeed` lowspeed, relecture) est celui des
+volets. Le mode silencieux fonctionne sur la fenêtre.
+
+**`stop` : déclaré mais ignoré.** La fenêtre Velux DÉCLARE la commande `stop`, mais la box ne la lui fait pas
+exécuter (essayé depuis l'appli TaHoma et depuis Kasbah le 2026-11-12) : seule sa télécommande l'arrête.
+La capacité `stop` n'est donc PAS déclarée quand le `controllableName` contient « Velux » : pas de bouton
+qui ne fait rien. Un autre fabricant de fenêtre io garde `stop`.
+
+**Le store Velux** (volet de la fenêtre) remonte à part, en `io:VerticalExteriorAwningVeluxIOComponent`,
+uiClass `ExteriorScreen` : un cover `blind`, `stop` fonctionnel. Il habille la même ouverture que la
+fenêtre (voir `4_8`).
+
+**Impasse : la « Position air ».** L'appli TaHoma propose une « Position air ». C'est un alias Velux de type
+`ventilation`, rappelé par `goToAlias` (listé dans l'attribut `core:SupportedAliases`). Essayé par
+l'utilisateur depuis TaHoma : elle FERME la fenêtre. Aucun intérêt, non intégrée : ne pas la rouvrir sans
+nouvelle mesure.
+
+**Non vérifié** : le vrai Velux avec le serveur redémarré sur ce code (testé par les fixtures et par
+l'essai de commandes dans TaHoma seulement).

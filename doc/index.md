@@ -25,18 +25,18 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | Pages | Dernière mise à jour |
 |---|---|
 | [1_0 Monorepo et flux de données](1_architecture/1_0_monorepo-et-flux.md) | 2026-10-20 |
-| [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-11-05 |
+| [1_1 Contrat des appareils](1_architecture/1_1_contrat-appareils.md) | 2026-11-12 |
 | [1_2 Serveur et hôte de plugins](1_architecture/1_2_serveur-et-plugins.md) | 2026-11-10 |
 | [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-11-11 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-11-01 |
 | [1_5 Scène 3D (Three.js)](1_architecture/1_5_scene-3d.md) | 2026-10-29 |
 | [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-11-12 |
-| [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-11-10 |
+| [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-11-12 |
 | [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-11-10 |
 | [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-11-08 |
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-11-11 |
 | [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-11-12 |
-| [1_12 Scène 3D : objets dessinés](1_architecture/1_12_scene-3d-objets.md) | 2026-10-26 |
+| [1_12 Scène 3D : objets dessinés](1_architecture/1_12_scene-3d-objets.md) | 2026-11-12 |
 | [1_13 Comptes et sessions](1_architecture/1_13_comptes-et-sessions.md) | 2026-11-09 |
 | [1_14 Énergie](1_architecture/1_14_energie.md) | 2026-10-31 |
 | [1_15 Appli Android Auto](1_architecture/1_15_appli-android-auto.md) | 2026-11-12 |
@@ -63,14 +63,14 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 
 | Socle | Dernière mise à jour |
 |---|---|
-| [3_0 Simulation (mock-sim et plugin mock)](3_plugins/3_0_simulation-mock.md) | 2026-10-31 |
+| [3_0 Simulation (mock-sim et plugin mock)](3_plugins/3_0_simulation-mock.md) | 2026-11-12 |
 | [3_2 Écrire un plugin](3_plugins/3_2_ecrire-un-plugin.md) | 2026-11-10 |
 | [3_3 Fabricants à venir](3_plugins/3_3_fabricants-a-venir.md) | 2026-10-06 |
 
 | Intégrations | Dernière mise à jour |
 |---|---|
 | [3_1 Philips Hue](3_plugins/3_1_philips-hue.md) | 2026-11-07 |
-| [3_4 Somfy TaHoma](3_plugins/3_4_somfy-tahoma.md) | 2026-11-05 |
+| [3_4 Somfy TaHoma](3_plugins/3_4_somfy-tahoma.md) | 2026-11-12 |
 | [3_5 Google Nest (caméras, sonnettes)](3_plugins/3_5_google-nest.md) | 2026-11-03 |
 | [3_6 Google Cast](3_plugins/3_6_google-cast.md) | 2026-11-09 |
 | [3_7 Enphase](3_plugins/3_7_enphase.md) | 2026-10-31 |
@@ -93,7 +93,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_24 Claude (moteur de l'assistant)](3_plugins/3_24_claude.md) | 2026-11-05 |
 | [3_25 Transcription (la voix de l'assistant)](3_plugins/3_25_transcription.md) | 2026-11-08 |
 | [3_26 Hörmann (portes de garage)](3_plugins/3_26_hormann.md) | 2026-10-21 |
-| [3_27 Home Assistant](3_plugins/3_27_home-assistant.md) | 2026-10-30 |
+| [3_27 Home Assistant](3_plugins/3_27_home-assistant.md) | 2026-11-12 |
 | [3_28 Podcasts](3_plugins/3_28_podcasts.md) | 2026-11-06 |
 | [3_29 IKEA DIRIGERA](3_plugins/3_29_ikea-dirigera.md) | 2026-11-06 |
 <!-- section:3_plugins:end -->
@@ -111,12 +111,12 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 
 | Vues | Dernière mise à jour |
 |---|---|
-| [4_3 Vues Lumières, Ouvrants et Caméras](4_ui/4_3_vues-lumieres-ouvrants-cameras.md) | 2026-10-26 |
+| [4_3 Vues Lumières, Ouvrants et Caméras](4_ui/4_3_vues-lumieres-ouvrants-cameras.md) | 2026-11-12 |
 | [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-31 |
 | [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-11-06 |
 | [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-11-04 |
 | [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-11-12 |
-| [4_8 Mode édition et propriétés](4_ui/4_8_mode-edition-et-proprietes.md) | 2026-10-21 |
+| [4_8 Mode édition et propriétés](4_ui/4_8_mode-edition-et-proprietes.md) | 2026-11-12 |
 <!-- section:4_ui:end -->
 
 ## 5 — Setup

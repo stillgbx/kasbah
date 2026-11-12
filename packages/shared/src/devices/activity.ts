@@ -99,6 +99,8 @@ export function isDeviceOn(s: DeviceState, descriptor?: DeviceDescriptor): boole
     case 'pet_feeder': return s.feeding === true
     case 'pet_fountain': return s.on
     case 'fan': return s.on
+    // an open window gets noticed, like an open shutter; unknown = not tinted
+    case 'window': return (s.position ?? 0) > 0
   }
 }
 

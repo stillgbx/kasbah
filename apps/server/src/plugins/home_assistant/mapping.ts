@@ -142,7 +142,8 @@ export function candidatesOf(
     const device = reg?.device_id ? deviceById.get(reg.device_id) : undefined
     const areaId = reg?.area_id ?? device?.area_id ?? undefined
     const room = areaId ? areaName.get(areaId) : undefined
-    const kind = SUPPORTED_KINDS[domain]!
+    // a cover HA calls a window opens the house: Kasbah's `window` kind, out of the shutters' group gestures
+    const kind = domain === 'cover' && str(s.attributes.device_class) === 'window' ? 'window' : SUPPORTED_KINDS[domain]!
     out.push({
       externalId: s.entity_id, entityId: s.entity_id, kind, integration: reg?.platform ?? '',
       ...(slowEntityId ? { slowEntityId } : {}),
@@ -190,6 +191,14 @@ export function toDescriptor(pluginId: string, kind: DeviceKind, s: HaState, ext
       const dc = str(s.attributes.device_class)
       meta.cover = { deviceClass: dc && (COVER_CLASSES as readonly string[]).includes(dc) ? dc as CoverClass : 'shutter' }
       if (Array.isArray(s.attributes.entity_id)) meta.isGroup = true
+      break
+    }
+    case 'window': {
+      const f = features(s)
+      if (f & 3) capabilities.push('open_close')
+      if (f & 4) capabilities.push('position')
+      if (f & 8) capabilities.push('stop')
+      if (extra.quiet) capabilities.push('quiet')
       break
     }
     case 'climate': {
@@ -286,6 +295,15 @@ export function toPatch(kind: DeviceKind, s: HaState, quiet?: boolean): StatePat
         ...(quiet !== undefined ? { quiet } : {}),
       } as StatePatch
     }
+    case 'window': {
+      const pos = num(a.current_position)
+      const motion = s.state === 'opening' ? 'opening' : s.state === 'closing' ? 'closing' : 'stopped'
+      return {
+        available, motion,
+        position: pos !== undefined ? clampPct(pos) : s.state === 'closed' ? 0 : s.state === 'open' ? 100 : null,
+        ...(quiet !== undefined ? { quiet } : {}),
+      } as StatePatch
+    }
     case 'climate': {
       const mode = s.state === 'heat_cool' ? 'auto' : s.state
       const current = num(a.current_temperature)
@@ -361,6 +379,11 @@ export function toServiceCall(t: Tracked, cmd: Command, quiet: boolean, climateM
     case 'cover.stop': return call('cover', 'stop_cover', {}, motor)
     case 'cover.set_position': return call('cover', 'set_cover_position', { position: clampPct(cmd.position) }, motor)
     case 'cover.set_tilt': return call('cover', 'set_cover_tilt_position', { tilt_position: clampPct(cmd.tilt) })
+    // a window is an HA cover: same services
+    case 'window.open': return call('cover', 'open_cover', {}, motor)
+    case 'window.close': return call('cover', 'close_cover', {}, motor)
+    case 'window.stop': return call('cover', 'stop_cover', {}, motor)
+    case 'window.set_position': return call('cover', 'set_cover_position', { position: clampPct(cmd.position) }, motor)
     case 'climate.set_mode': {
       const mode = cmd.mode === 'auto' && !climateModes.includes('auto') && climateModes.includes('heat_cool') ? 'heat_cool' : cmd.mode
       return call('climate', 'set_hvac_mode', { hvac_mode: mode })

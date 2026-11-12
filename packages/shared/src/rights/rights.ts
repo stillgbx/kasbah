@@ -23,13 +23,15 @@ export const isRight = (s: string): s is Right => (RIGHTS as readonly string[]).
 /** The rights granted; absent = all of them. */
 export const rightsSchema = z.array(z.enum(RIGHTS))
 
-/** A cover that opens the house (gate, garage door, window) needs `access`, not `covers`. */
-export const ACCESS_COVER_CLASSES: ReadonlySet<string> = new Set(['gate', 'garage', 'window'])
+/** A cover that opens the house (gate, garage door) needs `access`, not `covers` — like a window. */
+export const ACCESS_COVER_CLASSES: ReadonlySet<string> = new Set(['gate', 'garage'])
 
 const RIGHT_OF_KIND: Record<DeviceKind, Right | null> = {
   light: 'lights', cover: 'covers', media_player: 'media', climate: 'heating', fan: 'heating',
   vacuum: 'robots', mower: 'robots', energy: 'energy', ev_charger: 'vehicles', vehicle: 'vehicles',
   camera: 'cameras', weather: 'weather', water: 'water', pet_feeder: 'pets', pet_fountain: 'pets',
+  // a window opens the house, like a gate
+  window: 'access',
   // a sensor only measures: nothing to guard
   sensor: null,
 }
