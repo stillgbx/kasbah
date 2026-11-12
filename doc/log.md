@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-12] update | Scène 3D : pluie et neige sur l'objectif
+
+**Déclencheur** : demande de l'utilisateur (gouttes et flocons sur l'écran de la vue 3D, comme si elle était filmée dehors, discret), puis quatre retours sur le rendu.
+
+**Pages modifiées** :
+- `1_architecture/1_11_scene-3d-rendu.md` - section datée : les essais écartés (calque CSS), la passe de réfraction GLSL/TSL, la carte d'eau simulée par le CPU et floutée, la gravité, l'adhérence du verre, la neige, le branchement et le piège WebGPU de la carte retournée
+- `4_ui/4_7_reglages.md` - section datée : carte « Pluie et neige sur l'objectif » de l'onglet Scène 3D, allumée par défaut
+
+**Index** : catalogues 1_architecture (résumé et date) et 4_ui (date) mis à jour, index.md régénéré.
+
 ## [2026-11-12] update | Musique : une source coupée en cours de fichier est rouverte
 
 **Déclencheur** : demande de l'utilisateur (« assez souvent des arrêts de lecture », mix Mixcloud sur une barre de son ou sur le PC, à relancer à la main).

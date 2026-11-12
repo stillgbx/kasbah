@@ -50,7 +50,7 @@ export interface RenderLoop {
 }
 
 /** Default rate of the decorative animations, in frames per second. A 5.75 s wave is smooth at it. */
-const ANIMATION_HZ = 20
+export const ANIMATION_HZ = 20
 
 export function createRenderLoop(opts: RenderLoopOptions): RenderLoop {
   const raf = opts.requestFrame ?? ((cb) => requestAnimationFrame(cb))

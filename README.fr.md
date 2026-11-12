@@ -241,7 +241,7 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 
 La géométrie (murs, sols, toit, ouvertures, jardin, piscine) est construite depuis le JSON. Chaque appareil porte une **pilule** (icône + nom). Treize styles de rendu : réaliste, nature, indigo, maquette, cyberpunk, candy, maison hantée, disco, Halloween, Noël, Star Wars — Tatooine, Akira, Girlyversaire. L'ambiance solaire (auto / jour / crépuscule / nuit) est indépendante du thème de l'app. Véhicules et tondeuse se placent d'après leur GPS.
 
-La scène suit aussi la météo du plugin (Open-Meteo) : pluie et neige qui tombent, inclinées par le vent, sols mouillés, brouillard. L'eau de la piscine a une houle qui suit la force et la direction du vent, et des reflets au fond qui suivent le soleil.
+La scène suit aussi la météo du plugin (Open-Meteo) : pluie et neige qui tombent, inclinées par le vent, sols mouillés, brouillard, et gouttes et flocons qui se posent sur la vue comme sur l'objectif d'une caméra, puis coulent ou fondent (Réglages › Scène 3D › « Pluie et neige sur l'objectif », allumé par défaut). L'eau de la piscine a une houle qui suit la force et la direction du vent, et des reflets au fond qui suivent le soleil.
 
 En **mode édition** (Réglages) : poser et coter des ouvertures, affecter un ouvrant, régler des places de stationnement, déplacer les appareils.
 

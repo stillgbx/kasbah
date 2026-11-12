@@ -1,6 +1,6 @@
 # Vue Réglages
 
-> Dernière mise à jour : 2026-11-09
+> Dernière mise à jour : 2026-11-12
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre la vue Réglages : ses zones, la carte Plugins, les thèmes, le rendu 3D, les entrées locales au poste, les comptes, le calage sur la photo. Elle est née du découpage de
@@ -620,3 +620,16 @@ Vérifié dans `kasbah-mock` : position et hauteur du formulaire identiques en m
 changement (mesure géométrique), compte créé avec ses droits et le rôle de la maison, pas d'erreur console.
 Tests : `McpUsersCard.test.ts` (création avec rôles et droits, compte existant figé). **Non joués** : zooms,
 thème clair, anglais (aucun nouveau libellé, les textes repris existent dans les deux langues).
+
+### Mise à jour 2026-11-12 — carte « Pluie et neige sur l'objectif » (Scène 3D)
+
+Une petite carte de plus dans l'onglet Scène 3D, après « Moteur de rendu » : un titre, une phrase,
+un interrupteur (`settings.sceneLensWater`, `localStorage` `kasbah.sceneLensWater`, **allumé par
+défaut**). Il pilote l'option de scène `lensWater` sans recharger la page ; l'effet lui-même est
+décrit dans [1_11 Scène 3D : rendu](../1_architecture/1_11_scene-3d-rendu.md). L'intitulé dit
+« pluie et neige » : la neige a son propre effet. La phrase rappelle qu'il n'y a rien en qualité
+basse. Vérifié en fr et en en, thèmes clair et sombre, sans débordement à 1280 px.
+
+Sources : `apps/web/src/views/SettingsView.vue`, `apps/web/src/stores/settings.ts`,
+`apps/web/src/composables/useHouseScene.ts`, `apps/web/src/i18n/locales/{fr,en}.json`
+(`render.lensWater`, `render.lensWaterHint`).

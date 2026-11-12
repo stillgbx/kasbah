@@ -12,7 +12,7 @@ vi.mock('./core/post', async (importOriginal) => ({
   gpuName: () => '',
   createPostPipeline: (deps: PostPipelineDeps) => {
     built.push(deps)
-    return { quality: deps.quality, sceneTarget: null, setLook() {}, setSize() {}, render() {}, dispose() {} }
+    return { quality: deps.quality, sceneTarget: null, setLook() {}, setLensWater() {}, setSize() {}, render() {}, dispose() {} }
   },
 }))
 

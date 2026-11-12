@@ -1,6 +1,6 @@
 # Scène 3D : rendu
 
-> Dernière mise à jour : 2026-11-10
+> Dernière mise à jour : 2026-11-12
 > Sources : sections reprises telles quelles de `1_5_scene-3d.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre le rendu de la scène : styles et thèmes, lumière du jour et de la nuit, ombres, météo (nuages, pluie, neige, brume), eau de la piscine, matières photo, chaîne d'image et étalonnage, tilt-shift, banc de réglage, performance GPU (passes, MSAA, shaders précompilés, voile de mesure). Elle est née du découpage de
@@ -1011,6 +1011,81 @@ dallage, en WebGL et en WebGPU, neige comprise, sans erreur console.
 Sources : `apps/web/src/three/effects/precipitation.ts` (`precipitationCovers`, `coverMap`),
 `apps/web/src/three/gpu/precipitation.ts`, `apps/web/src/three/HouseScene.ts`,
 `apps/web/src/three/three.test.ts`.
+
+### Mise à jour 2026-11-12 — pluie et neige sur l'objectif
+
+Demande de l'utilisateur : quand il pleut ou neige, voir des gouttes et des flocons sur l'écran, comme
+si la vue était filmée par une caméra dehors — discret. Trois essais avant le bon :
+
+- **Un calque CSS** de gouttes nettes posées au-dessus du canevas (`backdrop-filter`) : refusé, « des
+  taches circulaires », ni forme, ni réfraction, ni coulure : on ne comprend pas que c'est de l'eau.
+  Puis des taches floues en `backdrop-filter: blur()` : même verdict. Le CSS ne sait pas **réfracter**.
+- **Une passe de la chaîne d'image** : retenue. Une goutte est une lentille ; la passe lit l'image
+  finie DÉCALÉE selon la normale de la goutte, ce qui la montre petite et à l'envers, comme une vraie.
+- Retours suivants sur ce socle : trop nettes (il faut le flou de l'objectif), pas de gravité, formes
+  trop rondes, traînées trop droites — d'où le flou de la carte, la chute accélérée et l'adhérence
+  ci-dessous.
+
+**Le partage du travail** (`effects/lensWater.ts`) :
+
+- Le **CPU simule** les gouttes, en pixels CSS (débits par mégapixel d'écran : un téléphone et un
+  grand écran sont aussi mouillés) : gouttelettes, gouttes qui grossissent en avalant ce qu'elles
+  touchent, cèdent au-delà d'un rayon et **coulent** ; flocons qui collent puis fondent en flaques.
+  Plafond de 1 400 éléments ; rien ne s'alloue au-delà.
+- Il **dessine une carte d'eau** dans un canevas 2D à demi-résolution : la normale de lentille en
+  rouge/vert (0,5 = plat, vert vers le HAUT), la couverture en alpha, la blancheur d'un flocon en
+  bleu. Trois lutins de 64 px calculés une fois : goutte (calotte), tube de traînée (normale en
+  travers seulement), flocon. Puis la carte est **floutée en bloc** (`ctx.filter = blur()`, 7 px
+  CSS) : les gouttes sont sur l'objectif, bien plus près que la maison — hors de netteté. Un
+  navigateur sans filtres de canevas la garde nette.
+- La **dernière passe** de la chaîne (après le tilt-shift : les gouttes ne sont pas floutées par lui)
+  lit la carte : `LENS_WATER_SHADER` (`core/post.ts`) en WebGL, `gpu/lensWater.ts` en WebGPU, mêmes
+  constantes (`LENS_REFRACT` 0,07 de la hauteur d'image, `LENS_SOFT` : ce qu'on voit à travers est
+  flouté sur un anneau de huit lectures, `LENS_RIM` : bord assombri, `LENS_COVER` : la couverture
+  floutée est remontée pour que la goutte garde son corps). Neuf lectures par pixel mouillé, une
+  seule par pixel sec.
+
+**La gravité** : une goutte qui cède part lentement, accélère d'autant plus qu'elle est lourde vers
+une vitesse limite, s'étire avec la vitesse ; elle laisse sa traînée sur TOUT le chemin parcouru
+dans l'image (des morceaux tous les 3 px, inclinés dans le sens de la coulée — sinon des marches
+d'escalier), et la traînée sèche en se cassant en pointillés. L'animation passe à **30 Hz** pendant
+qu'une goutte coule (`hz` en accesseur), 20 Hz sinon (`ANIMATION_HZ`, désormais exporté).
+
+**L'adhérence** : le verre ne retient pas l'eau partout pareil (gras, poussière, traitement usé). Un
+champ fixe par averse, deux octaves de bruit de valeur (cellules de 38 et 13 px). Il façonne tout :
+une goutte qui coule tâte le verre juste devant elle et tourne vers le côté qui glisse (`STEER`),
+ralentit et peut être arrêtée là où il accroche — d'où des coulées sinueuses qui bifurquent ; une
+traînée laisse plus d'eau là où le verre retient ; une goutte au repos s'étire le long du gradient
+d'adhérence et pousse ses lobes vers où elle accroche (`reshape`, refait à chaque fusion), puis
+s'étale peu à peu.
+
+**Neige** : des amas de deux ou trois cristaux, blancs (canal bleu), sans réfraction, qui fondent
+au bout de quelques secondes en flaque irrégulière ; une flaque assez lourde coule comme une goutte.
+Un flocon ne coule jamais.
+
+**Branchement** (`HouseScene.syncLensWater`) : appelé à chaque `setAppearance`, au `load` et à
+chaque reconstruction de la chaîne (`applyQuality`, qui rend les gouttes à la nouvelle chaîne au lieu
+de les perdre). Pas avant une maison chargée (le constructeur bâtit la chaîne avant la boucle de
+rendu). Quand la pluie s'arrête, plus rien ne tombe et le verre sèche ; l'effet s'en va quand il est
+sec. Aucun effet en **qualité basse** (pas de chaîne) ni quand l'interrupteur des Réglages est coupé
+(option de scène `lensWater`, réglage `sceneLensWater`, allumé par défaut — cf.
+[4_7 Réglages](../4_ui/4_7_reglages.md)). `PostPipeline.setLensWater(map | null)` : la passe est
+éteinte (WebGL) ou hors du graphe (WebGPU, clé de reconstruction) tant qu'il fait sec : le rendu par
+beau temps est inchangé.
+
+**Piège WebGPU** : la carte arrivait retournée verticalement (le canevas est envoyé `flipY`, et
+`screenUV` part du haut) ; le TSL la lit à `1 − y` et change le signe du décalage vertical. Vérifié
+en posant les mêmes gouttes aux mêmes endroits dans les deux moteurs : images identiques.
+
+Vérifié dans la preview en images figées (le volet tourne à ~1 img/s : le mouvement se juge dans un
+vrai navigateur), pluie de jour et de nuit, neige, WebGL et WebGPU, sans erreur console ; neuf tests
+de la simulation (gravité, coulée sinueuse, séchage, neige, plafond, lutins). Non mesuré : le coût
+sur la tablette (neuf lectures par pixel mouillé, l'envoi de la carte à chaque image).
+
+Sources : `apps/web/src/three/effects/lensWater.ts`, `apps/web/src/three/effects/lensWater.test.ts`,
+`apps/web/src/three/core/post.ts` (`LENS_WATER_SHADER`), `apps/web/src/three/gpu/lensWater.ts`,
+`apps/web/src/three/gpu/post.ts`, `apps/web/src/three/HouseScene.ts` (`syncLensWater`),
+`apps/web/src/three/core/renderLoop.ts`.
 
 ## Banc de réglage de la lumière (2026-09-18)
 

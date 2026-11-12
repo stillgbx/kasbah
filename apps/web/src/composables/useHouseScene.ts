@@ -170,10 +170,10 @@ export function useHouseScene(args: UseHouseSceneArgs) {
     fit()
 
     scene.setDescriptors(devices.descriptors)
-    // The two scene settings that Settings holds (render budget, projection) go
+    // The scene settings that Settings holds (render budget, projection, water on the lens) go
     // first; what the caller imposes through `options` wins afterwards.
     scene.setOptions({
-      quality: sceneProbe?.quality ?? settings.sceneQuality, projection: settings.sceneProjection, ...(args.options ? args.options.value : {}),
+      quality: sceneProbe?.quality ?? settings.sceneQuality, projection: settings.sceneProjection, lensWater: settings.sceneLensWater, ...(args.options ? args.options.value : {}),
       ...(sceneProbe?.shadows !== undefined ? { shadows: sceneProbe.shadows } : {}),
     })
     if (args.house.value) scene.load(args.house.value)
@@ -204,6 +204,7 @@ export function useHouseScene(args: UseHouseSceneArgs) {
   if (args.options) watch(args.options, (o) => scene?.setOptions(o), { deep: true })
   watch(() => settings.sceneQuality, (q) => scene?.setOptions({ quality: q }))
   watch(() => settings.sceneProjection, (p) => scene?.setOptions({ projection: p }))
+  watch(() => settings.sceneLensWater, (v) => scene?.setOptions({ lensWater: v }))
   // nextTick: the new theme's CSS variables must be applied before reading
   watch(() => theme.global.name.value, () => { void nextTick(() => scene?.setAppearance({ ui: readUiTheme() })) })
   watch(style, (s) => scene?.setAppearance({ style: s }))

@@ -286,6 +286,16 @@ const houseStats = computed(() => {
             <Segmented dense :model-value="settings.sceneRenderer" :options="rendererOptions" class="w-100" @update:model-value="(v: RendererChoice) => chooseRenderer(v)" />
             <div class="muted small">{{ $t(rendererNote) }}</div>
           </section>
+          <section class="card block">
+            <div class="auto-row">
+              <div class="min0">
+                <div class="block__title">{{ $t('render.lensWater') }}</div>
+                <div class="muted small">{{ $t('render.lensWaterHint') }}</div>
+              </div>
+              <v-switch :model-value="settings.sceneLensWater" hide-details density="compact"
+                        @update:model-value="(v: boolean | null) => settings.setSceneLensWater(v === true)" />
+            </div>
+          </section>
           <section v-if="houseSettings" class="card block">
             <div class="auto-row">
               <div class="min0">

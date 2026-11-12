@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, AgXToneMapping, HalfFloatType, NeutralToneMapping, NoBlending, NoToneMapping, ShaderMaterial, UniformsUtils, Vector2, Vector3, WebGLRenderTarget, type Camera, type Scene, type ToneMapping, type WebGLRenderer } from 'three'
+import { ACESFilmicToneMapping, AgXToneMapping, HalfFloatType, NeutralToneMapping, NoBlending, NoToneMapping, ShaderMaterial, UniformsUtils, Vector2, Vector3, WebGLRenderTarget, type Camera, type Scene, type Texture, type ToneMapping, type WebGLRenderer } from 'three'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
@@ -215,6 +215,58 @@ const TILT_SHIFT_SHADER = {
   `,
 }
 
+/** How far a drop's rim looks (fraction of the image height): beyond its own radius, which turns the scene upside down inside it. */
+export const LENS_REFRACT = 0.07
+/** The rim of a drop darkens (it reflects the grey of the glass), from this share of its radius. */
+export const LENS_RIM = 0.6
+/**
+ * The map is blurred (out of focus): a small drop comes out as a faint smear. Its coverage is raised
+ * back between these two values, so that the drop keeps its body and only its edge stays soft.
+ */
+export const LENS_COVER = [0.02, 0.6] as const
+/** Out of focus: what is seen through a drop is blurred over this radius (fraction of the image height), eight taps on a ring. */
+export const LENS_SOFT = 0.009
+/** The eight taps of that ring: unit directions, the x to be divided by the aspect. */
+export const LENS_RING = Array.from({ length: 8 }, (_, i) => [Math.cos((i * Math.PI) / 4), Math.sin((i * Math.PI) / 4)] as const)
+
+/**
+ * WATER ON THE LENS (`effects/lensWater.ts`): the very last pass, after the tilt-shift — the drops are
+ * on the glass, sharp, in front of everything. The water map gives, per pixel, a drop's lens normal
+ * (red/green, 0.5 = flat), its coverage (alpha) and a flake's whiteness (blue). Inside a drop, the image
+ * is read SHIFTED against the normal, which is what makes a drop show the scene small and upside down;
+ * a little brighter in its heart, darker at its rim, a spot of sky at the top left.
+ */
+const LENS_WATER_SHADER = {
+  uniforms: {
+    tDiffuse: { value: null as unknown },
+    tWater: { value: null as unknown },
+    /** Width / height of the image: the shift is counted in heights. */
+    aspect: { value: 1 },
+  },
+  vertexShader: TILT_SHIFT_SHADER.vertexShader,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tDiffuse;
+    uniform sampler2D tWater;
+    uniform float aspect;
+    varying vec2 vUv;
+    void main() {
+      vec4 base = texture2D(tDiffuse, vUv);
+      vec4 w = texture2D(tWater, vUv);
+      if (w.a < 0.004) { gl_FragColor = base; return; }
+      vec2 n = w.rg * 2.0 - 1.0;
+      float r = min(length(n), 1.0);
+      vec2 at = vUv - vec2(n.x / aspect, n.y) * ${LENS_REFRACT.toFixed(3)};
+      vec3 seen = texture2D(tDiffuse, at).rgb * 0.2;
+      ${LENS_RING.map(([x, y]) => `seen += texture2D(tDiffuse, at + vec2(${(x * LENS_SOFT).toFixed(5)} / aspect, ${(y * LENS_SOFT).toFixed(5)})).rgb * 0.1;`).join(' ')}
+      vec3 c = seen * (1.1 - 0.3 * smoothstep(${LENS_RIM.toFixed(2)}, 1.0, r));
+      c += 0.12 * smoothstep(0.5, 0.0, length(n - vec2(-0.3, 0.38)));
+      c = mix(c, vec3(0.93, 0.95, 0.98), w.b);
+      float cover = smoothstep(${LENS_COVER[0].toFixed(2)}, ${LENS_COVER[1].toFixed(2)}, w.a);
+      gl_FragColor = vec4(mix(base.rgb, c, cover), max(base.a, cover));
+    }
+  `,
+}
+
 /**
  * How much a point of the image is blurred, from 0 (sharp) to 1. `uvY` has its origin at the BOTTOM, like the
  * shader. ALSO used for the device pills, which live in the DOM and not in the canvas: without
@@ -294,6 +346,8 @@ export interface PostPipeline {
   readonly sceneTarget: WebGLRenderTarget
   setSize(width: number, height: number, pixelRatio: number): void
   setLook(look: PostLook): void
+  /** The water on the lens (`effects/lensWater.ts`), `null` = dry: the pass leaves the chain. */
+  setLensWater(map: Texture | null): void
   /**
    * Renders a full frame. Measures its cost and may request a quality drop. `measurable`:
    * the frame says something about the machine — it follows a gesture (see `renderLoop.ts`) and does not redo
@@ -357,6 +411,11 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
   const tilt = quality === 'low' ? null : [new ShaderPass(TILT_SHIFT_SHADER), new ShaderPass(TILT_SHIFT_SHADER)] as const
   if (tilt) for (const pass of tilt) { pass.enabled = false; composer.addPass(pass) }
 
+  // The water on the lens closes the chain; off while it is dry. Never in low quality: no chain at all there.
+  const lens = new ShaderPass(LENS_WATER_SHADER)
+  lens.enabled = false
+  composer.addPass(lens)
+
   // THE SAFEGUARD MEASURES THE GPU, NOT THE MAIN THREAD. `composer.render()` only SUBMITS
   // commands: 7 ms on a machine whose GPU takes 93 ms to execute them — and it is the execution that
   // caps the frame rate. Timed on the CPU side, the safeguard stayed blind and "auto" stayed "high"
@@ -390,6 +449,7 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
       // `setPixelRatio` already resizes buffers AND passes: no need to touch them one by one.
       composer.setPixelRatio(pixelRatio)
       composer.setSize(width, height)
+      ;(lens.uniforms.aspect as { value: number }).value = Math.max(1, width) / Math.max(1, height)
       if (tilt) {
         // The sampling step is ONE RENDERED PIXEL: it therefore follows the size AND the pixel
         // ratio, otherwise the blur would be twice as narrow on a dense screen.
@@ -434,6 +494,10 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
           ;(pass.uniforms.width as { value: number }).value = ts.width
         }
       }
+    },
+    setLensWater(map) {
+      lens.enabled = map !== null
+      ;(lens.uniforms.tWater as { value: unknown }).value = map
     },
     render(measurable) {
       if (timer) {

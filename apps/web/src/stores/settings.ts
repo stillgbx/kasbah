@@ -72,6 +72,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const sceneProjection = useLocalStorage<SceneProjection>('kasbah.sceneProjection', 'perspective')
   /** Materials as images (the style's photo pack) rather than procedural, for the styles that have them. */
   const sceneAssets = useLocalStorage<boolean>('kasbah.sceneAssets', true)
+  /** Rain and snow on the lens (`three/effects/lensWater.ts`), on by default; Settings can turn it off. */
+  const sceneLensWater = useLocalStorage<boolean>('kasbah.sceneLensWater', true)
   /** Measurement veil placed over the scene (frames/s, draw calls, passes, shadows). */
   const sceneDebug = useLocalStorage<boolean>('kasbah.sceneDebug', false)
   /**
@@ -159,6 +161,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function setSceneRenderer(v: RendererChoice) { if (RENDERER_CHOICES.includes(v)) sceneRenderer.value = v }
   function setSceneProjection(v: SceneProjection) { if (SCENE_PROJECTIONS.includes(v)) sceneProjection.value = v }
   function setSceneAssets(v: boolean) { sceneAssets.value = v }
+  function setSceneLensWater(v: boolean) { sceneLensWater.value = v }
   function setSceneDebug(v: boolean) { sceneDebug.value = v }
   function setSceneTuning(patch: Partial<SceneTuning>) { sceneTuningDraft.value = resolveTuning({ ...sceneTuning.value, ...patch }) }
   /** "Reset": back to what the style computes, with no tweak. What is saved in the house stays, until a "Save". */
@@ -212,9 +215,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
   return {
     appearance, theme, locale, isDark, wantDark, themeId, currentTheme, resolvedLocale, fullscreen,
-    sceneStyle, sceneAmbience, sceneQuality, sceneRenderer, sceneProjection, sceneAssets, sceneDebug, sceneTuning, savedSceneTuning, sceneTuningDirty, sceneTuningPreset, sceneTuningOpen, reliefEditing, terrainTab, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize, cupGrams, navOrder,
+    sceneStyle, sceneAmbience, sceneQuality, sceneRenderer, sceneProjection, sceneAssets, sceneLensWater, sceneDebug, sceneTuning, savedSceneTuning, sceneTuningDirty, sceneTuningPreset, sceneTuningOpen, reliefEditing, terrainTab, houseEditing, sceneWeather, sceneCloudCover, sceneVisibilityM, householdSize, cupGrams, navOrder,
     setAppearance, cycleAppearance, setTheme, setLocale, toggleLocale, applyToVuetify, applyLocale,
-    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneRenderer, setSceneProjection, setSceneAssets, setSceneDebug, setSceneTuning, resetSceneTuning, applySceneTuningPreset, saveSceneTuning, setSceneTuningOpen, setReliefEditing, setTerrainTab, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize, setCupGrams, setNavOrder,
+    setSceneStyle, setSceneAmbience, setSceneQuality, setSceneRenderer, setSceneProjection, setSceneAssets, setSceneLensWater, setSceneDebug, setSceneTuning, resetSceneTuning, applySceneTuningPreset, saveSceneTuning, setSceneTuningOpen, setReliefEditing, setTerrainTab, setHouseEditing, setSceneWeather, setSceneCloudCover, setSceneVisibilityM, setHouseholdSize, setCupGrams, setNavOrder,
     appearances: APPEARANCES, themes: THEME_LIST, locales: LOCALES,
     styles: RENDER_STYLES, ambiences: AMBIENCE_MODES, seasons: SEASON_MODES, sceneSeason, setSceneSeason, qualities: RENDER_QUALITIES, renderers: RENDERER_CHOICES, projections: SCENE_PROJECTIONS,
   }

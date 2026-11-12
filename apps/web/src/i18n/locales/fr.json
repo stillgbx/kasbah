@@ -499,6 +499,8 @@
     "qualityHint": "Halo des lampes, occlusion des angles et anticrénelage. « Automatique » choisit d'après la machine, puis descend d'un cran si les images coûtent trop cher.",
     "qualities": { "auto": "Automatique", "high": "Haute", "medium": "Moyenne", "low": "Basse" },
     "renderer": "Moteur de rendu",
+    "lensWater": "Pluie et neige sur l'objectif",
+    "lensWaterHint": "Quand il pleut ou qu'il neige, des gouttes et des flocons se posent sur la vue comme sur l'objectif d'une caméra, puis coulent ou fondent. Sans effet en qualité basse.",
     "rendererHint": "WebGPU est le moteur le plus récent, mais il est plus lent aujourd'hui sur les machines mesurées. Changer de moteur recharge la page.",
     "rendererMissing": "Ce navigateur n'a pas WebGPU : la vue reste en WebGL.",
     "rendererInsecure": "WebGPU ne s'ouvre que sur une page sécurisée (HTTPS ou localhost) : la vue reste en WebGL.",

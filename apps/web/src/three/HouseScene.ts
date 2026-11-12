@@ -29,6 +29,7 @@ import { Disco } from './effects/disco'
 import { Parade } from './effects/parade'
 import type { Box, Circle } from './effects/roam'
 import { Precipitation, precipitationCovers } from './effects/precipitation'
+import { LensWater } from './effects/lensWater'
 import { createWaterUniforms, makeWaterAlive, setWaterSun, setWaterTint, setWaterWind, WaterCaustics, type WaterStrength } from './effects/water'
 import { defaultAmbience, defaultSceneTheme, rolesOf, styleById, type GlowLook, type PostLook, type RenderStyle, type StyleLook } from './styles'
 import { applyTuning, NEUTRAL_TUNING, type SceneTuning } from './styles/tuning'
@@ -48,7 +49,7 @@ import {
 import { boundsToWorldBox, houseToWorld } from './core/coords'
 import { disposeObject3D } from './core/dispose'
 import { createDragDetector, createTapDetector, type DragDetector, type TapEvent } from './core/input'
-import { createRenderLoop, type RenderLoop } from './core/renderLoop'
+import { ANIMATION_HZ, createRenderLoop, type RenderLoop } from './core/renderLoop'
 import { resolveSceneTheme, type SceneTheme, type UiTheme } from './core/theme'
 import { createTween, easeInCubic, easeInOutCubic, easeOutCubic, linear, type Tween } from './core/tween'
 import { emitsSound, soundRouting } from '../lib/audioRouting'
@@ -68,6 +69,8 @@ export interface HouseSceneOptions {
   quality: RenderQuality
   /** Perspective, free orthographic, or locked isometric (`core/cameraFit.ts`). */
   projection: SceneProjection
+  /** Rain and snow on the lens while it falls (`effects/lensWater.ts`). */
+  lensWater: boolean
 }
 
 /**
@@ -464,6 +467,9 @@ export class HouseScene {
   private gardenRoamKey = ''
   private stopParade: (() => void) | null = null
   private precipIntensity = 0
+  /** Rain or snow on the lens (`effects/lensWater.ts`), drawn by the last pass of the effect chain, and what stops its animation. */
+  private lens: LensWater | null = null
+  private stopLens: (() => void) | null = null
   /**
    * The living water (`effects/water.ts`): a time SHARED by the surface and the bottom — crests and
    * caustics beat together —, the strength of each, and what it takes to remove the animation. The two
@@ -501,7 +507,7 @@ export class HouseScene {
   private house: House | null = null
   private index: HouseIndex | null = null
   private geometry: HouseGeometry | null = null
-  private options: HouseSceneOptions = { levelFocusMode: 'hide', shadows: true, quality: 'auto', projection: 'perspective' }
+  private options: HouseSceneOptions = { levelFocusMode: 'hide', shadows: true, quality: 'auto', projection: 'perspective', lensWater: true }
   private focusedLevelId: string | null = null
   private pillLod: PillLod | null = null
   private highlightedRoom: string | null = null
@@ -782,6 +788,7 @@ export class HouseScene {
     this.nodes.terrain.receiveShadow = true
     this.scene.add(this.nodes.root)
     this.syncPrecipitation()               // the root is new: what falls is set on it again
+    this.syncLensWater()
     this.syncBats()
     this.syncDisco()
     this.syncParade()
@@ -2958,7 +2965,9 @@ export class HouseScene {
     this.invalidateShadows()
     const before = this.options.quality
     const projectionBefore = this.options.projection
+    const lensBefore = this.options.lensWater
     this.options = { ...this.options, ...opts }
+    if (this.options.lensWater !== lensBefore) this.syncLensWater()
     if (this.renderer) this.renderer.shadowMap.enabled = this.options.shadows
     if (this.options.quality !== before) { this.autoQuality = null; this.applyQuality() }   // an explicit choice starts from detection again
     if (this.options.projection !== projectionBefore) this.applyProjectionMode()
@@ -3848,6 +3857,7 @@ export class HouseScene {
     this.invalidateShadows()               // the sun may have moved
     this.syncStorm()
     this.syncPrecipitation()
+    this.syncLensWater()
     this.syncBats()
     this.syncDisco()
     this.syncParade()
@@ -4051,6 +4061,44 @@ export class HouseScene {
     this.stopParade = null
     this.parade?.dispose()
     this.parade = null
+  }
+
+  /**
+   * Water on the lens, while it rains or snows — when Settings asks for it. It lives in the effect
+   * chain: none in low quality, so no water there either. When it stops, nothing new lands and what is on the glass dries; the effect
+   * leaves once the glass is dry. A quality change rebuilds the chain: the drops are handed to the new one.
+   */
+  private syncLensWater(): void {
+    if (!this.post || !this.options.lensWater) { this.removeLensWater(); return }
+    const p = this.ambience.precipitation ?? null
+    if (this.lens) {
+      this.lens.setParams(p?.kind ?? null, p?.intensity ?? 0)
+      this.post.setLensWater(this.lens.texture)
+      return
+    }
+    // not before a house: the constructor builds the chain before the render loop exists
+    if (!p || !this.nodes) return
+    const lens = new LensWater(this.size.width, this.size.height, p.kind, p.intensity)
+    this.lens = lens
+    this.post.setLensWater(lens.texture)
+    this.stopLens = this.loop.addAnimation({
+      // a running drop at 20 Hz is a slideshow, not a fall: 30 while one runs, the usual rate otherwise
+      get hz() { return lens.sim.running ? 30 : ANIMATION_HZ },
+      step: (_now, dtS) => {
+        if (this.lens !== lens) return false
+        lens.step(dtS)
+        if (lens.done) { this.removeLensWater(); return false }
+        return true
+      },
+    })
+  }
+
+  private removeLensWater(): void {
+    this.stopLens?.()
+    this.stopLens = null
+    this.post?.setLensWater(null)
+    this.lens?.dispose()
+    this.lens = null
   }
 
   private removePrecipitation(): void {
@@ -4295,7 +4343,7 @@ export class HouseScene {
     this.syncDisco()                       // …and the mirror ball
     this.syncParade()                      // …and the parade
     this.syncWater()                       // …and freezes the water
-    if (!this.renderer) return
+    if (!this.renderer) { this.syncLensWater(); return }
     const pixelRatio = Math.min(window.devicePixelRatio || 1, PIXEL_RATIO[wanted])
     this.renderer.setPixelRatio(pixelRatio)
     this.renderer.setSize(this.size.width, this.size.height, false)
@@ -4303,6 +4351,7 @@ export class HouseScene {
       // No chain: tone mapping goes back to the renderer, and the image goes straight to the screen.
       this.renderer.toneMapping = toneMappingOf(this.look.post)
       this.renderer.toneMappingExposure = this.look.post.exposure
+      this.syncLensWater()                 // no chain, no water on the lens
       return
     }
     if (this.gpu) {
@@ -4312,6 +4361,7 @@ export class HouseScene {
         ...(auto ? { onDowngrade: (to: EffectiveQuality) => { this.autoQuality = to; this.applyQuality(); this.loop.invalidate() } } : {}),
       })
       this.post.setLook(this.look.post)
+      this.syncLensWater()
       return
     }
     this.post = createPostPipeline({
@@ -4325,6 +4375,7 @@ export class HouseScene {
     })
     this.post.setLook(this.look.post)
     this.post.setSize(this.size.width, this.size.height, pixelRatio)
+    this.syncLensWater()
   }
 
   /**
@@ -4367,6 +4418,7 @@ export class HouseScene {
     this.applyProjection()
     this.renderer?.setSize(this.size.width, this.size.height, false)
     this.post?.setSize(this.size.width, this.size.height, this.renderer?.getPixelRatio() ?? 1)
+    this.lens?.resize(this.size.width, this.size.height)
     this.labelRenderer?.setSize(this.size.width, this.size.height)
     this.loop.invalidate()
   }
@@ -4534,6 +4586,7 @@ export class HouseScene {
     if (this.labelsIdle !== null) clearTimeout(this.labelsIdle)
     if (this.stormTimer !== null) { clearTimeout(this.stormTimer); this.stormTimer = null }
     this.removePrecipitation()
+    this.removeLensWater()
     this.removeBats()
     this.removeDisco()
     this.removeParade()

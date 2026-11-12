@@ -499,6 +499,8 @@
     "qualityHint": "Lamp glow, corner occlusion and anti-aliasing. « Automatic » picks from the machine, then steps down if frames cost too much.",
     "qualities": { "auto": "Automatic", "high": "High", "medium": "Medium", "low": "Low" },
     "renderer": "Renderer",
+    "lensWater": "Rain and snow on the lens",
+    "lensWaterHint": "When it rains or snows, drops and flakes land on the view as on a camera lens, then run down or melt. No effect in low quality.",
     "rendererHint": "WebGPU is the newer renderer, but it is slower today on the machines measured. Changing the renderer reloads the page.",
     "rendererMissing": "This browser has no WebGPU: the view stays on WebGL.",
     "rendererInsecure": "WebGPU only opens on a secure page (HTTPS or localhost): the view stays on WebGL.",

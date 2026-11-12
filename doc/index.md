@@ -35,7 +35,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-11-10 |
 | [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-11-08 |
 | [1_10 Liste de courses](1_architecture/1_10_liste-de-courses.md) | 2026-11-11 |
-| [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-11-10 |
+| [1_11 Scène 3D : rendu](1_architecture/1_11_scene-3d-rendu.md) | 2026-11-12 |
 | [1_12 Scène 3D : objets dessinés](1_architecture/1_12_scene-3d-objets.md) | 2026-10-26 |
 | [1_13 Comptes et sessions](1_architecture/1_13_comptes-et-sessions.md) | 2026-11-09 |
 | [1_14 Énergie](1_architecture/1_14_energie.md) | 2026-10-31 |
@@ -101,7 +101,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 ## 4 — UI
 
 <!-- section:4_ui:begin (généré par scripts/wiki-index.mjs depuis 4_ui/README.md - ne pas éditer ici) -->
-Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-11-09).
+Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et langues, puis une page par famille de vues. Résumés : [4_ui/README.md](4_ui/README.md) (9 pages, dernière mise à jour 2026-11-12).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -115,7 +115,7 @@ Interface : langage visuel, navigation et panneaux de la vue Maison, thèmes et 
 | [4_4 Vues Énergie et Véhicules](4_ui/4_4_vues-energie-vehicules.md) | 2026-10-31 |
 | [4_5 Musique et médias](4_ui/4_5_musique-et-medias.md) | 2026-11-06 |
 | [4_6 Autres vues](4_ui/4_6_autres-vues.md) | 2026-11-04 |
-| [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-11-09 |
+| [4_7 Vue Réglages](4_ui/4_7_reglages.md) | 2026-11-12 |
 | [4_8 Mode édition et propriétés](4_ui/4_8_mode-edition-et-proprietes.md) | 2026-10-21 |
 <!-- section:4_ui:end -->
 
