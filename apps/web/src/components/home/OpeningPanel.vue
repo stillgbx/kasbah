@@ -446,6 +446,7 @@ const freedName = computed(() => {
                   density="compact" variant="outlined" hide-details :disabled="house.savingOpening"
                   :aria-label="$t('opening.window')" @update:model-value="(id: string) => setDevice(id, 'window')" />
       </div>
+      <p class="muted opening__hint">{{ $t('opening.deviceHint') }}</p>
 
       <div class="opening__row opening__bottom">
         <button type="button" class="pill opening__remove" :class="{ 'opening__remove--armed': removeArmed }"

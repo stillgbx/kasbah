@@ -815,7 +815,7 @@
     "gapRight": "Droite", "gapLeft": "Gauche", "gapFront": "Avant", "gapBack": "Arrière",
     "wall": "Mur {segment}", "whereHint": "Se règle ici, ou en glissant l'ouverture sur les murs de la pièce dans la vue 3D.",
     "whereHintSurface": "Se règle ici, ou en glissant l'ouverture sur le sol ou le toit dans la vue 3D.",
-    "device": "Ouvrant lié", "window": "Fenêtre motorisée", "deviceNone": "Aucun", "deviceTaken": "{name} (déjà posé sur {opening})",
+    "device": "Volet, store ou porte", "window": "Fenêtre motorisée", "deviceHint": "L'appareil lié prend la place, la taille et l'orientation de l'ouverture.", "deviceNone": "Aucun", "deviceTaken": "{name} (déjà posé sur {opening})",
     "revert": "Rétablir", "smaller": "Réduire", "bigger": "Agrandir",
     "saveError": "Ouverture non enregistrée : {message}"
   },

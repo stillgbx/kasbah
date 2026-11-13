@@ -815,7 +815,7 @@
     "gapRight": "Right", "gapLeft": "Left", "gapFront": "Front", "gapBack": "Back",
     "wall": "Wall {segment}", "whereHint": "Adjust here, or by dragging the opening on the room's walls in the 3D view.",
     "whereHintSurface": "Adjust here, or by dragging the opening on the floor or roof in the 3D view.",
-    "device": "Linked cover", "window": "Motorized window", "deviceNone": "None", "deviceTaken": "{name} (already on {opening})",
+    "device": "Shutter, blind or door", "window": "Motorized window", "deviceHint": "A linked device takes the opening's place, size and orientation.", "deviceNone": "None", "deviceTaken": "{name} (already on {opening})",
     "revert": "Revert", "smaller": "Smaller", "bigger": "Bigger",
     "saveError": "Opening not saved: {message}"
   },

@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-13] update | Ouverture : « Volet, store ou porte » et cône d'orientation
+
+**Déclencheur** : retour de l'utilisateur sur la fenêtre de toit motorisée et son store : l'orientation d'une ouverture de toit ne se voit pas en 3D, et « Ouvrant lié » à côté de « Fenêtre motorisée » prêtait à confusion.
+
+**Pages modifiées** :
+- `4_ui/4_8_mode-edition-et-proprietes.md` - section datée : liste renommée « Volet, store ou porte » (pourquoi pas « Volet ou store »), ligne d'aide sous les deux listes, cône d'orientation d'une ouverture de surface sélectionnée, orientation propre au store écartée
+
+**Index** : catalogue 4_ui mis à jour (1 ligne, date), index.md régénéré.
+
 ## [2026-11-12] update | Fenêtre motorisée : le kind `window` (fenêtre de toit Velux)
 
 **Déclencheur** : demande de l'utilisateur, une fenêtre de toit motorisée « ne doit pas être considérée comme un volet » (une fenêtre ouvre la maison, un geste groupé sur les volets ne doit jamais l'ouvrir).

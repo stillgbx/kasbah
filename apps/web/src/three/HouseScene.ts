@@ -39,7 +39,7 @@ import { OutlineEditor } from './relief/outlineEditor'
 import { GardenLayer } from './garden/gardenLayer'
 import { ReflectionProbe } from './effects/reflection'
 import type { Season } from './garden/season'
-import { buildParking, parkingGlyphTexture, parkingMaterials, type ParkingMaterials, type ParkingNodes } from './builders/parking'
+import { buildParking, facingCone, parkingGlyphTexture, parkingMaterials, type ParkingMaterials, type ParkingNodes } from './builders/parking'
 import { buildGroundOverlay, type GroundShape } from './builders/groundOverlay'
 import { extrudeRing, flatPolygon, flatRing, insetPolygon } from './builders/shapes'
 import {
@@ -547,7 +547,7 @@ export class HouseScene {
   private dressed: ReadonlySet<string> = new Set<string>()
   /** Openings whose glass a motorized window draws (`windowOpenings`), as the panes were built. */
   private ownGlass: ReadonlySet<string> = new Set<string>()
-  private openingHandles = new Map<string, { group: Group; fill: Mesh; ring: Mesh; ringOn: Mesh; rect: OpeningRect }>()
+  private openingHandles = new Map<string, { group: Group; fill: Mesh; ring: Mesh; ringOn: Mesh; cone?: Mesh; rect: OpeningRect }>()
   /** Five materials for all the handles: selection is only a material swap. */
   private openingMats: {
     fill: MeshBasicMaterial; fillOn: MeshBasicMaterial
@@ -2415,6 +2415,15 @@ export class HouseScene {
         const ring = new Mesh(rest, mats.ring)
         const ringOn = new Mesh(bold, mats.ringOn)
         group.add(fill, ring, ringOn)
+        // A SURFACE opening turns freely: the device cone says which way it faces (local +y, the
+        // low edge of a roof window, where its sash opens), lit with the bold frame. A wall opening
+        // faces where its wall does: no cone.
+        let cone: Mesh | undefined
+        if (o.host !== 'wall') {
+          cone = new Mesh(facingCone(o.height), mats.off)
+          cone.position.z = thick / 2
+          group.add(cone)
+        }
         group.traverse((n) => n.layers.set(DECOR_LAYER))
         parent.add(group)
         // The `Scene` runs with `matrixWorldAutoUpdate = false`: without this call, the world matrix
@@ -2424,7 +2433,7 @@ export class HouseScene {
         // group, that the ray hits. Same move as `focusJournalPoint` and `openingFoot`, which read
         // a world position without waiting for a frame.
         group.updateWorldMatrix(true, true)
-        this.openingHandles.set(o.openingId, { group, fill, ring, ringOn, rect: o })
+        this.openingHandles.set(o.openingId, { group, fill, ring, ringOn, cone, rect: o })
       }
     }
     this.styleOpeningHandles()
@@ -2676,6 +2685,7 @@ export class HouseScene {
       h.fill.material = on ? mats.fillOn : mats.fill
       h.ring.material = on ? mats.off : mats.ring          // the thin frame fades under the thick one
       h.ringOn.material = on ? mats.ringOn : mats.off
+      if (h.cone) h.cone.material = on ? mats.ringOn : mats.off
     }
   }
 

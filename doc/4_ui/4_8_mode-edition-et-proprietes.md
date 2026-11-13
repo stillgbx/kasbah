@@ -1,6 +1,6 @@
 # Mode édition et propriétés
 
-> Dernière mise à jour : 2026-11-12
+> Dernière mise à jour : 2026-11-13
 > Sources : sections reprises telles quelles de `4_1_navigation-et-panneaux.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre le mode édition de la maison (ouvertures, menuiserie, places, fenêtres de toit, jardin, terrain, relief, cadastre, apparence, dimensions, pièces et niveaux) et la gestion des propriétés (démo, création, renommage). Elle est née du découpage de
@@ -955,3 +955,27 @@ et le lien posé depuis l'appareil (`setOpeningPluginDevice`) choisissent la fam
 - **Liste « à affecter »** : une fenêtre sans ouverture y rejoint les volets qui en attendent une.
 - Test : « une fenêtre + un volet par ouverture » dans `house.test.ts`. Vérifié dans la preview simulée, fr et
   en, sans débordement.
+
+### Mise à jour 2026-11-13 — « Volet, store ou porte », et le cône d'une ouverture de surface
+
+Sources : `apps/web/src/components/home/OpeningPanel.vue`, `apps/web/src/i18n/locales/{fr,en}.json`
+(`opening.device`, `opening.deviceHint`), `apps/web/src/three/HouseScene.ts` (`buildOpeningHandles`,
+`styleOpeningHandles`), `apps/web/src/three/builders/parking.ts` (`facingCone`).
+
+Avant, la liste s'appelait « Ouvrant lié » (en « Linked cover ») ; elle devient **« Volet, store ou
+porte »** (en « Shutter, blind or door »). En menuiserie, « l'ouvrant » est la partie mobile de la fenêtre : à
+côté de « Fenêtre motorisée », le mot faisait croire que les deux listes servaient à la même chose.
+« Volet ou store » a été écarté : la liste propose aussi les portes de garage (`canTakeOpening` n'exclut que
+le portail). Sous les deux listes, une ligne dit que **l'appareil lié prend la place, la taille et
+l'orientation de l'ouverture** : un appareil lié n'a plus de réglage de placement à lui (`DevicePanel`,
+`placeable`).
+
+En 3D, une ouverture de **surface** (fenêtre de toit, puits de lumière) sélectionnée porte le **cône
+d'orientation** des appareils et des places (`facingCone`), posé devant son bord bas (+y local, côté où le
+châssis s'ouvre et d'où part le store), allumé avec le cadre épais et éteint par son matériau comme lui. Une
+ouverture de mur n'en a pas : elle regarde où regarde son mur. Sur un versant en pente, l'orientation reste
+verrouillée par la pente ; le cône montre alors le sens imposé.
+
+Écarté : une orientation propre au store lié (il est monté dans le cadre de la fenêtre et suit l'ouverture).
+Vérifié dans la preview simulée (Les Tilleuls) : cône au bas de la fenêtre de toit du palier, aucune erreur
+console ; suite complète, typecheck et lint verts.

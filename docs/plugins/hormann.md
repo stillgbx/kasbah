@@ -61,7 +61,7 @@ python esptool.py --chip esp32 --port COMx --baud 115200 write_flash -z 0x1000 b
 2. **Run a bus scan** on the motor: hold PRG until `00`, arrows to menu **37**, short PRG, parameter **01**, hold PRG until `bS` blinks. The motor only powers the bus **during the scan** (0 V on the socket at rest is normal) and keeps it on if an accessory answers: the display ends on **1**. A **0** means nothing answered: A/B swapped (harmless, swap them), RS485 pins, or the bridge too slow to start (then power the base from the screw terminal: 5 = +24 V → DC, 20 = 0 V → G).
 3. In `apps/server/.env`, set `HORMANN_DOORS` (see below), then restart the server.
 4. Tick **Hormann** in **Settings → Plugins**. As long as `HORMANN_DOORS` is empty, the plugin stays "Pairing required".
-5. Link the door to its opening (edit mode, select the opening, **Linked cover** list: a door never placed in the house is offered too), and place its light on the ceiling (**Lights** view → **Place**, then **Mounting height → Ceiling**).
+5. Link the door to its opening (edit mode, select the opening, **Shutter, blind or door** list: a door never placed in the house is offered too), and place its light on the ceiling (**Lights** view → **Place**, then **Mounting height → Ceiling**).
 
 If you unplug a bridge, run a bus scan again, otherwise the motor shows error 04.
 

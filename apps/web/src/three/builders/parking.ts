@@ -133,9 +133,9 @@ function bayMarking(width: number, length: number): BufferGeometry | null {
  * without it is placed blind — the solid back line only shows once the space is drawn.
  *
  * It is placed ahead of the front of the space and sized by it: an 80 cm mower base does not
- * carry the same arrow as a 5 m garage.
+ * carry the same arrow as a 5 m garage. A roof window's handle carries it too (`HouseScene`).
  */
-function facingCone(length: number): BufferGeometry {
+export function facingCone(length: number): BufferGeometry {
   const reach = Math.min(Math.max(length * 0.42, 0.45), 1.6)
   const w = reach * 0.31
   const shape = new Shape()
