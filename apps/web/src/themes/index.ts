@@ -10,6 +10,7 @@ import { kasbah } from './kasbah'
 import { catppuccin } from './catppuccin'
 import { dracula } from './dracula'
 import { nightOwl } from './night-owl'
+import { miamiBay, miamiSunset } from './miami26'
 import { synthwave84 } from './synthwave84'
 import { tokyoNight } from './tokyo-night'
 
@@ -52,7 +53,7 @@ export interface Theme {
   dark?: Palette
 }
 
-const REGISTRY = [kasbah, catppuccin, dracula, nightOwl, synthwave84, tokyoNight] as const satisfies readonly Theme[]
+const REGISTRY = [kasbah, catppuccin, dracula, miamiBay, miamiSunset, nightOwl, synthwave84, tokyoNight] as const satisfies readonly Theme[]
 
 /** `REGISTRY` keeps the literal identifiers (for `ThemeId`), the public list widens them. */
 export const THEME_LIST: readonly Theme[] = REGISTRY

@@ -1,6 +1,6 @@
 # Jardin : arbres, buissons, pierres
 
-> Dernière mise à jour : 2026-10-06
+> Dernière mise à jour : 2026-11-13
 > Sources : `packages/shared/src/house/{schema,validate,place}.ts` (`gardenItemSchema`, `GARDEN_KINDS`, `addGardenItemToJson` / `patchGardenItemInJson` / `removeGardenItemFromJson`), `packages/shared/src/house/place.test.ts` (« éléments du jardin »), `apps/server/src/http/routes.ts`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/stores/house.ts` (section jardin, `GARDEN_DEFAULT_HEIGHT`), `apps/web/src/stores/settings.ts` (`sceneSeason`), `apps/web/src/three/garden/{shapes,gardenLayer,species,speciesShape,season}.ts`, `apps/web/src/three/garden/species/*.json` (21 espèces), `apps/web/src/three/garden/hedgeShape.ts`, tests `apps/web/src/three/garden/{shapes,species}.test.ts`, `apps/web/src/three/HouseScene.ts`, `apps/web/src/composables/useHouseScene.ts` (`sameShellButGarden`), `apps/web/src/components/home/{GardenSection,GardenPanel,HouseEditPanel,EditSection}.vue`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/lib/gardenIcons.ts`, `.claude/skills/garden-species/SKILL.md`, `scripts/photo-palette.mjs`, journal de session `_generated-ai-doc/sessions/2026-09-28-jardin/journal.md` (non versionné) ; arbre de travail non commité après cf60c7d
 
 Le jardin de la vue 3D reçoit du **décor posé à la main** : arbres, buissons, pierres. Ce ne sont
@@ -454,6 +454,7 @@ réaliste, nature et indigo (ce dernier n'a pas été demandé, il reste naturel
 | Halloween | l'automne poussé : orange, rouge sombre, violet presque noir ; troncs noirs, fruits orange (citrouilles), feuillage réduit à 70 % |
 | Noël | sapins sombres et givre (une teinte claire), troncs bruns, fruits : boules rouges |
 | Tatooine | végétation rare d'un désert, olive poussiéreuse et à moitié sèche (feuillage restant 60 %), fruits de l'espèce |
+| Miami'26 Bay / Sunset | verts tropicaux le jour, presque noirs la nuit avec des fleurs qui luisent (corail pour Bay, magenta pour Sunset) ; pierre de la couleur de l'allée — ajouté le 2026-11-13 |
 
 > Mis à jour le 2026-10-06 (lint) : le tableau ne donnait que quatre styles ; dix déclarent une palette `garden` dans leur `look` (`apps/web/src/three/styles/{akira,candy,cyberpunk,disco,girlyversaire,halloween,haunted,maquette,noel,tatooine}.ts`), les six lignes Akira à Tatooine sont ajoutées d'après ces fichiers. Réaliste, nature et indigo n'en déclarent pas : jardin naturel.
 

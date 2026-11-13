@@ -1,6 +1,6 @@
 # Thème et langues
 
-> Dernière mise à jour : 2026-11-08
+> Dernière mise à jour : 2026-11-13
 > Sources : `apps/web/src/stores/settings.ts`, `apps/web/src/lib/daylight.ts`, `apps/web/src/themes/*.ts`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/i18n/index.ts`, `apps/web/src/i18n/locales/{fr,en}.json`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/PetkitLinkCard.vue`, `apps/web/src/three/core/renderBackend.ts`
 
 ## Apparence
@@ -741,3 +741,45 @@ Deux avertissements `[intlify]` dans la console de la page Réglages :
 
 Sources : `apps/web/src/i18n/index.ts`, `apps/web/src/i18n/locales/{fr,en}.json`,
 `apps/web/src/components/PetkitLinkCard.vue`.
+
+### Mise à jour 2026-11-13 — thèmes Miami'26 Bay et Sunset
+
+Deux thèmes de plus, chacun en clair et en sombre : **Miami'26 Bay** (`miamiBay`) et **Miami'26
+Sunset** (`miamiSunset`), dans un seul fichier `src/themes/miami26.ts`. Le registre passe à huit
+thèmes (`REGISTRY`, ordre alphabétique : Kasbah, Catppuccin, Dracula, Miami'26 Bay, Miami'26
+Sunset, Night Owl, Synthwave '84, Tokyo Night).
+
+| Thème | Clair | Sombre |
+|---|---|---|
+| Miami'26 Bay | Miami'26 Bay (sans `lightLabel`) | Miami'26 Bay |
+| Miami'26 Sunset | Miami'26 Sunset | Miami'26 Sunset |
+
+**Source des couleurs** : les thèmes d'éditeur Miami '26 du même auteur, publiés à part
+(`github.com/stillgbx/miami26-vscode`, `tools/generate-themes.js`, mêmes palettes que
+`github.com/stillgbx/miami26-vs`). Bay = une journée sur la baie (turquoise, bleu ciel, lavande,
+rose) ; Sunset = le crépuscule sur le front de mer (magenta, orange, or, pervenche, ciel violet).
+Une première version aux valeurs choisies à la main a été remplacée le même jour par ces palettes,
+à la demande de l'utilisateur.
+
+**Correspondance éditeur → Kasbah** :
+
+- sombre : `bg` = fond de l'éditeur, `surface` = barre latérale, `surface2` = « raised »,
+  `bright` = bordure ;
+- clair : `bg` = barre latérale, `surface` = « raised », `surface2` = éditeur, `bright` = blanc —
+  la page plus foncée que les cartes, comme Catppuccin Latte ;
+- `text`, `muted`, `accent`, `error`, `warning`, `success` : les couleurs d'interface de
+  l'éditeur, telles quelles ;
+- `info` et les quatre teintes de catégorie : prises dans les couleurs de syntaxe (Bay : sable,
+  turquoise, lavande, rose ; Sunset : or, pervenche, violet, corail).
+
+Toutes les variantes passent `themes.test.ts` (texte et texte secondaire à 4,5:1 sur `surface` et
+`bg`, texte lisible sur l'accent) sans retouche des valeurs publiées.
+
+**Libellés** : `render.styles.miamiBay` / `render.styles.miamiSunset`, « Miami'26 Bay » et
+« Miami'26 Sunset » en français comme en anglais (noms propres) — ce sont les tuiles des deux styles
+de rendu du même nom ([1_11](../1_architecture/1_11_scene-3d-rendu.md)). `kasbah.sceneStyle`
+accepte donc 15 styles.
+
+Vérifié dans la preview `kasbah-mock` : les quatre variantes sur la vue Maison, aucune erreur console.
+
+Sources : `apps/web/src/themes/{miami26,index}.ts`, `apps/web/src/i18n/locales/{fr,en}.json`.

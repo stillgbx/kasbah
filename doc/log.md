@@ -7,6 +7,17 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-13] update | Thèmes et styles 3D Miami'26 Bay et Sunset
+
+**Trigger** : demande de l'utilisateur, un thème Miami pour l'app et le rendu 3D en deux palettes ; couleurs reprises des thèmes d'éditeur Miami '26 (VS Code / VS).
+
+**Pages modifiées** :
+- 4_ui/4_2_theme-et-langues.md - section « thèmes Miami'26 Bay et Sunset » : source des couleurs, correspondance éditeur → Kasbah, libellés, 15 styles
+- 1_architecture/1_11_scene-3d-rendu.md - section « Styles Miami'26 Bay et Sunset » : deux ambiances d'une même fonction, crépuscule, piège de la pelouse brune
+- 2_maison/2_2_jardin.md - ligne Miami'26 du tableau des jardins par style
+
+**Index** : catalogues mis à jour (3 lignes), index.md régénéré.
+
 ## [2026-11-13] update | Ouverture : « Volet, store ou porte » et cône d'orientation
 
 **Déclencheur** : retour de l'utilisateur sur la fenêtre de toit motorisée et son store : l'orientation d'une ouverture de toit ne se voit pas en 3D, et « Ouvrant lié » à côté de « Fenêtre motorisée » prêtait à confusion.

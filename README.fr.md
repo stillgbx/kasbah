@@ -12,7 +12,7 @@ Application web (**tablette, ordinateur, téléphone**) qui montre la maison et 
 
 - La maison (étages, pièces, ouvertures, terrain, origine GPS, plugins actifs) est décrite dans un **fichier JSON** : voir [docs/house-json.md](docs/house-json.md) et le [wiki](doc/index.md).
 - Chaque fabricant est un **plugin** côté serveur ; les secrets d'API vivent dans un `.env` **serveur**, jamais dans le navigateur.
-- Six thèmes nommés, apparence clair / sombre / système / auto (soleil au-dessus de la maison), français et anglais.
+- Huit thèmes nommés, apparence clair / sombre / système / auto (soleil au-dessus de la maison), français et anglais.
 
 ## Aperçu
 
@@ -239,7 +239,7 @@ Mise en page en grand écran (paysage) en trois colonnes : **rail** à gauche, *
 
 ### Scène 3D
 
-La géométrie (murs, sols, toit, ouvertures, jardin, piscine) est construite depuis le JSON. Chaque appareil porte une **pilule** (icône + nom). Treize styles de rendu : réaliste, nature, indigo, maquette, cyberpunk, candy, maison hantée, disco, Halloween, Noël, Star Wars — Tatooine, Akira, Girlyversaire. L'ambiance solaire (auto / jour / crépuscule / nuit) est indépendante du thème de l'app. Véhicules et tondeuse se placent d'après leur GPS.
+La géométrie (murs, sols, toit, ouvertures, jardin, piscine) est construite depuis le JSON. Chaque appareil porte une **pilule** (icône + nom). Quinze styles de rendu : réaliste, nature, indigo, maquette, cyberpunk, candy, maison hantée, disco, Halloween, Noël, Star Wars — Tatooine, Akira, Girlyversaire, Miami'26 Bay, Miami'26 Sunset. L'ambiance solaire (auto / jour / crépuscule / nuit) est indépendante du thème de l'app. Véhicules et tondeuse se placent d'après leur GPS.
 
 La scène suit aussi la météo du plugin (Open-Meteo) : pluie et neige qui tombent, inclinées par le vent, sols mouillés, brouillard, et gouttes et flocons qui se posent sur la vue comme sur l'objectif d'une caméra, puis coulent ou fondent (Réglages › Scène 3D › « Pluie et neige sur l'objectif », allumé par défaut). L'eau de la piscine a une houle qui suit la force et la direction du vent, et des reflets au fond qui suivent le soleil.
 

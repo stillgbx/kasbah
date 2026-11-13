@@ -12,7 +12,7 @@ A web app (**tablet, computer, phone**) that shows the house and garden in **3D*
 
 - The house (floors, rooms, openings, terrain, GPS origin, active plugins) is described in a **JSON file**: see [docs/house-json.md](docs/house-json.md) and the [wiki](doc/index.md) (in French).
 - Each vendor is a server-side **plugin**; API secrets live in a **server** `.env`, never in the browser.
-- Six named themes, light / dark / system / auto appearance (sun above the house), French and English.
+- Eight named themes, light / dark / system / auto appearance (sun above the house), French and English.
 
 ## Overview
 
@@ -239,7 +239,7 @@ On a large (landscape) screen, a three-column layout: the **rail** on the left, 
 
 ### 3D scene
 
-The geometry (walls, floors, roof, openings, garden, pool) is built from the JSON. Each device carries a **pill** (icon + name). Thirteen rendering styles: realistic, nature, indigo, model, cyberpunk, candy, haunted house, disco, Halloween, Christmas, Star Wars — Tatooine, Akira, Girlyversaire. The sun lighting (auto / day / dusk / night) is independent of the app theme. Vehicles and the mower are placed from their GPS.
+The geometry (walls, floors, roof, openings, garden, pool) is built from the JSON. Each device carries a **pill** (icon + name). Fifteen rendering styles: realistic, nature, indigo, model, cyberpunk, candy, haunted house, disco, Halloween, Christmas, Star Wars — Tatooine, Akira, Girlyversaire, Miami'26 Bay, Miami'26 Sunset. The sun lighting (auto / day / dusk / night) is independent of the app theme. Vehicles and the mower are placed from their GPS.
 
 The scene also follows the weather from the plugin (Open-Meteo): falling rain and snow, slanted by the wind, wet ground, fog, and drops and flakes that land on the view as on a camera lens, then run down or melt (Settings › 3D scene › « Rain and snow on the lens », on by default). The pool water has a swell that follows the wind's strength and direction, and caustics on the bottom that follow the sun.
 

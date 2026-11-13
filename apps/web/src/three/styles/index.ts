@@ -9,6 +9,7 @@ import { halloweenStyle } from './halloween'
 import { hauntedStyle } from './haunted'
 import { indigoStyle } from './indigo'
 import { maquetteStyle } from './maquette'
+import { miamiBayStyle, miamiSunsetStyle } from './miami26'
 import { natureStyle } from './nature'
 import { noelStyle } from './noel'
 import { realisticStyle } from './realistic'
@@ -18,7 +19,7 @@ import type { RenderStyle } from './types'
 // The catalog of render styles. ONE line to add to offer one more, plus two i18n keys
 // (`scene.styles.<id>`): neither the scene, nor the builders, nor the settings know the list.
 
-export const RENDER_STYLES: readonly RenderStyle[] = [realisticStyle, natureStyle, indigoStyle, maquetteStyle, cyberpunkStyle, candyStyle, hauntedStyle, discoStyle, halloweenStyle, noelStyle, tatooineStyle, akiraStyle, girlyversaireStyle]
+export const RENDER_STYLES: readonly RenderStyle[] = [realisticStyle, natureStyle, indigoStyle, maquetteStyle, cyberpunkStyle, candyStyle, hauntedStyle, discoStyle, halloweenStyle, noelStyle, tatooineStyle, akiraStyle, girlyversaireStyle, miamiBayStyle, miamiSunsetStyle]
 
 /** The maquette's, and the application default. */
 export const DEFAULT_STYLE_ID = realisticStyle.id

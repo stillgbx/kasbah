@@ -1,6 +1,6 @@
 # Scène 3D : rendu
 
-> Dernière mise à jour : 2026-11-12
+> Dernière mise à jour : 2026-11-13
 > Sources : sections reprises telles quelles de `1_5_scene-3d.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre le rendu de la scène : styles et thèmes, lumière du jour et de la nuit, ombres, météo (nuages, pluie, neige, brume), eau de la piscine, matières photo, chaîne d'image et étalonnage, tilt-shift, banc de réglage, performance GPU (passes, MSAA, shaders précompilés, voile de mesure). Elle est née du découpage de
@@ -2728,3 +2728,44 @@ qu'en PCF ou en Basic.
 
 Sources : `apps/web/src/three/HouseScene.ts`, `apps/web/src/three/core/levelLight.ts`,
 `apps/web/src/three/three.test.ts`, `node_modules/three/src/renderers/shaders/ShaderChunk/shadowmap_pars_fragment.glsl.js`.
+
+## Styles Miami'26 Bay et Sunset (2026-11-13)
+
+Demande de l'utilisateur : un thème Miami pour l'app **et** pour le rendu 3D, en deux palettes,
+Bay et Sunset. Deux styles, `miamiBay` et `miamiSunset`, dans un seul fichier
+`three/styles/miami26.ts`, ajoutés en fin de `RENDER_STYLES` (15 styles).
+
+**Une fonction, deux ambiances.** Les deux styles partagent leurs matières (`SURFACES` : enduit en
+relief pour les murs, carrelage au sol, gazon, eau pour la piscine, pavés émissifs pour les
+allées) et la même fonction `moodLook(mood, ambience)`. Un `Mood` ne porte que des couleurs : deux
+palettes (nuit, jour) mélangées par `mixPalette` selon `dayFactor`, le ciel de nuit / jour /
+crépuscule, la lumière du soleil et de l'hémisphère, l'étalonnage (`gain` par heure, `lift`,
+saturation) et le jardin.
+
+- **Bay**, la baie à midi : façades lavande, cloisons pêche, piscine turquoise, ciel bleu pastel ;
+  la nuit, cloisons et allées turquoise, fenêtres roses.
+- **Sunset**, l'heure dorée : stuc rose, horizon orange vers rose sous un zénith violet,
+  saturation poussée ; la nuit, cloisons et allées magenta, fenêtres pervenche, piscine cyan.
+
+Les néons de nuit reprennent les couleurs des thèmes d'éditeur Miami '26, comme les thèmes
+d'interface ([4_2](../4_ui/4_2_theme-et-langues.md)) : Bay `#2ed3c6` / `#ff9cc2`, Sunset `#ff4fa3`
+/ `#ff2e93` / `#8e9bff`. La pervenche remplace le cyan d'une première version, absent de la palette
+Sunset de l'éditeur.
+
+**Le crépuscule** (`duskFactor`, atténué de 70 % par la couverture nuageuse : un ciel couvert n'a
+pas de couleur de couchant) tire le ciel, le soleil et l'hémisphère vers leurs teintes de couchant,
+et ajoute bloom et saturation.
+
+**Piège : la pelouse brune au couchant.** La lumière orange multiplie le vert du gazon et le rend
+brun. Le terrain et la pelouse sont donc tirés vers un vert d'eau (`duskGrass`) au prorata du
+crépuscule (× 0,7) : ils restent verts, un peu éteints. Le jour, le terrain prend la texture
+`grass` et un vert franc : avec `soil` et un sable, il paraissait presque blanc.
+
+**Jardin** : feuillages tropicaux le jour, sombres la nuit avec des fleurs qui luisent (émission
+0,25 la nuit, nulle le jour), pierre = couleur de l'allée de garage
+([2_2](../2_maison/2_2_jardin.md)).
+
+Vérifié dans la preview `kasbah-mock` au jour, au crépuscule et à la nuit pour les deux styles.
+
+Sources : `apps/web/src/three/styles/{miami26,index}.ts`, `apps/web/src/three/core/ambience.ts`
+(`dayFactor`, `duskFactor`), `apps/web/src/i18n/locales/{fr,en}.json`.
