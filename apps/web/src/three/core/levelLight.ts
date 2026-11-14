@@ -2,6 +2,7 @@ import { Material, ShaderChunk, type WebGLProgramParametersWithUniforms } from '
 import { applyHeightMist } from './heightMist'
 import { applyLevelFade } from './levelFade'
 import { applyRoomFocus } from './roomFocus'
+import { applyToonShading } from './toonShading'
 
 // An indoor lamp only lights ITS level, in the shader, in a single pass.
 //
@@ -111,6 +112,7 @@ export function applyLevelLight(shader: WebGLProgramParametersWithUniforms, mate
 // room (`roomFocus.ts`) go through the same hook, for the same reason.
 Material.prototype.onBeforeCompile = function (this: Material, shader: WebGLProgramParametersWithUniforms) {
   applyLevelLight(shader, this)
+  applyToonShading(shader)
   applyHeightMist(shader, this)
   applyLevelFade(shader, this)
   applyRoomFocus(shader, this)

@@ -20,6 +20,7 @@ import { DECOR_LAYER, SITE_DECOR_LAYER } from './core/layers'
 import { setLevelHeights } from './core/levelLight'
 import { isWebGPU, type GpuBackend } from './core/renderBackend'
 import { setHeightMist } from './core/heightMist'
+import { setToonShading } from './core/toonShading'
 import { materialOpacity, setLevelFade } from './core/levelFade'
 import { roomFocusUniforms, setRoomFocusShape, setRoomFocusStrength } from './core/roomFocus'
 import { createPostPipeline, detectQuality, gpuName, PIXEL_RATIO, tiltBlurFactor, toneMappingOf, type EffectiveQuality, type PostPipeline, type RenderQuality } from './core/post'
@@ -664,6 +665,7 @@ export class HouseScene {
     this.style = deps.style ?? styleById(null)
     this.ambience = deps.ambience ?? defaultAmbience()
     this.look = applyTuning(this.style.look(this.ambience), this.tuning)
+    setToonShading(this.look.shading)
     this.theme = deps.theme ?? defaultSceneTheme()
     this.materials = createMaterials(this.theme, this.look)
     this.waterStrength = {
@@ -3866,6 +3868,7 @@ export class HouseScene {
     if (next.style || next.ambience || next.tuning) this.look = applyTuning(this.style.look(this.ambience), this.tuning)
     this.theme = resolveSceneTheme(next.ui ?? this.theme, this.look.palette, this.ambience)
     this.photoGen++                        // the images of a style or setting that was left have no taker anymore
+    setToonShading(this.look.shading)
     this.applyMaterials()
     this.applySky()
     this.applyLighting()

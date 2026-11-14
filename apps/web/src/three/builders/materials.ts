@@ -216,8 +216,10 @@ export function applyLook(mats: MaterialSet, theme: SceneTheme, look: StyleLook,
   const s = look.surfaces
   const roofFlat: SurfaceLook = s.roofFlat ?? { texture: 'gravel', roughness: 1 }
   ensureTextures(mats.textures, [...rolesOf(s), 'tile', 'poolTile', roofFlat.texture])
-  // a material as images (`textures/assets.ts`) takes precedence over the procedural one of the same role
-  const tex = (l: SurfaceLook) => photos?.[l.texture] ?? mats.textures[l.texture]
+  // a material as images (`textures/assets.ts`) takes precedence over the procedural one of the same role;
+  // a drawn style (`ShadingLook.flat`) takes neither: flat colors, only the water keeps its own
+  const flat = look.shading?.flat ?? false
+  const tex = (l: SurfaceLook) => flat && l.texture !== 'water' ? undefined : photos?.[l.texture] ?? mats.textures[l.texture]
   // outdoors, the weather is applied after the material; indoors and on the water, it is not applied
   const outdoor = (m: MeshStandardMaterial, color: Color, l: SurfaceLook) => { surface(m, color, l, tex(l)); weathered(m, l, tex(l), weather) }
 

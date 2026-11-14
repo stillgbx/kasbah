@@ -116,6 +116,7 @@ export function applyTuning(look: StyleLook, t: SceneTuning): StyleLook {
     ao: look.post.ao,
     vignette: look.post.vignette * t.vignette,
     ...(look.post.grade ? { grade: look.post.grade } : {}),
+    ...(look.post.outline ? { outline: look.post.outline } : {}),
     // The tilt-shift comes from no style: it is born here. Off, the key is ABSENT and not `null` —
     // that is what keeps true the promise of the neutral setting: the style's look, identical.
     ...(t.tiltShift > 0 ? { tiltShift: { strength: t.tiltShift, center: t.tiltCenter, width: t.tiltWidth, pills: t.tiltPills } } : {}),

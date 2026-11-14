@@ -121,6 +121,28 @@ export interface PostLook {
   tiltShift?: TiltShiftLook | null
   /** Grading of the finished image (`GradeLook`). Absent = neutral: the style's image, identical. */
   grade?: GradeLook | null
+  /** INK LINES on creases and silhouettes, read from the depth (`core/post.ts`). Absent = none. */
+  outline?: OutlineLook | null
+}
+
+/** See `PostLook.outline`. Drawn in the scene's copy, before tone mapping: the ink is a linear color. */
+export interface OutlineLook {
+  /** Color of the ink, linear. */
+  color: readonly [number, number, number]
+  /** 0 = no line, 1 = the full ink color on the line. */
+  strength: number
+}
+
+/**
+ * How the materials take the light (`core/toonShading.ts`). Absent = the physical gradient.
+ * A drawn style: the sun falls in flat BANDS, the cast shadows have a hard edge, and the
+ * procedural materials give way to flat colors — an illustration has no plaster grain.
+ */
+export interface ShadingLook {
+  /** Steps of the sun's light on a face: 2 = lit / half / shade. 0 = continuous. */
+  bands: number
+  /** No procedural material: flat colors (the pool keeps its water). */
+  flat: boolean
 }
 
 /**
@@ -210,6 +232,8 @@ export interface StyleLook {
    */
   parade?: { kind: ParadeKind }
   garden?: GardenLook
+  /** A drawn style (`ShadingLook`). Absent = physical shading. */
+  shading?: ShadingLook
 }
 
 export interface RenderStyle {

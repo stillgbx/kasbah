@@ -2782,3 +2782,65 @@ bougent pas.
 Vérifié dans la preview `kasbah-mock` : Bay de nuit et de jour, Sunset de nuit.
 
 Sources : `apps/web/src/three/styles/miami26.ts`.
+
+### Mise à jour 2026-11-14 (bis) — le mode dessin : aplats, soleil en paliers, traits d'encre
+
+Demande de l'utilisateur : garder les couleurs Miami'26 mais passer au rendu d'une illustration
+(affiche peinte, traits cernés). Les deux styles Miami portent désormais un **mode dessin**, dans les
+deux moteurs. Le contrat d'un style gagne deux champs, absents de tous les autres styles :
+
+- `StyleLook.shading` (`ShadingLook`) : `bands` = paliers du soleil sur une face (0 = dégradé
+  physique), `flat` = plus de matière procédurale ni photo, des aplats (la piscine garde son eau) ;
+- `PostLook.outline` (`OutlineLook`) : couleur linéaire de l'encre et force du trait.
+
+**Paliers et ombres franches** (`core/toonShading.ts`, accroché au crochet partagé de
+`levelLight.ts` ; `gpu/toonShading.ts` en TSL). La part du soleil sur une face (`dotNL`) est
+arrondie au palier le plus proche, avec une rampe d'un dixième de palier contre l'escalier ; le bord
+de l'ombre portée du soleil est poussé à 0 ou 1 (sur l'ombre seule : `getShadow` rend déjà
+`mix( 1, ombre, intensité )`). Piloté par un uniforme : 0 palier = image identique, et changer de
+style ne recompile rien. En GLSL, la ligne `irradiance` des chunks physique et Lambert est
+remplacée ; en TSL, `PhysicalLightingModel` et `PhongLightingModel` reçoivent une couleur de lumière
+multipliée par `toon(dotNL) / dotNL`, ce qui donne le même éclairement diffus et spéculaire.
+
+**Traits d'encre sans passe de plus** (`core/post.ts`, `SCENE_COPY_SHADER` ; `gpu/outline.ts`). Le
+trait se lit dans la seule profondeur, par sa DIFFÉRENCE SECONDE à travers le pixel : sur une face
+plane elle est nulle (la profondeur en perspective, la distance en orthographique sont affines à
+l'écran sur un plan), donc seuls les plis (angle de mur, faîtage) et les silhouettes (saut) sortent.
+Divisée par la taille d'un pixel, la mesure devient un changement de pente : le même pli se dessine
+à toute distance et toute résolution ; un pas d'un pixel CSS garde l'épaisseur sur un écran dense.
+Aucun tampon de normales : ce serait un rendu de plus de la scène. En WebGL, le calcul se fait dans
+la copie MSAA → tampon de `ScenePass` qui existait déjà ; sa cible porte une `DepthTexture`, résolue
+(`resolveDepthBuffer`) seulement quand un style dessine. En WebGPU, il lit la profondeur de la passe
+de scène (celle du GTAO) et n'entre dans le graphe que si le style le demande.
+
+**Deux réglages Miami ont suivi.** En aplat, le toit plat perdait le gravier qui l'assombrissait et
+redevenait le presque-blanc de la pente : il a sa teinte (`roofFlat`, Bay `#b4bccc`, Sunset
+`#d4bfbc`). Les allées pâles en aplat passaient le seuil du bloom de jour (0,9) et voilaient tout :
+seuil de jour à 1,3, seules les lampes rayonnent.
+
+**Piège : arrondir les paliers vers le HAUT brûle les toits.** Une première courbe montait au palier
+supérieur dès que la face recevait un peu de soleil : chaque face prenait un palier de trop et le
+toit pâle partait au blanc sous le bloom. L'arrondi au plus proche garde en moyenne l'énergie reçue.
+
+**Coût mesuré** (banc `perf.mjs`, Radeon intégrée, 1904×905, qualité haute, Miami Sunset, quatre
+vues ; deux passes alternées avec / sans, après une passe de chauffe écartée ; « sans » garde les
+aplats et ne retire que paliers et traits) : WebGL 20,4-21,5 ms sans, 19,8-25,4 ms avec, soit
++0,5 à +1,5 ms, dans le bruit ; WebGPU 20,7-21,3 ms sans, 21,8-23,0 ms avec, soit environ +1 ms
+stable. Loin du budget de 33 ms du garde-fou.
+
+**Bancs.** `perf.mjs` prend `STYLE=<id>` et `DRAWING=off` (le style sans ses shaders de dessin,
+aplats gardés) ; `parity.mjs` ajoute les vues `miami-plain` et `miami-drawn` (effet vérifié de même
+taille dans les deux moteurs : 4,77 en WebGL, 4,84 en WebGPU ; parité 1,44). Les aides `STYLE` et
+`PLAIN` sont dans `chrome.mjs`.
+
+**Non couvert** : en qualité basse WebGL il n'y a pas de copie MSAA, donc pas de trait (les paliers
+restent) ; la qualité basse WebGPU n'a pas été regardée.
+
+Vérifié dans la preview `kasbah-mock` : Bay et Sunset de jour, au crépuscule et de nuit, en WebGL et
+en WebGPU ; le style Réaliste inchangé (ni trait ni aplat), y compris après un changement de style à
+chaud.
+
+Sources : `apps/web/src/three/core/{toonShading,levelLight,post}.ts`,
+`apps/web/src/three/gpu/{toonShading,outline,post,index}.ts`, `apps/web/src/three/styles/{types,tuning,miami26}.ts`,
+`apps/web/src/three/builders/materials.ts` (`applyLook`), `apps/web/src/three/HouseScene.ts`,
+`scripts/bench-3d/{chrome,perf,parity}.mjs`.

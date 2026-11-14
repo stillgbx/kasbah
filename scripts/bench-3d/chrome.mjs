@@ -103,5 +103,12 @@ export async function openHouse(base, renderer, port) {
 export const ambience = (a) => `window.kasbahScene.setAppearance({ __bench: true, ambience: ${JSON.stringify({ windKmh: 0, windDirDeg: 0, cloudiness: 0, ...a })} })`
 export const DAY = ambience({ sunAltitudeDeg: 35, sunAzimuthDeg: 200 })
 export const NIGHT = ambience({ sunAltitudeDeg: -25, sunAzimuthDeg: 0 })
+/** A render style chosen as Settings does (the app's own catalog): `miamiSunset`, `realistic`… */
+export const STYLE = (id) => `document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('settings').setSceneStyle(${JSON.stringify(id)})`
+/**
+ * The current style WITHOUT its drawing shaders (the bands of `StyleLook.shading`, `PostLook.outline`),
+ * its flat tones kept: the baseline that isolates what those shaders cost and draw.
+ */
+export const PLAIN = `(() => { const s = window.kasbahScene, st = s.style; s.setAppearance({ style: { ...st, id: st.id + '-plain', look: (a) => { const l = st.look(a); return { ...l, shading: l.shading && { ...l.shading, bands: 0 }, post: { ...l.post, outline: null } } } } }) })()`
 /** Every dimmable lamp on, at full brightness. */
 export const ALL_LAMPS = `(() => { const s = window.kasbahScene, st = {}; for (const [k, v] of Object.entries(s.states)) st[k] = v && 'brightness' in v ? { ...v, on: true, brightness: 100 } : v; s.updateStates(st, true) })()`

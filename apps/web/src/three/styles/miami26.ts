@@ -77,6 +77,8 @@ const BAY: Mood = {
     floors: { wood: '#b08a64', tile: '#eef0ee', carpet: '#c8c0e0', concrete: '#d6d6d2' },
     glass: '#a8e8ec',
     roof: '#eef2f6',
+    // a flat tone, no gravel to darken it: the slope's near-white burned out under the noon sun
+    roofFlat: '#b4bccc',
     terrain: '#5fae7a',
     zones: {
       lawn: '#4fae74', pool: '#5fd6c6', driveway: '#e4e6ea', path: '#f2c2a8',
@@ -124,6 +126,7 @@ const SUNSET: Mood = {
     floors: { wood: '#c49a6c', tile: '#f2ebe0', carpet: '#e7b0b8', concrete: '#d8d0c4' },
     glass: '#7fd8e0',
     roof: '#f6efe4',
+    roofFlat: '#d4bfbc',
     terrain: '#6fae5a',
     zones: {
       lawn: '#4fb36a', pool: '#19d3d0', driveway: '#e9e1d6', path: '#f2a7a0',
@@ -149,6 +152,9 @@ const SUNSET: Mood = {
 }
 
 const lerpHex = (a: number, b: number, t: number) => new Color(a).lerp(new Color(b), t)
+
+/** The ink of the lines, linear (#2a1438). */
+const INK: Rgb = [0.023, 0.007, 0.04]
 
 function moodLook(m: Mood, a: SceneAmbience): StyleLook {
   const day = dayFactor(a)
@@ -189,11 +195,16 @@ function moodLook(m: Mood, a: SceneAmbience): StyleLook {
     post: {
       toneMapping: 'aces',
       exposure: mix(1.4, 1.05, day),
-      bloom: { strength: mix(1.4, 0.35, day) + 0.3 * dusk, radius: 0.75, threshold: mix(0.5, 0.9, day) },
+      // by day only the lamps glow: the flat pale tones (paths, driveway) crossed 0.9 and fogged the drawing
+      bloom: { strength: mix(1.4, 0.35, day) + 0.3 * dusk, radius: 0.75, threshold: mix(0.5, 1.3, day) },
       ao: { intensity: 1.1, radius: 0.4 },
       vignette: mix(0.55, 0.3, day),
       grade,
+      // the illustrated poster: a deep violet ink rather than a black, which would dirty the pastels
+      outline: { color: INK, strength: 0.85 },
     },
+    // flat tones and two steps of sun: a drawn house, not a photographed one
+    shading: { bands: 2, flat: true },
     glow: { scale: mix(1.5, 1, day), opacity: mix(0.95, 0.3, day), lightIntensity: mix(18, 7, day), emissive: mix(2.8, 1.4, day) },
     // garden: tropical greens by day, dark with glowing flowers at night
     garden: {

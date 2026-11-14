@@ -6,6 +6,7 @@ import { setPointView, syncPointTwins } from './points'
 import { KasbahShaderNodeMaterial } from './shaderMaterials'
 import './levelLight'
 import './materialHooks'
+import './toonShading'
 
 // The WebGPU side (`core/renderBackend.ts`), loaded only when Settings chooses it. Importing it
 // registers, once, what replaces the GLSL patches: the point light that only lights its level, the

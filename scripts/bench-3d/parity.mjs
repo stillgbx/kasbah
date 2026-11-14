@@ -14,7 +14,7 @@
 // as strong, fails even when the image looks close. Exit code 1 if anything fails.
 // Env: PORT (DevTools port, 9351), OUT (captures; default `_generated-ai-doc/bench-3d`), MAX_GAP (3).
 import path from 'node:path'
-import { ALL_LAMPS, DAY, NIGHT, ambience, openHouse, outputDir } from './chrome.mjs'
+import { ALL_LAMPS, DAY, NIGHT, PLAIN, STYLE, ambience, openHouse, outputDir } from './chrome.mjs'
 import { compareImages } from './png.mjs'
 
 const base = process.argv[2] ?? 'http://localhost:6175'
@@ -43,6 +43,9 @@ const VIEWS = [
   { name: 'grey', prepare: `s.focusLevel(null); ${ambience(GREY)}` },
   // the flakes are 2-3 px at this distance: a small effect, but one renderer without them fails
   { name: 'snow', effectOf: 'grey', minEffect: 0.02, prepare: ambience({ ...GREY, condition: 'snow', precipitation: { kind: 'snow', intensity: 0.8 } }) },
+  // the DRAWN style (bands, hard shadows, ink lines, flat tones): Miami '26 Sunset without it, then with it
+  { name: 'miami-plain', prepare: `${STYLE('miamiSunset')}; await sleep(1500); ${DAY}; s.__drawn = s.style; ${PLAIN}` },
+  { name: 'miami-drawn', effectOf: 'miami-plain', prepare: 's.setAppearance({ style: s.__drawn })' },
 ]
 
 const file = (renderer, view) => path.join(out, `parity-${renderer}-${view}.png`)

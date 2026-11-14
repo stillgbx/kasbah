@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, AgXToneMapping, HalfFloatType, NeutralToneMapping, NoBlending, NoToneMapping, ShaderMaterial, UniformsUtils, Vector2, Vector3, WebGLRenderTarget, type Camera, type Scene, type Texture, type ToneMapping, type WebGLRenderer } from 'three'
+import { ACESFilmicToneMapping, AgXToneMapping, DepthTexture, FloatType, HalfFloatType, NeutralToneMapping, NoBlending, NoToneMapping, ShaderMaterial, UniformsUtils, Vector2, Vector3, WebGLRenderTarget, type Camera, type Scene, type Texture, type ToneMapping, type WebGLRenderer } from 'three'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
@@ -7,7 +7,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { CopyShader } from 'three/addons/shaders/CopyShader.js'
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './layers'
-import { NEUTRAL_GRADE, type PostLook } from '../styles/types'
+import { NEUTRAL_GRADE, type OutlineLook, type PostLook } from '../styles/types'
 
 // POST-PROCESSING: what separates a direct render from an image. Three things, in this order.
 //
@@ -281,35 +281,115 @@ export function tiltBlurFactor(uvY: number, look: { center: number; width: numbe
 /** Draws the scene into the given target, `null` = the screen. */
 export type DrawScene = (target: WebGLRenderTarget | null) => void
 
+/** Below this crease measure (change of slope, in tangent units) no ink; above the second, a full line. */
+export const OUTLINE_RAMP = [0.3, 0.7] as const
+
+/**
+ * The copy of the scene, with the INK LINES of a drawn style (`PostLook.outline`). They are read in
+ * the depth alone, by its SECOND difference across the pixel: on a plane it is zero — the depth buffer
+ * (perspective) or the distance (orthographic) is affine in screen space over a flat face — so only
+ * creases (a wall corner, a ridge) and silhouettes (a jump) come out. The measure is brought back to
+ * a change of slope by dividing by the size of a pixel, so the same crease draws at every distance
+ * and every resolution. No normal buffer: that would cost one more render of the scene.
+ */
+const SCENE_COPY_SHADER = {
+  uniforms: {
+    tDiffuse: { value: null as unknown },
+    tDepth: { value: null as unknown },
+    /** One sampling step, in UV. */
+    texel: { value: new Vector2(0, 0) },
+    near: { value: 0.1 },
+    far: { value: 500 },
+    ortho: { value: 0 },
+    /** Size of a sampling step: an angle (perspective) or a length in meters (orthographic). */
+    pixelSize: { value: 1e-3 },
+    inkColor: { value: new Vector3(0, 0, 0) },
+    inkStrength: { value: 0 },
+  },
+  vertexShader: CopyShader.vertexShader,
+  fragmentShader: /* glsl */`
+    uniform sampler2D tDiffuse;
+    uniform sampler2D tDepth;
+    uniform vec2 texel;
+    uniform float near, far, ortho, pixelSize, inkStrength;
+    uniform vec3 inkColor;
+    varying vec2 vUv;
+    // affine over a flat face: 1/distance in perspective (up to a factor), the distance in orthographic
+    float kasbahW( float d ) { return ortho > 0.5 ? near + ( far - near ) * d : far - ( far - near ) * d; }
+    float kasbahCrease( float wc, float a, float b ) {
+      float e = abs( kasbahW( a ) + kasbahW( b ) - 2.0 * wc );
+      return ortho > 0.5 ? e / pixelSize : e / ( wc * pixelSize );
+    }
+    void main() {
+      vec4 col = texture2D( tDiffuse, vUv );
+      if ( inkStrength > 0.0 ) {
+        float wc = kasbahW( texture2D( tDepth, vUv ).x );
+        float mx = kasbahCrease( wc, texture2D( tDepth, vUv - vec2( texel.x, 0.0 ) ).x, texture2D( tDepth, vUv + vec2( texel.x, 0.0 ) ).x );
+        float my = kasbahCrease( wc, texture2D( tDepth, vUv - vec2( 0.0, texel.y ) ).x, texture2D( tDepth, vUv + vec2( 0.0, texel.y ) ).x );
+        float line = smoothstep( ${OUTLINE_RAMP[0].toFixed(2)}, ${OUTLINE_RAMP[1].toFixed(2)}, max( mx, my ) );
+        col.rgb = mix( col.rgb, inkColor, line * inkStrength );
+      }
+      gl_FragColor = col;
+    }
+  `,
+}
+
 /**
  * The first pass: our own render (shadows on demand, caustics), where a `RenderPass`
  * would do a bare `render`. It carries the ANTI-ALIASING: the scene is drawn into its MSAA target, then
- * copied — resolved — into the composer's buffer, which has none (see the header).
+ * copied — resolved — into the composer's buffer, which has none (see the header). The copy also
+ * draws the ink lines (`SCENE_COPY_SHADER`): no pass of their own, and none in low quality (no copy there).
  */
 class ScenePass extends Pass {
   private readonly msaa: WebGLRenderTarget | null
   private readonly copy: FullScreenQuad | null
   private readonly copyMaterial: ShaderMaterial | null
+  private height = 1
 
-  constructor(private readonly draw: DrawScene, samples: number) {
+  constructor(private readonly draw: DrawScene, samples: number, private readonly camera: Camera) {
     super()
     this.needsSwap = false          // like `RenderPass`: what follows reads the buffer just written
-    this.msaa = samples > 0 ? new WebGLRenderTarget(1, 1, { type: HalfFloatType, samples }) : null
+    // the depth is kept as a texture for the ink lines; resolved only while a style draws them
+    this.msaa = samples > 0
+      ? new WebGLRenderTarget(1, 1, { type: HalfFloatType, samples, depthTexture: new DepthTexture(1, 1, FloatType), resolveDepthBuffer: false })
+      : null
     // no blending: the copy replaces the buffer, alpha included (the canvas is transparent)
     this.copyMaterial = this.msaa
-      ? new ShaderMaterial({ ...CopyShader, uniforms: UniformsUtils.clone(CopyShader.uniforms), blending: NoBlending, depthTest: false, depthWrite: false })
+      ? new ShaderMaterial({ ...SCENE_COPY_SHADER, uniforms: UniformsUtils.clone(SCENE_COPY_SHADER.uniforms), blending: NoBlending, depthTest: false, depthWrite: false })
       : null
     this.copy = this.copyMaterial ? new FullScreenQuad(this.copyMaterial) : null
   }
 
+  setOutline(look: OutlineLook | null | undefined): void {
+    if (!this.msaa) return
+    const u = this.copyMaterial!.uniforms
+    u.inkStrength!.value = look?.strength ?? 0
+    if (look) (u.inkColor!.value as Vector3).set(...look.color)
+    this.msaa.resolveDepthBuffer = !!look && look.strength > 0
+  }
+
   override setSize(width: number, height: number): void {
     this.msaa?.setSize(width, height)
+    this.height = Math.max(1, height)
   }
 
   override render(renderer: WebGLRenderer, _write: WebGLRenderTarget, read: WebGLRenderTarget): void {
     if (!this.msaa || this.renderToScreen) { this.draw(this.renderToScreen ? null : read); return }
     this.draw(this.msaa)
-    this.copyMaterial!.uniforms.tDiffuse!.value = this.msaa.texture
+    const u = this.copyMaterial!.uniforms
+    u.tDiffuse!.value = this.msaa.texture
+    if (this.msaa.resolveDepthBuffer) {
+      // a step of one CSS pixel: the line keeps its width on a dense screen
+      const step = Math.max(1, Math.round(renderer.getPixelRatio()))
+      const cam = this.camera as Camera & { near: number; far: number; isOrthographicCamera?: boolean }
+      u.tDepth!.value = this.msaa.depthTexture
+      ;(u.texel!.value as Vector2).set(step / this.msaa.width, step / this.msaa.height)
+      u.near!.value = cam.near
+      u.far!.value = cam.far
+      u.ortho!.value = cam.isOrthographicCamera ? 1 : 0
+      // projection[5] = 1 / half the visible height (at unit distance, or in meters)
+      u.pixelSize!.value = (2 * step) / (cam.projectionMatrix.elements[5]! * this.height)
+    }
     renderer.setRenderTarget(read)
     this.copy!.render(renderer)
   }
@@ -390,7 +470,8 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
   // Without MSAA: it is in the scene's target (`ScenePass`), and the composer CLONES this target.
   const target = new WebGLRenderTarget(1, 1, { type: HalfFloatType })
   const composer = new EffectComposer(renderer, target)
-  composer.addPass(new ScenePass(draw, samples))
+  const scenePass = new ScenePass(draw, samples, camera)
+  composer.addPass(scenePass)
 
   // The occlusion is only computed in high quality: it is the most expensive pass of the lot (it renders
   // the scene one more time, in depth and normals).
@@ -478,6 +559,7 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
           ao.updateGtaoMaterial({ radius: look.ao.radius, distanceExponent: 1, thickness: 1, scale: 1 })
         }
       }
+      scenePass.setOutline(look.outline)
       output.vignette.value = look.vignette
       const g = look.grade ?? NEUTRAL_GRADE
       output.grade.lift.value.set(...g.lift)

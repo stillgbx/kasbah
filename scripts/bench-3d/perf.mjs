@@ -7,13 +7,20 @@
 // side only turns on in development (`three/gpu/index.ts`). `fpsNoQuery` is the frame rate without any
 // timing query. Never conclude on one pair: alternate WebGL / WebGPU / WebGL / WebGPU and discard the
 // first run of a cold Chrome. On battery, or in an energy-saving mode, write it down with the figures.
-// Env: Q (quality: low, medium, high; default high), SEC (seconds per view, 6), PORT (9352).
-import { ALL_LAMPS, DAY, NIGHT, openHouse } from './chrome.mjs'
+// Env: Q (quality: low, medium, high; default high), SEC (seconds per view, 6), PORT (9352),
+// STYLE (a render style id, e.g. miamiSunset; default the app's), DRAWING=off (that style without its
+// drawing: the cost of the ink lines and the bands is the gap between the two).
+import { ALL_LAMPS, DAY, NIGHT, PLAIN, STYLE, openHouse } from './chrome.mjs'
 
 const base = process.argv[2] ?? 'http://localhost:6175'
 const renderer = process.argv[3] === 'webgpu' ? 'webgpu' : 'webgl'
 const SEC = Number(process.env.SEC ?? 6)
 const page = await openHouse(base, renderer, Number(process.env.PORT ?? 9352))
+if (process.env.STYLE) {
+  await page.evalJs(STYLE(process.env.STYLE))
+  await new Promise((r) => setTimeout(r, 3000))
+  if (process.env.DRAWING === 'off') await page.evalJs(PLAIN)
+}
 
 const setup = await page.evalJs(`(async () => {
   const s = window.kasbahScene, r = s.renderer
@@ -29,7 +36,7 @@ const setup = await page.evalJs(`(async () => {
     const info = r.backend.adapter?.info ?? (await navigator.gpu.requestAdapter())?.info
     gpu = [info?.vendor, info?.architecture, info?.description].filter(Boolean).join(' ')
   }
-  return { renderer: r.constructor.name, gpu, canvas: [r.domElement.width, r.domElement.height], quality: s.debugStats().quality }
+  return { renderer: r.constructor.name, gpu, canvas: [r.domElement.width, r.domElement.height], quality: s.debugStats().quality, style: s.style.id }
 })()`)
 console.log(JSON.stringify(setup))
 
