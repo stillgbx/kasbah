@@ -491,7 +491,7 @@ export function registerRoutes(app: FastifyInstance, deps: RoutesDeps): void {
     if (!entry) return sendError(reply, 404, 'NOT_FOUND', `unknown device "${req.params.id}"`)
     const cmd = commandSchema.parse(req.body)        // ZodError → 400 through the error handler
     assertCommandAllowed(entry.descriptor, cmd)      // CommandNotAllowedError → 400
-    await deps.host.execute(entry.descriptor.id, cmd) // PluginError → 4xx/5xx
+    await deps.host.execute(entry.descriptor.id, cmd, `api:${req.sessionUser ?? 'anonymous'}`) // PluginError → 4xx/5xx
     return { ok: true as const }
   })
 }

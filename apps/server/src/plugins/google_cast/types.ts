@@ -77,6 +77,8 @@ export const mediaStatusSchema = z.looseObject({
   mediaSessionId: z.number(),
   /** PLAYING, PAUSED, BUFFERING, IDLE. */
   playerState: z.string(),
+  /** With IDLE: FINISHED, ERROR, INTERRUPTED (another load), CANCELLED (a sender's STOP). */
+  idleReason: z.string().nullish(),
   currentTime: z.number().nullish(),
   media: z.looseObject({
     /** Empty (`""`) on a stream started by the Assistant: the URL is then in `contentUrl`. */

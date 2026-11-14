@@ -30,7 +30,7 @@ Monorepo, contrat partagé des appareils, serveur et plugins, protocole REST/Web
 | [1_3 Protocole REST et WebSocket](1_architecture/1_3_protocole-rest-ws.md) | 2026-11-11 |
 | [1_4 Application web : stores, transport, routage](1_architecture/1_4_app-web.md) | 2026-11-01 |
 | [1_5 Scène 3D (Three.js)](1_architecture/1_5_scene-3d.md) | 2026-10-29 |
-| [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-11-12 |
+| [1_6 Lecteur musique commun](1_architecture/1_6_lecteur-musique.md) | 2026-11-14 |
 | [1_7 Serveur MCP](1_architecture/1_7_serveur-mcp.md) | 2026-11-12 |
 | [1_8 Automatisations](1_architecture/1_8_automatisations.md) | 2026-11-10 |
 | [1_9 Assistant (« Demander à Kasbah »)](1_architecture/1_9_assistant.md) | 2026-11-08 |
@@ -59,7 +59,7 @@ La maison décrite en JSON : format et validation, géométrie dérivée (murs, 
 ## 3 — Plugins
 
 <!-- section:3_plugins:begin (généré par scripts/wiki-index.mjs depuis 3_plugins/README.md - ne pas éditer ici) -->
-Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (30 pages, dernière mise à jour 2026-11-12).
+Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin), puis chaque intégration, ses contraintes, ses pièges et ce qui a été vérifié sur du vrai matériel. Résumés : [3_plugins/README.md](3_plugins/README.md) (30 pages, dernière mise à jour 2026-11-14).
 
 | Socle | Dernière mise à jour |
 |---|---|
@@ -72,7 +72,7 @@ Un plugin par fabricant ou par service : le socle (simulation, écrire un plugin
 | [3_1 Philips Hue](3_plugins/3_1_philips-hue.md) | 2026-11-07 |
 | [3_4 Somfy TaHoma](3_plugins/3_4_somfy-tahoma.md) | 2026-11-12 |
 | [3_5 Google Nest (caméras, sonnettes)](3_plugins/3_5_google-nest.md) | 2026-11-03 |
-| [3_6 Google Cast](3_plugins/3_6_google-cast.md) | 2026-11-09 |
+| [3_6 Google Cast](3_plugins/3_6_google-cast.md) | 2026-11-14 |
 | [3_7 Enphase](3_plugins/3_7_enphase.md) | 2026-10-31 |
 | [3_8 Tesla (Fleet API)](3_plugins/3_8_tesla.md) | 2026-10-31 |
 | [3_9 Renault (Gigya + Kamereon)](3_plugins/3_9_renault.md) | 2026-10-31 |

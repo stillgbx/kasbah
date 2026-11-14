@@ -251,6 +251,23 @@ describe('google_cast plugin', () => {
     await plugin.stop()
   })
 
+  it('logs why a playing receiver stopped, once, with its idle reason', async () => {
+    const speaker = fakeReceiver(RECEIVER_STATUS_PLAYING, MEDIA_STATUS_PLAYING)
+    const { plugin, ctx } = await started(fakeDiscovery([SERVICE_NEST_MINI]), network({ [SERVICE_NEST_MINI.host]: speaker }))
+    const transportId = RECEIVER_STATUS_PLAYING.applications[0]!.transportId
+    const info = vi.spyOn(ctx.logger, 'info')
+    const stops = () => info.mock.calls.filter((c) => c[1] === 'cast playback stopped').map((c) => c[0])
+    speaker.pushMedia({ mediaSessionId: 1, playerState: 'PLAYING', currentTime: 300 }, transportId)
+    await flush()
+    expect(stops()).toEqual([])
+    speaker.pushMedia({ mediaSessionId: 1, playerState: 'IDLE', idleReason: 'ERROR', currentTime: 600 }, transportId)
+    await flush()
+    speaker.pushMedia({ mediaSessionId: 1, playerState: 'IDLE', idleReason: 'ERROR' }, transportId)
+    await flush()
+    expect(stops()).toEqual([expect.objectContaining({ was: 'PLAYING', state: 'IDLE', idleReason: 'ERROR', positionS: 600 })])
+    await plugin.stop()
+  })
+
   it('"previous" restarts the track past three seconds, and goes back a track before that', async () => {
     const speaker = fakeReceiver(RECEIVER_STATUS_PLAYING, MEDIA_STATUS_PLAYING)          // currentTime 42.5
     const { plugin, ctx, clock } = await started(fakeDiscovery([SERVICE_NEST_MINI]), network({ [SERVICE_NEST_MINI.host]: speaker }))

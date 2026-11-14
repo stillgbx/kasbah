@@ -1,6 +1,6 @@
 # Plugin Google Cast (enceintes, réveils, Chromecast, barres de son)
 
-> Dernière mise à jour : 2026-11-09
+> Dernière mise à jour : 2026-11-14
 > Sources : `apps/server/src/plugins/google_cast/{index,channel,discovery,mapping,protocol,types}.ts`, `apps/server/src/plugins/google_cast/__fixtures__/network.ts`, tests `protocol.test.ts`, `mapping.test.ts` et `plugin.test.ts`, `apps/server/.env.example`, `apps/web/src/views/MediaView.vue`, demande de l'utilisateur du 2026-09-09, `apps/server/src/plugins/google_cast/known.ts`, `apps/server/src/plugins/google_cast/enrich/cover.ts`, `tools/cast-probe.mts`, `apps/server/src/plugins/google_cast/bravia.ts`, `apps/server/src/plugins/google_cast/__fixtures__/bravia.ts`
 
 ## Ce que l'utilisateur veut, et ce que le protocole permet
@@ -712,3 +712,24 @@ de 12 s, la lecture n'a pas échoué, puis le réveil la fait aboutir ; vu rouge
 
 Sources : `apps/server/src/plugins/google_cast/{channel,index,plugin.test}.ts`,
 `apps/server/src/core/{plugin,plugin-host}.ts`.
+
+### Mise à jour 2026-11-14 — un récepteur qui s'arrête dit pourquoi
+
+Une barre de son s'arrêtait seule en plein mix sans laisser de trace (`../1_architecture/1_6_lecteur-musique.md`,
+même date). Le récepteur donne pourtant la raison : `MEDIA_STATUS` porte **`idleReason`** avec `IDLE`
+(`FINISHED` = fin du fichier selon lui, `ERROR` = le flux a échoué, `CANCELLED` = `STOP` d'un émetteur,
+`INTERRUPTED` = un autre `LOAD`). Le schéma (`types.ts`, `mediaStatusSchema`) le lit désormais, et
+`channel.ts` écrit trois lignes `info` :
+
+- `cast playback stopped` — en sortant de `PLAYING` / `BUFFERING` vers autre chose : état d'avant,
+  nouvel état, `idleReason`, position, appli. **Une seule fois** par arrêt : un `IDLE` republié ne
+  compte pas, puisque l'état d'avant n'est plus « en lecture » ;
+- `cast app left while playing` — l'appli qui jouait disparaît ou change (`RECEIVER_STATUS`) : retour
+  à la veille, autre appli lancée ;
+- `cast app closed its media channel while playing` — `CLOSE` du canal média de l'appli en pleine lecture.
+
+Une pause voulue écrit aussi `cast playback stopped` (état `PAUSED`) : c'est le prix d'une ligne qui ne
+devine rien. **Test** (`plugin.test.ts`, « logs why a playing receiver stopped ») : `PLAYING` →
+`IDLE`/`ERROR` à 600 s donne une ligne avec ces valeurs, l'`IDLE` répété n'en donne pas d'autre ;
+contrôle négatif fait (sans le changement de `channel.ts`, le test échoue). Pas encore vu sur la vraie
+barre.

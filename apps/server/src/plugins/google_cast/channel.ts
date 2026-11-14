@@ -239,7 +239,10 @@ export class CastConnection {
         // the app closed our media channel: no more session; the receiver itself: everything is over
         if (msg.type === 'CLOSE') {
           if (m.sourceId === RECEIVER_ID) this.close('closed by receiver')
-          else if (m.sourceId === this.app?.transportId) this.setMedia(undefined)
+          else if (m.sourceId === this.app?.transportId) {
+            if (this.media?.playerState === 'PLAYING') this.opts.logger.info({ host: this.opts.host, appId: this.app.appId }, 'cast app closed its media channel while playing')
+            this.setMedia(undefined)
+          }
         }
         return
       case NS_RECEIVER:
@@ -263,6 +266,10 @@ export class CastConnection {
     const app = activeApplication(status.data)
     // by `sessionId` and not `transportId`: an app without a media channel (native Netflix) has none
     const changed = app?.sessionId !== this.app?.sessionId
+    // the app that was playing went away (closed, replaced, receiver back to standby)
+    if (changed && this.app && this.media?.playerState === 'PLAYING') {
+      this.opts.logger.info({ host: this.opts.host, was: this.app.appId, now: app?.appId ?? null }, 'cast app left while playing')
+    }
     this.app = app
     if (changed || !this.mediaReported) {
       // new app (or no more app): (re)open the media channel towards it and ask for its session;
@@ -287,6 +294,14 @@ export class CastConnection {
     // position arrive without it. Same session → we keep the known track, otherwise it would vanish on
     // every pause (seen on a Nest Hub: "Nothing playing · Paused").
     if (next && next.media == null && this.media && this.media.mediaSessionId === next.mediaSessionId) next = { ...next, media: this.media.media }
+    // A playback that stops is the receiver's word, and nothing else tells why: kept in the log
+    const was = this.media?.playerState
+    if ((was === 'PLAYING' || was === 'BUFFERING') && next?.playerState !== 'PLAYING' && next?.playerState !== 'BUFFERING') {
+      this.opts.logger.info({
+        host: this.opts.host, appId: this.app?.appId ?? null, was, state: next?.playerState ?? null,
+        idleReason: next?.idleReason ?? null, positionS: next?.currentTime ?? null,
+      }, 'cast playback stopped')
+    }
     this.setMedia(next)
     this.resolve(requestId, { status: raw })
   }

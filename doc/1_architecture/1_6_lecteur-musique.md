@@ -1,6 +1,6 @@
 # Lecteur musique commun (`/api/music`)
 
-> Dernière mise à jour : 2026-11-12
+> Dernière mise à jour : 2026-11-14
 > Sources : `apps/server/src/music/{player,proxy,queue,sources,ytdlp}.ts`, tests `apps/server/src/music/{proxy,queue}.test.ts`, `apps/server/src/plugins/ytmusic/plugin.test.ts`, `apps/server/src/app.ts`, `apps/server/src/plugins/{ytmusic,mixcloud}/{index,resolve}.ts`, `apps/server/.env.example`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue`, arbre de travail non commité du 2026-09-23 (après 5c43833) ; `apps/server/src/music/lastPlayed.ts` et son test, `apps/web/src/stores/localPlayer.test.ts`, arbre de travail non commité du 2026-09-28 (après c6fe7c1) ; `apps/server/src/music/lightsync/{analyze,decode,effects/*,palette,settingsFile,sync}.ts`, `packages/shared/src/music/lightsync.ts` et leurs tests, `apps/server/src/core/lightStreamBridge.ts`, `apps/web/src/components/music/ListeningSessions.vue` (2026-11-05)
 
 ## Pourquoi un noyau, et pourquoi maintenant
@@ -622,3 +622,29 @@ qui annonçait 4,3 Mo pour 4 octets : elle envoie désormais la taille annoncée
 `grep -i "source cut" logs/kasbah.log`). **Non couvert** : une coupure entre l'enceinte et le serveur
 (Wi-Fi), que seule l'enceinte peut reprendre ; une URL de source expirée en cours de mix, qui
 demanderait de résoudre la piste à nouveau (jamais observé sur Mixcloud).
+
+### Mise à jour 2026-11-14 — un arrêt sans « source cut » : de quoi savoir qui a coupé
+
+Constat sur la vraie maison, serveur à jour du correctif du 2026-11-12 : un long mix Mixcloud relayé
+vers une barre de son Cast s'arrête deux fois en une demi-heure, et **le journal ne dit rien** — ni
+`source cut`, ni refus de la source, ni déconnexion Cast. La source n'y est donc pour rien. Restaient
+trois causes muettes : l'enceinte qui raccroche le relais, l'enceinte qui s'arrête d'elle-même (veille,
+HDMI-CEC), ou une pause / un arrêt envoyé par Kasbah. Trois journaux `info` les séparent, sans rien
+changer au comportement :
+
+- **relais** (`music/player.ts`, `GET /raw/:file`) : `music raw GET: player closed the connection
+  before the end`, avec l'octet atteint, quand l'enceinte ferme sa requête avant la fin promise.
+  Un saut, une pause ou un changement de piste en écrivent aussi une : c'est voulu. Le navigateur
+  (`local:…`) est exclu, ses sondes coupent sans arrêt ;
+- **Cast** : `cast playback stopped` avec `idleReason` (`3_plugins/3_6_google-cast.md`, même date) ;
+- **commandes** (`core/plugin-host.ts`, `execute`) : `media command sent` pour chaque
+  `media_player.pause` / `media_player.stop`, quelle qu'en soit la source, avec un `origin` facultatif
+  passé par la route REST (`api:<compte>`) et l'outil MCP `send_command` (`mcp:<compte>`) ; vide pour
+  une automatisation ou le lecteur commun. Fastify ne journalise qu'à partir de `warn`
+  (`app.ts`, `loggerInstance`) : la route ne pouvait pas l'écrire elle-même. Le pont Matter n'expose
+  pas les lecteurs média : rien à y ajouter.
+
+Lecture au prochain arrêt : `idleReason: ERROR` sans `media command sent` → le flux (avec « player
+closed the connection » : l'enceinte a raccroché) ; `cast app left while playing` → veille ou CEC ;
+`media command sent` juste avant → Kasbah, et l'origine dit qui. **Cause toujours inconnue** à cette
+date.

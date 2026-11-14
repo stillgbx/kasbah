@@ -238,9 +238,13 @@ export class PluginHost {
   /**
    * A command, wherever it comes from (interface, automation, MCP). "Start charging" on a car first
    * forces the charger it is plugged into (`chargerToForce`); a charger failure does not prevent
-   * sending the command to the car.
+   * sending the command to the car. `origin` only feeds the log (`api:<user>`, `mcp:<user>`).
    */
-  async execute(deviceId: string, command: Command): Promise<void> {
+  async execute(deviceId: string, command: Command, origin?: string): Promise<void> {
+    // a speaker that falls silent: was it told to? (the other commands are not logged)
+    if (command.type === 'media_player.pause' || command.type === 'media_player.stop') {
+      this.logger.info({ deviceId, command: command.type, origin: origin ?? null }, 'media command sent')
+    }
     // a vehicle that cannot stop itself (`meta.vehicle.stopViaCharger`): its charger is what
     // stops, and nothing goes to the vehicle, which would refuse
     const stopper = chargerToStop(deviceId, command, this.opts.registry.list(), this.opts.site())

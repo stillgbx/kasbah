@@ -264,7 +264,7 @@ function buildServer(deps: McpDeps, app: FastifyInstance, user: string | null, c
     if (!await mayUse(deps.auth.users, user, deviceRight(entry.descriptor))) return fail(NO_RIGHT)
     const opens = sensitiveActions([{ type: 'command', target: { type: 'devices', deviceIds: [entry.descriptor.id] }, command }], classOf)
     if (opens.length && external.recent()) return fail(EXTERNAL_REFUSAL)
-    await deps.host.execute(entry.descriptor.id, command)
+    await deps.host.execute(entry.descriptor.id, command, `mcp:${user ?? 'house'}`)
     return json({ ok: true })
   })
 

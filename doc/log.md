@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-14] update | Arrêts muets d'une enceinte Cast : journaux de diagnostic
+
+**Trigger** : un long mix Mixcloud sur une barre de son Cast s'arrête seul, sans rien dans les logs, avec le correctif du relais du 2026-11-12 déjà en production.
+
+**Pages modified** :
+- `1_architecture/1_6_lecteur-musique.md` - ce que le journal exclut, les trois causes muettes restantes, les journaux `info` du relais (enceinte qui raccroche) et des commandes pause / arrêt avec leur origine, et comment lire le prochain arrêt.
+- `3_plugins/3_6_google-cast.md` - `idleReason` lu dans `MEDIA_STATUS`, trois lignes `info` (lecture arrêtée, appli partie, canal média fermé), le test et son contrôle négatif.
+
+**Index** : catalogues 1_architecture et 3_plugins mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-11-14] update | Miami'26 suit la version 1.1 des thèmes d'éditeur
 
 **Trigger** : les thèmes d'éditeur Miami '26 ont été repeints (1.1) ; demande de l'utilisateur d'adapter Kasbah.

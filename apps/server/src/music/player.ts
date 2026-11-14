@@ -1142,6 +1142,13 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       const from = span ? Number(span[1]) : 0
       const to = span ? Number(span[2]) : len ? Number(len) - 1 : null
       let sent = 0
+      // A speaker that hangs up midway (seek, pause, track change… or a stop of its own): the line
+      // that tells a stop on the speaker's side from one on the source's. The browser probes and
+      // drops ranges all the time: not logged.
+      reply.raw.on('close', () => {
+        if (reply.raw.writableEnded || session.deviceId.startsWith(LOCAL_PREFIX)) return
+        log.info({ sid: session.sid, deviceId: session.deviceId, at: from + sent, to }, 'music raw GET: player closed the connection before the end')
+      })
       // Reopenings in a row without a byte coming through: past `RAW_RETRIES`, or a refusal, we give up.
       let attempts = 0
       const reopen = async (to: number): Promise<ReadableStream<Uint8Array> | null> => {
