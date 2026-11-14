@@ -351,7 +351,10 @@ export function finishMaterial(mats: MaterialSet, surface: FinishSurfaceKind, fi
 function applyFinish(mats: MaterialSet, m: MeshStandardMaterial, key: string, theme: SceneTheme, look: StyleLook): void {
   const [surface, id, tint, fallback] = key.split('|') as [FinishSurfaceKind, FinishId, string, FloorStyle | '']
   const s = look.surfaces
-  const tex = (l: SurfaceLook) => mats.textures[l.texture]
+  // a drawn style (`ShadingLook.flat`) paints the finishes flat too: the facade and the rooms'
+  // floors are finishes, and kept their grain while the bare surfaces had lost theirs
+  const flat = look.shading?.flat ?? false
+  const tex = (l: SurfaceLook) => flat ? undefined : mats.textures[l.texture]
   if (!mats.finishMode.honor) {
     // "costume" style: the finish takes the look of the surface it replaces
     if (surface === 'floor') {
@@ -366,8 +369,8 @@ function applyFinish(mats: MaterialSet, m: MeshStandardMaterial, key: string, th
   const base = surface === 'floor' ? (fam ? s.floors[fam] : s.floor) : surface === 'wall' ? s.wallInterior : s.wall
   const l: SurfaceLook = { ...base, texture: FAMILY_ROLE[spec.family], emissive: 0 }
   ensureTextures(mats.textures, [l.texture])
-  const photo = mats.finishMode.photos?.[id]
-  surface_(m, new Color(tint || spec.color), l, photo ?? mats.textures[l.texture])
+  const photo = flat ? undefined : mats.finishMode.photos?.[id]
+  surface_(m, new Color(tint || spec.color), l, photo ?? tex(l))
   // a chosen tint colors the photo (a photographed white plaster, repainted)
   if (photo && tint) m.color.set(tint)
 }

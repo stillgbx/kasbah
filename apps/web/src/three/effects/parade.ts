@@ -1,7 +1,7 @@
 import {
   AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, CapsuleGeometry, CircleGeometry, Color, ConeGeometry,
-  CylinderGeometry, DoubleSide, type BufferGeometry as Geometry, Group, LineBasicMaterial, LineSegments, type Material, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, type Object3D, Points, PointsMaterial, SphereGeometry, TorusGeometry, Vector3,
+  CylinderGeometry, DoubleSide, ExtrudeGeometry, type BufferGeometry as Geometry, Group, LineBasicMaterial, LineSegments, type Material, Mesh, MeshBasicMaterial,
+  MeshStandardMaterial, type Object3D, Points, PointsMaterial, Shape, SphereGeometry, TorusGeometry, Vector3,
 } from 'three'
 import type { ParadeKind } from '../styles/types'
 import { type Box, type Circle, type Obstacles, type Path, roam, type RoamArea } from './roam'
@@ -299,35 +299,47 @@ export class Parade {
   // ---- Akira ------------------------------------------------------------------------------------
 
   private bike(site: RoamArea, groundZ: (x: number, y: number) => number): void {
-    const red = std(0xc8141a, 0.35, 0.3), black = std(0x111114, 0.7), metal = std(0x9a9ca4, 0.3, 0.9)
-    const white = std(0xf2f0ea, 0.5), screen = std(0x1a2a34, 0.1, 0.6), denim = std(0x2a3448, 0.8)
+    const red = std(0xd0161c, 0.3, 0.25), maroon = std(0x5a0c12, 0.5, 0.2), black = std(0x111114, 0.75), metal = std(0x9a9ca4, 0.3, 0.9)
+    const white = std(0xf2f0ea, 0.5), visor = std(0x1a2a34, 0.1, 0.6), denim = std(0x2a3448, 0.8), seat = std(0x5a2418, 0.6)
+    const smoked = new MeshStandardMaterial({ color: 0x3a3442, roughness: 0.08, metalness: 0.3, transparent: true, opacity: 0.55 })
     const tail = new MeshBasicMaterial({ color: new Color(0xff2010).multiplyScalar(5) })   // > 1: the bloom catches it
     const head = new MeshBasicMaterial({ color: new Color(0xfff2d0).multiplyScalar(3) })
 
+    // The bike is drawn as its SIDE PROFILE, extruded across its width and rounded at the edges: one
+    // long, low red shell that wraps the top of both wheels, the nose rounding down over the front
+    // one, the tail raised over the rear one — where capsules and spheres made a toy. (x forward, z up)
     const g = new Group()
-    // the wheels: thick black tires, solid red hubs (three's cylinder axis is Y, here the side)
-    for (const x of [-0.95, 0.95]) {
-      g.add(at(mesh(new CylinderGeometry(0.34, 0.34, 0.22, 20), black), x, 0, 0.34))
-      g.add(at(mesh(new CylinderGeometry(0.22, 0.22, 0.24, 16), red), x, 0, 0.34))
+    // fat black tires, solid red hub covers (three's cylinder axis is Y, here the side)
+    for (const x of [-1.0, 1.05]) {
+      g.add(at(mesh(new CylinderGeometry(0.36, 0.36, 0.28, 24), black), x, 0, 0.36))
+      g.add(at(mesh(new CylinderGeometry(0.23, 0.23, 0.3, 20), red), x, 0, 0.36))
+      g.add(at(mesh(new CylinderGeometry(0.08, 0.08, 0.31, 12), metal), x, 0, 0.36))
     }
-    // the fairing: an elongated red capsule, low, the rounded nose dropping toward the front wheel
-    g.add(sized(at(tilt(mesh(new CapsuleGeometry(0.3, 1.5, 6, 14), red), 0, 0, Math.PI / 2), -0.05, 0, 0.62), 1, 0.85, 1))
-    g.add(sized(at(mesh(new SphereGeometry(0.34, 14, 10), red), 0.85, 0, 0.62), 1.2, 0.85, 0.9))
-    g.add(at(tilt(mesh(new SphereGeometry(0.22, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), screen), 0, -0.6), 0.55, 0, 0.82))
-    g.add(at(mesh(new BoxGeometry(1.6, 0.27, 0.05), white), -0.1, 0, 0.5))                          // the white trim
-    g.add(at(mesh(new BoxGeometry(0.5, 0.5, 0.08), black), -0.75, 0, 0.92))                          // the seat
-    g.add(at(mesh(new BoxGeometry(0.6, 0.12, 0.12), metal), -0.95, 0.22, 0.3))                       // the exhaust
-    g.add(at(mesh(new BoxGeometry(0.05, 0.3, 0.1), tail), -1.28, 0, 0.72))
-    g.add(at(tilt(mesh(new CircleGeometry(0.09, 12), head), 0, Math.PI / 2), 1.26, 0, 0.66))
+    // the shell: a high rounded nose cowl over the front wheel, a low cockpit, a rounded tail cowl
+    g.add(mesh(profile([
+      ['M', -1.36, 0.42], ['L', -1.44, 0.58], ['Q', -1.42, 0.8, -1.22, 0.82], ['L', -0.86, 0.78], ['Q', -0.78, 0.62, -0.62, 0.6],
+      ['L', 0.05, 0.62], ['Q', 0.3, 0.64, 0.42, 0.9], ['L', 1.0, 0.94], ['Q', 1.44, 0.92, 1.46, 0.6], ['L', 1.4, 0.42],
+      ['L', 0.74, 0.42], ['L', 0.58, 0.3], ['L', -0.58, 0.3], ['L', -0.74, 0.42],
+    ], 0.48, 0.06), red))
+    // a dark crease along each flank, the line that gives the shell its length
+    g.add(at(mesh(new BoxGeometry(2.3, 0.5, 0.025), maroon), 0.05, 0, 0.5))
+    // the smoked windscreen, rising from the nose cowl and arching back over the rider's head
+    g.add(mesh(profile([['M', 1.0, 0.94], ['Q', 0.78, 1.26, 0.36, 1.2], ['L', 0.38, 1.14], ['Q', 0.7, 1.16, 0.86, 0.94]], 0.42, 0.02), smoked))
+    // the padded seat sunk in the cockpit, its back against the tail cowl
+    g.add(mesh(profile([['M', -0.92, 0.78], ['L', -0.78, 0.63], ['L', -0.1, 0.63], ['L', -0.1, 0.68], ['L', -0.7, 0.7], ['Q', -0.82, 0.86, -0.94, 0.86]], 0.36, 0.04), seat))
+    g.add(at(mesh(new BoxGeometry(0.5, 0.1, 0.1), metal), -0.95, 0.28, 0.24))                       // the exhaust
+    g.add(at(mesh(new BoxGeometry(0.05, 0.36, 0.08), tail), -1.49, 0, 0.62))
+    g.add(at(tilt(mesh(new CircleGeometry(0.08, 14), head), 0, Math.PI / 2), 1.52, 0, 0.68))
 
-    // Kaneda: lying on the tank, red jacket with the white capsule on the back, red helmet
-    g.add(tilt(at(mesh(new BoxGeometry(0.75, 0.42, 0.3), red), -0.35, 0, 1.12), 0, 0.45))
-    g.add(tilt(at(mesh(new CapsuleGeometry(0.06, 0.14, 4, 8), white), -0.42, 0, 1.3), 0, 0, Math.PI / 2))
-    g.add(at(mesh(new SphereGeometry(0.16, 14, 10), red), 0.12, 0, 1.36))
-    g.add(at(mesh(new BoxGeometry(0.08, 0.24, 0.1), screen), 0.25, 0, 1.36))                          // the visor
-    for (const y of [-0.17, 0.17]) {
-      g.add(tilt(at(mesh(new BoxGeometry(0.55, 0.09, 0.09), red), 0.1, y, 1.08), 0, 0.5))           // arm toward the handlebar
-      g.add(tilt(at(mesh(new BoxGeometry(0.5, 0.12, 0.12), denim), -0.6, y * 1.25, 0.82), 0, -0.5))  // thigh
+    // Kaneda: lying flat along the tank under the windscreen, red jacket with the white capsule on the
+    // back, red helmet just behind the screen
+    g.add(tilt(at(mesh(new BoxGeometry(0.62, 0.36, 0.22), red), -0.1, 0, 0.84), 0, 0.18))
+    g.add(tilt(at(mesh(new CapsuleGeometry(0.06, 0.14, 4, 8), white), -0.18, 0, 0.97), 0, 0, Math.PI / 2))
+    g.add(at(mesh(new SphereGeometry(0.15, 14, 10), red), 0.36, 0, 0.98))
+    g.add(at(mesh(new BoxGeometry(0.08, 0.22, 0.09), visor), 0.48, 0, 0.98))                          // the visor
+    for (const y of [-0.16, 0.16]) {
+      g.add(tilt(at(mesh(new BoxGeometry(0.38, 0.08, 0.08), red), 0.36, y, 0.86), 0, 0.15))          // arm toward the handlebar
+      g.add(tilt(at(mesh(new BoxGeometry(0.44, 0.11, 0.11), denim), -0.55, y * 0.7, 0.72), 0, -0.15)) // thigh, inside the cockpit
     }
     g.scale.setScalar(1.3)                               // larger than life, like the rest
     this.object.add(g)
@@ -336,7 +348,7 @@ export class Parade {
 
     // the tail light trail: two crossed ribbons (seen from above as from the side) laid on the
     // past trajectory — `path` is a function of time, the trail has nothing to remember
-    const N = 48, DT = 0.025, LAG = 0.2, Z = 0.72 * 1.3, W = 0.09
+    const N = 48, DT = 0.025, LAG = 0.2, Z = 0.62 * 1.3, W = 0.09
     const pos = new Float32Array(N * 4 * 3), col = new Float32Array(N * 4 * 3)
     const index: number[] = []
     for (let i = 0; i < N - 1; i++) for (const o of [0, 2]) {
@@ -516,6 +528,26 @@ function tilt<T extends Object3D>(o: T, x: number, y: number, z = 0): T {
 function sized<T extends Object3D>(o: T, x: number, y: number, z: number): T {
   o.scale.set(x, y, z)
   return o
+}
+
+type Stroke = readonly ['M' | 'L', number, number] | readonly ['Q', number, number, number, number]
+
+/**
+ * A side profile (x forward, z up, as path strokes: move, line, quadratic curve), extruded across a
+ * total `width` (centred on y) with its edges rounded by `round`.
+ */
+function profile(strokes: readonly Stroke[], width: number, round: number): BufferGeometry {
+  const s = new Shape()
+  for (const k of strokes) {
+    if (k[0] === 'M') s.moveTo(k[1], k[2])
+    else if (k[0] === 'L') s.lineTo(k[1], k[2])
+    else { const [, cx, cy, x, y] = k as readonly ['Q', number, number, number, number]; s.quadraticCurveTo(cx, cy, x, y) }
+  }
+  const depth = Math.max(0.01, width - 2 * round)
+  const g = new ExtrudeGeometry(s, { depth, bevelEnabled: true, bevelThickness: round, bevelSize: round, bevelSegments: 3, curveSegments: 10 })
+  g.rotateX(Math.PI / 2)                                 // the shape's y becomes z, the extrusion runs along −y
+  g.translate(0, depth / 2, 0)
+  return g
 }
 
 /** three's primitives are Y-up: lays their axis down onto Z. */

@@ -46,12 +46,20 @@ const VIEWS = [
   // the DRAWN style (bands, hard shadows, ink lines, flat tones): Miami '26 Sunset without it, then with it
   { name: 'miami-plain', prepare: `${STYLE('miamiSunset')}; await sleep(1500); ${DAY}; s.__drawn = s.style; ${PLAIN}` },
   { name: 'miami-drawn', effectOf: 'miami-plain', prepare: 's.setAppearance({ style: s.__drawn })' },
+  // …and Akira by night, where the moon's rim light shows (`PostLook.rim`). Without Kaneda's bike: its
+  // trail moves between the two renderers' captures (a 3.3 gap with no drawing at all)
+  { name: 'akira-plain', prepare: `${STYLE('akira')}; await sleep(1500); ${NIGHT}; const st = s.style; s.__drawn = { ...st, id: 'akira-still', look: (a) => ({ ...st.look(a), parade: undefined }) }; s.setAppearance({ style: s.__drawn }); ${PLAIN}` },
+  { name: 'akira-drawn', effectOf: 'akira-plain', prepare: 's.setAppearance({ style: s.__drawn })' },
 ]
 
 const file = (renderer, view) => path.join(out, `parity-${renderer}-${view}.png`)
 for (const renderer of ['webgl', 'webgpu']) {
   const page = await openHouse(base, renderer, PORT)
   await page.evalJs(`window.kasbahScene.setOptions({ quality: 'medium' })`)
+  // the style views below write the chosen style in the bench profile, which the next page reads:
+  // each page starts again from the app's default style
+  await page.evalJs(STYLE('realistic'))
+  await new Promise((r) => setTimeout(r, 3000))
   for (const v of VIEWS) {
     await page.evalJs(`(async () => { const s = window.kasbahScene, sleep = (ms) => new Promise((r) => setTimeout(r, ms)); ${v.prepare} })()`)
     await page.capture(file(renderer, v.name))

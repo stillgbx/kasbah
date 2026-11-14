@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, AgXToneMapping, DepthTexture, FloatType, HalfFloatType, NeutralToneMapping, NoBlending, NoToneMapping, ShaderMaterial, UniformsUtils, Vector2, Vector3, WebGLRenderTarget, type Camera, type Scene, type Texture, type ToneMapping, type WebGLRenderer } from 'three'
+import { ACESFilmicToneMapping, AgXToneMapping, DepthTexture, FloatType, HalfFloatType, NeutralToneMapping, NoBlending, NoToneMapping, ShaderMaterial, UniformsUtils, Vector2, Vector3, WebGLRenderTarget, type Camera, type DirectionalLight, type Scene, type Texture, type ToneMapping, type WebGLRenderer } from 'three'
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
@@ -7,7 +7,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { CopyShader } from 'three/addons/shaders/CopyShader.js'
 import { DECOR_LAYER, SITE_DECOR_LAYER } from './layers'
-import { NEUTRAL_GRADE, type OutlineLook, type PostLook } from '../styles/types'
+import { NEUTRAL_GRADE, type OutlineLook, type PostLook, type RimLook } from '../styles/types'
 
 // POST-PROCESSING: what separates a direct render from an image. Three things, in this order.
 //
@@ -283,6 +283,35 @@ export type DrawScene = (target: WebGLRenderTarget | null) => void
 
 /** Below this crease measure (change of slope, in tangent units) no ink; above the second, a full line. */
 export const OUTLINE_RAMP = [0.3, 0.7] as const
+/** A rim when what lies toward the light is farther by this share of the distance (none below, full above). */
+export const RIM_GAP = [0.03, 0.08] as const
+
+/** The sun of the scene (the moon at night): the one directional light. */
+export function findSun(scene: Scene): DirectionalLight | null {
+  let sun: DirectionalLight | null = null
+  scene.traverse((o) => { if (!sun && (o as DirectionalLight).isDirectionalLight) sun = o as DirectionalLight })
+  return sun
+}
+
+const toLight = new Vector3()
+const targetAt = new Vector3()
+
+/**
+ * Where the rim light points on the screen this frame, and how strong it is. The light's direction
+ * is taken into view space: its (x, y) is the side of a volume it lights, in screen pixels (y up), and
+ * its z says whether it comes from behind (the rim is a backlight: full against the light, 40 % facing
+ * it). Along the view axis it has no side: the rim fades out.
+ */
+export function rimFrame(camera: Camera, sun: DirectionalLight | null, look: RimLook | null | undefined, stepPx: number, offsetPx: Vector2): number {
+  if (!sun || !look || look.strength <= 0) return 0
+  sun.getWorldPosition(toLight).sub(sun.target.getWorldPosition(targetAt))
+  toLight.transformDirection(camera.matrixWorldInverse)
+  const len = Math.hypot(toLight.x, toLight.y)
+  if (len < 1e-4) return 0
+  offsetPx.set(toLight.x / len, toLight.y / len).multiplyScalar(look.width * stepPx)
+  const ramp = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t) }
+  return look.strength * ramp(0.05, 0.3, len) * (0.4 + 0.6 * ramp(-0.2, 0.6, -toLight.z))
+}
 
 /**
  * The copy of the scene, with the INK LINES of a drawn style (`PostLook.outline`). They are read in
@@ -305,25 +334,41 @@ const SCENE_COPY_SHADER = {
     pixelSize: { value: 1e-3 },
     inkColor: { value: new Vector3(0, 0, 0) },
     inkStrength: { value: 0 },
+    rimColor: { value: new Vector3(0, 0, 0) },
+    /** Already weighted by the light's position (`rimFrame`): 0 = no rim. */
+    rimStrength: { value: 0 },
+    /** Toward the light, the rim's width, in UV. */
+    rimOffset: { value: new Vector2(0, 0) },
   },
   vertexShader: CopyShader.vertexShader,
   fragmentShader: /* glsl */`
     uniform sampler2D tDiffuse;
     uniform sampler2D tDepth;
-    uniform vec2 texel;
-    uniform float near, far, ortho, pixelSize, inkStrength;
-    uniform vec3 inkColor;
+    uniform vec2 texel, rimOffset;
+    uniform float near, far, ortho, pixelSize, inkStrength, rimStrength;
+    uniform vec3 inkColor, rimColor;
     varying vec2 vUv;
     // affine over a flat face: 1/distance in perspective (up to a factor), the distance in orthographic
     float kasbahW( float d ) { return ortho > 0.5 ? near + ( far - near ) * d : far - ( far - near ) * d; }
+    // the distance itself, in meters
+    float kasbahZ( float d ) { return ortho > 0.5 ? near + ( far - near ) * d : near * far / ( far - ( far - near ) * d ); }
     float kasbahCrease( float wc, float a, float b ) {
       float e = abs( kasbahW( a ) + kasbahW( b ) - 2.0 * wc );
       return ortho > 0.5 ? e / pixelSize : e / ( wc * pixelSize );
     }
     void main() {
       vec4 col = texture2D( tDiffuse, vUv );
+      // a style that does not draw reads no depth at all
+      float dc = rimStrength > 0.0 || inkStrength > 0.0 ? texture2D( tDepth, vUv ).x : 1.0;
+      // the RIM first, the ink over it: the line stays dark at the very edge, the light just inside it.
+      // A pixel whose neighbour toward the light is far behind it (or the sky) is on the lit edge.
+      if ( rimStrength > 0.0 && dc < 1.0 ) {
+        float zc = kasbahZ( dc );
+        float gap = ( kasbahZ( texture2D( tDepth, vUv + rimOffset ).x ) - zc ) / zc;
+        col.rgb += rimColor * ( smoothstep( ${RIM_GAP[0].toFixed(2)}, ${RIM_GAP[1].toFixed(2)}, gap ) * rimStrength );
+      }
       if ( inkStrength > 0.0 ) {
-        float wc = kasbahW( texture2D( tDepth, vUv ).x );
+        float wc = kasbahW( dc );
         float mx = kasbahCrease( wc, texture2D( tDepth, vUv - vec2( texel.x, 0.0 ) ).x, texture2D( tDepth, vUv + vec2( texel.x, 0.0 ) ).x );
         float my = kasbahCrease( wc, texture2D( tDepth, vUv - vec2( 0.0, texel.y ) ).x, texture2D( tDepth, vUv + vec2( 0.0, texel.y ) ).x );
         float line = smoothstep( ${OUTLINE_RAMP[0].toFixed(2)}, ${OUTLINE_RAMP[1].toFixed(2)}, max( mx, my ) );
@@ -345,8 +390,12 @@ class ScenePass extends Pass {
   private readonly copy: FullScreenQuad | null
   private readonly copyMaterial: ShaderMaterial | null
   private height = 1
+  private outline: OutlineLook | null = null
+  private rim: RimLook | null = null
+  private sun: DirectionalLight | null = null
+  private readonly rimPx = new Vector2()
 
-  constructor(private readonly draw: DrawScene, samples: number, private readonly camera: Camera) {
+  constructor(private readonly draw: DrawScene, samples: number, private readonly camera: Camera, private readonly scene: Scene) {
     super()
     this.needsSwap = false          // like `RenderPass`: what follows reads the buffer just written
     // the depth is kept as a texture for the ink lines; resolved only while a style draws them
@@ -360,12 +409,16 @@ class ScenePass extends Pass {
     this.copy = this.copyMaterial ? new FullScreenQuad(this.copyMaterial) : null
   }
 
-  setOutline(look: OutlineLook | null | undefined): void {
+  setDrawing(outline: OutlineLook | null | undefined, rim: RimLook | null | undefined): void {
     if (!this.msaa) return
     const u = this.copyMaterial!.uniforms
-    u.inkStrength!.value = look?.strength ?? 0
-    if (look) (u.inkColor!.value as Vector3).set(...look.color)
-    this.msaa.resolveDepthBuffer = !!look && look.strength > 0
+    this.outline = outline && outline.strength > 0 ? outline : null
+    this.rim = rim && rim.strength > 0 ? rim : null
+    u.inkStrength!.value = this.outline?.strength ?? 0
+    if (this.outline) (u.inkColor!.value as Vector3).set(...this.outline.color)
+    if (this.rim) (u.rimColor!.value as Vector3).set(...this.rim.color)
+    else u.rimStrength!.value = 0
+    this.msaa.resolveDepthBuffer = !!this.outline || !!this.rim
   }
 
   override setSize(width: number, height: number): void {
@@ -389,6 +442,11 @@ class ScenePass extends Pass {
       u.ortho!.value = cam.isOrthographicCamera ? 1 : 0
       // projection[5] = 1 / half the visible height (at unit distance, or in meters)
       u.pixelSize!.value = (2 * step) / (cam.projectionMatrix.elements[5]! * this.height)
+      if (this.rim) {
+        this.sun ??= findSun(this.scene)
+        u.rimStrength!.value = rimFrame(cam, this.sun, this.rim, step, this.rimPx)
+        ;(u.rimOffset!.value as Vector2).set(this.rimPx.x / this.msaa.width, this.rimPx.y / this.msaa.height)
+      }
     }
     renderer.setRenderTarget(read)
     this.copy!.render(renderer)
@@ -470,7 +528,7 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
   // Without MSAA: it is in the scene's target (`ScenePass`), and the composer CLONES this target.
   const target = new WebGLRenderTarget(1, 1, { type: HalfFloatType })
   const composer = new EffectComposer(renderer, target)
-  const scenePass = new ScenePass(draw, samples, camera)
+  const scenePass = new ScenePass(draw, samples, camera, scene)
   composer.addPass(scenePass)
 
   // The occlusion is only computed in high quality: it is the most expensive pass of the lot (it renders
@@ -559,7 +617,7 @@ export function createPostPipeline(deps: PostPipelineDeps): PostPipeline {
           ao.updateGtaoMaterial({ radius: look.ao.radius, distanceExponent: 1, thickness: 1, scale: 1 })
         }
       }
-      scenePass.setOutline(look.outline)
+      scenePass.setDrawing(look.outline, look.rim)
       output.vignette.value = look.vignette
       const g = look.grade ?? NEUTRAL_GRADE
       output.grade.lift.value.set(...g.lift)

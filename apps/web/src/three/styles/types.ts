@@ -123,6 +123,23 @@ export interface PostLook {
   grade?: GradeLook | null
   /** INK LINES on creases and silhouettes, read from the depth (`core/post.ts`). Absent = none. */
   outline?: OutlineLook | null
+  /** RIM LIGHT on the edges facing the sun (the moon at night), read from the depth. Absent = none. */
+  rim?: RimLook | null
+}
+
+/**
+ * See `PostLook.rim`: the thin line of light a cel paints along the edge of a volume lit from behind.
+ * ADDED to the image before tone mapping, strongest against the light. Keep `color × strength` UNDER
+ * the style's bloom threshold: a painted line, not a neon — and the two renderers' blooms answer
+ * differently to a value just above it (parity gap 4.7 on the Akira night view at strength 1).
+ */
+export interface RimLook {
+  /** Colour of the light, linear, may exceed 1. */
+  color: readonly [number, number, number]
+  /** 0 = none, 1 = the full colour; against the light, it is this; facing it, 40 % of it. */
+  strength: number
+  /** Width of the line, in CSS pixels. */
+  width: number
 }
 
 /** See `PostLook.outline`. Drawn in the scene's copy, before tone mapping: the ink is a linear color. */

@@ -11,7 +11,7 @@ import { tiltShift } from './tiltShift'
 import { lensWater } from './lensWater'
 import { outline } from './outline'
 
-// `core/post.ts` as a TSL `RenderPipeline`. Same order: scene (MSAA 4×) → ink lines (a drawn style) → occlusion (high) → bloom →
+// `core/post.ts` as a TSL `RenderPipeline`. Same order: scene (MSAA 4×) → rim light and ink lines (a drawn style) → occlusion (high) → bloom →
 // output (tone mapping, sRGB) → grade + vignette → tilt-shift → water on the lens.
 //
 // What differs:
@@ -51,13 +51,15 @@ export function createGpuPostPipeline(deps: GpuPostDeps): PostPipeline {
   const saturation = uniform(1)
   const tilt = tiltShift()
   const lens = lensWater()
-  const ink = outline(camera, () => renderer.getPixelRatio())
+  const ink = outline(camera, scene, () => renderer.getPixelRatio())
   let wet = false
-  let inked = false
+  let drawing = ''
 
-  const build = (withAo: boolean, withBloom: boolean, withTilt: boolean, withLens: boolean, withInk: boolean): Node => {
+  const build = (withAo: boolean, withBloom: boolean, withTilt: boolean, withLens: boolean, withDrawing: boolean): Node => {
     const base = color as unknown as Node<'vec4'>
-    const drawn = withInk ? ink.apply(base, scenePass.getTextureNode('depth')) : base
+    // The bloom keeps reading the scene's own colour, where the WebGL one reads the drawn copy: a rim
+    // light is kept UNDER the bloom threshold (`RimLook`) so that neither renderer makes it glow.
+    const drawn = withDrawing ? ink.apply(base, scenePass.getTextureNode('depth')) : base
     let lit = drawn
     if (withAo && occlusion) lit = vec4(drawn.rgb.mul(mix(1, occlusion.denoised.r, aoIntensity)), drawn.a)
     if (withBloom) lit = lit.add(bloom)
@@ -74,17 +76,17 @@ export function createGpuPostPipeline(deps: GpuPostDeps): PostPipeline {
 
   const pipeline = new RenderPipeline(renderer, build(!!occlusion, true, false, false, false))
   pipeline.outputColorTransform = false   // done by `renderOutput`, BEFORE the grade
-  let built = `${!!occlusion}|true|false|false|false`
+  let built = `${!!occlusion}|true|false|false|`
   let look: PostLook | null = null
   // a pass that is off leaves the graph, as `enabled = false` does in the composer
   const rebuild = () => {
     const ao = !!occlusion && look?.ao !== null
     const bl = look ? look.bloom !== null : true
     const ts = !!look?.tiltShift && look.tiltShift.strength > 0
-    const key = `${ao}|${bl}|${ts}|${wet}|${inked}`
+    const key = `${ao}|${bl}|${ts}|${wet}|${drawing}`
     if (key === built) return
     built = key
-    pipeline.outputNode = build(ao, bl, ts, wet, inked)
+    pipeline.outputNode = build(ao, bl, ts, wet, drawing !== '')
     pipeline.needsUpdate = true
   }
 
@@ -111,7 +113,7 @@ export function createGpuPostPipeline(deps: GpuPostDeps): PostPipeline {
       gain.value.set(...g.gain)
       saturation.value = g.saturation
       tilt.set(look.tiltShift)
-      inked = ink.set(look.outline)
+      drawing = ink.set(look.outline, look.rim)
       rebuild()
     },
     setLensWater(map) {

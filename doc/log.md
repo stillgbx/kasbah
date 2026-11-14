@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-14] update | Akira dessiné en cel : liseré de contre-jour, jour clair, moto redessinée
+
+**Trigger** : l'utilisateur veut le mode dessin de Miami sur Akira, inspiré du film, puis un jour de luminosité normale, une nuit plus lisible et une moto plus soignée.
+
+**Pages modified** :
+- `1_architecture/1_11_scene-3d-rendu.md` - sous-section 2026-11-14 (ter) : cel d'Akira, liseré de contre-jour (`RimLook`, `rimFrame`, lecture de la lumière sur la scène), piège du liseré au-dessus du seuil du bloom et pistes écartées, aplats étendus aux finitions, jour et nuit réglés, moto en profil extrudé, vues et piège du banc de parité.
+
+**Index** : catalogue 1_architecture inchangé (page déjà datée du jour), index.md régénéré.
+
 ## [2026-11-14] update | Mode dessin des styles Miami'26 (aplats, paliers, traits d'encre)
 
 **Trigger** : l'utilisateur veut, avec les couleurs Miami'26, le rendu d'une affiche illustrée ; prototype validé, puis WebGPU et mesure du coût demandés.

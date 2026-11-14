@@ -2844,3 +2844,70 @@ Sources : `apps/web/src/three/core/{toonShading,levelLight,post}.ts`,
 `apps/web/src/three/gpu/{toonShading,outline,post,index}.ts`, `apps/web/src/three/styles/{types,tuning,miami26}.ts`,
 `apps/web/src/three/builders/materials.ts` (`applyLook`), `apps/web/src/three/HouseScene.ts`,
 `scripts/bench-3d/{chrome,perf,parity}.mjs`.
+
+### Mise à jour 2026-11-14 (ter) — Akira dessiné en cel : liseré de contre-jour, jour clair, moto redessinée
+
+Demande de l'utilisateur : le mode dessin de Miami appliqué au style Akira, inspiré du film de 1988,
+puis un jour « normal » en luminosité (comme les scènes de jour du film), une nuit moins bouchée et
+une moto plus fidèle à l'esprit du dessin (sans ses autocollants de marques).
+
+**Le cel.** `akira.ts` porte `shading: { bands: 1, flat: true }` (un seul palier : une face est au
+soleil ou à l'ombre), une encre bleu-noir à 75 % et l'ombre colorée par l'éclairage du ciel et du sol
+(`hemiSky`, `hemiGround`) : bleu-vert de jour, rouge de la ville la nuit.
+
+**Le liseré de contre-jour** (`PostLook.rim`, `RimLook` : couleur, force, largeur en pixels CSS). Le
+filet de lumière qu'un cel peint au bord d'un volume éclairé par derrière, lu dans la profondeur
+dans la même passe que les traits (`SCENE_COPY_SHADER`, `gpu/outline.ts`) : un pixel dont le voisin,
+du côté de la lumière, est loin derrière lui (le fond, un objet plus éloigné) est sur un bord éclairé.
+`rimFrame` (`core/post.ts`) passe chaque image la direction de la lumière en espace vue : son (x, y)
+donne le côté éclairé à l'écran, son z le contre-jour (pleine force contre la lumière, 40 % face à
+elle) ; dans l'axe de la vue le liseré s'efface. La direction est lue sur la lumière directionnelle de
+la scène elle-même (`findSun`), pas posée par `HouseScene` : `fitSunShadow` est classé CRITIQUE par
+GitNexus. Un style qui ne dessine rien ne lit aucune profondeur (lecture conditionnée en GLSL, nœud
+absent du graphe en TSL).
+
+**Piège : un liseré au-dessus du seuil du bloom.** À pleine force, le liseré rayonnait en WebGL et pas
+en WebGPU (parité 4,7 sur la vue Akira de nuit) : les deux blooms ne répondent pas de la même façon à
+une valeur juste au-dessus du seuil, et en WebGL la qualité haute (la passe d'occlusion qui suit la
+copie) l'écrêtait aussi. Deux pistes essayées puis retirées en WebGPU : rebrancher l'entrée du bloom
+(`inputNode`, ignoré : le nœud lit son entrée une fois, à sa mise en place) et rendre l'image dessinée
+dans une texture (`convertToTexture`, une passe de plus pour rien). Règle retenue : `couleur × force`
+du liseré reste SOUS le seuil du bloom du style — un trait peint, pas un néon.
+
+**Les aplats couvrent les finitions.** La façade, les cloisons et les sols des pièces passent par
+`applyFinish` (`builders/materials.ts`), que le mode aplat n'atteignait pas : ils gardaient leur
+texture (vu de près sur Akira ; Miami avait le même défaut, invisible de loin). Corrigé : en aplat,
+`applyFinish` ne pose ni texture procédurale ni photo.
+
+**Le jour, clair.** La première palette « smog de midi » en gris moyens (terrain `#5a5e66`), les
+arbres presque noirs même à midi et un étalonnage qui écrasait les noirs et assombrissait les tons
+moyens de jour faisaient un jour sombre. Désormais : béton pâle, métal gris-vert, sol un cran plus
+sombre et plus vert que la maison, feuillages sauge et bleu-vert le jour (noirs la nuit), ombre
+bleu-vert, exposition 1,05, gamma neutre, seuil du bloom de jour à 1,3 comme Miami.
+
+**La nuit, lisible.** Lune 1,7 (au lieu de 1,2), ciel de la ville 1,35 (au lieu de 1), ambiance 0,2
+(au lieu de 0,12), exposition 1,6 (au lieu de 1,45) ; liseré de nuit ramené à 0,42 pour rester sous
+le seuil (0,5).
+
+**La moto** (`effects/parade.ts`). Plus de capsules ni de sphères : un PROFIL latéral extrudé et
+arrondi (`profile()`, `ExtrudeGeometry` biseautée) — longue coque rouge et basse qui enveloppe le haut
+des roues, nez haut arrondi d'où part un pare-brise fumé en arc, poste de pilotage bas, selle bordeaux
+à dossier, poupe arrondie qui porte le feu arrière, gros pneus à moyeux pleins rouges, filet sombre le
+long du flanc. Le pilote couché sur le réservoir, casque derrière le pare-brise. Les autocollants et
+logos de marques du dessin d'origine sont laissés de côté.
+
+**Banc de parité.** Vues `akira-plain` / `akira-drawn` (de nuit, là où se voit le liseré), sans le
+défilé (la traînée de la moto bougeait entre les deux captures : 3,3 d'écart sans aucun dessin). Piège
+du banc : le style choisi par une vue s'écrit dans le profil Chrome du banc, que la page suivante
+relit — la page WebGPU démarrait en Akira quand la WebGL démarrait en Réaliste (26 d'écart sur toutes
+les vues). Chaque page repart maintenant du style par défaut. `PLAIN` retire aussi `rim`.
+
+Vérifié : parité verte sur toutes les vues (Akira dessiné 2,82, sans dessin 2,85 : la nuit plus
+lumineuse fait travailler le bloom, près du seuil de 3) ; preview `kasbah-mock` de jour et de nuit,
+WebGL et WebGPU ; Réaliste inchangé. Non mesuré : le coût GPU du liseré (une lecture de profondeur de
+plus dans une passe existante).
+
+Sources : `apps/web/src/three/styles/{akira,types,tuning}.ts`, `apps/web/src/three/core/post.ts`
+(`RIM_GAP`, `findSun`, `rimFrame`, `ScenePass.setDrawing`), `apps/web/src/three/gpu/{outline,post}.ts`,
+`apps/web/src/three/builders/materials.ts` (`applyFinish`), `apps/web/src/three/effects/parade.ts`
+(`bike`, `profile`), `scripts/bench-3d/{chrome,parity}.mjs`.
