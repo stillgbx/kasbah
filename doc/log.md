@@ -7,6 +7,16 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-14] update | Miami'26 suit la version 1.1 des thèmes d'éditeur
+
+**Trigger** : les thèmes d'éditeur Miami '26 ont été repeints (1.1) ; demande de l'utilisateur d'adapter Kasbah.
+
+**Pages modifiées** :
+- 4_ui/4_2_theme-et-langues.md - sous-section 2026-11-14 : nouvelles valeurs des quatre variantes, exception `catLight` en clair
+- 1_architecture/1_11_scene-3d-rendu.md - sous-section 2026-11-14 : nouveaux codes des néons Bay et Sunset
+
+**Index** : catalogues mis à jour (2 lignes), index.md régénéré.
+
 ## [2026-11-13] update | Thèmes et styles 3D Miami'26 Bay et Sunset
 
 **Trigger** : demande de l'utilisateur, un thème Miami pour l'app et le rendu 3D en deux palettes ; couleurs reprises des thèmes d'éditeur Miami '26 (VS Code / VS).

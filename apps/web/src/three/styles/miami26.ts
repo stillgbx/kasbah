@@ -57,21 +57,21 @@ const SURFACES: SurfaceLooks = {
 const BAY: Mood = {
   night: {
     wall: '#2a3a5e',
-    wallInterior: '#2ed3c6',
+    wallInterior: '#5fd6c6',
     floor: '#182238',
     floors: { wood: '#2a2a38', tile: '#1c2a40', carpet: '#2a2446', concrete: '#1e2a3c' },
-    glass: '#ff9cc2',
+    glass: '#f2a0b4',
     roof: '#24324e',
     terrain: '#145a50',
     zones: {
-      lawn: '#186050', pool: '#00e5d4', driveway: '#1e2a3c', path: '#8fe9e1',
+      lawn: '#186050', pool: '#2ee0c8', driveway: '#1e2a3c', path: '#9fe3d6',
       bed: '#101820', terrace: '#2a2a3a', other: '#1c2434',
     },
     slat: '#4a6a8a',
     device: '#8aa0b8',
   },
   day: {
-    wall: '#b9a6ff',
+    wall: '#a9a6f0',
     wallInterior: '#f6c6b4',
     floor: '#e6e2da',
     floors: { wood: '#b08a64', tile: '#eef0ee', carpet: '#c8c0e0', concrete: '#d6d6d2' },
@@ -79,7 +79,7 @@ const BAY: Mood = {
     roof: '#eef2f6',
     terrain: '#5fae7a',
     zones: {
-      lawn: '#4fae74', pool: '#2ed3c6', driveway: '#e4e6ea', path: '#f2c2a8',
+      lawn: '#4fae74', pool: '#5fd6c6', driveway: '#e4e6ea', path: '#f2c2a8',
       bed: '#5a4a3a', terrace: '#a07a5a', other: '#d4d6d8',
     },
     slat: '#ffffff',
@@ -97,16 +97,16 @@ const BAY: Mood = {
   gain: { night: [0.96, 1, 1.08], day: [0.98, 1, 1.04], dusk: [1.06, 0.97, 1] },
   lift: [0, 0.01, 0.03],
   saturation: 1.12,
-  garden: { night: [0x0f3a40, 0x123a4a, 0x16402e], day: [0x3f9a8a, 0x2f8a6a, 0x6abf8a], accent: 0xff9e7a },
+  garden: { night: [0x0f3a40, 0x123a4a, 0x16402e], day: [0x3f9a8a, 0x2f8a6a, 0x6abf8a], accent: 0xf5b095 },
 }
 
 const SUNSET: Mood = {
   night: {
     wall: '#4a2a5e',
-    wallInterior: '#ff4fa3',
+    wallInterior: '#ff5faa',
     floor: '#2a1838',
     floors: { wood: '#3a2238', tile: '#2c1f44', carpet: '#4a1a46', concrete: '#2a2240' },
-    glass: '#8e9bff',
+    glass: '#9aa6ff',
     roof: '#3a2450',
     // greener than it needs to be at night: the sunset blends it with the day's green
     terrain: '#145a40',
@@ -145,7 +145,7 @@ const SUNSET: Mood = {
   gain: { night: [1.02, 0.96, 1.06], day: [1.05, 1, 0.95], dusk: [1.12, 0.94, 0.9] },
   lift: [0.015, 0, 0.035],
   saturation: 1.18,
-  garden: { night: [0x0f4a3a, 0x123a44, 0x1a3a2a], day: [0x2f9e4f, 0x1f8a5a, 0x5cbf3a], accent: 0xff4fa3 },
+  garden: { night: [0x0f4a3a, 0x123a44, 0x1a3a2a], day: [0x2f9e4f, 0x1f8a5a, 0x5cbf3a], accent: 0xff5faa },
 }
 
 const lerpHex = (a: number, b: number, t: number) => new Color(a).lerp(new Color(b), t)

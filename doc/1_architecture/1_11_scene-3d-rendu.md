@@ -1,6 +1,6 @@
 # Scène 3D : rendu
 
-> Dernière mise à jour : 2026-11-13
+> Dernière mise à jour : 2026-11-14
 > Sources : sections reprises telles quelles de `1_5_scene-3d.md` le 2026-10-13 ; chaque section cite les siennes.
 
 Cette page couvre le rendu de la scène : styles et thèmes, lumière du jour et de la nuit, ombres, météo (nuages, pluie, neige, brume), eau de la piscine, matières photo, chaîne d'image et étalonnage, tilt-shift, banc de réglage, performance GPU (passes, MSAA, shaders précompilés, voile de mesure). Elle est née du découpage de
@@ -2769,3 +2769,16 @@ Vérifié dans la preview `kasbah-mock` au jour, au crépuscule et à la nuit po
 
 Sources : `apps/web/src/three/styles/{miami26,index}.ts`, `apps/web/src/three/core/ambience.ts`
 (`dayFactor`, `duskFactor`), `apps/web/src/i18n/locales/{fr,en}.json`.
+
+### Mise à jour 2026-11-14 — les néons Miami'26 suivent la version 1.1
+
+Les couleurs citées plus haut pour les néons datent de la première version des thèmes d'éditeur.
+Avec la 1.1 ([4_2](../4_ui/4_2_theme-et-langues.md)), elles deviennent : **Bay** cloisons de nuit
+`#5fd6c6`, piscine `#2ee0c8`, allées `#9fe3d6`, fenêtres `#f2a0b4`, façade lavande de jour
+`#a9a6f0`, fleurs du jardin pêche `#f5b095` ; **Sunset** cloisons et fleurs `#ff5faa`, fenêtres
+`#9aa6ff` (les allées gardent `#ff2e93`, inchangé dans la 1.1). Lumière, ciel et étalonnage ne
+bougent pas.
+
+Vérifié dans la preview `kasbah-mock` : Bay de nuit et de jour, Sunset de nuit.
+
+Sources : `apps/web/src/three/styles/miami26.ts`.

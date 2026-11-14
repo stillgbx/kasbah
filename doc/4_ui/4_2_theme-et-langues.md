@@ -1,6 +1,6 @@
 # Thème et langues
 
-> Dernière mise à jour : 2026-11-13
+> Dernière mise à jour : 2026-11-14
 > Sources : `apps/web/src/stores/settings.ts`, `apps/web/src/lib/daylight.ts`, `apps/web/src/themes/*.ts`, `apps/web/src/plugins/vuetify.ts`, `apps/web/src/i18n/index.ts`, `apps/web/src/i18n/locales/{fr,en}.json`, `apps/web/src/views/SettingsView.vue`, `apps/web/src/components/PetkitLinkCard.vue`, `apps/web/src/three/core/renderBackend.ts`
 
 ## Apparence
@@ -783,3 +783,25 @@ accepte donc 15 styles.
 Vérifié dans la preview `kasbah-mock` : les quatre variantes sur la vue Maison, aucune erreur console.
 
 Sources : `apps/web/src/themes/{miami26,index}.ts`, `apps/web/src/i18n/locales/{fr,en}.json`.
+
+### Mise à jour 2026-11-14 — Miami'26 suit la version 1.1 des thèmes d'éditeur
+
+Les thèmes d'éditeur Miami '26 ont été repeints d'après leurs références (version 1.1, commit
+`b75d7a8` du dépôt `miami26-vscode`) ; Kasbah reprend leurs nouvelles valeurs, avec la **même
+correspondance** que le 2026-11-13. Ce qui change à l'écran :
+
+| Variante | Page / cartes | Accent |
+|---|---|---|
+| Bay sombre | `#102230` / `#1c2747` (cartes bleu lilas) | `#5fd6c6` |
+| Bay clair | `#d3eee8` / `#fef9f0` (page menthe, cartes sable) | `#128079` |
+| Sunset sombre | `#231833` / `#2a1a3e` (violet prune) | `#ff5faa` |
+| Sunset clair | `#f8d8e1` / `#fef4ec` (page rose, cartes pêche) | `#c8287a` |
+
+Une exception à la correspondance : en **clair**, la teinte des lumières (`catLight`) n'est pas
+la couleur « warm » de l'éditeur, une pêche trop pâle pour un disque posé sur la page, mais un
+orange foncé pris dans la syntaxe (`#b04f2a` pour Bay, `#a64f18` pour Sunset). Les quatre
+variantes passent `themes.test.ts` sans retouche des valeurs publiées.
+
+Vérifié dans la preview `kasbah-mock` : les quatre variantes sur la vue Maison, aucune erreur console.
+
+Sources : `apps/web/src/themes/miami26.ts`.
