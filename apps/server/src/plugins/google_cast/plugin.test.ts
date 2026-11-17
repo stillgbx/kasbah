@@ -268,6 +268,17 @@ describe('google_cast plugin', () => {
     await plugin.stop()
   })
 
+  it('logs the standby and input flags when the playing app leaves', async () => {
+    const speaker = fakeReceiver(RECEIVER_STATUS_PLAYING, MEDIA_STATUS_PLAYING)
+    const { plugin, ctx } = await started(fakeDiscovery([SERVICE_NEST_MINI]), network({ [SERVICE_NEST_MINI.host]: speaker }))
+    const info = vi.spyOn(ctx.logger, 'info')
+    speaker.push({ ...RECEIVER_STATUS_PLAYING, applications: [], isStandBy: true, isActiveInput: false })
+    await flush()
+    const left = info.mock.calls.filter((c) => c[1] === 'cast app left while playing').map((c) => c[0])
+    expect(left).toEqual([expect.objectContaining({ was: RECEIVER_STATUS_PLAYING.applications[0]!.appId, now: null, isStandBy: true, isActiveInput: false })])
+    await plugin.stop()
+  })
+
   it('"previous" restarts the track past three seconds, and goes back a track before that', async () => {
     const speaker = fakeReceiver(RECEIVER_STATUS_PLAYING, MEDIA_STATUS_PLAYING)          // currentTime 42.5
     const { plugin, ctx, clock } = await started(fakeDiscovery([SERVICE_NEST_MINI]), network({ [SERVICE_NEST_MINI.host]: speaker }))

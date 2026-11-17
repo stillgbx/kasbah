@@ -268,7 +268,9 @@ export class CastConnection {
     const changed = app?.sessionId !== this.app?.sessionId
     // the app that was playing went away (closed, replaced, receiver back to standby)
     if (changed && this.app && this.media?.playerState === 'PLAYING') {
-      this.opts.logger.info({ host: this.opts.host, was: this.app.appId, now: app?.appId ?? null }, 'cast app left while playing')
+      // standby or input switch (TV over HDMI-CEC) versus a sender's STOP, when the device reports them
+      const { isStandBy = null, isActiveInput = null } = status.data
+      this.opts.logger.info({ host: this.opts.host, was: this.app.appId, now: app?.appId ?? null, isStandBy, isActiveInput }, 'cast app left while playing')
     }
     this.app = app
     if (changed || !this.mediaReported) {

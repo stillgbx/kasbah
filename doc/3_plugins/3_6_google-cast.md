@@ -1,6 +1,6 @@
 # Plugin Google Cast (enceintes, réveils, Chromecast, barres de son)
 
-> Dernière mise à jour : 2026-11-14
+> Dernière mise à jour : 2026-11-17
 > Sources : `apps/server/src/plugins/google_cast/{index,channel,discovery,mapping,protocol,types}.ts`, `apps/server/src/plugins/google_cast/__fixtures__/network.ts`, tests `protocol.test.ts`, `mapping.test.ts` et `plugin.test.ts`, `apps/server/.env.example`, `apps/web/src/views/MediaView.vue`, demande de l'utilisateur du 2026-09-09, `apps/server/src/plugins/google_cast/known.ts`, `apps/server/src/plugins/google_cast/enrich/cover.ts`, `tools/cast-probe.mts`, `apps/server/src/plugins/google_cast/bravia.ts`, `apps/server/src/plugins/google_cast/__fixtures__/bravia.ts`
 
 ## Ce que l'utilisateur veut, et ce que le protocole permet
@@ -733,3 +733,21 @@ devine rien. **Test** (`plugin.test.ts`, « logs why a playing receiver stopped 
 `IDLE`/`ERROR` à 600 s donne une ligne avec ces valeurs, l'`IDLE` répété n'en donne pas d'autre ;
 contrôle négatif fait (sans le changement de `channel.ts`, le test échoue). Pas encore vu sur la vraie
 barre.
+
+### Mise à jour 2026-11-17 — veille ou entrée : `isStandBy` et `isActiveInput`
+
+Premier arrêt observé sur la vraie barre avec ces lignes : `cast app left while playing` avec
+`now: null`, **sans** `cast playback stopped` avant (aucun `IDLE`, donc aucun `idleReason`), sans
+`media command sent` ni `source cut`. Le récepteur a fermé l'appli d'un coup, et Kasbah n'y est pour
+rien : son seul arrêt d'appli (`stopApp`, `STOP` sur le canal récepteur) passe par
+`media_player.stop`, donc par `PluginHost.execute` qui le journalise, et Kasbah n'envoie jamais de
+`CLOSE` vers le `transportId`. Restent la veille de l'appareil, un changement d'entrée (télé en
+HDMI-CEC) ou le `STOP` d'un autre émetteur (appli Google Home, voix).
+
+Pour trancher, `cast app left while playing` porte désormais `isStandBy` et `isActiveInput`, lus tels
+quels dans le `RECEIVER_STATUS` qui annonce le départ (`channel.ts`, `onReceiverStatus` ; le schéma
+`looseObject` les garde déjà), `null` quand l'appareil ne les envoie pas — ce qui n'est pas garanti
+sur une barre de son. **Test** (`plugin.test.ts`, « logs the standby and input flags when the playing
+app leaves ») ; contrôle négatif fait. Les deux lignes `player closed the connection before the end`
+vues juste après le lancement sont le rythme normal d'un récepteur Cast (il remplit une grosse avance,
+puis raccroche et reprend par `Range`) : elles ne comptent que juste avant un arrêt.

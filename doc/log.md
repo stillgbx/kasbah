@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-17] update | Arrêt d'une barre Cast : appli fermée par le récepteur, veille et entrée journalisées
+
+**Trigger** : premier arrêt observé sur la vraie barre avec les journaux du 2026-11-14 ; l'appli Cast part sans `idleReason` ni commande de Kasbah.
+
+**Pages modified** :
+- `3_plugins/3_6_google-cast.md` - sous-section 2026-11-17 : lecture de l'arrêt observé, causes écartées, `isStandBy` / `isActiveInput` ajoutés à `cast app left while playing`.
+
+**Index** : catalogue 3_plugins (1 ligne), index.md régénéré.
+
 ## [2026-11-14] update | Akira dessiné en cel : liseré de contre-jour, jour clair, moto redessinée
 
 **Trigger** : l'utilisateur veut le mode dessin de Miami sur Akira, inspiré du film, puis un jour de luminosité normale, une nuit plus lisible et une moto plus soignée.
