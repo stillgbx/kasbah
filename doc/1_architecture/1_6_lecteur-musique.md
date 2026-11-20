@@ -1,6 +1,6 @@
 # Lecteur musique commun (`/api/music`)
 
-> Dernière mise à jour : 2026-11-14
+> Dernière mise à jour : 2026-11-20
 > Sources : `apps/server/src/music/{player,proxy,queue,sources,ytdlp}.ts`, tests `apps/server/src/music/{proxy,queue}.test.ts`, `apps/server/src/plugins/ytmusic/plugin.test.ts`, `apps/server/src/app.ts`, `apps/server/src/plugins/{ytmusic,mixcloud}/{index,resolve}.ts`, `apps/server/.env.example`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue`, arbre de travail non commité du 2026-09-23 (après 5c43833) ; `apps/server/src/music/lastPlayed.ts` et son test, `apps/web/src/stores/localPlayer.test.ts`, arbre de travail non commité du 2026-09-28 (après c6fe7c1) ; `apps/server/src/music/lightsync/{analyze,decode,effects/*,palette,settingsFile,sync}.ts`, `packages/shared/src/music/lightsync.ts` et leurs tests, `apps/server/src/core/lightStreamBridge.ts`, `apps/web/src/components/music/ListeningSessions.vue` (2026-11-05)
 
 ## Pourquoi un noyau, et pourquoi maintenant
@@ -648,3 +648,43 @@ Lecture au prochain arrêt : `idleReason: ERROR` sans `media command sent` → l
 closed the connection » : l'enceinte a raccroché) ; `cast app left while playing` → veille ou CEC ;
 `media command sent` juste avant → Kasbah, et l'origine dit qui. **Cause toujours inconnue** à cette
 date.
+
+### Mise à jour 2026-11-20 — la cause : la veille de la barre ; le relais envoie par paquets
+
+La cause est trouvée sur la vraie maison. La barre de son se met en veille d'elle-même : son
+réglage « veille auto » l'éteint après 15 min d'inactivité, et la lecture Cast n'en est pas une à
+ses yeux. Le journal montre `cast app left while playing` avec `now: null`, sans `idleReason` ni
+`media command sent`, et l'afficheur de la barre indique « stand by » au même moment
+(`../3_plugins/3_6_google-cast.md`, 2026-11-17). Une radio, elle, tient plus de 15 min.
+L'explication retenue est le trafic. Une enceinte lit un mix relayé aussi vite que le réseau le
+permet : la moitié d'un mix de deux heures en 45 s, puis plus rien ne passe pendant de longues
+minutes. Une radio coule en continu. Le doute « déclarée `LIVE` plutôt que fichier » n'a pas été
+levé. Déclarer les mix `LIVE` est écarté : on perdrait la recherche dans le morceau.
+
+**Correctif** (`player.ts`, `GET /raw/:file`) : vers une enceinte, le relais envoie par paquets.
+Chaque requête reçoit d'abord `RAW_LEAD_MAX_S` (10 min) d'audio d'un coup. Ensuite, le relais
+attend tant que l'enceinte a au moins `RAW_LEAD_MIN_S` (5 min) d'avance sur sa tête de lecture. Il
+complète à 10 min dès que l'avance passe sous ce seuil. Résultat : au plus ~5 min sans trafic, et
+toujours 5 min d'avance pour couvrir une coupure de la source.
+
+- **L'avance** = octets remis ÷ (`lengthBytes` / `durationS`) − position publiée par l'enceinte
+  (`trackPosition`, prolongée pendant la lecture). Elle est relue toutes les 10 s avec l'horloge
+  injectable (`deps.clock`).
+- **En pause**, la position ne bouge plus, donc rien ne part. Après une recherche, les 10 premières
+  minutes de la requête partent toujours, parce que la position publiée peut être encore l'ancienne.
+- **Envoi de tout, comme avant** : quand la position est inconnue, pour le navigateur (`local:*`,
+  qui a sa propre réserve), et quand la taille ou la durée manque. Les Sonos lisent par petites
+  plages qui n'atteignent jamais 10 min : ils ne sont pas concernés.
+- **La source est toujours lue d'une traite**, en mémoire : jusqu'à la taille du mix, ~30 à 60 Mo
+  pour deux heures à 64 kb/s. Laissée inactive plusieurs minutes, sa connexion risquerait de tomber
+  (serveurs à délai d'envoi, `bodyTimeout` d'undici). La reprise par `Range` du 2026-11-12 reste
+  derrière. À la fin, ou à l'abandon de la source, la réponse ne se termine qu'une fois remis ce qui
+  était retenu.
+- **Journal** : une ligne `info` par requête, `music raw GET: player far enough ahead, sending in
+  packets`, quand les paquets commencent. `player closed the connection before the end` donne
+  maintenant l'octet **remis** à l'enceinte, et non plus l'octet lu à la source.
+
+**Test** (`player.test.ts`, « a speaker gets ten minutes ahead… ») : vraie socket, `ManualClock`,
+1 octet = 6 s. On vérifie 100 octets d'un coup, rien à 300 s, 160 octets à 310 s, puis tout le
+fichier à la fin. Le test échoue sans le correctif (1000 octets d'un coup). **Pas encore vu sur la
+barre** à cette date.

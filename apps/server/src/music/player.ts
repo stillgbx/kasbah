@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { lightSyncSettingsPatchSchema, type Command } from '@kasbah/shared'
 import { stateFile } from '../core/paths'
 import { PluginError } from '../core/plugin'
-import { systemClock, type Clock } from '../core/clock'
+import { sleep, systemClock, type Clock } from '../core/clock'
 import { getLightStreamer, type LightStreamer } from '../core/lightStreamBridge'
 import { getPlaybackBridge } from '../core/playbackBridge'
 import { sendError } from '../http/errors'
@@ -69,6 +69,18 @@ const QUEUE_MAX = 1000
  */
 const RAW_RETRIES = 3
 const RAW_RETRY_MS = 300
+/**
+ * Relay to a speaker, in packets. Left alone, a speaker reads a long mix as fast as the network
+ * allows (half an hour of audio in under a minute), then nothing passes for a long while: a soundbar
+ * whose auto-standby counts that silence as inactivity went to standby mid-mix after 15 min (seen on
+ * the real house; a radio, which flows, never did). Each request first gets `RAW_LEAD_MAX_S` of
+ * audio at once; past that, the relay waits while the speaker is that far ahead of its playhead,
+ * and tops it up again once the lead falls under `RAW_LEAD_MIN_S`. The source is still read at full
+ * speed, into memory: left idle for minutes, its connection would drop.
+ */
+const RAW_LEAD_MAX_S = 600
+const RAW_LEAD_MIN_S = 300
+const RAW_PACE_POLL_MS = 10_000
 
 export interface MusicPlayerDeps {
   config?: Partial<MusicConfig>
@@ -101,7 +113,7 @@ export interface MusicPlayerDeps {
   lightSyncSettings?: LightSyncSettingsStore
   /** The light stream (tests); otherwise the bridge a lights plugin registers with. */
   lightStreamer?: () => LightStreamer | null
-  /** Timers of the light sync (tests); otherwise the system clock. */
+  /** Timers of the light sync and of the relay's packets (tests); otherwise the system clock. */
   clock?: Clock
 }
 
@@ -1142,13 +1154,65 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       const from = span ? Number(span[1]) : 0
       const to = span ? Number(span[2]) : len ? Number(len) - 1 : null
       let sent = 0
+      // Bytes handed to the player: behind `sent` while the relay holds back a packet.
+      let written = 0
       // A speaker that hangs up midway (seek, pause, track change… or a stop of its own): the line
       // that tells a stop on the speaker's side from one on the source's. The browser probes and
       // drops ranges all the time: not logged.
       reply.raw.on('close', () => {
         if (reply.raw.writableEnded || session.deviceId.startsWith(LOCAL_PREFIX)) return
-        log.info({ sid: session.sid, deviceId: session.deviceId, at: from + sent, to }, 'music raw GET: player closed the connection before the end')
+        log.info({ sid: session.sid, deviceId: session.deviceId, at: from + written, to }, 'music raw GET: player closed the connection before the end')
       })
+      // Packets (`RAW_LEAD_MAX_S`): speakers only, with a known size and duration. A browser keeps its
+      // own buffer, and a Sonos reads small ranges that never get that far ahead.
+      const durationS = session.meta.durationS
+      const bytesPerS = !session.deviceId.startsWith(LOCAL_PREFIX) && session.lengthBytes && durationS ? session.lengthBytes / durationS : null
+      const clock = deps.clock ?? systemClock
+      /** Seconds of audio the player holds beyond its playhead; null when its position is unknown. */
+      const aheadS = (bps: number): number | null => {
+        const { get } = resolvePlay()
+        const st = get(session.deviceId)?.state as { kind?: string; nowPlaying?: { positionS?: unknown } } | undefined
+        if (st?.kind !== 'media_player' || typeof st.nowPlaying?.positionS !== 'number') return null
+        return (from + written) / bps - trackPosition(get, session)
+      }
+      let pacingLogged = false
+      // Waits while the player is far enough ahead. The first `RAW_LEAD_MAX_S` of a request always go:
+      // after a seek, the published position may still be the old one for a moment.
+      const pace = async (): Promise<void> => {
+        if (bytesPerS === null || written / bytesPerS < RAW_LEAD_MAX_S) return
+        const ahead = aheadS(bytesPerS)
+        if (ahead === null || ahead < RAW_LEAD_MAX_S) return
+        if (!pacingLogged) {
+          pacingLogged = true
+          log.info({ sid: session.sid, deviceId: session.deviceId, aheadS: Math.round(ahead) }, 'music raw GET: player far enough ahead, sending in packets')
+        }
+        for (;;) {
+          await sleep(clock, RAW_PACE_POLL_MS, abort.signal)
+          const left = abort.signal.aborted ? null : aheadS(bytesPerS)
+          if (left === null || left < RAW_LEAD_MIN_S) return
+        }
+      }
+      // What the source sent and the player has not had yet (packets only); `ended`: the source is done.
+      const held: Uint8Array[] = []
+      let ended: 'whole' | 'cut' | null = null
+      let kick: (() => void) | null = null
+      const wake = () => { kick?.(); kick = null }
+      const handOver = async (): Promise<void> => {
+        while (!abort.signal.aborted) {
+          const chunk = held.shift()
+          if (!chunk) {
+            if (ended === 'whole') { reply.raw.end(); return }
+            if (ended === 'cut') { reply.raw.destroy(); return }
+            await new Promise<void>((r) => { kick = r })
+            continue
+          }
+          await pace()
+          if (abort.signal.aborted) return
+          written += chunk.length
+          if (!reply.raw.write(chunk)) await once(reply.raw, 'drain', { signal: abort.signal })
+        }
+      }
+      if (bytesPerS !== null) handOver().catch((err) => { if (!abort.signal.aborted) log.debug({ err, sid: session.sid }, 'music raw GET: hand-over failed') })
       // Reopenings in a row without a byte coming through: past `RAW_RETRIES`, or a refusal, we give up.
       let attempts = 0
       const reopen = async (to: number): Promise<ReadableStream<Uint8Array> | null> => {
@@ -1183,6 +1247,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
             for await (const chunk of body as unknown as AsyncIterable<Uint8Array>) {
               sent += chunk.length
               attempts = 0
+              if (bytesPerS !== null) { held.push(chunk); wake(); continue }
+              written += chunk.length
               if (!reply.raw.write(chunk)) await once(reply.raw, 'drain', { signal: abort.signal })
             }
           } catch (err) {
@@ -1191,7 +1257,10 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
           }
           if (abort.signal.aborted) return
           // Whole: done. Unknown length: nothing to reopen.
-          if (to === null || from + sent > to) { reply.raw.end(); return }
+          if (to === null || from + sent > to) {
+            if (bytesPerS !== null) { ended = 'whole'; wake() } else reply.raw.end()
+            return
+          }
           // A long mix is ONE request held for hours: the source sometimes drops it. Ending the response
           // here would leave the player waiting for the missing bytes on a live connection (it neither
           // ends nor fails: the sound just stops). Reopen the source from the byte reached instead.
@@ -1200,7 +1269,8 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
         if (abort.signal.aborted) return
         log.warn({ sid: session.sid, sent, from, to }, 'music raw GET: source cut, giving up')
         // the player must see a failure, not wait: a closed connection, then it asks again or stops
-        reply.raw.destroy()
+        // (after what it was still owed, when the relay held it back)
+        if (bytesPerS !== null) { ended = 'cut'; wake() } else reply.raw.destroy()
       })()
     })
 

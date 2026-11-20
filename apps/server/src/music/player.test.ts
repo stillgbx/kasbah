@@ -185,6 +185,52 @@ it('relay: a source cut mid-file is reopened from the byte reached, the player g
   } finally { await close() }
 })
 
+// A speaker reads a long mix as fast as it can, then nothing passes for half an hour: a soundbar
+// whose auto-standby counts that silence goes to standby mid-mix. The relay hands it packets instead.
+it('relay: a speaker gets ten minutes ahead, then a packet each time its lead falls under five', async () => {
+  const clock = new ManualClock(0)
+  // 1000 bytes for 6000 s: 1 byte = 6 s, ten minutes = 100 bytes; the source sends 10 bytes at a time
+  let i = 0
+  const source = () => new ReadableStream<Uint8Array>({ pull(c) { if (i >= FILE.length) c.close(); else { c.enqueue(FILE.subarray(i, i + 10)); i += 10 } } })
+  const fetchImpl = (async () => new Response(source(), { status: 200, headers: { 'content-length': String(FILE.length) } })) as unknown as typeof fetch
+  let streamUrl = ''
+  const state = { kind: 'media_player', playback: 'playing', updatedAt: 0, nowPlaying: { positionS: 0 } }
+  const player = createMusicPlayer({
+    logger: pino({ level: 'silent' }), fetchImpl, clock, now: () => clock.now(),
+    source: (id) => (id === 'mixcloud'
+      ? { id, label: 'Mixcloud', resolve: async () => ({ url: 'https://cdn.example.org/mix.m4a', formatId: 'http', ext: 'm4a', abrKbps: 64, sizeBytes: FILE.length, durationS: 6000 }) }
+      : undefined),
+    getDevice: () => ({ descriptor: { kind: 'media_player', capabilities: ['play_url'] }, state }),
+    execute: async (_id, command) => { if (command.type === 'media_player.play_url') streamUrl = command.url },
+  })
+  const app = Fastify()
+  await app.register(async (sub) => player.registerRoutes(sub), { prefix: '/api/music' })
+  await app.listen({ port: 0, host: '127.0.0.1' })
+  const ctrl = new AbortController()
+  try {
+    const base = `http://127.0.0.1:${(app.server.address() as { port: number }).port}`
+    const played = await fetch(`${base}/api/music/play`, {
+      // the address a speaker is given: a LAN one, which the test then reaches on its own port
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-host': '192.168.1.90:8787' },
+      body: JSON.stringify({ source: 'mixcloud', id: '/someone/a-mix/', deviceId: 'google_cast:bar' }),
+    })
+    expect(played.status).toBe(200)
+    const res = await fetch(streamUrl.replace('http://192.168.1.90:8787', base), { signal: ctrl.signal })
+    let got = 0
+    void (async () => { for await (const c of res.body as unknown as AsyncIterable<Uint8Array>) got += c.length })().catch(() => {})
+    const settle = () => new Promise((r) => setTimeout(r, 150))
+    const playTo = async (s: number) => { while (clock.now() < s * 1000) { clock.advance(10_000); await new Promise((r) => setImmediate(r)) } await settle() }
+    await settle()
+    expect(got).toBe(100)                  // ten minutes, at once
+    await playTo(300)
+    expect(got).toBe(100)                  // still five minutes ahead: nothing
+    await playTo(310)
+    expect(got).toBe(160)                  // under five: topped up to ten again (160 × 6 − 310 ≥ 600)
+    await playTo(6000)
+    expect(got).toBe(FILE.length)          // and the whole file by the end
+  } finally { ctrl.abort(); player.stop(); await app.close() }
+})
+
 it('relay: a source that refuses the reopening closes the connection, the player does not wait', async () => {
   const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
     const range = (init?.headers as Record<string, string> | undefined)?.range

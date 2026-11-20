@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-20] update | Veille d'une barre en plein mix : le relais envoie par paquets
+
+**Trigger** : la barre de son se met en veille d'elle-même (réglage de veille à 15 min) pendant les mix Mixcloud, pas avec une radio ; l'utilisateur veut garder la veille et la recherche dans le morceau.
+
+**Pages modified** :
+- `1_architecture/1_6_lecteur-musique.md` - sous-section 2026-11-20 : cause trouvée, relais par paquets (`RAW_LEAD_MAX_S` / `RAW_LEAD_MIN_S`), calcul de l'avance, cas exclus, source lue d'une traite en mémoire, journal, test.
+
+**Index** : catalogue 1_architecture (1 ligne), index.md régénéré.
+
 ## [2026-11-17] update | Arrêt d'une barre Cast : appli fermée par le récepteur, veille et entrée journalisées
 
 **Trigger** : premier arrêt observé sur la vraie barre avec les journaux du 2026-11-14 ; l'appli Cast part sans `idleReason` ni commande de Kasbah.
