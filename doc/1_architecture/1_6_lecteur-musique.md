@@ -1,6 +1,6 @@
 # Lecteur musique commun (`/api/music`)
 
-> Dernière mise à jour : 2026-11-20
+> Dernière mise à jour : 2026-11-21
 > Sources : `apps/server/src/music/{player,proxy,queue,sources,ytdlp}.ts`, tests `apps/server/src/music/{proxy,queue}.test.ts`, `apps/server/src/plugins/ytmusic/plugin.test.ts`, `apps/server/src/app.ts`, `apps/server/src/plugins/{ytmusic,mixcloud}/{index,resolve}.ts`, `apps/server/.env.example`, `apps/web/src/api/{transport,httpTransport,mockTransport}.ts`, `apps/web/src/stores/localPlayer.ts`, `apps/web/src/views/MusicView.vue`, arbre de travail non commité du 2026-09-23 (après 5c43833) ; `apps/server/src/music/lastPlayed.ts` et son test, `apps/web/src/stores/localPlayer.test.ts`, arbre de travail non commité du 2026-09-28 (après c6fe7c1) ; `apps/server/src/music/lightsync/{analyze,decode,effects/*,palette,settingsFile,sync}.ts`, `packages/shared/src/music/lightsync.ts` et leurs tests, `apps/server/src/core/lightStreamBridge.ts`, `apps/web/src/components/music/ListeningSessions.vue` (2026-11-05)
 
 ## Pourquoi un noyau, et pourquoi maintenant
@@ -687,4 +687,23 @@ toujours 5 min d'avance pour couvrir une coupure de la source.
 **Test** (`player.test.ts`, « a speaker gets ten minutes ahead… ») : vraie socket, `ManualClock`,
 1 octet = 6 s. On vérifie 100 octets d'un coup, rien à 300 s, 160 octets à 310 s, puis tout le
 fichier à la fin. Le test échoue sans le correctif (1000 octets d'un coup). **Pas encore vu sur la
+barre** à cette date.
+
+#### Suite 2026-11-21 — les paquets ne suffisent pas : un flux continu
+
+Les paquets ont été essayés sur la vraie barre. Ils sont bien partis : l'octet remis à la coupure
+correspond à 10 min d'avance plus deux paquets de 5 min. Pourtant la barre s'est mise en veille
+**15 min pile** après le `LOAD`. Contre-épreuve : une radio Icecast `.mp3` lancée par `play_url`
+**sans** `live`, donc annoncée `BUFFERED` comme un fichier, tient au-delà de 15 min. La barre ne
+regarde donc pas la déclaration `LIVE`. Elle semble veiller à ce que les données arrivent **en
+continu** au moment où sa minuterie expire. Un paquet toutes les 5 min ne suffit pas.
+
+Le relais garde donc l'enceinte **à `RAW_LEAD_S` (10 min) d'avance en permanence**. Il relit l'avance
+chaque seconde (`RAW_PACE_POLL_MS` = 1000) et remet un morceau de la source, soit quelques secondes
+d'audio, dès qu'elle passe sous ce seuil. La barre reçoit des données toutes les quelques secondes,
+comme avec une radio. `RAW_LEAD_MIN_S` disparaît. Le reste de la sous-section précédente vaut
+toujours : première rafale, pause, cas exclus, source lue d'une traite. La ligne de journal devient
+`music raw GET: player far enough ahead, keeping it there as it plays`. **Test** (`player.test.ts`,
+« …then a trickle that keeps it there ») : 100 octets d'un coup, 110 après 1 s jouée, toujours 110
+à 60 s, 120 à 61 s, puis tout le fichier. Le test échouait avec les paquets. **Pas encore vu sur la
 barre** à cette date.

@@ -186,8 +186,9 @@ it('relay: a source cut mid-file is reopened from the byte reached, the player g
 })
 
 // A speaker reads a long mix as fast as it can, then nothing passes for half an hour: a soundbar
-// whose auto-standby counts that silence goes to standby mid-mix. The relay hands it packets instead.
-it('relay: a speaker gets ten minutes ahead, then a packet each time its lead falls under five', async () => {
+// whose auto-standby counts that silence goes to standby mid-mix, and packets every few minutes were
+// not enough. The relay keeps it ten minutes ahead, topping it up as it plays: a steady trickle.
+it('relay: a speaker gets ten minutes ahead at once, then a trickle that keeps it there', async () => {
   const clock = new ManualClock(0)
   // 1000 bytes for 6000 s: 1 byte = 6 s, ten minutes = 100 bytes; the source sends 10 bytes at a time
   let i = 0
@@ -219,13 +220,15 @@ it('relay: a speaker gets ten minutes ahead, then a packet each time its lead fa
     let got = 0
     void (async () => { for await (const c of res.body as unknown as AsyncIterable<Uint8Array>) got += c.length })().catch(() => {})
     const settle = () => new Promise((r) => setTimeout(r, 150))
-    const playTo = async (s: number) => { while (clock.now() < s * 1000) { clock.advance(10_000); await new Promise((r) => setImmediate(r)) } await settle() }
+    const playTo = async (s: number) => { while (clock.now() < s * 1000) { clock.advance(1000); await new Promise((r) => setImmediate(r)) } await settle() }
     await settle()
     expect(got).toBe(100)                  // ten minutes, at once
-    await playTo(300)
-    expect(got).toBe(100)                  // still five minutes ahead: nothing
-    await playTo(310)
-    expect(got).toBe(160)                  // under five: topped up to ten again (160 × 6 − 310 ≥ 600)
+    await playTo(1)
+    expect(got).toBe(110)                  // a second played: under ten minutes, one chunk (60 s)
+    await playTo(60)
+    expect(got).toBe(110)                  // ten minutes ahead again until then
+    await playTo(61)
+    expect(got).toBe(120)                  // and the next chunk as soon as the lead dips
     await playTo(6000)
     expect(got).toBe(FILE.length)          // and the whole file by the end
   } finally { ctrl.abort(); player.stop(); await app.close() }

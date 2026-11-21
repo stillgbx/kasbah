@@ -70,17 +70,17 @@ const QUEUE_MAX = 1000
 const RAW_RETRIES = 3
 const RAW_RETRY_MS = 300
 /**
- * Relay to a speaker, in packets. Left alone, a speaker reads a long mix as fast as the network
+ * Relay to a speaker, as a trickle. Left alone, a speaker reads a long mix as fast as the network
  * allows (half an hour of audio in under a minute), then nothing passes for a long while: a soundbar
  * whose auto-standby counts that silence as inactivity went to standby mid-mix after 15 min (seen on
- * the real house; a radio, which flows, never did). Each request first gets `RAW_LEAD_MAX_S` of
- * audio at once; past that, the relay waits while the speaker is that far ahead of its playhead,
- * and tops it up again once the lead falls under `RAW_LEAD_MIN_S`. The source is still read at full
- * speed, into memory: left idle for minutes, its connection would drop.
+ * the real house). A radio, which flows, never did, even announced as a file; packets every five
+ * minutes did not help. Each request first gets `RAW_LEAD_S` of audio at once; past that, the relay
+ * keeps the speaker that far ahead of its playhead, one source chunk (a few seconds) whenever the
+ * lead dips, checked every `RAW_PACE_POLL_MS`. The source is still read at full speed, into memory:
+ * left idle for minutes, its connection would drop.
  */
-const RAW_LEAD_MAX_S = 600
-const RAW_LEAD_MIN_S = 300
-const RAW_PACE_POLL_MS = 10_000
+const RAW_LEAD_S = 600
+const RAW_PACE_POLL_MS = 1000
 
 export interface MusicPlayerDeps {
   config?: Partial<MusicConfig>
@@ -113,7 +113,7 @@ export interface MusicPlayerDeps {
   lightSyncSettings?: LightSyncSettingsStore
   /** The light stream (tests); otherwise the bridge a lights plugin registers with. */
   lightStreamer?: () => LightStreamer | null
-  /** Timers of the light sync and of the relay's packets (tests); otherwise the system clock. */
+  /** Timers of the light sync and of the relay's trickle (tests); otherwise the system clock. */
   clock?: Clock
 }
 
@@ -1154,7 +1154,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
       const from = span ? Number(span[1]) : 0
       const to = span ? Number(span[2]) : len ? Number(len) - 1 : null
       let sent = 0
-      // Bytes handed to the player: behind `sent` while the relay holds back a packet.
+      // Bytes handed to the player: behind `sent` while the relay holds the speaker back.
       let written = 0
       // A speaker that hangs up midway (seek, pause, track change… or a stop of its own): the line
       // that tells a stop on the speaker's side from one on the source's. The browser probes and
@@ -1163,7 +1163,7 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
         if (reply.raw.writableEnded || session.deviceId.startsWith(LOCAL_PREFIX)) return
         log.info({ sid: session.sid, deviceId: session.deviceId, at: from + written, to }, 'music raw GET: player closed the connection before the end')
       })
-      // Packets (`RAW_LEAD_MAX_S`): speakers only, with a known size and duration. A browser keeps its
+      // Trickle (`RAW_LEAD_S`): speakers only, with a known size and duration. A browser keeps its
       // own buffer, and a Sonos reads small ranges that never get that far ahead.
       const durationS = session.meta.durationS
       const bytesPerS = !session.deviceId.startsWith(LOCAL_PREFIX) && session.lengthBytes && durationS ? session.lengthBytes / durationS : null
@@ -1176,23 +1176,23 @@ export function createMusicPlayer(deps: MusicPlayerDeps): MusicPlayer {
         return (from + written) / bps - trackPosition(get, session)
       }
       let pacingLogged = false
-      // Waits while the player is far enough ahead. The first `RAW_LEAD_MAX_S` of a request always go:
+      // Waits while the player is far enough ahead. The first `RAW_LEAD_S` of a request always go:
       // after a seek, the published position may still be the old one for a moment.
       const pace = async (): Promise<void> => {
-        if (bytesPerS === null || written / bytesPerS < RAW_LEAD_MAX_S) return
+        if (bytesPerS === null || written / bytesPerS < RAW_LEAD_S) return
         const ahead = aheadS(bytesPerS)
-        if (ahead === null || ahead < RAW_LEAD_MAX_S) return
+        if (ahead === null || ahead < RAW_LEAD_S) return
         if (!pacingLogged) {
           pacingLogged = true
-          log.info({ sid: session.sid, deviceId: session.deviceId, aheadS: Math.round(ahead) }, 'music raw GET: player far enough ahead, sending in packets')
+          log.info({ sid: session.sid, deviceId: session.deviceId, aheadS: Math.round(ahead) }, 'music raw GET: player far enough ahead, keeping it there as it plays')
         }
         for (;;) {
           await sleep(clock, RAW_PACE_POLL_MS, abort.signal)
           const left = abort.signal.aborted ? null : aheadS(bytesPerS)
-          if (left === null || left < RAW_LEAD_MIN_S) return
+          if (left === null || left < RAW_LEAD_S) return
         }
       }
-      // What the source sent and the player has not had yet (packets only); `ended`: the source is done.
+      // What the source sent and the player has not had yet (trickle only); `ended`: the source is done.
       const held: Uint8Array[] = []
       let ended: 'whole' | 'cut' | null = null
       let kick: (() => void) | null = null

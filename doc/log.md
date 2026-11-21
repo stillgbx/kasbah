@@ -7,6 +7,15 @@ Entrées les plus récentes en haut. Une session = une entrée.
 > Pour remonter plus loin : chercher (`Grep`) un nom de page, un fichier ou un mot-clé dans `log/`, plutôt que lire les archives ; la date de mise à jour d'une page donne le mois à ouvrir. Mois précédent : [log/2026-10.md](log/2026-10.md).
 <!-- log-nav:end -->
 
+## [2026-11-21] update | Veille d'une barre : les paquets ne suffisent pas, le relais envoie en continu
+
+**Trigger** : sur la vraie barre, les paquets de 5 min n'empêchent pas la veille à 15 min ; une radio annoncée comme un fichier tient : c'est le flux continu qui compte.
+
+**Pages modified** :
+- `1_architecture/1_6_lecteur-musique.md` - suite 2026-11-21 : essai des paquets, contre-épreuve de la radio `BUFFERED`, avance tenue en continu (`RAW_LEAD_S`, relue chaque seconde), test.
+
+**Index** : catalogue 1_architecture (1 ligne), index.md régénéré.
+
 ## [2026-11-20] update | Veille d'une barre en plein mix : le relais envoie par paquets
 
 **Trigger** : la barre de son se met en veille d'elle-même (réglage de veille à 15 min) pendant les mix Mixcloud, pas avec une radio ; l'utilisateur veut garder la veille et la recherche dans le morceau.
